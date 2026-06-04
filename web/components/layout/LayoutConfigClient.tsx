@@ -22,7 +22,10 @@ import LayoutPreviewRenderer from "@/components/layout/LayoutPreviewRenderer";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
-import type { EntityLayoutRecord, LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
+import { LAYOUT_GRID_COLUMNS } from "@/lib/layout/layoutV2";
+import type { EntityLayoutRecord, LayoutColumn, LayoutDoc, LayoutItem, LayoutRow, LayoutSection } from "@/lib/layout/layoutV2";
+
+type AvailableField = { key: string; label: string; sectionKey: string | null };
 
 type ListResponse = {
     records: EntityLayoutRecord[];
@@ -47,6 +50,16 @@ function ConfigHeader() {
 
 function clone<T>(v: T): T {
     return JSON.parse(JSON.stringify(v)) as T;
+}
+
+function slug(input: string): string {
+    return (
+        input
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "_")
+            .replace(/^_+|_+$/g, "")
+            .slice(0, 64) || "x"
+    );
 }
 
 function statusPill(status: string) {
@@ -74,6 +87,7 @@ export default function LayoutConfigClient() {
 
     const [list, setList] = useState<ListResponse | null>(null);
     const [labelMap, setLabelMap] = useState<EntityLabelMap>({});
+    const [availableFields, setAvailableFields] = useState<AvailableField[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -133,6 +147,11 @@ export default function LayoutConfigClient() {
             setJsonError(null);
             setDirty(false);
             setShowJson(false);
+            // Load the entity field catalog for the "add field" control.
+            fetch(`/api/admin/entity-layouts/available-fields?entity_type=${encodeURIComponent(rec.entityType)}`)
+                .then((r) => (r.ok ? r.json() : { fields: [] }))
+                .then((j) => setAvailableFields((j as { fields?: AvailableField[] }).fields ?? []))
+                .catch(() => setAvailableFields([]));
         } catch (e) {
             setError((e as Error).message);
         } finally {
@@ -278,6 +297,110 @@ export default function LayoutConfigClient() {
         next.sections.splice(index, 1);
         applyDoc(next);
     };
+
+    // --- item-level structural edits ----------------------------------------
+    // The simple editor treats a section's items as a flat ordered list, then
+    // re-packs them into rows/columns. Field items pack two-per-row (6/6);
+    // groups, related lists, and widget placeholders take a full-width row.
+    const newItemId = (sectionKey: string, refKey: string) =>
+        `${slug(sectionKey)}-add-${slug(refKey)}-${Math.random().toString(36).slice(2, 9)}`;
+
+    const flattenItems = (section: LayoutSection): LayoutItem[] =>
+        section.rows.flatMap((r) => r.columns.flatMap((c) => c.items));
+
+    const repackRows = (sectionId: string, items: LayoutItem[]): LayoutRow[] => {
+        const rows: LayoutRow[] = [];
+        let cols: LayoutColumn[] = [];
+        let ri = 0;
+        const flush = () => {
+            if (cols.length) {
+                rows.push({ id: `${sectionId}-r${ri}`, columns: cols });
+                ri += 1;
+                cols = [];
+            }
+        };
+        for (const item of items) {
+            const fullWidth = item.kind !== "field";
+            if (fullWidth) {
+                flush();
+                rows.push({
+                    id: `${sectionId}-r${ri}`,
+                    columns: [{ id: `${sectionId}-r${ri}-c0`, width: LAYOUT_GRID_COLUMNS, items: [item] }],
+                });
+                ri += 1;
+            } else {
+                cols.push({ id: `${sectionId}-r${ri}-c${cols.length}`, width: LAYOUT_GRID_COLUMNS / 2, items: [item] });
+                if (cols.length === 2) flush();
+            }
+        }
+        flush();
+        return rows;
+    };
+
+    const setSectionItems = (next: LayoutDoc, sectionIndex: number, items: LayoutItem[]) => {
+        const sec = next.sections[sectionIndex];
+        sec.rows = repackRows(sec.id, items);
+    };
+
+    const moveItem = (sectionIndex: number, itemId: string, dir: -1 | 1) => {
+        if (!workingDoc) return;
+        const next = clone(workingDoc);
+        const items = flattenItems(next.sections[sectionIndex]);
+        const i = items.findIndex((it) => it.id === itemId);
+        const target = i + dir;
+        if (i < 0 || target < 0 || target >= items.length) return;
+        [items[i], items[target]] = [items[target], items[i]];
+        setSectionItems(next, sectionIndex, items);
+        applyDoc(next);
+    };
+
+    const removeItem = (sectionIndex: number, itemId: string) => {
+        if (!workingDoc) return;
+        const next = clone(workingDoc);
+        const items = flattenItems(next.sections[sectionIndex]).filter((it) => it.id !== itemId);
+        setSectionItems(next, sectionIndex, items);
+        applyDoc(next);
+    };
+
+    const moveItemToSection = (fromIndex: number, toIndex: number, itemId: string) => {
+        if (!workingDoc || fromIndex === toIndex) return;
+        const next = clone(workingDoc);
+        const fromItems = flattenItems(next.sections[fromIndex]);
+        const moved = fromItems.find((it) => it.id === itemId);
+        if (!moved) return;
+        setSectionItems(next, fromIndex, fromItems.filter((it) => it.id !== itemId));
+        const toItems = flattenItems(next.sections[toIndex]);
+        toItems.push(moved);
+        setSectionItems(next, toIndex, toItems);
+        applyDoc(next);
+    };
+
+    const addFieldToSection = (sectionIndex: number, field: AvailableField) => {
+        if (!workingDoc) return;
+        const next = clone(workingDoc);
+        const sec = next.sections[sectionIndex];
+        const items = flattenItems(sec);
+        if (items.some((it) => it.kind === "field" && it.refKey === field.key)) return; // already placed in this section
+        items.push({
+            id: newItemId(sec.key, field.key),
+            kind: "field",
+            refKey: field.key,
+            label: field.label,
+            renderHint: "text",
+            editable: true,
+        });
+        setSectionItems(next, sectionIndex, items);
+        applyDoc(next);
+    };
+
+    /** Field keys already placed anywhere in the doc (to de-dupe the add picker). */
+    const placedFieldKeys = useMemo(() => {
+        const keys = new Set<string>();
+        for (const s of workingDoc?.sections ?? [])
+            for (const r of s.rows) for (const c of r.columns) for (const it of c.items)
+                if (it.kind === "field") keys.add(it.refKey);
+        return keys;
+    }, [workingDoc]);
 
     const previewDoc = useMemo(() => workingDoc, [workingDoc]);
     const isPublished = selectedStatus === "published";
@@ -447,63 +570,98 @@ export default function LayoutConfigClient() {
                                         </p>
                                     )}
 
-                                    {/* Section list editor */}
-                                    {workingDoc.surface === "drawer" && (
-                                        <div className="flex flex-col gap-2">
-                                            <div className="text-xs font-semibold uppercase tracking-wide text-[#59678b]">Sections</div>
-                                            {workingDoc.sections.map((s, i) => (
-                                                <div
-                                                    key={s.id}
-                                                    className="flex flex-wrap items-center gap-2 rounded border border-[#e6e8ec] bg-white px-2 py-1.5"
-                                                >
-                                                    <input
-                                                        value={s.title}
-                                                        onChange={(e) => editSection(i, { title: e.target.value })}
-                                                        disabled={!editable}
-                                                        className="min-w-[160px] flex-1 rounded border border-[#e6e8ec] px-2 py-1 text-sm disabled:bg-[#f4f6f9]"
-                                                    />
-                                                    <span className="text-[11px] text-[#9aa4bf]">
-                                                        {s.rows.length} row{s.rows.length === 1 ? "" : "s"}
-                                                    </span>
-                                                    <label className="flex items-center gap-1 text-[11px] text-[#59678b]">
+                                    {/* Section + item editor (drawer and queue) */}
+                                    <div className="flex flex-col gap-2">
+                                        <div className="text-xs font-semibold uppercase tracking-wide text-[#59678b]">
+                                            {workingDoc.surface === "queue" ? "Queue columns" : "Sections & fields"}
+                                        </div>
+                                        {workingDoc.sections.map((s, i) => {
+                                            const items = flattenItems(s);
+                                            const addable = availableFields.filter((a) => !placedFieldKeys.has(a.key));
+                                            return (
+                                                <div key={s.id} className="rounded border border-[#e6e8ec] bg-white">
+                                                    <div className="flex flex-wrap items-center gap-2 border-b border-[#eef0f4] px-2 py-1.5">
                                                         <input
-                                                            type="checkbox"
-                                                            checked={Boolean(s.defaultExpanded)}
+                                                            value={s.title}
+                                                            onChange={(e) => editSection(i, { title: e.target.value })}
                                                             disabled={!editable}
-                                                            onChange={(e) => editSection(i, { defaultExpanded: e.target.checked })}
+                                                            className="min-w-[150px] flex-1 rounded border border-[#e6e8ec] px-2 py-1 text-sm font-medium disabled:bg-[#f4f6f9]"
                                                         />
-                                                        expanded
-                                                    </label>
-                                                    <div className="flex items-center gap-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => moveSection(i, -1)}
-                                                            disabled={!editable || i === 0}
-                                                            className="rounded border border-[#e6e8ec] px-1.5 text-sm disabled:opacity-40"
-                                                        >
-                                                            ↑
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => moveSection(i, 1)}
-                                                            disabled={!editable || i === workingDoc.sections.length - 1}
-                                                            className="rounded border border-[#e6e8ec] px-1.5 text-sm disabled:opacity-40"
-                                                        >
-                                                            ↓
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => deleteSection(i)}
-                                                            disabled={!editable}
-                                                            className="rounded border border-red-200 px-1.5 text-sm text-red-600 disabled:opacity-40"
-                                                        >
-                                                            ✕
-                                                        </button>
+                                                        <span className="text-[11px] text-[#9aa4bf]">{items.length} items</span>
+                                                        {workingDoc.surface === "drawer" && (
+                                                            <label className="flex items-center gap-1 text-[11px] text-[#59678b]">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={Boolean(s.defaultExpanded)}
+                                                                    disabled={!editable}
+                                                                    onChange={(e) => editSection(i, { defaultExpanded: e.target.checked })}
+                                                                />
+                                                                expanded
+                                                            </label>
+                                                        )}
+                                                        <button type="button" onClick={() => moveSection(i, -1)} disabled={!editable || i === 0} className="rounded border border-[#e6e8ec] px-1.5 text-sm disabled:opacity-40">↑</button>
+                                                        <button type="button" onClick={() => moveSection(i, 1)} disabled={!editable || i === workingDoc.sections.length - 1} className="rounded border border-[#e6e8ec] px-1.5 text-sm disabled:opacity-40">↓</button>
+                                                        <button type="button" onClick={() => deleteSection(i)} disabled={!editable} className="rounded border border-red-200 px-1.5 text-sm text-red-600 disabled:opacity-40" title="Delete section">✕</button>
+                                                    </div>
+
+                                                    <div className="flex flex-col gap-1 p-2">
+                                                        {items.length === 0 ? (
+                                                            <p className="px-1 text-[11px] text-[#9aa4bf]">No items.</p>
+                                                        ) : (
+                                                            items.map((it) => (
+                                                                <div key={it.id} className="flex items-center gap-2 rounded bg-[#fbfcfe] px-2 py-1 text-sm">
+                                                                    <span className="min-w-0 flex-1 truncate text-[#31394d]">
+                                                                        {it.label || it.refKey}
+                                                                        <span className="ml-1.5 rounded bg-[#eef1f6] px-1 py-0.5 text-[10px] text-[#59678b]">
+                                                                            {it.kind === "field" ? it.renderHint ?? "text" : it.kind.replace("_", " ")}
+                                                                        </span>
+                                                                    </span>
+                                                                    <button type="button" onClick={() => moveItem(i, it.id, -1)} disabled={!editable} className="rounded border border-[#e6e8ec] px-1 text-xs disabled:opacity-40" title="Move up">↑</button>
+                                                                    <button type="button" onClick={() => moveItem(i, it.id, 1)} disabled={!editable} className="rounded border border-[#e6e8ec] px-1 text-xs disabled:opacity-40" title="Move down">↓</button>
+                                                                    {workingDoc.sections.length > 1 && (
+                                                                        <select
+                                                                            value=""
+                                                                            disabled={!editable}
+                                                                            onChange={(e) => {
+                                                                                const to = Number(e.target.value);
+                                                                                if (!Number.isNaN(to)) moveItemToSection(i, to, it.id);
+                                                                            }}
+                                                                            className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[11px] disabled:opacity-40"
+                                                                            title="Move to section"
+                                                                        >
+                                                                            <option value="">move to…</option>
+                                                                            {workingDoc.sections.map((s2, j) =>
+                                                                                j === i ? null : (
+                                                                                    <option key={s2.id} value={j}>{s2.title}</option>
+                                                                                ),
+                                                                            )}
+                                                                        </select>
+                                                                    )}
+                                                                    <button type="button" onClick={() => removeItem(i, it.id)} disabled={!editable} className="rounded border border-red-200 px-1 text-xs text-red-600 disabled:opacity-40" title="Remove from layout">✕</button>
+                                                                </div>
+                                                            ))
+                                                        )}
+                                                        {addable.length > 0 && (
+                                                            <select
+                                                                value=""
+                                                                disabled={!editable}
+                                                                onChange={(e) => {
+                                                                    const f = addable.find((a) => a.key === e.target.value);
+                                                                    if (f) addFieldToSection(i, f);
+                                                                }}
+                                                                className="mt-1 rounded border border-dashed border-[#cdd5e4] bg-white px-2 py-1 text-[12px] text-[#4063b0] disabled:opacity-40"
+                                                            >
+                                                                <option value="">+ Add field…</option>
+                                                                {addable.map((a) => (
+                                                                    <option key={a.key} value={a.key}>{a.label}</option>
+                                                                ))}
+                                                            </select>
+                                                        )}
                                                     </div>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                            );
+                                        })}
+                                    </div>
 
                                     {/* Advanced JSON editor for full structural control */}
                                     <div>

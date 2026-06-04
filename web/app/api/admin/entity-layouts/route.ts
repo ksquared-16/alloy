@@ -18,6 +18,7 @@ import { isLayoutSurface, type LayoutSurface } from "@/lib/layout/layoutV2";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { resolveLayout } from "@/lib/layout/layoutResolver";
 import { layoutDocFromRegistry, ALL_ENTITY_PRESENTATION_TYPES } from "@/lib/layout/migrateFromRegistry";
+import { seedLayoutDocFromCurrent } from "@/lib/layout/seedFromCurrentPresentation";
 import {
     createDraft,
     listAllForOrg,
@@ -115,24 +116,36 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "layout_key must be 1–64 chars: a-z, 0-9, _" }, { status: 400 });
     }
 
-    const fromRegistry = body.from_registry === true || body.doc === undefined;
+    const fromDefault = body.from_registry === true || body.doc === undefined;
 
-    // Build the doc: either seed from the legacy registry, or accept a provided
-    // doc (validated). The registry seed guarantees a faithful starting point.
+    const supabase = createAdminClient();
+
+    // Build the doc. "Create from default" prefers the CURRENT runtime
+    // presentation (e.g. the live opportunity drawer / work-unit queue) and
+    // falls back to the legacy registry when no newer source exists. A provided
+    // doc is validated as-is.
     let doc;
-    if (fromRegistry) {
-        doc = layoutDocFromRegistry(entityType as never, surface);
+    let seededFrom: string;
+    if (fromDefault) {
+        const current = await seedLayoutDocFromCurrent(supabase, ctx.orgId, entityType, surface);
+        if (current) {
+            doc = current;
+            seededFrom = "current_presentation";
+        } else {
+            doc = layoutDocFromRegistry(entityType as never, surface);
+            seededFrom = "registry";
+        }
     } else {
         const parsed = parseLayoutDoc(body.doc);
         if (!parsed.ok || !parsed.doc) {
             return NextResponse.json({ error: "Invalid layout doc", details: parsed.errors }, { status: 400 });
         }
         doc = parsed.doc;
+        seededFrom = "request";
     }
 
     const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : `${entityType} ${surface} layout`;
 
-    const supabase = createAdminClient();
     try {
         const created = await createDraft(supabase, {
             orgId: ctx.orgId,
@@ -142,12 +155,12 @@ export async function POST(request: NextRequest) {
             name,
             doc,
             createdBy: ctx.userId,
-            metadata: { seededFrom: fromRegistry ? "registry" : "request" },
+            metadata: { seededFrom },
         });
         logAdminAudit({
             entity: "entity_layouts",
             id: created.id,
-            changed_fields: ["created", fromRegistry ? "seed:registry" : "seed:request"],
+            changed_fields: ["created", `seed:${seededFrom}`],
             actor_user_id: ctx.userId,
             role: ctx.role,
         });
