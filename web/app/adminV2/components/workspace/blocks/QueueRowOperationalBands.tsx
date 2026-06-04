@@ -153,15 +153,13 @@ export function QueueRowCompactOperationalHeader({
     const enrollmentSubline = plan.headerInline.enrollmentSubline?.trim() || null;
     const waitlistSubline = plan.headerInline.waitlistSubline?.trim() || null;
     const headerSubline = enrollmentSubline || waitlistSubline;
-    const attentionPrimaryVisible = Boolean(
-        statusLabel || enrollmentInline?.inline || waitlistInline?.rankingChip
-    );
+    const attentionPrimaryVisible = Boolean(enrollmentInline?.inline || waitlistInline?.rankingChip);
 
     return (
         <div
             className="adminv2-ws-queue-operational-record__header-zone"
             data-queue-row-band="header"
-            data-queue-header-layout="attention-column"
+            data-queue-header-layout="four-column"
             data-queue-header-container="true"
             data-queue-zone="summary"
         >
@@ -178,51 +176,52 @@ export function QueueRowCompactOperationalHeader({
                     </span>
                 </div>
 
+                {statusLabel ? (
+                    <span
+                        className={`adminv2-ws-queue-operational-record__header-status-cell adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--header-inline adminv2-ws-crm-queue-preview__status-pill--secondary adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}${
+                            operationalAttentionBadge
+                                ? " adminv2-ws-crm-queue-preview__status-pill--operational-attention"
+                                : ""
+                        }`}
+                        data-queue-preview-slot="header_status"
+                        data-testid="queue-header-status"
+                    >
+                        {statusLabel}
+                    </span>
+                ) : (
+                    <span
+                        className="adminv2-ws-queue-operational-record__header-status-cell adminv2-ws-queue-operational-record__header-status-cell--empty"
+                        aria-hidden="true"
+                    />
+                )}
+
                 <div
                     className="adminv2-ws-queue-operational-record__header-attention-column"
                     data-queue-preview-slot="header_attention_column"
                     data-testid="queue-header-attention-column"
                 >
-                    {attentionPrimaryVisible ? (
+                    {attentionPrimaryVisible || waitlistCandidateRow ? (
                         <div
                             className="adminv2-ws-queue-operational-record__header-attention-primary"
                             data-queue-header-row="primary"
                         >
-                            {statusLabel ? (
-                                <>
-                                    <span
-                                        className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--header-inline adminv2-ws-crm-queue-preview__status-pill--secondary adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}${
-                                            operationalAttentionBadge
-                                                ? " adminv2-ws-crm-queue-preview__status-pill--operational-attention"
-                                                : ""
-                                        }`}
-                                        data-queue-preview-slot="header_status"
-                                        data-testid="queue-header-status"
-                                    >
-                                        {statusLabel}
-                                    </span>
-                                </>
-                            ) : null}
                             {enrollmentInline?.inline ? (
-                                <>
-                                    {statusLabel ? <HeaderInlineSep /> : null}
-                                    <span
-                                        className={`adminv2-ws-queue-operational-record__header-attention${
-                                            enrollmentInline.urgencyLabel
-                                                ? " adminv2-ws-queue-operational-record__header-attention--urgent"
-                                                : ""
-                                        }`}
-                                        data-queue-preview-slot="header_attention_inline"
-                                        data-testid="queue-header-attention-inline"
-                                        title={enrollmentInline.fullText ?? enrollmentInline.inline}
-                                    >
-                                        {enrollmentInline.inline}
-                                    </span>
-                                </>
+                                <span
+                                    className={`adminv2-ws-queue-operational-record__header-attention${
+                                        enrollmentInline.urgencyLabel
+                                            ? " adminv2-ws-queue-operational-record__header-attention--urgent"
+                                            : ""
+                                    }`}
+                                    data-queue-preview-slot="header_attention_inline"
+                                    data-testid="queue-header-attention-inline"
+                                    title={enrollmentInline.fullText ?? enrollmentInline.inline}
+                                >
+                                    {enrollmentInline.inline}
+                                </span>
                             ) : null}
                             {waitlistInline?.rankingChip ? (
                                 <>
-                                    {statusLabel || enrollmentInline?.inline ? <HeaderInlineSep /> : null}
+                                    {enrollmentInline?.inline ? <HeaderInlineSep /> : null}
                                     <span
                                         className="adminv2-ws-queue-operational-record__header-ranking-chip"
                                         data-queue-preview-slot="header_waitlist_ranking"
@@ -235,9 +234,7 @@ export function QueueRowCompactOperationalHeader({
                             ) : null}
                             {waitlistCandidateRow ? (
                                 <>
-                                    {waitlistInline?.rankingChip || statusLabel || enrollmentInline?.inline ?
-                                        <HeaderInlineSep />
-                                    :   null}
+                                    {waitlistInline?.rankingChip || enrollmentInline?.inline ? <HeaderInlineSep /> : null}
                                     <QueueRowPlacementManualOrderControls
                                         row={waitlistCandidateRow}
                                         layout="header-adjust"

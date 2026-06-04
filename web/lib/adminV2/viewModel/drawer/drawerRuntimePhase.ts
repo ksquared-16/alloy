@@ -39,6 +39,38 @@ export function isDrawerTransitionPhase(phase: DrawerRuntimePhase): boolean {
     return phase === "swap_preparing" || phase === "applying_vm";
 }
 
+export function drawerRuntimeTransitionTargetKey(
+    target: DrawerRuntimeTransitionTarget | null | undefined
+): string | null {
+    if (!target) return null;
+    const entityId = target.entityId.trim();
+    if (!entityId) return null;
+    return `${target.entityType}:${entityId}`;
+}
+
+export function isSameDrawerRuntimeTransitionTarget(
+    a: DrawerRuntimeTransitionTarget | null | undefined,
+    b: DrawerRuntimeTransitionTarget | null | undefined
+): boolean {
+    if (!a || !b) return false;
+    return (
+        a.entityType === b.entityType && a.entityId.trim() === b.entityId.trim()
+    );
+}
+
+export function drawerRuntimePhaseStatesEqual(
+    a: DrawerRuntimePhaseState,
+    b: DrawerRuntimePhaseState
+): boolean {
+    return (
+        a.phase === b.phase &&
+        a.transitionId === b.transitionId &&
+        a.swapFallbackFetch === b.swapFallbackFetch &&
+        a.errorMessage === b.errorMessage &&
+        drawerRuntimeTransitionTargetKey(a.target) === drawerRuntimeTransitionTargetKey(b.target)
+    );
+}
+
 /** Hold prior record visible — no full-body loader, no data clear. */
 export function shouldHoldPriorDrawerContent(phase: DrawerRuntimePhase): boolean {
     return phase === "swap_preparing" || phase === "applying_vm";
@@ -89,11 +121,13 @@ export function drawerRuntimePhaseForSwapStart(
 export function drawerRuntimePhaseForApplyingVm(
     prev: DrawerRuntimePhaseState
 ): DrawerRuntimePhaseState {
-    return {
+    const next: DrawerRuntimePhaseState = {
         ...prev,
         phase: "applying_vm",
         errorMessage: null,
+        swapFallbackFetch: false,
     };
+    return drawerRuntimePhaseStatesEqual(prev, next) ? prev : next;
 }
 
 export function drawerRuntimePhaseForShowing(
@@ -112,13 +146,21 @@ export function drawerRuntimePhaseForSwapFallbackFetch(
     prev: DrawerRuntimePhaseState,
     target: DrawerRuntimeTransitionTarget
 ): DrawerRuntimePhaseState {
-    return {
-        phase: "showing",
+    if (
+        prev.phase === "swap_preparing" &&
+        prev.swapFallbackFetch &&
+        isSameDrawerRuntimeTransitionTarget(prev.target, target)
+    ) {
+        return prev;
+    }
+    const next: DrawerRuntimePhaseState = {
+        phase: "swap_preparing",
         transitionId: prev.transitionId,
         target,
         errorMessage: null,
         swapFallbackFetch: true,
     };
+    return drawerRuntimePhaseStatesEqual(prev, next) ? prev : next;
 }
 
 export function drawerRuntimePhaseForOpeningCold(

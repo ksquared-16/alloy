@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
+import {
+    createContext,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type ReactNode,
+} from "react";
 import { usePathname } from "next/navigation";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
@@ -17,27 +26,39 @@ import { prefetchOpportunityDrawerOnRowIntent } from "@/lib/admin/opportunityDra
 import {
     isDrawerModelSwapEligible,
     prepareDrawerViewModel,
+    prepareDrawerViewModelDeduped,
     type DrawerViewModelPreload,
 } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
+import {
+    DRAWER_LINK_OPEN_FAILED_MESSAGE,
+    drawerLinkPendingKeyFromOpenParams,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
+import {
+    beginDrawerLinkPendingIfCold,
+    logDrawerTargetCachePeek,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerTargetCache";
+import { findBackToLeadOpportunityInStack } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveBackToLeadOpportunity";
 import {
     buildPrepareParamsFromOpenDrawer,
     peekDrawerViewModelPreloadSync,
     resolveModelSwapOpportunityContext,
 } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import {
-    drawerRuntimePhaseForApplyingVm,
     drawerRuntimePhaseForIdle,
     drawerRuntimePhaseForOpeningCold,
     drawerRuntimePhaseForShowing,
     drawerRuntimePhaseForSwapFallbackFetch,
     drawerRuntimePhaseForSwapStart,
+    drawerRuntimeTransitionTargetKey,
     INITIAL_DRAWER_RUNTIME_PHASE_STATE,
+    isSameDrawerRuntimeTransitionTarget,
     type DrawerRuntimePhaseState,
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import type { PersonDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel";
 import type { ChildDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
 import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
+import { resolveDrawerVmRenderDrawer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 import {
     previewSeedForQueueNavigatorRecord,
     resolveOpportunityQueueNavigateTargetId,
@@ -101,6 +122,9 @@ export type OpportunityWorkspaceContext = { work_unit_id: string; department_id:
 
 /** Dev/diagnostic — model-swap navigation between VM-backed drawer entities (shell stays mounted). */
 export const DRAWER_MODEL_SWAP_OPEN_SOURCE = "drawer_model_swap";
+
+/** Person/Child → Opportunity stack restore — uses pinned VM session cache when warm. */
+export const DRAWER_BACK_TO_LEAD_OPEN_SOURCE = "drawer_back_to_lead";
 
 export interface AdminDrawerState {
     type: AdminDrawerEntityType | null;
@@ -179,6 +203,8 @@ export type DrawerStackItem = {
     opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
     opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
     opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
+    openSource?: string | null;
+    personDrawerOpenSeed?: PersonDrawerOpenSeed | null;
 };
 
 interface AdminDrawerContextValue {
@@ -194,10 +220,14 @@ interface AdminDrawerContextValue {
     canGoBack: boolean;
     /** Top of stack (the drawer we would return to on Back). */
     previousDrawer: DrawerStackItem | null;
+    /** Visible record during VM drawer-to-drawer transitions (source until target VM is ready). */
+    drawerVmRender: AdminDrawerState;
     openDrawer: (params: OpenDrawerParams) => void;
     /** Prev/next within the loaded work-unit queue — drawer stays open. */
     navigateOpportunityInQueue: (direction: "prev" | "next") => void;
     goBack: () => void;
+    /** Restore pinned opportunity from stack/seed (skips intermediate person frames). */
+    goBackToLead: () => void;
     closeDrawer: () => void;
     /** One-shot handoff after pre-open fetch (AdminEntityDrawer layout effect). */
     consumeOpportunityDrawerPreload: (opportunityId: string) => OpportunityDrawerOpenPreload | null;
@@ -227,6 +257,16 @@ interface AdminDrawerContextValue {
         opening: OpportunityDrawerOpeningParams,
         preload: OpportunityDrawerOpenPreload
     ) => void;
+    /** Inline related-link pending key (VM cache key) while target VM prepares. */
+    drawerLinkPendingKey: string | null;
+    drawerLinkPendingError: { key: string; message: string } | null;
+    clearDrawerLinkPendingError: () => void;
+    drawerLinkPending: {
+        begin: (pendingKey: string) => void;
+        fail: (pendingKey: string, message?: string) => void;
+        isPending: (pendingKey: string) => boolean;
+        errorForKey: (pendingKey: string) => string | null;
+    };
 }
 
 const AdminDrawerContext = createContext<AdminDrawerContextValue | null>(null);
@@ -257,9 +297,49 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const queueNavRunRef = useRef(0);
     /** Synchronous one-shot for entity-open effect (React state alone is not readable in the same tick). */
     const swapFallbackFetchPendingRef = useRef(false);
+    const lastAttachedSwapPreloadKeyRef = useRef<string | null>(null);
+    const swapFallbackFetchInFlightKeyRef = useRef<string | null>(null);
+    const pendingModelSwapParamsRef = useRef<OpenDrawerParams | null>(null);
+    const [drawerLinkPendingKey, setDrawerLinkPendingKey] = useState<string | null>(null);
+    const [drawerLinkPendingError, setDrawerLinkPendingError] = useState<{
+        key: string;
+        message: string;
+    } | null>(null);
+
+    const beginDrawerLinkPending = useCallback((pendingKey: string) => {
+        setDrawerLinkPendingKey((current) => (current === pendingKey ? current : pendingKey));
+        setDrawerLinkPendingError(null);
+    }, []);
+
+    const failDrawerLinkPending = useCallback((pendingKey: string, message?: string) => {
+        setDrawerLinkPendingKey((current) => (current === pendingKey ? null : current));
+        setDrawerLinkPendingError({
+            key: pendingKey,
+            message: message ?? DRAWER_LINK_OPEN_FAILED_MESSAGE,
+        });
+    }, []);
+
+    const clearDrawerLinkPendingError = useCallback(() => {
+        setDrawerLinkPendingError(null);
+    }, []);
+
+    const drawerLinkPendingApi = useMemo(
+        () => ({
+            begin: beginDrawerLinkPending,
+            fail: failDrawerLinkPending,
+            isPending: (pendingKey: string) =>
+                drawerLinkPendingKey != null && drawerLinkPendingKey === pendingKey,
+            errorForKey: (pendingKey: string) =>
+                drawerLinkPendingError?.key === pendingKey ? drawerLinkPendingError.message : null,
+        }),
+        [beginDrawerLinkPending, failDrawerLinkPending, drawerLinkPendingError, drawerLinkPendingKey]
+    );
 
     const completeDrawerRuntimeTransition = useCallback(() => {
         swapFallbackFetchPendingRef.current = false;
+        lastAttachedSwapPreloadKeyRef.current = null;
+        swapFallbackFetchInFlightKeyRef.current = null;
+        pendingModelSwapParamsRef.current = null;
         setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
     }, []);
 
@@ -296,6 +376,8 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     opportunityWorkspaceContext: prev.opportunityWorkspaceContext,
                     opportunityQueuePreviewSeed: prev.opportunityQueuePreviewSeed,
                     opportunityQueueNavigator: prev.opportunityQueueNavigator,
+                    openSource: prev.openSource ?? null,
+                    personDrawerOpenSeed: prev.personDrawerOpenSeed ?? null,
                 },
             ]);
         }
@@ -554,23 +636,18 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             }
         ) => {
             if (params.type !== "opportunities" && params.type !== "persons") return null;
-            return prepareDrawerViewModel({
-                entityType: params.type,
-                entityId: params.id,
-                context: params.context ?? null,
-                openSource: params.source ?? null,
-                presentationEmphasis: params.personDrawerOpenSeed?.presentation_emphasis ?? null,
-                opportunityWorkspaceContext: params.opportunityWorkspaceContext ?? null,
-            });
+            return prepareDrawerViewModelDeduped(buildPrepareParamsFromOpenDrawer(params));
         },
         []
     );
 
     const applyDrawerTargetNavigation = useCallback(
-        (params: OpenDrawerParams) => {
+        (params: OpenDrawerParams, options?: { skipStackPush?: boolean }) => {
             setDrawer((prev) => {
                 const oppCtx = resolveModelSwapOpportunityContext(params, prev);
-                pushDrawerToStack(prev);
+                if (!options?.skipStackPush) {
+                    pushDrawerToStack(prev);
+                }
                 return {
                     type: params.type,
                     id: params.id,
@@ -595,30 +672,93 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
         [pushDrawerToStack]
     );
 
-    const attachDrawerSwapPreload = useCallback(
+    const failDrawerModelSwap = useCallback(
+        (params: OpenDrawerParams, message: string) => {
+            const swapParams: OpenDrawerParams = {
+                ...params,
+                opportunityWorkspaceContext:
+                    params.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
+            };
+            const pendingKey = drawerLinkPendingKeyFromOpenParams(swapParams);
+            failDrawerLinkPending(pendingKey, message);
+            pendingModelSwapParamsRef.current = null;
+            swapFallbackFetchPendingRef.current = false;
+            lastAttachedSwapPreloadKeyRef.current = null;
+            swapFallbackFetchInFlightKeyRef.current = null;
+            setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
+            logDrawerVmRuntimeDiagnostic("model_swap_prepare_error", {
+                entity_type: params.type,
+                entity_id: params.id,
+                open_source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                message,
+            });
+        },
+        [drawer.opportunityWorkspaceContext, failDrawerLinkPending]
+    );
+
+    const commitDrawerModelSwap = useCallback(
         (params: OpenDrawerParams, preload: DrawerViewModelPreload | null) => {
             const target = { entityType: params.type, entityId: params.id.trim() };
+            const commitKey = `${target.entityType}:${target.entityId}:${preload ? "ready" : "miss"}`;
+            const pendingKey = drawerLinkPendingKeyFromOpenParams({
+                ...params,
+                opportunityWorkspaceContext:
+                    params.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
+            });
+
             logDrawerVmRuntimeDiagnostic("drawer_vm_model_swap_apply", {
                 entity_type: params.type,
                 entity_id: params.id,
                 preload_ready: Boolean(preload),
                 open_source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
             });
-            if (preload?.entityType === "opportunities") {
+
+            if (!preload) {
+                swapFallbackFetchPendingRef.current = true;
+                if (lastAttachedSwapPreloadKeyRef.current !== commitKey) {
+                    lastAttachedSwapPreloadKeyRef.current = commitKey;
+                    setDrawerRuntimePhase((prev) => drawerRuntimePhaseForSwapFallbackFetch(prev, target));
+                }
+                return;
+            }
+
+            if (preload.entityType === "opportunities") {
                 opportunityDrawerPreloadRef.current = preload.preload;
                 markOpportunityPreloadReady();
-            } else if (preload?.entityType === "persons") {
+            } else if (preload.entityType === "persons") {
                 personDrawerPreloadRef.current = preload.preload;
             }
-            if (preload) {
-                swapFallbackFetchPendingRef.current = false;
-                setDrawerRuntimePhase((prev) => drawerRuntimePhaseForApplyingVm(prev));
-            } else {
-                swapFallbackFetchPendingRef.current = true;
-                setDrawerRuntimePhase((prev) => drawerRuntimePhaseForSwapFallbackFetch(prev, target));
+
+            swapFallbackFetchPendingRef.current = false;
+            if (lastAttachedSwapPreloadKeyRef.current === commitKey) {
+                return;
             }
+            lastAttachedSwapPreloadKeyRef.current = commitKey;
+            pendingModelSwapParamsRef.current = null;
+
+            setDrawerLinkPendingKey((current) => (current === pendingKey ? null : current));
+
+            applyDrawerTargetNavigation(
+                {
+                    ...params,
+                    source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                },
+                { skipStackPush: true }
+            );
+            logDrawerVmRuntimeDiagnostic("model_swap_commit", {
+                entity_type: params.type,
+                entity_id: params.id,
+                open_source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                runtime:
+                    params.type === "opportunities" ? "opportunity-vm"
+                    : params.personDrawerOpenSeed?.presentation_emphasis === "child_lifecycle" ||
+                        params.source === "opportunity_inquiry_child" ?
+                        "child-vm"
+                    :   "person-vm",
+            });
+            setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
         },
-        [markOpportunityPreloadReady]
+        [applyDrawerTargetNavigation, drawer.opportunityWorkspaceContext, markOpportunityPreloadReady]
     );
 
     const openDrawerModelSwap = useCallback(
@@ -628,26 +768,54 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     entityType: params.type,
                     entityId: params.id.trim(),
                 };
+                lastAttachedSwapPreloadKeyRef.current = null;
+                pushDrawerToStack(drawer);
+                const swapParams: OpenDrawerParams = {
+                    ...params,
+                    source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                    opportunityWorkspaceContext:
+                        params.opportunityWorkspaceContext ??
+                        drawer.opportunityWorkspaceContext ??
+                        null,
+                };
+                pendingModelSwapParamsRef.current = swapParams;
+                const pendingKey = drawerLinkPendingKeyFromOpenParams(swapParams);
+                logDrawerTargetCachePeek(swapParams, "model_swap");
+                beginDrawerLinkPendingIfCold(
+                    {
+                        begin: beginDrawerLinkPending,
+                        fail: failDrawerLinkPending,
+                        isPending: (key) =>
+                            drawerLinkPendingKey != null && drawerLinkPendingKey === key,
+                    },
+                    pendingKey,
+                    swapParams
+                );
                 setDrawerRuntimePhase((prev) => drawerRuntimePhaseForSwapStart(prev, target));
-                applyDrawerTargetNavigation({
-                    ...params,
-                    source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
-                });
-                const prepareParams = buildPrepareParamsFromOpenDrawer({
-                    ...params,
-                    source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
-                });
+
+                const prepareParams = buildPrepareParamsFromOpenDrawer(swapParams);
                 const syncPreload = peekDrawerViewModelPreloadSync(prepareParams);
                 if (syncPreload) {
-                    attachDrawerSwapPreload(params, syncPreload);
+                    logDrawerVmRuntimeDiagnostic("model_swap_cache_hit", {
+                        entity_type: swapParams.type,
+                        entity_id: swapParams.id,
+                        open_source: swapParams.source ?? null,
+                    });
+                    commitDrawerModelSwap(swapParams, syncPreload);
                     return;
                 }
-                void prepareDrawerViewModelForOpen({
-                    ...params,
-                    source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
-                }).then((preload) => {
-                    attachDrawerSwapPreload(params, preload);
+                logDrawerVmRuntimeDiagnostic("model_swap_cache_miss", {
+                    entity_type: swapParams.type,
+                    entity_id: swapParams.id,
+                    open_source: swapParams.source ?? null,
                 });
+                void prepareDrawerViewModelForOpen(swapParams)
+                    .then((preload) => {
+                        commitDrawerModelSwap(swapParams, preload);
+                    })
+                    .catch(() => {
+                        failDrawerModelSwap(swapParams, DRAWER_LINK_OPEN_FAILED_MESSAGE);
+                    });
             };
             if (drawer.type === "persons" && drawer.id) {
                 confirmDiscardPersonDrawerUnsaved(proceedSwap);
@@ -655,7 +823,16 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             }
             proceedSwap();
         },
-        [applyDrawerTargetNavigation, attachDrawerSwapPreload, prepareDrawerViewModelForOpen]
+        [
+            beginDrawerLinkPending,
+            commitDrawerModelSwap,
+            drawer,
+            drawerLinkPendingKey,
+            failDrawerLinkPending,
+            failDrawerModelSwap,
+            prepareDrawerViewModelForOpen,
+            pushDrawerToStack,
+        ]
     );
 
     const openDrawer = useCallback(
@@ -737,7 +914,9 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                         params.operationalVisualContext ?? prev.operationalVisualContext,
                     defaultOpportunitySurface: params.defaultOpportunitySurface,
                     opportunityWorkspaceContext:
-                        params.type === "opportunities" ? params.opportunityWorkspaceContext ?? null : null,
+                        params.opportunityWorkspaceContext ??
+                        (params.type === "opportunities" ? null : prev.opportunityWorkspaceContext) ??
+                        null,
                     opportunityQueuePreviewSeed:
                         params.type === "opportunities" ? params.opportunityQueuePreviewSeed ?? null : null,
                     opportunityQueueNavigator:
@@ -769,6 +948,29 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
         [drawer.id, drawer.type, openDrawerModelSwap, pathname, pushDrawerToStack]
     );
 
+    const restoreVmPreloadFromStackItem = useCallback(
+        (item: DrawerStackItem) => {
+            if (!item.type || !item.id) return;
+            const sync = peekDrawerViewModelPreloadSync(
+                buildPrepareParamsFromOpenDrawer({
+                    type: item.type,
+                    id: item.id,
+                    source: item.openSource ?? undefined,
+                    personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
+                    opportunityWorkspaceContext: item.opportunityWorkspaceContext ?? null,
+                })
+            );
+            if (!sync) return;
+            if (sync.entityType === "opportunities") {
+                opportunityDrawerPreloadRef.current = sync.preload;
+                markOpportunityPreloadReady();
+            } else if (sync.entityType === "persons") {
+                personDrawerPreloadRef.current = sync.preload;
+            }
+        },
+        [markOpportunityPreloadReady]
+    );
+
     const goBack = useCallback(() => {
         const proceedBack = () => {
         setStack((s) => {
@@ -776,6 +978,35 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             const item = next.pop();
             if (item) {
                 swapFallbackFetchPendingRef.current = false;
+                lastAttachedSwapPreloadKeyRef.current = null;
+                swapFallbackFetchInFlightKeyRef.current = null;
+                pendingModelSwapParamsRef.current = null;
+                setDrawerLinkPendingKey(null);
+                const backParams = buildPrepareParamsFromOpenDrawer({
+                    type: item.type,
+                    id: item.id,
+                    source: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
+                    personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
+                    opportunityWorkspaceContext:
+                        item.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
+                });
+                const syncBack = peekDrawerViewModelPreloadSync(backParams);
+                logDrawerVmRuntimeDiagnostic(
+                    syncBack ? "back_to_lead_cache_hit" : "back_to_lead_cache_miss",
+                    {
+                        entity_type: item.type,
+                        entity_id: item.id,
+                        open_source: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
+                    }
+                );
+                if (syncBack) {
+                    logDrawerVmRuntimeDiagnostic("model_swap_cache_hit", {
+                        entity_type: item.type,
+                        entity_id: item.id,
+                        open_source: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
+                    });
+                }
+                restoreVmPreloadFromStackItem(item);
                 setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
                 setDrawer({
                     type: item.type,
@@ -791,15 +1022,117 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     opportunityWorkspaceContext: item.opportunityWorkspaceContext,
                     opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
                     opportunityQueueNavigator: item.opportunityQueueNavigator,
-                    personDrawerOpenSeed: null,
-                    openSource: null,
+                    personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
+                    openSource: item.openSource ?? null,
                 });
             }
             return next;
         });
         };
         confirmDiscardPersonDrawerUnsaved(proceedBack);
-    }, []);
+    }, [drawer.opportunityWorkspaceContext, restoreVmPreloadFromStackItem]);
+
+    const goBackToLead = useCallback(() => {
+        const proceedBackFromStackPop = () => {
+            setStack((s) => {
+                const next = [...s];
+                const item = next.pop();
+                if (item) {
+                    swapFallbackFetchPendingRef.current = false;
+                    lastAttachedSwapPreloadKeyRef.current = null;
+                    swapFallbackFetchInFlightKeyRef.current = null;
+                    pendingModelSwapParamsRef.current = null;
+                    setDrawerLinkPendingKey(null);
+                    restoreVmPreloadFromStackItem(item);
+                    setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
+                    setDrawer({
+                        type: item.type,
+                        id: item.id,
+                        defaultWorkflowEntityType: item.defaultWorkflowEntityType,
+                        defaultCustomerId: item.defaultCustomerId,
+                        defaultVendorId: item.defaultVendorId,
+                        defaultSchedulePrefill: item.defaultSchedulePrefill,
+                        defaultJobPrefill: item.defaultJobPrefill,
+                        jobRecordSurface: item.jobRecordSurface,
+                        operationalVisualContext: item.operationalVisualContext,
+                        defaultOpportunitySurface: item.defaultOpportunitySurface,
+                        opportunityWorkspaceContext: item.opportunityWorkspaceContext,
+                        opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
+                        opportunityQueueNavigator: item.opportunityQueueNavigator,
+                        personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
+                        openSource: item.openSource ?? null,
+                    });
+                }
+                return next;
+            });
+        };
+
+        const proceedBackToLead = () => {
+            const lead = findBackToLeadOpportunityInStack(stack, drawer);
+            if (!lead?.id) {
+                proceedBackFromStackPop();
+                return;
+            }
+            swapFallbackFetchPendingRef.current = false;
+            lastAttachedSwapPreloadKeyRef.current = null;
+            swapFallbackFetchInFlightKeyRef.current = null;
+            pendingModelSwapParamsRef.current = null;
+            setDrawerLinkPendingKey(null);
+
+            const backParams = buildPrepareParamsFromOpenDrawer({
+                type: "opportunities",
+                id: lead.id,
+                source: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
+                opportunityWorkspaceContext:
+                    lead.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
+                opportunityQueuePreviewSeed: lead.opportunityQueuePreviewSeed ?? null,
+                opportunityQueueNavigator: lead.opportunityQueueNavigator ?? null,
+            });
+            const syncBack = peekDrawerViewModelPreloadSync(backParams);
+            logDrawerVmRuntimeDiagnostic(
+                syncBack ? "back_to_lead_cache_hit" : "back_to_lead_cache_miss",
+                {
+                    entity_type: "opportunities",
+                    entity_id: lead.id,
+                    open_source: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
+                }
+            );
+            if (syncBack?.entityType === "opportunities") {
+                opportunityDrawerPreloadRef.current = syncBack.preload;
+                markOpportunityPreloadReady();
+            } else {
+                restoreVmPreloadFromStackItem(lead);
+            }
+
+            setStack((s) => {
+                const leadIndex = s.findLastIndex(
+                    (item) => item.type === "opportunities" && String(item.id) === String(lead.id)
+                );
+                return leadIndex >= 0 ? s.slice(0, leadIndex) : s;
+            });
+            setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
+            setDrawer({
+                type: "opportunities",
+                id: lead.id,
+                defaultWorkflowEntityType: lead.defaultWorkflowEntityType,
+                defaultCustomerId: lead.defaultCustomerId,
+                defaultVendorId: lead.defaultVendorId,
+                defaultSchedulePrefill: lead.defaultSchedulePrefill,
+                defaultJobPrefill: lead.defaultJobPrefill,
+                jobRecordSurface: lead.jobRecordSurface,
+                operationalVisualContext: lead.operationalVisualContext,
+                defaultOpportunitySurface: lead.defaultOpportunitySurface,
+                opportunityWorkspaceContext:
+                    lead.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
+                opportunityQueuePreviewSeed: lead.opportunityQueuePreviewSeed ?? null,
+                opportunityQueueNavigator: lead.opportunityQueueNavigator ?? null,
+                openSource: lead.openSource ?? DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
+                personDrawerOpenSeed: null,
+            });
+        };
+
+        confirmDiscardPersonDrawerUnsaved(proceedBackToLead);
+    }, [drawer, markOpportunityPreloadReady, restoreVmPreloadFromStackItem, stack]);
 
     const closeDrawer = useCallback(() => {
         const proceedClose = () => {
@@ -809,6 +1142,9 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
         opportunityDrawerPreloadRef.current = null;
         personDrawerPreloadRef.current = null;
         swapFallbackFetchPendingRef.current = false;
+        lastAttachedSwapPreloadKeyRef.current = null;
+        swapFallbackFetchInFlightKeyRef.current = null;
+        pendingModelSwapParamsRef.current = null;
         setDrawerRuntimePhase(drawerRuntimePhaseForIdle());
         setDrawer({ type: null, id: null });
         setStack([]);
@@ -835,6 +1171,63 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
 
     const previousDrawer = stack.length > 0 ? stack[stack.length - 1] : null;
 
+    const drawerVmRender = useMemo(
+        () => resolveDrawerVmRenderDrawer(drawer, drawerRuntimePhase),
+        [drawer, drawerRuntimePhase]
+    );
+
+    const swapFallbackTargetKey = useMemo(() => {
+        if (!drawerRuntimePhase.swapFallbackFetch || !drawerRuntimePhase.target) return null;
+        return drawerRuntimeTransitionTargetKey(drawerRuntimePhase.target);
+    }, [
+        drawerRuntimePhase.swapFallbackFetch,
+        drawerRuntimePhase.target?.entityType,
+        drawerRuntimePhase.target?.entityId,
+    ]);
+
+    useEffect(() => {
+        if (!swapFallbackTargetKey || !drawerRuntimePhase.target) return;
+        const target = drawerRuntimePhase.target;
+        if (target.entityType !== "opportunities" && target.entityType !== "persons") return;
+        const pendingParams = pendingModelSwapParamsRef.current;
+        if (!pendingParams || pendingParams.type !== target.entityType || pendingParams.id.trim() !== target.entityId) {
+            return;
+        }
+
+        const inFlightKey = `${drawerRuntimePhase.transitionId}:${swapFallbackTargetKey}`;
+        if (swapFallbackFetchInFlightKeyRef.current === inFlightKey) return;
+        swapFallbackFetchInFlightKeyRef.current = inFlightKey;
+
+        const prepareParams = buildPrepareParamsFromOpenDrawer({
+            ...pendingParams,
+            source: pendingParams.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+        });
+
+        let cancelled = false;
+        void prepareDrawerViewModelDeduped(prepareParams)
+            .then((preload) => {
+                if (cancelled) return;
+                if (!preload) {
+                    failDrawerModelSwap(pendingParams, DRAWER_LINK_OPEN_FAILED_MESSAGE);
+                    return;
+                }
+                commitDrawerModelSwap(pendingParams, preload);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                failDrawerModelSwap(pendingParams, DRAWER_LINK_OPEN_FAILED_MESSAGE);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        swapFallbackTargetKey,
+        drawerRuntimePhase.transitionId,
+        drawerRuntimePhase.target,
+        commitDrawerModelSwap,
+        failDrawerModelSwap,
+    ]);
+
     return (
         <AdminDrawerContext.Provider
             value={{
@@ -846,9 +1239,11 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 stack,
                 canGoBack: stack.length > 0,
                 previousDrawer,
+                drawerVmRender,
                 openDrawer,
                 navigateOpportunityInQueue,
                 goBack,
+                goBackToLead,
                 closeDrawer,
                 consumeOpportunityDrawerPreload,
                 opportunityPreloadGeneration,
@@ -861,6 +1256,10 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 openDrawerModelSwap,
                 cancelOpportunityDrawerOpen,
                 commitOpportunityDrawerOpen,
+                drawerLinkPendingKey,
+                drawerLinkPendingError,
+                clearDrawerLinkPendingError,
+                drawerLinkPending: drawerLinkPendingApi,
             }}
         >
             {children}

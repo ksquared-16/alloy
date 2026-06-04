@@ -7,6 +7,7 @@ import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityD
 import { prefetchOpportunityDrawerFull } from "@/lib/admin/opportunityDrawerFullPrefetch";
 import { prefetchOpportunityDrawerPrimary } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
+import { warmVisibleQueueRowOpportunityVms } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
@@ -93,4 +94,5 @@ export function prefetchVisibleWorkUnitDrawerPrimary(
     for (const id of unique) {
         prefetchOpportunityDrawerOnRowIntent(id, workspaceContext ?? undefined);
     }
+    warmVisibleQueueRowOpportunityVms(unique, workspaceContext ?? undefined);
 }

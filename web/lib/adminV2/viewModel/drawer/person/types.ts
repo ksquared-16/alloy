@@ -46,7 +46,7 @@ export type PersonDrawerViewModel = {
         operating_sections: PersonOperatingSectionKey[];
     };
     background_refresh: {
-        allowed: readonly ("status_values")[];
+        allowed: readonly ("status_values" | "record_visibility")[];
     };
     timing: {
         compose_ms: number;

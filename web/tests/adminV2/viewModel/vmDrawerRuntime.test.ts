@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { resolveVmDrawerRuntimeRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerRuntimeRoute";
+import {
+    coerceAdminV2VmDrawerRoute,
+    resolveVmDrawerRuntimeRoute,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerRuntimeRoute";
 import {
     shouldAllowColdOpenLoading,
     shouldHoldPriorDrawerContent,
@@ -9,14 +12,14 @@ import {
 describe("vmDrawerRuntimeRoute", () => {
     const prevKill = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
     const prevVm = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;
-    const prevPerson = process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM;
-    const prevChild = process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM;
+    const prevPersonKill = process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH;
+    const prevChildKill = process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM_KILL_SWITCH;
 
     afterEach(() => {
         process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = prevKill;
         process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM = prevVm;
-        process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM = prevPerson;
-        process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM = prevChild;
+        process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH = prevPersonKill;
+        process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM_KILL_SWITCH = prevChildKill;
         vi.unstubAllEnvs();
     });
 
@@ -60,19 +63,8 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("legacy");
     });
 
-    it("keeps persons on legacy unless person VM flag is enabled", () => {
-        delete process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM;
-        delete process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM;
-        expect(
-            resolveVmDrawerRuntimeRoute(
-                { type: "persons", id: "person-1", openSource: "opportunity_primary_contact" },
-                adminV2Wu
-            )
-        ).toBe("legacy");
-    });
-
-    it("routes adminV2 persons to person runtime when person VM flag is on", () => {
-        vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM", "true");
+    it("routes adminV2 persons to person runtime by default", () => {
+        delete process.env.NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH;
         expect(
             resolveVmDrawerRuntimeRoute(
                 { type: "persons", id: "person-1", openSource: "opportunity_primary_contact" },
@@ -81,8 +73,18 @@ describe("vmDrawerRuntimeRoute", () => {
         ).toBe("person");
     });
 
-    it("routes adminV2 child inquiry to child runtime when child VM flag is on", () => {
-        vi.stubEnv("NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM", "true");
+    it("keeps persons on legacy when person VM kill switch is active", () => {
+        vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH", "1");
+        expect(
+            resolveVmDrawerRuntimeRoute(
+                { type: "persons", id: "person-1", openSource: "opportunity_primary_contact" },
+                adminV2Wu
+            )
+        ).toBe("legacy");
+    });
+
+    it("routes adminV2 child inquiry to child runtime by default", () => {
+        delete process.env.NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM_KILL_SWITCH;
         expect(
             resolveVmDrawerRuntimeRoute(
                 {
@@ -93,6 +95,28 @@ describe("vmDrawerRuntimeRoute", () => {
                 adminV2Wu
             )
         ).toBe("child");
+    });
+
+    it("coerceAdminV2VmDrawerRoute keeps VM route when cutover is on", () => {
+        delete process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH;
+        expect(
+            coerceAdminV2VmDrawerRoute(
+                "legacy",
+                { type: "opportunities", id: "opp-1" },
+                adminV2Wu
+            )
+        ).toBe("opportunity");
+    });
+
+    it("coerceAdminV2VmDrawerRoute respects kill switch", () => {
+        process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH = "1";
+        expect(
+            coerceAdminV2VmDrawerRoute(
+                "legacy",
+                { type: "opportunities", id: "opp-1" },
+                adminV2Wu
+            )
+        ).toBe("legacy");
     });
 });
 

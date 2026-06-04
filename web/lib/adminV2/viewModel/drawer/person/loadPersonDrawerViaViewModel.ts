@@ -1,6 +1,7 @@
 import { adminV2PersonDrawerVmCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/drawerViewModelFeatureGates";
 import { buildPersonDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel";
 import { fetchPersonDrawerViewModelClient } from "@/lib/adminV2/viewModel/drawer/person/fetchPersonDrawerViewModelClient";
+import type { PersonDrawerVmComposeDepth } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
 import type { PersonDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel";
 import { drawerViewModelFirstPaintSettled } from "@/lib/adminV2/viewModel/drawer/drawerFirstPaint";
 
@@ -17,6 +18,7 @@ export async function loadPersonDrawerViaViewModel(
     opts?: {
         openSource?: string | null;
         presentationEmphasis?: string | null;
+        composeDepth?: PersonDrawerVmComposeDepth;
         init?: RequestInit;
     }
 ): Promise<LoadPersonDrawerViaViewModelResult> {
@@ -24,7 +26,12 @@ export async function loadPersonDrawerViaViewModel(
         return { ok: false, reason: "cutover_disabled" };
     }
 
-    const fetchResult = await fetchPersonDrawerViewModelClient(personId, opts);
+    const fetchResult = await fetchPersonDrawerViewModelClient(personId, {
+        openSource: opts?.openSource,
+        presentationEmphasis: opts?.presentationEmphasis,
+        composeDepth: opts?.composeDepth ?? "first_paint",
+        init: opts?.init,
+    });
     if (!fetchResult.ok) {
         if ("skipped" in fetchResult && fetchResult.skipped) {
             return { ok: false, reason: "skipped", skip_reason: fetchResult.skipped.reason };

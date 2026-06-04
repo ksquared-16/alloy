@@ -41,6 +41,16 @@ describe("Opportunity VM progressive status", () => {
         expect(src).toContain('setActive("dropdown")');
     });
 
+    it("shows dropdown chevron affordance when editable, not on readonly pill", () => {
+        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
+        expect(src).toContain("ChevronDown");
+        expect(src).toContain("data-vm-status-dropdown-affordance");
+        expect(src).toContain('data-vm-status-dropdown-affordance="button"');
+        expect(src).toContain('data-vm-status-dropdown-affordance="select"');
+        expect(src).toContain("aria-haspopup");
+        expect(src).toMatch(/if \(!interactive\)[\s\S]*VmReadonlyStatusPill/);
+    });
+
     it("uses VM embedded options when present before fetch", () => {
         const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
         expect(src).toContain("optionsFromVmStatus");

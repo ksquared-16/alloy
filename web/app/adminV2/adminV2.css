@@ -3,7 +3,7 @@
 /* Entity drawer / record modal vertical band — below shell header, above BOS command surface */
 :root {
   --adminv2-drawer-inset-top: 3.75rem;
-  --adminv2-drawer-inset-bottom: 6.5rem;
+  --adminv2-drawer-inset-bottom: 8rem;
 }
 
 .adminv2-drawer-shell-inset {

@@ -7172,20 +7172,29 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-grid,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__header-grid {
   display: grid;
-  grid-template-columns: minmax(0, 30fr) minmax(0, 55fr) minmax(0, 15fr);
+  grid-template-columns:
+    max-content
+    max-content
+    minmax(0, 1fr)
+    max-content;
+  grid-template-areas: "household status attention location";
   align-items: start;
-  column-gap: 8px;
+  column-gap: 14px;
   row-gap: 2px;
   min-width: 0;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-attention-column,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__header-attention-column {
+  grid-area: attention;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
   gap: 2px;
   min-width: 0;
   overflow: visible;
+  align-self: start;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-attention-primary,
@@ -7257,8 +7266,8 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-attention,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__header-attention {
-  flex: 1 1 10rem;
-  min-width: min(100%, 10rem);
+  flex: 0 1 auto;
+  min-width: 0;
   max-width: 100%;
   font-size: 10.5px;
   font-weight: 500;
@@ -7375,6 +7384,8 @@
   margin-top: 0;
   padding-top: 0;
   max-width: 100%;
+  text-align: left;
+  align-self: flex-start;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2
@@ -7405,10 +7416,32 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__household-cell,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__household-cell {
+  grid-area: household;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 5px;
   min-width: 0;
+  align-self: start;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-status-cell,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__header-status-cell {
+  grid-area: status;
+  display: inline-flex;
+  align-items: flex-start;
+  flex-shrink: 0;
+  white-space: nowrap;
+  align-self: start;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-queue-operational-record__header-status-cell--empty,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-queue-operational-record__header-status-cell--empty {
+  visibility: hidden;
+  height: 0;
+  overflow: hidden;
+  padding: 0;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__household-icon,
@@ -7441,6 +7474,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__location,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-operational-record__location {
+  grid-area: location;
   min-width: 0;
   justify-self: end;
   align-self: start;

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import clsx from "clsx";
+import { ChevronDown } from "lucide-react";
 import VmReadonlyStatusPill from "@/components/admin/vmDrawer/VmReadonlyStatusPill";
 import type { StatusControlVm, StatusOptionVm } from "@/lib/adminV2/viewModel/drawer/types";
 
@@ -196,6 +197,11 @@ export default function VmProgressiveStatusDropdown({
     const shellClass =
         "flex min-w-0 max-w-[11rem] shrink-0 flex-col gap-0.5 sm:max-w-[15rem]";
 
+    const editableSelectShellClass =
+        "relative w-full min-w-0 rounded-full border border-alloy-stone/30 bg-white shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 focus-within:border-alloy-blue focus-within:ring-2 focus-within:ring-alloy-blue/20";
+
+    const editableChevronClass = "pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-alloy-midnight/45";
+
     if (active === "dropdown" && options && options.length >= 2) {
         const key = statusKey.trim();
         return (
@@ -203,19 +209,21 @@ export default function VmProgressiveStatusDropdown({
                 className={shellClass}
                 data-opportunity-drawer-vm-status-control="true"
                 data-vm-progressive-status="dropdown"
+                data-vm-status-dropdown-affordance="select"
                 data-status-debug-owner="vm-dropdown"
                 {...statusDebugAttrs}
             >
                 <span className="sr-only">Opportunity status</span>
-                <select
-                    ref={selectRef}
-                    value={key}
-                    disabled={!canMutate || saving}
-                    onChange={(e) => void onStatusChange(e.target.value)}
-                    className="w-full min-w-0 rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90 shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 disabled:opacity-60"
-                    aria-label="Opportunity status"
-                    aria-busy={saving}
-                >
+                <div className={editableSelectShellClass}>
+                    <select
+                        ref={selectRef}
+                        value={key}
+                        disabled={!canMutate || saving}
+                        onChange={(e) => void onStatusChange(e.target.value)}
+                        className="w-full min-w-0 appearance-none rounded-full border-0 bg-transparent py-2 pl-3 pr-8 text-[12px] font-semibold text-alloy-midnight/90 focus:outline-none disabled:opacity-60"
+                        aria-label="Opportunity status"
+                        aria-busy={saving}
+                    >
                     {key && !options.some((o) => o.status_key === key) ?
                         <option value={key}>{displayLabel}</option>
                     :   null}
@@ -224,7 +232,9 @@ export default function VmProgressiveStatusDropdown({
                             {o.label}
                         </option>
                     ))}
-                </select>
+                    </select>
+                    <ChevronDown className={editableChevronClass} aria-hidden />
+                </div>
                 {fetchError ?
                     <span className="text-[10px] text-alloy-ember" role="status">
                         {fetchError}
@@ -261,6 +271,7 @@ export default function VmProgressiveStatusDropdown({
             className={shellClass}
             data-opportunity-drawer-vm-status-control="true"
             data-vm-progressive-status="pill"
+            data-vm-status-dropdown-affordance="button"
             data-status-debug-owner="vm-readonly-pill"
             {...statusDebugAttrs}
         >
@@ -270,15 +281,19 @@ export default function VmProgressiveStatusDropdown({
                 onFocus={() => void activateDropdown("focus")}
                 disabled={pending || saving}
                 className={clsx(
-                    "inline-flex rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90",
+                    "inline-flex max-w-full items-center gap-1 rounded-full border border-alloy-stone/30 bg-white py-2 pl-3 pr-2.5 text-[12px] font-semibold text-alloy-midnight/90",
                     "shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10",
                     "hover:border-alloy-blue/35 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20",
+                    "cursor-pointer",
                     pending && "opacity-80"
                 )}
-                aria-label={`Opportunity status: ${displayLabel}. Activate to change.`}
+                aria-haspopup="listbox"
+                aria-expanded={active === "dropdown"}
+                aria-label={`Opportunity status: ${displayLabel}. Open status menu.`}
                 aria-busy={pending}
             >
-                {displayLabel || "—"}
+                <span className="min-w-0 truncate">{displayLabel || "—"}</span>
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-alloy-midnight/45" aria-hidden />
             </button>
             {fetchError ?
                 <span className="text-[10px] text-alloy-ember" role="status">

@@ -73,6 +73,8 @@ import {
     workUnitQueueLaneRevealSettled,
 } from "@/lib/workspace/workUnitQueueLaneRevealState";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { buildPrepareParamsFromOpenDrawer, peekDrawerViewModelPreloadSync } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import {
@@ -654,7 +656,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
     const siteSelectionReady = siteFilter?.siteSelectionReady ?? true;
     const viewScopeFingerprint = workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId);
-    const { openDrawer } = useAdminDrawer();
+    const { openDrawer, drawer } = useAdminDrawer();
+    const [queueRowOpenPendingOpportunityId, setQueueRowOpenPendingOpportunityId] = useState<string | null>(
+        null
+    );
     const viewerTz = useAdminViewerTimezone();
 
     const [loading, setLoading] = useState(true);
@@ -2608,6 +2613,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     queueDefinition: wu?.queue_definition,
                 });
                 if (cachedLane) {
+                    logDrawerVmRuntimeDiagnostic("lane_payload_cache_hit", {
+                        work_unit_id: workUnitId,
+                        pill_key: nextKey,
+                        department_id: departmentId,
+                    });
                     setQueueItems(cachedLane);
                     setQueueItemsError(null);
                     setQueueItemsLoading(false);
@@ -2623,6 +2633,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         source: "lane_cache",
                     });
                 } else {
+                    logDrawerVmRuntimeDiagnostic("lane_payload_cache_miss", {
+                        work_unit_id: workUnitId,
+                        pill_key: nextKey,
+                        from_pill: prevKey,
+                        department_id: departmentId,
+                    });
                     lifecyclePillSwitchRetainRowsRef.current = true;
                     setLifecyclePillRetainRows(true);
                     markWorkUnitVmPillSwitchCacheMissHoldCurrent({
@@ -5158,10 +5174,39 @@ export default function AdminV2OpportunityWorkUnitPage() {
             lastQueueOpportunityIdRef.current = id;
             markDrawerRowClickStart();
             prefetchOpportunityDrawerOnRowIntent(id, opportunityWorkspaceContext ?? undefined, opportunityQueuePreviewSeed);
-            openDrawer(buildOpportunityDrawerOpenParams(id));
+            const openParams = buildOpportunityDrawerOpenParams(id);
+            const vmPeek = peekDrawerViewModelPreloadSync(
+                buildPrepareParamsFromOpenDrawer({
+                    ...openParams,
+                    source: "queue_row_open",
+                })
+            );
+            logDrawerVmRuntimeDiagnostic(
+                vmPeek ? "queue_row_open_cache_hit" : "queue_row_open_cache_miss",
+                {
+                    opportunity_id: id,
+                    work_unit_id: opportunityWorkspaceContext?.work_unit_id ?? null,
+                    department_id: opportunityWorkspaceContext?.department_id ?? null,
+                }
+            );
+            if (!vmPeek) {
+                setQueueRowOpenPendingOpportunityId(id);
+            }
+            openDrawer(openParams);
         },
         [buildOpportunityDrawerOpenParams, openDrawer, opportunityWorkspaceContext]
     );
+
+    useEffect(() => {
+        if (
+            drawer.type === "opportunities" &&
+            drawer.id &&
+            queueRowOpenPendingOpportunityId &&
+            String(drawer.id) === String(queueRowOpenPendingOpportunityId)
+        ) {
+            setQueueRowOpenPendingOpportunityId(null);
+        }
+    }, [drawer.id, drawer.type, queueRowOpenPendingOpportunityId]);
 
     const openWorkUnitQueuePersonDrawer = useCallback(
         (personId: string, opportunityId: string) => {
@@ -6297,6 +6342,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         aboveFoldHandlers={workUnitAboveFoldHandlers}
                         onAction={onAction}
                         opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
+                        queueRowOpenPendingOpportunityId={queueRowOpenPendingOpportunityId}
                         lifecyclePanel={workUnitLifecyclePanel}
                         recordFilterBar={workUnitRecordFilterBar}
                         otherPillSectionKey={otherPillSectionKey}

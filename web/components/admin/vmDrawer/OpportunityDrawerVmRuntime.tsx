@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
@@ -30,6 +30,7 @@ import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/dra
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
 import {
+    buildDrawerRuntimeProof,
     drawerDebugSourceFromPathname,
     drawerDebugSurfaceFromPresentation,
     drawerRuntimeDebugEnabled,
@@ -53,12 +54,14 @@ export default function OpportunityDrawerVmRuntime() {
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
     const {
         drawer,
+        drawerVmRender,
         closeDrawer,
         isOpportunityDrawerOpening,
         isOpportunityQueueNavPending,
         navigateOpportunityInQueue,
     } = useAdminDrawer();
-    const { displayVm, coldLoading, error, suppressFullDrawerLoading } = useOpportunityDrawerVmPayload();
+    const { displayVm, coldLoading, error, suppressFullDrawerLoading, holdPriorPayload } =
+        useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     const [statusDebugComponent, setStatusDebugComponent] =
         useState<DrawerDebugStatusComponent>("vm-readonly-pill");
@@ -89,20 +92,41 @@ export default function OpportunityDrawerVmRuntime() {
 
     const record = displayVm?.above_fold.record ?? null;
 
+    const vmMatchesRender = useMemo(
+        () =>
+            displayVm != null &&
+            String(displayVm.entity.id) === String(drawerVmRender.id) &&
+            drawerVmRender.type === "opportunities",
+        [displayVm, drawerVmRender.id, drawerVmRender.type]
+    );
+
+    const committedVisible = useMemo(
+        () =>
+            vmMatchesRender &&
+            drawer.type === "opportunities" &&
+            String(drawer.id) === String(displayVm?.entity.id),
+        [vmMatchesRender, drawer.type, drawer.id, displayVm?.entity.id]
+    );
+
+    const committedTitleRef = useRef(opportunitySingular);
+
     const queuePosition = useMemo(() => {
         if (!drawer.opportunityQueueNavigator || !drawer.id) return null;
         return resolveOpportunityQueueNavigatorPosition(drawer.id, drawer.opportunityQueueNavigator);
     }, [drawer.id, drawer.opportunityQueueNavigator]);
 
     const drawerTitle = useMemo(() => {
-        if (!record) return "Opportunity";
-        return formatOpportunityInquiryDrawerTitle(record, opportunitySingular) || opportunitySingular;
-    }, [record, opportunitySingular]);
+        if (!committedVisible || !record) return committedTitleRef.current;
+        const next =
+            formatOpportunityInquiryDrawerTitle(record, opportunitySingular) || opportunitySingular;
+        committedTitleRef.current = next;
+        return next;
+    }, [record, opportunitySingular, committedVisible]);
 
     const statusLabel = useMemo(
         () =>
             resolveOpportunityVmStatusLabel({
-                drawerId: drawer.id,
+                drawerId: committedVisible ? drawer.id : displayVm?.entity.id ?? drawer.id,
                 displayVm,
                 queueSeedStatusLabel: drawer.opportunityQueuePreviewSeed?.statusLabel,
             }),
@@ -115,7 +139,9 @@ export default function OpportunityDrawerVmRuntime() {
     );
 
     const headerAttentionCenter = useMemo(() => {
-        if (!drawer.id || !record || !isDrawerHeaderAttentionVisible(record)) return null;
+        if (!committedVisible || !drawer.id || !record || !isDrawerHeaderAttentionVisible(record)) {
+            return null;
+        }
         return (
             <OpportunityDrawerHeaderControls
                 layout="modal-attention"
@@ -131,6 +157,7 @@ export default function OpportunityDrawerVmRuntime() {
             />
         );
     }, [
+        committedVisible,
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
         displayVm?.actions.header,
@@ -142,7 +169,7 @@ export default function OpportunityDrawerVmRuntime() {
 
     /** Status below title (left) — matches legacy inquiry modal subtitle rail. */
     const headerSubtitleBelowTitle = useMemo(() => {
-        if (!drawer.id || !statusLabel) return undefined;
+        if (!committedVisible || !drawer.id || !statusLabel) return undefined;
         return (
             <div className="mt-0.5" data-opportunity-drawer-header-status-below-title="true">
                 <div className="shrink-0" data-drawer-vm-status-rail="true">
@@ -158,6 +185,7 @@ export default function OpportunityDrawerVmRuntime() {
             </div>
         );
     }, [
+        committedVisible,
         currentStatusKey,
         displayVm?.header.status,
         drawer.id,
@@ -167,7 +195,7 @@ export default function OpportunityDrawerVmRuntime() {
 
     /** Top-right: Work with BOS + Actions menu + close (Drawer appends close). */
     const headerTitleRight = useMemo(() => {
-        if (!drawer.id || !displayVm || !record) return undefined;
+        if (!committedVisible || !drawer.id || !displayVm || !record) return undefined;
         return (
             <div
                 className="flex shrink-0 items-start"
@@ -188,6 +216,7 @@ export default function OpportunityDrawerVmRuntime() {
             </div>
         );
     }, [
+        committedVisible,
         actionLoadingKey,
         displayVm,
         drawer.id,
@@ -263,6 +292,11 @@ export default function OpportunityDrawerVmRuntime() {
 
     const onTabSelect = useCallback((tab: DrawerTabKey) => setDrawerTab(tab), []);
 
+    const drawerRuntimeProof = useMemo(
+        () => buildDrawerRuntimeProof("opportunity-vm"),
+        []
+    );
+
     const runtimeDebug = useMemo(
         () =>
             drawerRuntimeDebugEnabled() && drawer.type && drawer.id ?
@@ -279,9 +313,15 @@ export default function OpportunityDrawerVmRuntime() {
         [drawer.type, drawer.id, pathname, statusDebugComponent]
     );
 
+    const drawerOpen =
+        Boolean(drawer.type && drawer.id) &&
+        !isOpportunityDrawerOpening &&
+        drawerVmRender.type === "opportunities" &&
+        Boolean(drawerVmRender.id);
+
     return (
         <Drawer
-            isOpen={Boolean(drawer.type && drawer.id) && !isOpportunityDrawerOpening}
+            isOpen={drawerOpen}
             onClose={closeDrawer}
             title={drawerTitle}
             headerSubtitle={headerSubtitleBelowTitle}
@@ -295,8 +335,14 @@ export default function OpportunityDrawerVmRuntime() {
             accentColor={DRAWER_ACCENT_OPPORTUNITY}
             recordModalTone="cleaning-v2"
             runtimeDebug={runtimeDebug}
+            drawerRuntimeProof={drawerRuntimeProof}
         >
-            <div className="relative" data-adminv2-drawer="true" data-drawer-vm-runtime="opportunity">
+            <div
+                className="relative"
+                data-adminv2-drawer="true"
+                data-drawer-runtime="opportunity-vm"
+                {...(holdPriorPayload ? { "data-drawer-vm-transition-hold": "true" } : {})}
+            >
                 {isOpportunityQueueNavPending ?
                     <div
                         className="absolute inset-0 z-20 flex items-center justify-center bg-white/75"
@@ -323,7 +369,7 @@ export default function OpportunityDrawerVmRuntime() {
                     <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
                         <p className="text-sm font-medium text-alloy-midnight/75">Loading opportunity…</p>
                     </div>
-                :   displayVm && record && drawer.id ?
+                :   committedVisible && displayVm && record ?
                     <>
                         <div
                             className="mb-3 flex flex-wrap gap-0.5 border-b border-alloy-stone/15 pb-2"

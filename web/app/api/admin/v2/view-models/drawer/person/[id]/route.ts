@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composePersonDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/person/composePersonDrawerViewModel";
+import { parsePersonDrawerVmComposeDepth } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             personId: personId.trim(),
             openSource: sp.get("open_source"),
             presentationEmphasis: sp.get("presentation_emphasis"),
+            composeDepth: parsePersonDrawerVmComposeDepth(sp.get("compose_depth")),
         });
 
         if (!result.ok) {
@@ -51,6 +53,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         });
     } catch (e) {
         const msg = e instanceof Error ? e.message : "Person drawer view model compose failed";
+        console.error("[person_drawer_vm_compose_error]", {
+            person_id: personId.trim(),
+            message: msg,
+            stack: e instanceof Error ? e.stack : undefined,
+        });
         return NextResponse.json({ error: msg }, { status: 500 });
     }
 }

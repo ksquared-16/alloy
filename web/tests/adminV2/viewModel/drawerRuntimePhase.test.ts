@@ -63,6 +63,7 @@ describe("drawerRuntimePhase helpers", () => {
 
         const applying = drawerRuntimePhaseForApplyingVm(preparing);
         expect(applying.phase).toBe("applying_vm");
+        expect(applying.swapFallbackFetch).toBe(false);
 
         const showing = drawerRuntimePhaseForShowing(applying);
         expect(showing.phase).toBe("showing");
@@ -71,7 +72,7 @@ describe("drawerRuntimePhase helpers", () => {
         expect(showing.transitionId).toBe(1);
     });
 
-    it("schedules swap fallback fetch without staying in swap_preparing", () => {
+    it("schedules swap fallback fetch while staying in swap_preparing", () => {
         const fallback = drawerRuntimePhaseForSwapFallbackFetch(
             drawerRuntimePhaseForSwapStart(INITIAL_DRAWER_RUNTIME_PHASE_STATE, {
                 entityType: "opportunities",
@@ -79,9 +80,34 @@ describe("drawerRuntimePhase helpers", () => {
             }),
             { entityType: "opportunities", entityId: "opp-2" }
         );
-        expect(fallback.phase).toBe("showing");
+        expect(fallback.phase).toBe("swap_preparing");
         expect(fallback.swapFallbackFetch).toBe(true);
         expect(fallback.target?.entityId).toBe("opp-2");
+    });
+
+    it("drawerRuntimePhaseForSwapFallbackFetch is idempotent for the same target", () => {
+        const first = drawerRuntimePhaseForSwapFallbackFetch(
+            drawerRuntimePhaseForSwapStart(INITIAL_DRAWER_RUNTIME_PHASE_STATE, {
+                entityType: "persons",
+                entityId: "p-9",
+            }),
+            { entityType: "persons", entityId: "p-9" }
+        );
+        const second = drawerRuntimePhaseForSwapFallbackFetch(first, {
+            entityType: "persons",
+            entityId: "p-9",
+        });
+        expect(second).toBe(first);
+    });
+
+    it("drawerRuntimePhaseForApplyingVm is idempotent when already applying", () => {
+        const preparing = drawerRuntimePhaseForSwapStart(INITIAL_DRAWER_RUNTIME_PHASE_STATE, {
+            entityType: "persons",
+            entityId: "p-3",
+        });
+        const applying = drawerRuntimePhaseForApplyingVm(preparing);
+        const again = drawerRuntimePhaseForApplyingVm(applying);
+        expect(again).toBe(applying);
     });
 
     it("idle clears transition state", () => {
@@ -117,47 +143,66 @@ describe("drawer runtime phase wiring (source contracts)", () => {
         expect(ctx).toContain("drawerTransitionId: drawerRuntimePhase.transitionId");
     });
 
-    it("AdminEntityDrawer gates loading and body from runtime phase", async () => {
+    it("Persons VM runtime places Back to Lead in header subtitle for child chrome", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("drawerRuntimePhase");
-        expect(drawer).toContain("suppressFullDrawerLoading");
-        expect(drawer).toContain("holdPriorDrawerContent");
-        expect(drawer).toContain("drawerBodyDataMatches");
-        expect(drawer).toContain("consumeDrawerSwapFallbackFetch");
-        expect(drawer).not.toContain("drawerShellPinnedVmSwapActive");
-        expect(drawer).not.toContain("drawerModelSwapGeneration");
-        expect(drawer).toMatch(/suppressFullDrawerLoading[\s\S]*return false/);
+        const person = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        expect(person).toContain("resolvePersonDrawerOperatingBackLink");
+        expect(person).toMatch(
+            /chrome === "child"[\s\S]*data-record-drawer-back-link/
+        );
+        expect(person).not.toMatch(/statusBadge=\{[\s\S]*chrome === "child"/);
     });
 
-    it("opportunity status does not unmount with return null after VM settle", async () => {
+    it("VM payload hooks schedule background related warm after apply", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        const block = drawer.slice(
-            drawer.indexOf("opportunityInquiryWorkflowHeaderStatus"),
-            drawer.indexOf("opportunityInquiryWorkflowHeaderStatus") + 4500
+        const opp = readFileSync(
+            join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload.ts"),
+            "utf8"
         );
-        expect(block).toContain("blockStatusSkeletonAfterVmSettle");
-        expect(block).not.toMatch(
-            /opportunityDrawerVmFirstPaintSettled[\s\S]{0,120}return null/
-        );
-        expect(block).toContain("Updating…");
+        expect(opp).toContain("scheduleWarmRelatedDrawerTargetsAfterVmApply");
+        expect(opp).toContain("generation: vm.generation");
     });
 
-    it("swap fallback fetch is consumed without early return during hold", async () => {
+    it("VM payload hooks suppress cold shell during swap transition phases", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toMatch(/consumeDrawerSwapFallbackFetch\(\)[\s\S]*setLoading\(true\)/);
-        expect(drawer).toMatch(/holdPriorDrawerContent[\s\S]*return;/);
+        for (const file of [
+            "useOpportunityDrawerVmPayload.ts",
+            "usePersonsDrawerVmPayload.ts",
+        ]) {
+            const hook = readFileSync(
+                join(webRoot, "lib/adminV2/viewModel/drawer/vmRuntime", file),
+                "utf8"
+            );
+            expect(hook).toContain("shouldShowVmDrawerColdShell");
+            expect(hook).toContain("suppressFullDrawerLoading");
+            expect(hook).toContain("swap_hold_current");
+        }
+    });
+
+    it("Opportunity VM runtime uses progressive status without legacy header status", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { join, dirname } = await import("node:path");
+        const { fileURLToPath } = await import("node:url");
+        const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
+        const vm = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        expect(vm).toContain("VmProgressiveStatusDropdown");
+        expect(vm).not.toContain("opportunityInquiryWorkflowHeaderStatus");
+        expect(vm).toContain("vmMatchesRender");
     });
 
     it("cached swap applies VM immediately via attachDrawerSwapPreload", async () => {
@@ -166,11 +211,11 @@ describe("drawer runtime phase wiring (source contracts)", () => {
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
         const ctx = readFileSync(join(webRoot, "contexts/AdminDrawerContext.tsx"), "utf8");
-        expect(ctx).toMatch(/if \(syncPreload\)[\s\S]*attachDrawerSwapPreload\(params, syncPreload\)/);
-        expect(ctx).toMatch(/if \(preload\)[\s\S]*drawerRuntimePhaseForApplyingVm/);
+        expect(ctx).toMatch(/if \(syncPreload\)[\s\S]*commitDrawerModelSwap\(params, syncPreload\)/);
+        expect(ctx).toMatch(/commitDrawerModelSwap[\s\S]*drawerRuntimePhaseForShowing/);
     });
 
-    it("uncached swap schedules entity fallback fetch without staying in swap_preparing", async () => {
+    it("uncached swap schedules VM fallback fetch while holding source drawer", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
@@ -178,19 +223,29 @@ describe("drawer runtime phase wiring (source contracts)", () => {
         const ctx = readFileSync(join(webRoot, "contexts/AdminDrawerContext.tsx"), "utf8");
         expect(ctx).toContain("swapFallbackFetchPendingRef");
         expect(ctx).toContain("drawerRuntimePhaseForSwapFallbackFetch");
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("drawerBodyDataMatches");
+        expect(ctx).toContain("drawerVmRender");
+        expect(ctx).toContain("prepareDrawerViewModelDeduped(prepareParams)");
+        expect(ctx).toContain("lastAttachedSwapPreloadKeyRef");
+        expect(ctx).toContain("swapFallbackFetchInFlightKeyRef");
     });
 
-    it("loading visuals are gated off during swap transition phases", async () => {
+    it("VM runtimes do not show loading copy during cross-drawer transition hold", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const drawer = readFileSync(join(webRoot, "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toMatch(/opportunityDrawerPrimaryLoadingVisible[\s\S]*!suppressFullDrawerLoading/);
-        expect(drawer).toMatch(/opportunityDrawerPreOverviewShell[\s\S]*!suppressFullDrawerLoading/);
-        expect(drawer).toMatch(/personDrawerShowLoadingShell[\s\S]*!suppressFullDrawerLoading/);
+        const opp = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        const person = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        expect(opp).toContain("showColdShell");
+        expect(person).toContain("showColdShell");
+        expect(opp).not.toContain("Preparing parent profile");
+        expect(person).not.toMatch(/Preparing child profile/);
     });
 
     it("cold open uses opening_cold phase only when no drawer is open", async () => {

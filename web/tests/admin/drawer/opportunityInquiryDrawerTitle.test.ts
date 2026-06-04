@@ -5,19 +5,20 @@ import {
 } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 
 describe("formatOpportunityInquiryDrawerTitle", () => {
-    it("prefers primary person over household label", () => {
+    it("uses configured entity label and household name, not primary contact person", () => {
         const title = formatOpportunityInquiryDrawerTitle(
             {
                 _identity: {
-                    household: { id: "c1", label: "Bennett Household" },
-                    primary_person: { id: "p1", label: "Bennett" },
+                    household: { id: "c1", label: "Mitchell Household" },
+                    primary_person: { id: "p1", label: "Kevin Mitchell" },
                 },
-                _customer_name: "Bennett Household",
+                _customer_name: "Mitchell Household",
             },
             "Lead"
         );
-        expect(title).toBe("Enrollment — Bennett");
-        expect(title.toLowerCase()).not.toContain("household");
+        expect(title).toBe("Lead — Mitchell");
+        expect(title).not.toContain("Kevin");
+        expect(title).not.toContain("Enrollment");
     });
 
     it("strips household suffix from customer name fallback", () => {
@@ -28,11 +29,11 @@ describe("formatOpportunityInquiryDrawerTitle", () => {
             },
             "Lead"
         );
-        expect(title).toBe("Enrollment — Williams");
+        expect(title).toBe("Lead — Williams");
     });
 
-    it("uses configured singular when no name hints exist", () => {
-        expect(formatOpportunityInquiryDrawerTitle({}, "Lead")).toBe("Enrollment — Lead");
+    it("uses configured singular when no household name hints exist", () => {
+        expect(formatOpportunityInquiryDrawerTitle({}, "Lead")).toBe("Lead");
     });
 });
 

@@ -13,6 +13,14 @@ import {
     isPersonDrawerSnapshotWarm,
     prefetchPersonDrawerSnapshot,
 } from "@/lib/admin/prefetchPersonDrawerSnapshot";
+import { buildPrepareParamsFromOpenDrawer } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
+import {
+    drawerLinkPendingKeyForChildFromOpportunity,
+    drawerLinkPendingKeyForPersonFromOpportunity,
+    type DrawerLinkPendingActions,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
+import { beginDrawerLinkPendingIfCold } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerTargetCache";
 
 export type OpenDrawerFromOpportunityFn = (params: OpenDrawerParams) => void;
 
@@ -23,12 +31,38 @@ export function openViewPersonFromOpportunity(args: {
     opportunityId: string;
     source?: string;
     openSeed?: PersonDrawerOpenSeed | null;
+    opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
+    linkPending?: DrawerLinkPendingActions;
 }): boolean {
     const personId = args.personId.trim();
     const opportunityId = args.opportunityId.trim();
     if (!personId) return false;
 
     const openSource = args.source ?? "opportunity_primary_contact";
+    const pendingKey =
+        openSource === PERSON_DRAWER_CHILD_OPEN_SOURCE ?
+            drawerLinkPendingKeyForChildFromOpportunity({
+                personId,
+                opportunityId,
+                openSeed: args.openSeed ?? null,
+                opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+            })
+        :   drawerLinkPendingKeyForPersonFromOpportunity({
+                personId,
+                opportunityId,
+                source: openSource,
+                openSeed: args.openSeed ?? null,
+                opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+            });
+    const openParams = {
+        type: "persons" as const,
+        id: personId,
+        source: openSource,
+        parent: opportunityId ? { type: "opportunities" as const, id: opportunityId } : undefined,
+        personDrawerOpenSeed: args.openSeed ?? null,
+        opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+    };
+    beginDrawerLinkPendingIfCold(args.linkPending, pendingKey, openParams);
     const childOpen = openSource === PERSON_DRAWER_CHILD_OPEN_SOURCE;
     const cacheHit = isPersonDrawerSnapshotWarm(personId);
     const openStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -46,13 +80,7 @@ export function openViewPersonFromOpportunity(args: {
         }
     }
 
-    args.openDrawer({
-        type: "persons",
-        id: personId,
-        source: openSource,
-        parent: opportunityId ? { type: "opportunities", id: opportunityId } : undefined,
-        personDrawerOpenSeed: args.openSeed ?? null,
-    });
+    args.openDrawer(openParams);
 
     const timeToVisibleMs = Math.round(
         (typeof performance !== "undefined" ? performance.now() : Date.now()) - openStartedAt
@@ -76,17 +104,55 @@ export function openViewPersonFromOpportunity(args: {
 }
 
 /** Optional hover warm — never blocks click open. */
-export function prefetchViewPersonOnHover(personId: string): void {
-    prefetchViewPersonOnPointerDown(personId);
+export function prefetchViewPersonOnHover(
+    personId: string,
+    opts?: Parameters<typeof prefetchViewPersonOnPointerDown>[1]
+): void {
+    prefetchViewPersonOnPointerDown(personId, opts);
+}
+
+function prefetchPersonDrawerVmCache(args: {
+    personId: string;
+    openSource?: string;
+    openSeed?: PersonDrawerOpenSeed | null;
+    opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
+}): void {
+    const id = args.personId.trim();
+    if (!id) return;
+    const openSource = args.openSource ?? "opportunity_primary_contact";
+    void prepareDrawerViewModelDeduped(
+        buildPrepareParamsFromOpenDrawer({
+            type: "persons",
+            id,
+            source: openSource,
+            personDrawerOpenSeed: args.openSeed ?? null,
+            opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+        })
+    ).catch(() => {
+        /* VM warm must not block UI */
+    });
 }
 
 /** Pointer/mousedown warm — runs before click handler for faster open. */
-export function prefetchViewPersonOnPointerDown(personId: string): void {
+export function prefetchViewPersonOnPointerDown(
+    personId: string,
+    opts?: {
+        openSource?: string;
+        openSeed?: PersonDrawerOpenSeed | null;
+        opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
+    }
+): void {
     const id = personId.trim();
     if (!id) return;
     try {
-        prefetchPersonDrawerSnapshot(id, { source: "hover" });
+        prefetchPersonDrawerSnapshot(id, { source: "hover", openSeed: opts?.openSeed ?? undefined });
     } catch {
         /* ignore */
     }
+    prefetchPersonDrawerVmCache({
+        personId: id,
+        openSource: opts?.openSource,
+        openSeed: opts?.openSeed ?? null,
+        opportunityWorkspaceContext: opts?.opportunityWorkspaceContext ?? null,
+    });
 }

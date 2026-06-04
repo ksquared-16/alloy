@@ -3342,8 +3342,7 @@ export function AdminEntityDrawerLegacy() {
             const result =
                 childOpen ?
                     await loadChildDrawerViaViewModel(personId, {
-                        ...workspaceDataFetchInit(),
-                        signal: ac.signal,
+                        init: { ...workspaceDataFetchInit(), signal: ac.signal },
                     })
                 :   await loadPersonDrawerViaViewModel(personId, {
                         openSource: drawer.openSource,

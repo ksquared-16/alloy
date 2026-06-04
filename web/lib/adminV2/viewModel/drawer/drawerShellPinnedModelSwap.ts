@@ -145,9 +145,9 @@ export function resolveModelSwapOpportunityContext(
 > {
     if (params.type !== "opportunities") {
         return {
-            opportunityWorkspaceContext: null,
-            opportunityQueueNavigator: null,
-            opportunityQueuePreviewSeed: null,
+            opportunityWorkspaceContext: prev.opportunityWorkspaceContext ?? null,
+            opportunityQueueNavigator: prev.opportunityQueueNavigator ?? null,
+            opportunityQueuePreviewSeed: prev.opportunityQueuePreviewSeed ?? null,
         };
     }
     return {

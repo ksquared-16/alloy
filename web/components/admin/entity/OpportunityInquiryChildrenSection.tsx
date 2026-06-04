@@ -1,6 +1,14 @@
 "use client";
 
-import { prefetchPersonDrawerSnapshot } from "@/lib/admin/prefetchPersonDrawerSnapshot";
+import { buildPrepareParamsFromOpenDrawer } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
+import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { buildInquiryChildPersonOpenSeed } from "@/lib/admin/drawer/inquiryChildPersonOpen";
+import { resolveInquiryChildOpenPersonId } from "@/lib/admin/drawer/inquiryChildPersonOpen";
+import {
+    drawerLinkPendingKeyForChildFromOpportunity,
+    type DrawerLinkPendingActions,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
 
 import { formatDate } from "@/lib/adminFormatters";
 import {
@@ -145,31 +153,58 @@ function InquiryChildDrawerIconButton({
     displayName,
     onOpenChild,
     row,
+    opportunityId,
+    opportunityRecord,
+    opportunityWorkspaceContext,
+    linkPending,
+    pendingKey,
 }: {
     personId: string | null;
     customerMemberId: string;
     displayName: string;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
     row: InquiryChildRow;
+    opportunityId: string;
+    opportunityRecord: Record<string, unknown>;
+    opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
+    linkPending?: DrawerLinkPendingActions;
+    pendingKey: string | null;
 }) {
     if (!onOpenChild) return null;
-    const targetId = (personId ?? customerMemberId).trim();
-    if (!targetId) return null;
+    const cmId = customerMemberId.trim();
+    if (!cmId) return null;
+    const resolvedPersonId = resolveInquiryChildOpenPersonId(opportunityRecord, row) ?? personId?.trim() ?? "";
+    const iconTargetId = resolvedPersonId || cmId;
+    const isPending = pendingKey != null && (linkPending?.isPending(pendingKey) ?? false);
+
+    const warmChildVm = () => {
+        if (!resolvedPersonId) return;
+        const openSeed = buildInquiryChildPersonOpenSeed(opportunityRecord, row, resolvedPersonId);
+        void prepareDrawerViewModelDeduped(
+            buildPrepareParamsFromOpenDrawer({
+                type: "persons",
+                id: resolvedPersonId,
+                source: PERSON_DRAWER_CHILD_OPEN_SOURCE,
+                personDrawerOpenSeed: openSeed,
+                opportunityWorkspaceContext: opportunityWorkspaceContext ?? null,
+            })
+        ).catch(() => {
+            /* warm must not block UI */
+        });
+    };
 
     return (
         <ViewPersonDrawerIconButton
-            personId={targetId}
+            personId={iconTargetId}
             displayName={displayName}
             recordKind="child"
-            onMouseEnter={() => {
-                if (personId) prefetchPersonDrawerSnapshot(personId);
-            }}
-            onFocus={() => {
-                if (personId) prefetchPersonDrawerSnapshot(personId);
-            }}
+            isPending={isPending}
+            onMouseEnter={warmChildVm}
+            onFocus={warmChildVm}
+            onPointerDown={warmChildVm}
             onClick={() =>
                 onOpenChild({
-                    person_id: row.person_id,
+                    person_id: row.person_id ?? resolvedPersonId ?? null,
                     customer_member_id: row.customer_member_id,
                     display_name: row.display_name,
                 })
@@ -199,6 +234,9 @@ export default function OpportunityInquiryChildrenSection({
     opportunityId,
     opportunityDesiredStartDate = null,
     onOpenChild,
+    opportunityRecord = {},
+    opportunityWorkspaceContext = null,
+    linkPending,
     onChildrenMutated,
     /** When true and rows are empty, reserve row shells until drawer owner supplies rows. */
     recordDetailPending = false,
@@ -217,6 +255,9 @@ export default function OpportunityInquiryChildrenSection({
     /** Household/inquiry-level desired start for inheritance display when child OCM value is null. */
     opportunityDesiredStartDate?: string | null;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
+    opportunityRecord?: Record<string, unknown>;
+    opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
+    linkPending?: DrawerLinkPendingActions;
     onChildrenMutated?: () => void;
     recordDetailPending?: boolean;
     embeddedInPremiumSection?: boolean;
@@ -983,6 +1024,24 @@ export default function OpportunityInquiryChildrenSection({
                                             displayName={displayName}
                                             onOpenChild={onOpenChild && !isMetadataOnly ? onOpenChild : undefined}
                                             row={r}
+                                            opportunityId={opportunityId ?? ""}
+                                            opportunityRecord={opportunityRecord}
+                                            opportunityWorkspaceContext={opportunityWorkspaceContext}
+                                            linkPending={linkPending}
+                                            pendingKey={(() => {
+                                                if (!opportunityId) return null;
+                                                const resolved =
+                                                    resolveInquiryChildOpenPersonId(
+                                                        opportunityRecord,
+                                                        r
+                                                    ) ?? String(r.person_id ?? "").trim();
+                                                if (!resolved) return null;
+                                                return drawerLinkPendingKeyForChildFromOpportunity({
+                                                    personId: resolved,
+                                                    opportunityId,
+                                                    opportunityWorkspaceContext,
+                                                });
+                                            })()}
                                         />
                                         {rowCanEdit ? (
                                             <>

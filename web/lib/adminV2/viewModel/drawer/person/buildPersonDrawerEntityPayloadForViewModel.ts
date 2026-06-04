@@ -3,6 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { attachPersonDrawerVisibility } from "@/lib/admin/person/attachPersonDrawerVisibility";
 import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    personDrawerRecordComposeDepthMarker,
+    visibilityScopeForComposeDepth,
+    type PersonDrawerVmComposeDepth,
+} from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
 
 const PERSON_LIMIT = 25;
 
@@ -18,7 +23,8 @@ export async function buildPersonDrawerEntityPayloadForViewModel(
     supabase: SupabaseClient,
     orgId: string,
     personId: string,
-    siteScope?: AdminAccessScopeDimensions | null
+    siteScope?: AdminAccessScopeDimensions | null,
+    composeDepth: PersonDrawerVmComposeDepth = "first_paint"
 ): Promise<BuildPersonDrawerEntityPayloadResult> {
     const id = personId.trim();
     if (!id) return { ok: false, reason: "not_found" };
@@ -138,7 +144,12 @@ export async function buildPersonDrawerEntityPayloadForViewModel(
     out._linked_locations = locResult;
     out._linked_opportunities = oppResult;
 
-    await attachPersonDrawerVisibility(supabase, orgId, id, out, { siteScope: siteScope ?? null });
+    out._person_drawer_vm_compose_depth = personDrawerRecordComposeDepthMarker(composeDepth);
+
+    await attachPersonDrawerVisibility(supabase, orgId, id, out, {
+        siteScope: siteScope ?? null,
+        scope: visibilityScopeForComposeDepth(composeDepth),
+    });
 
     return { ok: true, record: out };
 }

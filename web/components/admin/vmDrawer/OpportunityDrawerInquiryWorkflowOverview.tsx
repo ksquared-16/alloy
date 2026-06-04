@@ -41,7 +41,7 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
     onSelectTab,
 }: Props) {
     const { canMutate } = useAdminAuth();
-    const { openDrawer, drawer } = useAdminDrawer();
+    const { openDrawer, drawer, drawerLinkPending } = useAdminDrawer();
     const router = useRouter();
     const viewerTz = useAdminViewerTimezone();
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
@@ -233,7 +233,14 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                 </div>
             </div>
             {showInquiryChildren ?
-                <div data-opportunity-inquiry-children-section="true">
+                <div
+                    className={oppInqLeadSummaryShellClassName}
+                    data-opportunity-inquiry-children-section="true"
+                >
+                    <div className="flex flex-wrap items-end justify-between gap-1.5 border-b border-alloy-stone/12 pb-1">
+                        <span className={oppInqEyebrow}>{opportunitySingular} children</span>
+                    </div>
+                    <div className="mt-1 min-w-0 px-0.5 pb-0.5">
                     <OpportunityInquiryChildrenSection
                         rows={drawerChildRows}
                         opportunityId={drawerId}
@@ -253,15 +260,21 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                         shellReservedRowCount={expectedRowCount}
                         opportunityDisplayLocationKind={opportunityDisplayLocationKind ?? undefined}
                         onChildrenMutated={refreshVm}
+                        opportunityRecord={record}
+                        opportunityWorkspaceContext={drawer.opportunityWorkspaceContext ?? null}
+                        linkPending={drawerLinkPending}
                         onOpenChild={(row) => {
                             void openInquiryChildPersonFromOpportunitySync({
                                 openDrawer,
                                 opportunityRecord: record,
                                 opportunityId: drawerId,
+                                opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
+                                linkPending: drawerLinkPending,
                                 row,
                             });
                         }}
                     />
+                    </div>
                 </div>
             :   null}
         </div>

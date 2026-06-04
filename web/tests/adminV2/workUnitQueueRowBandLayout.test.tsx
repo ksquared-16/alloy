@@ -180,7 +180,7 @@ describe("operational record V3.2 compact header", () => {
         const statusIdx = html.indexOf('data-testid="queue-header-status"');
         expect(householdIdx).toBeGreaterThan(-1);
         expect(statusIdx).toBeGreaterThan(householdIdx);
-        expect(html).toContain('data-queue-header-layout="attention-column"');
+        expect(html).toContain('data-queue-header-layout="four-column"');
         expect(html).toContain('data-testid="queue-header-household-icon"');
         expect(html).toContain("Mitchell household");
     });
@@ -517,7 +517,7 @@ describe("operational record V3.2 compact header", () => {
             />
         );
         expect(html).toContain("Sam (4y)");
-        expect(html).toContain('data-queue-header-layout="attention-column"');
+        expect(html).toContain('data-queue-header-layout="four-column"');
         expect(html).not.toContain('data-queue-attention-supplement="true"');
     });
 });

@@ -14,7 +14,10 @@ import {
     personDrawerHouseholdAddressHasContent,
     resolvePersonDrawerHouseholdAddressModel,
 } from "@/lib/admin/person/resolvePersonDrawerHouseholdAddress";
-import { personDrawerHouseholdAgeLabel } from "@/lib/admin/person/personDrawerHouseholdDisplay";
+import {
+    personDrawerHouseholdAgeLabel,
+    resolvePersonDrawerChildDateOfBirth,
+} from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { resolvePersonDrawerProfileFromRecord } from "@/components/admin/entity/PersonDrawerProfileBadges";
 
 const childProfile = resolvePersonDrawerProfileFromRecord({
@@ -162,5 +165,23 @@ describe("person drawer IA cleanup pass", () => {
     it("computes child age label from date of birth", () => {
         const age = personDrawerHouseholdAgeLabel("2020-01-15");
         expect(age).toMatch(/yr|mo/);
+    });
+
+    it("resolvePersonDrawerChildDateOfBirth uses persons.date_of_birth only", () => {
+        expect(resolvePersonDrawerChildDateOfBirth({ date_of_birth: "2020-06-15" })).toBe("2020-06-15");
+        expect(resolvePersonDrawerChildDateOfBirth({ date_of_birth: null, metadata: { dob: "2019-03-01" } })).toBe(
+            "2019-03-01"
+        );
+        expect(resolvePersonDrawerChildDateOfBirth(null)).toBeNull();
+    });
+
+    it("attachPersonDrawerVisibility does not select nonexistent persons.dob", () => {
+        const src = readFileSync(
+            join(process.cwd(), "lib/admin/person/attachPersonDrawerVisibility.ts"),
+            "utf8"
+        );
+        expect(src).toContain('select("id, date_of_birth, status_key, metadata")');
+        expect(src).not.toMatch(/from\("persons"\)[\s\S]{0,120}dob/);
+        expect(src).not.toContain("person_drawer_household_child_meta:");
     });
 });

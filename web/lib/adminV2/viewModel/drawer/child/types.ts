@@ -38,7 +38,7 @@ export type ChildDrawerViewModel = {
         operating_sections: readonly ("child_summary" | "household")[];
     };
     background_refresh: {
-        allowed: readonly ("status_values")[];
+        allowed: readonly ("status_values" | "record_visibility")[];
     };
     timing: {
         compose_ms: number;

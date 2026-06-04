@@ -35,6 +35,7 @@ type Props = {
   kpiStripSkeletonCellCount?: number;
   primaryFooterSlot?: ReactNode;
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
+  queueRowOpenPendingOpportunityId?: string | null;
 };
 
 /**
@@ -52,6 +53,7 @@ export default function WorkUnitWorkspace({
   kpiStripSkeletonCellCount: _kpiStripSkeletonCellCount,
   primaryFooterSlot,
   opportunityDrawerWorkspaceContext = null,
+  queueRowOpenPendingOpportunityId = null,
 }: Props) {
   const wuShellStyle: CSSProperties = useMemo(
     () =>
@@ -219,6 +221,7 @@ export default function WorkUnitWorkspace({
                     variant="primary"
                     surface="work_unit"
                     opportunityDrawerWorkspaceContext={opportunityDrawerWorkspaceContext}
+                    queueRowOpenPendingOpportunityId={queueRowOpenPendingOpportunityId}
                   />
                 </div>
               </div>

@@ -22,6 +22,7 @@ describe("Opportunity VM drawer body — production parity sections", () => {
     it("OpportunityDrawerVmRuntime uses production inquiry drawer title formatter", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("formatOpportunityInquiryDrawerTitle");
+        expect(runtime).toContain("committedVisible");
         expect(runtime).not.toContain('title={displayVm?.header.title ?? "Opportunity"}');
     });
 
@@ -29,14 +30,16 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         const title = formatOpportunityInquiryDrawerTitle(
             {
                 name: "Family inquiry — Smith",
+                _customer_name: "Smith Household",
                 _identity: {
+                    household: { label: "Smith Household" },
                     primary_person: { label: "Smith Family" },
                 },
             },
-            "Enrollment"
+            "Lead"
         );
+        expect(title).toBe("Lead — Smith");
         expect(title).not.toMatch(/Family inquiry/i);
-        expect(title).toContain("Smith");
     });
 
     it("FamilyContactsPanel supports multiple contacts via shell reserved count", () => {
@@ -54,6 +57,9 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(overview).toContain('data-opportunity-lead-summary="true"');
         expect(overview).toContain('data-opportunity-tour-block="true"');
         expect(overview).toContain('data-opportunity-inquiry-children-section="true"');
+        expect(overview).toContain("className={oppInqLeadSummaryShellClassName}");
+        expect(overview).toContain("{opportunitySingular} children");
+        expect(overview).toContain("oppInqEyebrow");
         expect(overview).toContain('data-opportunity-inquiry-right-column="true"');
         expect(overview).toContain('data-opportunity-inquiry-summary="true"');
         expect(overview).not.toContain("VmInquiryRightColumn");

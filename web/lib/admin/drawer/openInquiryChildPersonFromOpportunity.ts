@@ -11,6 +11,13 @@ import {
     PERSON_DRAWER_CHILD_OPEN_SOURCE,
     type PersonDrawerOpenSeed,
 } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { buildPrepareParamsFromOpenDrawer } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
+import {
+    DRAWER_LINK_OPEN_FAILED_MESSAGE,
+    drawerLinkPendingKeyForChildFromOpportunity,
+    type DrawerLinkPendingActions,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
 
 export type OpenDrawerFromOpportunityFn = (params: OpenDrawerParams) => void;
 
@@ -38,6 +45,8 @@ export async function openInquiryChildPersonFromOpportunity(args: {
     opportunityRecord: Record<string, unknown>;
     opportunityId: string;
     row: InquiryChildRowLike;
+    opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
+    linkPending?: DrawerLinkPendingActions;
 }): Promise<boolean> {
     const cmId = trimId(args.row.customer_member_id);
     if (!cmId || isSyntheticInquiryChildMemberId(cmId)) {
@@ -60,13 +69,39 @@ export async function openInquiryChildPersonFromOpportunity(args: {
 
     cachePersonDrawerChildOpenSeed(personId, openSeed);
 
-    return openViewPersonFromOpportunity({
+    void prepareDrawerViewModelDeduped(
+        buildPrepareParamsFromOpenDrawer({
+            type: "persons",
+            id: personId,
+            source: PERSON_DRAWER_CHILD_OPEN_SOURCE,
+            personDrawerOpenSeed: openSeed,
+            opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+        })
+    ).catch(() => {
+        /* warm must not block open */
+    });
+
+    const opened = openViewPersonFromOpportunity({
         openDrawer: args.openDrawer,
         personId,
         opportunityId: args.opportunityId,
         source: PERSON_DRAWER_CHILD_OPEN_SOURCE,
         openSeed,
+        opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+        linkPending: args.linkPending,
     });
+    if (!opened) {
+        args.linkPending?.fail(
+            drawerLinkPendingKeyForChildFromOpportunity({
+                personId,
+                opportunityId: args.opportunityId,
+                opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+                openSeed,
+            }),
+            DRAWER_LINK_OPEN_FAILED_MESSAGE
+        );
+    }
+    return opened;
 }
 
 /** Fire-and-forget wrapper for click handlers — logs resolution failures in dev only. */

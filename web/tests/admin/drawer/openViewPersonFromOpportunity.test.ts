@@ -35,6 +35,7 @@ describe("openViewPersonFromOpportunity", () => {
             source: "opportunity_primary_contact",
             parent: { type: "opportunities", id: OPP_ID },
             personDrawerOpenSeed: null,
+            opportunityWorkspaceContext: null,
         });
     });
 

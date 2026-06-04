@@ -21,6 +21,8 @@ export type RelatedRecordDrawerIconButtonProps = {
     testId?: string;
     className?: string;
     extraAttrs?: Record<string, string>;
+    isPending?: boolean;
+    pendingLabel?: string;
 };
 
 const ICON_BUTTON_CLASS =
@@ -38,6 +40,8 @@ export default function RelatedRecordDrawerIconButton({
     testId,
     className = "",
     extraAttrs,
+    isPending = false,
+    pendingLabel = "Opening…",
 }: RelatedRecordDrawerIconButtonProps) {
     const pid = personId.trim();
     if (!pid) return null;
@@ -59,10 +63,26 @@ export default function RelatedRecordDrawerIconButton({
             onFocus={onFocus}
             onPointerDown={onPointerDown}
             onClick={onClick}
+            disabled={isPending}
+            aria-busy={isPending}
             {...extraAttrs}
-            className={[ICON_BUTTON_CLASS, className].filter(Boolean).join(" ")}
+            className={[
+                ICON_BUTTON_CLASS,
+                isPending ? "cursor-wait border-alloy-blue/40 bg-alloy-blue/8 ring-1 ring-alloy-blue/25" : "",
+                className,
+            ]
+                .filter(Boolean)
+                .join(" ")}
         >
-            <Icon className="h-3 w-3" aria-hidden data-related-record-drawer-icon-glyph="true" />
+            {isPending ?
+                <span
+                    className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-alloy-blue/30 border-t-alloy-blue"
+                    aria-hidden
+                />
+            :   <Icon className="h-3 w-3" aria-hidden data-related-record-drawer-icon-glyph="true" />}
+            {isPending ?
+                <span className="sr-only">{pendingLabel}</span>
+            :   null}
         </button>
     );
 }

@@ -1,23 +1,19 @@
-/** Per-entity drawer VM cutover — person/child env-gated; opportunity default-on in code. */
+/** Per-entity drawer VM cutover — opportunity/person/child default-on; kill switches opt out. */
 
+import { childDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/child/childDrawerHardCutoverGate";
 import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
-
-function envFlagTrue(name: string): boolean {
-    if (typeof process === "undefined") return false;
-    const v = process.env[name]?.trim().toLowerCase();
-    return v === "1" || v === "true";
-}
+import { personDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/person/personDrawerHardCutoverGate";
 
 export function adminV2OpportunityDrawerVmCutoverEnabled(): boolean {
     return opportunityDrawerHardCutoverEnabled();
 }
 
 export function adminV2PersonDrawerVmCutoverEnabled(): boolean {
-    return envFlagTrue("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM");
+    return personDrawerHardCutoverEnabled();
 }
 
 export function adminV2ChildDrawerVmCutoverEnabled(): boolean {
-    return envFlagTrue("NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM");
+    return childDrawerHardCutoverEnabled();
 }
 
 /** @deprecated Use adminV2OpportunityDrawerVmCutoverEnabled — kept for existing imports. */

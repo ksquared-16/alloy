@@ -2,6 +2,13 @@
 
 export type DrawerDebugRoute = "legacy" | "opportunity-vm" | "person-vm" | "child-vm";
 
+export type DrawerRuntimeRouteSource = "vm-cutover" | "legacy-fallback";
+
+export type DrawerRuntimeProofAttrs = {
+    runtime: DrawerDebugRoute;
+    routeSource: DrawerRuntimeRouteSource;
+};
+
 export type DrawerDebugSurface = "center-modal" | "right-side";
 
 export type DrawerDebugSource = "work-unit" | "workspace" | "other";
@@ -26,6 +33,22 @@ export function drawerRuntimeDebugEnabled(): boolean {
     if (typeof process === "undefined") return false;
     const v = process.env.NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG?.trim().toLowerCase();
     return v === "1" || v === "true";
+}
+
+/** Dev/staging proof attrs on drawer shell (`data-drawer-runtime`, `data-drawer-route-source`). */
+export function shouldExposeDrawerRuntimeProof(): boolean {
+    if (typeof process === "undefined") return false;
+    if (process.env.NODE_ENV !== "production") return true;
+    return drawerRuntimeDebugEnabled();
+}
+
+export function resolveDrawerRouteSource(route: DrawerDebugRoute): DrawerRuntimeRouteSource {
+    return route === "legacy" ? "legacy-fallback" : "vm-cutover";
+}
+
+export function buildDrawerRuntimeProof(route: DrawerDebugRoute): DrawerRuntimeProofAttrs | null {
+    if (!shouldExposeDrawerRuntimeProof()) return null;
+    return { runtime: route, routeSource: resolveDrawerRouteSource(route) };
 }
 
 export function drawerDebugSourceFromPathname(pathname: string | null | undefined): DrawerDebugSource {
