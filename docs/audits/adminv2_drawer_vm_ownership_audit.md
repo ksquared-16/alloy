@@ -9,7 +9,7 @@
 
 ---
 
-## Executive summary
+## Executive summary   
 
 AdminV2 CRM drawers (Opportunity, Person, Child) have **two parallel runtime stacks**:
 
@@ -26,11 +26,11 @@ At `d6c7e05e`, VM is **opt-in per entity** via build-time env flags (all default
 
 ### Feature gates (baseline `d6c7e05e`)
 
-| Flag | Env var | Default | Hard-cutover gate |
-|------|---------|---------|-------------------|
-| Opportunity VM | `NEXT_PUBLIC_ADMINV2_DRAWER_VM` | off | `opportunityDrawerHardCutoverEnabled()` |
-| Person VM | `NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM` | off | `personDrawerHardCutoverEnabled()` |
-| Child VM | `NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM` | off | `childDrawerHardCutoverEnabled()` |
+| Flag           | Env var                                | Default | Hard-cutover gate                       |
+| -------------- | -------------------------------------- | ------- | --------------------------------------- |
+| Opportunity VM | `NEXT_PUBLIC_ADMINV2_DRAWER_VM`        | off     | `opportunityDrawerHardCutoverEnabled()` |
+| Person VM      | `NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM` | off     | `personDrawerHardCutoverEnabled()`      |
+| Child VM       | `NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM`  | off     | `childDrawerHardCutoverEnabled()`       |
 
 Router: `web/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerRuntimeRoute.ts`  
 Entry: `web/components/admin/AdminEntityDrawer.tsx`
@@ -41,73 +41,73 @@ Entry: `web/components/admin/AdminEntityDrawer.tsx`
 
 ### 1. Opportunity drawer
 
-| Stage | Path (VM cutover ON @ d6c7e05e) | Path (legacy / flag OFF) |
-|-------|--------------------------------|---------------------------|
-| **Open source** | WU queue row: `openWorkUnitQueueRecord` → `buildOpportunityDrawerOpenParams` + `prefetchOpportunityDrawerOnRowIntent` (`page.tsx`). Actions, global search, related icons, tour modal callbacks → `openDrawer({ type: "opportunities", ... })`. | Same `openDrawer` entry; no VM router. |
-| **Context** | `AdminDrawerContext.openDrawer` / `openDrawerModelSwap` (eligible opp↔person swaps). Deferred open: `shouldDeferOpportunityDrawerOpen` + `openingOpportunity` gate. | Same. |
-| **Preload** | `prepareDrawerViewModel` / `peekDrawerViewModelPreloadSync` / `consumeOpportunityDrawerPreload` (`drawerShellPinnedModelSwap.ts`, `drawerModelSwapNavigation.ts`). WU `prepareDrawerViewModel` on person/child intent. | `prefetchOpportunityDrawerOnRowIntent`, bootstrap snapshot, queue seed on drawer state. |
-| **VM compose** | `loadOpportunityDrawerViaViewModel` → `fetchOpportunityDrawerViewModelClient` → `composeOpportunityDrawerViewModel` → `buildOpportunityDrawerOpenPreloadFromViewModel`. | Shadow VM optional in legacy via `buildOpportunityDrawerPipelineStateFromViewModel`; **primary** path uses bootstrap + `drawer_primary` hydrate. |
-| **Cache** | `drawerViewModelSessionCache` keyed by org/dept/WU + `buildDrawerViewModelCacheKey`. Session preload ref in `AdminDrawerContext`. | Entity snapshot cache, header-actions cache, opportunity drawer preload ref, route session patterns. |
-| **Legacy path** | **Not mounted** when route = `opportunity`. Legacy bootstrap **skipped** in code if hard cutover (but legacy unmounted anyway). | `AdminEntityDrawerLegacy`: `fetchOpportunityDrawerOperationalBootstrap` → primary hydrate → composed reveal gates → full inquiry UI. |
-| **Component mounted** | `OpportunityDrawerVmRuntime` | `AdminEntityDrawerLegacy` |
-| **Body** | Slim grid: record name card + `VmInquiryRightColumn` only (`OpportunityDrawerVmRuntime.tsx` ~L181–210). **No** `FamilyContactsPanel`, inquiry children, tour block, lifecycle in body. | `FamilyContactsPanel`, `OpportunityInquiryChildrenSection`, tour blocks, pipeline-driven layout (`AdminEntityDrawerLegacy` ~L16359+). |
-| **Header** | `Drawer` title/subtitle from VM; `OpportunityDrawerHeaderControls` (actions); `VmOpportunityStatusControl` (`statusBadge`). | Rich workflow header: location, lifecycle strip, oper trust, queue seed calm-loading, `opportunityInquiryWorkflowHeaderStatus`, modal 3-column layout. |
-| **Status** | VM `displayVm.header.status` → `VmOpportunityStatusControl`; queue seed pill during `holdPriorPayload`. Legacy status-options fetch **blocked** when hard cutover + legacy mounted (N/A when VM runtime). | `statusDefsForDrawer` + `/api/admin/status-options` with VM pin reconciliation when shadow VM settled. |
-| **Tabs** | Simple button strip from `displayVm.layout.tabs` (often `overview` + `communications` only). | `OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP` + workflow tab mount gates + lazy tab panes. |
-| **Loading / skeleton** | `coldLoading` → centered "Loading opportunity…"; swap: `shouldHoldPriorDrawerContent` + `suppressFullDrawerLoading`; queue nav overlay. | `opportunityDrawerHeaderCalmLoading`, pipeline reveal gates, `DrawerOpportunityOperationalLoadingComposition`, section skeletons (forbidden for above-fold per doctrine — legacy still has coordinated gates). |
-| **First-paint fetches** | `useOpportunityDrawerVmPayload` layout effect: preload consume → sync cache → else `loadOpportunityDrawerViaViewModel`. | Bootstrap API, then primary contract; status seed from record. |
-| **Post-paint fetches** | `CommunicationsDrawerBackgroundLoader`; comms tab `CommunicationsDrawerSection`. No notes/documents/activity in VM runtime. | Background full hydrate, tour bookings, inquiry children hydrate, tab-first-visit fetches, communications loader. |
+| Stage                   | Path (VM cutover ON @ d6c7e05e)                                                                                                                                                                                                                 | Path (legacy / flag OFF)                                                                                                                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Open source**         | WU queue row: `openWorkUnitQueueRecord` → `buildOpportunityDrawerOpenParams` + `prefetchOpportunityDrawerOnRowIntent` (`page.tsx`). Actions, global search, related icons, tour modal callbacks → `openDrawer({ type: "opportunities", ... })`. | Same `openDrawer` entry; no VM router.                                                                                                                                                                         |
+| **Context**             | `AdminDrawerContext.openDrawer` / `openDrawerModelSwap` (eligible opp↔person swaps). Deferred open: `shouldDeferOpportunityDrawerOpen` + `openingOpportunity` gate.                                                                             | Same.                                                                                                                                                                                                          |
+| **Preload**             | `prepareDrawerViewModel` / `peekDrawerViewModelPreloadSync` / `consumeOpportunityDrawerPreload` (`drawerShellPinnedModelSwap.ts`, `drawerModelSwapNavigation.ts`). WU `prepareDrawerViewModel` on person/child intent.                          | `prefetchOpportunityDrawerOnRowIntent`, bootstrap snapshot, queue seed on drawer state.                                                                                                                        |
+| **VM compose**          | `loadOpportunityDrawerViaViewModel` → `fetchOpportunityDrawerViewModelClient` → `composeOpportunityDrawerViewModel` → `buildOpportunityDrawerOpenPreloadFromViewModel`.                                                                         | Shadow VM optional in legacy via `buildOpportunityDrawerPipelineStateFromViewModel`; **primary** path uses bootstrap + `drawer_primary` hydrate.                                                               |
+| **Cache**               | `drawerViewModelSessionCache` keyed by org/dept/WU + `buildDrawerViewModelCacheKey`. Session preload ref in `AdminDrawerContext`.                                                                                                               | Entity snapshot cache, header-actions cache, opportunity drawer preload ref, route session patterns.                                                                                                           |
+| **Legacy path**         | **Not mounted** when route = `opportunity`. Legacy bootstrap **skipped** in code if hard cutover (but legacy unmounted anyway).                                                                                                                 | `AdminEntityDrawerLegacy`: `fetchOpportunityDrawerOperationalBootstrap` → primary hydrate → composed reveal gates → full inquiry UI.                                                                           |
+| **Component mounted**   | `OpportunityDrawerVmRuntime`                                                                                                                                                                                                                    | `AdminEntityDrawerLegacy`                                                                                                                                                                                      |
+| **Body**                | Slim grid: record name card + `VmInquiryRightColumn` only (`OpportunityDrawerVmRuntime.tsx` ~L181–210). **No** `FamilyContactsPanel`, inquiry children, tour block, lifecycle in body.                                                          | `FamilyContactsPanel`, `OpportunityInquiryChildrenSection`, tour blocks, pipeline-driven layout (`AdminEntityDrawerLegacy` ~L16359+).                                                                          |
+| **Header**              | `Drawer` title/subtitle from VM; `OpportunityDrawerHeaderControls` (actions); `VmOpportunityStatusControl` (`statusBadge`).                                                                                                                     | Rich workflow header: location, lifecycle strip, oper trust, queue seed calm-loading, `opportunityInquiryWorkflowHeaderStatus`, modal 3-column layout.                                                         |
+| **Status**              | VM `displayVm.header.status` → `VmOpportunityStatusControl`; queue seed pill during `holdPriorPayload`. Legacy status-options fetch **blocked** when hard cutover + legacy mounted (N/A when VM runtime).                                       | `statusDefsForDrawer` + `/api/admin/status-options` with VM pin reconciliation when shadow VM settled.                                                                                                         |
+| **Tabs**                | Simple button strip from `displayVm.layout.tabs` (often `overview` + `communications` only).                                                                                                                                                    | `OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP` + workflow tab mount gates + lazy tab panes.                                                                                                                          |
+| **Loading / skeleton**  | `coldLoading` → centered "Loading opportunity…"; swap: `shouldHoldPriorDrawerContent` + `suppressFullDrawerLoading`; queue nav overlay.                                                                                                         | `opportunityDrawerHeaderCalmLoading`, pipeline reveal gates, `DrawerOpportunityOperationalLoadingComposition`, section skeletons (forbidden for above-fold per doctrine — legacy still has coordinated gates). |
+| **First-paint fetches** | `useOpportunityDrawerVmPayload` layout effect: preload consume → sync cache → else `loadOpportunityDrawerViaViewModel`.                                                                                                                         | Bootstrap API, then primary contract; status seed from record.                                                                                                                                                 |
+| **Post-paint fetches**  | `CommunicationsDrawerBackgroundLoader`; comms tab `CommunicationsDrawerSection`. No notes/documents/activity in VM runtime.                                                                                                                     | Background full hydrate, tour bookings, inquiry children hydrate, tab-first-visit fetches, communications loader.                                                                                              |
 
 **Summary table**
 
-| Entity | Open source | VM path | Legacy path | Current owner @ d6c7e05e (VM on) | Overlap risk |
-|--------|-------------|---------|-------------|-----------------------------------|--------------|
-| Opportunity | `openDrawer` / WU queue / model swap | `OpportunityDrawerVmRuntime` + `useOpportunityDrawerVmPayload` | `AdminEntityDrawerLegacy` (unmounted) | **VM data + VM slim UI** | **High** — same VM payload could feed legacy UI but does not; presentation fork |
+| Entity      | Open source                          | VM path                                                        | Legacy path                           | Current owner @ d6c7e05e (VM on) | Overlap risk                                                                    |
+| ----------- | ------------------------------------ | -------------------------------------------------------------- | ------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------- |
+| Opportunity | `openDrawer` / WU queue / model swap | `OpportunityDrawerVmRuntime` + `useOpportunityDrawerVmPayload` | `AdminEntityDrawerLegacy` (unmounted) | **VM data + VM slim UI**         | **High** — same VM payload could feed legacy UI but does not; presentation fork |
 
 ---
 
 ### 2. Person drawer
 
-| Stage | Path (person VM ON @ d6c7e05e) | Path (legacy) |
-|-------|--------------------------------|---------------|
-| **Open source** | `queue_row_person`, `opportunity_primary_contact`, `opportunity_household_adult`, `person_household_link`, global search, household links. | Same |
-| **Preload** | `prepareDrawerViewModel` (person surface), `consumePersonDrawerPreload`, sync cache peek | `prefetchPersonDrawerSnapshot`, composed person payload loop in legacy |
-| **VM compose** | `loadPersonDrawerViaViewModel` → `composePersonDrawerViewModel` → `evaluateComposedPersonDrawerPayload` | Legacy GET `/api/admin/entity/persons/:id` + composed gates |
-| **Cache** | `drawerViewModelSessionCache` surface `person` | `putDrawerEntitySnapshot`, person drawer preload ref |
-| **Legacy path** | **Not mounted** (route `person` or `child` → both use **`PersonsDrawerVmRuntime`**) | Full legacy person chrome + `PersonDrawerOperatingSections` via layout runtime |
-| **Component mounted** | `PersonsDrawerVmRuntime` (not `PersonDrawerVmRuntime.tsx`) | `AdminEntityDrawerLegacy` |
-| **Body** | `PersonDrawerOperatingSections` via `layoutVariantFromPersonVm` | Same sections + enrollment activity + employee placement + `PersonDrawerRelationshipsOverview` in overview map |
-| **Header** | VM `header.title` / `header.subtitle` + `VmPersonStatusControl` only | `PersonDrawerParentTitleRow` / `PersonDrawerHeaderMetadata` / profile badges / back link in subtitle |
-| **Status** | VM `status_label` readonly pill | Profile-aware status fetch in legacy |
-| **Tabs** | None in VM runtime (single scroll body) | Legacy drawer tabs when configured |
-| **Loading** | Cold text shell; swap hold via `usePersonsDrawerVmPayload` | `personDrawerComposedPreparing`, parent/child overview skeletons |
-| **First-paint** | Preload → `loadPersonDrawerViaViewModel` | VM hard-cutover effect in legacy (~L3305) **only when legacy mounted** |
-| **Post-paint** | `warmRelatedDrawerTargetsAfterVmApply` | Legacy refetch on mutation paths |
+| Stage                 | Path (person VM ON @ d6c7e05e)                                                                                                             | Path (legacy)                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| **Open source**       | `queue_row_person`, `opportunity_primary_contact`, `opportunity_household_adult`, `person_household_link`, global search, household links. | Same                                                                                                           |
+| **Preload**           | `prepareDrawerViewModel` (person surface), `consumePersonDrawerPreload`, sync cache peek                                                   | `prefetchPersonDrawerSnapshot`, composed person payload loop in legacy                                         |
+| **VM compose**        | `loadPersonDrawerViaViewModel` → `composePersonDrawerViewModel` → `evaluateComposedPersonDrawerPayload`                                    | Legacy GET `/api/admin/entity/persons/:id` + composed gates                                                    |
+| **Cache**             | `drawerViewModelSessionCache` surface `person`                                                                                             | `putDrawerEntitySnapshot`, person drawer preload ref                                                           |
+| **Legacy path**       | **Not mounted** (route `person` or `child` → both use **`PersonsDrawerVmRuntime`**)                                                        | Full legacy person chrome + `PersonDrawerOperatingSections` via layout runtime                                 |
+| **Component mounted** | `PersonsDrawerVmRuntime` (not `PersonDrawerVmRuntime.tsx`)                                                                                 | `AdminEntityDrawerLegacy`                                                                                      |
+| **Body**              | `PersonDrawerOperatingSections` via `layoutVariantFromPersonVm`                                                                            | Same sections + enrollment activity + employee placement + `PersonDrawerRelationshipsOverview` in overview map |
+| **Header**            | VM `header.title` / `header.subtitle` + `VmPersonStatusControl` only                                                                       | `PersonDrawerParentTitleRow` / `PersonDrawerHeaderMetadata` / profile badges / back link in subtitle           |
+| **Status**            | VM `status_label` readonly pill                                                                                                            | Profile-aware status fetch in legacy                                                                           |
+| **Tabs**              | None in VM runtime (single scroll body)                                                                                                    | Legacy drawer tabs when configured                                                                             |
+| **Loading**           | Cold text shell; swap hold via `usePersonsDrawerVmPayload`                                                                                 | `personDrawerComposedPreparing`, parent/child overview skeletons                                               |
+| **First-paint**       | Preload → `loadPersonDrawerViaViewModel`                                                                                                   | VM hard-cutover effect in legacy (~L3305) **only when legacy mounted**                                         |
+| **Post-paint**        | `warmRelatedDrawerTargetsAfterVmApply`                                                                                                     | Legacy refetch on mutation paths                                                                               |
 
 **Summary table**
 
-| Entity | Open source | VM path | Legacy path | Current owner @ d6c7e05e (VM on) | Overlap risk |
-|--------|-------------|---------|-------------|-----------------------------------|--------------|
+| Entity | Open source                             | VM path                                                | Legacy path      | Current owner @ d6c7e05e (VM on)             | Overlap risk                                                        |
+| ------ | --------------------------------------- | ------------------------------------------------------ | ---------------- | -------------------------------------------- | ------------------------------------------------------------------- |
 | Person | `openDrawer` / model swap / WU prefetch | `PersonsDrawerVmRuntime` + `usePersonsDrawerVmPayload` | Legacy unmounted | **VM data + partial legacy body components** | **Medium** — body mostly production sections; header/chrome missing |
 
 ---
 
 ### 3. Child drawer
 
-| Stage | Path (child VM ON @ d6c7e05e) | Path (legacy) |
-|-------|-------------------------------|---------------|
-| **Open source** | `opportunity_inquiry_child` or seed `presentation_emphasis: child_lifecycle` (`isChildDrawerVmOpen`) | Same |
-| **VM compose** | `loadChildDrawerViaViewModel` → `composeChildDrawerViewModel` (sets `_drawer_presentation_emphasis: child_lifecycle`) | Legacy child chrome detectors + composed child payload |
-| **Router** | `resolveVmDrawerRuntimeRoute` → `"child"` but **`AdminEntityDrawer` maps `person` and `child` to `PersonsDrawerVmRuntime`** | `personChildLifecycleChrome` branches in legacy |
-| **Body** | `PersonDrawerChildLifecycleRail` + `PersonDrawerOperatingSections` with child layout variant | `PersonDrawerChildTitleRow`, child header subtitle, child skeletons, lifecycle rail |
-| **Header** | Generic VM title "Child" / VM subtitle | `PersonDrawerChildTitleRow` + record number + back link |
-| **Surface mismatch risk** | `layoutVariant` null if `isChildSurface` disagrees with `displayVm.surface` → **empty body** | Explicit chrome flags |
+| Stage                     | Path (child VM ON @ d6c7e05e)                                                                                               | Path (legacy)                                                                       |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Open source**           | `opportunity_inquiry_child` or seed `presentation_emphasis: child_lifecycle` (`isChildDrawerVmOpen`)                        | Same                                                                                |
+| **VM compose**            | `loadChildDrawerViaViewModel` → `composeChildDrawerViewModel` (sets `_drawer_presentation_emphasis: child_lifecycle`)       | Legacy child chrome detectors + composed child payload                              |
+| **Router**                | `resolveVmDrawerRuntimeRoute` → `"child"` but **`AdminEntityDrawer` maps `person` and `child` to `PersonsDrawerVmRuntime`** | `personChildLifecycleChrome` branches in legacy                                     |
+| **Body**                  | `PersonDrawerChildLifecycleRail` + `PersonDrawerOperatingSections` with child layout variant                                | `PersonDrawerChildTitleRow`, child header subtitle, child skeletons, lifecycle rail |
+| **Header**                | Generic VM title "Child" / VM subtitle                                                                                      | `PersonDrawerChildTitleRow` + record number + back link                             |
+| **Surface mismatch risk** | `layoutVariant` null if `isChildSurface` disagrees with `displayVm.surface` → **empty body**                                | Explicit chrome flags                                                               |
 
 **Summary table**
 
-| Entity | Open source | VM path | Legacy path | Current owner @ d6c7e05e (VM on) | Overlap risk |
-|--------|-------------|---------|-------------|-----------------------------------|--------------|
-| Child | inquiry child / child seed | `PersonsDrawerVmRuntime` + child branch in `usePersonsDrawerVmPayload` | Legacy unmounted | **VM data + partial child body** | **Medium–high** — wrong surface/cache → generic person/empty body |
+| Entity | Open source                | VM path                                                                | Legacy path      | Current owner @ d6c7e05e (VM on) | Overlap risk                                                      |
+| ------ | -------------------------- | ---------------------------------------------------------------------- | ---------------- | -------------------------------- | ----------------------------------------------------------------- |
+| Child  | inquiry child / child seed | `PersonsDrawerVmRuntime` + child branch in `usePersonsDrawerVmPayload` | Legacy unmounted | **VM data + partial child body** | **Medium–high** — wrong surface/cache → generic person/empty body |
 
 ---
 
@@ -115,29 +115,29 @@ Entry: `web/components/admin/AdminEntityDrawer.tsx`
 
 Legend: **VM** = VM runtime component/field; **Legacy** = `AdminEntityDrawerLegacy`; **Shared** = used by both; **Unclear** = split or dead code.
 
-| Region | VM owner | Legacy owner | Actual owner @ d6c7e05e (VM flags ON) | Conflict? | Risk |
-|--------|----------|--------------|--------------------------------------|-----------|------|
-| Drawer shell/chrome | `Drawer` in `*VmRuntime` | `Drawer` in legacy | VM runtime `Drawer` | No | Low |
-| Header title | VM `header.title` | `formatOpportunityInquiryDrawerTitle` / person title rows | Opp: VM; Person: VM plain string; Child: VM "Child" default | **Yes** | High for person/child |
-| Header subtitle | VM `header.subtitle` | Workflow compact record #, location, person metadata | VM only (lossy) | **Yes** | High |
-| Status | `VmOpportunityStatusControl` / `VmPersonStatusControl` | Status dropdown + options API + workflow header status | VM controls | Partial | Medium — opp VM status OK; legacy pin logic unused when VM mounted |
-| Header actions | `OpportunityDrawerHeaderControls` in VM | Same + save nodes + queue nav placement | Opp: **Shared** component; Person: legacy only when legacy | Partial | Low opp / high person |
-| Lifecycle rail | **None** in VM opp runtime | `RecordLifecycleRail` in legacy workflow header/postTab | Legacy only (VM opp missing) | **Yes** | High |
-| Tabs | VM simple strip (opp) | `OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP` + gates | Opp VM partial; Person none | **Yes** | High |
-| Overview body | `VmInquiryRightColumn` + name card (opp VM) | Full inquiry workflow layout | **VM placeholder (opp)** / `PersonDrawerOperatingSections` (person) | **Yes** | Critical (opp) |
-| Family/contact summary | **None** (opp VM) | `FamilyContactsPanel` | Legacy only | **Yes** | Critical |
-| Multiple contacts | **None** (opp VM) | `FamilyContactsPanel` + related people | Legacy only | **Yes** | Critical |
-| Inquiry children | **None** (opp VM) | `OpportunityInquiryChildrenSection` | Legacy only | **Yes** | Critical |
-| Tour block | **None** (opp VM) | `OpportunityInquiryTourDateBlock` / what-matters slots | Legacy only | **Yes** | High |
-| Tasks/reminders | `VmInquiryRightColumn` (partial) | `OpportunityInquirySummaryRightColumn` / operational strip | Shared data model, **different components** | Partial | Medium |
-| Communications tab | `CommunicationsDrawerSection` | Same + tab visit tracking | **Shared** | No | Low |
-| Notes tab | **None** (opp VM) | Legacy tab panes | Legacy only | **Yes** | High |
-| Documents tab | **None** (opp VM) | Legacy tab panes | Legacy only | **Yes** | High |
-| Activity tab | **None** (opp VM) | Legacy tab panes | Legacy only | **Yes** | High |
-| Person household section | `PersonDrawerHouseholdSection` via `PersonDrawerOperatingSections` | Same + relationships overview | **Shared** body components when person VM on | No | Low |
-| Child household section | Same (child variant sections) | Same | **Shared** if layout resolves | Partial | Medium if variant wrong |
-| Loading shell | VM cold text / swap hold | Pipeline gates, calm loading, skeletons | VM swap hold; legacy gates dormant | Partial | Medium |
-| Skeletons | VM avoids section skeletons | Child/parent overview skeletons | Person VM: minimal; Legacy path: coordinated | Partial | Medium |
+| Region                   | VM owner                                                           | Legacy owner                                               | Actual owner @ d6c7e05e (VM flags ON)                               | Conflict? | Risk                                                               |
+| ------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------- | --------- | ------------------------------------------------------------------ |
+| Drawer shell/chrome      | `Drawer` in `*VmRuntime`                                           | `Drawer` in legacy                                         | VM runtime `Drawer`                                                 | No        | Low                                                                |
+| Header title             | VM `header.title`                                                  | `formatOpportunityInquiryDrawerTitle` / person title rows  | Opp: VM; Person: VM plain string; Child: VM "Child" default         | **Yes**   | High for person/child                                              |
+| Header subtitle          | VM `header.subtitle`                                               | Workflow compact record #, location, person metadata       | VM only (lossy)                                                     | **Yes**   | High                                                               |
+| Status                   | `VmOpportunityStatusControl` / `VmPersonStatusControl`             | Status dropdown + options API + workflow header status     | VM controls                                                         | Partial   | Medium — opp VM status OK; legacy pin logic unused when VM mounted |
+| Header actions           | `OpportunityDrawerHeaderControls` in VM                            | Same + save nodes + queue nav placement                    | Opp: **Shared** component; Person: legacy only when legacy          | Partial   | Low opp / high person                                              |
+| Lifecycle rail           | **None** in VM opp runtime                                         | `RecordLifecycleRail` in legacy workflow header/postTab    | Legacy only (VM opp missing)                                        | **Yes**   | High                                                               |
+| Tabs                     | VM simple strip (opp)                                              | `OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP` + gates           | Opp VM partial; Person none                                         | **Yes**   | High                                                               |
+| Overview body            | `VmInquiryRightColumn` + name card (opp VM)                        | Full inquiry workflow layout                               | **VM placeholder (opp)** / `PersonDrawerOperatingSections` (person) | **Yes**   | Critical (opp)                                                     |
+| Family/contact summary   | **None** (opp VM)                                                  | `FamilyContactsPanel`                                      | Legacy only                                                         | **Yes**   | Critical                                                           |
+| Multiple contacts        | **None** (opp VM)                                                  | `FamilyContactsPanel` + related people                     | Legacy only                                                         | **Yes**   | Critical                                                           |
+| Inquiry children         | **None** (opp VM)                                                  | `OpportunityInquiryChildrenSection`                        | Legacy only                                                         | **Yes**   | Critical                                                           |
+| Tour block               | **None** (opp VM)                                                  | `OpportunityInquiryTourDateBlock` / what-matters slots     | Legacy only                                                         | **Yes**   | High                                                               |
+| Tasks/reminders          | `VmInquiryRightColumn` (partial)                                   | `OpportunityInquirySummaryRightColumn` / operational strip | Shared data model, **different components**                         | Partial   | Medium                                                             |
+| Communications tab       | `CommunicationsDrawerSection`                                      | Same + tab visit tracking                                  | **Shared**                                                          | No        | Low                                                                |
+| Notes tab                | **None** (opp VM)                                                  | Legacy tab panes                                           | Legacy only                                                         | **Yes**   | High                                                               |
+| Documents tab            | **None** (opp VM)                                                  | Legacy tab panes                                           | Legacy only                                                         | **Yes**   | High                                                               |
+| Activity tab             | **None** (opp VM)                                                  | Legacy tab panes                                           | Legacy only                                                         | **Yes**   | High                                                               |
+| Person household section | `PersonDrawerHouseholdSection` via `PersonDrawerOperatingSections` | Same + relationships overview                              | **Shared** body components when person VM on                        | No        | Low                                                                |
+| Child household section  | Same (child variant sections)                                      | Same                                                       | **Shared** if layout resolves                                       | Partial   | Medium if variant wrong                                            |
+| Loading shell            | VM cold text / swap hold                                           | Pipeline gates, calm loading, skeletons                    | VM swap hold; legacy gates dormant                                  | Partial   | Medium                                                             |
+| Skeletons                | VM avoids section skeletons                                        | Child/parent overview skeletons                            | Person VM: minimal; Legacy path: coordinated                        | Partial   | Medium                                                             |
 
 ---
 
@@ -145,54 +145,54 @@ Legend: **VM** = VM runtime component/field; **Legacy** = `AdminEntityDrawerLega
 
 ### What changed after `d6c7e05e`
 
-| Area | `d6c7e05e` (safe) | `a68c7ef2` (reverted) |
-|------|-------------------|------------------------|
-| Router | Per-entity routes → `OpportunityDrawerVmRuntime` / `PersonsDrawerVmRuntime` | Single `vm_shell` → `AdminEntityDrawerVmShell` |
-| Feature gates | Opt-in env flags (default off) | **Default ON** unless kill switch |
-| Opportunity body | Slim placeholder in `OpportunityDrawerVmRuntime` | `OpportunityDrawerVmBody` + **`OpportunityDrawerInquiryWorkflowOverview`** (production panels) |
-| Person/child body | `PersonsDrawerVmRuntime` | `PersonDrawerVmBody` (same sections, no title rows) |
-| Header layout | Status in `statusBadge` slot | Status moved to **`headerTitleCenter`**; tabs in `headerExtra`; lifecycle in `postTabStrip` |
-| Dead runtimes | `PersonDrawerVmRuntime`, `ChildDrawerVmRuntime` unused | Still unused (shell uses `PersonsDrawerVmPayload` only) |
+| Area              | `d6c7e05e` (safe)                                                           | `a68c7ef2` (reverted)                                                                          |
+| ----------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Router            | Per-entity routes → `OpportunityDrawerVmRuntime` / `PersonsDrawerVmRuntime` | Single `vm_shell` → `AdminEntityDrawerVmShell`                                                 |
+| Feature gates     | Opt-in env flags (default off)                                              | **Default ON** unless kill switch                                                              |
+| Opportunity body  | Slim placeholder in `OpportunityDrawerVmRuntime`                            | `OpportunityDrawerVmBody` + **`OpportunityDrawerInquiryWorkflowOverview`** (production panels) |
+| Person/child body | `PersonsDrawerVmRuntime`                                                    | `PersonDrawerVmBody` (same sections, no title rows)                                            |
+| Header layout     | Status in `statusBadge` slot                                                | Status moved to **`headerTitleCenter`**; tabs in `headerExtra`; lifecycle in `postTabStrip`    |
+| Dead runtimes     | `PersonDrawerVmRuntime`, `ChildDrawerVmRuntime` unused                      | Still unused (shell uses `PersonsDrawerVmPayload` only)                                        |
 
 ### Root-cause answers
 
-| Symptom | Why |
-|---------|-----|
-| **Opportunity lost real body** | At **d6c7e05e**, VM ON already shows **placeholder** overview (name + `VmInquiryRightColumn` only). **`a68c7ef2`** added production overview but coupled it to **shell display logic** (`useVmDrawerShellDisplay`): if `activeOpportunityVm` not ready and pin/hold fails → cold shell or empty body. Forced **default VM ON** exposed this on all staging traffic. |
-| **Multiple contacts disappeared** | Not rendered in `OpportunityDrawerVmRuntime` at d6c7e05e. In a68c7ef2, `FamilyContactsPanel` lives in `OpportunityDrawerInquiryWorkflowOverview` — requires **full VM record** + `family_contacts` slot; shell hold showing wrong surface or cold shell blocks overview. |
+| Symptom                                  | Why                                                                                                                                                                                                                                                                                                                                                                                                               |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Opportunity lost real body**           | At **d6c7e05e**, VM ON already shows **placeholder** overview (name + `VmInquiryRightColumn` only). **`a68c7ef2`** added production overview but coupled it to **shell display logic** (`useVmDrawerShellDisplay`): if `activeOpportunityVm` not ready and pin/hold fails → cold shell or empty body. Forced **default VM ON** exposed this on all staging traffic.                                               |
+| **Multiple contacts disappeared**        | Not rendered in `OpportunityDrawerVmRuntime` at d6c7e05e. In a68c7ef2, `FamilyContactsPanel` lives in `OpportunityDrawerInquiryWorkflowOverview` — requires **full VM record** + `family_contacts` slot; shell hold showing wrong surface or cold shell blocks overview.                                                                                                                                          |
 | **Child drawer generic / employee-only** | `PersonDrawerOperatingSections` uses `layoutVariantFromChildVm` / person variant. If **`isChildSurface` vs `displayVm.surface` mismatch** (stale person VM during child open, or cross-surface pin), `layoutVariant` is **null** → no body; if person VM used, **generic/employee** sections appear. Shell **`accentColor`** logic used `activeOpportunityVm` and caused **wrong chrome** during opp→child swaps. |
-| **Person header lost context** | VM runtimes never ported **`PersonDrawerHeaderMetadata`**, **`PersonDrawerParentTitleRow`**, **`PersonDrawerChildTitleRow`**, back links, record numbers. a68c7ef2 shell used flat `title`/`headerSubtitle` from VM header fields only. |
-| **Placeholder "Family inquiry" title** | VM `buildOpportunityDrawerHeaderTitle` uses `record.name` / `title` / `_customer_name`. Slim VM card also uses `record.name ?? record.title ?? "Inquiry"`. Legacy uses **`formatOpportunityInquiryDrawerTitle`**. VM record shape without inquiry formatting → generic titles. |
+| **Person header lost context**           | VM runtimes never ported **`PersonDrawerHeaderMetadata`**, **`PersonDrawerParentTitleRow`**, **`PersonDrawerChildTitleRow`**, back links, record numbers. a68c7ef2 shell used flat `title`/`headerSubtitle` from VM header fields only.                                                                                                                                                                           |
+| **Placeholder "Family inquiry" title**   | VM `buildOpportunityDrawerHeaderTitle` uses `record.name` / `title` / `_customer_name`. Slim VM card also uses `record.name ?? record.title ?? "Inquiry"`. Legacy uses **`formatOpportunityInquiryDrawerTitle`**. VM record shape without inquiry formatting → generic titles.                                                                                                                                    |
 
 ### Placeholder / dead-end components (do not treat as canonical body)
 
-| Component | Notes |
-|-----------|--------|
-| `OpportunityDrawerVmRuntime` overview block (~L193–201) | Name card only; not production inquiry workflow |
-| `VmInquiryRightColumn` | VM-only tasks column; subset of `OpportunityInquirySummaryRightColumn` |
-| `PersonDrawerVmRuntime.tsx` | **Not routed** by `AdminEntityDrawer` |
-| `ChildDrawerVmRuntime.tsx` | **Not routed** |
-| `usePersonDrawerVmPayload` / `useChildDrawerVmPayload` | Used only by dead runtimes above |
-| VM cold-loading text shells | UX placeholder, not production loading composition |
+| Component                                               | Notes                                                                  |
+| ------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `OpportunityDrawerVmRuntime` overview block (~L193–201) | Name card only; not production inquiry workflow                        |
+| `VmInquiryRightColumn`                                  | VM-only tasks column; subset of `OpportunityInquirySummaryRightColumn` |
+| `PersonDrawerVmRuntime.tsx`                             | **Not routed** by `AdminEntityDrawer`                                  |
+| `ChildDrawerVmRuntime.tsx`                              | **Not routed**                                                         |
+| `usePersonDrawerVmPayload` / `useChildDrawerVmPayload`  | Used only by dead runtimes above                                       |
+| VM cold-loading text shells                             | UX placeholder, not production loading composition                     |
 
 ### Production components that must be preserved (reuse under VM data ownership)
 
-| Component | Role |
-|-----------|------|
-| `FamilyContactsPanel` | Multiple contacts / family summary |
-| `OpportunityInquiryChildrenSection` | Inquiry children |
-| `OpportunityInquiryTourDateBlock` / tour slots in inquiry summary | Tour block |
-| `OpportunityInquirySummaryRightColumn` or parity with `VmInquiryRightColumn` | Tasks/reminders (prefer production column when hydrate allows) |
-| `OpportunityInquirySummaryActivity` | Activity summary in overview |
-| `RecordLifecycleRail` | Lifecycle rail |
-| `OpportunityDrawerHeaderControls` | Header actions (already in VM opp) |
-| `CommunicationsDrawerSection` / `CommunicationsDrawerBackgroundLoader` | Comms |
-| Legacy tab panes (notes, documents, activity) | Non-overview tabs |
-| `PersonDrawerOperatingSections` + household components | Person/child body |
-| `PersonDrawerChildLifecycleRail` | Child lifecycle |
-| `PersonDrawerChildTitleRow` / `PersonDrawerParentTitleRow` / `PersonDrawerHeaderMetadata` | Person/child header context |
-| `PersonDrawerRelationshipsOverview` | Household relationships (non-chrome person) |
-| `formatOpportunityInquiryDrawerTitle` + workflow header subtitle stack | Opportunity header context |
+| Component                                                                                 | Role                                                           |
+| ----------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `FamilyContactsPanel`                                                                     | Multiple contacts / family summary                             |
+| `OpportunityInquiryChildrenSection`                                                       | Inquiry children                                               |
+| `OpportunityInquiryTourDateBlock` / tour slots in inquiry summary                         | Tour block                                                     |
+| `OpportunityInquirySummaryRightColumn` or parity with `VmInquiryRightColumn`              | Tasks/reminders (prefer production column when hydrate allows) |
+| `OpportunityInquirySummaryActivity`                                                       | Activity summary in overview                                   |
+| `RecordLifecycleRail`                                                                     | Lifecycle rail                                                 |
+| `OpportunityDrawerHeaderControls`                                                         | Header actions (already in VM opp)                             |
+| `CommunicationsDrawerSection` / `CommunicationsDrawerBackgroundLoader`                    | Comms                                                          |
+| Legacy tab panes (notes, documents, activity)                                             | Non-overview tabs                                              |
+| `PersonDrawerOperatingSections` + household components                                    | Person/child body                                              |
+| `PersonDrawerChildLifecycleRail`                                                          | Child lifecycle                                                |
+| `PersonDrawerChildTitleRow` / `PersonDrawerParentTitleRow` / `PersonDrawerHeaderMetadata` | Person/child header context                                    |
+| `PersonDrawerRelationshipsOverview`                                                       | Household relationships (non-chrome person)                    |
+| `formatOpportunityInquiryDrawerTitle` + workflow header subtitle stack                    | Opportunity header context                                     |
 
 ### Components that should never be canonical drawer body alone
 
@@ -260,13 +260,13 @@ Legend: **VM** = VM runtime component/field; **Legacy** = `AdminEntityDrawerLega
 
 ### Phase order (locked)
 
-| Phase | Scope |
-|-------|--------|
-| **A** | Opportunity VM body parity + production overview |
-| **A.1** | Opportunity static status (no flicker) |
-| **B** | Person/Child header/body parity + related VM preload |
-| **C** | Shell-pinned movement after parity proven |
-| **D** | Default-on VM / legacy removal |
+| Phase   | Scope                                                |
+| ------- | ---------------------------------------------------- |
+| **A**   | Opportunity VM body parity + production overview     |
+| **A.1** | Opportunity static status (no flicker)               |
+| **B**   | Person/Child header/body parity + related VM preload |
+| **C**   | Shell-pinned movement after parity proven            |
+| **D**   | Default-on VM / legacy removal                       |
 
 ### Phase C — Shell-pinned movement (optional)
 
@@ -322,14 +322,14 @@ Legend: **VM** = VM runtime component/field; **Legacy** = `AdminEntityDrawerLega
 
 ## Part 6 — Conflict / overlap summary table
 
-| Layer | VM | Legacy | Overlap | Resolution |
-|-------|-----|--------|---------|------------|
-| Router mount | `AdminEntityDrawer` → VM runtimes | `AdminEntityDrawerLegacy` | Mutual exclusive | Keep single fork |
-| Compose/fetch | `load*ViaViewModel`, session cache | bootstrap + primary + composed evaluate | Same APIs, different callers | VM only on VM route |
-| Opportunity UI | Placeholder overview | Full inquiry workflow | **No shared body** | Phase A adapter |
-| Person UI | Operating sections only | Full chrome + sections | Partial shared sections | Port header chrome |
-| Child UI | Combined persons runtime | Child chrome branches | Surface detection | Enforce cache surface + title rows |
-| Feature flags | Per-entity opt-in @ d6c7e05e | N/A | a68 default-on | **Do not repeat** |
+| Layer          | VM                                 | Legacy                                  | Overlap                      | Resolution                         |
+| -------------- | ---------------------------------- | --------------------------------------- | ---------------------------- | ---------------------------------- |
+| Router mount   | `AdminEntityDrawer` → VM runtimes  | `AdminEntityDrawerLegacy`               | Mutual exclusive             | Keep single fork                   |
+| Compose/fetch  | `load*ViaViewModel`, session cache | bootstrap + primary + composed evaluate | Same APIs, different callers | VM only on VM route                |
+| Opportunity UI | Placeholder overview               | Full inquiry workflow                   | **No shared body**           | Phase A adapter                    |
+| Person UI      | Operating sections only            | Full chrome + sections                  | Partial shared sections      | Port header chrome                 |
+| Child UI       | Combined persons runtime           | Child chrome branches                   | Surface detection            | Enforce cache surface + title rows |
+| Feature flags  | Per-entity opt-in @ d6c7e05e       | N/A                                     | a68 default-on               | **Do not repeat**                  |
 
 ---
 
