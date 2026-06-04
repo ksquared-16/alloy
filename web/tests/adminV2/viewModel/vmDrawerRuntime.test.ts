@@ -123,7 +123,8 @@ describe("VM drawer runtime wiring", () => {
             "utf8"
         );
         expect(vm).toContain("VmOpportunityStatusControl");
-        expect(vm).toContain("VmInquiryRightColumn");
+        expect(vm).toContain("OpportunityDrawerInquiryWorkflowOverview");
+        expect(vm).not.toContain("VmInquiryRightColumn");
         expect(vm).not.toContain("opportunityInquiryWorkflowHeaderStatus");
         expect(vm).not.toContain("opportunityDrawerOverviewRevealReady");
         expect(vm).not.toContain("OpportunityOperationalCompactStrip");
@@ -161,15 +162,18 @@ describe("VM drawer runtime wiring", () => {
         expect(vm).toContain("holdPriorPayload");
     });
 
-    it("VmInquiryRightColumn renders tasks without fetchEnabled", async () => {
+    it("OpportunityDrawerInquiryWorkflowOverview uses production right column not VmInquiryRightColumn", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
         const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
-        const col = readFileSync(join(webRoot, "components/admin/vmDrawer/VmInquiryRightColumn.tsx"), "utf8");
-        expect(col).not.toContain("fetchEnabled");
-        expect(col).not.toContain("OpportunityOperationalCompactStrip");
-        expect(col).not.toContain("skeleton");
+        const overview = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx"),
+            "utf8"
+        );
+        expect(overview).toContain("OpportunityInquirySummaryRightColumn");
+        expect(overview).not.toContain("VmInquiryRightColumn");
+        expect(overview).toContain("fetchEnabled={false}");
     });
 
     it("swap phases suppress full loading shell", () => {

@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
+import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
+import RecordLifecycleRailSkeleton from "@/components/admin/drawer/RecordLifecycleRailSkeleton";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
-import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
+import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview";
+import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
 import OpportunityDrawerQueueNavigatorControls from "@/components/admin/OpportunityDrawerQueueNavigatorControls";
-import VmInquiryRightColumn from "@/components/admin/vmDrawer/VmInquiryRightColumn";
 import VmOpportunityStatusControl from "@/components/admin/vmDrawer/VmOpportunityStatusControl";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -14,15 +16,39 @@ import Drawer, {
     ADMINV2_DRAWER_BACKDROP_Z,
     ADMINV2_DRAWER_PANEL_Z,
 } from "@/components/admin/Drawer";
+import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
+import { resolveOpportunityDrawerQueueDefinition } from "@/lib/admin/drawer/resolveOpportunityDrawerQueueDefinition";
+import { resolveRecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
+import { opportunityDrawerVmStatusLabelFromControl } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerVmStatusReconciliation";
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
+import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
 
 const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
 
+const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
+    overview: "Overview",
+    communications: "Communications",
+    notes: "Notes",
+    documents: "Documents",
+    activity: "Activity",
+};
+
+/** Phase A — stable readonly status from VM; no dropdown on first paint. */
+function statusControlReadonlyForFirstPaint(status: StatusControlVm): StatusControlVm {
+    if (status.renderAs === "hidden") return status;
+    const label = opportunityDrawerVmStatusLabelFromControl(status);
+    return { renderAs: "readonly_pill", label };
+}
+
 export default function OpportunityDrawerVmRuntime() {
     const { canMutate } = useAdminAuth();
+    const { labels } = useEntityLabels();
+    const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
     const {
         drawer,
         closeDrawer,
@@ -48,13 +74,16 @@ export default function OpportunityDrawerVmRuntime() {
     }, [displayVm, drawer.id, drawerTab]);
 
     const record = displayVm?.above_fold.record ?? null;
-    const inq = displayVm?.above_fold.render_model.inquiry_summary;
-    const rightColumn = inq?.right_column ?? null;
 
     const queuePosition = useMemo(() => {
         if (!drawer.opportunityQueueNavigator || !drawer.id) return null;
         return resolveOpportunityQueueNavigatorPosition(drawer.id, drawer.opportunityQueueNavigator);
     }, [drawer.id, drawer.opportunityQueueNavigator]);
+
+    const drawerTitle = useMemo(() => {
+        if (!record) return "Opportunity";
+        return formatOpportunityInquiryDrawerTitle(record, opportunitySingular) || opportunitySingular;
+    }, [record, opportunitySingular]);
 
     const headerActions = useMemo(() => {
         if (!displayVm || !drawer.id) return null;
@@ -88,8 +117,8 @@ export default function OpportunityDrawerVmRuntime() {
         if (displayVm && !showTargetSeed) {
             return (
                 <VmOpportunityStatusControl
-                    status={displayVm.header.status}
-                    canMutate={!!canMutate}
+                    status={statusControlReadonlyForFirstPaint(displayVm.header.status)}
+                    canMutate={false}
                 />
             );
         }
@@ -102,9 +131,39 @@ export default function OpportunityDrawerVmRuntime() {
             );
         }
         return undefined;
-    }, [canMutate, displayVm, drawer.id, drawer.opportunityQueuePreviewSeed?.statusLabel, holdPriorPayload]);
+    }, [displayVm, drawer.id, drawer.opportunityQueuePreviewSeed?.statusLabel, holdPriorPayload]);
 
-    const tabs = displayVm?.layout.tabs ?? (["overview", "communications"] as DrawerTabKey[]);
+    const tabs = useMemo((): DrawerTabKey[] => {
+        const fromVm = displayVm?.layout.tabs;
+        if (fromVm && fromVm.length > 0) return fromVm;
+        return OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP;
+    }, [displayVm?.layout.tabs]);
+
+    const lifecycleRail = useMemo(() => {
+        if (!displayVm || !drawer.id || drawer.id === "new") return null;
+        const rec = displayVm.above_fold.record ?? {};
+        const currentStatus = String(rec.status_key ?? "").trim() || null;
+        const qd = resolveOpportunityDrawerQueueDefinition(displayVm.workspace.queue_definition, {
+            allowEnrollmentFallback: true,
+        });
+        const model = resolveRecordLifecycleRailModel({
+            queueDefinition: qd,
+            currentStatusKey: currentStatus,
+        });
+        if (model && model.steps.length > 0) {
+            return (
+                <RecordLifecycleRail
+                    model={model}
+                    data-testid="opportunity-lifecycle-rail"
+                    aria-label="Opportunity lifecycle"
+                />
+            );
+        }
+        if (!qd) {
+            return <RecordLifecycleRailSkeleton stepCount={6} />;
+        }
+        return null;
+    }, [displayVm, drawer.id]);
 
     const showColdShell = coldLoading && !displayVm && !suppressFullDrawerLoading;
 
@@ -114,10 +173,11 @@ export default function OpportunityDrawerVmRuntime() {
         <Drawer
             isOpen={Boolean(drawer.type && drawer.id) && !isOpportunityDrawerOpening}
             onClose={closeDrawer}
-            title={displayVm?.header.title ?? "Opportunity"}
+            title={drawerTitle}
             headerSubtitle={displayVm?.header.subtitle ?? undefined}
             headerTitleRight={headerActions ?? undefined}
             statusBadge={statusSlot ?? undefined}
+            postTabStrip={displayVm ? lifecycleRail : undefined}
             variant="adminV2"
             presentation="modal"
             panelClassName="max-w-7xl"
@@ -153,9 +213,12 @@ export default function OpportunityDrawerVmRuntime() {
                     <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
                         <p className="text-sm font-medium text-alloy-midnight/75">Loading opportunity…</p>
                     </div>
-                :   displayVm && record ?
+                :   displayVm && record && drawer.id ?
                     <>
-                        <div className="mb-3 flex flex-wrap gap-1 border-b border-alloy-stone/15 pb-2">
+                        <div
+                            className="mb-3 flex flex-wrap gap-0.5 border-b border-alloy-stone/15 pb-2"
+                            data-opportunity-drawer-tab-strip="true"
+                        >
                             {tabs.map((tab) => (
                                 <button
                                     key={tab}
@@ -167,8 +230,9 @@ export default function OpportunityDrawerVmRuntime() {
                                             "bg-alloy-blue/10 text-alloy-blue"
                                         :   "text-alloy-midnight/60 hover:bg-alloy-stone/10"
                                     )}
+                                    data-opportunity-drawer-tab={tab}
                                 >
-                                    {tab}
+                                    {OPPORTUNITY_TAB_LABELS[tab] ?? tab}
                                 </button>
                             ))}
                         </div>
@@ -184,41 +248,20 @@ export default function OpportunityDrawerVmRuntime() {
                                 data-adminv2-opportunity-drawer-body="true"
                                 data-drawer-vm-runtime-overview="true"
                             >
-                                <div
-                                    className={clsx(
-                                        "grid gap-3",
-                                        inq?.column_mode === "two" ? "md:grid-cols-[1fr_minmax(12rem,16rem)]" : "grid-cols-1"
-                                    )}
-                                >
-                                    <div className="min-w-0 space-y-2 rounded-xl border border-alloy-stone/15 bg-white p-3">
-                                        <h3 className="text-sm font-semibold text-alloy-midnight">
-                                            {String(record.name ?? record.title ?? "Inquiry")}
-                                        </h3>
-                                        {displayVm.header.oper_trust_preview?.headline ?
-                                            <p className="text-xs text-alloy-midnight/70">
-                                                {displayVm.header.oper_trust_preview.headline}
-                                            </p>
-                                        :   null}
-                                    </div>
-                                    {rightColumn ?
-                                        <VmInquiryRightColumn
-                                            model={rightColumn}
-                                            reminders={displayVm.summaries.reminders}
-                                        />
-                                    :   null}
-                                </div>
-                            </div>
-                        :   null}
-                        {drawerTab === "communications" && drawer.id ?
-                            <div data-drawer-vm-runtime-comms="true">
-                                <CommunicationsDrawerSection
-                                    apiEntityType="opportunities"
-                                    entityId={drawer.id}
-                                    embedded
-                                    active
+                                <OpportunityDrawerInquiryWorkflowOverview
+                                    displayVm={displayVm}
+                                    drawerId={drawer.id}
+                                    opportunitySingular={opportunitySingular}
+                                    onSelectTab={onTabSelect}
                                 />
                             </div>
-                        :   null}
+                        :   <OpportunityDrawerVmTabPanes
+                                drawerId={drawer.id}
+                                drawerTab={drawerTab}
+                                record={record}
+                                onSelectTab={onTabSelect}
+                            />
+                        }
                     </>
                 :   null}
             </div>
