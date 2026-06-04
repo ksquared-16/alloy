@@ -100,7 +100,17 @@ export function parseQueueRowCrmChildrenStructured(raw: unknown): CrmCompactChil
                     : typeof o.programInline === "string"
                       ? o.programInline.trim()
                       : null;
-        out.push({ primary, secondary: secondary || null });
+        const personIdRaw =
+            typeof o.person_id === "string"
+                ? o.person_id.trim()
+                : typeof o.personId === "string"
+                  ? o.personId.trim()
+                  : "";
+        out.push({
+            primary,
+            secondary: secondary || null,
+            personId: personIdRaw || null,
+        });
     }
     return out;
 }
@@ -155,7 +165,10 @@ export function devWarnIfCrmCompactChildMissingWithProgramDev(
 function deriveStructuredContactFromQueueRow(
     row: Record<string, unknown>,
     want: (f: QueueUiRowPreviewField) => boolean
-): Pick<CrmCompactRowSemanticSlots, "contactDisplayName" | "contactPhoneDisplay" | "contactEmail" | "contactSnippet"> {
+): Pick<
+    CrmCompactRowSemanticSlots,
+    "contactDisplayName" | "contactPersonId" | "contactPhoneDisplay" | "contactEmail" | "contactSnippet"
+> {
     const contactLine =
         typeof row._primary_contact_line === "string" ? row._primary_contact_line.trim() : "";
     const emailRaw = typeof row._primary_email === "string" ? row._primary_email.trim() : "";
@@ -199,6 +212,10 @@ function deriveStructuredContactFromQueueRow(
     const contactEmail = em || null;
     const contactPhoneDisplay = phoneOk || null;
 
+    const contactPersonIdRaw =
+        typeof row._primary_person_id === "string" ? row._primary_person_id.trim() : "";
+    const contactPersonId = wantPrimary && contactPersonIdRaw ? contactPersonIdRaw : null;
+
     const structuredAny = Boolean(
         (contactDisplayName && contactDisplayName.trim()) || contactPhoneDisplay || contactEmail
     );
@@ -219,6 +236,7 @@ function deriveStructuredContactFromQueueRow(
 
     return {
         contactDisplayName: contactDisplayName?.trim() || null,
+        contactPersonId,
         contactPhoneDisplay,
         contactEmail,
         contactSnippet,
@@ -453,6 +471,7 @@ export function buildCrmQueueRowPreviewPresentation(
 ): Pick<
     CrmCompactRowSemanticSlots,
     | "contactDisplayName"
+    | "contactPersonId"
     | "contactPhoneDisplay"
     | "contactEmail"
     | "contactSnippet"

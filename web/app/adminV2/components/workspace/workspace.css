@@ -7139,6 +7139,154 @@
   min-width: 0;
 }
 
+/* Related Person/Child records — horizontal row bands: [icon] Name | Program | … */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-rows,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-rows {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-labels,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-labels {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: var(--ws-type-fact-group-label-size, 11px);
+  font-weight: var(--ws-type-fact-group-label-weight, 600);
+  line-height: 1.28;
+  letter-spacing: 0.008em;
+  color: color-mix(in srgb, var(--d-muted) 58%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-label-lead,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-label-lead {
+  flex: 1 1 8rem;
+  min-width: min(8rem, 100%);
+  max-width: 22rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-label-field,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-label-field {
+  display: inline-flex;
+  align-items: center;
+  flex: 2 1 12rem;
+  min-width: min(10rem, 100%);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-row,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  min-height: 26px;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
+  border-radius: 5px;
+  background: transparent;
+  min-width: 0;
+  max-width: 100%;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-row:hover,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-row:hover {
+  background: color-mix(in srgb, var(--d-surface) 72%, var(--d-border) 28%);
+  border-color: color-mix(in srgb, var(--d-border) 100%, var(--d-brand) 8%);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-row-lead,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-row-lead,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-lead,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-lead {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 8rem;
+  min-width: min(8rem, 100%);
+  max-width: 22rem;
+  min-height: 22px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-name,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-name {
+  font-size: var(--ws-type-fact-value-size, 13px);
+  font-weight: var(--ws-type-fact-value-weight, 400);
+  line-height: 1.34;
+  letter-spacing: -0.006em;
+  color: color-mix(in srgb, var(--d-muted) 18%, var(--d-text-primary, #273f52));
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-field,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-field {
+  display: inline-flex;
+  align-items: center;
+  flex: 2 1 12rem;
+  min-width: min(10rem, 100%);
+  min-height: 22px;
+  font-size: var(--ws-type-fact-value-size, 13px);
+  font-weight: var(--ws-type-fact-value-weight, 400);
+  line-height: 1.34;
+  letter-spacing: -0.006em;
+  color: color-mix(in srgb, var(--d-muted) 18%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-field--empty,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-field--empty {
+  visibility: hidden;
+  flex: 2 1 12rem;
+  min-width: min(10rem, 100%);
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-field-value,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-field-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-sep,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-sep {
+  flex: 0 0 auto;
+  margin: 0 8px;
+  color: color-mix(in srgb, var(--d-muted) 42%, transparent);
+  font-size: 11px;
+  line-height: 1;
+  user-select: none;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-overflow,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-overflow {
+  padding: 0 6px;
+  font-size: var(--ws-type-fact-value-size, 13px);
+  color: color-mix(in srgb, var(--d-muted) 35%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-icon,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-icon {
+  flex: 0 0 auto;
+}
+
 /* Contact row: Contact | Phone | Email must stay on one horizontal band (no wrap to row 2). */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-group[data-fact-kind="contact"] .adminv2-ws-queue-fact-column-grid,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-group[data-fact-kind="contact"] .adminv2-ws-queue-fact-column-grid {

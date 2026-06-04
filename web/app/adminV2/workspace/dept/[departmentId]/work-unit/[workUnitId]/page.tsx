@@ -4192,7 +4192,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const grainCtx = parseQueueRowGrainContext(r as Record<string, unknown>);
                 const relatedDrawerTargets = extractQueueRowRelatedDrawerTargets(
                     r as Record<string, unknown>,
-                    rid
+                    rid,
+                    process.env.NODE_ENV === "development"
+                        ? { log: true, queueKey: selectedQueueKeyRef.current ?? null }
+                        : undefined
                 );
 
                 return {
@@ -4246,6 +4249,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       primaryIdentity: rowPrimaryIdentity,
                                       waitlistHouseholdContext,
                                       childrenLines: waitlistCandidate ? null : childrenLinesForVm,
+                                      contactPersonId:
+                                          crmPresentation.contactPersonId ?? relatedDrawerTargets.personId,
+                                      childPersonId: waitlistCandidate
+                                          ? null
+                                          : multiChildren
+                                            ? null
+                                            : childrenLinesForVm?.length === 1
+                                              ? childrenLinesForVm[0]?.personId ??
+                                                relatedDrawerTargets.childPersonId
+                                              : childDisplayLine
+                                                ? relatedDrawerTargets.childPersonId
+                                                : null,
                                       childName: waitlistCandidate
                                           ? waitlistCandidate.childDisplayName
                                           : want("child_name")

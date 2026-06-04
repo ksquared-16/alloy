@@ -83,7 +83,7 @@ describe("opportunityDrawerVmStatusReconciliation", () => {
             statusKey: "new",
         });
         expect(info).toHaveBeenCalledWith(
-            "[drawer-vm-status:double_commit_detected]",
+            "[drawer_vm_status_double_commit_detected]",
             expect.objectContaining({ opportunity_id: "opp-1" })
         );
         info.mockRestore();
@@ -92,7 +92,7 @@ describe("opportunityDrawerVmStatusReconciliation", () => {
     it("emits vm_seed diagnostic tag", () => {
         const info = vi.spyOn(console, "info").mockImplementation(() => {});
         logDrawerVmStatusDiagnostic("vm_seed", { opportunity_id: "opp-1" });
-        expect(info).toHaveBeenCalledWith("[drawer-vm-status:vm_seed]", { opportunity_id: "opp-1" });
+        expect(info).toHaveBeenCalledWith("[drawer_vm_status_vm_seed]", expect.objectContaining({ opportunity_id: "opp-1" }));
         info.mockRestore();
     });
 });

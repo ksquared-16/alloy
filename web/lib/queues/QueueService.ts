@@ -41,6 +41,7 @@ import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
 import { formatOpportunityTourQueueDisplays } from "@/lib/tours/queue/opportunityQueueTourPreview";
 import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
+import { resolveQueueRowRelatedDrawerPersonIds } from "@/lib/workspace/viewModels/queueRowRelatedDrawerTargets";
 import {
     buildChildcarePlacementOptionLabelLookup,
     indexOcmPlacementByOpportunityAndMember,
@@ -779,8 +780,8 @@ function buildCrmCompactStructuredLinesFromCustomerMembers(
         ocmByMemberId: Map<string, QueueOcmPlacementRow>;
         optionLabelLookup: Map<string, string>;
     }
-): { primary: string; secondary: string | null }[] {
-    const withLabels: { primary: string; secondary: string | null; sort: string }[] = [];
+): { primary: string; secondary: string | null; personId?: string | null }[] {
+    const withLabels: { primary: string; secondary: string | null; personId: string | null; sort: string }[] = [];
     for (const m of members) {
         const base = displayBaseNameForCustomerMember(m);
         if (!base) continue;
@@ -801,10 +802,10 @@ function buildCrmCompactStructuredLinesFromCustomerMembers(
             ocmRow,
             optionLabelLookup: ctx.optionLabelLookup,
         });
-        withLabels.push({ primary, secondary, sort: primary.toLowerCase() });
+        withLabels.push({ primary, secondary, personId: pid || null, sort: primary.toLowerCase() });
     }
     withLabels.sort((a, b) => a.sort.localeCompare(b.sort));
-    return withLabels.map((w) => ({ primary: w.primary, secondary: w.secondary }));
+    return withLabels.map((w) => ({ primary: w.primary, secondary: w.secondary, personId: w.personId }));
 }
 
 type OpportunityNeedsAttentionRow = {
@@ -947,6 +948,7 @@ function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow,
 type OpportunityQueueCrmChildLine = {
     primary: string;
     secondary: string | null;
+    personId?: string | null;
 };
 
 /**
@@ -970,6 +972,7 @@ function buildStructuredCrmCompactChildren(joinChildNames: string[], inquiryChil
     const lineFromInquiryRow = (raw: unknown): OpportunityQueueCrmChildLine | null => {
         const row = raw as Record<string, unknown>;
         const disp = typeof row.display_name === "string" ? row.display_name.trim() : "";
+        const personId = typeof row.person_id === "string" ? row.person_id.trim() : null;
         const pl =
             typeof row.program_label === "string"
                 ? row.program_label.trim()
@@ -981,7 +984,7 @@ function buildStructuredCrmCompactChildren(joinChildNames: string[], inquiryChil
         const primary = (disp || detail || "").trim();
         if (!primary) return null;
         const secondary = disp && detail ? detail : null;
-        return { primary, secondary };
+        return { primary, secondary, personId: personId || null };
     };
     if (icRaw.length >= 2) {
         const out: OpportunityQueueCrmChildLine[] = [];
@@ -1496,13 +1499,25 @@ async function enrichOpportunityRows(params: {
         }
 
         const structuredFromInquiry = buildStructuredCrmCompactChildren([], inquiryChildren);
-        const crmCompactChildrenStructured =
+        const primaryPersonIdStr = pid ? String(pid).trim() : "";
+        const relatedDrawerPersonIds = resolveQueueRowRelatedDrawerPersonIds({
+            primaryPersonId: primaryPersonIdStr || null,
+            inquiryChildren,
+            activeMemberChildren: activeMemberChildren,
+        });
+        let crmCompactChildrenStructured =
             structuredFromMembers && structuredFromMembers.length > 0
                 ? structuredFromMembers
                 : structuredFromInquiry && structuredFromInquiry.length > 0
                   ? structuredFromInquiry
                   : childDisplay?.trim()
-                    ? [{ primary: childDisplay.trim(), secondary: programCombined }]
+                    ? [
+                          {
+                              primary: childDisplay.trim(),
+                              secondary: programCombined,
+                              personId: relatedDrawerPersonIds.childPersonId,
+                          },
+                      ]
                     : undefined;
 
         const locId = (r as { location_id?: string | null }).location_id;
@@ -1528,6 +1543,8 @@ async function enrichOpportunityRows(params: {
             _primary_contact_line: contactName ?? null,
             _primary_phone: contactPhone ?? null,
             _primary_email: contactEmail ?? null,
+            _primary_person_id: relatedDrawerPersonIds.personId,
+            _primary_child_person_id: relatedDrawerPersonIds.childPersonId,
             _child_display_name: childDisplay,
             _crm_compact_children: crmCompactChildrenStructured,
             _requested_program: programsDisplay ?? programCombined,

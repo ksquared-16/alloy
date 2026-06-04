@@ -443,6 +443,7 @@ import {
 import {
     detectOpportunityStatusDoubleCommit,
     logDrawerVmStatusDiagnostic,
+    logDrawerVmStatusWrite,
     opportunityDrawerVmStatusContractComplete,
     pinOpportunityDrawerVmStatusFromViewModel,
     reconcileStatusDefsWithVmPin,
@@ -461,6 +462,13 @@ import {
 import {
     personDrawerViewModelHardCutoverFailureMessage,
 } from "@/lib/adminV2/viewModel/drawer/person/personDrawerViewModelHardCutover";
+import {
+    isShellPinnedModelSwapOpenSource,
+    isVmBackedDrawerEntityType,
+} from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+import { warmRelatedDrawerViewModels } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
+import { putDrawerShellPinSnapshot } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
+import { resolvePersonDrawerViewModelSurface } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import {
     drawerViewModelCutoverFlagSnapshot,
@@ -1514,6 +1522,8 @@ export default function AdminEntityDrawer() {
         stack,
         consumeOpportunityDrawerPreload,
         consumePersonDrawerPreload,
+        opportunityPreloadGeneration,
+        drawerModelSwapGeneration,
         isOpportunityDrawerOpening,
         navigateOpportunityInQueue,
         isOpportunityQueueNavPending,
@@ -1761,10 +1771,34 @@ export default function AdminEntityDrawer() {
             !!drawer.id &&
             drawer.id !== "new" &&
             !(overview && (overview as { _create?: boolean })._create);
+        const entityKeyMismatch =
+            existingEntityDrawerTarget &&
+            data != null &&
+            !dm &&
+            isVmBackedDrawerEntityType(drawer.type);
+        const shellPinnedVmSwap =
+            entityKeyMismatch &&
+            (isShellPinnedModelSwapOpenSource(drawer.openSource) || drawerModelSwapGeneration > 0);
+        if (shellPinnedVmSwap) {
+            if (drawer.type === "opportunities" && opportunityDrawerVmFirstPaintSettled) return false;
+            if (drawer.type === "persons" && personDrawerVmFirstPaintSettled) return false;
+            return false;
+        }
         return existingEntityDrawerTarget && !error && !drawerReady;
-    }, [data, drawer.id, error, drawerReady]);
+    }, [
+        data,
+        drawer.id,
+        drawer.type,
+        drawer.openSource,
+        drawerModelSwapGeneration,
+        drawerReady,
+        error,
+        opportunityDrawerVmFirstPaintSettled,
+        personDrawerVmFirstPaintSettled,
+    ]);
 
     useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         setPostDrawerVisibleKey(null);
         postRevealEnrichEndReportedRef.current = null;
         opportunityDrawerVisitedTabsRef.current = createOpportunityDrawerTabVisitSet();
@@ -1779,9 +1813,7 @@ export default function AdminEntityDrawer() {
         memberPersonGraphOverlayInFlightRef.current = null;
         memberPersonGraphOverlayDoneRef.current = null;
         opportunityDeferredFullHydrateRef.current = null;
-        if (drawer.type === "opportunities" && drawer.id && drawer.id !== "new") {
-            resetOpportunityDrawerHydrateGuards(drawer.id);
-        }
+        resetOpportunityDrawerHydrateGuards(drawer.id);
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
@@ -2495,24 +2527,19 @@ export default function AdminEntityDrawer() {
     useLayoutEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         const preload = consumeOpportunityDrawerPreload(drawer.id);
-        if (!preload) return;
-        const boot = preload.bootstrap;
-        if (String((boot.entity as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
-        opportunityDrawerFirstPaintPreloadedRef.current = drawer.id;
-        const viewModelOpen = isOpportunityDrawerViewModelPreload(preload);
-        if (viewModelOpen) {
-            opportunityDrawerViewModelOpenRef.current = drawer.id;
-            opportunityDrawerViewModelRef.current = preload.viewModel;
-            setOpportunityDrawerVmFirstPaintSettled(
-                opportunityDrawerViewModelFirstPaintSettled(preload.viewModel)
-            );
-            setOpportunityVmActiveTourBookings(tourBookingsFromOpportunityDrawerVm(preload.viewModel));
-            setOpportunityDrawerViewModelPipeline(
-                buildOpportunityDrawerPipelineStateFromViewModel(preload.viewModel)
-            );
+        if (preload) {
+            applyOpportunityDrawerPreload(preload);
+            return;
+        }
+        const pinnedVm = opportunityDrawerViewModelRef.current;
+        if (
+            pinnedVm &&
+            String(pinnedVm.entity.id) === String(drawer.id) &&
+            !opportunityDrawerVmStatusPinRef.current
+        ) {
             const vmStatusPin = pinOpportunityDrawerVmStatusFromViewModel(
                 drawer.id,
-                preload.viewModel.header.status
+                pinnedVm.header.status
             );
             if (vmStatusPin) {
                 opportunityDrawerVmStatusPinRef.current = vmStatusPin;
@@ -2524,6 +2551,92 @@ export default function AdminEntityDrawer() {
                     status_key: vmStatusPin.statusKey,
                     option_count: vmStatusPin.statusDefs.length,
                     render_as: vmStatusPin.statusControl.renderAs,
+                    source: "view_model_ref_repin",
+                });
+            }
+        }
+    }, [drawer.type, drawer.id, consumeOpportunityDrawerPreload, opportunityPreloadGeneration, drawerModelSwapGeneration]);
+
+    function applyPersonDrawerPreload(
+        preload: import("@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel").PersonDrawerOpenPreload | import("@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel").ChildDrawerOpenPreload
+    ) {
+        const personId = drawer.id;
+        if (!personId || personId === "new" || preload.personId !== personId) return;
+
+        personDrawerViewModelOpenRef.current = personId;
+        setPersonDrawerVmFirstPaintSettled(preload.first_paint_settled);
+        setData(preload.primaryEntity);
+        putDrawerEntitySnapshot("persons", personId, preload.primaryEntity);
+        setPersonDrawerVmLoadError(null);
+        setError(null);
+        setLoading(false);
+        warmRelatedDrawerViewModels({
+            entityType: "persons",
+            record: preload.primaryEntity,
+            context: {
+                departmentId: drawer.opportunityWorkspaceContext?.department_id ?? null,
+                workUnitId: drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+            },
+            opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
+        });
+        putDrawerShellPinSnapshot(
+            {
+                entityType: "persons",
+                entityId: personId,
+                surface: resolvePersonDrawerViewModelSurface({
+                    openSource: drawer.openSource,
+                    presentationEmphasis: drawer.personDrawerOpenSeed?.presentation_emphasis ?? null,
+                }),
+                generation: preload.viewModel?.generation ?? null,
+                firstPaintSettled: preload.first_paint_settled,
+            },
+            {
+                departmentId: drawer.opportunityWorkspaceContext?.department_id ?? null,
+                workUnitId: drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+            }
+        );
+    }
+
+    useLayoutEffect(() => {
+        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
+        const preload = consumePersonDrawerPreload(drawer.id);
+        if (!preload || preload.personId !== drawer.id) return;
+        if (!preload.first_paint_settled) return;
+        applyPersonDrawerPreload(preload);
+    }, [drawer.type, drawer.id, consumePersonDrawerPreload, drawerModelSwapGeneration]);
+
+    function applyOpportunityDrawerPreload(preload: import("@/lib/admin/opportunityDrawerOpenCoordinator").OpportunityDrawerOpenPreload) {
+        const opportunityId = drawer.id;
+        if (!opportunityId || opportunityId === "new") return;
+        const boot = preload.bootstrap;
+        if (String((boot.entity as { id?: unknown }).id ?? "") !== String(opportunityId)) return;
+        opportunityDrawerFirstPaintPreloadedRef.current = opportunityId;
+        const viewModelOpen = isOpportunityDrawerViewModelPreload(preload);
+        if (viewModelOpen) {
+            opportunityDrawerViewModelOpenRef.current = opportunityId;
+            opportunityDrawerViewModelRef.current = preload.viewModel;
+            setOpportunityDrawerVmFirstPaintSettled(
+                opportunityDrawerViewModelFirstPaintSettled(preload.viewModel)
+            );
+            setOpportunityVmActiveTourBookings(tourBookingsFromOpportunityDrawerVm(preload.viewModel));
+            setOpportunityDrawerViewModelPipeline(
+                buildOpportunityDrawerPipelineStateFromViewModel(preload.viewModel)
+            );
+            const vmStatusPin = pinOpportunityDrawerVmStatusFromViewModel(
+                opportunityId,
+                preload.viewModel.header.status
+            );
+            if (vmStatusPin) {
+                opportunityDrawerVmStatusPinRef.current = vmStatusPin;
+                opportunityStatusDefsFetchGenRef.current += 1;
+                setStatusDefsForDrawer(vmStatusPin.statusDefs);
+                setStatusDefsLoading(false);
+                logDrawerVmStatusDiagnostic("vm_seed", {
+                    opportunity_id: opportunityId,
+                    status_key: vmStatusPin.statusKey,
+                    option_count: vmStatusPin.statusDefs.length,
+                    render_as: vmStatusPin.statusControl.renderAs,
+                    source: "preload_apply",
                 });
             } else {
                 const statusDefsFromVm = statusDefsFromViewModelStatusControl(preload.viewModel.header.status);
@@ -2553,18 +2666,18 @@ export default function AdminEntityDrawer() {
                 boot.entity as Record<string, unknown>
             );
         }
-        if (opportunityDrawerViewModelApplyLoggedRef.current !== drawer.id) {
-            opportunityDrawerViewModelApplyLoggedRef.current = drawer.id;
+        if (opportunityDrawerViewModelApplyLoggedRef.current !== opportunityId) {
+            opportunityDrawerViewModelApplyLoggedRef.current = opportunityId;
             safeLogDrawerViewModelCutover("drawer_apply", {
-                opportunity_id: drawer.id,
+                opportunity_id: opportunityId,
                 ...drawerViewModelCutoverFlagSnapshot(),
                 open_path: viewModelOpen ? "view_model" : (preload.openPath ?? "legacy"),
                 pipeline_pinned: viewModelOpen,
             });
         }
-        opportunityDrawerBootstrapAppliedRef.current = drawer.id;
-        opportunityDrawerBootstrapEntityKeyRef.current = `${drawer.type}:${drawer.id}`;
-        setOpportunityBootstrapAppliedId(drawer.id);
+        opportunityDrawerBootstrapAppliedRef.current = opportunityId;
+        opportunityDrawerBootstrapEntityKeyRef.current = `${drawer.type}:${opportunityId}`;
+        setOpportunityBootstrapAppliedId(opportunityId);
         setOpportunityBootstrapLayoutRow(mapBootstrapLayoutToRecordLayoutRow(boot));
         setOpportunityOperTrustPreview(boot.oper_trust_preview);
         setOpportunityDrawerReadiness(boot.readiness ?? null);
@@ -2574,20 +2687,20 @@ export default function AdminEntityDrawer() {
         );
         if (viewModelOpen) {
             merged = { ...merged, _record_surface: "full" };
-            markOpportunityDrawerHydrateDone(drawer.id, "full");
-            opportunityBackgroundFullDoneRef.current = drawer.id;
+            markOpportunityDrawerHydrateDone(opportunityId, "full");
+            opportunityBackgroundFullDoneRef.current = opportunityId;
             setOpportunityBackgroundFullHydrateFailed(false);
         } else if (preload.fullEntity) {
             merged = runOpportunityStagedFullHydrateMerge(merged, preload.fullEntity, {
-                opportunityId: drawer.id,
+                opportunityId,
                 phase: "composed_open_full_merge",
                 aboveFoldLocked: opportunityDrawerAboveFoldLockedRef.current,
                 sourceSurface: "full",
                 deferredRef: opportunityDeferredFullHydrateRef,
             });
             merged._record_surface = "full";
-            markOpportunityDrawerHydrateDone(drawer.id, "full");
-            opportunityBackgroundFullDoneRef.current = drawer.id;
+            markOpportunityDrawerHydrateDone(opportunityId, "full");
+            opportunityBackgroundFullDoneRef.current = opportunityId;
             setOpportunityBackgroundFullHydrateFailed(false);
         } else {
             merged._record_surface = "drawer_primary";
@@ -2595,7 +2708,7 @@ export default function AdminEntityDrawer() {
         setData(merged);
         setOpportunityDrawerEnrichmentHeld(preload.enrichmentHeldUntilInteraction);
         setOpportunityResolvedHeaderActions(preload.headerActions);
-        putOpportunityDrawerHeaderActionsCache(drawer.id, preload.headerActions, opportunityHeaderResolvedSigRef.current);
+        putOpportunityDrawerHeaderActionsCache(opportunityId, preload.headerActions, opportunityHeaderResolvedSigRef.current);
         setOpportunityResolvedHeaderLoading(false);
         if (boot.work_unit?.queue_definition) {
             setOpportunityQueueDefinition(
@@ -2605,28 +2718,37 @@ export default function AdminEntityDrawer() {
             setOpportunityQueueDefinition(null);
         }
         setOpportunityWorkUnitDepartmentId(boot.work_unit?.department_id ?? boot.workspace_scope.department_id);
-        markDrawerBootstrapApplied(String(drawer.id));
+        markDrawerBootstrapApplied(String(opportunityId));
         setOpportunityDrawerRevealCoordTimedOut(true);
-        markOpportunityDrawerHydrateDone(drawer.id, "primary");
-        opportunityPrimaryHydrateDoneRef.current = drawer.id;
+        markOpportunityDrawerHydrateDone(opportunityId, "primary");
+        opportunityPrimaryHydrateDoneRef.current = opportunityId;
         setLoading(false);
         setError(null);
-    }, [drawer.type, drawer.id, consumeOpportunityDrawerPreload, freezeOpportunityDrawerShellContract]);
-
-    useLayoutEffect(() => {
-        if (drawer.type !== "persons" || !drawer.id || drawer.id === "new") return;
-        const preload = consumePersonDrawerPreload(drawer.id);
-        if (!preload || preload.personId !== drawer.id) return;
-        if (!preload.first_paint_settled) return;
-
-        personDrawerViewModelOpenRef.current = drawer.id;
-        setPersonDrawerVmFirstPaintSettled(true);
-        setData(preload.primaryEntity);
-        putDrawerEntitySnapshot("persons", drawer.id, preload.primaryEntity);
-        setPersonDrawerVmLoadError(null);
-        setError(null);
-        setLoading(false);
-    }, [drawer.type, drawer.id, consumePersonDrawerPreload]);
+        warmRelatedDrawerViewModels({
+            entityType: "opportunities",
+            record: merged,
+            context: {
+                departmentId: drawer.opportunityWorkspaceContext?.department_id ?? null,
+                workUnitId: drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+            },
+            opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
+        });
+        if (viewModelOpen && preload.viewModel) {
+            putDrawerShellPinSnapshot(
+                {
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    surface: "opportunity",
+                    generation: preload.viewModel.generation ?? null,
+                    firstPaintSettled: opportunityDrawerViewModelFirstPaintSettled(preload.viewModel),
+                },
+                {
+                    departmentId: drawer.opportunityWorkspaceContext?.department_id ?? null,
+                    workUnitId: drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+                }
+            );
+        }
+    }
 
     useEffect(() => {
         if (!drawer.type || !drawer.id) {
@@ -2806,6 +2928,14 @@ export default function AdminEntityDrawer() {
             drawer.id !== "new" &&
             opportunityDrawerFirstPaintPreloadedRef.current === drawer.id
         ) {
+            return;
+        }
+        if (
+            drawer.type === "persons" &&
+            drawer.id !== "new" &&
+            personDrawerViewModelOpenRef.current === drawer.id
+        ) {
+            setLoading(false);
             return;
         }
         if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
@@ -5283,11 +5413,26 @@ export default function AdminEntityDrawer() {
                 opportunityDrawerViewModelOpenRef.current === drawer.id
             ) {
                 if (vmStatusPin && statusDefsForDrawer.length === 0) {
+                    logDrawerVmStatusWrite({
+                        opportunity_id: drawer.id,
+                        source: "status_effect_vm_pin_restore",
+                        action: "set_defs",
+                        def_count: vmStatusPin.statusDefs.length,
+                    });
                     setStatusDefsForDrawer(vmStatusPin.statusDefs);
                 }
                 setStatusDefsLoading(false);
                 return;
             }
+            logDrawerVmStatusWrite({
+                opportunity_id: drawer.id,
+                source: "status_effect_hard_cutover_wait",
+                action: "defer_until_vm",
+                hard_cutover: true,
+                vm_settled: opportunityDrawerVmFirstPaintSettled,
+                vm_open_ref: opportunityDrawerViewModelOpenRef.current === drawer.id,
+                pin_present: Boolean(vmStatusPin),
+            });
             setStatusDefsLoading(false);
             return;
         }
@@ -5313,6 +5458,13 @@ export default function AdminEntityDrawer() {
                 const sk = String(d?.status_key ?? "").trim();
                 const label = String(d?._status_display ?? "").trim();
                 if (sk) {
+                    logDrawerVmStatusWrite({
+                        opportunity_id: drawer.id,
+                        source: "bootstrap_single_option_seed",
+                        action: "set_defs",
+                        def_count: 1,
+                        status_key: sk,
+                    });
                     setStatusDefsForDrawer([
                         {
                             status_key: sk,
@@ -5356,6 +5508,13 @@ export default function AdminEntityDrawer() {
             }
         }
         const fetchGen = ++opportunityStatusDefsFetchGenRef.current;
+        logDrawerVmStatusWrite({
+            opportunity_id: drawer.id,
+            source: "status_options_api_start",
+            action: "fetch",
+            fetch_gen: fetchGen,
+            hard_cutover: hardCutoverOpportunity,
+        });
         setStatusDefsLoading(true);
         /** Effective defs (org + industry merge) — matches resolveStatusLabel / list badges; avoids org-only legacy gaps. */
         const init = workspaceDataFetchInit();
@@ -9789,6 +9948,7 @@ export default function AdminEntityDrawer() {
         !personDrawerComposedPayloadIsReady &&
         !personDrawerHasTypedOpenSnapshot &&
         !personDrawerTypedBodySnapshot &&
+        !personDrawerVmFirstPaintSettled &&
         loading;
 
     // Reset completion sentinel when the layout context changes (id, surface, or sections).

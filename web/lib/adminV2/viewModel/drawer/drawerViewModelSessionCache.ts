@@ -35,7 +35,19 @@ export type DrawerViewModelCacheEntry =
 
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 
+/** Optional shell pin — header/tabs/first_paint flags for instant reopen without recompose. */
+export type DrawerShellPinSnapshot = {
+    entityType: AdminDrawerEntityType;
+    entityId: string;
+    surface: DrawerViewModelCacheSurface;
+    /** VM generation when snapshot was captured — background refresh when stale. */
+    generation: string | null;
+    firstPaintSettled: boolean;
+    cachedAt: number;
+};
+
 const cache = new Map<string, DrawerViewModelCacheEntry>();
+const shellPinCache = new Map<string, DrawerShellPinSnapshot>();
 
 function trim(value: string | null | undefined): string {
     return typeof value === "string" ? value.trim() : "";
@@ -83,6 +95,38 @@ export function peekDrawerViewModelCacheEntry(params: {
 
 export function clearDrawerViewModelSessionCacheForTests(): void {
     cache.clear();
+    shellPinCache.clear();
+}
+
+export function putDrawerShellPinSnapshot(
+    snapshot: Omit<DrawerShellPinSnapshot, "cachedAt"> & { cachedAt?: number },
+    context?: DrawerViewModelCacheContext | null
+): void {
+    const key = buildDrawerViewModelCacheKey({
+        entityType: snapshot.entityType,
+        entityId: snapshot.entityId,
+        surface: snapshot.surface,
+        context,
+    });
+    shellPinCache.set(key, { ...snapshot, cachedAt: snapshot.cachedAt ?? Date.now() });
+}
+
+export function peekDrawerShellPinSnapshot(params: {
+    entityType: AdminDrawerEntityType;
+    entityId: string;
+    surface: DrawerViewModelCacheSurface;
+    context?: DrawerViewModelCacheContext | null;
+    maxAgeMs?: number;
+}): DrawerShellPinSnapshot | null {
+    const key = buildDrawerViewModelCacheKey(params);
+    const hit = shellPinCache.get(key);
+    if (!hit) return null;
+    const maxAge = params.maxAgeMs ?? DEFAULT_TTL_MS;
+    if (Date.now() - hit.cachedAt > maxAge) {
+        shellPinCache.delete(key);
+        return null;
+    }
+    return hit;
 }
 
 export function resolvePersonDrawerViewModelSurface(params: {

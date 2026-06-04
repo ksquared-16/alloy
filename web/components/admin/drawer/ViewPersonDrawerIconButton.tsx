@@ -8,7 +8,9 @@ type Props = {
     displayName: string;
     onClick: MouseEventHandler<HTMLButtonElement>;
     onMouseEnter?: () => void;
-    onPointerDown?: () => void;
+    onPointerDown?: MouseEventHandler<HTMLButtonElement>;
+    /** Person (guardian/contact) vs child lifecycle drawer target — same icon, distinct a11y copy. */
+    recordKind?: "person" | "child";
     testId?: string;
     className?: string;
     extraAttrs?: Record<string, string>;
@@ -21,6 +23,7 @@ export default function ViewPersonDrawerIconButton({
     onClick,
     onMouseEnter,
     onPointerDown,
+    recordKind = "person",
     testId = "view-person-drawer-open",
     className = "",
     extraAttrs,
@@ -28,13 +31,18 @@ export default function ViewPersonDrawerIconButton({
     const pid = personId.trim();
     if (!pid) return null;
 
+    const isChild = recordKind === "child";
+    const title = isChild ? "View child" : "View person";
+    const ariaLabel = isChild ? `View child ${displayName}` : `View person for ${displayName}`;
+
     return (
         <button
             type="button"
-            title="View person"
-            aria-label={`View person for ${displayName}`}
+            title={title}
+            aria-label={ariaLabel}
             data-testid={testId}
             data-view-person-target-id={pid}
+            data-view-person-record-kind={recordKind}
             onMouseEnter={onMouseEnter}
             onPointerDown={onPointerDown}
             onClick={onClick}

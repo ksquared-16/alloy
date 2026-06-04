@@ -36,6 +36,7 @@ import {
 } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementCandidatePanel";import { QueueRowPlacementManualOrderControls } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementManualOrderControls";
 import { QueueRowPlacementPriorityV2Panel } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityV2Panel";
 import { WorkUnitQueueLaneRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
+import ViewPersonDrawerIconButton from "@/components/admin/drawer/ViewPersonDrawerIconButton";
 import { ADMINV2_WORK_UNIT_QUEUE_ROW_SKELETON_COUNT } from "@/lib/ui-v2/adminV2LoadingGeometry";
 import {
     formatPlacementGroupHeaderTitle,
@@ -186,6 +187,237 @@ function fireQueueRowOpenChildDrawer(
       source: "queue_row_child_icon",
     },
   });
+}
+
+type CrmCompactDrawerRecordIconHandlers = {
+  onOpenPerson: (personId: string) => void;
+  onOpenChild: (childPersonId: string) => void;
+  onPrefetchPerson: (personId: string) => void;
+  onPrefetchChild: (childPersonId: string) => void;
+};
+
+function buildCrmCompactDrawerRecordIconHandlers(
+  queue: QueueVm,
+  item: QueueItemVm,
+  onAction: WorkspaceActionHandler,
+  workspaceContext?: OpportunityDrawerIntentContext | null
+): CrmCompactDrawerRecordIconHandlers | undefined {
+  if (queue.queueEntityType !== "opportunity") return undefined;
+  return {
+    onOpenPerson: (personId) => fireQueueRowOpenPersonDrawer(queue, item, personId, onAction),
+    onOpenChild: (childPersonId) => fireQueueRowOpenChildDrawer(queue, item, childPersonId, onAction),
+    onPrefetchPerson: (personId) => prefetchQueueRowPersonDrawerIntent(personId, workspaceContext),
+    onPrefetchChild: (childPersonId) => prefetchQueueRowChildDrawerIntent(childPersonId, workspaceContext),
+  };
+}
+
+function resolveRelatedRecordPersonId(
+  rowIdx: number,
+  colKey: string | undefined,
+  slots: CrmCompactRowSemanticSlots | undefined
+): string | null {
+  if (!slots) return null;
+  if (colKey === "primary_contact") return slots.contactPersonId?.trim() || null;
+  if (colKey === "child_name") {
+    const lines = slots.childrenLines ?? [];
+    return (
+      lines[rowIdx]?.personId?.trim() ||
+      (lines.length <= 1 && rowIdx === 0 ? slots.childPersonId?.trim() : "") ||
+      null
+    );
+  }
+  return null;
+}
+
+function queueRowRelatedRecordIcon(
+  personId: string,
+  displayName: string,
+  recordKind: "person" | "child",
+  handlers: CrmCompactDrawerRecordIconHandlers
+) {
+  return (
+    <ViewPersonDrawerIconButton
+      personId={personId}
+      displayName={displayName}
+      recordKind={recordKind}
+      testId={recordKind === "child" ? "view-child-drawer-open" : "view-person-drawer-open"}
+      className="adminv2-ws-queue-related-record-icon shrink-0"
+      extraAttrs={
+        recordKind === "person"
+          ? { "data-queue-row-person-icon": "true" }
+          : { "data-queue-row-child-icon": "true" }
+      }
+      onMouseEnter={() =>
+        recordKind === "person" ? handlers.onPrefetchPerson(personId) : handlers.onPrefetchChild(personId)
+      }
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (recordKind === "person") handlers.onPrefetchPerson(personId);
+        else handlers.onPrefetchChild(personId);
+      }}
+      onClick={(e) => {
+        e.stopPropagation();
+        if (recordKind === "person") handlers.onOpenPerson(personId);
+        else handlers.onOpenChild(personId);
+      }}
+    />
+  );
+}
+
+function queueRowInlineDrawerRecordCell(
+  displayName: string,
+  personId: string | null | undefined,
+  recordKind: "person" | "child",
+  handlers: CrmCompactDrawerRecordIconHandlers | undefined
+): ReactNode {
+  const name = displayName.trim();
+  if (!name || name === "—") return name || "—";
+  const pid = personId?.trim() ?? "";
+  if (!pid || !handlers) return name;
+
+  return (
+    <span
+      className="adminv2-ws-queue-inline-drawer-record adminv2-ws-queue-related-record-lead"
+      data-queue-inline-drawer-record={recordKind}
+    >
+      {queueRowRelatedRecordIcon(pid, name, recordKind, handlers)}
+      <span className="adminv2-ws-queue-related-record-name min-w-0 truncate">{name}</span>
+    </span>
+  );
+}
+
+function queueRowInlineIconForFactColumn(
+  colKey: string | undefined,
+  rowIdx: number,
+  displayName: string,
+  slots: CrmCompactRowSemanticSlots | undefined,
+  handlers: CrmCompactDrawerRecordIconHandlers | undefined
+): ReactNode | null {
+  if (!handlers || !slots || !displayName.trim() || displayName.trim() === "—") return null;
+  if (displayName.trim().startsWith("+")) return null;
+  if (colKey === "primary_contact") {
+    return queueRowInlineDrawerRecordCell(displayName, slots.contactPersonId, "person", handlers);
+  }
+  if (colKey === "child_name") {
+    return queueRowInlineDrawerRecordCell(
+      displayName,
+      resolveRelatedRecordPersonId(rowIdx, colKey, slots),
+      "child",
+      handlers
+    );
+  }
+  return null;
+}
+
+function crmFactGridUsesRelatedRecordRows(
+  grid: WorkUnitQueueCrmFactColumnGridVm,
+  drawerRecordIconHandlers: CrmCompactDrawerRecordIconHandlers | undefined
+): boolean {
+  if (!drawerRecordIconHandlers) return false;
+  const keys = grid.columnKeys ?? [];
+  return keys.includes("child_name") || keys.includes("primary_contact");
+}
+
+/**
+ * Horizontal related-record rows — [icon] Name | Program | … — one framed band per record.
+ * Scales to additional configured columns via `columnKeys` without stacked cards.
+ */
+function CrmFactRelatedRecordRows({
+  grid,
+  slots,
+  drawerRecordIconHandlers,
+}: {
+  grid: WorkUnitQueueCrmFactColumnGridVm;
+  slots?: CrmCompactRowSemanticSlots;
+  drawerRecordIconHandlers: CrmCompactDrawerRecordIconHandlers;
+}) {
+  const { headers, rows, columnKeys } = grid;
+  if (!headers.length || !rows.length) return null;
+
+  const nameColKey = columnKeys?.find((k) => k === "child_name" || k === "primary_contact");
+  const nameColIdx = nameColKey ? columnKeys!.indexOf(nameColKey) : 0;
+  const recordKind = nameColKey === "primary_contact" ? "person" : "child";
+  const trailingCols = headers
+    .map((header, colIdx) => ({ header, colIdx, key: columnKeys?.[colIdx] }))
+    .filter((col) => col.colIdx !== nameColIdx);
+
+  return (
+    <div className="adminv2-ws-queue-related-record-rows" data-queue-related-record-layout="row_band">
+      {trailingCols.length > 0 ? (
+        <div className="adminv2-ws-queue-related-record-labels" aria-hidden="true">
+          <span className="adminv2-ws-queue-related-record-label-lead">
+            {displayCrmFactGroupLabel(headers[nameColIdx] ?? "")}
+          </span>
+          {trailingCols.map((col, i) => (
+            <span key={col.key ?? i} className="adminv2-ws-queue-related-record-label-field">
+              <span className="adminv2-ws-queue-related-record-sep" aria-hidden="true">
+                |
+              </span>
+              <span className="adminv2-ws-queue-related-record-label-text">
+                {displayCrmFactGroupLabel(col.header)}
+              </span>
+            </span>
+          ))}
+        </div>
+      ) : null}
+      {rows.map((row, rowIdx) => {
+        const nameRaw = String(row[nameColIdx] ?? "").trim();
+        if (nameRaw.startsWith("+")) {
+          return (
+            <div
+              key={`overflow-${rowIdx}`}
+              className="adminv2-ws-queue-related-record-overflow adminv2-ws-queue-fact-line"
+            >
+              {nameRaw}
+            </div>
+          );
+        }
+        const personId = resolveRelatedRecordPersonId(rowIdx, nameColKey, slots);
+        const showIcon = Boolean(personId);
+
+        return (
+          <div
+            key={`record-${rowIdx}`}
+            className="adminv2-ws-queue-related-record-row"
+            data-queue-related-record-row={recordKind}
+            data-queue-inline-drawer-record={showIcon ? recordKind : undefined}
+          >
+            <div className="adminv2-ws-queue-related-record-row-lead">
+              {showIcon && personId ?
+                queueRowRelatedRecordIcon(personId, nameRaw || "—", recordKind, drawerRecordIconHandlers)
+              : null}
+              <span className="adminv2-ws-queue-related-record-name">{nameRaw || "—"}</span>
+            </div>
+            {trailingCols.map((col, i) => {
+              const val = String(row[col.colIdx] ?? "").trim();
+              if (!val || val === "—") {
+                return (
+                  <span
+                    key={`${rowIdx}-${col.key ?? i}-empty`}
+                    className="adminv2-ws-queue-related-record-field adminv2-ws-queue-related-record-field--empty"
+                    data-fact-col-key={col.key}
+                    aria-hidden="true"
+                  />
+                );
+              }
+              return (
+                <span
+                  key={`${rowIdx}-${col.key ?? i}`}
+                  className="adminv2-ws-queue-related-record-field"
+                  data-fact-col-key={col.key}
+                >
+                  <span className="adminv2-ws-queue-related-record-sep" aria-hidden="true">
+                    |
+                  </span>
+                  <span className="adminv2-ws-queue-related-record-field-value">{val}</span>
+                </span>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function prefetchOpportunityQueueRowIntent(
@@ -408,7 +640,25 @@ function CrmFactLineRow({
   );
 }
 
-function CrmFactColumnGrid({ grid }: { grid: WorkUnitQueueCrmFactColumnGridVm }) {
+function CrmFactColumnGrid({
+  grid,
+  slots,
+  drawerRecordIconHandlers,
+}: {
+  grid: WorkUnitQueueCrmFactColumnGridVm;
+  slots?: CrmCompactRowSemanticSlots;
+  drawerRecordIconHandlers?: CrmCompactDrawerRecordIconHandlers;
+}) {
+  if (crmFactGridUsesRelatedRecordRows(grid, drawerRecordIconHandlers)) {
+    return (
+      <CrmFactRelatedRecordRows
+        grid={grid}
+        slots={slots}
+        drawerRecordIconHandlers={drawerRecordIconHandlers!}
+      />
+    );
+  }
+
   const { headers, rows, columnKeys } = grid;
   if (!headers.length || !rows.length) return null;
   return (
@@ -420,11 +670,19 @@ function CrmFactColumnGrid({ grid }: { grid: WorkUnitQueueCrmFactColumnGridVm })
           data-fact-col-key={columnKeys?.[colIdx]}
         >
           <div className="adminv2-ws-queue-fact-col-head">{displayCrmFactGroupLabel(header)}</div>
-          {rows.map((row, rowIdx) => (
-            <div key={`${rowIdx}-${colIdx}`} className="adminv2-ws-queue-fact-value adminv2-ws-queue-fact-line">
-              {row[colIdx] ?? ""}
-            </div>
-          ))}
+          {rows.map((row, rowIdx) => {
+            const raw = row[colIdx] ?? "";
+            const colKey = columnKeys?.[colIdx];
+            const inline =
+              typeof raw === "string"
+                ? queueRowInlineIconForFactColumn(colKey, rowIdx, raw, slots, drawerRecordIconHandlers)
+                : null;
+            return (
+              <div key={`${rowIdx}-${colIdx}`} className="adminv2-ws-queue-fact-value adminv2-ws-queue-fact-line">
+                {inline ?? raw}
+              </div>
+            );
+          })}
         </div>
       ))}
     </div>
@@ -434,7 +692,15 @@ function CrmFactColumnGrid({ grid }: { grid: WorkUnitQueueCrmFactColumnGridVm })
 /**
  * Work-unit queue row doctrine — one fact group (label above, value below).
  */
-function CrmWorkUnitFactGroup({ group }: { group: WorkUnitQueueCrmFactGroupVm }) {
+function CrmWorkUnitFactGroup({
+  group,
+  slots,
+  drawerRecordIconHandlers,
+}: {
+  group: WorkUnitQueueCrmFactGroupVm;
+  slots?: CrmCompactRowSemanticSlots;
+  drawerRecordIconHandlers?: CrmCompactDrawerRecordIconHandlers;
+}) {
   const hasGrid = Boolean(group.columnGrid?.headers.length && group.columnGrid?.rows.length);
   const showGroupLabel = Boolean(group.label?.trim());
 
@@ -444,7 +710,11 @@ function CrmWorkUnitFactGroup({ group }: { group: WorkUnitQueueCrmFactGroupVm })
         {showGroupLabel ? (
           <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(group.label)}</div>
         ) : null}
-        <CrmFactColumnGrid grid={group.columnGrid} />
+        <CrmFactColumnGrid
+          grid={group.columnGrid}
+          slots={slots}
+          drawerRecordIconHandlers={drawerRecordIconHandlers}
+        />
       </div>
     );
   }
@@ -509,7 +779,13 @@ function legacyMiddleHasContent(slots: CrmCompactRowSemanticSlots): boolean {
 }
 
 /** Fallback when `crmFactGroups` is absent (older callers). Prefers field column grids when slots allow. */
-function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSlots }) {
+function LegacyCrmCompactQueueMiddle({
+  slots,
+  drawerRecordIconHandlers,
+}: {
+  slots: CrmCompactRowSemanticSlots;
+  drawerRecordIconHandlers?: CrmCompactDrawerRecordIconHandlers;
+}) {
   const nodes: ReactNode[] = [];
   const DL = DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS;
   const primaryContactCaption = slots.rowPreviewLabelPrimaryContact?.trim() || DL.primary_contact;
@@ -543,6 +819,8 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
               ],
               columnKeys: ["primary_contact", "phone", "email"],
             }}
+            slots={slots}
+            drawerRecordIconHandlers={drawerRecordIconHandlers}
           />
         </div>
       );
@@ -584,6 +862,8 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
             rows,
             columnKeys: useProgramCol ? ["child_name", "program"] : ["child_name"],
           }}
+          slots={slots}
+          drawerRecordIconHandlers={drawerRecordIconHandlers}
         />
       </div>
     );
@@ -595,13 +875,19 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
         <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
           <CrmFactColumnGrid
             grid={{ headers: [childHdr, programHdr], rows: [[n, p]], columnKeys: ["child_name", "program"] }}
+            slots={slots}
+            drawerRecordIconHandlers={drawerRecordIconHandlers}
           />
         </div>
       );
     } else if (n) {
       nodes.push(
         <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
-          <CrmFactColumnGrid grid={{ headers: [childHdr], rows: [[n]], columnKeys: ["child_name"] }} />
+          <CrmFactColumnGrid
+            grid={{ headers: [childHdr], rows: [[n]], columnKeys: ["child_name"] }}
+            slots={slots}
+            drawerRecordIconHandlers={drawerRecordIconHandlers}
+          />
         </div>
       );
     } else if (p) {
@@ -791,6 +1077,7 @@ export function CrmCompactQueuePreview({
   waitlistPlacementV2,
   waitlistCandidateRow,
   waitlistStatusLabel,
+  drawerRecordIconHandlers,
 }: {
   slots: CrmCompactRowSemanticSlots;
   urgencyTier?: QueueItemVm["urgencyTier"];
@@ -802,6 +1089,8 @@ export function CrmCompactQueuePreview({
   waitlistPlacementV2?: QueueRowPlacementPriorityV2Vm;
   waitlistCandidateRow?: import("@/lib/ui-v2/workspace-types").QueueRowPlacementWaitlistCandidateVm;
   waitlistStatusLabel?: string;
+  /** Inline person/child drawer icons beside displayed names (work-unit opportunity rows). */
+  drawerRecordIconHandlers?: CrmCompactDrawerRecordIconHandlers;
 }) {
   const stageStatus =
     slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
@@ -946,8 +1235,20 @@ export function CrmCompactQueuePreview({
           {hasMiddle || waitlistCandidateRow ? (
             <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--middle">
               {useDoctrine
-                ? slots.crmFactGroups!.map((g, i) => <CrmWorkUnitFactGroup key={i} group={g} />)
-                : <LegacyCrmCompactQueueMiddle slots={slots} />}
+                ? slots.crmFactGroups!.map((g, i) => (
+                    <CrmWorkUnitFactGroup
+                      key={i}
+                      group={g}
+                      slots={slots}
+                      drawerRecordIconHandlers={drawerRecordIconHandlers}
+                    />
+                  ))
+                : (
+                    <LegacyCrmCompactQueueMiddle
+                      slots={slots}
+                      drawerRecordIconHandlers={drawerRecordIconHandlers}
+                    />
+                  )}
               {waitlistCandidateRow ? (
                 <QueueRowPlacementCandidateMetaChips
                   row={waitlistCandidateRow}
@@ -1043,8 +1344,20 @@ export function CrmCompactQueuePreview({
         {hasMiddle || waitlistCandidateRow ? (
           <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--middle">
             {useDoctrine
-              ? slots.crmFactGroups!.map((g, i) => <CrmWorkUnitFactGroup key={i} group={g} />)
-              : <LegacyCrmCompactQueueMiddle slots={slots} />}
+              ? slots.crmFactGroups!.map((g, i) => (
+                  <CrmWorkUnitFactGroup
+                    key={i}
+                    group={g}
+                    slots={slots}
+                    drawerRecordIconHandlers={drawerRecordIconHandlers}
+                  />
+                ))
+              : (
+                  <LegacyCrmCompactQueueMiddle
+                    slots={slots}
+                    drawerRecordIconHandlers={drawerRecordIconHandlers}
+                  />
+                )}
             {waitlistCandidateRow ? (
               <QueueRowPlacementCandidateMetaChips
                 row={waitlistCandidateRow}
@@ -1311,10 +1624,12 @@ function WorkUnitQueueLane({
             ? []
             : orderedQueueQuickActions(item.quickActions);
           const rowActionsPending = Boolean(queue.rowActionsPending);
-          const relatedPersonId = item.relatedPersonId?.trim() ?? "";
-          const relatedChildPersonId = item.relatedChildPersonId?.trim() ?? "";
-          const showRelatedDrawerIcons =
-            queue.queueEntityType === "opportunity" && Boolean(relatedPersonId || relatedChildPersonId);
+          const drawerRecordIconHandlers = buildCrmCompactDrawerRecordIconHandlers(
+            queue,
+            item,
+            onAction,
+            opportunityDrawerWorkspaceContext
+          );
           const crm = item.semanticCrmCompact;
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
@@ -1417,6 +1732,7 @@ function WorkUnitQueueLane({
                         urgencyTier={tier}
                         operationalAttentionBadge={attentionAccent}
                         scanMode
+                        drawerRecordIconHandlers={drawerRecordIconHandlers}
                         waitlistCandidateRow={
                           item.placementWaitlistCandidate && placementShowBucketChip
                             ? item.placementWaitlistCandidate
@@ -1447,83 +1763,8 @@ function WorkUnitQueueLane({
                         <span className="inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
                         <span className="ml-1.5 inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
                       </div>
-                    ) : rowQuickActions.length || showRelatedDrawerIcons ? (
+                    ) : rowQuickActions.length ? (
                       <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
-                        {showRelatedDrawerIcons ? (
-                          <div
-                            className="adminv2-ws-wu-queue-related-record-icons mr-1.5 flex items-center gap-1 opacity-70 transition-opacity hover:opacity-100 focus-within:opacity-100"
-                            data-queue-related-record-icons="true"
-                          >
-                            {relatedPersonId ? (
-                              <button
-                                type="button"
-                                title="Open person record"
-                                aria-label="Open person record"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-alloy-stone/25 bg-white/80 text-[11px] font-semibold text-alloy-midnight/70 shadow-sm hover:border-alloy-blue/40 hover:text-alloy-blue"
-                                data-queue-row-person-icon="true"
-                                onMouseEnter={() =>
-                                  prefetchQueueRowPersonDrawerIntent(
-                                    relatedPersonId,
-                                    opportunityDrawerWorkspaceContext
-                                  )
-                                }
-                                onFocus={() =>
-                                  prefetchQueueRowPersonDrawerIntent(
-                                    relatedPersonId,
-                                    opportunityDrawerWorkspaceContext
-                                  )
-                                }
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  prefetchQueueRowPersonDrawerIntent(
-                                    relatedPersonId,
-                                    opportunityDrawerWorkspaceContext
-                                  );
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  fireQueueRowOpenPersonDrawer(queue, item, relatedPersonId, onAction);
-                                }}
-                              >
-                                <span aria-hidden>P</span>
-                              </button>
-                            ) : null}
-                            {relatedChildPersonId ? (
-                              <button
-                                type="button"
-                                title="Open child record"
-                                aria-label="Open child record"
-                                className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-alloy-stone/25 bg-white/80 text-[11px] font-semibold text-alloy-midnight/70 shadow-sm hover:border-alloy-blue/40 hover:text-alloy-blue"
-                                data-queue-row-child-icon="true"
-                                onMouseEnter={() =>
-                                  prefetchQueueRowChildDrawerIntent(
-                                    relatedChildPersonId,
-                                    opportunityDrawerWorkspaceContext
-                                  )
-                                }
-                                onFocus={() =>
-                                  prefetchQueueRowChildDrawerIntent(
-                                    relatedChildPersonId,
-                                    opportunityDrawerWorkspaceContext
-                                  )
-                                }
-                                onMouseDown={(e) => {
-                                  e.stopPropagation();
-                                  prefetchQueueRowChildDrawerIntent(
-                                    relatedChildPersonId,
-                                    opportunityDrawerWorkspaceContext
-                                  );
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  fireQueueRowOpenChildDrawer(queue, item, relatedChildPersonId, onAction);
-                                }}
-                              >
-                                <span aria-hidden>C</span>
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
                         <div className="adminv2-ws-enrollment-crm-row__action-stack">
                           {rowQuickActions.map((qa) => {
                             const dispatchId = queueQuickActionDispatchId(qa);

@@ -141,6 +141,8 @@ export type CrmCompactChildLineVm = {
   secondary?: string | null;
   /** Deduped program / age text for doctrine line (`Name · program`). */
   programInline?: string | null;
+  /** Child person id when enriched on queue rows — opens child drawer inline icon. */
+  personId?: string | null;
 };
 
 export type CrmCompactRowSemanticSlots = {
@@ -164,8 +166,12 @@ export type CrmCompactRowSemanticSlots = {
    * `contactSnippet` is used for legacy / fallback one-line contact.
    */
   contactDisplayName?: string | null;
+  /** Primary contact person id when enriched — inline person drawer icon target. */
+  contactPersonId?: string | null;
   contactPhoneDisplay?: string | null;
   contactEmail?: string | null;
+  /** Single-child fallback person id when `childName` is set without `childrenLines`. */
+  childPersonId?: string | null;
   /** Desired start date, date-only MM-DD-YYYY (UTC), or `—` when the field is in row preview but missing. */
   desiredStartDateDisplay?: string | null;
   /**

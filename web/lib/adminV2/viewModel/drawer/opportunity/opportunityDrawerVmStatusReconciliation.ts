@@ -1,5 +1,6 @@
 import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
 import { statusDefsFromViewModelStatusControl } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
+import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 
 export type OpportunityDrawerStatusDefOption = {
     status_key: string;
@@ -23,14 +24,28 @@ export type DrawerVmStatusDiagnosticTag =
     | "status_defs_reconciled"
     | "double_commit_detected";
 
-const DIAG_PREFIX = "[drawer-vm-status:";
+const LEGACY_DIAG_TO_RUNTIME: Record<
+    DrawerVmStatusDiagnosticTag,
+    | "drawer_vm_status_vm_seed"
+    | "drawer_vm_status_non_vm_write_blocked"
+    | "drawer_vm_status_defs_reconciled"
+    | "drawer_vm_status_double_commit_detected"
+> = {
+    vm_seed: "drawer_vm_status_vm_seed",
+    non_vm_write_blocked: "drawer_vm_status_non_vm_write_blocked",
+    status_defs_reconciled: "drawer_vm_status_defs_reconciled",
+    double_commit_detected: "drawer_vm_status_double_commit_detected",
+};
 
 export function logDrawerVmStatusDiagnostic(
     tag: DrawerVmStatusDiagnosticTag,
     payload: Record<string, unknown>
 ): void {
-    if (typeof console === "undefined" || typeof console.info !== "function") return;
-    console.info(`${DIAG_PREFIX}${tag}]`, payload);
+    logDrawerVmRuntimeDiagnostic(LEGACY_DIAG_TO_RUNTIME[tag], payload);
+}
+
+export function logDrawerVmStatusWrite(payload: Record<string, unknown>): void {
+    logDrawerVmRuntimeDiagnostic("drawer_vm_status_write", payload);
 }
 
 export function opportunityDrawerVmStatusKeyFromControl(status: StatusControlVm): string {
