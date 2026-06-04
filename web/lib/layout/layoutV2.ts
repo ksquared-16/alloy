@@ -80,10 +80,29 @@ export interface LayoutLinkTarget {
 }
 
 /**
+ * Optional visibility rule for an item/row/section (V1 — presentation only).
+ * Preserves intent; the renderer may apply or ignore it. NOT a rules engine.
+ *  - "exists": show when `path` resolves to a non-empty value.
+ *  - "equals": show when `path` equals `value`.
+ * `path` is a namespaced source path, e.g. "person.secondary_contact".
+ */
+export const LAYOUT_CONDITION_TYPES = ["exists", "equals"] as const;
+export type LayoutConditionType = (typeof LAYOUT_CONDITION_TYPES)[number];
+export interface LayoutCondition {
+    type: LayoutConditionType;
+    path: string;
+    value?: string;
+}
+export function isLayoutConditionType(v: unknown): v is LayoutConditionType {
+    return typeof v === "string" && (LAYOUT_CONDITION_TYPES as readonly string[]).includes(v);
+}
+
+/**
  * A single placed item inside a Column.
  *
  * `kind` selects how `refKey` is interpreted:
- *  - "field"             → refKey = field_key on the entity
+ *  - "field"             → refKey = field_key, optionally namespaced by source
+ *                          entity (e.g. "person.primary_phone", "child.name").
  *  - "field_group"       → refKey = group key; `items` holds a flat list of "field" items
  *  - "related_list"      → refKey = related-module key (entityType + filterKey in metadata)
  *  - "widget_placeholder"→ refKey = widget key from the widget allow-list
@@ -110,7 +129,11 @@ export interface LayoutItem {
     /** For kind "related_list": the related entity + optional filter key. */
     related?: { entityType: string; filterKey?: string };
     /** For kind "widget_placeholder": which registered widget to position. */
-    widget?: { widgetKey: string; note?: string };
+    widget?: { widgetKey: string; note?: string; displayMode?: string };
+    /** Optional V1 visibility rule (preserved; renderer may apply or ignore). */
+    visibleWhen?: LayoutCondition;
+    /** Source entity group for a namespaced field (e.g. "person"); display aid. */
+    sourceEntity?: string;
     /**
      * Presentation-only metadata bag (e.g. queue column `sortable`, group hints).
      * Never carries styling, color, or business rules.
@@ -130,6 +153,8 @@ export interface LayoutColumn {
 export interface LayoutRow {
     id: string;
     columns: LayoutColumn[];
+    /** Optional V1 visibility rule. */
+    visibleWhen?: LayoutCondition;
 }
 
 /** A section inside a Layout. Holds rows only. */
@@ -140,6 +165,8 @@ export interface LayoutSection {
     collapsible?: boolean;
     defaultExpanded?: boolean;
     rows: LayoutRow[];
+    /** Optional V1 visibility rule. */
+    visibleWhen?: LayoutCondition;
 }
 
 /** The full presentation document for one (entity_type, surface). */

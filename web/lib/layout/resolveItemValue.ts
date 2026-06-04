@@ -19,6 +19,7 @@ import {
     formatPhoneUS,
 } from "@/lib/adminFormatters";
 import type { LayoutItem } from "./layoutV2";
+import { parseRefKey } from "./fieldCatalog";
 
 export interface ResolvedValue {
     /** Rendered display string (or null when placeholder). */
@@ -48,6 +49,20 @@ function formatMoney(refKey: string, value: unknown): string {
 }
 
 /**
+ * Resolve the raw value behind a (possibly namespaced) refKey.
+ *  - "opportunity.X" or bare "X" → record[X] (or record[refKey] as a fallback).
+ *  - "person.X" / "child.X" / … → record[refKey] then record[X]; usually absent
+ *    on the opportunity record today, so the renderer shows a placeholder while
+ *    the layout still preserves the intended source.
+ */
+function resolveRaw(record: Record<string, unknown>, refKey: string): unknown {
+    if (record[refKey] !== undefined) return record[refKey];
+    const { entityKey, fieldKey } = parseRefKey(refKey);
+    if (entityKey === "opportunity") return record[fieldKey];
+    return record[fieldKey]; // related-entity field not hydrated on this record → undefined
+}
+
+/**
  * Resolve a single item's value from a record.
  *
  * Status items prefer a hydrated `_status_display` label when present (the
@@ -59,7 +74,7 @@ export function resolveItemValue(record: Record<string, unknown>, item: LayoutIt
 
     // Status: prefer the hydrated display label, else the raw key value.
     if (hint === "status") {
-        const display = record["_status_display"] ?? record[item.refKey];
+        const display = record["_status_display"] ?? resolveRaw(record, item.refKey);
         return {
             display: hasValue(display) ? String(display) : null,
             isPlaceholder: !hasValue(display),
@@ -68,7 +83,7 @@ export function resolveItemValue(record: Record<string, unknown>, item: LayoutIt
         };
     }
 
-    const raw = record[item.refKey];
+    const raw = resolveRaw(record, item.refKey);
     if (!hasValue(raw)) {
         return { display: null, isPlaceholder: true, renderHint: hint, raw: null };
     }

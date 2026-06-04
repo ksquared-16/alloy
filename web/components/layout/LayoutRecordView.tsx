@@ -43,6 +43,14 @@ function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
                         · system field
                     </span>
                 ) : null}
+                {item.visibleWhen ? (
+                    <span
+                        className="ml-1 rounded bg-[#fff7ed] px-1 text-[9px] text-[#b54708]"
+                        title={`Shown when ${item.visibleWhen.path}${item.visibleWhen.type === "equals" ? ` = ${item.visibleWhen.value}` : " exists"}`}
+                    >
+                        conditional
+                    </span>
+                ) : null}
             </div>
             <div className="mt-0.5 text-sm" style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
                 {r.isPlaceholder ? (

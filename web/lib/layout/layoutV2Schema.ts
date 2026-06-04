@@ -17,10 +17,12 @@
 import {
     LAYOUT_DOC_FORMAT_VERSION,
     LAYOUT_GRID_COLUMNS,
+    isLayoutConditionType,
     isLayoutItemKind,
     isLayoutRenderHint,
     isLayoutSurface,
     type LayoutColumn,
+    type LayoutCondition,
     type LayoutDoc,
     type LayoutItem,
     type LayoutRow,
@@ -81,6 +83,31 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
     const rawSections = Array.isArray(input.sections) ? input.sections : [];
     if (!Array.isArray(input.sections)) errors.push(`root: "sections" must be an array`);
 
+    const parseCondition = (raw: unknown, path: string): LayoutCondition | undefined => {
+        if (raw === undefined || raw === null) return undefined;
+        if (!isObject(raw)) {
+            errors.push(`${path}.visibleWhen: must be an object`);
+            return undefined;
+        }
+        if (!isLayoutConditionType(raw.type)) {
+            errors.push(`${path}.visibleWhen: invalid type "${String(raw.type)}"`);
+            return undefined;
+        }
+        const cpath = asString(raw.path);
+        if (!cpath) {
+            errors.push(`${path}.visibleWhen: missing string "path"`);
+            return undefined;
+        }
+        const cond: LayoutCondition = { type: raw.type, path: cpath };
+        const value = asString(raw.value);
+        if (value !== undefined) cond.value = value;
+        if (raw.type === "equals" && cond.value === undefined) {
+            errors.push(`${path}.visibleWhen: "equals" requires a string "value"`);
+            return undefined;
+        }
+        return cond;
+    };
+
     const parseItem = (raw: unknown, path: string, allowGroup: boolean): LayoutItem | null => {
         if (!isObject(raw)) {
             errors.push(`${path}: item must be an object`);
@@ -139,9 +166,15 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
 
         if (kind === "widget_placeholder" && isObject(raw.widget)) {
             const wk = asString(raw.widget.widgetKey);
-            if (wk) item.widget = { widgetKey: wk, note: asString(raw.widget.note) };
+            if (wk) item.widget = { widgetKey: wk, note: asString(raw.widget.note), displayMode: asString(raw.widget.displayMode) };
             else errors.push(`${path}: widget_placeholder requires widget.widgetKey`);
         }
+
+        const sourceEntity = asString(raw.sourceEntity);
+        if (sourceEntity !== undefined) item.sourceEntity = sourceEntity;
+
+        const itemCond = parseCondition(raw.visibleWhen, path);
+        if (itemCond) item.visibleWhen = itemCond;
 
         if (isObject(raw.metadata)) item.metadata = raw.metadata;
 
@@ -180,7 +213,10 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
         if (widthSum > LAYOUT_GRID_COLUMNS) {
             warnings.push(`${path}: column widths sum to ${widthSum} (> ${LAYOUT_GRID_COLUMNS}); will wrap`);
         }
-        return { id, columns };
+        const row: LayoutRow = { id, columns };
+        const rowCond = parseCondition(raw.visibleWhen, path);
+        if (rowCond) row.visibleWhen = rowCond;
+        return row;
     };
 
     const parseSection = (raw: unknown, path: string): LayoutSection | null => {
@@ -201,6 +237,8 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
         if (collapsible !== undefined) section.collapsible = collapsible;
         const defaultExpanded = asBool(raw.defaultExpanded);
         if (defaultExpanded !== undefined) section.defaultExpanded = defaultExpanded;
+        const secCond = parseCondition(raw.visibleWhen, path);
+        if (secCond) section.visibleWhen = secCond;
         return section;
     };
 

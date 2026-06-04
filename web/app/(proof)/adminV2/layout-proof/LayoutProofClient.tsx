@@ -17,9 +17,8 @@
  * DataTable, work-unit runtime, bootstrap, VM perf code, or entityPresentation.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { LayoutDoc, LayoutItem, LayoutResolutionSource } from "@/lib/layout/layoutV2";
-import { resolveItemValue } from "@/lib/layout/resolveItemValue";
+import { useCallback, useEffect, useState } from "react";
+import type { LayoutDoc, LayoutResolutionSource } from "@/lib/layout/layoutV2";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import LayoutRecordView from "@/components/layout/LayoutRecordView";
@@ -153,10 +152,6 @@ export default function LayoutProofClient() {
         [loadRecords],
     );
 
-    const queueColumns: LayoutItem[] = useMemo(
-        () => queue?.resolved.sections[0]?.rows[0]?.columns[0]?.items ?? [],
-        [queue],
-    );
     const records = proof?.records ?? [];
     const selectedRecord = records.find((r) => r.id === selectedId) ?? null;
 
@@ -244,46 +239,25 @@ export default function LayoutProofClient() {
                             this stage. (The proof never injects demo records.)
                         </p>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[640px] text-left text-sm">
-                                <thead>
-                                    <tr className="border-b border-[#e6e8ec]" style={{ color: MUTED }}>
-                                        {queueColumns.map((col) => (
-                                            <th key={col.id} className="px-3 py-2 font-semibold">
-                                                {col.label || col.refKey}
-                                            </th>
-                                        ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {records.map((rec) => (
-                                        <tr
-                                            key={rec.id}
-                                            onClick={() => setSelectedId(rec.id)}
-                                            className={`cursor-pointer border-b border-[#f0f2f6] hover:bg-[#f7f9fc] ${
-                                                selectedId === rec.id ? "bg-[#eef3fb]" : ""
-                                            }`}
-                                        >
-                                            {queueColumns.map((col) => {
-                                                const v = resolveItemValue(rec, col);
-                                                return (
-                                                    <td key={col.id} className="px-3 py-2" style={{ color: TEXT }}>
-                                                        {v.isPlaceholder ? (
-                                                            <span style={{ color: "#9aa4bf" }}>—</span>
-                                                        ) : v.renderHint === "status" ? (
-                                                            <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">
-                                                                {v.display}
-                                                            </span>
-                                                        ) : (
-                                                            v.display
-                                                        )}
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                        <div className="flex flex-col gap-2 p-2">
+                            {records.map((rec) => (
+                                <button
+                                    key={rec.id}
+                                    type="button"
+                                    onClick={() => setSelectedId(rec.id)}
+                                    className={`rounded-lg border p-1 text-left transition-colors ${
+                                        selectedId === rec.id ? "border-[#2f6df6] bg-[#f5f8ff]" : "border-[#e6e8ec] bg-white hover:bg-[#f7f9fc]"
+                                    }`}
+                                >
+                                    {queue?.resolved ? (
+                                        <LayoutRecordView doc={queue.resolved} record={rec} />
+                                    ) : (
+                                        <span className="px-2 text-sm" style={{ color: MUTED }}>
+                                            {String(rec["name"] ?? rec.id)}
+                                        </span>
+                                    )}
+                                </button>
+                            ))}
                         </div>
                     )}
                 </div>

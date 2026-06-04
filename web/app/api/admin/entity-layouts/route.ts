@@ -19,6 +19,7 @@ import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { resolveLayout } from "@/lib/layout/layoutResolver";
 import { layoutDocFromRegistry, ALL_ENTITY_PRESENTATION_TYPES } from "@/lib/layout/migrateFromRegistry";
 import { seedLayoutDocFromCurrent } from "@/lib/layout/seedFromCurrentPresentation";
+import { buildLeadDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import {
     createDraft,
     listAllForOrg,
@@ -124,16 +125,25 @@ export async function POST(request: NextRequest) {
     // presentation (e.g. the live opportunity drawer / work-unit queue) and
     // falls back to the legacy registry when no newer source exists. A provided
     // doc is validated as-is.
+    // seed mode: "lead_default" (curated, recommended) | "runtime" (mirror live)
+    const seedMode = body.seed === "runtime" ? "runtime" : "lead_default";
+
     let doc;
     let seededFrom: string;
     if (fromDefault) {
-        const current = await seedLayoutDocFromCurrent(supabase, ctx.orgId, entityType, surface);
-        if (current) {
-            doc = current;
-            seededFrom = "current_presentation";
+        const lead = seedMode === "lead_default" ? buildLeadDefaultDoc(entityType, surface) : null;
+        if (lead) {
+            doc = lead;
+            seededFrom = "lead_default";
         } else {
-            doc = layoutDocFromRegistry(entityType as never, surface);
-            seededFrom = "registry";
+            const current = await seedLayoutDocFromCurrent(supabase, ctx.orgId, entityType, surface);
+            if (current) {
+                doc = current;
+                seededFrom = "current_presentation";
+            } else {
+                doc = layoutDocFromRegistry(entityType as never, surface);
+                seededFrom = "registry";
+            }
         }
     } else {
         const parsed = parseLayoutDoc(body.doc);
