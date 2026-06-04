@@ -125,4 +125,12 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(lib).toMatch(/prefetchHit = bootstrapWarm && primaryWarm/);
         expect(lib).not.toMatch(/prefetchHit = bootstrapWarm && primaryWarm && fullWarm/);
     });
+
+    it("schedules drawer VM shadow diff after composed open without awaiting it", () => {
+        const lib = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
+        expect(lib).toContain("scheduleOpportunityDrawerViewModelShadow");
+        expect(lib).toMatch(/scheduleOpportunityDrawerViewModelShadow\([\s\S]*?\);\s*return \{/);
+        expect(lib).not.toMatch(/await scheduleOpportunityDrawerViewModelShadow/);
+        expect(lib).not.toMatch(/await runOpportunityDrawerViewModelShadow/);
+    });
 });
