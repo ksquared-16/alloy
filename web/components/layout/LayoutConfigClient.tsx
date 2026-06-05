@@ -17,7 +17,17 @@ import LayoutPreviewRenderer from "@/components/layout/LayoutPreviewRenderer";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
-import type { EntityLayoutRecord, LayoutCondition, LayoutDoc, LayoutItem } from "@/lib/layout/layoutV2";
+import { LAYOUT_ADORNMENT_ICONS } from "@/lib/layout/layoutV2";
+import type {
+    EntityLayoutRecord,
+    LayoutAdornmentActionEntity,
+    LayoutAdornmentIcon,
+    LayoutCondition,
+    LayoutDoc,
+    LayoutFieldAdornment,
+    LayoutItem,
+} from "@/lib/layout/layoutV2";
+import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
 import type { LayoutCatalogField, LayoutCatalogWidget, LayoutEntityGroupKey } from "@/lib/layout/fieldCatalog";
 import * as ops from "@/lib/layout/builderOps";
 
@@ -398,6 +408,7 @@ export default function LayoutConfigClient() {
                                                                             onRight={() => op(ops.moveItemHorizontal(workingDoc, sIdx, rIdx, cIdx, it.id, 1))}
                                                                             onRemove={() => op(ops.removeItem(workingDoc, sIdx, rIdx, cIdx, it.id))}
                                                                             onCondition={(cond) => op(ops.setItemCondition(workingDoc, sIdx, rIdx, cIdx, it.id, cond))}
+                                                                            onAdornment={(a) => op(ops.setItemAdornment(workingDoc, sIdx, rIdx, cIdx, it.id, a))}
                                                                         />
                                                                     ))}
                                                                     {editable && (
@@ -479,6 +490,7 @@ function ItemRow({
     onRight,
     onRemove,
     onCondition,
+    onAdornment,
 }: {
     item: LayoutItem;
     editable: boolean;
@@ -490,7 +502,18 @@ function ItemRow({
     onRight: () => void;
     onRemove: () => void;
     onCondition: (cond: LayoutCondition | undefined) => void;
+    onAdornment: (a: LayoutFieldAdornment | undefined) => void;
 }) {
+    const ad = item.adornment;
+    const setIcon = (icon: string) => {
+        if (!icon) return onAdornment(undefined);
+        onAdornment({ position: ad?.position ?? "left", icon: icon as LayoutAdornmentIcon, ...(ad?.action ? { action: ad.action } : {}) });
+    };
+    const setAction = (entity: string) => {
+        if (!ad) return;
+        if (!entity) return onAdornment({ position: ad.position, icon: ad.icon });
+        onAdornment({ position: ad.position, icon: ad.icon, action: { type: "open_drawer", entity: entity as LayoutAdornmentActionEntity } });
+    };
     return (
         <div className="rounded border border-[#eef0f4] bg-white px-1.5 py-1 text-[12px]">
             <div className="flex items-center gap-1">
@@ -516,6 +539,25 @@ function ItemRow({
                     {condKey(item.visibleWhen) === "custom" && <option value="custom">Custom (JSON)</option>}
                 </select>
             </div>
+            {item.kind === "field" && (
+                <div className="mt-0.5 flex items-center gap-1">
+                    <span className="text-[9px] text-[#9aa4bf]">icon:</span>
+                    <select value={ad?.icon ?? ""} disabled={!editable} onChange={(e) => setIcon(e.target.value)} className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
+                        <option value="">None</option>
+                        {LAYOUT_ADORNMENT_ICONS.map((ic) => (
+                            <option key={ic} value={ic}>{ADORNMENT_ICON_GLYPH[ic]} {ic}</option>
+                        ))}
+                    </select>
+                    {ad?.icon ? (
+                        <select value={ad.action?.entity ?? ""} disabled={!editable} onChange={(e) => setAction(e.target.value)} className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40" title="Field action icon">
+                            <option value="">Icon only</option>
+                            <option value="person">Open person drawer</option>
+                            <option value="child">Open child drawer</option>
+                            <option value="opportunity">Open opportunity drawer</option>
+                        </select>
+                    ) : null}
+                </div>
+            )}
         </div>
     );
 }

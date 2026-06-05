@@ -17,6 +17,8 @@
 import {
     LAYOUT_DOC_FORMAT_VERSION,
     LAYOUT_GRID_COLUMNS,
+    isLayoutAdornmentActionEntity,
+    isLayoutAdornmentIcon,
     isLayoutConditionType,
     isLayoutItemKind,
     isLayoutRenderHint,
@@ -24,6 +26,7 @@ import {
     type LayoutColumn,
     type LayoutCondition,
     type LayoutDoc,
+    type LayoutFieldAdornment,
     type LayoutItem,
     type LayoutRow,
     type LayoutSection,
@@ -108,6 +111,34 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
         return cond;
     };
 
+    const parseAdornment = (raw: unknown, path: string): LayoutFieldAdornment | undefined => {
+        if (raw === undefined || raw === null) return undefined;
+        if (!isObject(raw)) {
+            errors.push(`${path}.adornment: must be an object`);
+            return undefined;
+        }
+        if (!isLayoutAdornmentIcon(raw.icon)) {
+            errors.push(`${path}.adornment: invalid icon "${String(raw.icon)}"`);
+            return undefined;
+        }
+        const position = raw.position === "right" ? "right" : "left";
+        const adornment: LayoutFieldAdornment = { position, icon: raw.icon };
+        if (isObject(raw.action)) {
+            if (raw.action.type !== "open_drawer") {
+                errors.push(`${path}.adornment.action: only "open_drawer" is supported`);
+                return undefined;
+            }
+            if (!isLayoutAdornmentActionEntity(raw.action.entity)) {
+                errors.push(`${path}.adornment.action: invalid entity "${String(raw.action.entity)}"`);
+                return undefined;
+            }
+            adornment.action = { type: "open_drawer", entity: raw.action.entity };
+            const idPath = asString(raw.action.idPath);
+            if (idPath) adornment.action.idPath = idPath;
+        }
+        return adornment;
+    };
+
     const parseItem = (raw: unknown, path: string, allowGroup: boolean): LayoutItem | null => {
         if (!isObject(raw)) {
             errors.push(`${path}: item must be an object`);
@@ -172,6 +203,9 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
 
         const sourceEntity = asString(raw.sourceEntity);
         if (sourceEntity !== undefined) item.sourceEntity = sourceEntity;
+
+        const adornment = parseAdornment(raw.adornment, path);
+        if (adornment) item.adornment = adornment;
 
         const itemCond = parseCondition(raw.visibleWhen, path);
         if (itemCond) item.visibleWhen = itemCond;

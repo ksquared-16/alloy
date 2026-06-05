@@ -82,6 +82,15 @@ export default function LayoutProofClient() {
     const [error, setError] = useState<string | null>(null);
     const [flagDisabled, setFlagDisabled] = useState(false);
     const [labelMap, setLabelMap] = useState<EntityLabelMap>({});
+    const [simNav, setSimNav] = useState<string | null>(null);
+
+    const onAdornment = useCallback((item: { label?: string; refKey: string }, ad: { action?: { entity: string } }) => {
+        const target = ad.action?.entity ?? "record";
+        const msg = `Would open ${target} drawer · ${item.label || item.refKey}`;
+        // Proof harness is isolated — simulate navigation only (no live drawer).
+        console.log("[layout-proof] adornment action →", { refKey: item.refKey, action: ad.action });
+        setSimNav(msg);
+    }, []);
 
     const loadLayouts = useCallback(async () => {
         const fetchResolve = async (surface: "queue" | "drawer"): Promise<ResolveResp | null> => {
@@ -250,7 +259,7 @@ export default function LayoutProofClient() {
                                     }`}
                                 >
                                     {queue?.resolved ? (
-                                        <LayoutRecordView doc={queue.resolved} record={rec} />
+                                        <LayoutRecordView doc={queue.resolved} record={rec} onAdornmentAction={onAdornment} />
                                     ) : (
                                         <span className="px-2 text-sm" style={{ color: MUTED }}>
                                             {String(rec["name"] ?? rec.id)}
@@ -279,7 +288,7 @@ export default function LayoutProofClient() {
                             No drawer layout resolved.
                         </p>
                     ) : (
-                        <LayoutRecordView doc={drawer.resolved} record={selectedRecord} />
+                        <LayoutRecordView doc={drawer.resolved} record={selectedRecord} onAdornmentAction={onAdornment} />
                     )}
                 </div>
             </div>
@@ -293,6 +302,14 @@ export default function LayoutProofClient() {
                 edit, publish — then reload this page and the source badge flips to <strong>org layout</strong> and your
                 edits appear here.
             </p>
+
+            {simNav && (
+                <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-[#2f6df6] bg-white px-4 py-2 text-sm shadow-lg" role="status">
+                    <span style={{ color: TEXT }}>{simNav}</span>
+                    <span className="ml-2 text-[11px] text-[#9aa4bf]">(simulated — proof only)</span>
+                    <button type="button" onClick={() => setSimNav(null)} className="ml-3 text-[#59678b]">✕</button>
+                </div>
+            )}
         </Shell>
     );
 }

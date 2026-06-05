@@ -22,6 +22,7 @@ import {
     type LayoutRow,
     type LayoutSection,
 } from "@/lib/layout/layoutV2";
+import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
 
 const BORDER = "#e6e8ec";
 const TEXT = "#31394d";
@@ -64,16 +65,28 @@ function FieldPreview({ item }: { item: LayoutItem }) {
                 ) : null}
                 <SystemFieldChip locked={item.locked} />
             </div>
-            <div className="mt-0.5 text-sm text-[#31394d]">
-                {item.renderHint === "status" ? (
-                    <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs text-[#31394d]">Status</span>
-                ) : item.renderHint === "money" ? (
-                    "$0.00"
-                ) : item.renderHint === "link" ? (
-                    <span className="text-[#2f6df6] underline">Linked record →</span>
-                ) : (
-                    "—"
-                )}
+            <div className="mt-0.5 flex items-center gap-1 text-sm text-[#31394d]">
+                {item.adornment && item.adornment.position !== "right" ? (
+                    <span title={item.adornment.action ? `Opens ${item.adornment.action.entity} drawer` : undefined}>
+                        {ADORNMENT_ICON_GLYPH[item.adornment.icon]}
+                    </span>
+                ) : null}
+                <span>
+                    {item.renderHint === "status" ? (
+                        <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs text-[#31394d]">Status</span>
+                    ) : item.renderHint === "money" ? (
+                        "$0.00"
+                    ) : item.renderHint === "link" ? (
+                        <span className="text-[#2f6df6] underline">Linked record →</span>
+                    ) : (
+                        "—"
+                    )}
+                </span>
+                {item.adornment && item.adornment.position === "right" ? (
+                    <span title={item.adornment.action ? `Opens ${item.adornment.action.entity} drawer` : undefined}>
+                        {ADORNMENT_ICON_GLYPH[item.adornment.icon]}
+                    </span>
+                ) : null}
             </div>
         </div>
     );

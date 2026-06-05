@@ -12,6 +12,7 @@ import {
     type LayoutColumn,
     type LayoutCondition,
     type LayoutDoc,
+    type LayoutFieldAdornment,
     type LayoutItem,
     type LayoutSection,
 } from "./layoutV2";
@@ -169,6 +170,26 @@ export function setItemCondition(
         const copy = { ...it };
         if (cond) copy.visibleWhen = cond;
         else delete copy.visibleWhen;
+        return copy;
+    });
+    return next;
+}
+
+export function setItemAdornment(
+    doc: LayoutDoc,
+    sIdx: number,
+    rIdx: number,
+    cIdx: number,
+    itemId: string,
+    adornment: LayoutFieldAdornment | undefined,
+): LayoutDoc {
+    const next = clone(doc);
+    const col = next.sections[sIdx].rows[rIdx].columns[cIdx];
+    col.items = col.items.map((it) => {
+        if (it.id !== itemId) return it;
+        const copy = { ...it };
+        if (adornment) copy.adornment = adornment;
+        else delete copy.adornment;
         return copy;
     });
     return next;

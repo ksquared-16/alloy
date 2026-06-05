@@ -13,21 +13,53 @@
  * both the layout doc and the record.
  */
 
+import { createContext, useContext } from "react";
 import {
     LAYOUT_GRID_COLUMNS,
     type LayoutColumn,
     type LayoutDoc,
+    type LayoutFieldAdornment,
     type LayoutItem,
     type LayoutRow,
     type LayoutSection,
 } from "@/lib/layout/layoutV2";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
+import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
 
 const TEXT = "#31394d";
 const MUTED = "#59678b";
 const BORDER = "#e6e8ec";
 
 type Rec = Record<string, unknown>;
+
+export type AdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
+const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
+
+/** The field action icon: clickable when it has an action and a handler is provided. */
+function Adorn({ item }: { item: LayoutItem }) {
+    const onAction = useContext(AdornmentActionContext);
+    const ad = item.adornment;
+    if (!ad) return null;
+    const glyph = ADORNMENT_ICON_GLYPH[ad.icon];
+    if (ad.action && onAction) {
+        const title = `Open ${ad.action.entity} drawer`;
+        return (
+            <button
+                type="button"
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onAction(item, ad);
+                }}
+                title={title}
+                aria-label={title}
+                className="rounded px-0.5 leading-none hover:bg-[#eef1f6]"
+            >
+                {glyph}
+            </button>
+        );
+    }
+    return <span title={ad.action ? `Opens ${ad.action.entity} drawer` : undefined}>{glyph}</span>;
+}
 
 function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
     const r = resolveItemValue(record, item);
@@ -52,16 +84,20 @@ function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
                     </span>
                 ) : null}
             </div>
-            <div className="mt-0.5 text-sm" style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
-                {r.isPlaceholder ? (
-                    <span title="Configured field not present on this record">— (placeholder)</span>
-                ) : r.renderHint === "status" ? (
-                    <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{r.display}</span>
-                ) : r.renderHint === "link" ? (
-                    <span className="text-[#2f6df6]">{r.display}</span>
-                ) : (
-                    r.display
-                )}
+            <div className="mt-0.5 flex items-center gap-1 text-sm" style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
+                {item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
+                <span>
+                    {r.isPlaceholder ? (
+                        <span title="Configured field not present on this record">— (placeholder)</span>
+                    ) : r.renderHint === "status" ? (
+                        <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{r.display}</span>
+                    ) : r.renderHint === "link" ? (
+                        <span className="text-[#2f6df6]">{r.display}</span>
+                    ) : (
+                        r.display
+                    )}
+                </span>
+                {item.adornment && item.adornment.position === "right" ? <Adorn item={item} /> : null}
             </div>
         </div>
     );
@@ -158,15 +194,25 @@ function SectionView({ record, section }: { record: Rec; section: LayoutSection 
     );
 }
 
-export default function LayoutRecordView({ doc, record }: { doc: LayoutDoc; record: Rec }) {
+export default function LayoutRecordView({
+    doc,
+    record,
+    onAdornmentAction,
+}: {
+    doc: LayoutDoc;
+    record: Rec;
+    onAdornmentAction?: AdornmentActionHandler;
+}) {
     if (!doc || !Array.isArray(doc.sections)) {
         return <div className="text-sm" style={{ color: MUTED }}>No drawer layout.</div>;
     }
     return (
-        <div className="flex flex-col gap-3" style={{ border: `0 solid ${BORDER}` }}>
-            {doc.sections.map((section) => (
-                <SectionView key={section.id} record={record} section={section} />
-            ))}
-        </div>
+        <AdornmentActionContext.Provider value={onAdornmentAction}>
+            <div className="flex flex-col gap-3" style={{ border: `0 solid ${BORDER}` }}>
+                {doc.sections.map((section) => (
+                    <SectionView key={section.id} record={record} section={section} />
+                ))}
+            </div>
+        </AdornmentActionContext.Provider>
     );
 }

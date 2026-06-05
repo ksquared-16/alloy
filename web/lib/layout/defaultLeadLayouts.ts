@@ -15,6 +15,7 @@ import {
     LAYOUT_GRID_COLUMNS,
     type LayoutCondition,
     type LayoutDoc,
+    type LayoutFieldAdornment,
     type LayoutItem,
     type LayoutRenderHint,
     type LayoutRow,
@@ -22,6 +23,10 @@ import {
     type LayoutSurface,
 } from "./layoutV2";
 import { parseRefKey } from "./fieldCatalog";
+
+const PERSON_LINK: LayoutFieldAdornment = { position: "left", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "opportunity.primary_person_id" } };
+const CHILD_LINK: LayoutFieldAdornment = { position: "left", icon: "child", action: { type: "open_drawer", entity: "child" } };
+const CALENDAR_ICON: LayoutFieldAdornment = { position: "left", icon: "calendar" };
 
 function id(...parts: string[]): string {
     return parts.join("-");
@@ -33,6 +38,7 @@ function fieldItem(
     label: string,
     renderHint: LayoutRenderHint = "text",
     visibleWhen?: LayoutCondition,
+    adornment?: LayoutFieldAdornment,
 ): LayoutItem {
     const item: LayoutItem = {
         id: id(base, "f", refKey.replace(/\./g, "_")),
@@ -44,6 +50,7 @@ function fieldItem(
         sourceEntity: parseRefKey(refKey).entityKey,
     };
     if (visibleWhen) item.visibleWhen = visibleWhen;
+    if (adornment) item.adornment = adornment;
     return item;
 }
 
@@ -95,14 +102,18 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
         [
             row(id(sumBase, "r0"), [
                 col(id(sumBase, "r0"), 0, HALF, [
-                    fieldItem(id(sumBase, "r0c0"), "person.primary_contact_name", "Primary contact", "text"),
+                    fieldItem(id(sumBase, "r0c0"), "person.primary_contact_name", "Primary contact", "text", undefined, PERSON_LINK),
                     fieldItem(id(sumBase, "r0c0"), "person.primary_phone", "Phone", "phone"),
                     fieldItem(id(sumBase, "r0c0"), "person.primary_email", "Email", "text"),
-                    fieldItem(id(sumBase, "r0c0"), "person.secondary_contact_name", "Secondary contact", "text", {
-                        type: "exists",
-                        path: "person.secondary_contact_name",
-                    }),
-                    fieldItem(id(sumBase, "r0c0"), "opportunity.tour_date", "Tour date", "date"),
+                    fieldItem(
+                        id(sumBase, "r0c0"),
+                        "person.secondary_contact_name",
+                        "Secondary contact",
+                        "text",
+                        { type: "exists", path: "person.secondary_contact_name" },
+                        PERSON_LINK,
+                    ),
+                    fieldItem(id(sumBase, "r0c0"), "opportunity.tour_date", "Tour date", "date", undefined, CALENDAR_ICON),
                     fieldItem(id(sumBase, "r0c0"), "opportunity.tour_status", "Tour status", "status"),
                 ]),
                 col(id(sumBase, "r0"), 1, HALF, [
@@ -123,7 +134,7 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
         [
             row(id(ciBase, "r0"), [col(id(ciBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(id(ciBase, "r0c0"), "children_list", "Children list", "list")])]),
             row(id(ciBase, "r1"), [
-                col(id(ciBase, "r1"), 0, HALF, [fieldItem(id(ciBase, "r1c0"), "child.name", "Child name", "text")]),
+                col(id(ciBase, "r1"), 0, HALF, [fieldItem(id(ciBase, "r1c0"), "child.name", "Child name", "text", undefined, CHILD_LINK)]),
                 col(id(ciBase, "r1"), 1, HALF, [fieldItem(id(ciBase, "r1c1"), "child.program", "Program", "text")]),
             ]),
             row(id(ciBase, "r2"), [
@@ -165,7 +176,7 @@ export function buildLeadQueueDefaultDoc(): LayoutDoc {
     const base = id("opportunities", "lead", "queue_card");
     const card = section("lead_card", "Lead card", [
         row(id(base, "r0"), [
-            col(id(base, "r0"), 0, HALF, [fieldItem(id(base, "r0c0"), "person.primary_contact_name", "Contact", "text")]),
+            col(id(base, "r0"), 0, HALF, [fieldItem(id(base, "r0c0"), "person.primary_contact_name", "Contact", "text", undefined, PERSON_LINK)]),
             col(id(base, "r0"), 1, HALF, [fieldItem(id(base, "r0c1"), "opportunity.status_key", "Status", "status")]),
         ]),
         row(id(base, "r1"), [
@@ -173,7 +184,7 @@ export function buildLeadQueueDefaultDoc(): LayoutDoc {
             col(id(base, "r1"), 1, HALF, [fieldItem(id(base, "r1c1"), "child.desired_start_date", "Desired start", "date")]),
         ]),
         row(id(base, "r2"), [
-            col(id(base, "r2"), 0, HALF, [fieldItem(id(base, "r2c0"), "child.name", "Child", "text")]),
+            col(id(base, "r2"), 0, HALF, [fieldItem(id(base, "r2c0"), "child.name", "Child", "text", undefined, CHILD_LINK)]),
             col(id(base, "r2"), 1, HALF, [fieldItem(id(base, "r2c1"), "child.program", "Program", "text")]),
         ]),
         row(id(base, "r3"), [

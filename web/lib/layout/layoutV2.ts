@@ -98,6 +98,43 @@ export function isLayoutConditionType(v: unknown): v is LayoutConditionType {
 }
 
 /**
+ * Field action-icon adornment (V1.1). A small icon shown next to a field that
+ * can act as a navigation affordance to a related record. Presentation only —
+ * the proof renderer simulates navigation; live drawers are NOT wired.
+ */
+export const LAYOUT_ADORNMENT_ICONS = [
+    "person",
+    "child",
+    "opportunity",
+    "calendar",
+    "task",
+    "message",
+    "document",
+] as const;
+export type LayoutAdornmentIcon = (typeof LAYOUT_ADORNMENT_ICONS)[number];
+
+export const LAYOUT_ADORNMENT_ACTION_ENTITIES = ["person", "child", "opportunity"] as const;
+export type LayoutAdornmentActionEntity = (typeof LAYOUT_ADORNMENT_ACTION_ENTITIES)[number];
+
+export interface LayoutFieldAdornment {
+    position: "left" | "right";
+    icon: LayoutAdornmentIcon;
+    /** Optional action; only the icon is the affordance, not the whole field. */
+    action?: {
+        type: "open_drawer";
+        entity: LayoutAdornmentActionEntity;
+        /** Namespaced path to the related id (e.g. "opportunity.primary_person_id"). */
+        idPath?: string;
+    };
+}
+export function isLayoutAdornmentIcon(v: unknown): v is LayoutAdornmentIcon {
+    return typeof v === "string" && (LAYOUT_ADORNMENT_ICONS as readonly string[]).includes(v);
+}
+export function isLayoutAdornmentActionEntity(v: unknown): v is LayoutAdornmentActionEntity {
+    return typeof v === "string" && (LAYOUT_ADORNMENT_ACTION_ENTITIES as readonly string[]).includes(v);
+}
+
+/**
  * A single placed item inside a Column.
  *
  * `kind` selects how `refKey` is interpreted:
@@ -134,6 +171,8 @@ export interface LayoutItem {
     visibleWhen?: LayoutCondition;
     /** Source entity group for a namespaced field (e.g. "person"); display aid. */
     sourceEntity?: string;
+    /** Optional field action icon (V1.1); fields only. */
+    adornment?: LayoutFieldAdornment;
     /**
      * Presentation-only metadata bag (e.g. queue column `sortable`, group hints).
      * Never carries styling, color, or business rules.
