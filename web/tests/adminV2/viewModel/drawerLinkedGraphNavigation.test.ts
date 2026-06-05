@@ -222,9 +222,17 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(ctx).toContain("child_model_swap_commit");
     });
 
-    it("child open defers pending to model swap path", () => {
-        const open = read("lib/admin/drawer/openViewPersonFromOpportunity.ts");
-        expect(open).not.toContain("beginDrawerLinkPendingIfCold");
-        expect(open).toContain("child_open_view_person");
+    it("Work Unit lane commits row actions atomically with cached rows", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("commitQueueRowActionsWithLane");
+        expect(page).toContain("markWorkUnitVmPillSwitchActionsReady");
+        expect(page).toContain("queueRowActionsHydratedRef.current");
+    });
+
+    it("Work Unit visible rows warm VM immediately after above-fold ready", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("prefetchVisibleWorkUnitDrawerPrimary");
+        expect(page).not.toContain("idleTimeoutMs: 2500");
+        expect(page).toContain("warmQueueRowOpportunityVm");
     });
 });

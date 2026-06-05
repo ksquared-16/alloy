@@ -1,6 +1,6 @@
 import { ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2_BUNDLE } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
 import { resolveRecordLifecycleRailModel } from "@/lib/admin/drawer/resolveRecordLifecycleRailModel";
-import { buildPersonEnrollmentActivityEntries } from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
+import { buildPersonEnrollmentActivityEntries } from "@/lib/admin/person/buildPersonEnrollmentActivityEntries";
 import type {
     PersonEnrollmentMirrorRow,
     PersonEnrollmentOpportunityRow,
