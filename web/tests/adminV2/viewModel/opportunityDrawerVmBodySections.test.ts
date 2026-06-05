@@ -121,9 +121,13 @@ describe("Opportunity VM drawer body — production parity sections", () => {
     it("OpportunityDrawerVmRuntime wires header actions via useOpportunityDrawerVmHeaderActions", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("useOpportunityDrawerVmHeaderActions");
+        expect(runtime).toContain("useOpportunityDrawerVmRegistryModals");
         expect(runtime).toContain('layout="modal-actions"');
         const hook = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions.ts");
         expect(hook).toContain("applyRegistryResolvedActionClient");
+        expect(hook).toContain("registryHostExtensions");
+        expect(hook).toContain('action.key.trim() === "create_task"');
+        expect(hook).toContain('action.action_type === "open_form"');
         expect(runtime).not.toContain("onActionSelect={() => {}}");
     });
 

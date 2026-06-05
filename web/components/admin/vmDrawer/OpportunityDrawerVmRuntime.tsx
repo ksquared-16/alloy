@@ -20,6 +20,8 @@ import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderA
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions";
+import { useOpportunityDrawerVmRegistryModals } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals";
+import { useOpportunityDrawerActionPreflight } from "@/lib/admin/actions/useOpportunityDrawerActionPreflight";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
@@ -59,14 +61,42 @@ export default function OpportunityDrawerVmRuntime() {
         [displayVm, authCanMutate]
     );
 
+    const record = displayVm?.above_fold.record ?? null;
+
+    const { modals: registryModals, registryHostExtensions } = useOpportunityDrawerVmRegistryModals({
+        opportunityId: drawer.id,
+        record,
+        canMutate: statusCanMutate,
+    });
+
+    const { blocked: actionPreflightBlocked, clearBlocked: clearActionPreflightBlocked } =
+        useOpportunityDrawerActionPreflight(drawer.id);
+
     const { onActionSelect, actionLoadingKey } = useOpportunityDrawerVmHeaderActions({
         opportunityId: drawer.id,
         departmentId: displayVm?.workspace.department_id,
         workUnitId: displayVm?.workspace.work_unit_id,
+        registryHostExtensions,
     });
 
     useEffect(() => {
         setDrawerTab("overview");
+    }, [drawer.id]);
+
+    useEffect(() => {
+        if (!drawer.id?.trim()) return;
+        const oid = drawer.id.trim();
+        const onFocusDocuments = (ev: Event) => {
+            const id =
+                typeof (ev as CustomEvent<{ opportunity_id?: string }>).detail?.opportunity_id === "string"
+                    ? (ev as CustomEvent<{ opportunity_id?: string }>).detail!.opportunity_id!.trim()
+                    : "";
+            if (id !== oid) return;
+            setDrawerTab("documents");
+        };
+        window.addEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
+        return () =>
+            window.removeEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
     }, [drawer.id]);
 
     useEffect(() => {
@@ -77,8 +107,6 @@ export default function OpportunityDrawerVmRuntime() {
             tab: drawerTab,
         });
     }, [displayVm, drawer.id, drawerTab]);
-
-    const record = displayVm?.above_fold.record ?? null;
 
     const vmMatchesRender = useMemo(
         () =>
@@ -131,18 +159,20 @@ export default function OpportunityDrawerVmRuntime() {
             return null;
         }
         return (
-            <OpportunityDrawerHeaderControls
-                layout="modal-attention"
-                opportunityId={drawer.id}
-                overviewData={record}
-                opportunitySingular={opportunitySingular}
-                queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
-                inquiryWorkflow
-                menuActions={displayVm?.actions.header ?? []}
-                showRegistryActions={false}
-                canMutate={statusCanMutate}
-                onActionSelect={onActionSelect}
-            />
+                <OpportunityDrawerHeaderControls
+                    layout="modal-attention"
+                    opportunityId={drawer.id}
+                    overviewData={record}
+                    opportunitySingular={opportunitySingular}
+                    queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
+                    inquiryWorkflow
+                    menuActions={displayVm?.actions.header ?? []}
+                    showRegistryActions={false}
+                    canMutate={statusCanMutate}
+                    onActionSelect={onActionSelect}
+                    actionPreflightBlocked={actionPreflightBlocked}
+                    onDismissActionPreflightBlocked={clearActionPreflightBlocked}
+                />
         );
     }, [
         committedVisible,
@@ -153,6 +183,8 @@ export default function OpportunityDrawerVmRuntime() {
         opportunitySingular,
         record,
         statusCanMutate,
+        actionPreflightBlocked,
+        clearActionPreflightBlocked,
     ]);
 
     /** Status below title (left) — matches legacy inquiry modal subtitle rail. */
@@ -199,6 +231,8 @@ export default function OpportunityDrawerVmRuntime() {
                     actionLoadingKey={actionLoadingKey}
                     onActionSelect={onActionSelect}
                     layout="modal-actions"
+                    actionPreflightBlocked={actionPreflightBlocked}
+                    onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                 />
             </div>
         );
@@ -211,6 +245,8 @@ export default function OpportunityDrawerVmRuntime() {
         onActionSelect,
         record,
         statusCanMutate,
+        actionPreflightBlocked,
+        clearActionPreflightBlocked,
     ]);
 
     const tabs = useMemo((): DrawerTabKey[] => {
@@ -247,6 +283,7 @@ export default function OpportunityDrawerVmRuntime() {
         Boolean(drawerVmRender.id);
 
     return (
+        <>
         <Drawer
             isOpen={drawerOpen}
             onClose={closeDrawer}
@@ -353,7 +390,11 @@ export default function OpportunityDrawerVmRuntime() {
                         }
                     </>
                 :   null}
+                {registryModals ?
+                    <div data-vm-drawer-action-modals-host="true">{registryModals}</div>
+                :   null}
             </div>
         </Drawer>
+    </>
     );
 }
