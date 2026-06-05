@@ -10,25 +10,39 @@ import { RecordTourOutcomeModal } from "@/components/admin/opportunity/actions/R
 import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
 import type { ApplyRegistryResolvedActionHost } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
+import {
+    resolveOpportunityRegistryActionErrorMessage,
+} from "@/lib/admin/actions/resolveOpportunityRegistryActionFeedbackMessage";
 import {
     ADMIN_V2_OPEN_CREATE_WORK_MODAL,
-    ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
     type OpportunityOpenCreateWorkModalDetail,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
+import {
+    dispatchOpportunityDrawerOperationalTasksRefresh,
+    dispatchOpportunityDrawerScopedUpdate,
+} from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { patchOpportunityDrawerRecordAfterTourBooking } from "@/lib/admin/opportunityDrawerTourBookingRefresh";
 import {
     ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
     ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
 } from "@/lib/tours/actions/tourBookingActionClient";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
 
 type ActionFormState = {
     form_key: string;
     action: ResolvedActionForClient;
 };
 
+export type OpportunityDrawerVmRegistryModalHost = {
+    patchRecord: (patchFn: (prev: Record<string, unknown>) => Record<string, unknown>) => void;
+};
+
 type Params = {
     opportunityId: string | null | undefined;
     record: Record<string, unknown> | null | undefined;
     canMutate: boolean;
+    actionHost: OpportunityDrawerVmRegistryModalHost;
 };
 
 function readStringField(record: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -37,12 +51,21 @@ function readStringField(record: Record<string, unknown> | null | undefined, key
     return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
+type ExecuteResult =
+    | { ok: true; execution_result?: Record<string, unknown> }
+    | {
+          ok: false;
+          error: string;
+          action_preflight?: ActionPreflightUiPayload;
+          completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
+      };
+
 async function executeOpportunityHeaderAction(params: {
     opportunityId: string;
     actionKey: string;
     workUnitId?: string | null;
     payload?: Record<string, unknown>;
-}): Promise<void> {
+}): Promise<ExecuteResult> {
     const res = await fetch("/api/admin/actions/execute", {
         method: "POST",
         credentials: "include",
@@ -55,21 +78,39 @@ async function executeOpportunityHeaderAction(params: {
             payload: params.payload,
         }),
     });
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        action_preflight?: ActionPreflightUiPayload;
+        completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
+        execution_result?: Record<string, unknown>;
+    };
     if (!res.ok || !json.ok) {
-        throw new Error(json.error ?? "Action failed");
+        return {
+            ok: false,
+            error: resolveOpportunityRegistryActionErrorMessage(json.error),
+            action_preflight: json.action_preflight,
+            completion_requirements: json.completion_requirements,
+        };
     }
+    return { ok: true, execution_result: json.execution_result };
 }
 
 /**
  * VM opportunity drawer: registry actions dispatch window events and open_form callbacks
  * that Legacy used to own. Without this host, header Actions menu clicks are silent no-ops.
  */
-export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, canMutate }: Params): {
+export function useOpportunityDrawerVmRegistryModals({
+    opportunityId,
+    record,
+    canMutate,
+    actionHost,
+}: Params): {
     modals: ReactNode;
     registryHostExtensions: Pick<ApplyRegistryResolvedActionHost, "openForm" | "openCreateWork">;
 } {
     const oid = opportunityId?.trim() ?? "";
+    const { patchRecord } = actionHost;
     const [createWorkOpen, setCreateWorkOpen] = useState(false);
     const [createWorkPrefill, setCreateWorkPrefill] = useState<
         OpportunityOpenCreateWorkModalDetail["prefill"] | undefined
@@ -78,6 +119,7 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
     const [launchPacketOpen, setLaunchPacketOpen] = useState(false);
     const [actionFormState, setActionFormState] = useState<ActionFormState | null>(null);
     const pendingTourScheduleRef = useRef<{ id: string; action_key?: string } | null>(null);
+    const prevOidRef = useRef<string | null>(null);
 
     /** Direct host callback from header actions — always targets the mounted drawer. */
     const openCreateWorkDirect = useCallback((detail: OpportunityOpenCreateWorkModalDetail) => {
@@ -101,15 +143,6 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
         },
         [oid]
     );
-
-    const dispatchOpportunityRefresh = useCallback(() => {
-        if (!oid) return;
-        window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "opportunities", id: oid } }));
-        window.dispatchEvent(
-            new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, { detail: { opportunity_id: oid } })
-        );
-        window.dispatchEvent(new CustomEvent("adminv2:opportunity-updated", { detail: { id: oid } }));
-    }, [oid]);
 
     useEffect(() => {
         if (!oid) return;
@@ -220,11 +253,15 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
     }, [oid]);
 
     useEffect(() => {
-        setCreateWorkOpen(false);
-        setCreateWorkPrefill(undefined);
-        setSendFormOpen(false);
-        setLaunchPacketOpen(false);
-        setActionFormState(null);
+        const prev = prevOidRef.current;
+        prevOidRef.current = oid;
+        if (prev != null && prev !== oid) {
+            setCreateWorkOpen(false);
+            setCreateWorkPrefill(undefined);
+            setSendFormOpen(false);
+            setLaunchPacketOpen(false);
+            setActionFormState(null);
+        }
     }, [oid]);
 
     const entityLabel = readStringField(record, "name");
@@ -238,6 +275,19 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
         :   null;
     const initialTourDate = typeof metadata?.tour_date === "string" ? metadata.tour_date.trim() : null;
     const initialTourTime = typeof metadata?.tour_time === "string" ? metadata.tour_time.trim() : null;
+
+    const applyTourBookingPatch = useCallback(
+        (booking: {
+            start_at: string;
+            timezone: string;
+            status_key: string;
+            booking_id?: string | null;
+            mirror_override?: { tour_date: string; tour_time: string } | null;
+        }) => {
+            patchRecord((prev) => patchOpportunityDrawerRecordAfterTourBooking(prev, booking));
+        },
+        [patchRecord]
+    );
 
     const modals = useMemo(() => {
         if (!oid) return null;
@@ -258,6 +308,9 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
                             setCreateWorkOpen(false);
                             setCreateWorkPrefill(undefined);
                         }}
+                        onCreated={() => {
+                            dispatchOpportunityDrawerOperationalTasksRefresh(oid);
+                        }}
                     />
                 :   null}
                 {sendFormOpen ?
@@ -268,6 +321,9 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
                         familyLabel={readStringField(record, "_customer_name")}
                         canMutate={canMutate}
                         onDismiss={() => setSendFormOpen(false)}
+                        onSent={() => {
+                            dispatchOpportunityDrawerScopedUpdate(oid, "send_form", ["documents", "activity"]);
+                        }}
                     />
                 :   null}
                 {launchPacketOpen ?
@@ -275,7 +331,7 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
                         open={launchPacketOpen}
                         opportunityId={oid}
                         opportunityLabel={entityLabel ?? "Opportunity"}
-                        opportunityRecord={record}
+                        opportunityRecord={record ?? null}
                         canMutate={canMutate}
                         onDismiss={() => setLaunchPacketOpen(false)}
                     />
@@ -291,18 +347,80 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
                     locationId={locationId}
                     initialTourDate={initialTourDate}
                     initialTourTime={initialTourTime}
-                    onSlotBooked={async () => {
-                        dispatchOpportunityRefresh();
+                    onSlotBooked={async (result) => {
+                        const booking = result?.booking;
+                        if (booking && typeof booking.start_at === "string" && typeof booking.timezone === "string") {
+                            applyTourBookingPatch({
+                                start_at: booking.start_at,
+                                timezone: booking.timezone,
+                                status_key: String(booking.status_key ?? "confirmed"),
+                                booking_id: typeof booking.id === "string" ? booking.id : null,
+                            });
+                        }
+                        dispatchOpportunityDrawerScopedUpdate(oid, actionKey || "schedule_tour", [
+                            "tour_surfaces",
+                            "header_actions",
+                        ]);
                     }}
                     onLegacySubmit={async (payload) => {
-                        await executeOpportunityHeaderAction({
+                        const resolvedActionKey = actionKey || "schedule_tour";
+                        const locId = locationId ?? "";
+                        if (locId) {
+                            const res = await fetch("/api/admin/tours/bookings", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    opportunity_id: oid,
+                                    location_id: locId,
+                                    tour_date: payload.tour_date,
+                                    tour_time: payload.tour_time,
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as {
+                                booking?: TourBookingRow;
+                                error?: string;
+                            };
+                            if (!res.ok) {
+                                throw new Error(json.error ?? "Failed to schedule tour");
+                            }
+                            const booking = json.booking;
+                            if (
+                                booking &&
+                                typeof booking.start_at === "string" &&
+                                typeof booking.timezone === "string"
+                            ) {
+                                applyTourBookingPatch({
+                                    start_at: booking.start_at,
+                                    timezone: booking.timezone,
+                                    status_key: String(booking.status_key ?? "confirmed"),
+                                    booking_id: typeof booking.id === "string" ? booking.id : null,
+                                    mirror_override: {
+                                        tour_date: payload.tour_date,
+                                        tour_time: payload.tour_time,
+                                    },
+                                });
+                            }
+                            dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, [
+                                "tour_surfaces",
+                                "header_actions",
+                            ]);
+                            return;
+                        }
+
+                        const result = await executeOpportunityHeaderAction({
                             opportunityId: oid,
-                            actionKey: actionKey || "schedule_tour",
+                            actionKey: resolvedActionKey,
                             workUnitId,
                             payload,
                         });
-                        setActionFormState(null);
-                        dispatchOpportunityRefresh();
+                        if (!result.ok) {
+                            throw new Error(result.error);
+                        }
+                        dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, [
+                            "tour_surfaces",
+                            "header_actions",
+                        ]);
                     }}
                 />
                 <RecordTourOutcomeModal
@@ -310,14 +428,21 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
                     onClose={() => setActionFormState(null)}
                     title={actionFormState?.action?.label ?? "Record tour outcome"}
                     onSubmit={async (payload) => {
-                        await executeOpportunityHeaderAction({
+                        const resolvedActionKey = actionKey || "record_tour_outcome";
+                        const result = await executeOpportunityHeaderAction({
                             opportunityId: oid,
-                            actionKey: actionKey || "record_tour_outcome",
+                            actionKey: resolvedActionKey,
                             workUnitId,
                             payload: { outcome: payload.outcome },
                         });
-                        setActionFormState(null);
-                        dispatchOpportunityRefresh();
+                        if (!result.ok) {
+                            throw new Error(result.error);
+                        }
+                        dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, [
+                            "tour_surfaces",
+                            "header_actions",
+                            "activity",
+                        ]);
                     }}
                 />
                 <AddNoteModal
@@ -325,24 +450,27 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
                     onClose={() => setActionFormState(null)}
                     title={actionFormState?.action?.label ?? "Add note"}
                     onSubmit={async (payload) => {
-                        await executeOpportunityHeaderAction({
+                        const resolvedActionKey = actionKey || "add_note";
+                        const result = await executeOpportunityHeaderAction({
                             opportunityId: oid,
-                            actionKey: actionKey || "add_note",
+                            actionKey: resolvedActionKey,
                             workUnitId,
                             payload,
                         });
-                        setActionFormState(null);
-                        dispatchOpportunityRefresh();
+                        if (!result.ok) {
+                            throw new Error(result.error);
+                        }
+                        dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, ["activity"]);
                     }}
                 />
             </>
         );
     }, [
         actionFormState,
+        applyTourBookingPatch,
         canMutate,
         createWorkOpen,
         createWorkPrefill,
-        dispatchOpportunityRefresh,
         entityLabel,
         initialTourDate,
         initialTourTime,

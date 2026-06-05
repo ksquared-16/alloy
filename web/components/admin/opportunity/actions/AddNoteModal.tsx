@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
+
+const SUCCESS_DISMISS_MS = 2000;
 
 export function AddNoteModal(props: {
     open: boolean;
@@ -12,15 +15,17 @@ export function AddNoteModal(props: {
     const [note, setNote] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     useEffect(() => {
         if (!open) return;
         setNote("");
         setError(null);
         setBusy(false);
+        setSuccessMessage(null);
     }, [open]);
 
-    const canSubmit = useMemo(() => !busy && note.trim().length > 0, [busy, note]);
+    const canSubmit = useMemo(() => !busy && note.trim().length > 0 && !successMessage, [busy, note, successMessage]);
 
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel =
@@ -33,7 +38,7 @@ export function AddNoteModal(props: {
 
     return (
         <>
-            <div className={overlay} onClick={() => (!busy ? onClose() : null)} />
+            <div className={overlay} onClick={() => (!busy && !successMessage ? onClose() : null)} />
             <div className={panel} role="dialog" aria-modal="true" aria-label={title}>
                 <div className="flex items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
                     <div className="min-w-0">
@@ -53,22 +58,23 @@ export function AddNoteModal(props: {
                 </div>
 
                 <div className="space-y-3 px-5 py-4">
-                    <div>
-                        <div className={label}>Note</div>
-                        <textarea
-                            value={note}
-                            disabled={busy}
-                            onChange={(e) => setNote(e.target.value)}
-                            className={input}
-                            rows={4}
-                            placeholder="What should the team know?"
-                        />
-                    </div>
-                    {error ? (
-                        <div className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember">
-                            {error}
+                    {successMessage ?
+                        <ActionModalStatusMessage type="success" message={successMessage} />
+                    :   <div>
+                            <div className={label}>Note</div>
+                            <textarea
+                                value={note}
+                                disabled={busy}
+                                onChange={(e) => setNote(e.target.value)}
+                                className={input}
+                                rows={4}
+                                placeholder="What should the team know?"
+                            />
                         </div>
-                    ) : null}
+                    }
+                    {error ?
+                        <ActionModalStatusMessage type="error" message={error} />
+                    :   null}
                 </div>
 
                 <div className="flex items-center justify-end gap-2 border-t border-alloy-stone/15 px-5 py-4">
@@ -78,27 +84,30 @@ export function AddNoteModal(props: {
                         onClick={onClose}
                         className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/75 hover:bg-alloy-stone/5 disabled:opacity-50"
                     >
-                        Cancel
+                        {successMessage ? "Done" : "Cancel"}
                     </button>
-                    <button
-                        type="button"
-                        disabled={!canSubmit}
-                        onClick={async () => {
-                            setBusy(true);
-                            setError(null);
-                            try {
-                                await onSubmit({ note: note.trim() });
-                                onClose();
-                            } catch (e) {
-                                setError(e instanceof Error ? e.message : "Add note failed");
-                            } finally {
-                                setBusy(false);
-                            }
-                        }}
-                        className="rounded-lg border border-alloy-blue/30 bg-alloy-blue px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                    >
-                        {busy ? "Saving…" : "Add note"}
-                    </button>
+                    {!successMessage ?
+                        <button
+                            type="button"
+                            disabled={!canSubmit}
+                            onClick={async () => {
+                                setBusy(true);
+                                setError(null);
+                                try {
+                                    await onSubmit({ note: note.trim() });
+                                    setSuccessMessage("Note added.");
+                                    window.setTimeout(() => onClose(), SUCCESS_DISMISS_MS);
+                                } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Add note failed");
+                                } finally {
+                                    setBusy(false);
+                                }
+                            }}
+                            className="rounded-lg border border-alloy-blue/30 bg-alloy-blue px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                            {busy ? "Saving…" : "Add note"}
+                        </button>
+                    :   null}
                 </div>
             </div>
         </>

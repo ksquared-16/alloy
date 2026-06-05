@@ -22,6 +22,7 @@ import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/dra
 import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions";
 import { useOpportunityDrawerVmRegistryModals } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals";
 import { useOpportunityDrawerActionPreflight } from "@/lib/admin/actions/useOpportunityDrawerActionPreflight";
+import { useOpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/useOpportunityDrawerRegistryActionFeedback";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContracts/opportunityInquiryWorkflowTabs";
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
@@ -52,7 +53,7 @@ export default function OpportunityDrawerVmRuntime() {
         isOpportunityQueueNavPending,
         navigateOpportunityInQueue,
     } = useAdminDrawer();
-    const { displayVm, coldLoading, error, suppressFullDrawerLoading, holdPriorPayload } =
+    const { displayVm, coldLoading, error, suppressFullDrawerLoading, holdPriorPayload, patchDisplayRecord } =
         useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
 
@@ -63,25 +64,59 @@ export default function OpportunityDrawerVmRuntime() {
 
     const record = displayVm?.above_fold.record ?? null;
 
+    const { feedback: registryActionFeedback, showSuccess, showError, clearFeedback: clearRegistryActionFeedback } =
+        useOpportunityDrawerRegistryActionFeedback(drawer.id);
+
+    const { blocked: actionPreflightBlocked, clearBlocked: clearActionPreflightBlocked, applyBlockedFromDetail } =
+        useOpportunityDrawerActionPreflight(drawer.id);
+
+    const registryActionHost = useMemo(
+        () => ({
+            patchRecord: patchDisplayRecord,
+        }),
+        [patchDisplayRecord]
+    );
+
+    const headerActionHost = useMemo(
+        () => ({
+            showSuccess: (message: string, opts?: { workflow_run_id?: string }) => {
+                clearActionPreflightBlocked();
+                showSuccess(message, opts);
+            },
+            showError: (message: string) => {
+                clearActionPreflightBlocked();
+                showError(message);
+            },
+            clearPreflight: clearActionPreflightBlocked,
+            applyPreflightBlocked: applyBlockedFromDetail,
+        }),
+        [
+            applyBlockedFromDetail,
+            clearActionPreflightBlocked,
+            showError,
+            showSuccess,
+        ]
+    );
+
     const { modals: registryModals, registryHostExtensions } = useOpportunityDrawerVmRegistryModals({
         opportunityId: drawer.id,
         record,
         canMutate: statusCanMutate,
+        actionHost: registryActionHost,
     });
-
-    const { blocked: actionPreflightBlocked, clearBlocked: clearActionPreflightBlocked } =
-        useOpportunityDrawerActionPreflight(drawer.id);
 
     const { onActionSelect, actionLoadingKey } = useOpportunityDrawerVmHeaderActions({
         opportunityId: drawer.id,
         departmentId: displayVm?.workspace.department_id,
         workUnitId: displayVm?.workspace.work_unit_id,
         registryHostExtensions,
+        actionHost: headerActionHost,
     });
 
     useEffect(() => {
         setDrawerTab("overview");
-    }, [drawer.id]);
+        clearRegistryActionFeedback();
+    }, [drawer.id, clearRegistryActionFeedback]);
 
     useEffect(() => {
         if (!drawer.id?.trim()) return;
@@ -172,6 +207,7 @@ export default function OpportunityDrawerVmRuntime() {
                     onActionSelect={onActionSelect}
                     actionPreflightBlocked={actionPreflightBlocked}
                     onDismissActionPreflightBlocked={clearActionPreflightBlocked}
+                    registryActionFeedback={registryActionFeedback}
                 />
         );
     }, [
@@ -185,6 +221,7 @@ export default function OpportunityDrawerVmRuntime() {
         statusCanMutate,
         actionPreflightBlocked,
         clearActionPreflightBlocked,
+        registryActionFeedback,
     ]);
 
     /** Status below title (left) — matches legacy inquiry modal subtitle rail. */
@@ -233,6 +270,12 @@ export default function OpportunityDrawerVmRuntime() {
                     layout="modal-actions"
                     actionPreflightBlocked={actionPreflightBlocked}
                     onDismissActionPreflightBlocked={clearActionPreflightBlocked}
+                    registryActionFeedback={registryActionFeedback}
+                    actionsDisabledReason={
+                        actionLoadingKey ? "An action is running — wait for it to finish."
+                        : !statusCanMutate ? "You don't have permission to run actions on this record."
+                        :   null
+                    }
                 />
             </div>
         );
@@ -247,6 +290,7 @@ export default function OpportunityDrawerVmRuntime() {
         statusCanMutate,
         actionPreflightBlocked,
         clearActionPreflightBlocked,
+        registryActionFeedback,
     ]);
 
     const tabs = useMemo((): DrawerTabKey[] => {
@@ -298,6 +342,11 @@ export default function OpportunityDrawerVmRuntime() {
             zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={DRAWER_ACCENT_OPPORTUNITY}
             recordModalTone="cleaning-v2"
+            overlayChildren={
+                registryModals ?
+                    <div data-vm-drawer-action-modals-host="true">{registryModals}</div>
+                :   null
+            }
         >
             <div
                 className="relative"
@@ -389,9 +438,6 @@ export default function OpportunityDrawerVmRuntime() {
                             />
                         }
                     </>
-                :   null}
-                {registryModals ?
-                    <div data-vm-drawer-action-modals-host="true">{registryModals}</div>
                 :   null}
             </div>
         </Drawer>

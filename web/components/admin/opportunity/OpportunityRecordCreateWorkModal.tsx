@@ -30,6 +30,9 @@ import {
     createOperationalTask,
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
+
+const CREATE_WORK_SUCCESS_DISMISS_MS = 2000;
 
 export type OpportunityRecordCreateWorkModalPrefill = {
     title?: string | null;
@@ -69,6 +72,7 @@ export default function OpportunityRecordCreateWorkModal({
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     const resolveParams = useMemo(
         () => ({
@@ -107,6 +111,7 @@ export default function OpportunityRecordCreateWorkModal({
         setBusy(false);
         setError(null);
         setInfoMessage(null);
+        setSuccessMessage(null);
 
         const hasPrefillTitle = Boolean(prefill?.title?.trim());
         if (hasPrefillTitle) {
@@ -181,8 +186,9 @@ export default function OpportunityRecordCreateWorkModal({
                 onCreated?.();
                 return;
             }
+            setSuccessMessage("Task created.");
             onCreated?.();
-            onClose();
+            window.setTimeout(() => onClose(), CREATE_WORK_SUCCESS_DISMISS_MS);
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
         } finally {
@@ -193,7 +199,7 @@ export default function OpportunityRecordCreateWorkModal({
     if (!open) return null;
 
     const recordHint = entityLabel?.trim() || "this record";
-    const canSubmit = Boolean(title.trim() && dueLocal.trim());
+    const canSubmit = Boolean(title.trim() && dueLocal.trim()) && !successMessage;
 
     return (
         <div
@@ -221,6 +227,20 @@ export default function OpportunityRecordCreateWorkModal({
                     </div>
                 </div>
                 <div className={`${MESSAGING_MODAL_BODY_CLASS} space-y-3`}>
+                    {successMessage ?
+                        <>
+                            <ActionModalStatusMessage type="success" message={successMessage} />
+                            <div className="flex flex-wrap justify-end gap-2 pt-1">
+                                <button
+                                    type="button"
+                                    className={MESSAGING_MODAL_SECONDARY_BUTTON_CLASS}
+                                    onClick={onClose}
+                                >
+                                    Close
+                                </button>
+                            </div>
+                        </>
+                    :   <>
                     <div>
                         <label
                             htmlFor="operational-work-create-type"
@@ -310,16 +330,12 @@ export default function OpportunityRecordCreateWorkModal({
                             onChange={setAssignedToUserId}
                         />
                     </div>
-                    {infoMessage ? (
-                        <p className="text-[11px] font-medium text-alloy-midnight/70" role="status">
-                            {infoMessage}
-                        </p>
-                    ) : null}
-                    {error ? (
-                        <p className="text-[11px] font-medium text-red-800/90" role="alert">
-                            {error}
-                        </p>
-                    ) : null}
+                    {infoMessage ?
+                        <ActionModalStatusMessage type="info" message={infoMessage} />
+                    :   null}
+                    {error ?
+                        <ActionModalStatusMessage type="error" message={error} />
+                    :   null}
                     <div className="flex flex-wrap justify-end gap-2 pt-1">
                         <button
                             type="button"
@@ -339,6 +355,8 @@ export default function OpportunityRecordCreateWorkModal({
                             {busy ? "Creating…" : "Create work"}
                         </button>
                     </div>
+                        </>
+                    }
                 </div>
             </div>
         </div>

@@ -207,12 +207,12 @@ describe("drawerLinkedGraphNavigation", () => {
         const drawer = read("components/admin/Drawer.tsx");
         expect(drawer).not.toMatch(/<DrawerRuntimeDebugBadge/);
         expect(drawer).not.toMatch(/import DrawerRuntimeDebugBadge/);
-        expect(drawer).toContain("debug_ui_render_blocked");
+        expect(drawer).not.toContain("runtimeDebug");
         const opp = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(opp).not.toContain("lifecycleRailDevDebug");
         expect(opp).not.toContain("runtimeDebug={");
         const legacy = read("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(legacy).toContain("runtimeDebug={null}");
+        expect(legacy).not.toContain("runtimeDebug={");
     });
 
     it("model swap clears pending unconditionally and re-applies when drawer is stale", () => {

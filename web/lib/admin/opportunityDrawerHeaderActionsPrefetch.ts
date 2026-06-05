@@ -32,6 +32,31 @@ function appendOpportunityRecordHeaderHints(
     }
 }
 
+export function buildOpportunityDrawerHeaderActionsUrlFromRecord(
+    opportunityId: string,
+    workspaceContext: OpportunityWorkspaceContext | null | undefined,
+    entity: Record<string, unknown>
+): string | null {
+    const id = opportunityId.trim();
+    const ctxWu = (workspaceContext?.work_unit_id ?? "").trim();
+    const ctxDept = (workspaceContext?.department_id ?? "").trim();
+    const dataWu = String((entity.work_unit_id as unknown) ?? "").trim();
+    const deptFromRecord = String((entity._work_unit_department_id as unknown) ?? "").trim();
+    const workUnitId = ctxWu || dataWu;
+    const departmentId = ctxDept || deptFromRecord;
+    if (!workUnitId || !departmentId) return null;
+
+    const qs = new URLSearchParams({
+        surface: "record_header",
+        entity_type: "opportunity",
+        entity_id: id,
+    });
+    qs.set("work_unit_id", workUnitId);
+    qs.set("department_id", departmentId);
+    appendOpportunityRecordHeaderHints(qs, entity, id);
+    return `/api/admin/actions?${qs.toString()}`;
+}
+
 export function buildOpportunityDrawerHeaderActionsUrl(
     opportunityId: string,
     workspaceContext: OpportunityWorkspaceContext | null | undefined,
@@ -57,6 +82,21 @@ export function buildOpportunityDrawerHeaderActionsUrl(
     qs.set("department_id", departmentId);
     appendOpportunityRecordHeaderHints(qs, entity, id);
     return `/api/admin/actions?${qs.toString()}`;
+}
+
+export async function fetchOpportunityDrawerHeaderActionsFromRecord(
+    opportunityId: string,
+    workspaceContext: OpportunityWorkspaceContext | null | undefined,
+    entity: Record<string, unknown>,
+    init?: RequestInit
+): Promise<ResolvedActionsBySlot> {
+    const url = buildOpportunityDrawerHeaderActionsUrlFromRecord(opportunityId, workspaceContext, entity);
+    if (!url) return emptyResolvedActionsBySlot();
+
+    return dedupeAdminFetchWithTtl(url, init ?? workspaceDataFetchInit(), HEADER_ACTIONS_CACHE_TTL_MS)
+        .then((r) => r.json())
+        .then((j: { actions?: ResolvedActionsBySlot }) => j.actions ?? emptyResolvedActionsBySlot())
+        .catch(() => emptyResolvedActionsBySlot());
 }
 
 export function isOpportunityDrawerHeaderActionsWarm(actionsUrl: string | null): boolean {

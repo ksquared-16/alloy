@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
 
 export type TourOutcomeChoice = "completed" | "no_show";
+
+const SUCCESS_DISMISS_MS = 2000;
 
 export function RecordTourOutcomeModal(props: {
     open: boolean;
@@ -14,15 +17,17 @@ export function RecordTourOutcomeModal(props: {
     const [outcome, setOutcome] = useState<TourOutcomeChoice | "">("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
     useEffect(() => {
         if (!open) return;
         setOutcome("");
         setError(null);
         setBusy(false);
+        setSuccessMessage(null);
     }, [open]);
 
-    const canSubmit = useMemo(() => !busy && outcome !== "", [busy, outcome]);
+    const canSubmit = useMemo(() => !busy && outcome !== "" && !successMessage, [busy, outcome, successMessage]);
 
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel =
@@ -33,7 +38,7 @@ export function RecordTourOutcomeModal(props: {
 
     return (
         <>
-            <div className={overlay} onClick={() => (!busy ? onClose() : null)} />
+            <div className={overlay} onClick={() => (!busy && !successMessage ? onClose() : null)} />
             <div className={panel} role="dialog" aria-modal="true" aria-label={title}>
                 <div className="flex items-start justify-between gap-3 border-b border-alloy-stone/15 px-5 py-4">
                     <div className="min-w-0">
@@ -53,36 +58,37 @@ export function RecordTourOutcomeModal(props: {
                 </div>
 
                 <div className="space-y-3 px-5 py-4">
-                    <div>
-                        <div className={label}>Outcome</div>
-                        <div className="mt-1 flex flex-col gap-2">
-                            <label className="flex cursor-pointer items-center gap-2 text-sm text-alloy-midnight">
-                                <input
-                                    type="radio"
-                                    name="tour_outcome"
-                                    disabled={busy}
-                                    checked={outcome === "completed"}
-                                    onChange={() => setOutcome("completed")}
-                                />
-                                Tour completed — family attended
-                            </label>
-                            <label className="flex cursor-pointer items-center gap-2 text-sm text-alloy-midnight">
-                                <input
-                                    type="radio"
-                                    name="tour_outcome"
-                                    disabled={busy}
-                                    checked={outcome === "no_show"}
-                                    onChange={() => setOutcome("no_show")}
-                                />
-                                No-show — family did not attend
-                            </label>
+                    {successMessage ?
+                        <ActionModalStatusMessage type="success" message={successMessage} />
+                    :   <div>
+                            <div className={label}>Outcome</div>
+                            <div className="mt-1 flex flex-col gap-2">
+                                <label className="flex cursor-pointer items-center gap-2 text-sm text-alloy-midnight">
+                                    <input
+                                        type="radio"
+                                        name="tour_outcome"
+                                        disabled={busy}
+                                        checked={outcome === "completed"}
+                                        onChange={() => setOutcome("completed")}
+                                    />
+                                    Tour completed — family attended
+                                </label>
+                                <label className="flex cursor-pointer items-center gap-2 text-sm text-alloy-midnight">
+                                    <input
+                                        type="radio"
+                                        name="tour_outcome"
+                                        disabled={busy}
+                                        checked={outcome === "no_show"}
+                                        onChange={() => setOutcome("no_show")}
+                                    />
+                                    No-show — family did not attend
+                                </label>
+                            </div>
                         </div>
-                    </div>
-                    {error ? (
-                        <div className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember">
-                            {error}
-                        </div>
-                    ) : null}
+                    }
+                    {error ?
+                        <ActionModalStatusMessage type="error" message={error} />
+                    :   null}
                 </div>
 
                 <div className="flex items-center justify-end gap-2 border-t border-alloy-stone/15 px-5 py-4">
@@ -92,28 +98,31 @@ export function RecordTourOutcomeModal(props: {
                         onClick={onClose}
                         className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/75 hover:bg-alloy-stone/5 disabled:opacity-50"
                     >
-                        Cancel
+                        {successMessage ? "Done" : "Cancel"}
                     </button>
-                    <button
-                        type="button"
-                        disabled={!canSubmit}
-                        onClick={async () => {
-                            if (!outcome) return;
-                            setBusy(true);
-                            setError(null);
-                            try {
-                                await onSubmit({ outcome });
-                                onClose();
-                            } catch (e) {
-                                setError(e instanceof Error ? e.message : "Save failed");
-                            } finally {
-                                setBusy(false);
-                            }
-                        }}
-                        className="rounded-lg border border-alloy-blue/30 bg-alloy-blue px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                    >
-                        {busy ? "Saving…" : "Save outcome"}
-                    </button>
+                    {!successMessage ?
+                        <button
+                            type="button"
+                            disabled={!canSubmit}
+                            onClick={async () => {
+                                if (!outcome) return;
+                                setBusy(true);
+                                setError(null);
+                                try {
+                                    await onSubmit({ outcome });
+                                    setSuccessMessage("Tour outcome recorded.");
+                                    window.setTimeout(() => onClose(), SUCCESS_DISMISS_MS);
+                                } catch (e) {
+                                    setError(e instanceof Error ? e.message : "Save failed");
+                                } finally {
+                                    setBusy(false);
+                                }
+                            }}
+                            className="rounded-lg border border-alloy-blue/30 bg-alloy-blue px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                        >
+                            {busy ? "Saving…" : "Save outcome"}
+                        </button>
+                    :   null}
                 </div>
             </div>
         </>
