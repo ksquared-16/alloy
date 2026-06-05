@@ -203,8 +203,17 @@ describe("drawerLinkedGraphNavigation", () => {
     it("drawer runtime debug proof is gated behind debug flag only", () => {
         const debug = read("lib/adminV2/drawer/drawerRuntimeDebug.ts");
         expect(debug).toContain("NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG");
+        expect(debug).not.toContain("NODE_ENV !== \"production\"");
         const opp = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(opp).toContain("drawerRuntimeDebugEnabled()");
-        expect(opp).not.toContain("shouldExposeDrawerRuntimeProof(): boolean {\n    return true");
+        const legacy = read("components/admin/AdminEntityDrawerLegacy.tsx");
+        expect(legacy).toContain("drawerRuntimeDebugEnabled()");
+        expect(legacy).toContain("runtimeDebug={drawerRuntimeDebug}");
+    });
+
+    it("model swap re-applies navigation when preload commit key matches but drawer is stale", () => {
+        const ctx = read("contexts/AdminDrawerContext.tsx");
+        expect(ctx).toContain("drawerAlreadyOnTarget");
+        expect(ctx).toContain("Preload commit key was recorded but drawer state never applied");
     });
 });

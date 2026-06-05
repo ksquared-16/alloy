@@ -736,7 +736,15 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             swapFallbackFetchPendingRef.current = false;
             if (lastAttachedSwapPreloadKeyRef.current === commitKey) {
                 setDrawerLinkPendingKey((current) => (current === pendingKey ? null : current));
-                return;
+                const targetId = params.id.trim();
+                const drawerAlreadyOnTarget =
+                    drawer.type === params.type &&
+                    drawer.id != null &&
+                    String(drawer.id) === targetId;
+                if (drawerAlreadyOnTarget) {
+                    return;
+                }
+                // Preload commit key was recorded but drawer state never applied — fall through.
             }
             lastAttachedSwapPreloadKeyRef.current = commitKey;
             pendingModelSwapParamsRef.current = null;
@@ -763,7 +771,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             });
             setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
         },
-        [applyDrawerTargetNavigation, drawer.opportunityWorkspaceContext, markOpportunityPreloadReady]
+        [applyDrawerTargetNavigation, drawer.id, drawer.opportunityWorkspaceContext, drawer.type, markOpportunityPreloadReady]
     );
 
     const openDrawerModelSwap = useCallback(
@@ -1084,6 +1092,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             pendingModelSwapParamsRef.current = null;
             setDrawerLinkPendingKey(null);
             setDrawerLinkPendingError(null);
+            personDrawerPreloadRef.current = null;
 
             const backParams = buildPrepareParamsFromOpenDrawer({
                 type: "opportunities",
