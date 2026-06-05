@@ -24,7 +24,7 @@ import {
     type LayoutSection,
 } from "@/lib/layout/layoutV2";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
-import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
+import AdornmentIcon from "@/components/layout/AdornmentIcon";
 
 const TEXT = "#31394d";
 const MUTED = "#59678b";
@@ -40,7 +40,6 @@ function Adorn({ item }: { item: LayoutItem }) {
     const onAction = useContext(AdornmentActionContext);
     const ad = item.adornment;
     if (!ad) return null;
-    const glyph = ADORNMENT_ICON_GLYPH[ad.icon];
     if (ad.action && onAction) {
         const title = `Open ${ad.action.entity} drawer`;
         return (
@@ -52,13 +51,17 @@ function Adorn({ item }: { item: LayoutItem }) {
                 }}
                 title={title}
                 aria-label={title}
-                className="rounded px-0.5 leading-none hover:bg-[#eef1f6]"
+                className="inline-flex items-center rounded p-0.5 text-[#00458C] hover:bg-[#eef3fb]"
             >
-                {glyph}
+                <AdornmentIcon icon={ad.icon} />
             </button>
         );
     }
-    return <span title={ad.action ? `Opens ${ad.action.entity} drawer` : undefined}>{glyph}</span>;
+    return (
+        <span className="inline-flex items-center text-[rgba(39,63,82,0.55)]" title={ad.action ? `Opens ${ad.action.entity} drawer` : undefined}>
+            <AdornmentIcon icon={ad.icon} />
+        </span>
+    );
 }
 
 function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
