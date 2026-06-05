@@ -105,6 +105,16 @@ export async function GET(request: NextRequest) {
         // --- Cheap enrichment joins (customer + vertical names).
         const customerIds = [...new Set(opps.map((o) => o.customer_id).filter(Boolean))] as string[];
         const verticalIds = [...new Set(opps.map((o) => o.vertical_id).filter(Boolean))] as string[];
+        const locationIds = [...new Set(opps.map((o) => o.location_id as string | null).filter(Boolean))] as string[];
+
+        const locationName = new Map<string, string>();
+        if (locationIds.length) {
+            const { data } = await supabase.from("locations").select("id, label, city").in("id", locationIds);
+            for (const l of data ?? []) {
+                const row = l as { id: string; label?: string | null; city?: string | null };
+                locationName.set(row.id, (row.label?.trim() || row.city?.trim() || "") as string);
+            }
+        }
 
         const customerName = new Map<string, string>();
         if (customerIds.length) {
@@ -154,6 +164,7 @@ export async function GET(request: NextRequest) {
                 _status_display: statusDisplay,
                 _customer_name: custName,
                 _vertical_name: o.vertical_id ? verticalName.get(o.vertical_id) ?? null : null,
+                _location_name: o.location_id ? locationName.get(o.location_id as string) || null : null,
                 _customer_email: primary?.email ?? null,
                 _customer_phone: primary?.phone ?? null,
                 _quote_total_display: o.quote_total ?? null,

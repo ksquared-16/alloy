@@ -57,11 +57,6 @@ const str = (v: unknown): string => (v === undefined || v === null ? "" : String
 function recordName(rec: Rec): string {
     return str(rec["_customer_name"]) || str(rec["name"]) || `Lead ${str(rec.id).slice(0, 6)}`;
 }
-function recordSubtitle(rec: Rec): string {
-    const oppName = str(rec["name"]);
-    const email = str(rec["_customer_email"]) || str(rec["primary_email"]);
-    return [oppName, email].filter(Boolean).join(" · ");
-}
 function recordStatusLabel(rec: Rec): string {
     return str(rec["_status_display"]) || str(rec["status_key"]) || str(rec["status"]) || "—";
 }
@@ -242,7 +237,7 @@ export default function LayoutProofClient() {
                 open={!!selectedRecord}
                 onClose={() => setSelectedId(null)}
                 title={selectedRecord ? `Lead — ${recordName(selectedRecord)}` : ""}
-                subtitle={selectedRecord ? recordSubtitle(selectedRecord) : undefined}
+                location={selectedRecord ? str(selectedRecord["_location_name"]) || null : null}
                 statusLabel={selectedRecord ? recordStatusLabel(selectedRecord) : undefined}
                 attention={selectedRecord ? `Layout V2 proof · Overview below is config-driven (source: ${drawer?.source ?? "—"}).` : null}
                 lifecycleStatusKey={selectedRecord ? (str(selectedRecord["status_key"]) || str(selectedRecord["status"])) : null}

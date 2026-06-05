@@ -69,8 +69,8 @@ function Adorn({ item }: { item: LayoutItem }) {
 function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
     const r = resolveItemValue(record, item);
     return (
-        <div className="rounded-md bg-white px-2.5 py-1.5 ring-1 ring-[rgba(0,0,0,0.04)]">
-            <div className="flex items-center gap-1 text-xs font-medium" style={{ color: "rgba(39,63,82,0.8)" }}>
+        <div className="px-0.5 py-0.5">
+            <div className="flex items-center gap-1 text-xs font-medium text-alloy-midnight/80">
                 {item.label || item.refKey}
                 {item.locked ? (
                     <span
@@ -320,14 +320,14 @@ function RowView({ record, row }: { record: Rec; row: LayoutRow }) {
 }
 
 function SectionView({ record, section }: { record: Rec; section: LayoutSection }) {
-    // Branded to match the staging drawer "premium" section: bend-pine left
-    // accent, subtle ring, tinted header.
+    // Mirrors the staging drawer "premium" section exactly (EntityDrawerSection):
+    // bend-pine left accent, alloy-stone ring, emerald-tinted header, no uppercase.
     return (
-        <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.08)] border-l-[3px] border-l-[#00A283] bg-white shadow-sm ring-1 ring-[rgba(0,0,0,0.06)]">
-            <div className="border-b border-[rgba(0,0,0,0.08)] bg-[rgba(0,0,0,0.025)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "rgba(39,63,82,0.8)" }}>
-                {section.title}
+        <div className="overflow-hidden rounded-lg border border-alloy-stone/[0.1] border-l-[3px] border-l-[rgb(0,162,131)] bg-white/[0.97] shadow-sm ring-1 ring-alloy-stone/[0.06]">
+            <div className="flex items-center gap-2 border-b border-alloy-stone/10 bg-emerald-50/20 px-2.5 py-1.5">
+                <span className="min-w-0 truncate text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80">{section.title}</span>
             </div>
-            <div className="flex flex-col gap-3 p-3">
+            <div className="flex flex-col gap-2.5 px-3 py-2.5">
                 {section.rows.map((row) => (
                     <RowView key={row.id} record={record} row={row} />
                 ))}

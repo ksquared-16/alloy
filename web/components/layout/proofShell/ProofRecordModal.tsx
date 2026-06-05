@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { MoreHorizontal, Sparkles, X } from "lucide-react";
+import { MapPin, MoreHorizontal, Sparkles, X } from "lucide-react";
 import ProofLifecycleRail from "./ProofLifecycleRail";
 
 const BORDER = "rgba(39,63,82,0.18)";
@@ -36,7 +36,7 @@ export default function ProofRecordModal({
     open,
     onClose,
     title,
-    subtitle,
+    location,
     statusLabel,
     attention,
     lifecycleStatusKey,
@@ -46,7 +46,8 @@ export default function ProofRecordModal({
     open: boolean;
     onClose: () => void;
     title: string;
-    subtitle?: string;
+    /** Location label rendered as a pill next to the title (null → muted "No location"). */
+    location?: string | null;
     statusLabel?: string;
     attention?: string | null;
     lifecycleStatusKey?: string | null;
@@ -77,8 +78,16 @@ export default function ProofRecordModal({
                         {/* row 1: title + status + actions */}
                         <div className="flex items-start justify-between gap-4 px-6 pb-2 pt-4">
                             <div className="min-w-0 flex-1">
-                                <h2 className="break-words text-xl font-bold leading-snug" style={{ color: TEXT }}>{title}</h2>
-                                {subtitle && <p className="mt-1 text-sm font-medium leading-snug" style={{ color: MUTED }}>{subtitle}</p>}
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h2 className="break-words text-xl font-bold leading-snug" style={{ color: TEXT }}>{title}</h2>
+                                    {location ? (
+                                        <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70">
+                                            <MapPin className="h-3 w-3" aria-hidden /> {location}
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex items-center rounded-full border border-alloy-stone/20 bg-white px-2 py-0.5 text-[11px] text-alloy-midnight/40">No location</span>
+                                    )}
+                                </div>
                             </div>
                             <div className="flex shrink-0 items-center gap-2">
                                 <label className="inline-flex min-w-0 items-center gap-1.5" title="Status (simulated — read-only in proof)">
