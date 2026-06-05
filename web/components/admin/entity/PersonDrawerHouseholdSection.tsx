@@ -34,8 +34,10 @@ import {
 
 type OpenDrawer = (type: string, id: string) => void;
 
-const HOUSEHOLD_PERSON_CARD_CLASS =
-    "flex h-full min-h-[4.5rem] min-w-0 items-start gap-2.5 rounded-lg border border-alloy-stone/15 bg-white/90 px-2.5 py-2 shadow-sm transition hover:border-alloy-stone/25";
+const HOUSEHOLD_PERSON_CARD_BASE_CLASS =
+    "flex h-full min-h-[4.5rem] min-w-0 items-start gap-2.5 rounded-lg border border-alloy-stone/15 bg-white/90 px-2.5 py-2 shadow-sm transition-[background-color,border-color,transform,box-shadow] duration-150";
+
+const HOUSEHOLD_PERSON_CARD_CLICKABLE_CLASS = `${HOUSEHOLD_PERSON_CARD_BASE_CLASS} cursor-pointer hover:border-alloy-stone/30 hover:bg-alloy-stone/[0.05] hover:shadow-md active:scale-[0.99] active:bg-alloy-stone/[0.09] active:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-alloy-blue/45`;
 
 function RoleChip({ label }: { label: string }) {
     return (
@@ -118,7 +120,7 @@ function ViewingPersonPrimaryContactCard({
     return (
         <li>
             <div
-                className={`${HOUSEHOLD_PERSON_CARD_CLASS} border-alloy-blue/20 bg-alloy-blue/[0.03]`}
+                className={`${HOUSEHOLD_PERSON_CARD_BASE_CLASS} border-alloy-blue/20 bg-alloy-blue/[0.03]`}
                 data-person-drawer-viewing-person-primary-card="true"
             >
                 <PersonDrawerIdentityAvatar
@@ -207,7 +209,7 @@ function GuardianCard({
                 <button
                     type="button"
                     onClick={() => onOpenPerson(personId)}
-                    className={`${HOUSEHOLD_PERSON_CARD_CLASS} w-full text-left`}
+                    className={`${HOUSEHOLD_PERSON_CARD_CLICKABLE_CLASS} w-full text-left`}
                     data-person-drawer-household-guardian-link="true"
                 >
                     {body}
@@ -218,7 +220,7 @@ function GuardianCard({
 
     return (
         <li>
-            <div className={HOUSEHOLD_PERSON_CARD_CLASS}>{body}</div>
+            <div className={HOUSEHOLD_PERSON_CARD_BASE_CLASS}>{body}</div>
         </li>
     );
 }
@@ -273,7 +275,7 @@ function ChildCard({
                 <button
                     type="button"
                     onClick={() => onOpenChild(row.person_id!)}
-                    className={`${HOUSEHOLD_PERSON_CARD_CLASS} w-full text-left`}
+                    className={`${HOUSEHOLD_PERSON_CARD_CLICKABLE_CLASS} w-full text-left`}
                     data-person-drawer-household-child-link="true"
                 >
                     {body}
@@ -285,7 +287,7 @@ function ChildCard({
     return (
         <li>
             <div
-                className={`${HOUSEHOLD_PERSON_CARD_CLASS} cursor-not-allowed opacity-75`}
+                className={`${HOUSEHOLD_PERSON_CARD_BASE_CLASS} cursor-not-allowed opacity-75`}
                 data-person-drawer-household-child-unlinked="true"
                 title={PERSON_DRAWER_UNLINKED_CHILD_TOOLTIP}
                 aria-disabled="true"

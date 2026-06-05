@@ -73,6 +73,9 @@ import {
     workUnitQueueLaneRevealSettled,
 } from "@/lib/workspace/workUnitQueueLaneRevealState";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { buildPrepareParamsFromOpenDrawer, peekDrawerViewModelPreloadSync } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
+import { warmQueueRowOpportunityVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import {
@@ -321,6 +324,7 @@ import {
     markWorkUnitVmOpenCold,
     markWorkUnitVmOpenWarm,
     markWorkUnitVmPillSwitchApply,
+    markWorkUnitVmPillSwitchActionsReady,
     markWorkUnitVmPillSwitchCacheHit,
     markWorkUnitVmPillSwitchCacheMissHoldCurrent,
     markWorkUnitVmPillSwitchCommitted,
@@ -654,7 +658,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
     const siteSelectionReady = siteFilter?.siteSelectionReady ?? true;
     const viewScopeFingerprint = workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId);
-    const { openDrawer } = useAdminDrawer();
+    const { openDrawer, drawer } = useAdminDrawer();
+    const [queueRowOpenPendingOpportunityId, setQueueRowOpenPendingOpportunityId] = useState<string | null>(
+        null
+    );
+    /** Pill key showing inline pending while a cold lane payload loads (rows/actions stay on prior lane). */
+    const [queuePillPendingKey, setQueuePillPendingKey] = useState<string | null>(null);
     const viewerTz = useAdminViewerTimezone();
 
     const [loading, setLoading] = useState(true);
@@ -1603,14 +1612,45 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             queueRowActionsHydratedRef.current = true;
             setQueueRowActionsReady(true);
+            logDrawerVmRuntimeDiagnostic("row_actions_ready", {
+                work_unit_id: workUnitId,
+                department_id: departmentId,
+                source: "hydrate",
+            });
             return true;
         } catch {
             setOpportunityQueueRowResolved([]);
             queueRowActionsHydratedRef.current = true;
             setQueueRowActionsReady(true);
+            logDrawerVmRuntimeDiagnostic("row_actions_ready", {
+                work_unit_id: workUnitId,
+                department_id: departmentId,
+                source: "hydrate_fallback",
+            });
             return true;
         }
     }, [departmentId, workUnitId]);
+
+    const commitQueueRowActionsWithLane = useCallback(
+        (detail: {
+            work_unit_id: string;
+            department_id: string;
+            source: string;
+            pill_key?: string;
+        }) => {
+            if (queueRowActionsHydratedRef.current) {
+                setQueueRowActionsReady(true);
+            }
+            logDrawerVmRuntimeDiagnostic("row_actions_ready", detail);
+            markWorkUnitVmPillSwitchActionsReady({
+                department_id: detail.department_id,
+                work_unit_id: detail.work_unit_id,
+                source: detail.source,
+                pill_key: detail.pill_key,
+            });
+        },
+        []
+    );
 
     const loadWorkUnitDeferredSupplement = useCallback(async () => {
         if (!workUnitId || !departmentId) return;
@@ -1811,6 +1851,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     queueItemsLastFetchSigRef.current = fetchSig;
                     setQueueItemsError(null);
                     setQueueItemsRoute(route);
+                    setQueuePillPendingKey(null);
                     setQueueItems(ent.payload);
                     setQueueItemsLoading(false);
                     logQueueRowClientCache({
@@ -1821,6 +1862,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         attention_bucket_key: abSnap || undefined,
                         age_ms: Date.now() - ent.fetchedAt,
                     });
+                    commitQueueRowActionsWithLane({
+                        work_unit_id: workUnitId,
+                        department_id: departmentId,
+                        pill_key: queueKey,
+                        source: "lease_cache",
+                    });
+                    if (options?.userInitiated) {
+                        markWorkUnitVmPillSwitchCommitted({
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            queue_key: apiQueueKey,
+                            pill_key: queueKeyForLane,
+                            source: "lane_cache",
+                        });
+                    }
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
                         alloyPerfSet("queue_tab_rows_ready", performance.now());
@@ -2020,6 +2076,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             scopeFingerprint: viewScopeFingerprint,
                         }
                     );
+                    setQueuePillPendingKey(null);
                     setQueueItems(payload);
                     lifecyclePillSwitchRetainRowsRef.current = false;
                     setLifecyclePillRetainRows(false);
@@ -2043,6 +2100,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             record_count: items.length,
                             total: typeof payload.total === "number" ? payload.total : null,
                             api_path: route,
+                        });
+                        commitQueueRowActionsWithLane({
+                            work_unit_id: workUnitId,
+                            department_id: departmentId,
+                            pill_key: queueKey,
+                            source: "network",
                         });
                         markWorkUnitVmPillSwitchCommitted({
                             department_id: departmentId,
@@ -2149,9 +2212,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (ent) {
                     // Cache hit for the same sig: apply immediately without a network round-trip.
                     lease.delete(fetchSig);
+                    setQueuePillPendingKey(null);
                     setQueueItems(ent.payload);
                     setQueueItemsError(null);
                     setQueueItemsLoading(false);
+                    commitQueueRowActionsWithLane({
+                        work_unit_id: workUnitId,
+                        department_id: departmentId,
+                        pill_key: queueKey,
+                        source: "row_cache",
+                    });
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
                         alloyPerfSet("queue_tab_rows_ready", performance.now());
@@ -2247,6 +2317,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
         },
         [
+            commitQueueRowActionsWithLane,
             hydrateWorkUnitQueueRowActions,
             requestWorkUnitDeferredSupplement,
             markFirstUsefulPaintOnce,
@@ -2608,21 +2679,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     queueDefinition: wu?.queue_definition,
                 });
                 if (cachedLane) {
-                    setQueueItems(cachedLane);
-                    setQueueItemsError(null);
-                    setQueueItemsLoading(false);
+                    logDrawerVmRuntimeDiagnostic("lane_payload_cache_hit", {
+                        work_unit_id: workUnitId,
+                        pill_key: nextKey,
+                        department_id: departmentId,
+                    });
                     markWorkUnitVmPillSwitchCacheHit({
                         department_id: departmentId,
                         work_unit_id: workUnitId,
                         pill_key: nextKey,
                     });
-                    markWorkUnitVmPillSwitchCommitted({
-                        department_id: departmentId,
+                } else {
+                    logDrawerVmRuntimeDiagnostic("lane_payload_cache_miss", {
                         work_unit_id: workUnitId,
                         pill_key: nextKey,
-                        source: "lane_cache",
+                        from_pill: prevKey,
+                        department_id: departmentId,
                     });
-                } else {
+                    setQueuePillPendingKey(nextKey);
                     lifecyclePillSwitchRetainRowsRef.current = true;
                     setLifecyclePillRetainRows(true);
                     markWorkUnitVmPillSwitchCacheMissHoldCurrent({
@@ -2665,6 +2739,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
         ]
     );
 
+    const handleQueuePillIntent = useCallback(
+        (pillKey: string, opts?: { unmappedActive?: boolean }) => {
+            if (!workUnitId) return;
+            if (pillKey === LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY) return;
+            const lifecycleNavWuId = parseLifecycleWorkUnitNavChipKey(pillKey);
+            if (lifecycleNavWuId) return;
+            const wu = workUnitRef.current;
+            const resolved = resolveWorkUnitFetchQueueKeyFromPill(
+                pillKey,
+                attentionBucketKeyRef.current,
+                wu ? { queue_definition: wu.queue_definition } : undefined
+            );
+            void fetchQueueItems(workUnitId, pillKey, null, {
+                prefetchOnly: true,
+                logicalUnmapped: opts?.unmappedActive ?? false,
+                ...(resolved.attentionBucketOverride !== undefined
+                    ? { attentionBucketOverride: resolved.attentionBucketOverride }
+                    : {}),
+            });
+        },
+        [fetchQueueItems, workUnitId]
+    );
+
     const handleAttentionBucketSelect = useCallback(
         (bucketKey: string | null) => {
             if (!workUnitId) return;
@@ -2677,6 +2774,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const pillKey = next
                 ? `${ATTENTION_BUCKET_PILL_PREFIX}${next}`
                 : "needs_attention";
+            setQueuePillPendingKey(pillKey);
+            lifecyclePillSwitchRetainRowsRef.current = true;
+            setLifecyclePillRetainRows(true);
             setSelectedQueueKeyTraced("handleAttentionBucketSelect", pillKey);
             setLaneUnmappedOnly(false);
             setAttentionBucketKey(next);
@@ -4679,7 +4779,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 rowsHeld: !laneMayPaint && !lifecycleRetainPaint,
                 rowsRefreshing,
                 rowActionsPending:
-                    displayItems.length > 0 && !queueRowActionsReady && !lifecycleRetainPaint,
+                    displayItems.length > 0 &&
+                    !queueRowActionsReady &&
+                    !queueRowActionsHydratedRef.current &&
+                    !lifecycleRetainPaint,
                 ...(workUnitGroupHeaders ? { workUnitGroupHeaders } : {}),
             },
             workSummary: null,
@@ -5157,11 +5260,41 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 : undefined;
             lastQueueOpportunityIdRef.current = id;
             markDrawerRowClickStart();
+            warmQueueRowOpportunityVm(id, opportunityWorkspaceContext ?? null, "queue_row_click");
             prefetchOpportunityDrawerOnRowIntent(id, opportunityWorkspaceContext ?? undefined, opportunityQueuePreviewSeed);
-            openDrawer(buildOpportunityDrawerOpenParams(id));
+            const openParams = buildOpportunityDrawerOpenParams(id);
+            const vmPeek = peekDrawerViewModelPreloadSync(
+                buildPrepareParamsFromOpenDrawer({
+                    ...openParams,
+                    source: "queue_row_open",
+                })
+            );
+            logDrawerVmRuntimeDiagnostic(
+                vmPeek ? "queue_row_open_cache_hit" : "queue_row_open_cache_miss",
+                {
+                    opportunity_id: id,
+                    work_unit_id: opportunityWorkspaceContext?.work_unit_id ?? null,
+                    department_id: opportunityWorkspaceContext?.department_id ?? null,
+                }
+            );
+            if (!vmPeek) {
+                setQueueRowOpenPendingOpportunityId(id);
+            }
+            openDrawer(openParams);
         },
         [buildOpportunityDrawerOpenParams, openDrawer, opportunityWorkspaceContext]
     );
+
+    useEffect(() => {
+        if (
+            drawer.type === "opportunities" &&
+            drawer.id &&
+            queueRowOpenPendingOpportunityId &&
+            String(drawer.id) === String(queueRowOpenPendingOpportunityId)
+        ) {
+            setQueueRowOpenPendingOpportunityId(null);
+        }
+    }, [drawer.id, drawer.type, queueRowOpenPendingOpportunityId]);
 
     const openWorkUnitQueuePersonDrawer = useCallback(
         (personId: string, opportunityId: string) => {
@@ -6087,24 +6220,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     useEffect(() => {
         if (!workUnitAboveFoldPageReady || !departmentId || !workUnitId) return;
-        const cancel = scheduleAdminV2BackgroundWork(
-            () => {
-                const raw = (queueItems?.items ?? []) as Array<{ id?: string; opportunity_id?: string }>;
-                const ids: string[] = [];
-                for (const row of raw) {
-                    const id = String(row.opportunity_id ?? row.id ?? "").trim();
-                    if (!id) continue;
-                    ids.push(id);
-                    if (ids.length >= 3) break;
-                }
-                prefetchVisibleWorkUnitDrawerPrimary(ids, {
-                    work_unit_id: workUnitId,
-                    department_id: departmentId,
-                });
-            },
-            { idleTimeoutMs: 2500, fallbackMs: 500 }
-        );
-        return cancel;
+        const raw = (queueItems?.items ?? []) as Array<{ id?: string; opportunity_id?: string }>;
+        const ids: string[] = [];
+        for (const row of raw) {
+            const id = String(row.opportunity_id ?? row.id ?? "").trim();
+            if (!id) continue;
+            ids.push(id);
+            if (ids.length >= 5) break;
+        }
+        if (ids.length === 0) return;
+        prefetchVisibleWorkUnitDrawerPrimary(ids, {
+            work_unit_id: workUnitId,
+            department_id: departmentId,
+        });
     }, [workUnitAboveFoldPageReady, departmentId, workUnitId, queueItems]);
 
     const visibleQueuePillKeys = useMemo(
@@ -6245,8 +6373,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
         () => ({
             onQueueTabChange: handleQueueTabChange,
             onAttentionBucketSelect: handleAttentionBucketSelect,
+            onQueuePillIntent: handleQueuePillIntent,
         }),
-        [handleQueueTabChange, handleAttentionBucketSelect]
+        [handleQueueTabChange, handleAttentionBucketSelect, handleQueuePillIntent]
     );
 
     return (
@@ -6297,6 +6426,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         aboveFoldHandlers={workUnitAboveFoldHandlers}
                         onAction={onAction}
                         opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
+                        queueRowOpenPendingOpportunityId={queueRowOpenPendingOpportunityId}
+                        queuePillPendingKey={queuePillPendingKey}
                         lifecyclePanel={workUnitLifecyclePanel}
                         recordFilterBar={workUnitRecordFilterBar}
                         otherPillSectionKey={otherPillSectionKey}

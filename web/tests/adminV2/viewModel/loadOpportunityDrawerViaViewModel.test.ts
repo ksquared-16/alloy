@@ -15,7 +15,7 @@ import { minimalSettledOpportunityDrawerViewModel } from "./fixtures/minimalSett
 function settledVm() {
     return minimalSettledOpportunityDrawerViewModel({
         generation: "gen-1",
-        actions: { header: [] },
+        actions: { header: [], header_menu: [] },
         header: {
             title: "Opp",
             subtitle: null,

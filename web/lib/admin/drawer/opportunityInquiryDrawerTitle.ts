@@ -16,17 +16,17 @@ export function stripHouseholdWording(label: string): string {
 }
 
 /**
- * Opportunity inquiry drawer title — `Enrollment — {family name}` without "household" suffix.
- * Prefers primary person label, then customer name; never uses `_identity.household.label` directly.
+ * Opportunity inquiry drawer title — `{configured label} — {household name}`.
+ * Uses household/customer identity only (never primary contact person name).
  */
 export function formatOpportunityInquiryDrawerTitle(
     data: Record<string, unknown>,
     opportunitySingular: string
 ): string {
     const ident = (data._identity as Record<string, unknown> | null) ?? null;
-    const primaryPerson =
-        ident?.primary_person && typeof ident.primary_person === "object"
-            ? trimOrNull((ident.primary_person as { label?: unknown }).label)
+    const householdLabel =
+        ident?.household && typeof ident.household === "object"
+            ? trimOrNull((ident.household as { label?: unknown }).label)
             : null;
     const customerName = trimOrNull((data as { _customer_name?: unknown })._customer_name);
     const inquiryTitle =
@@ -35,22 +35,14 @@ export function formatOpportunityInquiryDrawerTitle(
             : null;
     const recordName = trimOrNull(data.name) ?? trimOrNull(data.title);
 
-    const nameCandidate =
-        stripHouseholdWording(primaryPerson ?? "") ||
+    const householdName =
+        stripHouseholdWording(householdLabel ?? "") ||
         stripHouseholdWording(customerName ?? "") ||
         stripHouseholdWording(inquiryTitle ?? "") ||
-        stripHouseholdWording(recordName ?? "") ||
-        opportunitySingular;
+        stripHouseholdWording(recordName ?? "");
 
-    const raw = nameCandidate.startsWith("Enrollment")
-        ? nameCandidate
-        : `Enrollment — ${nameCandidate}`;
-
-    return (
-        raw
-            .replace(/\bInquiry\b/gi, "")
-            .replace(/\s{2,}/g, " ")
-            .replace(/^\s*[-:]\s*/g, "")
-            .trim() || raw
-    );
+    const entityLabel = trimOrNull(opportunitySingular) || "Lead";
+    if (!householdName) return entityLabel;
+    if (householdName.toLowerCase() === entityLabel.toLowerCase()) return entityLabel;
+    return `${entityLabel} — ${householdName}`;
 }

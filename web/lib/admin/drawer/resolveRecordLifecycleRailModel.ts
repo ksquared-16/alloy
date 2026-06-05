@@ -1,5 +1,5 @@
 import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
-import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
+import { extractDrawerLifecycleExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 
 export type RecordLifecycleRailStepState = "complete" | "current" | "future" | "unknown";
@@ -76,7 +76,7 @@ export function resolveRecordLifecycleRailModel(input: {
     const def = input.queueDefinition;
     if (!def || def.entity_type !== "opportunity") return null;
 
-    const lanes = extractPipelineExecutionLanes(def);
+    const lanes = extractDrawerLifecycleExecutionLanes(def);
     if (!lanes.length) return null;
 
     const queueByKey = new Map(def.queues.map((q) => [q.key, q as QueueDefinitionV1["queues"][number] & Record<string, unknown>]));

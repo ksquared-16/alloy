@@ -73,7 +73,12 @@ function minimalViewModel(): OpportunityDrawerViewModel {
         structureSettled: true,
         compose_version: "1.0.0",
         entity: { type: "opportunity", id: "opp-1" },
-        workspace: { department_id: "dept-1", work_unit_id: "wu-1" },
+        workspace: {
+            department_id: "dept-1",
+            work_unit_id: "wu-1",
+            queue_definition: null,
+            lifecycle_rail: null,
+        },
         header: {
             title: "Test",
             subtitle: null,
@@ -86,10 +91,12 @@ function minimalViewModel(): OpportunityDrawerViewModel {
                     { status_key: "tour_scheduled", label: "Tour scheduled", sort_order: 1 },
                 ],
             },
+            status_can_mutate: true,
             oper_trust_preview: null,
         },
         actions: {
             header: preload.headerActions.header,
+            header_menu: preload.headerActions.header,
         },
         layout: {
             mode: "workflow_v1",
@@ -147,6 +154,7 @@ function minimalViewModel(): OpportunityDrawerViewModel {
             record: { id: "opp-1" },
         },
         summaries: {
+            active_tour_bookings: [],
             tasks: { state: "loaded", open_tasks: [], open_count: 0 },
             reminders: {
                 state: "empty",
@@ -189,7 +197,7 @@ describe("diffOpportunityDrawerViewModelShadow", () => {
         const legacy = assembleLegacyDrawerOpenShadowSnapshot(preload);
         const vm = extractOpportunityDrawerViewModelShadowSnapshot({
             ...minimalViewModel(),
-            actions: { header: [] },
+            actions: { header: [], header_menu: [] },
         });
         const diff = diffOpportunityDrawerViewModelShadow(legacy, vm);
         expect(diff.structural_mismatches.some((m) => m.field === "header_action_keys")).toBe(true);
@@ -316,7 +324,7 @@ describe("scheduleOpportunityDrawerViewModelShadow", () => {
             ok: true,
             viewModel: {
                 ...minimalViewModel(),
-                actions: { header: [] },
+                actions: { header: [], header_menu: [] },
             },
         });
 

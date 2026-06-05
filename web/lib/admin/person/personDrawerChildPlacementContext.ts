@@ -1,4 +1,4 @@
-import { buildPersonEnrollmentActivityEntries } from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
+import { buildPersonEnrollmentActivityEntries } from "@/lib/admin/person/buildPersonEnrollmentActivityEntries";
 import { personDrawerCrmDisplayLabel } from "@/lib/admin/person/personDrawerChildIdentity";
 import {
     PERSON_DRAWER_CHILD_PLACEMENT_SOURCE,

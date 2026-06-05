@@ -13,7 +13,7 @@ import {
 import { isPersonDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel";
 import { loadPersonDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/person/loadPersonDrawerViaViewModel";
 import type { PersonDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/person/types";
-import { warmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
+import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 
 export type PersonDrawerVmPayloadState = {
@@ -51,11 +51,12 @@ export function usePersonDrawerVmPayload(): PersonDrawerVmPayloadState {
             setColdLoading(false);
             setError(null);
             completeDrawerRuntimeTransition();
-            warmRelatedDrawerTargetsAfterVmApply({
+            scheduleWarmRelatedDrawerTargetsAfterVmApply({
                 drawer,
                 entityType: "persons",
                 record: vm.record,
                 runtime: "person",
+                generation: vm.generation,
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?

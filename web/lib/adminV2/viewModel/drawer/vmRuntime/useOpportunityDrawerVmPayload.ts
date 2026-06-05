@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { shouldShowVmDrawerColdShell } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 import { isOpportunityDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
 import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
 import {
@@ -13,7 +14,8 @@ import {
     shouldSuppressFullDrawerLoading,
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
-import { warmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
+import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
+import { peekOpportunityDrawerDisplayVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerPayloadPeekSeed";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 
 export type OpportunityDrawerVmPayloadState = {
@@ -28,6 +30,9 @@ export type OpportunityDrawerVmPayloadState = {
 export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState {
     const {
         drawer,
+        drawerVmRender,
+        previousDrawer,
+        stack,
         consumeOpportunityDrawerPreload,
         opportunityPreloadGeneration,
         drawerRuntimePhase,
@@ -35,8 +40,12 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
         consumeDrawerSwapFallbackFetch,
     } = useAdminDrawer();
 
-    const [displayVm, setDisplayVm] = useState<OpportunityDrawerViewModel | null>(null);
-    const [activeVm, setActiveVm] = useState<OpportunityDrawerViewModel | null>(null);
+    const [displayVm, setDisplayVm] = useState<OpportunityDrawerViewModel | null>(() =>
+        drawer.type === "opportunities" ? peekOpportunityDrawerDisplayVm(drawer) : null
+    );
+    const [activeVm, setActiveVm] = useState<OpportunityDrawerViewModel | null>(() =>
+        drawer.type === "opportunities" ? peekOpportunityDrawerDisplayVm(drawer) : null
+    );
     const [coldLoading, setColdLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const fetchGenRef = useRef(0);
@@ -51,11 +60,14 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             setColdLoading(false);
             setError(null);
             completeDrawerRuntimeTransition();
-            warmRelatedDrawerTargetsAfterVmApply({
+            scheduleWarmRelatedDrawerTargetsAfterVmApply({
                 drawer,
                 entityType: "opportunities",
                 record: vm.above_fold.record,
                 runtime: "opportunity",
+                generation: vm.generation,
+                previousDrawer,
+                stack,
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?
@@ -73,7 +85,7 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
                 swap_commit_ms: payloadApplyMs,
             });
         },
-        [completeDrawerRuntimeTransition, drawer]
+        [completeDrawerRuntimeTransition, drawer, previousDrawer, stack]
     );
 
     useLayoutEffect(() => {
@@ -87,6 +99,9 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
     }, [drawer.id, drawerRuntimePhase.phase]);
 
     useLayoutEffect(() => {
+        if (drawerVmRender.type !== "opportunities" || !drawerVmRender.id || drawerVmRender.id === "new") {
+            return;
+        }
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         const preload = consumeOpportunityDrawerPreload(drawer.id);
         if (preload && isOpportunityDrawerViewModelPreload(preload)) {
@@ -106,6 +121,8 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             applyVm(sync.preload.viewModel, "sync_cache");
         }
     }, [
+        drawerVmRender.type,
+        drawerVmRender.id,
         drawer.type,
         drawer.id,
         drawer.openSource,
@@ -117,8 +134,10 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
     ]);
 
     useEffect(() => {
+        if (drawerVmRender.type !== "opportunities") return;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         if (activeVm && String(activeVm.entity.id) === String(drawer.id)) return;
+        if (displayVm && String(displayVm.entity.id) === String(drawer.id)) return;
 
         const needsFallback = consumeDrawerSwapFallbackFetch();
         const holdPrior = shouldHoldPriorDrawerContent(drawerRuntimePhase.phase);
@@ -168,6 +187,7 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             applyVm(result.preload.viewModel, needsFallback ? "swap_fetch" : "cold_fetch");
         });
     }, [
+        drawerVmRender.type,
         drawer.type,
         drawer.id,
         drawer.opportunityWorkspaceContext,
@@ -183,12 +203,23 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
         displayVm != null &&
         String(displayVm.entity.id) !== String(drawer.id);
 
+    const suppressFullDrawerLoading = shouldSuppressFullDrawerLoading(drawerRuntimePhase.phase);
+
     return {
         activeVm,
         displayVm: holdPriorPayload ? displayVm : activeVm ?? displayVm,
-        coldLoading: coldLoading && !displayVm && !shouldSuppressFullDrawerLoading(drawerRuntimePhase.phase),
+        coldLoading:
+            coldLoading &&
+            !displayVm &&
+            shouldShowVmDrawerColdShell({
+                coldLoading,
+                hasDisplayVm: Boolean(displayVm),
+                suppressFullDrawerLoading,
+                renderDrawer: drawerVmRender,
+                targetDrawer: drawer,
+            }),
         error,
-        suppressFullDrawerLoading: shouldSuppressFullDrawerLoading(drawerRuntimePhase.phase),
+        suppressFullDrawerLoading,
         holdPriorPayload,
     };
 }

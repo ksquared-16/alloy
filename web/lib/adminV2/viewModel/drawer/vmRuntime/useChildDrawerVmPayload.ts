@@ -13,8 +13,9 @@ import {
 import { isChildDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
 import { loadChildDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/child/loadChildDrawerViaViewModel";
 import type { ChildDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/child/types";
-import { warmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
+import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 export type ChildDrawerVmPayloadState = {
     activeVm: ChildDrawerViewModel | null;
@@ -28,6 +29,8 @@ export type ChildDrawerVmPayloadState = {
 export function useChildDrawerVmPayload(): ChildDrawerVmPayloadState {
     const {
         drawer,
+        previousDrawer,
+        stack,
         consumePersonDrawerPreload,
         drawerRuntimePhase,
         drawerTransitionId,
@@ -51,11 +54,14 @@ export function useChildDrawerVmPayload(): ChildDrawerVmPayloadState {
             setColdLoading(false);
             setError(null);
             completeDrawerRuntimeTransition();
-            warmRelatedDrawerTargetsAfterVmApply({
+            scheduleWarmRelatedDrawerTargetsAfterVmApply({
                 drawer,
                 entityType: "persons",
                 record: vm.record,
                 runtime: "child",
+                generation: vm.generation,
+                previousDrawer,
+                stack,
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?
@@ -73,7 +79,7 @@ export function useChildDrawerVmPayload(): ChildDrawerVmPayloadState {
                 swap_commit_ms: payloadApplyMs,
             });
         },
-        [completeDrawerRuntimeTransition, drawer]
+        [completeDrawerRuntimeTransition, drawer, previousDrawer, stack]
     );
 
     useLayoutEffect(() => {
@@ -147,7 +153,7 @@ export function useChildDrawerVmPayload(): ChildDrawerVmPayloadState {
             runtime: "child",
         });
 
-        void loadChildDrawerViaViewModel(drawer.id).then((result) => {
+        void loadChildDrawerViaViewModel(drawer.id, { init: workspaceDataFetchInit() }).then((result) => {
             if (gen !== fetchGenRef.current) return;
             const fetchMs =
                 typeof performance !== "undefined" ?

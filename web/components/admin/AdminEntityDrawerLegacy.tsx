@@ -470,11 +470,6 @@ import {
     shouldRenderHeldDrawerBody,
     shouldSuppressFullDrawerLoading,
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
-import {
-    drawerDebugSourceFromPathname,
-    drawerDebugSurfaceFromPresentation,
-    resolveLegacyDrawerStatusDebugComponent,
-} from "@/lib/adminV2/drawer/drawerRuntimeDebug";
 import { warmRelatedDrawerViewModels } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import {
     logDrawerVmDomRenderTrace,
@@ -3342,8 +3337,7 @@ export function AdminEntityDrawerLegacy() {
             const result =
                 childOpen ?
                     await loadChildDrawerViaViewModel(personId, {
-                        ...workspaceDataFetchInit(),
-                        signal: ac.signal,
+                        init: { ...workspaceDataFetchInit(), signal: ac.signal },
                     })
                 :   await loadPersonDrawerViaViewModel(personId, {
                         openSource: drawer.openSource,
@@ -13733,19 +13727,6 @@ export function AdminEntityDrawerLegacy() {
         locationRecordChromeBodyShell;
 
     const drawerPresentation = useAdminV2RecordModalPresentation ? "modal" : "sidebar";
-    const drawerRuntimeDebug = {
-        route: "legacy" as const,
-        surface: drawerDebugSurfaceFromPresentation(drawerPresentation),
-        source: drawerDebugSourceFromPathname(pathname),
-        path: pathname ?? "",
-        entityType: drawer.type,
-        entityId: String(drawer.id),
-        statusComponent: resolveLegacyDrawerStatusDebugComponent({
-            drawerType: drawer.type,
-            opportunityInquiryWorkflow:
-                drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer,
-        }),
-    };
 
     return (
         <Drawer
@@ -13781,7 +13762,7 @@ export function AdminEntityDrawerLegacy() {
                     })
                     : undefined
             }
-            runtimeDebug={drawerRuntimeDebug}
+            runtimeDebug={null}
         >
             <div
                 className="relative"

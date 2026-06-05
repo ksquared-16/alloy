@@ -68,6 +68,16 @@ describe("drawerShellPinnedModelSwap", () => {
         expect((hit?.preload as { primaryEntity?: { first_name?: string } }).primaryEntity?.first_name).toBe("Ada");
     });
 
+    it("preserves opportunity workspace context when opening a person drawer", () => {
+        const resolved = resolveModelSwapOpportunityContext(
+            { type: "persons", id: "person-1", source: "opportunity_primary_contact" },
+            {
+                opportunityWorkspaceContext: { work_unit_id: "wu-1", department_id: "dept-1" },
+            }
+        );
+        expect(resolved.opportunityWorkspaceContext?.work_unit_id).toBe("wu-1");
+    });
+
     it("preserves opportunity workspace context on swap-back when params omit it", () => {
         const resolved = resolveModelSwapOpportunityContext(
             { type: "opportunities", id: "opp-1" },
@@ -101,7 +111,7 @@ describe("AdminDrawerContext shell-pinned swap wiring", () => {
         expect(ctx).toContain("completeDrawerRuntimeTransition");
         expect(ctx).toContain("peekDrawerViewModelPreloadSync");
         expect(ctx).toContain("drawer_vm_model_swap_apply");
-        expect(ctx).toContain("attachDrawerSwapPreload");
+        expect(ctx).toContain("commitDrawerModelSwap");
     });
 
     it("VM drawer payload hooks suppress gate loading during swap transition phases", async () => {

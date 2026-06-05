@@ -501,25 +501,25 @@ describe("Parent/child known-empty readiness stability", () => {
         expect(drawer).toContain("opportunityQueuePreviewSeed?.title?.trim()");
     });
 
-    it("formatOpportunityInquiryDrawerTitle returns correct title when _identity is available", () => {
+    it("formatOpportunityInquiryDrawerTitle returns household title, not primary contact name", () => {
         const title = formatOpportunityInquiryDrawerTitle(
             {
                 _identity: {
                     primary_person: { id: "p1", label: "Priya Rivera" },
+                    household: { id: "c1", label: "Rivera Household" },
                 },
                 _customer_name: "Rivera Household",
             },
             "Lead"
         );
-        expect(title).toContain("Priya Rivera");
-        expect(title).not.toBe("Lead");
+        expect(title).toBe("Lead — Rivera");
+        expect(title).not.toContain("Priya");
         expect(title).not.toBe("Enrollment — Lead");
     });
 
     it("formatOpportunityInquiryDrawerTitle uses opportunitySingular when no identity data is present", () => {
         const title = formatOpportunityInquiryDrawerTitle({}, "Lead");
-        // Function always wraps in "Enrollment — {name}" — with no identity, uses singular as name
-        expect(title).toContain("Lead");
+        expect(title).toBe("Lead");
         // The opportunityPreRevealTitle guard returns null in this case (checked separately)
     });
 

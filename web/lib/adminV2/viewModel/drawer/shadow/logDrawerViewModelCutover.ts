@@ -25,9 +25,9 @@ export function drawerViewModelCutoverFlagSnapshot(entityType?: string): {
     drawer_vm_cutover_flag_value: string | null;
 } {
     const envByEntity: Record<string, string> = {
-        opportunity: "NEXT_PUBLIC_ADMINV2_DRAWER_VM",
-        person: "NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM",
-        child: "NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM",
+        opportunity: "NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH",
+        person: "NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH",
+        child: "NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM_KILL_SWITCH",
     };
     const key = entityType ? envByEntity[entityType] : "NEXT_PUBLIC_ADMINV2_DRAWER_VM";
     const raw = key ? process.env[key] : process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM;

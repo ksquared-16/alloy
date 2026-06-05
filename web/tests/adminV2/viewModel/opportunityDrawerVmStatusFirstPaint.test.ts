@@ -78,10 +78,13 @@ describe("Opportunity VM status — no flicker contract", () => {
         expect(runtime).not.toContain("status-options");
     });
 
-    it("status and actions share headerTitleRight cluster", () => {
+    it("status renders below title; actions stay in headerTitleRight", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(runtime).toContain("data-opportunity-drawer-header-status-below-title");
         expect(runtime).toContain("data-opportunity-drawer-header-title-right");
-        expect(runtime).toMatch(/VmProgressiveStatusDropdown[\s\S]*OpportunityDrawerHeaderControls/);
+        expect(runtime).not.toMatch(
+            /headerTitleRight[\s\S]*VmProgressiveStatusDropdown/
+        );
     });
 
     it("VmOpportunityStatusControl is not imported by VM opportunity runtime", () => {

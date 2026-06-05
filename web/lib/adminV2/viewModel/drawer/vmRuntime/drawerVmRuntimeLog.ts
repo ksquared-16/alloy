@@ -15,6 +15,10 @@ export type DrawerVmRuntimeLogEvent =
     | "legacy_fetch_blocked"
     | "related_prefetch_start"
     | "related_prefetch_ready"
+    | "related_prefetch_error"
+    | "background_enrich_start"
+    | "background_enrich_ready"
+    | "background_enrich_error"
     | "render"
     | "swap_hold"
     /** @deprecated use cold_fetch_start */

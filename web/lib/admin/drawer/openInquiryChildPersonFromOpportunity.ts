@@ -11,6 +11,15 @@ import {
     PERSON_DRAWER_CHILD_OPEN_SOURCE,
     type PersonDrawerOpenSeed,
 } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { buildPrepareParamsFromOpenDrawer } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
+import {
+    DRAWER_LINK_OPEN_FAILED_MESSAGE,
+    drawerLinkPendingKeyForChildFromOpportunity,
+    drawerLinkPendingKeyForInquiryChildRow,
+    type DrawerLinkPendingActions,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
+import { logDrawerHardTrace } from "@/lib/adminV2/drawer/drawerHardTrace";
 
 export type OpenDrawerFromOpportunityFn = (params: OpenDrawerParams) => void;
 
@@ -38,6 +47,8 @@ export async function openInquiryChildPersonFromOpportunity(args: {
     opportunityRecord: Record<string, unknown>;
     opportunityId: string;
     row: InquiryChildRowLike;
+    opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
+    linkPending?: DrawerLinkPendingActions;
 }): Promise<boolean> {
     const cmId = trimId(args.row.customer_member_id);
     if (!cmId || isSyntheticInquiryChildMemberId(cmId)) {
@@ -60,13 +71,65 @@ export async function openInquiryChildPersonFromOpportunity(args: {
 
     cachePersonDrawerChildOpenSeed(personId, openSeed);
 
-    return openViewPersonFromOpportunity({
+    const prepareParams = buildPrepareParamsFromOpenDrawer({
+        type: "persons",
+        id: personId,
+        source: PERSON_DRAWER_CHILD_OPEN_SOURCE,
+        personDrawerOpenSeed: openSeed,
+        opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+    });
+    const pendingKey =
+        drawerLinkPendingKeyForInquiryChildRow({
+            opportunityRecord: args.opportunityRecord,
+            row: args.row,
+            opportunityId: args.opportunityId,
+            opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+        }) ??
+        drawerLinkPendingKeyForChildFromOpportunity({
+            personId,
+            opportunityId: args.opportunityId,
+            openSeed,
+            opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+        });
+
+    logDrawerHardTrace("child_click", "lib/admin/drawer/openInquiryChildPersonFromOpportunity.ts", {
+        person_id: personId,
+        opportunity_id: args.opportunityId,
+        open_source: PERSON_DRAWER_CHILD_OPEN_SOURCE,
+        presentation_emphasis: openSeed.presentation_emphasis ?? null,
+        pending_key: pendingKey,
+        customer_member_id: cmId,
+    });
+
+    void prepareDrawerViewModelDeduped(prepareParams)
+        .then((preload) => {
+            logDrawerHardTrace("child_open_prepare", "lib/admin/drawer/openInquiryChildPersonFromOpportunity.ts", {
+                person_id: personId,
+                preload_ready: Boolean(preload),
+                cache_key: pendingKey,
+            });
+        })
+        .catch((err) => {
+            logDrawerHardTrace("child_open_prepare", "lib/admin/drawer/openInquiryChildPersonFromOpportunity.ts", {
+                person_id: personId,
+                preload_ready: false,
+                error: err instanceof Error ? err.message : String(err),
+            });
+        });
+
+    const opened = openViewPersonFromOpportunity({
         openDrawer: args.openDrawer,
         personId,
         opportunityId: args.opportunityId,
         source: PERSON_DRAWER_CHILD_OPEN_SOURCE,
         openSeed,
+        opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+        linkPending: args.linkPending,
     });
+    if (!opened) {
+        args.linkPending?.fail(pendingKey, DRAWER_LINK_OPEN_FAILED_MESSAGE);
+    }
+    return opened;
 }
 
 /** Fire-and-forget wrapper for click handlers — logs resolution failures in dev only. */

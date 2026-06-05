@@ -1,4 +1,4 @@
-import { buildPersonEnrollmentActivityEntries } from "@/components/admin/entity/PersonDrawerEnrollmentActivity";
+import { buildPersonEnrollmentActivityEntries } from "@/lib/admin/person/buildPersonEnrollmentActivityEntries";
 import { CHILD_LIFECYCLE_SECTION_SLOTS } from "@/lib/admin/person/personDrawerPresentationEmphasis";
 import { resolvePersonDrawerPresentationEmphasis } from "@/lib/admin/person/personDrawerPresentationEmphasis";
 import type {

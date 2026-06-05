@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminRouteGateFailureResponse, loadAdminRouteGate } from "@/lib/admin/adminRouteGate";
 import { composeChildDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/child/composeChildDrawerViewModel";
+import { parsePersonDrawerVmComposeDepth } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -26,6 +27,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             supabase,
             gate,
             personId: personId.trim(),
+            composeDepth: parsePersonDrawerVmComposeDepth(
+                new URL(_request.url).searchParams.get("compose_depth")
+            ),
         });
 
         if (!result.ok) {
@@ -48,6 +52,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         });
     } catch (e) {
         const msg = e instanceof Error ? e.message : "Child drawer view model compose failed";
+        console.error("[child_drawer_vm_compose_error]", {
+            person_id: personId.trim(),
+            message: msg,
+            stack: e instanceof Error ? e.stack : undefined,
+        });
         return NextResponse.json({ error: msg }, { status: 500 });
     }
 }

@@ -1,5 +1,30 @@
 /** Display helpers for shared household person rows. */
 
+/** PostgREST `persons` row shape for household child meta — only native columns. */
+export type PersonDrawerChildMetaRow = {
+    date_of_birth?: string | null;
+    metadata?: Record<string, unknown> | null;
+};
+
+/**
+ * Resolve child DOB for drawer household links.
+ * `public.persons` has `date_of_birth` only (no `dob` column). Optional metadata fallbacks never throw.
+ */
+export function resolvePersonDrawerChildDateOfBirth(
+    row: PersonDrawerChildMetaRow | null | undefined
+): string | null {
+    if (!row || typeof row !== "object") return null;
+    const native = String(row.date_of_birth ?? "").trim();
+    if (native) return native.slice(0, 10);
+    const md = row.metadata;
+    if (!md || typeof md !== "object" || Array.isArray(md)) return null;
+    for (const key of ["date_of_birth", "dob", "dateOfBirth"] as const) {
+        const v = String((md as Record<string, unknown>)[key] ?? "").trim();
+        if (v) return v.slice(0, 10);
+    }
+    return null;
+}
+
 export function personDrawerHouseholdInitials(displayName: string): string {
     const parts = displayName.trim().split(/\s+/).filter(Boolean);
     if (parts.length >= 2) {

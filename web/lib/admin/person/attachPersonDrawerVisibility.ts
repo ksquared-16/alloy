@@ -4,7 +4,10 @@ import { resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 import { buildPersonEnrollmentMirrorRowsForMemberIds } from "@/lib/admin/person/buildPersonEnrollmentMirrorRows";
 import { customerPersonRowIsHouseholdPrimaryContact } from "@/lib/admin/person/householdPrimaryContact";
 import { mergeHouseholdAdultLinks } from "@/lib/admin/person/mergeHouseholdAdultLinks";
-import { personDrawerHouseholdAgeLabel } from "@/lib/admin/person/personDrawerHouseholdDisplay";
+import {
+    personDrawerHouseholdAgeLabel,
+    resolvePersonDrawerChildDateOfBirth,
+} from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { filterPersonDrawerHouseholdVisibilityBySiteScope } from "@/lib/admin/person/personDrawerHouseholdSiteScope";
 import { viewingPersonHouseholdDisplayName } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
 import type {
@@ -39,8 +42,12 @@ function trimOrNull(v: unknown): string | null {
  * Read-only person drawer visibility payloads (enrollment mirror, opportunity mirror, siblings).
  * OCM remains operational authority — this only projects existing rows for display.
  */
+/** `first_paint` — household links/address only; defers enrollment mirror, siblings, deep OCM. */
+export type PersonDrawerVisibilityScope = "first_paint" | "full";
+
 export type AttachPersonDrawerVisibilityOptions = {
     siteScope?: AdminAccessScopeDimensions | null;
+    scope?: PersonDrawerVisibilityScope;
     /** Populated in-place with ms durations for household_links, household_address, enrollment_mirror, enrollment_opportunities, and sibling_links sections. */
     payloadTiming?: Map<string, number>;
 };
@@ -75,15 +82,22 @@ export async function attachPersonDrawerVisibility(
 
     const memberNameById = new Map(memberRows.map((m) => [m.id, trimOrNull(m.display_name)]));
 
+    const scope: PersonDrawerVisibilityScope = options?.scope ?? "full";
+
+    let enrollmentMirror: PersonEnrollmentMirrorRow[] = [];
+    let enrollmentOpportunities: PersonEnrollmentOpportunityRow[] = [];
+    let enrollmentPersonRoles: { role_type: string | null }[] = [];
+    let siblingLinks: PersonSiblingLinkRow[] = [];
+
     // ── Phase: enrollment mirror + enrollment opportunities + sibling links (parallel) ──────────
-    // These three sections are all independent. Run them concurrently to cut wall-clock time.
+    // Deferred on first_paint — hydrated via background full compose.
     const primaryOpps =
         (out._linked_opportunities as { id: string; name?: string | null; status_key?: string | null }[]) ?? [];
 
-    // _ts is reused after the parallel block for household links / address timing
     let _ts = 0;
-    const _tsParallelStart = _pt ? Date.now() : 0;
-    const [enrollmentMirror, enrollmentOpportunitiesResult, siblingLinksResult] = await Promise.all([
+    if (scope === "full") {
+        const _tsParallelStart = _pt ? Date.now() : 0;
+        const [enrollmentMirrorResult, enrollmentOpportunitiesResult, siblingLinksResult] = await Promise.all([
         // ── enrollment mirror ─────────────────────────────────────────────────────────────────
         (async (): Promise<PersonEnrollmentMirrorRow[]> => {
             if (memberIds.length === 0) return [];
@@ -221,12 +235,22 @@ export async function attachPersonDrawerVisibility(
             _pt?.set("sibling_links", Date.now() - ts);
             return links;
         })(),
-    ]);
+        ]);
 
-    const siblingLinks = siblingLinksResult;
-    const enrollmentOpportunities = enrollmentOpportunitiesResult.opps;
-    const enrollmentPersonRoles = enrollmentOpportunitiesResult.personRoles;
-    if (_pt) _pt.set("visibility_parallel_total", Date.now() - _tsParallelStart);
+        enrollmentMirror = enrollmentMirrorResult;
+        siblingLinks = siblingLinksResult;
+        enrollmentOpportunities = enrollmentOpportunitiesResult.opps;
+        enrollmentPersonRoles = enrollmentOpportunitiesResult.personRoles;
+        if (_pt) _pt.set("visibility_parallel_total", Date.now() - _tsParallelStart);
+    } else {
+        out._person_drawer_visibility_scope = "first_paint";
+        if (_pt) {
+            _pt.set("enrollment_mirror", 0);
+            _pt.set("enrollment_opportunities", 0);
+            _pt.set("sibling_links", 0);
+            _pt.set("visibility_parallel_total", 0);
+        }
+    }
 
     _ts = _pt ? Date.now() : 0;
     const householdAdultLinks: PersonHouseholdAdultLinkRow[] = [];
@@ -390,48 +414,67 @@ export async function attachPersonDrawerVisibility(
             ),
         ];
         if (childPersonIds.length > 0) {
-            const { data: childPersonRows } = await supabase
+            const { data: childPersonRows, error: childPersonMetaErr } = await supabase
                 .from("persons")
-                .select("id, date_of_birth, dob, status_key, photo_url, avatar_url")
+                .select("id, date_of_birth, status_key, metadata")
                 .eq("org_id", orgId)
                 .in("id", childPersonIds);
-            const personMetaById = new Map(
-                (childPersonRows ?? []).map(
-                    (row: {
-                        id: string;
-                        date_of_birth?: string | null;
-                        dob?: string | null;
-                        status_key?: string | null;
-                        photo_url?: string | null;
-                        avatar_url?: string | null;
-                    }) => [row.id, row]
-                )
-            );
-            const statusKeys = [
-                ...new Set(
-                    (childPersonRows ?? [])
-                        .map((row: { status_key?: string | null }) => trimOrNull(row.status_key))
-                        .filter((key): key is string => Boolean(key))
-                ),
-            ];
-            const statusLabelByKey = new Map<string, string>();
-            for (const statusKey of statusKeys) {
-                statusLabelByKey.set(
-                    statusKey,
-                    (await resolveStatusLabel(supabase, orgId, "persons", statusKey)) ?? statusKey
+            if (childPersonMetaErr) {
+                if (typeof console !== "undefined" && typeof console.warn === "function") {
+                    console.warn("[person_drawer_household_child_meta]", {
+                        org_id: orgId,
+                        person_id: personId,
+                        child_person_ids: childPersonIds,
+                        message: childPersonMetaErr.message ?? "query_failed",
+                    });
+                }
+            } else {
+                const personMetaById = new Map(
+                    (childPersonRows ?? []).map(
+                        (row: {
+                            id: string;
+                            date_of_birth?: string | null;
+                            status_key?: string | null;
+                            metadata?: Record<string, unknown> | null;
+                        }) => [row.id, row]
+                    )
                 );
-            }
-            for (const link of householdChildLinks) {
-                if (!link.person_id) continue;
-                const meta = personMetaById.get(link.person_id);
-                if (!meta) continue;
-                const dob = trimOrNull(meta.date_of_birth) ?? trimOrNull(meta.dob);
-                link.date_of_birth = dob;
-                link.age_label = personDrawerHouseholdAgeLabel(dob);
-                const statusKey = trimOrNull(meta.status_key);
-                link.status_key = statusKey;
-                link.status_label = statusKey ? statusLabelByKey.get(statusKey) ?? statusKey : null;
-                link.photo_url = trimOrNull(meta.photo_url) ?? trimOrNull(meta.avatar_url);
+                const statusKeys = [
+                    ...new Set(
+                        (childPersonRows ?? [])
+                            .map((row: { status_key?: string | null }) => trimOrNull(row.status_key))
+                            .filter((key): key is string => Boolean(key))
+                    ),
+                ];
+                let statusLabelByKey = new Map<string, string>();
+                try {
+                    const statusLabelPairs = await Promise.all(
+                        statusKeys.map(async (statusKey) => [
+                            statusKey,
+                            (await resolveStatusLabel(supabase, orgId, "persons", statusKey)) ?? statusKey,
+                        ] as const)
+                    );
+                    statusLabelByKey = new Map(statusLabelPairs);
+                } catch (statusErr) {
+                    if (typeof console !== "undefined" && typeof console.warn === "function") {
+                        console.warn("[person_drawer_household_child_status_labels]", {
+                            org_id: orgId,
+                            message:
+                                statusErr instanceof Error ? statusErr.message : String(statusErr),
+                        });
+                    }
+                }
+                for (const link of householdChildLinks) {
+                    if (!link.person_id) continue;
+                    const meta = personMetaById.get(link.person_id);
+                    if (!meta) continue;
+                    const dob = resolvePersonDrawerChildDateOfBirth(meta);
+                    link.date_of_birth = dob;
+                    link.age_label = personDrawerHouseholdAgeLabel(dob);
+                    const statusKey = trimOrNull(meta.status_key);
+                    link.status_key = statusKey;
+                    link.status_label = statusKey ? statusLabelByKey.get(statusKey) ?? statusKey : null;
+                }
             }
         }
     }
@@ -530,7 +573,7 @@ export async function attachPersonDrawerVisibility(
     const extraHouseholdMemberIds = [...householdMemberDisplay.keys()].filter(
         (id) => !memberIds.includes(id)
     );
-    if (extraHouseholdMemberIds.length > 0) {
+    if (scope === "full" && extraHouseholdMemberIds.length > 0) {
         const extraMirror = await buildPersonEnrollmentMirrorRowsForMemberIds(
             supabase,
             orgId,

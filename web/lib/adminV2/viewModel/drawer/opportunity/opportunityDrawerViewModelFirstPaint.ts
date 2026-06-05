@@ -95,9 +95,17 @@ export function statusDefsFromViewModelStatusControl(status: StatusControlVm): {
         }));
     }
     if (status.renderAs === "readonly_pill") {
+        if (status.options?.length) {
+            return status.options.map((o) => ({
+                status_key: o.status_key,
+                status_label: o.label,
+                sort_order: o.sort_order,
+                is_active: true,
+            }));
+        }
         return [
             {
-                status_key: status.label,
+                status_key: status.status_key ?? status.label,
                 status_label: status.label,
                 sort_order: 0,
                 is_active: true,

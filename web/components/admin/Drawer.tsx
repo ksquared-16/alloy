@@ -2,12 +2,15 @@
 
 import React, { type CSSProperties, isValidElement, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import DrawerRuntimeDebugBadge from "@/components/admin/drawer/DrawerRuntimeDebugBadge";
 import { shouldCloseAdminV2DrawerOnOutsideTarget } from "@/lib/adminV2/drawerOutsideClick";
 import {
     drawerRuntimeDebugEnabled,
+    resolveDrawerRouteSource,
+    shouldExposeDrawerRuntimeProof,
     type DrawerRuntimeDebugInfo,
+    type DrawerRuntimeProofAttrs,
 } from "@/lib/adminV2/drawer/drawerRuntimeDebug";
+import { logDrawerHardTrace } from "@/lib/adminV2/drawer/drawerHardTrace";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 /**
@@ -82,6 +85,8 @@ interface DrawerProps {
     recordModalContextStyle?: CSSProperties;
     /** Temporary runtime path proof (dev / NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG). */
     runtimeDebug?: DrawerRuntimeDebugInfo | null;
+    /** Dev proof attrs on drawer shell — `data-drawer-runtime` / `data-drawer-route-source`. */
+    drawerRuntimeProof?: DrawerRuntimeProofAttrs | null;
 }
 
 export default function Drawer({
@@ -107,6 +112,7 @@ export default function Drawer({
     recordModalTone,
     recordModalContextStyle,
     runtimeDebug,
+    drawerRuntimeProof,
 }: DrawerProps) {
     const [portalReady, setPortalReady] = useState(false);
     useEffect(() => {
@@ -274,7 +280,21 @@ export default function Drawer({
         </button>
     );
 
-    const showRuntimeDebug = drawerRuntimeDebugEnabled() && runtimeDebug != null;
+    const exposeDebugAttrs = drawerRuntimeDebugEnabled() && runtimeDebug != null;
+    if (exposeDebugAttrs) {
+        logDrawerHardTrace("debug_ui_render_blocked", "components/admin/Drawer.tsx", {
+            would_render: "DrawerRuntimeDebugBadge",
+            route: runtimeDebug.route,
+        });
+    }
+    const runtimeProof =
+        drawerRuntimeProof ??
+        (shouldExposeDrawerRuntimeProof() && runtimeDebug ?
+            {
+                runtime: runtimeDebug.route,
+                routeSource: resolveDrawerRouteSource(runtimeDebug.route),
+            }
+        :   null);
 
     const headerBlock = (
         <>
@@ -299,7 +319,6 @@ export default function Drawer({
                         : undefined
                 }
             >
-                {showRuntimeDebug ? <DrawerRuntimeDebugBadge {...runtimeDebug} /> : null}
                 <div
                     className={`${
                         usesThreeColumnHeader
@@ -468,13 +487,15 @@ export default function Drawer({
                     data-adminv2-drawer="true"
                     data-adminv2-record-modal="true"
                     data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
-                    data-drawer-debug-route={showRuntimeDebug ? runtimeDebug.route : undefined}
-                    data-drawer-debug-surface={showRuntimeDebug ? runtimeDebug.surface : undefined}
-                    data-drawer-debug-source={showRuntimeDebug ? runtimeDebug.source : undefined}
+                    data-drawer-runtime={runtimeProof?.runtime}
+                    data-drawer-route-source={runtimeProof?.routeSource}
+                    data-drawer-debug-route={exposeDebugAttrs ? runtimeDebug.route : undefined}
+                    data-drawer-debug-surface={exposeDebugAttrs ? runtimeDebug.surface : undefined}
+                    data-drawer-debug-source={exposeDebugAttrs ? runtimeDebug.source : undefined}
                     data-drawer-debug-status-component={
-                        showRuntimeDebug ? runtimeDebug.statusComponent : undefined
+                        exposeDebugAttrs ? runtimeDebug.statusComponent : undefined
                     }
-                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed left-1/2 flex w-[min(calc(100vw-1.5rem),80rem)] max-h-[min(920px,100%)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
+                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed left-1/2 flex w-[min(calc(100vw-1.5rem),80rem)] max-h-[min(860px,calc(100dvh-var(--adminv2-drawer-inset-top)-var(--adminv2-drawer-inset-bottom)-1rem))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
                     style={
                         cleaningRecordModalTone && recordModalContextStyle
                             ? { ...recordModalContextStyle, ...panelStyle, zIndex: zIndexPanel }
@@ -497,11 +518,13 @@ export default function Drawer({
                     aria-modal="true"
                     aria-labelledby="admin-drawer-title"
                     data-adminv2-drawer={isV2 ? "true" : undefined}
-                    data-drawer-debug-route={showRuntimeDebug ? runtimeDebug.route : undefined}
-                    data-drawer-debug-surface={showRuntimeDebug ? runtimeDebug.surface : undefined}
-                    data-drawer-debug-source={showRuntimeDebug ? runtimeDebug.source : undefined}
+                    data-drawer-runtime={runtimeProof?.runtime}
+                    data-drawer-route-source={runtimeProof?.routeSource}
+                    data-drawer-debug-route={exposeDebugAttrs ? runtimeDebug.route : undefined}
+                    data-drawer-debug-surface={exposeDebugAttrs ? runtimeDebug.surface : undefined}
+                    data-drawer-debug-source={exposeDebugAttrs ? runtimeDebug.source : undefined}
                     data-drawer-debug-status-component={
-                        showRuntimeDebug ? runtimeDebug.statusComponent : undefined
+                        exposeDebugAttrs ? runtimeDebug.statusComponent : undefined
                     }
                     className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed right-0 left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${isV2 ? "adminv2-drawer-shell-inset border-solid" : "inset-y-0"} ${panelClassName ?? ""} ${
                         isV2 ? "" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`

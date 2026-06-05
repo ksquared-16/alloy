@@ -15,6 +15,7 @@ import type {
     PersonDrawerViewModel,
     PersonDrawerViewModelResult,
 } from "@/lib/adminV2/viewModel/drawer/person/types";
+import type { PersonDrawerVmComposeDepth } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
 
 export const PERSON_DRAWER_VM_COMPOSE_VERSION = "1.0.0";
 
@@ -71,6 +72,7 @@ export type ComposePersonDrawerViewModelParams = {
     personId: string;
     openSource?: string | null;
     presentationEmphasis?: string | null;
+    composeDepth?: PersonDrawerVmComposeDepth;
 };
 
 export async function composePersonDrawerViewModel(
@@ -87,8 +89,16 @@ export async function composePersonDrawerViewModel(
     });
     const plan = buildPersonFirstViewportPlan(surface);
 
+    const composeDepth = params.composeDepth ?? "first_paint";
+
     const tRecord0 = Date.now();
-    const payload = await buildPersonDrawerEntityPayloadForViewModel(supabase, orgId, personId, gate.dim);
+    const payload = await buildPersonDrawerEntityPayloadForViewModel(
+        supabase,
+        orgId,
+        personId,
+        gate.dim,
+        composeDepth
+    );
     phases.record_full_ms = Date.now() - tRecord0;
 
     if (!payload.ok) {
@@ -172,7 +182,12 @@ export async function composePersonDrawerViewModel(
             variant_key: plan.variant_key,
             operating_sections: plan.operating_sections,
         },
-        background_refresh: { allowed: ["status_values"] },
+        background_refresh: {
+            allowed:
+                composeDepth === "first_paint" ?
+                    (["status_values", "record_visibility"] as const)
+                :   (["status_values"] as const),
+        },
         timing: {
             compose_ms: Date.now() - composeStart,
             phases_ms: phases,

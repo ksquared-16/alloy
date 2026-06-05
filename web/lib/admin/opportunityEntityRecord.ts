@@ -716,6 +716,79 @@ export async function attachOpportunityPersonsShell(
   ).length;
 }
 
+/** Household guardians for inquiry lead summary — merges with `_opportunity_persons` in FamilyContactsPanel. */
+export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
+  supabase: AdminSupabase,
+  orgId: string,
+  host: Record<string, unknown>,
+): Promise<void> {
+  const householdId =
+    typeof host.customer_id === "string" && host.customer_id.trim() ? host.customer_id.trim() : null;
+  if (!householdId) {
+    host._customer_persons = [];
+    return;
+  }
+
+  const pmap = new Map<string, WarmPersonRow>();
+  const rawOpp = (host._opportunity_persons as { person_id?: string }[]) ?? [];
+  if (Array.isArray(rawOpp)) {
+    for (const row of rawOpp) {
+      const pid = trimOrNull(row.person_id);
+      if (!pid) continue;
+      pmap.set(pid, {
+        id: pid,
+        first_name: null,
+        last_name: null,
+        full_name: null,
+        email: null,
+        phone: null,
+      });
+    }
+  }
+
+  const { data: cpRows } = await supabase
+    .from("customer_persons")
+    .select("person_id, role_type, is_primary")
+    .eq("org_id", orgId)
+    .eq("customer_id", householdId);
+
+  const cpPersonIds = [
+    ...new Set(
+      ((cpRows ?? []) as { person_id?: string | null }[])
+        .map((r) => trimOrNull(r.person_id))
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const missingCpPersonIds = cpPersonIds.filter((pid) => !pmap.has(pid));
+  if (missingCpPersonIds.length > 0) {
+    const { data: cpPeople } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, email, phone")
+      .eq("org_id", orgId)
+      .in("id", missingCpPersonIds);
+    for (const row of (cpPeople ?? []) as WarmPersonRow[]) {
+      pmap.set(row.id, row);
+    }
+  }
+
+  host._customer_persons = ((cpRows ?? []) as {
+    person_id: string;
+    role_type?: string | null;
+    is_primary?: boolean | null;
+  }[]).map((cp) => {
+    const p = (pmap.get(cp.person_id) ?? null) as WarmPersonRow | null;
+    return {
+      customer_id: householdId,
+      person_id: cp.person_id,
+      role_type: trimOrNull(cp.role_type),
+      is_primary: Boolean(cp.is_primary),
+      name: warmPersonDisplayName(p),
+      phone: trimOrNull(p?.phone),
+      email: trimOrNull(p?.email),
+    };
+  });
+}
+
 /** Header last-activity line — workflow_events + WU/dept rules (no separate client GET when embedded). */
 export async function attachOpportunityActivitySignalShell(
   supabase: AdminSupabase,

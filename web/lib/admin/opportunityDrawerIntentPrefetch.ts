@@ -3,10 +3,12 @@ import {
     fetchOpportunityDrawerOperationalBootstrap,
 } from "@/lib/admin/opportunityDrawerBootstrapClient";
 import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
+import { warmQueueRowOpportunityVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import { prefetchOpportunityDrawerFull } from "@/lib/admin/opportunityDrawerFullPrefetch";
 import { prefetchOpportunityDrawerPrimary } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
+import { warmVisibleQueueRowOpportunityVms } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
@@ -24,7 +26,13 @@ export function prefetchOpportunityDrawerOnRowIntent(
     workspaceContext?: OpportunityDrawerIntentContext | null,
     _queuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null
 ): void {
-    prefetchOpportunityDrawerPrimaryLaneOnRowIntent(opportunityId, workspaceContext, _queuePreviewSeed);
+    const id = opportunityId.trim();
+    if (!id || typeof window === "undefined") return;
+    if (opportunityDrawerHardCutoverEnabled()) {
+        warmQueueRowOpportunityVm(id, workspaceContext ?? null, "queue_row_intent");
+        return;
+    }
+    prefetchOpportunityDrawerPrimaryLaneOnRowIntent(id, workspaceContext, _queuePreviewSeed);
 }
 
 /** Bootstrap + drawer_primary — safe on hover/focus without full-hydrate cost. */
@@ -62,11 +70,15 @@ export function prefetchOpportunityDrawerPrimaryLaneOnRowIntent(
 /** Pointer-down intent — warm surface=full without blocking active queue lane work on hover. */
 export function prefetchOpportunityDrawerFullOnRowIntent(
     opportunityId: string,
-    init?: RequestInit
+    init?: RequestInit,
+    workspaceContext?: OpportunityDrawerIntentContext | null
 ): void {
     const id = opportunityId.trim();
     if (!id || typeof window === "undefined") return;
-    if (opportunityDrawerHardCutoverEnabled()) return;
+    if (opportunityDrawerHardCutoverEnabled()) {
+        warmQueueRowOpportunityVm(id, workspaceContext ?? null, "queue_row_pointer_down");
+        return;
+    }
     prefetchOpportunityDrawerFull(id, init ?? workspaceDataFetchInit());
 }
 
@@ -93,4 +105,5 @@ export function prefetchVisibleWorkUnitDrawerPrimary(
     for (const id of unique) {
         prefetchOpportunityDrawerOnRowIntent(id, workspaceContext ?? undefined);
     }
+    warmVisibleQueueRowOpportunityVms(unique, workspaceContext ?? undefined);
 }

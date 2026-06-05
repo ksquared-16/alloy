@@ -14,23 +14,21 @@ describe("drawerViewModelFeatureGates", () => {
         vi.unstubAllEnvs();
     });
 
-    it("defaults opportunity VM on; person and child off", () => {
-        expect(adminV2OpportunityDrawerVmCutoverEnabled()).toBe(true);
-        expect(adminV2PersonDrawerVmCutoverEnabled()).toBe(false);
-        expect(adminV2ChildDrawerVmCutoverEnabled()).toBe(false);
-    });
-
-    it("enables person and child from env; opportunity stays on unless kill switch", () => {
-        vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM", "1");
-        vi.stubEnv("NEXT_PUBLIC_ADMINV2_CHILD_DRAWER_VM", "true");
+    it("defaults opportunity, person, and child VM on", () => {
         expect(adminV2OpportunityDrawerVmCutoverEnabled()).toBe(true);
         expect(adminV2PersonDrawerVmCutoverEnabled()).toBe(true);
         expect(adminV2ChildDrawerVmCutoverEnabled()).toBe(true);
     });
 
+    it("kill switch disables person VM only", () => {
+        vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM_KILL_SWITCH", "1");
+        expect(adminV2PersonDrawerVmCutoverEnabled()).toBe(false);
+        expect(adminV2OpportunityDrawerVmCutoverEnabled()).toBe(true);
+        expect(adminV2ChildDrawerVmCutoverEnabled()).toBe(true);
+    });
+
     it("kill switch disables opportunity VM only", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_DRAWER_VM_KILL_SWITCH", "1");
-        vi.stubEnv("NEXT_PUBLIC_ADMINV2_PERSON_DRAWER_VM", "true");
         expect(adminV2OpportunityDrawerVmCutoverEnabled()).toBe(false);
         expect(adminV2PersonDrawerVmCutoverEnabled()).toBe(true);
     });

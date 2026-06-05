@@ -3,7 +3,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
 import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
-import { buildOpportunityDrawerVisiblePayload } from "@/lib/admin/opportunityEntityRecord";
+import {
+    attachOpportunityHouseholdCustomerPersonsForDrawer,
+    buildOpportunityDrawerVisiblePayload,
+} from "@/lib/admin/opportunityEntityRecord";
+import { resolveWorkUnitQueueDefinitionForDrawer } from "@/lib/admin/drawer/resolveWorkUnitQueueDefinitionForDrawer";
 import { sanitizeDrawerOperTrustPreviewFromHints } from "@/lib/admin/sanitizeDrawerOperTrustPreview";
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
 import { createReadinessMemoScope } from "@/lib/completion/readinessEvaluationMemo";
@@ -19,6 +23,9 @@ import {
     buildOpportunityDrawerHeaderTitle,
     buildOpportunityStatusControlVm,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
+import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
+import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
+import { resolveOpportunityDrawerStatusCanMutateFromGate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import {
     buildOpportunityDrawerAttentionSummary,
     buildOpportunityDrawerBosSummary,
@@ -84,9 +91,7 @@ function taskAssistEnabledOnServer(): boolean {
 function queueDefinitionFromWorkUnit(
     wu: { queue_definition?: unknown } | null | undefined
 ): QueueDefinitionV1 | null {
-    const qd = wu?.queue_definition;
-    if (!qd || typeof qd !== "object") return null;
-    return qd as QueueDefinitionV1;
+    return resolveWorkUnitQueueDefinitionForDrawer(wu?.queue_definition);
 }
 
 const EMPTY_REMINDERS: RemindersSummaryVm = {
@@ -178,6 +183,8 @@ export async function composeOpportunityDrawerViewModel(
         { hintDepartmentId: ctxDept }
     );
     phases.visible_entity_ms = Date.now() - tVisible0;
+
+    await attachOpportunityHouseholdCustomerPersonsForDrawer(supabase, orgId, record);
 
     const wuData = wuRes.data as {
         id?: string;
@@ -293,6 +300,11 @@ export async function composeOpportunityDrawerViewModel(
     }
 
     const headerActions = resolvedActions?.header ?? [];
+    const activeTourBookings = tourBookingsFromFirstPaintData(resolved.data);
+    const headerMenuActions = buildOpportunityDrawerHeaderMenuActions(
+        resolvedActions,
+        activeTourBookings.length > 0
+    );
     const tabs = shell.tabs;
     const default_tab: DrawerTabKey = tabs.includes("overview") ? "overview" : (tabs[0] ?? "overview");
 
@@ -314,6 +326,17 @@ export async function composeOpportunityDrawerViewModel(
 
     const attentionRaw = record._operational_attention as OpportunityAttentionResult | null | undefined;
 
+    const lifecycle_rail = buildOpportunityWorkspaceLifecycleRail({
+        departmentMetadata: deptMetadata,
+        statusKey,
+        statusDefs,
+        workUnitMetadata: wuData?.metadata ?? null,
+    });
+    const status_can_mutate = resolveOpportunityDrawerStatusCanMutateFromGate({
+        role: gate.role,
+        roleKeys: gate.roleKeys,
+    });
+
     const viewModel: OpportunityDrawerViewModel = {
         generation: computeOpportunityDrawerViewModelGeneration({
             orgId,
@@ -331,7 +354,9 @@ export async function composeOpportunityDrawerViewModel(
         workspace: {
             department_id: departmentId,
             work_unit_id: workUnitId || null,
-            queue_definition: queueDefinition,
+            /** Raw work-unit JSON (v1/v2) — client lifecycle parser re-coerces via resolveWorkUnitQueueDefinitionForDrawer. */
+            queue_definition: wuData?.queue_definition ?? null,
+            lifecycle_rail,
         },
         first_paint,
         header: {
@@ -342,10 +367,12 @@ export async function composeOpportunityDrawerViewModel(
                 statusDefs,
                 layoutMode: "workflow_v1",
             }),
+            status_can_mutate,
             oper_trust_preview,
         },
         actions: {
             header: headerActions,
+            header_menu: headerMenuActions,
         },
         layout,
         above_fold: {
@@ -354,6 +381,7 @@ export async function composeOpportunityDrawerViewModel(
         },
         summaries: {
             tasks: parseInquirySummaryTasksFromRecord(record),
+            active_tour_bookings: activeTourBookings,
             reminders,
             bos: buildOpportunityDrawerBosSummary(record),
             attention: buildOpportunityDrawerAttentionSummary(attentionRaw),

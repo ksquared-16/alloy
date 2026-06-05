@@ -16,6 +16,7 @@ import {
     type PersonContactCardValues,
 } from "@/lib/admin/drawer/primaryPersonCardEdit";
 import { openViewPersonFromOpportunity, prefetchViewPersonOnHover, prefetchViewPersonOnPointerDown } from "@/lib/admin/drawer/openViewPersonFromOpportunity";
+import { drawerLinkPendingKeyForPersonFromOpportunity } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
 import { personDrawerOpenSeedFromContactValues } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import {
@@ -84,7 +85,7 @@ export default function EditablePersonContactCard({
     const pid = (personId ?? "").trim();
     const oppId = (opportunityId ?? "").trim();
     const anyEditable = personContactCardHasEditableField(gates) && Boolean(pid);
-    const { openDrawer: contextOpenDrawer, drawer, stack } = useAdminDrawer();
+    const { openDrawer: contextOpenDrawer, drawer, stack, drawerLinkPending } = useAdminDrawer();
     const openDrawer = openDrawerProp ?? contextOpenDrawer;
     const [clickFired, setClickFired] = useState(false);
     const [openCalled, setOpenCalled] = useState(false);
@@ -117,9 +118,11 @@ export default function EditablePersonContactCard({
                 openDrawer,
                 personId: pid,
                 opportunityId: oppId,
+                opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
                 openSeed: personDrawerOpenSeedFromContactValues(pid, initialValues, {
                     presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
                 }),
+                linkPending: drawerLinkPending,
             });
 
             if (opened) {
@@ -135,8 +138,35 @@ export default function EditablePersonContactCard({
                 });
             }
         },
-        [drawer.id, drawer.type, openDrawer, oppId, pid, stack.length, initialValues]
+        [
+            drawer.id,
+            drawer.type,
+            drawer.opportunityWorkspaceContext,
+            drawerLinkPending,
+            openDrawer,
+            oppId,
+            pid,
+            stack.length,
+            initialValues,
+        ]
     );
+
+    const personOpenPendingKey = useMemo(() => {
+        if (!pid || !oppId) return null;
+        return drawerLinkPendingKeyForPersonFromOpportunity({
+            personId: pid,
+            opportunityId: oppId,
+            openSeed: personDrawerOpenSeedFromContactValues(pid, initialValues, {
+                presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+            }),
+            opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
+        });
+    }, [pid, oppId, initialValues, drawer.opportunityWorkspaceContext]);
+
+    const linkPendingActive =
+        personOpenPendingKey != null && drawerLinkPending.isPending(personOpenPendingKey);
+    const linkPendingError =
+        personOpenPendingKey != null ? drawerLinkPending.errorForKey(personOpenPendingKey) : null;
 
     const viewPersonDiagAttrs = pid
         ? viewPersonLiveDiagAttrs({
@@ -262,9 +292,26 @@ export default function EditablePersonContactCard({
             <ViewPersonDrawerIconButton
                 personId={pid}
                 displayName={displayName}
+                isPending={linkPendingActive}
                 extraAttrs={viewPersonDiagAttrs}
-                onMouseEnter={() => prefetchViewPersonOnHover(pid)}
-                onPointerDown={() => prefetchViewPersonOnPointerDown(pid)}
+                onMouseEnter={() =>
+                    prefetchViewPersonOnHover(pid, {
+                        openSource: "opportunity_primary_contact",
+                        openSeed: personDrawerOpenSeedFromContactValues(pid, initialValues, {
+                            presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+                        }),
+                        opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
+                    })
+                }
+                onPointerDown={() =>
+                    prefetchViewPersonOnPointerDown(pid, {
+                        openSource: "opportunity_primary_contact",
+                        openSeed: personDrawerOpenSeedFromContactValues(pid, initialValues, {
+                            presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+                        }),
+                        opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
+                    })
+                }
                 onClick={handleViewPersonClick}
             />
         ) : null;
@@ -299,7 +346,14 @@ export default function EditablePersonContactCard({
             "rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-emerald-600/10"
         :   "rounded-lg border border-alloy-stone/18 border-t-2 border-t-alloy-blue/20 bg-alloy-stone/[0.035] shadow-sm ring-1 ring-alloy-stone/[0.05]";
 
-    const outerClass = [surfaceClass, cardPad, className].filter(Boolean).join(" ");
+    const outerClass = [
+        surfaceClass,
+        cardPad,
+        linkPendingActive ? "ring-2 ring-alloy-blue/25 border-alloy-blue/35" : "",
+        className,
+    ]
+        .filter(Boolean)
+        .join(" ");
 
     return (
         <div
@@ -308,8 +362,19 @@ export default function EditablePersonContactCard({
             data-editable-person-contact-card={dataCardKind}
             data-editable={anyEditable ? "true" : "false"}
             data-person-id={pid || undefined}
+            data-drawer-link-pending={linkPendingActive ? "true" : undefined}
             onBlur={anyEditable && !useExplicitSave ? handleCardBlur : undefined}
         >
+            {linkPendingActive ?
+                <p className="mb-1 text-[10px] font-medium text-alloy-blue" aria-live="polite">
+                    Opening…
+                </p>
+            :   null}
+            {linkPendingError ?
+                <p className="mb-1 text-[10px] font-medium text-alloy-ember" role="alert">
+                    {linkPendingError}
+                </p>
+            :   null}
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="flex min-w-0 flex-1 items-start gap-1">
                     {viewPersonIcon}

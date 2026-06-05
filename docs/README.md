@@ -1,6 +1,6 @@
 # Alloy documentation (active)
 
-**Purpose:** Single compact source of truth for Cursor, GPT, and engineers. Prefer these files over chat memory or archived material under `docs/archive/`.
+**Purpose:** Single compact source of truth for Cursor, GPT, and engineers. Prefer these files over chat memory or archived material under `docs/archive/`.  
 
 For any merge that changes behavior, include `docs/execution/operating-doctrine.md` in context.
 
@@ -12,12 +12,12 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 
 ### Active topic files (18)
 
-| Folder | Files |
-|--------|-------|
-| `core/` | `system-overview.md`, `glossary.md` |
-| `system/` | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md`, **`adminv2-runtime-performance-doctrine.md`** |
-| `product/` | `crm-system.md`, `communications.md`, `documents-and-forms.md`, `billing-and-financials.md`, `bos-foundation.md`, `ai-system.md` (stub) |
-| `execution/` | `operating-doctrine.md`, `roadmap-and-gaps.md` |
+| Folder       | Files                                                                                                                                                                                                              |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `core/`      | `system-overview.md`, `glossary.md`                                                                                                                                                                                |
+| `system/`    | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md`, **`adminv2-runtime-performance-doctrine.md`** |
+| `product/`   | `crm-system.md`, `communications.md`, `documents-and-forms.md`, `billing-and-financials.md`, `bos-foundation.md`, `ai-system.md` (stub)                                                                            |
+| `execution/` | `operating-doctrine.md`, `roadmap-and-gaps.md`                                                                                                                                                                     |
 
 **Consolidated (May 2026):** Former `execution/admin-settings-config-parity.md`, `execution/crm-opportunity-needs-attention-count-semantics.md`, `execution/crm-go-live-gap-analysis.md`, and `strategy/*` were merged into `system/configuration-system.md`, `system/workspace-system.md`, and `product/crm-system.md` / `documents-and-forms.md` to stay within the 16-topic cap. Historical copies may exist under `docs/archive/` if exported.
 

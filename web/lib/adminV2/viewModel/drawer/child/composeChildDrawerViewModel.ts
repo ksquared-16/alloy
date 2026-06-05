@@ -13,6 +13,7 @@ import type {
     ChildDrawerViewModelResult,
 } from "@/lib/adminV2/viewModel/drawer/child/types";
 import { buildPersonDrawerEntityPayloadForViewModel } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerEntityPayloadForViewModel";
+import type { PersonDrawerVmComposeDepth } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
 
 export const CHILD_DRAWER_VM_COMPOSE_VERSION = "1.0.0";
 
@@ -66,6 +67,7 @@ export type ComposeChildDrawerViewModelParams = {
     supabase: SupabaseClient;
     gate: AdminRouteGateSuccess;
     personId: string;
+    composeDepth?: PersonDrawerVmComposeDepth;
 };
 
 export async function composeChildDrawerViewModel(
@@ -77,8 +79,16 @@ export async function composeChildDrawerViewModel(
     const orgId = gate.orgId;
     const plan = buildChildFirstViewportPlan();
 
+    const composeDepth = params.composeDepth ?? "first_paint";
+
     const tRecord0 = Date.now();
-    const payload = await buildPersonDrawerEntityPayloadForViewModel(supabase, orgId, personId, gate.dim);
+    const payload = await buildPersonDrawerEntityPayloadForViewModel(
+        supabase,
+        orgId,
+        personId,
+        gate.dim,
+        composeDepth
+    );
     phases.record_full_ms = Date.now() - tRecord0;
 
     if (!payload.ok) {
@@ -163,7 +173,12 @@ export async function composeChildDrawerViewModel(
             variant_key: plan.variant_key,
             operating_sections: ["child_summary", "household"],
         },
-        background_refresh: { allowed: ["status_values"] },
+        background_refresh: {
+            allowed:
+                composeDepth === "first_paint" ?
+                    (["status_values", "record_visibility"] as const)
+                :   (["status_values"] as const),
+        },
         timing: {
             compose_ms: Date.now() - composeStart,
             phases_ms: phases,

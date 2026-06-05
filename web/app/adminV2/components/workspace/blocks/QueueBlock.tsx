@@ -22,6 +22,7 @@ import {
   prefetchOpportunityDrawerFullOnRowIntent,
   type OpportunityDrawerIntentContext,
 } from "@/lib/admin/opportunityDrawerIntentPrefetch";
+import { warmQueueRowOpportunityVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
 import { queueRowGrainActionPayload, queueRowGrainContextFromPreviewItem } from "@/lib/queues/queueRowGrainContext";
 import { prepareDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
@@ -72,6 +73,8 @@ type Props = {
   surface?: "default" | "department" | "work_unit";
   /** Work-unit lane scope — must match drawer open so intent prefetch warms the same bootstrap URL. */
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
+  /** Row-level inline open pending (cold VM) — opportunity id. */
+  queueRowOpenPendingOpportunityId?: string | null;
 };
 
 /** Routing context for queue gestures — entity authority lives on GET / resolver after drill. */
@@ -445,6 +448,7 @@ function prefetchOpportunityQueueRowIntent(
 ): void {
   if (queue.queueEntityType !== "opportunity") return;
   prefetchOpportunityDrawerOnRowIntent(itemId, workspaceContext ?? null);
+  warmQueueRowOpportunityVm(itemId, workspaceContext ?? null, "queue_row_hover");
 }
 
 function fireViewAll(queue: QueueVm, onAction: WorkspaceActionHandler) {
@@ -1563,10 +1567,12 @@ function WorkUnitQueueLane({
   queue,
   onAction,
   opportunityDrawerWorkspaceContext,
+  queueRowOpenPendingOpportunityId = null,
 }: {
   queue: QueueVm;
   onAction: WorkspaceActionHandler;
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
+  queueRowOpenPendingOpportunityId?: string | null;
 }) {
   const listShellRef = useRef<HTMLDivElement>(null);
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
@@ -1781,6 +1787,9 @@ function WorkUnitQueueLane({
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
           const actionEntityId = queueItemOpportunityId(item);
+          const rowOpenPending =
+            queueRowOpenPendingOpportunityId != null &&
+            queueRowOpenPendingOpportunityId === actionEntityId;
           const headerCfg = sectionKey ? queue.workUnitGroupHeaders?.[sectionKey] : undefined;
           const count = sectionKey ? (groupCounts.get(sectionKey) ?? 0) : 0;
           const rowMode = placementWaitlistGroupRowMode(
@@ -1850,6 +1859,8 @@ function WorkUnitQueueLane({
                 }`}
                 data-ws-wu-urgency={tier}
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
+                data-queue-row-open-pending={rowOpenPending ? "true" : undefined}
+                aria-busy={rowOpenPending ? true : undefined}
                 role="button"
                 tabIndex={0}
                 onMouseEnter={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
@@ -1868,6 +1879,14 @@ function WorkUnitQueueLane({
                   }
                 }}
               >
+                {rowOpenPending ? (
+                  <span
+                    className="absolute right-2 top-2 z-[2] rounded bg-alloy-midnight/5 px-1.5 py-0.5 text-[11px] font-medium text-alloy-midnight/60"
+                    aria-live="polite"
+                  >
+                    Opening…
+                  </span>
+                ) : null}
                 {crm ? (
                   <div
                     className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split"
@@ -2095,6 +2114,7 @@ export default function QueueBlock({
   variant = "primary",
   surface = "default",
   opportunityDrawerWorkspaceContext = null,
+  queueRowOpenPendingOpportunityId = null,
 }: Props) {
   const isPrimary = variant === "primary";
 
@@ -2108,6 +2128,7 @@ export default function QueueBlock({
         queue={queue}
         onAction={onAction}
         opportunityDrawerWorkspaceContext={opportunityDrawerWorkspaceContext}
+        queueRowOpenPendingOpportunityId={queueRowOpenPendingOpportunityId}
       />
     );
   }

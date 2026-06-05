@@ -18,11 +18,13 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import type { FieldDefForLinkedEdit } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { inquiryChildrenRowCountFromEntity, mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
+import { logDrawerHardTrace } from "@/lib/adminV2/drawer/drawerHardTrace";
 import { openInquiryChildPersonFromOpportunitySync } from "@/lib/admin/drawer/openInquiryChildPersonFromOpportunity";
 import { opportunityStatusDisplayLabelSafe } from "@/lib/admin/drawer/opportunityRawValueGuard";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import { opportunityDrawerVmFirstPaintDependencySettled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 
@@ -40,7 +42,7 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
     onSelectTab,
 }: Props) {
     const { canMutate } = useAdminAuth();
-    const { openDrawer, drawer } = useAdminDrawer();
+    const { openDrawer, drawer, drawerLinkPending } = useAdminDrawer();
     const router = useRouter();
     const viewerTz = useAdminViewerTimezone();
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
@@ -55,7 +57,13 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
     const showTourFromPrimaryOnly = inqModel?.what_matters?.tour_from_metadata === true;
     const showTourFromBookings = inqModel?.what_matters?.show_tour_bookings_enrichment === true;
     const showWhatMattersTourSlot = showTourFromPrimaryOnly || showTourFromBookings;
-    const fullHydrateApplied = String(record._record_surface ?? "").trim() === "full";
+    const tourBookingsFirstPaintReady = opportunityDrawerVmFirstPaintDependencySettled(
+        displayVm,
+        "tour_bookings"
+    );
+    const vmActiveTourBookings = displayVm.summaries.active_tour_bookings ?? [];
+    /** VM first paint is authoritative — do not wait on legacy background full hydrate. */
+    const vmFamilyContactsReady = displayVm.structureSettled && displayVm.first_paint.settled;
 
     const stageLabel =
         opportunityStatusDisplayLabelSafe(
@@ -126,8 +134,8 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                                 router={router}
                                 openDrawer={openDrawer}
                                 recordHydrationPending={false}
-                                opportunityFullHydratePending={!fullHydrateApplied}
-                                opportunityFullHydrateApplied={fullHydrateApplied}
+                                opportunityFullHydratePending={!vmFamilyContactsReady}
+                                opportunityFullHydrateApplied={vmFamilyContactsReady}
                                 opportunityRelationshipsFullHydrateFailed={
                                     fcSlot?.relationships_full_hydrate_failed === true
                                 }
@@ -146,7 +154,7 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                                 onPrimaryPersonUpdated={() => refreshVm()}
                                 onLinkedPersonUpdated={() => refreshVm()}
                                 openForm={() => {}}
-                                actionsFetchEnabled={fullHydrateApplied}
+                                actionsFetchEnabled={vmFamilyContactsReady}
                                 refreshKey={relatedPeopleRefreshKey}
                                 onRegistryApplied={refreshVm}
                             />
@@ -167,7 +175,14 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                                     onRefresh={refreshVm}
                                     labelClassName={oppInqEyebrow}
                                     readonlyFieldClassName={oppInqReadonlyField}
-                                    fetchEnabled={showTourFromBookings && !showTourFromPrimaryOnly}
+                                    sharedActiveBookings={
+                                        tourBookingsFirstPaintReady ? vmActiveTourBookings : undefined
+                                    }
+                                    fetchEnabled={
+                                        showTourFromBookings &&
+                                        !showTourFromPrimaryOnly &&
+                                        !tourBookingsFirstPaintReady
+                                    }
                                 />
                             :   null}
                         </div>
@@ -219,7 +234,14 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                 </div>
             </div>
             {showInquiryChildren ?
-                <div data-opportunity-inquiry-children-section="true">
+                <div
+                    className={oppInqLeadSummaryShellClassName}
+                    data-opportunity-inquiry-children-section="true"
+                >
+                    <div className="flex flex-wrap items-end justify-between gap-1.5 border-b border-alloy-stone/12 pb-1">
+                        <span className={oppInqEyebrow}>{opportunitySingular} children</span>
+                    </div>
+                    <div className="mt-1 min-w-0 px-0.5 pb-0.5">
                     <OpportunityInquiryChildrenSection
                         rows={drawerChildRows}
                         opportunityId={drawerId}
@@ -239,15 +261,30 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                         shellReservedRowCount={expectedRowCount}
                         opportunityDisplayLocationKind={opportunityDisplayLocationKind ?? undefined}
                         onChildrenMutated={refreshVm}
+                        opportunityRecord={record}
+                        opportunityWorkspaceContext={drawer.opportunityWorkspaceContext ?? null}
+                        linkPending={drawerLinkPending}
                         onOpenChild={(row) => {
+                            logDrawerHardTrace(
+                                "child_click",
+                                "components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx",
+                                {
+                                    opportunity_id: drawerId,
+                                    person_id: row.person_id,
+                                    customer_member_id: row.customer_member_id,
+                                }
+                            );
                             void openInquiryChildPersonFromOpportunitySync({
                                 openDrawer,
                                 opportunityRecord: record,
                                 opportunityId: drawerId,
+                                opportunityWorkspaceContext: drawer.opportunityWorkspaceContext ?? null,
+                                linkPending: drawerLinkPending,
                                 row,
                             });
                         }}
                     />
+                    </div>
                 </div>
             :   null}
         </div>
