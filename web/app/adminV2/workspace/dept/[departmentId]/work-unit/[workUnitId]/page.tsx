@@ -660,6 +660,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [queueRowOpenPendingOpportunityId, setQueueRowOpenPendingOpportunityId] = useState<string | null>(
         null
     );
+    /** Pill key showing inline pending while a cold lane payload loads (rows/actions stay on prior lane). */
+    const [queuePillPendingKey, setQueuePillPendingKey] = useState<string | null>(null);
     const viewerTz = useAdminViewerTimezone();
 
     const [loading, setLoading] = useState(true);
@@ -1608,11 +1610,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             queueRowActionsHydratedRef.current = true;
             setQueueRowActionsReady(true);
+            logDrawerVmRuntimeDiagnostic("row_actions_ready", {
+                work_unit_id: workUnitId,
+                department_id: departmentId,
+                source: "hydrate",
+            });
             return true;
         } catch {
             setOpportunityQueueRowResolved([]);
             queueRowActionsHydratedRef.current = true;
             setQueueRowActionsReady(true);
+            logDrawerVmRuntimeDiagnostic("row_actions_ready", {
+                work_unit_id: workUnitId,
+                department_id: departmentId,
+                source: "hydrate_fallback",
+            });
             return true;
         }
     }, [departmentId, workUnitId]);
@@ -1816,6 +1828,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     queueItemsLastFetchSigRef.current = fetchSig;
                     setQueueItemsError(null);
                     setQueueItemsRoute(route);
+                    setQueuePillPendingKey(null);
                     setQueueItems(ent.payload);
                     setQueueItemsLoading(false);
                     logQueueRowClientCache({
@@ -1826,6 +1839,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         attention_bucket_key: abSnap || undefined,
                         age_ms: Date.now() - ent.fetchedAt,
                     });
+                    logDrawerVmRuntimeDiagnostic("row_actions_ready", {
+                        work_unit_id: workUnitId,
+                        department_id: departmentId,
+                        pill_key: queueKey,
+                        source: "lease_cache",
+                    });
+                    if (options?.userInitiated) {
+                        markWorkUnitVmPillSwitchCommitted({
+                            department_id: departmentId,
+                            work_unit_id: workUnitId,
+                            queue_key: apiQueueKey,
+                            pill_key: queueKeyForLane,
+                            source: "lane_cache",
+                        });
+                    }
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
                         alloyPerfSet("queue_tab_rows_ready", performance.now());
@@ -2025,6 +2053,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             scopeFingerprint: viewScopeFingerprint,
                         }
                     );
+                    setQueuePillPendingKey(null);
                     setQueueItems(payload);
                     lifecyclePillSwitchRetainRowsRef.current = false;
                     setLifecyclePillRetainRows(false);
@@ -2048,6 +2077,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             record_count: items.length,
                             total: typeof payload.total === "number" ? payload.total : null,
                             api_path: route,
+                        });
+                        logDrawerVmRuntimeDiagnostic("row_actions_ready", {
+                            work_unit_id: workUnitId,
+                            department_id: departmentId,
+                            pill_key: queueKeyForLane,
+                            source: "network",
                         });
                         markWorkUnitVmPillSwitchCommitted({
                             department_id: departmentId,
@@ -2154,9 +2189,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (ent) {
                     // Cache hit for the same sig: apply immediately without a network round-trip.
                     lease.delete(fetchSig);
+                    setQueuePillPendingKey(null);
                     setQueueItems(ent.payload);
                     setQueueItemsError(null);
                     setQueueItemsLoading(false);
+                    logDrawerVmRuntimeDiagnostic("row_actions_ready", {
+                        work_unit_id: workUnitId,
+                        department_id: departmentId,
+                        pill_key: queueKey,
+                        source: "row_cache",
+                    });
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
                         alloyPerfSet("queue_tab_rows_ready", performance.now());
@@ -2618,19 +2660,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         pill_key: nextKey,
                         department_id: departmentId,
                     });
-                    setQueueItems(cachedLane);
-                    setQueueItemsError(null);
-                    setQueueItemsLoading(false);
                     markWorkUnitVmPillSwitchCacheHit({
                         department_id: departmentId,
                         work_unit_id: workUnitId,
                         pill_key: nextKey,
-                    });
-                    markWorkUnitVmPillSwitchCommitted({
-                        department_id: departmentId,
-                        work_unit_id: workUnitId,
-                        pill_key: nextKey,
-                        source: "lane_cache",
                     });
                 } else {
                     logDrawerVmRuntimeDiagnostic("lane_payload_cache_miss", {
@@ -2639,6 +2672,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         from_pill: prevKey,
                         department_id: departmentId,
                     });
+                    setQueuePillPendingKey(nextKey);
                     lifecyclePillSwitchRetainRowsRef.current = true;
                     setLifecyclePillRetainRows(true);
                     markWorkUnitVmPillSwitchCacheMissHoldCurrent({
@@ -2681,6 +2715,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
         ]
     );
 
+    const handleQueuePillIntent = useCallback(
+        (pillKey: string, opts?: { unmappedActive?: boolean }) => {
+            if (!workUnitId) return;
+            if (pillKey === LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY) return;
+            const lifecycleNavWuId = parseLifecycleWorkUnitNavChipKey(pillKey);
+            if (lifecycleNavWuId) return;
+            const wu = workUnitRef.current;
+            const resolved = resolveWorkUnitFetchQueueKeyFromPill(
+                pillKey,
+                attentionBucketKeyRef.current,
+                wu ? { queue_definition: wu.queue_definition } : undefined
+            );
+            void fetchQueueItems(workUnitId, pillKey, null, {
+                prefetchOnly: true,
+                logicalUnmapped: opts?.unmappedActive ?? false,
+                ...(resolved.attentionBucketOverride !== undefined
+                    ? { attentionBucketOverride: resolved.attentionBucketOverride }
+                    : {}),
+            });
+        },
+        [fetchQueueItems, workUnitId]
+    );
+
     const handleAttentionBucketSelect = useCallback(
         (bucketKey: string | null) => {
             if (!workUnitId) return;
@@ -2693,6 +2750,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const pillKey = next
                 ? `${ATTENTION_BUCKET_PILL_PREFIX}${next}`
                 : "needs_attention";
+            setQueuePillPendingKey(pillKey);
+            lifecyclePillSwitchRetainRowsRef.current = true;
+            setLifecyclePillRetainRows(true);
             setSelectedQueueKeyTraced("handleAttentionBucketSelect", pillKey);
             setLaneUnmappedOnly(false);
             setAttentionBucketKey(next);
@@ -6290,8 +6350,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
         () => ({
             onQueueTabChange: handleQueueTabChange,
             onAttentionBucketSelect: handleAttentionBucketSelect,
+            onQueuePillIntent: handleQueuePillIntent,
         }),
-        [handleQueueTabChange, handleAttentionBucketSelect]
+        [handleQueueTabChange, handleAttentionBucketSelect, handleQueuePillIntent]
     );
 
     return (
@@ -6343,6 +6404,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         onAction={onAction}
                         opportunityDrawerWorkspaceContext={opportunityWorkspaceContext ?? null}
                         queueRowOpenPendingOpportunityId={queueRowOpenPendingOpportunityId}
+                        queuePillPendingKey={queuePillPendingKey}
                         lifecyclePanel={workUnitLifecyclePanel}
                         recordFilterBar={workUnitRecordFilterBar}
                         otherPillSectionKey={otherPillSectionKey}

@@ -10,6 +10,8 @@ import { WORK_UNIT_ATTENTION_BUCKET_PILL_PREFIX } from "@/lib/adminV2/routeShell
 export type WorkUnitAboveFoldHeaderHandlers = {
     onQueueTabChange: (queueKey: string, opts?: { unmappedActive?: boolean }) => void;
     onAttentionBucketSelect: (bucketKey: string | null) => void;
+    /** Hover/focus/mousedown warm for a lane pill before click. */
+    onQueuePillIntent?: (queueKey: string, opts?: { unmappedActive?: boolean }) => void;
 };
 
 const PILL_BASE =
@@ -73,6 +75,8 @@ type Props = {
     handlers: WorkUnitAboveFoldHeaderHandlers;
     otherPillSectionKey?: string | null;
     lifecyclePanel?: React.ReactNode;
+    /** Pill key showing inline pending while cold lane payload loads. */
+    queuePillPendingKey?: string | null;
 };
 
 /**
@@ -83,6 +87,7 @@ export function WorkUnitAboveFoldHeaderChips({
     handlers,
     otherPillSectionKey = null,
     lifecyclePanel = null,
+    queuePillPendingKey = null,
 }: Props) {
     if (!slot.visible) return null;
 
@@ -119,10 +124,28 @@ export function WorkUnitAboveFoldHeaderChips({
                             role="group"
                             aria-label={section.label}
                         >
-                            {section.chips.map((chip) => (
+                            {section.chips.map((chip) => {
+                                const pillPending =
+                                    queuePillPendingKey != null && queuePillPendingKey === chip.key;
+                                return (
                                 <button
                                     key={chip.key}
                                     type="button"
+                                    onMouseEnter={() => {
+                                        if (chip.attention_placeholder) return;
+                                        if (chip.synthetic_attention_bucket) return;
+                                        handlers.onQueuePillIntent?.(chip.key);
+                                    }}
+                                    onFocus={() => {
+                                        if (chip.attention_placeholder) return;
+                                        if (chip.synthetic_attention_bucket) return;
+                                        handlers.onQueuePillIntent?.(chip.key);
+                                    }}
+                                    onMouseDown={() => {
+                                        if (chip.attention_placeholder) return;
+                                        if (chip.synthetic_attention_bucket) return;
+                                        handlers.onQueuePillIntent?.(chip.key);
+                                    }}
                                     onClick={() => {
                                         if (chip.attention_placeholder) return;
                                         if (chip.synthetic_attention_bucket) {
@@ -133,11 +156,20 @@ export function WorkUnitAboveFoldHeaderChips({
                                     }}
                                     disabled={chip.attention_placeholder === true}
                                     aria-disabled={chip.attention_placeholder === true}
+                                    aria-busy={pillPending ? true : undefined}
+                                    data-queue-pill-open-pending={pillPending ? "true" : undefined}
                                     className={`${PILL_BASE} ${tierRing(chip.priority, chip.selected)}`}
                                     aria-pressed={chip.selected}
                                     title={chip.count_aria_label ?? chip.description}
                                 >
-                                    <span className="adminv2-ws-queue-pill-chip__label">{chip.label}</span>
+                                    <span className="adminv2-ws-queue-pill-chip__label">
+                                        {chip.label}
+                                        {pillPending ?
+                                            <span className="ml-1 text-[10px] font-medium text-alloy-midnight/50">
+                                                …
+                                            </span>
+                                        :   null}
+                                    </span>
                                     <CountBadge
                                         count={chip.count}
                                         selected={chip.selected}
@@ -145,7 +177,8 @@ export function WorkUnitAboveFoldHeaderChips({
                                         countAriaLabel={chip.count_aria_label}
                                     />
                                 </button>
-                            ))}
+                            );
+                            })}
                             {slot.show_other_pill &&
                             slot.other_pill &&
                             section.key === otherPillSectionKey ? (

@@ -7,6 +7,7 @@ import { buildInquiryChildPersonOpenSeed } from "@/lib/admin/drawer/inquiryChild
 import { resolveInquiryChildOpenPersonId } from "@/lib/admin/drawer/inquiryChildPersonOpen";
 import {
     drawerLinkPendingKeyForChildFromOpportunity,
+    drawerLinkPendingKeyForInquiryChildRow,
     type DrawerLinkPendingActions,
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
 
@@ -1029,20 +1030,16 @@ export default function OpportunityInquiryChildrenSection({
                                             opportunityRecord={opportunityRecord}
                                             opportunityWorkspaceContext={opportunityWorkspaceContext}
                                             linkPending={linkPending}
-                                            pendingKey={(() => {
-                                                if (!opportunityId) return null;
-                                                const resolved =
-                                                    resolveInquiryChildOpenPersonId(
+                                            pendingKey={
+                                                opportunityId ?
+                                                    drawerLinkPendingKeyForInquiryChildRow({
                                                         opportunityRecord,
-                                                        r
-                                                    ) ?? String(r.person_id ?? "").trim();
-                                                if (!resolved) return null;
-                                                return drawerLinkPendingKeyForChildFromOpportunity({
-                                                    personId: resolved,
-                                                    opportunityId,
-                                                    opportunityWorkspaceContext,
-                                                });
-                                            })()}
+                                                        row: r,
+                                                        opportunityId,
+                                                        opportunityWorkspaceContext,
+                                                    })
+                                                :   null
+                                            }
                                         />
                                         {rowCanEdit ? (
                                             <>

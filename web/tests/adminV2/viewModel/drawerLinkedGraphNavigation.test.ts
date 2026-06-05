@@ -6,8 +6,13 @@ import { DRAWER_BACK_TO_LEAD_OPEN_SOURCE } from "@/contexts/AdminDrawerContext";
 import { DRAWER_LINK_OPEN_FAILED_MESSAGE } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
 import {
     drawerLinkPendingKeyForChildFromOpportunity,
+    drawerLinkPendingKeyForInquiryChildRow,
     drawerLinkPendingKeyForPersonFromOpportunity,
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
+import {
+    buildRestoredOpportunityDrawerState,
+    restoredOpportunityDrawerOpenSource,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/restoreOpportunityDrawerSession";
 import { warmRelatedDrawerGraph } from "@/lib/adminV2/viewModel/drawer/vmRuntime/warmRelatedDrawerGraph";
 
 function read(rel: string): string {
@@ -32,6 +37,29 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(personKey).not.toBe(childKey);
     });
 
+    it("inquiry child pending key includes openSeed so open path clears pending", () => {
+        const ws = { work_unit_id: "wu-1", department_id: "dept-1" };
+        const rowKey = drawerLinkPendingKeyForInquiryChildRow({
+            opportunityRecord: { id: "opp-1" },
+            row: { id: "ic-1", person_id: "child-1" },
+            opportunityId: "opp-1",
+            opportunityWorkspaceContext: ws,
+        });
+        const childKey = drawerLinkPendingKeyForChildFromOpportunity({
+            personId: "child-1",
+            opportunityId: "opp-1",
+            opportunityWorkspaceContext: ws,
+            openSeed: {
+                opportunity_id: "opp-1",
+                inquiry_child_row_id: "ic-1",
+                person_id: "child-1",
+            },
+        });
+        expect(rowKey).toBeTruthy();
+        expect(childKey).toContain("child-1");
+        expect(rowKey).toBe(childKey);
+    });
+
     it("AdminDrawerContext exposes drawer link pending and back-to-lead restore", () => {
         const ctx = read("contexts/AdminDrawerContext.tsx");
         expect(ctx).toContain("drawerLinkPendingKey");
@@ -42,6 +70,39 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(ctx).toContain("goBackToLead");
         expect(ctx).toContain("beginDrawerLinkPendingIfCold");
         expect(ctx).toContain("back_to_lead_cache_hit");
+        expect(ctx).toContain("buildRestoredOpportunityDrawerState");
+        expect(ctx).toContain("scheduleOpportunityDrawerGraphRewarmAfterRestore");
+        expect(ctx).toContain("setDrawerLinkPendingKey(null)");
+    });
+
+    it("back-to-lead restore reactivates opportunity with workspace context and graph rewarm", () => {
+        const ws = { work_unit_id: "wu-1", department_id: "dept-1" };
+        const lead = {
+            type: "opportunities" as const,
+            id: "opp-1",
+            openSource: "queue_row",
+            opportunityWorkspaceContext: ws,
+            opportunityQueuePreviewSeed: null,
+            opportunityQueueNavigator: null,
+        };
+        expect(restoredOpportunityDrawerOpenSource(lead)).toBe("queue_row");
+        expect(
+            restoredOpportunityDrawerOpenSource({
+                ...lead,
+                openSource: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
+            })
+        ).toBeNull();
+        const restored = buildRestoredOpportunityDrawerState(lead, null);
+        expect(restored.type).toBe("opportunities");
+        expect(restored.id).toBe("opp-1");
+        expect(restored.openSource).toBe("queue_row");
+        expect(restored.opportunityWorkspaceContext).toEqual(ws);
+        expect(restored.personDrawerOpenSeed).toBeNull();
+
+        const restoreModule = read(
+            "lib/adminV2/viewModel/drawer/vmRuntime/restoreOpportunityDrawerSession.ts"
+        );
+        expect(restoreModule).toContain("scheduleWarmRelatedDrawerTargetsAfterVmApply");
     });
 
     it("useOpportunityDrawerVmPayload skips cold fetch when displayVm already matches drawer", () => {
@@ -58,16 +119,17 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(src).toContain("drawerLinkPending");
     });
 
-    it("OpportunityInquiryChildrenSection warms child VM on pointer intent", () => {
+    it("OpportunityInquiryChildrenSection uses inquiry child pending key with openSeed", () => {
         const src = read("components/admin/entity/OpportunityInquiryChildrenSection.tsx");
         expect(src).toContain("prepareDrawerViewModelDeduped");
         expect(src).toContain("PERSON_DRAWER_CHILD_OPEN_SOURCE");
+        expect(src).toContain("drawerLinkPendingKeyForInquiryChildRow");
         expect(src).toContain("isPending={isPending}");
     });
 
     it("VmPersonStatusControl marks unset status without fake label", () => {
         const src = read("components/admin/vmDrawer/VmPersonStatusControl.tsx");
-        expect(src).toContain('data-vm-status-unset');
+        expect(src).toContain("data-vm-status-unset");
         expect(src).not.toContain('"Active"');
     });
 
@@ -113,5 +175,36 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(src).toContain("queueRowOpenPendingOpportunityId");
         expect(src).toContain("Opening…");
         expect(src).toContain("warmQueueRowOpportunityVm");
+    });
+
+    it("WorkUnit lane pill cache miss keeps rows stable and shows pill pending", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("queuePillPendingKey");
+        expect(page).toContain("lane_payload_cache_hit");
+        expect(page).toContain("lane_payload_cache_miss");
+        expect(page).toContain("setQueuePillPendingKey(nextKey)");
+        expect(page).toContain("row_actions_ready");
+        expect(page).toContain("source: \"lane_cache\"");
+        expect(page).not.toMatch(
+            /lane_payload_cache_hit[\s\S]{0,400}setQueueItems\(cachedLane\)/
+        );
+    });
+
+    it("WorkUnit pill intent warms lane on hover/focus/mousedown", () => {
+        const chips = read("app/adminV2/components/workspace/WorkUnitAboveFoldHeaderChips.tsx");
+        expect(chips).toContain("onQueuePillIntent");
+        expect(chips).toContain("onMouseEnter");
+        expect(chips).toContain("data-queue-pill-open-pending");
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("handleQueuePillIntent");
+        expect(page).toContain("prefetchOnly: true");
+    });
+
+    it("drawer runtime debug proof is gated behind debug flag only", () => {
+        const debug = read("lib/adminV2/drawer/drawerRuntimeDebug.ts");
+        expect(debug).toContain("NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG");
+        const opp = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(opp).toContain("drawerRuntimeDebugEnabled()");
+        expect(opp).not.toContain("shouldExposeDrawerRuntimeProof(): boolean {\n    return true");
     });
 });

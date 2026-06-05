@@ -243,7 +243,10 @@ export default function PersonsDrawerVmRuntime() {
     }, [record, chrome, statusControl, backLink, handleBackLink]);
 
     const drawerRuntimeProof = useMemo(
-        () => buildDrawerRuntimeProof(isChildSurface ? "child-vm" : "person-vm"),
+        () =>
+            drawerRuntimeDebugEnabled() ?
+                buildDrawerRuntimeProof(isChildSurface ? "child-vm" : "person-vm")
+            :   null,
         [isChildSurface]
     );
 

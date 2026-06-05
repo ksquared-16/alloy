@@ -36,6 +36,7 @@ type Props = {
   primaryFooterSlot?: ReactNode;
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
   queueRowOpenPendingOpportunityId?: string | null;
+  queuePillPendingKey?: string | null;
 };
 
 /**
@@ -54,6 +55,7 @@ export default function WorkUnitWorkspace({
   primaryFooterSlot,
   opportunityDrawerWorkspaceContext = null,
   queueRowOpenPendingOpportunityId = null,
+  queuePillPendingKey = null,
 }: Props) {
   const wuShellStyle: CSSProperties = useMemo(
     () =>
@@ -145,6 +147,7 @@ export default function WorkUnitWorkspace({
                             handlers={aboveFoldHandlers}
                             otherPillSectionKey={otherPillSectionKey}
                             lifecyclePanel={lifecyclePanel}
+                            queuePillPendingKey={queuePillPendingKey}
                           />
                         </div>
                       ) : null}
@@ -157,6 +160,7 @@ export default function WorkUnitWorkspace({
                         handlers={aboveFoldHandlers}
                         otherPillSectionKey={otherPillSectionKey}
                         lifecyclePanel={lifecyclePanel}
+                        queuePillPendingKey={queuePillPendingKey}
                       />
                     </div>
                   ) : null}

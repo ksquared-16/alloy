@@ -40,6 +40,10 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerTargetCache";
 import { findBackToLeadOpportunityInStack } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveBackToLeadOpportunity";
 import {
+    buildRestoredOpportunityDrawerState,
+    scheduleOpportunityDrawerGraphRewarmAfterRestore,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/restoreOpportunityDrawerSession";
+import {
     buildPrepareParamsFromOpenDrawer,
     peekDrawerViewModelPreloadSync,
     resolveModelSwapOpportunityContext,
@@ -731,6 +735,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
 
             swapFallbackFetchPendingRef.current = false;
             if (lastAttachedSwapPreloadKeyRef.current === commitKey) {
+                setDrawerLinkPendingKey((current) => (current === pendingKey ? null : current));
                 return;
             }
             lastAttachedSwapPreloadKeyRef.current = commitKey;
@@ -1078,6 +1083,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             swapFallbackFetchInFlightKeyRef.current = null;
             pendingModelSwapParamsRef.current = null;
             setDrawerLinkPendingKey(null);
+            setDrawerLinkPendingError(null);
 
             const backParams = buildPrepareParamsFromOpenDrawer({
                 type: "opportunities",
@@ -1104,30 +1110,28 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 restoreVmPreloadFromStackItem(lead);
             }
 
-            setStack((s) => {
-                const leadIndex = s.findLastIndex(
+            const nextStack = (() => {
+                const leadIndex = stack.findLastIndex(
                     (item) => item.type === "opportunities" && String(item.id) === String(lead.id)
                 );
-                return leadIndex >= 0 ? s.slice(0, leadIndex) : s;
-            });
+                return leadIndex >= 0 ? stack.slice(0, leadIndex) : stack;
+            })();
+
+            const restoredDrawer = buildRestoredOpportunityDrawerState(
+                lead,
+                drawer.opportunityWorkspaceContext ?? null
+            );
+
+            setStack(nextStack);
             setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
-            setDrawer({
-                type: "opportunities",
-                id: lead.id,
-                defaultWorkflowEntityType: lead.defaultWorkflowEntityType,
-                defaultCustomerId: lead.defaultCustomerId,
-                defaultVendorId: lead.defaultVendorId,
-                defaultSchedulePrefill: lead.defaultSchedulePrefill,
-                defaultJobPrefill: lead.defaultJobPrefill,
-                jobRecordSurface: lead.jobRecordSurface,
-                operationalVisualContext: lead.operationalVisualContext,
-                defaultOpportunitySurface: lead.defaultOpportunitySurface,
-                opportunityWorkspaceContext:
-                    lead.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
-                opportunityQueuePreviewSeed: lead.opportunityQueuePreviewSeed ?? null,
-                opportunityQueueNavigator: lead.opportunityQueueNavigator ?? null,
-                openSource: lead.openSource ?? DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
-                personDrawerOpenSeed: null,
+            setDrawer(restoredDrawer);
+            scheduleOpportunityDrawerGraphRewarmAfterRestore({
+                drawer: restoredDrawer,
+                preload:
+                    syncBack?.entityType === "opportunities" ?
+                        syncBack.preload
+                    :   opportunityDrawerPreloadRef.current,
+                stack: nextStack,
             });
         };
 

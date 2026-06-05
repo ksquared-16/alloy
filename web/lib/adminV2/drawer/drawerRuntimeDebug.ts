@@ -37,8 +37,6 @@ export function drawerRuntimeDebugEnabled(): boolean {
 
 /** Dev/staging proof attrs on drawer shell (`data-drawer-runtime`, `data-drawer-route-source`). */
 export function shouldExposeDrawerRuntimeProof(): boolean {
-    if (typeof process === "undefined") return false;
-    if (process.env.NODE_ENV !== "production") return true;
     return drawerRuntimeDebugEnabled();
 }
 

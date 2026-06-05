@@ -27,6 +27,7 @@ export type DrawerVmRuntimeDiagnosticEvent =
     | "queue_row_open_cache_miss"
     | "lane_payload_cache_hit"
     | "lane_payload_cache_miss"
+    | "row_actions_ready"
     | "model_swap_prepare_error"
     | "drawer_vm_status_vm_seed"
     | "drawer_vm_status_non_vm_write_blocked"

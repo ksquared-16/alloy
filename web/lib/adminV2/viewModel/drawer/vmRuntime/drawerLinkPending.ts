@@ -1,4 +1,7 @@
 import type { OpenDrawerParams } from "@/contexts/AdminDrawerContext";
+import { buildInquiryChildPersonOpenSeed } from "@/lib/admin/drawer/inquiryChildPersonOpen";
+import type { InquiryChildRowLike } from "@/lib/admin/drawer/inquiryChildPersonOpen";
+import { resolveInquiryChildOpenPersonId } from "@/lib/admin/drawer/inquiryChildPersonOpen";
 import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { drawerViewModelCacheKeyForOpenParams } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 
@@ -46,6 +49,27 @@ export function drawerLinkPendingKeyForChildFromOpportunity(args: {
         source: PERSON_DRAWER_CHILD_OPEN_SOURCE,
         parent: { type: "opportunities", id: args.opportunityId.trim() },
         personDrawerOpenSeed: args.openSeed ?? null,
+        opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
+    });
+}
+
+export function drawerLinkPendingKeyForInquiryChildRow(args: {
+    opportunityRecord: Record<string, unknown>;
+    row: InquiryChildRowLike;
+    opportunityId: string;
+    opportunityWorkspaceContext?: OpenDrawerParams["opportunityWorkspaceContext"];
+}): string | null {
+    const opportunityId = args.opportunityId.trim();
+    if (!opportunityId) return null;
+    const personId =
+        resolveInquiryChildOpenPersonId(args.opportunityRecord, args.row) ??
+        String(args.row.person_id ?? "").trim();
+    if (!personId) return null;
+    const openSeed = buildInquiryChildPersonOpenSeed(args.opportunityRecord, args.row, personId);
+    return drawerLinkPendingKeyForChildFromOpportunity({
+        personId,
+        opportunityId,
+        openSeed,
         opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
     });
 }

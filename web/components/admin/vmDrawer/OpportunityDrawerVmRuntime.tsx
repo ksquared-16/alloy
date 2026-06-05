@@ -293,7 +293,7 @@ export default function OpportunityDrawerVmRuntime() {
     const onTabSelect = useCallback((tab: DrawerTabKey) => setDrawerTab(tab), []);
 
     const drawerRuntimeProof = useMemo(
-        () => buildDrawerRuntimeProof("opportunity-vm"),
+        () => (drawerRuntimeDebugEnabled() ? buildDrawerRuntimeProof("opportunity-vm") : null),
         []
     );
 
