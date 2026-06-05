@@ -180,6 +180,12 @@ export interface LayoutItem {
      * Validation rejects any non-"field" child and any deeper nesting.
      */
     items?: LayoutItem[];
+    /**
+     * For kind "field_group" as a CONTROLLED SUBGRID (column-in-column): one
+     * level of rows → columns → field items. No field_group is allowed inside
+     * (validator enforces), so nesting depth stays bounded.
+     */
+    rows?: LayoutRow[];
     /** For kind "related_list": the related entity + optional filter key. */
     related?: { entityType: string; filterKey?: string };
     /**

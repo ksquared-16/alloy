@@ -12,7 +12,7 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { MoreHorizontal, X } from "lucide-react";
+import { MoreHorizontal, Sparkles, X } from "lucide-react";
 import ProofLifecycleRail from "./ProofLifecycleRail";
 
 const BORDER = "rgba(39,63,82,0.18)";
@@ -86,8 +86,11 @@ export default function ProofRecordModal({
                                         <option value="cur">{statusLabel || "—"}</option>
                                     </select>
                                 </label>
-                                <button type="button" disabled title="Actions (simulated)" className="rounded-md border border-[rgba(0,0,0,0.14)] bg-white p-1.5 text-[rgba(39,63,82,0.6)] disabled:opacity-70">
-                                    <MoreHorizontal className="h-4 w-4" aria-hidden />
+                                <button type="button" disabled title="Work with BOS (simulated)" className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,69,140,0.35)] bg-[#f5f8ff] px-2 py-1 text-xs font-medium text-[#00458C] disabled:opacity-90">
+                                    <Sparkles className="h-3.5 w-3.5" aria-hidden /> Work with BOS
+                                </button>
+                                <button type="button" disabled title="Actions (simulated)" className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.14)] bg-white px-2 py-1 text-xs font-medium text-[rgba(39,63,82,0.75)] disabled:opacity-90">
+                                    <MoreHorizontal className="h-3.5 w-3.5" aria-hidden /> Actions
                                 </button>
                                 <button type="button" onClick={onClose} aria-label="Close" className="rounded-md p-1.5 text-[rgba(39,63,82,0.7)] hover:bg-[rgba(0,0,0,0.05)]">
                                     <X className="h-4 w-4" aria-hidden />

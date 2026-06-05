@@ -271,7 +271,7 @@ export default function LayoutProofClient() {
                 </div>
                 <p className="mt-2 text-[11px]" style={{ color: MUTED }}>
                     {proof?.lifecycle.note}{" "}Configure at{" "}
-                    <a className="text-[#00458C] underline" href="/adminV2/layouts">/adminV2/layouts</a>{" "}— publish a Lead drawer/queue and reload; the source badge flips to <strong>org layout</strong> and edits appear here.
+                    <a className="text-[#00458C] underline" href="/adminV2/settings/layouts">/adminV2/settings/layouts</a>{" "}— publish a Lead drawer/queue and reload; the source badge flips to <strong>org layout</strong> and edits appear here.
                 </p>
             </details>
 

@@ -18,7 +18,15 @@ const wrapItem = (item: Record<string, unknown>): LayoutDoc =>
     }) as unknown as LayoutDoc;
 
 function allItems(doc: LayoutDoc) {
-    return doc.sections.flatMap((s) => s.rows).flatMap((r) => r.columns).flatMap((c) => c.items);
+    const out: import("@/lib/layout/layoutV2").LayoutItem[] = [];
+    const walkItem = (it: import("@/lib/layout/layoutV2").LayoutItem) => {
+        out.push(it);
+        // recurse into field_group subgrid rows + flat items
+        (it.rows ?? []).forEach((r) => r.columns.forEach((c) => c.items.forEach(walkItem)));
+        (it.items ?? []).forEach(walkItem);
+    };
+    doc.sections.forEach((s) => s.rows.forEach((r) => r.columns.forEach((c) => c.items.forEach(walkItem))));
+    return out;
 }
 
 describe("adornment schema", () => {

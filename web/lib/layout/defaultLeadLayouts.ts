@@ -96,15 +96,29 @@ function section(
 export function buildLeadDrawerDefaultDoc(): LayoutDoc {
     // 1. Lead Summary — 2 columns: contacts/tour | tasks/reminders/actions
     const sumBase = id("opportunities", "lead", "lead_summary");
+    // Contact block: a controlled subgrid (column-in-column) — row1 full name,
+    // row2 email | phone (2 columns) — inside the left column.
+    const cbBase = id(sumBase, "r0c0", "contact");
+    const contactBlock: LayoutItem = {
+        id: id(cbBase, "group"),
+        kind: "field_group",
+        refKey: "contact_block",
+        label: "Contact",
+        rows: [
+            row(id(cbBase, "r0"), [col(id(cbBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [fieldItem(id(cbBase, "r0c0"), "person.primary_contact_name", "Full name", "text", undefined, PERSON_LINK)])]),
+            row(id(cbBase, "r1"), [
+                col(id(cbBase, "r1"), 0, HALF, [fieldItem(id(cbBase, "r1c0"), "person.primary_email", "Email", "text")]),
+                col(id(cbBase, "r1"), 1, HALF, [fieldItem(id(cbBase, "r1c1"), "person.primary_phone", "Phone", "phone")]),
+            ]),
+        ],
+    };
     const leadSummary = section(
         "lead_summary",
         "Lead Summary",
         [
             row(id(sumBase, "r0"), [
                 col(id(sumBase, "r0"), 0, HALF, [
-                    fieldItem(id(sumBase, "r0c0"), "person.primary_contact_name", "Primary contact", "text", undefined, PERSON_LINK),
-                    fieldItem(id(sumBase, "r0c0"), "person.primary_phone", "Phone", "phone"),
-                    fieldItem(id(sumBase, "r0c0"), "person.primary_email", "Email", "text"),
+                    contactBlock,
                     fieldItem(
                         id(sumBase, "r0c0"),
                         "person.secondary_contact_name",

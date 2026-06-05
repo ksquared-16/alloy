@@ -66,7 +66,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         items: [
             { href: "/admin/system/option-sets", label: "Option sets" },
             { href: "/admin/system/field-sections", label: "Field sections" },
-            { href: "/adminV2/layouts", label: "Layouts (V2)" },
+            { href: "/adminV2/settings/layouts", label: "Layouts (V2)" },
             {
                 label: "Fields",
                 subItems: [

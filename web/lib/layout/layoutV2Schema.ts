@@ -186,9 +186,12 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
             item.items = rawItems
                 .map((c, ci) => parseItem(c, `${path}.items[${ci}]`, /* allowGroup */ false))
                 .filter((c): c is LayoutItem => c !== null && c.kind === "field");
-            if (rawItems.length !== item.items.length) {
-                // Some children were rejected (non-field or nested group).
-                // parseItem already pushed precise errors.
+            // Controlled subgrid (column-in-column): rows → columns → field items
+            // (no nested field_group allowed, enforced via allowGroupItems=false).
+            if (Array.isArray(raw.rows)) {
+                item.rows = raw.rows
+                    .map((r, ri) => parseRow(r, `${path}.rows[${ri}]`, /* allowGroupItems */ false))
+                    .filter((r): r is LayoutRow => r !== null);
             }
         }
 
@@ -246,7 +249,7 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
         return item;
     };
 
-    const parseColumn = (raw: unknown, path: string): LayoutColumn | null => {
+    const parseColumn = (raw: unknown, path: string, allowGroupItems = true): LayoutColumn | null => {
         if (!isObject(raw)) {
             errors.push(`${path}: column must be an object`);
             return null;
@@ -259,12 +262,12 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
         }
         const rawItems = Array.isArray(raw.items) ? raw.items : [];
         const items = rawItems
-            .map((it, ii) => parseItem(it, `${path}.items[${ii}]`, /* allowGroup */ true))
+            .map((it, ii) => parseItem(it, `${path}.items[${ii}]`, allowGroupItems))
             .filter((it): it is LayoutItem => it !== null);
         return { id, width, items };
     };
 
-    const parseRow = (raw: unknown, path: string): LayoutRow | null => {
+    const parseRow = (raw: unknown, path: string, allowGroupItems = true): LayoutRow | null => {
         if (!isObject(raw)) {
             errors.push(`${path}: row must be an object`);
             return null;
@@ -272,7 +275,7 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
         const id = requireId(raw.id, path);
         const rawCols = Array.isArray(raw.columns) ? raw.columns : [];
         const columns = rawCols
-            .map((c, ci) => parseColumn(c, `${path}.columns[${ci}]`))
+            .map((c, ci) => parseColumn(c, `${path}.columns[${ci}]`, allowGroupItems))
             .filter((c): c is LayoutColumn => c !== null);
         const widthSum = columns.reduce((s, c) => s + c.width, 0);
         if (widthSum > LAYOUT_GRID_COLUMNS) {

@@ -108,16 +108,25 @@ function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
 }
 
 function GroupCell({ record, item }: { record: Rec; item: LayoutItem }) {
+    const hasSubgrid = Array.isArray(item.rows) && item.rows.length > 0;
     return (
         <div className="rounded-md border border-[#e6e8ec] bg-[#fbfcfe] p-2.5">
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                 {item.label || item.refKey}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-                {(item.items ?? []).map((child) => (
-                    <ValueCell key={child.id} record={record} item={child} />
-                ))}
-            </div>
+            {hasSubgrid ? (
+                <div className="flex flex-col gap-2">
+                    {item.rows!.map((row) => (
+                        <RowView key={row.id} record={record} row={row} />
+                    ))}
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-2">
+                    {(item.items ?? []).map((child) => (
+                        <ValueCell key={child.id} record={record} item={child} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -310,9 +319,11 @@ function RowView({ record, row }: { record: Rec; row: LayoutRow }) {
 }
 
 function SectionView({ record, section }: { record: Rec; section: LayoutSection }) {
+    // Branded to match the staging drawer "premium" section: bend-pine left
+    // accent, subtle ring, tinted header.
     return (
-        <div className="rounded-lg border border-[#e6e8ec] bg-white">
-            <div className="border-b border-[#e6e8ec] px-3 py-2 text-sm font-semibold" style={{ color: TEXT }}>
+        <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.08)] border-l-[3px] border-l-[#00A283] bg-white shadow-sm ring-1 ring-[rgba(0,0,0,0.06)]">
+            <div className="border-b border-[rgba(0,0,0,0.08)] bg-[rgba(0,0,0,0.025)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "rgba(39,63,82,0.8)" }}>
                 {section.title}
             </div>
             <div className="flex flex-col gap-3 p-3">
