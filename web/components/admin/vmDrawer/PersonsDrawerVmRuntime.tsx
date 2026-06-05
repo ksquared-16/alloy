@@ -187,7 +187,7 @@ export default function PersonsDrawerVmRuntime() {
     }, [backLink?.mode, goBack, goBackToLead]);
 
     const drawerTitle = useMemo(() => {
-        if (!committedVisible) return committedTitleRef.current;
+        if (!committedVisible || !record) return committedTitleRef.current;
         const next =
             chrome === "child" ?
                 <PersonDrawerChildTitleRow record={record} />
@@ -199,7 +199,7 @@ export default function PersonsDrawerVmRuntime() {
     }, [record, chrome, displayVm?.header.title, defaultTitle, committedVisible]);
 
     const headerSubtitle = useMemo(() => {
-        if (!committedVisible) return undefined;
+        if (!committedVisible || !record) return undefined;
         if (chrome === "child" || chrome === "parent") {
             const recordNum = formatPersonDrawerRecordNumber(record);
             return (
@@ -304,7 +304,7 @@ export default function PersonsDrawerVmRuntime() {
                             Loading {isChildSurface ? "child" : "person"}…
                         </p>
                     </div>
-                :   committedVisible && displayVm ?
+                :   committedVisible && displayVm && record && layoutVariant ?
                     <PersonsDrawerVmBody
                         displayVm={displayVm}
                         chrome={chrome}
