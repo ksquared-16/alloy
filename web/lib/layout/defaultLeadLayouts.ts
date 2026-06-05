@@ -126,22 +126,31 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
         { defaultExpanded: true },
     );
 
-    // 2. Children Inquiry — children list widget + child field rows
+    // 2. Lead Children — related-list TABLE (rows = children, columns = fields)
     const ciBase = id("opportunities", "lead", "children_inquiry");
+    const childrenTable: LayoutItem = {
+        id: id(ciBase, "children_table"),
+        kind: "related_list",
+        refKey: "children",
+        label: "Lead children",
+        source: "children",
+        displayMode: "table",
+        related: { entityType: "child" },
+        columns: [
+            { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
+            { label: "DOB / Age", refKey: "child.dob_age", width: "medium" },
+            { label: "Desired Start", refKey: "child.desired_start_date", width: "medium", renderHint: "date" },
+            { label: "Location", refKey: "child.location", width: "medium" },
+            { label: "Program", refKey: "child.program", width: "medium" },
+            { label: "Room", refKey: "child.room", width: "medium" },
+            { label: "Schedule", refKey: "child.schedule", width: "medium" },
+            { label: "Status", refKey: "child.status", width: "medium", renderHint: "status" },
+        ],
+    };
     const childrenInquiry = section(
         "children_inquiry",
-        "Children Inquiry",
-        [
-            row(id(ciBase, "r0"), [col(id(ciBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(id(ciBase, "r0c0"), "children_list", "Children list", "list")])]),
-            row(id(ciBase, "r1"), [
-                col(id(ciBase, "r1"), 0, HALF, [fieldItem(id(ciBase, "r1c0"), "child.name", "Child name", "text", undefined, CHILD_LINK)]),
-                col(id(ciBase, "r1"), 1, HALF, [fieldItem(id(ciBase, "r1c1"), "child.program", "Program", "text")]),
-            ]),
-            row(id(ciBase, "r2"), [
-                col(id(ciBase, "r2"), 0, HALF, [fieldItem(id(ciBase, "r2c0"), "child.desired_start_date", "Desired start date", "date")]),
-                col(id(ciBase, "r2"), 1, HALF, [fieldItem(id(ciBase, "r2c1"), "child.status", "Status", "status")]),
-            ]),
-        ],
+        "Lead Children",
+        [row(id(ciBase, "r0"), [col(id(ciBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [childrenTable])])],
         { defaultExpanded: true },
     );
 

@@ -13,9 +13,10 @@
  * both the layout doc and the record.
  */
 
-import { createContext, useContext } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import {
     LAYOUT_GRID_COLUMNS,
+    type LayoutCollectionColumn,
     type LayoutColumn,
     type LayoutDoc,
     type LayoutFieldAdornment,
@@ -121,29 +122,155 @@ function GroupCell({ record, item }: { record: Rec; item: LayoutItem }) {
     );
 }
 
-function RelatedCell({ item }: { item: LayoutItem }) {
+/** Resolve + render one collection-table cell (value + optional action icon). */
+function CellContent({ row, col }: { row: Rec; col: LayoutCollectionColumn }) {
+    const synthetic: LayoutItem = { id: col.refKey, kind: "field", refKey: col.refKey, renderHint: col.renderHint, adornment: col.adornment };
+    const r = resolveItemValue(row, synthetic);
+    return (
+        <span className="inline-flex items-center gap-1">
+            {col.adornment && col.adornment.position !== "right" ? <Adorn item={synthetic} /> : null}
+            <span style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
+                {r.isPlaceholder ? "—" : col.renderHint === "status" ? (
+                    <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-[11px]">{r.display}</span>
+                ) : (
+                    r.display
+                )}
+            </span>
+            {col.adornment && col.adornment.position === "right" ? <Adorn item={synthetic} /> : null}
+        </span>
+    );
+}
+
+function RelatedCell({ record, item }: { record: Rec; item: LayoutItem }) {
+    const isTable = item.displayMode === "table" && Array.isArray(item.columns) && item.columns.length > 0;
+    if (isTable) {
+        const columns = item.columns as LayoutCollectionColumn[];
+        const raw = record[item.source ?? item.refKey];
+        const rows: Rec[] = Array.isArray(raw) ? (raw as Rec[]) : [];
+        return (
+            <div className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white">
+                <div className="flex items-center justify-between border-b border-[#eef0f4] px-2.5 py-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{item.label || item.refKey}</span>
+                    <span className="text-[10px]" style={{ color: MUTED }}>{rows.length} {item.related?.entityType ?? "row"}{rows.length === 1 ? "" : "s"}</span>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full min-w-[640px] text-left text-xs">
+                        <thead>
+                            <tr className="border-b border-[#eef0f4]" style={{ color: MUTED }}>
+                                {columns.map((c) => (
+                                    <th key={c.refKey} className="px-2 py-1.5 font-semibold">{c.label}</th>
+                                ))}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {rows.length === 0 ? (
+                                <tr>
+                                    <td colSpan={columns.length} className="px-2 py-3 text-[#9aa4bf]">
+                                        No {item.related?.entityType ?? "rows"} on this record.
+                                    </td>
+                                </tr>
+                            ) : (
+                                rows.map((rw, i) => (
+                                    <tr key={(rw.id as string) ?? i} className="border-b border-[#f5f6f9]">
+                                        {columns.map((c) => (
+                                            <td key={c.refKey} className="px-2 py-1.5" style={{ color: TEXT }}>
+                                                <CellContent row={rw} col={c} />
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        );
+    }
     return (
         <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2.5 py-2">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-[#4063b0]">Related</span>{" "}
-            <span className="text-sm font-medium" style={{ color: TEXT }}>
-                {item.label || item.refKey}
-            </span>
+            <span className="text-sm font-medium" style={{ color: TEXT }}>{item.label || item.refKey}</span>
             {item.related ? <span className="ml-1 text-xs text-[#59678b]">({item.related.entityType})</span> : null}
         </div>
     );
 }
 
-function WidgetCell({ item }: { item: LayoutItem }) {
+function WidgetChrome({ title, children }: { title: string; children: ReactNode }) {
     return (
-        <div className="rounded-md border-2 border-dashed border-[#cdd5e4] bg-[#fbfcfe] px-2.5 py-2 text-center">
-            <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                Widget
-            </span>{" "}
-            <span className="text-sm" style={{ color: TEXT }}>
-                {item.label || item.refKey}
-            </span>
+        <div className="rounded-md border border-[#e6e8ec] bg-white">
+            <div className="border-b border-[#eef0f4] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{title}</div>
+            <div className="px-2.5 py-2">{children}</div>
         </div>
     );
+}
+function widgetRows(record: Rec, key: string): { label: string; meta?: string }[] {
+    const raw = record[key];
+    if (!Array.isArray(raw)) return [];
+    return (raw as unknown[]).map((r) => {
+        if (r && typeof r === "object") {
+            const o = r as Record<string, unknown>;
+            return { label: String(o.label ?? o.title ?? o.name ?? o.body ?? ""), meta: o.due || o.when || o.at ? String(o.due ?? o.when ?? o.at) : undefined };
+        }
+        return { label: String(r) };
+    });
+}
+
+function WidgetCell({ record, item }: { record: Rec; item: LayoutItem }) {
+    const key = item.refKey;
+    const title = item.label || key;
+    const empty = <span className="text-xs text-[#9aa4bf]">No {title.toLowerCase()} yet</span>;
+
+    if (key === "tasks" || key === "reminders") {
+        const rows = widgetRows(record, key);
+        return (
+            <WidgetChrome title={title}>
+                {rows.length === 0 ? empty : (
+                    <ul className="flex flex-col gap-1">
+                        {rows.map((r, i) => (
+                            <li key={i} className="flex items-center justify-between rounded bg-[#f7f9fc] px-2 py-1 text-xs" style={{ color: TEXT }}>
+                                <span className="truncate">{r.label}</span>
+                                {r.meta ? <span className="ml-2 shrink-0 text-[10px]" style={{ color: MUTED }}>{r.meta}</span> : null}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </WidgetChrome>
+        );
+    }
+    if (key === "actions") {
+        const actions = ["Call", "Email", "Schedule tour", "Update status"];
+        return (
+            <WidgetChrome title={title}>
+                <div className="flex flex-wrap gap-1.5">
+                    {actions.map((a) => (
+                        <button key={a} type="button" disabled title="Simulated — no live mutation" className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2 py-1 text-[11px] font-medium text-[#00458C] disabled:opacity-90">
+                            {a}
+                        </button>
+                    ))}
+                    <span className="self-center text-[10px]" style={{ color: MUTED }}>(simulated)</span>
+                </div>
+            </WidgetChrome>
+        );
+    }
+    if (key === "tour_summary") {
+        const date = record["opportunity.tour_date"] ?? record["tour_date"] ?? null;
+        const status = record["opportunity.tour_status"] ?? record["tour_status"] ?? null;
+        return (
+            <WidgetChrome title={title}>
+                {date || status ? (
+                    <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: TEXT }}>
+                        {date ? <span>📅 {String(date)}</span> : null}
+                        {status ? <span className="rounded-full bg-[#eef1f6] px-2 py-0.5 text-[11px]">{String(status)}</span> : null}
+                        <button type="button" disabled className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2 py-1 text-[11px] font-medium text-[#00458C] disabled:opacity-90">Reschedule</button>
+                    </div>
+                ) : (
+                    empty
+                )}
+            </WidgetChrome>
+        );
+    }
+    // recent_communication / notes / children_list / other → styled (data not available)
+    return <WidgetChrome title={title}>{empty}</WidgetChrome>;
 }
 
 function ItemCell({ record, item }: { record: Rec; item: LayoutItem }) {
@@ -153,9 +280,9 @@ function ItemCell({ record, item }: { record: Rec; item: LayoutItem }) {
         case "field_group":
             return <GroupCell record={record} item={item} />;
         case "related_list":
-            return <RelatedCell item={item} />;
+            return <RelatedCell record={record} item={item} />;
         case "widget_placeholder":
-            return <WidgetCell item={item} />;
+            return <WidgetCell record={record} item={item} />;
         default:
             return null;
     }

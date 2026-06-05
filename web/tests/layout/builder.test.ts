@@ -80,13 +80,15 @@ describe("default Lead layouts", () => {
         // widgets present
         const allItems = doc.sections.flatMap((s) => s.rows).flatMap((r) => r.columns).flatMap((c) => c.items);
         const widgetKeys = allItems.filter((i) => i.kind === "widget_placeholder").map((i) => i.refKey);
-        expect(widgetKeys).toEqual(expect.arrayContaining(["tasks", "reminders", "actions", "children_list", "recent_communication", "notes"]));
+        expect(widgetKeys).toEqual(expect.arrayContaining(["tasks", "reminders", "actions", "recent_communication", "notes"]));
         // conditional secondary contact
         const cond = allItems.find((i) => i.refKey === "person.secondary_contact_name");
         expect(cond?.visibleWhen).toEqual({ type: "exists", path: "person.secondary_contact_name" });
         // namespaced refs
         expect(allItems.some((i) => i.refKey === "opportunity.tour_date")).toBe(true);
-        expect(allItems.some((i) => i.refKey === "child.name")).toBe(true);
+        // child fields live in the Lead Children related_list table columns
+        const childTable = allItems.find((i) => i.kind === "related_list" && i.displayMode === "table");
+        expect(childTable?.columns?.some((c) => c.refKey === "child.name")).toBe(true);
     });
 
     it("queue default is a card (multi-row) and validates", () => {

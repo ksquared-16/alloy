@@ -19,10 +19,12 @@ import {
     LAYOUT_GRID_COLUMNS,
     isLayoutAdornmentActionEntity,
     isLayoutAdornmentIcon,
+    isLayoutColumnWidth,
     isLayoutConditionType,
     isLayoutItemKind,
     isLayoutRenderHint,
     isLayoutSurface,
+    type LayoutCollectionColumn,
     type LayoutColumn,
     type LayoutCondition,
     type LayoutDoc,
@@ -190,9 +192,38 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
             }
         }
 
-        if (kind === "related_list" && isObject(raw.related)) {
-            const re = asString(raw.related.entityType);
-            if (re) item.related = { entityType: re, filterKey: asString(raw.related.filterKey) };
+        if (kind === "related_list") {
+            if (isObject(raw.related)) {
+                const re = asString(raw.related.entityType);
+                if (re) item.related = { entityType: re, filterKey: asString(raw.related.filterKey) };
+            }
+            const source = asString(raw.source);
+            if (source !== undefined) item.source = source;
+            const displayMode = asString(raw.displayMode);
+            if (displayMode !== undefined) item.displayMode = displayMode;
+            if (Array.isArray(raw.columns)) {
+                const cols: LayoutCollectionColumn[] = [];
+                raw.columns.forEach((c, ci) => {
+                    if (!isObject(c)) {
+                        errors.push(`${path}.columns[${ci}]: must be an object`);
+                        return;
+                    }
+                    const colRef = asString(c.refKey);
+                    if (!colRef) {
+                        errors.push(`${path}.columns[${ci}]: missing string "refKey"`);
+                        return;
+                    }
+                    const col: LayoutCollectionColumn = { label: asString(c.label) ?? colRef, refKey: colRef };
+                    if (isLayoutColumnWidth(c.width)) col.width = c.width;
+                    if (c.renderHint !== undefined && isLayoutRenderHint(c.renderHint)) col.renderHint = c.renderHint;
+                    const ce = asBool(c.editable);
+                    if (ce !== undefined) col.editable = ce;
+                    const cad = parseAdornment(c.adornment, `${path}.columns[${ci}]`);
+                    if (cad) col.adornment = cad;
+                    cols.push(col);
+                });
+                item.columns = cols;
+            }
         }
 
         if (kind === "widget_placeholder" && isObject(raw.widget)) {

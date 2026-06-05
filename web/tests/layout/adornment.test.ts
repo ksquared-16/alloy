@@ -78,8 +78,8 @@ describe("default Lead layouts include adornment examples", () => {
         expect(tour?.adornment?.icon).toBe("calendar");
         expect(tour?.adornment?.action).toBeUndefined(); // icon only
 
-        const child = items.find((i) => i.refKey === "child.name");
-        expect(child?.adornment?.action?.entity).toBe("child");
+        const childTable = items.find((i) => i.kind === "related_list" && i.displayMode === "table");
+        expect(childTable?.columns?.find((c) => c.refKey === "child.name")?.adornment?.action?.entity).toBe("child");
     });
 
     it("queue card: contact opens person, child opens child; still validates", () => {

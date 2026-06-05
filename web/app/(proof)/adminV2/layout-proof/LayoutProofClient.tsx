@@ -19,7 +19,7 @@ import type { LayoutDoc, LayoutResolutionSource } from "@/lib/layout/layoutV2";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import LayoutRecordView from "@/components/layout/LayoutRecordView";
-import ProofDrawerShell from "@/components/layout/proofShell/ProofDrawerShell";
+import ProofRecordModal from "@/components/layout/proofShell/ProofRecordModal";
 import { LEAD_LIFECYCLE_STAGES, leadStageIndexForStatus } from "@/components/layout/proofShell/ProofLifecycleRail";
 
 const ENTITY_TYPE = "opportunities";
@@ -237,8 +237,8 @@ export default function LayoutProofClient() {
                 )}
             </div>
 
-            {/* Drawer shell (mirrors staging chrome; Overview body is Layout V2) */}
-            <ProofDrawerShell
+            {/* Center modal record drawer (mirrors current staging chrome; Overview = Layout V2) */}
+            <ProofRecordModal
                 open={!!selectedRecord}
                 onClose={() => setSelectedId(null)}
                 title={selectedRecord ? `Lead — ${recordName(selectedRecord)}` : ""}
@@ -258,7 +258,7 @@ export default function LayoutProofClient() {
                 ) : (
                     <p className="text-sm" style={{ color: MUTED }}>No drawer layout resolved.</p>
                 )}
-            </ProofDrawerShell>
+            </ProofRecordModal>
 
             {/* Proof details (collapsed by default — not the dominant visual) */}
             <details className="mt-4 rounded-lg border border-[rgba(39,63,82,0.12)] bg-white px-3 py-2 text-sm">

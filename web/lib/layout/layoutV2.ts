@@ -134,6 +134,23 @@ export function isLayoutAdornmentActionEntity(v: unknown): v is LayoutAdornmentA
     return typeof v === "string" && (LAYOUT_ADORNMENT_ACTION_ENTITIES as readonly string[]).includes(v);
 }
 
+export const LAYOUT_COLUMN_WIDTHS = ["small", "medium", "large"] as const;
+export type LayoutColumnWidth = (typeof LAYOUT_COLUMN_WIDTHS)[number];
+
+/** A column definition for a related_list rendered as a collection table. */
+export interface LayoutCollectionColumn {
+    label: string;
+    /** Namespaced ref resolved against each row (e.g. "child.name"). */
+    refKey: string;
+    width?: LayoutColumnWidth;
+    renderHint?: LayoutRenderHint;
+    editable?: boolean;
+    adornment?: LayoutFieldAdornment;
+}
+export function isLayoutColumnWidth(v: unknown): v is LayoutColumnWidth {
+    return typeof v === "string" && (LAYOUT_COLUMN_WIDTHS as readonly string[]).includes(v);
+}
+
 /**
  * A single placed item inside a Column.
  *
@@ -165,6 +182,13 @@ export interface LayoutItem {
     items?: LayoutItem[];
     /** For kind "related_list": the related entity + optional filter key. */
     related?: { entityType: string; filterKey?: string };
+    /**
+     * For kind "related_list" rendered as a collection table (e.g. Lead Children):
+     * the source collection key on the record + ordered column definitions.
+     */
+    source?: string;
+    displayMode?: string;
+    columns?: LayoutCollectionColumn[];
     /** For kind "widget_placeholder": which registered widget to position. */
     widget?: { widgetKey: string; note?: string; displayMode?: string };
     /** Optional V1 visibility rule (preserved; renderer may apply or ignore). */
