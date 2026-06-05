@@ -37,7 +37,7 @@ type CatalogResponse = {
     widgets: LayoutCatalogWidget[];
 };
 
-type PickerTarget = { sIdx: number; rIdx: number; cIdx: number } | null;
+type PickerTarget = { sIdx: number; rIdx: number; cIdx: number; group?: { itemId: string; gr: number; gc: number } } | null;
 
 const CONDITION_PRESETS: { key: string; label: string; cond?: LayoutCondition }[] = [
     { key: "", label: "Always" },
@@ -266,12 +266,22 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
 
     const addCatalogField = (target: NonNullable<PickerTarget>, f: LayoutCatalogField) => {
         if (!workingDoc) return;
-        op(ops.addItem(workingDoc, target.sIdx, target.rIdx, target.cIdx, ops.makeFieldItem(f.refKey, f.fieldLabel, f.fieldType, f.entityKey)));
+        const item = ops.makeFieldItem(f.refKey, f.fieldLabel, f.fieldType, f.entityKey);
+        if (target.group) {
+            op(ops.groupAddItem(workingDoc, { sIdx: target.sIdx, rIdx: target.rIdx, cIdx: target.cIdx, itemId: target.group.itemId }, target.group.gr, target.group.gc, item));
+        } else {
+            op(ops.addItem(workingDoc, target.sIdx, target.rIdx, target.cIdx, item));
+        }
         setPicker(null);
     };
     const addCatalogWidget = (target: NonNullable<PickerTarget>, w: LayoutCatalogWidget) => {
         if (!workingDoc) return;
-        op(ops.addItem(workingDoc, target.sIdx, target.rIdx, target.cIdx, ops.makeWidgetItem(w.widgetKey, w.label, w.defaultDisplayMode)));
+        const item = ops.makeWidgetItem(w.widgetKey, w.label, w.defaultDisplayMode);
+        if (target.group) {
+            op(ops.groupAddItem(workingDoc, { sIdx: target.sIdx, rIdx: target.rIdx, cIdx: target.cIdx, itemId: target.group.itemId }, target.group.gr, target.group.gc, item));
+        } else {
+            op(ops.addItem(workingDoc, target.sIdx, target.rIdx, target.cIdx, item));
+        }
         setPicker(null);
     };
 
@@ -443,26 +453,44 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                                             {r.columns.map((c, cIdx) => (
                                                                 <div key={c.id} style={{ gridColumn: `span ${c.width} / span ${c.width}` }} className="flex flex-col gap-1 rounded bg-[#fbfcfe] p-1.5">
                                                                     {c.items.length === 0 && <p className="px-1 text-[10px] text-[#9aa4bf]">empty</p>}
-                                                                    {c.items.map((it) => (
-                                                                        <ItemRow
-                                                                            key={it.id}
-                                                                            item={it}
-                                                                            editable={editable}
-                                                                            canLeft={cIdx > 0}
-                                                                            canRight={cIdx < r.columns.length - 1}
-                                                                            onUp={() => op(ops.moveItemVertical(workingDoc, sIdx, rIdx, cIdx, it.id, -1))}
-                                                                            onDown={() => op(ops.moveItemVertical(workingDoc, sIdx, rIdx, cIdx, it.id, 1))}
-                                                                            onLeft={() => op(ops.moveItemHorizontal(workingDoc, sIdx, rIdx, cIdx, it.id, -1))}
-                                                                            onRight={() => op(ops.moveItemHorizontal(workingDoc, sIdx, rIdx, cIdx, it.id, 1))}
-                                                                            onRemove={() => op(ops.removeItem(workingDoc, sIdx, rIdx, cIdx, it.id))}
-                                                                            onCondition={(cond) => op(ops.setItemCondition(workingDoc, sIdx, rIdx, cIdx, it.id, cond))}
-                                                                            onAdornment={(a) => op(ops.setItemAdornment(workingDoc, sIdx, rIdx, cIdx, it.id, a))}
-                                                                            catalogFields={catalogFields}
-                                                                            onReplaceField={(f) => replaceField(sIdx, rIdx, cIdx, it.id, f)}
-                                                                        />
-                                                                    ))}
+                                                                    {c.items.map((it) =>
+                                                                        it.kind === "field_group" ? (
+                                                                            <GroupBlockEditor
+                                                                                key={it.id}
+                                                                                doc={workingDoc}
+                                                                                loc={{ sIdx, rIdx, cIdx, itemId: it.id }}
+                                                                                editable={editable}
+                                                                                catalogFields={catalogFields}
+                                                                                op={op}
+                                                                                onMoveBlock={(dir) => op(ops.moveItemVertical(workingDoc, sIdx, rIdx, cIdx, it.id, dir))}
+                                                                                onRemoveBlock={() => op(ops.removeItem(workingDoc, sIdx, rIdx, cIdx, it.id))}
+                                                                                onRenameBlock={(t) => op(ops.patchItem(workingDoc, sIdx, rIdx, cIdx, it.id, { label: t }))}
+                                                                                onAddToCell={(gr, gc) => { setPicker({ sIdx, rIdx, cIdx, group: { itemId: it.id, gr, gc } }); setPickerTab("field"); }}
+                                                                            />
+                                                                        ) : (
+                                                                            <ItemRow
+                                                                                key={it.id}
+                                                                                item={it}
+                                                                                editable={editable}
+                                                                                canLeft={cIdx > 0}
+                                                                                canRight={cIdx < r.columns.length - 1}
+                                                                                onUp={() => op(ops.moveItemVertical(workingDoc, sIdx, rIdx, cIdx, it.id, -1))}
+                                                                                onDown={() => op(ops.moveItemVertical(workingDoc, sIdx, rIdx, cIdx, it.id, 1))}
+                                                                                onLeft={() => op(ops.moveItemHorizontal(workingDoc, sIdx, rIdx, cIdx, it.id, -1))}
+                                                                                onRight={() => op(ops.moveItemHorizontal(workingDoc, sIdx, rIdx, cIdx, it.id, 1))}
+                                                                                onRemove={() => op(ops.removeItem(workingDoc, sIdx, rIdx, cIdx, it.id))}
+                                                                                onCondition={(cond) => op(ops.setItemCondition(workingDoc, sIdx, rIdx, cIdx, it.id, cond))}
+                                                                                onAdornment={(a) => op(ops.setItemAdornment(workingDoc, sIdx, rIdx, cIdx, it.id, a))}
+                                                                                catalogFields={catalogFields}
+                                                                                onReplaceField={(f) => replaceField(sIdx, rIdx, cIdx, it.id, f)}
+                                                                            />
+                                                                        ),
+                                                                    )}
                                                                     {editable && (
-                                                                        <button type="button" onClick={() => { setPicker({ sIdx, rIdx, cIdx }); setPickerTab("field"); }} className="mt-1 rounded border border-dashed border-[#cdd5e4] px-2 py-1 text-[11px] text-[#2f6df6] hover:bg-[#f5f8ff]">+ Add</button>
+                                                                        <div className="mt-1 flex gap-1">
+                                                                            <button type="button" onClick={() => { setPicker({ sIdx, rIdx, cIdx }); setPickerTab("field"); }} className="rounded border border-dashed border-[#cdd5e4] px-2 py-1 text-[11px] text-[#2f6df6] hover:bg-[#f5f8ff]">+ Add</button>
+                                                                            <button type="button" onClick={() => op(ops.addGroup(workingDoc, sIdx, rIdx, cIdx))} className="rounded border border-dashed border-[#cdd5e4] px-2 py-1 text-[11px] text-[#4063b0] hover:bg-[#f5f8ff]">+ Block</button>
+                                                                        </div>
                                                                     )}
                                                                 </div>
                                                             ))}
@@ -691,6 +719,129 @@ function PickerOverlay({
                     </div>
                 )}
             </div>
+        </div>
+    );
+}
+
+type GroupLoc = { sIdx: number; rIdx: number; cIdx: number; itemId: string };
+
+function GroupBlockEditor({
+    doc,
+    loc,
+    editable,
+    catalogFields,
+    op,
+    onMoveBlock,
+    onRemoveBlock,
+    onRenameBlock,
+    onAddToCell,
+}: {
+    doc: LayoutDoc;
+    loc: GroupLoc;
+    editable: boolean;
+    catalogFields: LayoutCatalogField[];
+    op: (next: LayoutDoc | null | undefined) => void;
+    onMoveBlock: (dir: -1 | 1) => void;
+    onRemoveBlock: () => void;
+    onRenameBlock: (t: string) => void;
+    onAddToCell: (gr: number, gc: number) => void;
+}) {
+    const group = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((i) => i.id === loc.itemId);
+    const rows = group?.rows ?? [];
+    return (
+        <div className="rounded border border-[#dbe7ff] bg-[#f7faff] p-1.5">
+            <div className="flex items-center gap-1">
+                <span className="rounded bg-[#e6efff] px-1 text-[9px] font-semibold uppercase text-[#4063b0]">block</span>
+                <input value={group?.label ?? ""} onChange={(e) => onRenameBlock(e.target.value)} disabled={!editable} className="min-w-0 flex-1 rounded border border-[#e6e8ec] px-1 py-0.5 text-[11px] font-medium disabled:bg-[#f4f6f9]" placeholder="Block name" />
+                <button type="button" onClick={() => onMoveBlock(-1)} disabled={!editable} className="px-0.5 text-[11px] disabled:opacity-30" title="Move up">↑</button>
+                <button type="button" onClick={() => onMoveBlock(1)} disabled={!editable} className="px-0.5 text-[11px] disabled:opacity-30" title="Move down">↓</button>
+                <button type="button" onClick={onRemoveBlock} disabled={!editable} className="px-0.5 text-[11px] text-red-600 disabled:opacity-30" title="Remove block">✕</button>
+            </div>
+            {rows.map((gr, gri) => (
+                <div key={gr.id} className="mt-1 rounded border border-[#eef0f4] bg-white p-1">
+                    <div className="mb-1 flex items-center gap-1 text-[9px] text-[#9aa4bf]">
+                        <span>cols:</span>
+                        {[1, 2, 3].map((n) => (
+                            <button key={n} type="button" disabled={!editable} onClick={() => op(ops.groupSetRowColumnCount(doc, loc, gri, n))} className={`rounded border px-1 ${gr.columns.length === n ? "border-[#2f6df6] bg-[#f5f8ff] text-[#2f6df6]" : "border-[#e6e8ec]"} disabled:opacity-40`}>{n}</button>
+                        ))}
+                        <span className="ml-auto flex items-center gap-1">
+                            <button type="button" onClick={() => op(ops.groupMoveRow(doc, loc, gri, -1))} disabled={!editable} className="px-0.5 disabled:opacity-30">↑</button>
+                            <button type="button" onClick={() => op(ops.groupMoveRow(doc, loc, gri, 1))} disabled={!editable} className="px-0.5 disabled:opacity-30">↓</button>
+                            <button type="button" onClick={() => op(ops.groupRemoveRow(doc, loc, gri))} disabled={!editable} className="px-0.5 text-red-600 disabled:opacity-30">✕ row</button>
+                        </span>
+                    </div>
+                    <div className="grid gap-1" style={{ gridTemplateColumns: "repeat(12, minmax(0,1fr))" }}>
+                        {gr.columns.map((gc, gci) => (
+                            <div key={gc.id} style={{ gridColumn: `span ${gc.width} / span ${gc.width}` }} className="rounded bg-[#fbfcfe] p-1">
+                                {gc.items.length === 0 && <p className="px-0.5 text-[9px] text-[#9aa4bf]">empty</p>}
+                                {gc.items.map((git) => (
+                                    <MiniItemRow
+                                        key={git.id}
+                                        item={git}
+                                        editable={editable}
+                                        catalogFields={catalogFields}
+                                        onUp={() => op(ops.groupMoveItemVertical(doc, loc, gri, gci, git.id, -1))}
+                                        onDown={() => op(ops.groupMoveItemVertical(doc, loc, gri, gci, git.id, 1))}
+                                        onRemove={() => op(ops.groupRemoveItem(doc, loc, gri, gci, git.id))}
+                                        onReplaceField={(f) => op(ops.groupPatchItem(doc, loc, gri, gci, git.id, { refKey: f.refKey, label: f.fieldLabel, renderHint: ops.makeFieldItem(f.refKey, f.fieldLabel, f.fieldType).renderHint, sourceEntity: f.entityKey }))}
+                                    />
+                                ))}
+                                {editable && <button type="button" onClick={() => onAddToCell(gri, gci)} className="mt-0.5 w-full rounded border border-dashed border-[#cdd5e4] px-1 py-0.5 text-[10px] text-[#2f6df6] hover:bg-[#f5f8ff]">+ Add</button>}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ))}
+            {editable && <button type="button" onClick={() => op(ops.groupAddRow(doc, loc, 2))} className="mt-1 rounded border border-[#e6e8ec] px-2 py-0.5 text-[10px] text-[#31394d] hover:bg-[#F4F6F9]">+ Add row in block</button>}
+        </div>
+    );
+}
+
+function MiniItemRow({
+    item,
+    editable,
+    catalogFields,
+    onUp,
+    onDown,
+    onRemove,
+    onReplaceField,
+}: {
+    item: LayoutItem;
+    editable: boolean;
+    catalogFields: LayoutCatalogField[];
+    onUp: () => void;
+    onDown: () => void;
+    onRemove: () => void;
+    onReplaceField: (f: LayoutCatalogField) => void;
+}) {
+    return (
+        <div className="mb-0.5 rounded border border-[#eef0f4] bg-white px-1 py-0.5 text-[11px]">
+            <div className="flex items-center gap-1">
+                <span className="min-w-0 flex-1 truncate text-[#31394d]" title={item.refKey}>
+                    {item.label || item.refKey}
+                    <span className="ml-1 text-[9px] text-[#9aa4bf]">{item.kind === "field" ? item.sourceEntity ?? "field" : "widget"}</span>
+                </span>
+                <button type="button" onClick={onUp} disabled={!editable} className="px-0.5 disabled:opacity-30" title="Up">↑</button>
+                <button type="button" onClick={onDown} disabled={!editable} className="px-0.5 disabled:opacity-30" title="Down">↓</button>
+                <button type="button" onClick={onRemove} disabled={!editable} className="px-0.5 text-red-600 disabled:opacity-30" title="Remove">✕</button>
+            </div>
+            {item.kind === "field" && catalogFields.length > 0 && (
+                <select
+                    value={catalogFields.some((f) => f.refKey === item.refKey) ? item.refKey : ""}
+                    disabled={!editable}
+                    onChange={(e) => {
+                        const f = catalogFields.find((c) => c.refKey === e.target.value);
+                        if (f) onReplaceField(f);
+                    }}
+                    title="Replace this field"
+                    className="mt-0.5 w-full truncate rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40"
+                >
+                    {!catalogFields.some((f) => f.refKey === item.refKey) && <option value="">{item.refKey} (custom)</option>}
+                    {catalogFields.map((f) => (
+                        <option key={f.refKey} value={f.refKey}>{f.entityLabel}: {f.fieldLabel}</option>
+                    ))}
+                </select>
+            )}
         </div>
     );
 }

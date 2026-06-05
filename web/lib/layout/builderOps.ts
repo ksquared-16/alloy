@@ -228,3 +228,87 @@ export function makeWidgetItem(widgetKey: string, label: string, displayMode?: s
 }
 
 export type ItemCoords = { sIdx: number; rIdx: number; cIdx: number };
+
+// ---------------------------------------------------------------------------
+// field_group subgrid ops (column-in-column editing)
+// A group lives at (sIdx,rIdx,cIdx,itemId); its subgrid is group.rows.
+// ---------------------------------------------------------------------------
+export type GroupLoc = { sIdx: number; rIdx: number; cIdx: number; itemId: string };
+
+function groupOf(doc: LayoutDoc, loc: GroupLoc): LayoutItem | undefined {
+    const g = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === loc.itemId);
+    if (g && !Array.isArray(g.rows)) g.rows = [];
+    return g;
+}
+
+/** Add an empty field_group (block) with one 2-column subgrid row to a column. */
+export function addGroup(doc: LayoutDoc, sIdx: number, rIdx: number, cIdx: number): LayoutDoc {
+    const next = clone(doc);
+    next.sections[sIdx].rows[rIdx].columns[cIdx].items.push({
+        id: makeId("grp"),
+        kind: "field_group",
+        refKey: "block",
+        label: "Block",
+        rows: [{ id: makeId("row"), columns: emptyColumns(2) }],
+    });
+    return next;
+}
+export function groupAddRow(doc: LayoutDoc, loc: GroupLoc, columnCount = 2): LayoutDoc {
+    const next = clone(doc);
+    groupOf(next, loc)?.rows!.push({ id: makeId("row"), columns: emptyColumns(columnCount) });
+    return next;
+}
+export function groupRemoveRow(doc: LayoutDoc, loc: GroupLoc, gr: number): LayoutDoc {
+    const next = clone(doc);
+    groupOf(next, loc)?.rows!.splice(gr, 1);
+    return next;
+}
+export function groupMoveRow(doc: LayoutDoc, loc: GroupLoc, gr: number, dir: -1 | 1): LayoutDoc {
+    const next = clone(doc);
+    const rows = groupOf(next, loc)?.rows;
+    if (!rows) return doc;
+    const t = gr + dir;
+    if (t < 0 || t >= rows.length) return doc;
+    [rows[gr], rows[t]] = [rows[t], rows[gr]];
+    return next;
+}
+export function groupSetRowColumnCount(doc: LayoutDoc, loc: GroupLoc, gr: number, count: number): LayoutDoc {
+    const next = clone(doc);
+    const row = groupOf(next, loc)?.rows?.[gr];
+    if (!row) return doc;
+    const items = row.columns.flatMap((c) => c.items);
+    const widths = columnWidths(count);
+    const n = widths.length;
+    const cols: LayoutColumn[] = widths.map((width) => ({ id: makeId("col"), width, items: [] }));
+    const per = Math.ceil(items.length / n) || 0;
+    items.forEach((item, i) => cols[per > 0 ? Math.min(n - 1, Math.floor(i / per)) : 0].items.push(item));
+    row.columns = cols;
+    return next;
+}
+export function groupAddItem(doc: LayoutDoc, loc: GroupLoc, gr: number, gc: number, item: LayoutItem): LayoutDoc {
+    const next = clone(doc);
+    groupOf(next, loc)?.rows?.[gr]?.columns[gc]?.items.push(item);
+    return next;
+}
+export function groupRemoveItem(doc: LayoutDoc, loc: GroupLoc, gr: number, gc: number, itemId: string): LayoutDoc {
+    const next = clone(doc);
+    const col = groupOf(next, loc)?.rows?.[gr]?.columns[gc];
+    if (col) col.items = col.items.filter((it) => it.id !== itemId);
+    return next;
+}
+export function groupMoveItemVertical(doc: LayoutDoc, loc: GroupLoc, gr: number, gc: number, itemId: string, dir: -1 | 1): LayoutDoc {
+    const next = clone(doc);
+    const items = groupOf(next, loc)?.rows?.[gr]?.columns[gc]?.items;
+    if (!items) return doc;
+    const i = items.findIndex((it) => it.id === itemId);
+    const t = i + dir;
+    if (i < 0 || t < 0 || t >= items.length) return doc;
+    [items[i], items[t]] = [items[t], items[i]];
+    return next;
+}
+export function groupPatchItem(doc: LayoutDoc, loc: GroupLoc, gr: number, gc: number, itemId: string, patch: Partial<LayoutItem>): LayoutDoc {
+    const next = clone(doc);
+    const col = groupOf(next, loc)?.rows?.[gr]?.columns[gc];
+    if (col) col.items = col.items.map((it) => (it.id === itemId ? { ...it, ...patch } : it));
+    return next;
+}

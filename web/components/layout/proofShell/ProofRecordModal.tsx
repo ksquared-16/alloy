@@ -69,7 +69,7 @@ export default function ProofRecordModal({
                     aria-modal="true"
                     aria-label={title}
                     onClick={(e) => e.stopPropagation()}
-                    className="my-auto flex max-h-[calc(100dvh-3rem)] w-[min(calc(100vw-1.5rem),80rem)] max-w-5xl flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl"
+                    className="my-auto flex max-h-[min(860px,calc(100dvh-3rem))] w-[min(calc(100vw-1.5rem),80rem)] max-w-5xl flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl"
                     style={{ backgroundColor: SURFACE, color: TEXT, borderColor: BORDER }}
                 >
                     {/* sticky header */}

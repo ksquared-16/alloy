@@ -14,6 +14,7 @@
  */
 
 import { createContext, useContext, type ReactNode } from "react";
+import { Calendar } from "lucide-react";
 import {
     LAYOUT_GRID_COLUMNS,
     type LayoutCollectionColumn,
@@ -68,8 +69,8 @@ function Adorn({ item }: { item: LayoutItem }) {
 function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
     const r = resolveItemValue(record, item);
     return (
-        <div className="rounded border border-[#eef0f4] bg-white px-2.5 py-1.5">
-            <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: MUTED }}>
+        <div className="rounded-md bg-white px-2.5 py-1.5 ring-1 ring-[rgba(0,0,0,0.04)]">
+            <div className="flex items-center gap-1 text-xs font-medium" style={{ color: "rgba(39,63,82,0.8)" }}>
                 {item.label || item.refKey}
                 {item.locked ? (
                     <span
@@ -268,7 +269,7 @@ function WidgetCell({ record, item }: { record: Rec; item: LayoutItem }) {
             <WidgetChrome title={title}>
                 {date || status ? (
                     <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: TEXT }}>
-                        {date ? <span>📅 {String(date)}</span> : null}
+                        {date ? <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5 text-[rgba(39,63,82,0.55)]" aria-hidden /> {String(date)}</span> : null}
                         {status ? <span className="rounded-full bg-[#eef1f6] px-2 py-0.5 text-[11px]">{String(status)}</span> : null}
                         <button type="button" disabled className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2 py-1 text-[11px] font-medium text-[#00458C] disabled:opacity-90">Reschedule</button>
                     </div>
