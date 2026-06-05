@@ -729,7 +729,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
     return;
   }
 
-  const pmap = new Map<string, PersonRowAgg>();
+  const pmap = new Map<string, WarmPersonRow>();
   const rawOpp = (host._opportunity_persons as { person_id?: string }[]) ?? [];
   if (Array.isArray(rawOpp)) {
     for (const row of rawOpp) {
@@ -766,7 +766,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
       .select("id, first_name, last_name, full_name, email, phone")
       .eq("org_id", orgId)
       .in("id", missingCpPersonIds);
-    for (const row of (cpPeople ?? []) as PersonRowAgg[]) {
+    for (const row of (cpPeople ?? []) as WarmPersonRow[]) {
       pmap.set(row.id, row);
     }
   }
@@ -776,7 +776,7 @@ export async function attachOpportunityHouseholdCustomerPersonsForDrawer(
     role_type?: string | null;
     is_primary?: boolean | null;
   }[]).map((cp) => {
-    const p = (pmap.get(cp.person_id) ?? null) as PersonRowAgg | null;
+    const p = (pmap.get(cp.person_id) ?? null) as WarmPersonRow | null;
     return {
       customer_id: householdId,
       person_id: cp.person_id,

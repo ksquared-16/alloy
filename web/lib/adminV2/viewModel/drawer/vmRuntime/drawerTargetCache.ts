@@ -33,7 +33,7 @@ export function beginDrawerLinkPendingIfCold(
 ): boolean {
     if (!actions) return false;
     if (isDrawerTargetWarm(params)) return false;
-    if (actions.isPending(pendingKey)) return true;
+    if (actions.isPending?.(pendingKey)) return true;
     actions.begin(pendingKey);
     return true;
 }

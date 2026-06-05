@@ -1,4 +1,4 @@
-import type { AdminDrawerState } from "@/contexts/AdminDrawerContext";
+import type { AdminDrawerEntityType, AdminDrawerState } from "@/contexts/AdminDrawerContext";
 import type { DrawerRuntimePhaseState } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import {
     drawerRuntimeTransitionTargetKey,
@@ -6,7 +6,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 
 export type DrawerVmSwapTarget = {
-    entityType: AdminDrawerState["type"];
+    entityType: AdminDrawerEntityType;
     entityId: string;
 };
 
