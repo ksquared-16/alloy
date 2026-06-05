@@ -18,6 +18,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import type { FieldDefForLinkedEdit } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { inquiryChildrenRowCountFromEntity, mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
+import { logDrawerHardTrace } from "@/lib/adminV2/drawer/drawerHardTrace";
 import { openInquiryChildPersonFromOpportunitySync } from "@/lib/admin/drawer/openInquiryChildPersonFromOpportunity";
 import { opportunityStatusDisplayLabelSafe } from "@/lib/admin/drawer/opportunityRawValueGuard";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
@@ -264,6 +265,15 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                         opportunityWorkspaceContext={drawer.opportunityWorkspaceContext ?? null}
                         linkPending={drawerLinkPending}
                         onOpenChild={(row) => {
+                            logDrawerHardTrace(
+                                "child_click",
+                                "components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview.tsx",
+                                {
+                                    opportunity_id: drawerId,
+                                    person_id: row.person_id,
+                                    customer_member_id: row.customer_member_id,
+                                }
+                            );
                             void openInquiryChildPersonFromOpportunitySync({
                                 openDrawer,
                                 opportunityRecord: record,

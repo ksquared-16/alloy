@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
@@ -17,7 +16,6 @@ import Drawer, {
     ADMINV2_DRAWER_PANEL_Z,
 } from "@/components/admin/Drawer";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
-import { inspectWorkUnitQueueDefinitionShape } from "@/lib/admin/drawer/inspectWorkUnitQueueDefinitionShape";
 import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
@@ -29,13 +27,6 @@ import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
-import {
-    buildDrawerRuntimeProof,
-    drawerDebugSourceFromPathname,
-    drawerDebugSurfaceFromPresentation,
-    drawerRuntimeDebugEnabled,
-    type DrawerDebugStatusComponent,
-} from "@/lib/adminV2/drawer/drawerRuntimeDebug";
 
 const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
 
@@ -48,7 +39,6 @@ const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
 };
 
 export default function OpportunityDrawerVmRuntime() {
-    const pathname = usePathname();
     const { canMutate: authCanMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
@@ -63,8 +53,6 @@ export default function OpportunityDrawerVmRuntime() {
     const { displayVm, coldLoading, error, suppressFullDrawerLoading, holdPriorPayload } =
         useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
-    const [statusDebugComponent, setStatusDebugComponent] =
-        useState<DrawerDebugStatusComponent>("vm-readonly-pill");
 
     const statusCanMutate = useMemo(
         () => resolveOpportunityVmStatusCanMutate(displayVm, authCanMutate),
@@ -179,7 +167,6 @@ export default function OpportunityDrawerVmRuntime() {
                         currentStatusKey={currentStatusKey}
                         statusControl={displayVm?.header.status}
                         canMutate={statusCanMutate}
-                        onDebugModeChange={setStatusDebugComponent}
                     />
                 </div>
             </div>
@@ -249,69 +236,9 @@ export default function OpportunityDrawerVmRuntime() {
         return null;
     }, [displayVm, drawer.id]);
 
-    const lifecycleRailDevDebug = useMemo(() => {
-        if (!drawerRuntimeDebugEnabled() || !displayVm || lifecycleRail) return null;
-        const model = buildOpportunityVmLifecycleRailModel({
-            displayVm,
-            drawerId: drawer.id,
-        });
-        const probe = inspectWorkUnitQueueDefinitionShape(displayVm.workspace.queue_definition);
-        const qdPresent = Boolean(displayVm.workspace.queue_definition);
-        const builderStages = displayVm.workspace.lifecycle_rail?.stages?.length ?? 0;
-        const steps = model?.steps.length ?? 0;
-        const keys = probe?.top_level_keys.join(", ") || "—";
-        const shapeFlags = probe
-            ? [
-                  probe.has_ui ? "ui" : null,
-                  probe.has_sections ? "sections" : null,
-                  probe.has_queues_array ? `queues(${probe.queues_array_length})` : null,
-                  probe.has_definition ? "definition" : null,
-                  probe.bundle_load_ok ? `bundle(v${probe.bundle_is_v2 ? 2 : 1})` : "bundle_fail",
-                  probe.ui_layout_after_coerce ? `layout=${probe.ui_layout_after_coerce}` : null,
-                  probe.pipeline_lane_count > 0 ? `lanes=${probe.pipeline_lane_count}` : "lanes=0",
-                  builderStages > 0 ? `builder_stages=${builderStages}` : null,
-              ]
-                  .filter(Boolean)
-                  .join(", ")
-            : "—";
-        return (
-            <div
-                className="mb-2 rounded-md border border-amber-300/80 bg-amber-50 px-2 py-1 text-[11px] text-amber-950"
-                data-opportunity-vm-lifecycle-debug="true"
-                role="status"
-            >
-                Lifecycle rail unavailable (debug): queue_definition={qdPresent ? "present" : "missing"},
-                parsed_steps={steps}, keys=[{keys}], shape=[{shapeFlags}], work_unit_id=
-                {displayVm.workspace.work_unit_id ?? "—"}, department_id=
-                {displayVm.workspace.department_id ?? "—"}
-            </div>
-        );
-    }, [displayVm, drawer.id, lifecycleRail]);
-
     const showColdShell = coldLoading && !displayVm && !suppressFullDrawerLoading;
 
     const onTabSelect = useCallback((tab: DrawerTabKey) => setDrawerTab(tab), []);
-
-    const drawerRuntimeProof = useMemo(
-        () => (drawerRuntimeDebugEnabled() ? buildDrawerRuntimeProof("opportunity-vm") : null),
-        []
-    );
-
-    const runtimeDebug = useMemo(
-        () =>
-            drawerRuntimeDebugEnabled() && drawer.type && drawer.id ?
-                {
-                    route: "opportunity-vm" as const,
-                    surface: drawerDebugSurfaceFromPresentation("modal"),
-                    source: drawerDebugSourceFromPathname(pathname),
-                    path: pathname ?? "",
-                    entityType: drawer.type,
-                    entityId: String(drawer.id),
-                    statusComponent: statusDebugComponent,
-                }
-            :   null,
-        [drawer.type, drawer.id, pathname, statusDebugComponent]
-    );
 
     const drawerOpen =
         Boolean(drawer.type && drawer.id) &&
@@ -334,8 +261,6 @@ export default function OpportunityDrawerVmRuntime() {
             zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={DRAWER_ACCENT_OPPORTUNITY}
             recordModalTone="cleaning-v2"
-            runtimeDebug={runtimeDebug}
-            drawerRuntimeProof={drawerRuntimeProof}
         >
             <div
                 className="relative"
@@ -399,7 +324,7 @@ export default function OpportunityDrawerVmRuntime() {
                             >
                                 {lifecycleRail}
                             </div>
-                        :   lifecycleRailDevDebug}
+                        :   null}
                         {drawer.id ?
                             <CommunicationsDrawerBackgroundLoader
                                 apiEntityType="opportunities"

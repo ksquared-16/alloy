@@ -17,10 +17,11 @@ import { buildPrepareParamsFromOpenDrawer } from "@/lib/adminV2/viewModel/drawer
 import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import {
     drawerLinkPendingKeyForChildFromOpportunity,
+    drawerLinkPendingKeyForInquiryChildRow,
     drawerLinkPendingKeyForPersonFromOpportunity,
     type DrawerLinkPendingActions,
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
-import { beginDrawerLinkPendingIfCold } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerTargetCache";
+import { logDrawerHardTrace } from "@/lib/adminV2/drawer/drawerHardTrace";
 
 export type OpenDrawerFromOpportunityFn = (params: OpenDrawerParams) => void;
 
@@ -62,7 +63,14 @@ export function openViewPersonFromOpportunity(args: {
         personDrawerOpenSeed: args.openSeed ?? null,
         opportunityWorkspaceContext: args.opportunityWorkspaceContext ?? null,
     };
-    beginDrawerLinkPendingIfCold(args.linkPending, pendingKey, openParams);
+    logDrawerHardTrace("child_open_view_person", "lib/admin/drawer/openViewPersonFromOpportunity.ts", {
+        person_id: personId,
+        opportunity_id: opportunityId,
+        open_source: openSource,
+        presentation_emphasis: args.openSeed?.presentation_emphasis ?? null,
+        pending_key: pendingKey,
+    });
+    // Model swap path owns cold pending — do not begin here (avoids key drift vs commit clear).
     const childOpen = openSource === PERSON_DRAWER_CHILD_OPEN_SOURCE;
     const cacheHit = isPersonDrawerSnapshotWarm(personId);
     const openStartedAt = typeof performance !== "undefined" ? performance.now() : Date.now();

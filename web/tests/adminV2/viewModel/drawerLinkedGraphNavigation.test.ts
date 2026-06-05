@@ -204,16 +204,27 @@ describe("drawerLinkedGraphNavigation", () => {
         const debug = read("lib/adminV2/drawer/drawerRuntimeDebug.ts");
         expect(debug).toContain("NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG");
         expect(debug).not.toContain("NODE_ENV !== \"production\"");
+        const drawer = read("components/admin/Drawer.tsx");
+        expect(drawer).not.toMatch(/<DrawerRuntimeDebugBadge/);
+        expect(drawer).not.toMatch(/import DrawerRuntimeDebugBadge/);
+        expect(drawer).toContain("debug_ui_render_blocked");
         const opp = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(opp).toContain("drawerRuntimeDebugEnabled()");
+        expect(opp).not.toContain("lifecycleRailDevDebug");
+        expect(opp).not.toContain("runtimeDebug={");
         const legacy = read("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(legacy).toContain("drawerRuntimeDebugEnabled()");
-        expect(legacy).toContain("runtimeDebug={drawerRuntimeDebug}");
+        expect(legacy).toContain("runtimeDebug={null}");
     });
 
-    it("model swap re-applies navigation when preload commit key matches but drawer is stale", () => {
+    it("model swap clears pending unconditionally and re-applies when drawer is stale", () => {
         const ctx = read("contexts/AdminDrawerContext.tsx");
         expect(ctx).toContain("drawerAlreadyOnTarget");
-        expect(ctx).toContain("Preload commit key was recorded but drawer state never applied");
+        expect(ctx).toContain("setDrawerLinkPendingKey(null)");
+        expect(ctx).toContain("child_model_swap_commit");
+    });
+
+    it("child open defers pending to model swap path", () => {
+        const open = read("lib/admin/drawer/openViewPersonFromOpportunity.ts");
+        expect(open).not.toContain("beginDrawerLinkPendingIfCold");
+        expect(open).toContain("child_open_view_person");
     });
 });

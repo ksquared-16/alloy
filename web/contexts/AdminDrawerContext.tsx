@@ -29,6 +29,7 @@ import {
     prepareDrawerViewModelDeduped,
     type DrawerViewModelPreload,
 } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
+import { logDrawerHardTrace } from "@/lib/adminV2/drawer/drawerHardTrace";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
 import {
     DRAWER_LINK_OPEN_FAILED_MESSAGE,
@@ -734,22 +735,36 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             }
 
             swapFallbackFetchPendingRef.current = false;
-            if (lastAttachedSwapPreloadKeyRef.current === commitKey) {
-                setDrawerLinkPendingKey((current) => (current === pendingKey ? null : current));
-                const targetId = params.id.trim();
-                const drawerAlreadyOnTarget =
-                    drawer.type === params.type &&
-                    drawer.id != null &&
-                    String(drawer.id) === targetId;
-                if (drawerAlreadyOnTarget) {
-                    return;
-                }
-                // Preload commit key was recorded but drawer state never applied — fall through.
+            const targetId = params.id.trim();
+            const drawerAlreadyOnTarget =
+                drawer.type === params.type &&
+                drawer.id != null &&
+                String(drawer.id) === targetId;
+            if (lastAttachedSwapPreloadKeyRef.current === commitKey && drawerAlreadyOnTarget) {
+                setDrawerLinkPendingKey(null);
+                logDrawerHardTrace("child_model_swap_commit", "contexts/AdminDrawerContext.tsx", {
+                    entity_type: params.type,
+                    entity_id: params.id,
+                    open_source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                    pending_key: pendingKey,
+                    commit_key: commitKey,
+                    skipped: "already_on_target",
+                });
+                return;
             }
             lastAttachedSwapPreloadKeyRef.current = commitKey;
             pendingModelSwapParamsRef.current = null;
 
-            setDrawerLinkPendingKey((current) => (current === pendingKey ? null : current));
+            setDrawerLinkPendingKey(null);
+            logDrawerHardTrace("child_model_swap_commit", "contexts/AdminDrawerContext.tsx", {
+                entity_type: params.type,
+                entity_id: params.id,
+                open_source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                pending_key: pendingKey,
+                commit_key: commitKey,
+                drawer_before_type: drawer.type,
+                drawer_before_id: drawer.id,
+            });
 
             applyDrawerTargetNavigation(
                 {
@@ -794,9 +809,21 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 pendingModelSwapParamsRef.current = swapParams;
                 const pendingKey = drawerLinkPendingKeyFromOpenParams(swapParams);
                 logDrawerTargetCachePeek(swapParams, "model_swap");
+                logDrawerHardTrace("child_model_swap_start", "contexts/AdminDrawerContext.tsx", {
+                    entity_type: swapParams.type,
+                    entity_id: swapParams.id,
+                    open_source: swapParams.source ?? null,
+                    pending_key: pendingKey,
+                    presentation_emphasis: swapParams.personDrawerOpenSeed?.presentation_emphasis ?? null,
+                });
                 beginDrawerLinkPendingIfCold(
                     {
-                        begin: beginDrawerLinkPending,
+                        begin: (key) => {
+                            logDrawerHardTrace("child_pending_begin", "contexts/AdminDrawerContext.tsx", {
+                                pending_key: key,
+                            });
+                            beginDrawerLinkPending(key);
+                        },
                         fail: failDrawerLinkPending,
                         isPending: (key) =>
                             drawerLinkPendingKey != null && drawerLinkPendingKey === key,
@@ -814,6 +841,12 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                         entity_id: swapParams.id,
                         open_source: swapParams.source ?? null,
                     });
+                    logDrawerHardTrace("child_model_swap_start", "contexts/AdminDrawerContext.tsx", {
+                        entity_type: swapParams.type,
+                        entity_id: swapParams.id,
+                        cache_hit: true,
+                        pending_key: pendingKey,
+                    });
                     commitDrawerModelSwap(swapParams, syncPreload);
                     return;
                 }
@@ -822,11 +855,22 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     entity_id: swapParams.id,
                     open_source: swapParams.source ?? null,
                 });
+                logDrawerHardTrace("child_model_swap_start", "contexts/AdminDrawerContext.tsx", {
+                    entity_type: swapParams.type,
+                    entity_id: swapParams.id,
+                    cache_hit: false,
+                    pending_key: pendingKey,
+                });
                 void prepareDrawerViewModelForOpen(swapParams)
                     .then((preload) => {
                         commitDrawerModelSwap(swapParams, preload);
                     })
                     .catch(() => {
+                        logDrawerHardTrace("child_model_swap_fail", "contexts/AdminDrawerContext.tsx", {
+                            entity_type: swapParams.type,
+                            entity_id: swapParams.id,
+                            pending_key: pendingKey,
+                        });
                         failDrawerModelSwap(swapParams, DRAWER_LINK_OPEN_FAILED_MESSAGE);
                     });
             };
@@ -1093,6 +1137,9 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             setDrawerLinkPendingKey(null);
             setDrawerLinkPendingError(null);
             personDrawerPreloadRef.current = null;
+            logDrawerHardTrace("back_to_lead", "contexts/AdminDrawerContext.tsx", {
+                opportunity_id: lead.id,
+            });
 
             const backParams = buildPrepareParamsFromOpenDrawer({
                 type: "opportunities",

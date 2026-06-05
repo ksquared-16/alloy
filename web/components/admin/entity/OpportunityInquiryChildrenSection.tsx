@@ -5,6 +5,7 @@ import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/dr
 import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { buildInquiryChildPersonOpenSeed } from "@/lib/admin/drawer/inquiryChildPersonOpen";
 import { resolveInquiryChildOpenPersonId } from "@/lib/admin/drawer/inquiryChildPersonOpen";
+import { logDrawerHardTrace } from "@/lib/adminV2/drawer/drawerHardTrace";
 import {
     drawerLinkPendingKeyForChildFromOpportunity,
     drawerLinkPendingKeyForInquiryChildRow,
@@ -204,13 +205,23 @@ function InquiryChildDrawerIconButton({
             onMouseEnter={warmChildVm}
             onFocus={warmChildVm}
             onPointerDown={warmChildVm}
-            onClick={() =>
+            onClick={() => {
+                logDrawerHardTrace(
+                    "child_click",
+                    "components/admin/entity/OpportunityInquiryChildrenSection.tsx",
+                    {
+                        opportunity_id: opportunityId,
+                        person_id: row.person_id ?? resolvedPersonId ?? null,
+                        customer_member_id: row.customer_member_id,
+                        pending_key: pendingKey,
+                    }
+                );
                 onOpenChild({
                     person_id: row.person_id ?? resolvedPersonId ?? null,
                     customer_member_id: row.customer_member_id,
                     display_name: row.display_name,
-                })
-            }
+                });
+            }}
         />
     );
 }

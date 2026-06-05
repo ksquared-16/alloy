@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
-import { usePathname } from "next/navigation";
 import PersonDrawerChildTitleRow from "@/components/admin/entity/PersonDrawerChildTitleRow";
 import PersonDrawerHeaderMetadata, {
     formatPersonDrawerRecordNumber,
@@ -26,12 +25,6 @@ import {
 import { usePersonsDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/usePersonsDrawerVmPayload";
 import { peekPersonsDrawerDisplayVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerPayloadPeekSeed";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
-import {
-    buildDrawerRuntimeProof,
-    drawerDebugSourceFromPathname,
-    drawerDebugSurfaceFromPresentation,
-    drawerRuntimeDebugEnabled,
-} from "@/lib/adminV2/drawer/drawerRuntimeDebug";
 
 const DRAWER_ACCENT_PERSON = "#0d9488";
 const DRAWER_ACCENT_CHILD = "#2563eb";
@@ -47,7 +40,6 @@ function resolvePersonDrawerVmChrome(
 }
 
 export default function PersonsDrawerVmRuntime() {
-    const pathname = usePathname();
     const { canMutate } = useAdminAuth();
     const {
         drawer,
@@ -242,30 +234,6 @@ export default function PersonsDrawerVmRuntime() {
         );
     }, [record, chrome, statusControl, backLink, handleBackLink]);
 
-    const drawerRuntimeProof = useMemo(
-        () =>
-            drawerRuntimeDebugEnabled() ?
-                buildDrawerRuntimeProof(isChildSurface ? "child-vm" : "person-vm")
-            :   null,
-        [isChildSurface]
-    );
-
-    const runtimeDebug = useMemo(
-        () =>
-            drawerRuntimeDebugEnabled() && drawer.type && drawer.id ?
-                {
-                    route: isChildSurface ? ("child-vm" as const) : ("person-vm" as const),
-                    surface: drawerDebugSurfaceFromPresentation("modal"),
-                    source: drawerDebugSourceFromPathname(pathname),
-                    path: pathname ?? "",
-                    entityType: drawer.type,
-                    entityId: String(drawer.id),
-                    statusComponent: "unknown" as const,
-                }
-            :   null,
-        [drawer.type, drawer.id, isChildSurface, pathname]
-    );
-
     const headerExtra =
         committedVisible && (chrome === "parent" || chrome === "child") ?
             <PersonsDrawerVmTabStrip active={drawerTab} onSelect={setDrawerTab} />
@@ -284,8 +252,6 @@ export default function PersonsDrawerVmRuntime() {
             zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={accentColor}
             recordModalTone="cleaning-v2"
-            runtimeDebug={runtimeDebug}
-            drawerRuntimeProof={drawerRuntimeProof}
             statusBadge={
                 committedVisible && chrome === "generic" ? statusControl ?? undefined : undefined
             }
