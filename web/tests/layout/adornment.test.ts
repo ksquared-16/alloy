@@ -1,0 +1,105 @@
+/**
+ * Layout V1.1 — field action-icon adornment: schema validation, default
+ * layout examples, and builder op.
+ */
+
+import { describe, expect, it } from "vitest";
+import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
+import * as ops from "@/lib/layout/builderOps";
+import { buildLeadDrawerDefaultDoc, buildLeadQueueDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import type { LayoutDoc } from "@/lib/layout/layoutV2";
+
+const wrapItem = (item: Record<string, unknown>): LayoutDoc =>
+    ({
+        formatVersion: 1,
+        surface: "drawer",
+        entityType: "opportunities",
+        sections: [{ id: "s", key: "k", title: "T", rows: [{ id: "r", columns: [{ id: "c", width: 12, items: [item] }] }] }],
+    }) as unknown as LayoutDoc;
+
+function allItems(doc: LayoutDoc) {
+    return doc.sections.flatMap((s) => s.rows).flatMap((r) => r.columns).flatMap((c) => c.items);
+}
+
+describe("adornment schema", () => {
+    it("accepts an icon-only adornment (defaults position to left)", () => {
+        const res = parseLayoutDoc(wrapItem({ id: "i", kind: "field", refKey: "opportunity.tour_date", adornment: { icon: "calendar" } }));
+        expect(res.ok, res.errors.join("; ")).toBe(true);
+        const ad = allItems(res.doc!)[0].adornment!;
+        expect(ad.icon).toBe("calendar");
+        expect(ad.position).toBe("left");
+        expect(ad.action).toBeUndefined();
+    });
+
+    it("accepts an open_drawer action with entity + idPath", () => {
+        const res = parseLayoutDoc(
+            wrapItem({
+                id: "i",
+                kind: "field",
+                refKey: "person.primary_contact_name",
+                adornment: { position: "right", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "opportunity.primary_person_id" } },
+            }),
+        );
+        expect(res.ok, res.errors.join("; ")).toBe(true);
+        const ad = allItems(res.doc!)[0].adornment!;
+        expect(ad).toEqual({ position: "right", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "opportunity.primary_person_id" } });
+    });
+
+    it("rejects an invalid icon", () => {
+        const res = parseLayoutDoc(wrapItem({ id: "i", kind: "field", refKey: "x", adornment: { icon: "rocket" } }));
+        expect(res.ok).toBe(false);
+        expect(res.errors.join(" ")).toMatch(/invalid icon/);
+    });
+
+    it("rejects a non open_drawer action type", () => {
+        const res = parseLayoutDoc(wrapItem({ id: "i", kind: "field", refKey: "x", adornment: { icon: "person", action: { type: "navigate", entity: "person" } } }));
+        expect(res.ok).toBe(false);
+        expect(res.errors.join(" ")).toMatch(/open_drawer/);
+    });
+
+    it("rejects an invalid action entity", () => {
+        const res = parseLayoutDoc(wrapItem({ id: "i", kind: "field", refKey: "x", adornment: { icon: "person", action: { type: "open_drawer", entity: "vendor" } } }));
+        expect(res.ok).toBe(false);
+        expect(res.errors.join(" ")).toMatch(/invalid entity/);
+    });
+});
+
+describe("default Lead layouts include adornment examples", () => {
+    it("drawer: primary contact opens person, tour date is calendar icon, child opens child", () => {
+        const items = allItems(buildLeadDrawerDefaultDoc());
+        const contact = items.find((i) => i.refKey === "person.primary_contact_name");
+        expect(contact?.adornment?.icon).toBe("person");
+        expect(contact?.adornment?.action?.entity).toBe("person");
+
+        const secondary = items.find((i) => i.refKey === "person.secondary_contact_name");
+        expect(secondary?.adornment?.icon).toBe("person");
+
+        const tour = items.find((i) => i.refKey === "opportunity.tour_date");
+        expect(tour?.adornment?.icon).toBe("calendar");
+        expect(tour?.adornment?.action).toBeUndefined(); // icon only
+
+        const child = items.find((i) => i.refKey === "child.name");
+        expect(child?.adornment?.action?.entity).toBe("child");
+    });
+
+    it("queue card: contact opens person, child opens child; still validates", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        expect(parseLayoutDoc(doc).ok).toBe(true);
+        const items = allItems(doc);
+        expect(items.find((i) => i.refKey === "person.primary_contact_name")?.adornment?.icon).toBe("person");
+        expect(items.find((i) => i.refKey === "child.name")?.adornment?.action?.entity).toBe("child");
+    });
+});
+
+describe("setItemAdornment op", () => {
+    it("sets and clears an adornment", () => {
+        let d = ops.addSection({ formatVersion: 1, surface: "drawer", entityType: "opportunities", sections: [] });
+        const f = ops.makeFieldItem("person.primary_phone", "Phone", "phone", "person");
+        d = ops.addItem(d, 0, 0, 0, f);
+        d = ops.setItemAdornment(d, 0, 0, 0, f.id, { position: "left", icon: "person", action: { type: "open_drawer", entity: "person" } });
+        expect(d.sections[0].rows[0].columns[0].items[0].adornment?.icon).toBe("person");
+        expect(parseLayoutDoc(d).ok).toBe(true);
+        d = ops.setItemAdornment(d, 0, 0, 0, f.id, undefined);
+        expect(d.sections[0].rows[0].columns[0].items[0].adornment).toBeUndefined();
+    });
+});
