@@ -117,15 +117,71 @@ export async function GET(request: NextRequest) {
             for (const v of data ?? []) verticalName.set((v as { id: string }).id, String((v as { name?: string }).name ?? ""));
         }
 
-        const records = opps.map((o) => ({
-            ...o,
-            // Hydrated/derived keys the registry layout references:
-            _status_display: o.status_key ? labelByKey.get(o.status_key) ?? o.status_key : o.status ?? null,
-            _customer_name: o.customer_id ? customerName.get(o.customer_id) ?? null : null,
-            _vertical_name: o.vertical_id ? verticalName.get(o.vertical_id) ?? null : null,
-            _quote_total_display: o.quote_total ?? null,
-            _updated: o.updated_at ?? o.created_at ?? null,
-        }));
+        // --- Real contacts: primary (by id) + secondary (another contact for the customer).
+        type ContactRow = { id: string; customer_id: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
+        const contactById = new Map<string, ContactRow>();
+        const contactsByCustomer = new Map<string, ContactRow[]>();
+        if (customerIds.length) {
+            const { data } = await supabase
+                .from("contacts")
+                .select("id, customer_id, first_name, last_name, phone, email")
+                .in("customer_id", customerIds)
+                .limit(500);
+            for (const c of data ?? []) {
+                const row = c as ContactRow;
+                contactById.set(row.id, row);
+                if (row.customer_id) {
+                    const arr = contactsByCustomer.get(row.customer_id) ?? [];
+                    arr.push(row);
+                    contactsByCustomer.set(row.customer_id, arr);
+                }
+            }
+        }
+        const fullName = (c?: ContactRow): string => (c ? [c.first_name, c.last_name].filter(Boolean).join(" ").trim() : "");
+
+        const records = opps.map((o) => {
+            const custName = o.customer_id ? customerName.get(o.customer_id) ?? null : null;
+            const statusDisplay = o.status_key ? labelByKey.get(o.status_key) ?? o.status_key : (o.status as string | null) ?? null;
+            const primaryId = (o.primary_contact_id as string | null) ?? null;
+            const primary = primaryId ? contactById.get(primaryId) : undefined;
+            const custContacts = o.customer_id ? contactsByCustomer.get(o.customer_id) ?? [] : [];
+            const secondary = custContacts.find((c) => c.id !== primaryId);
+            const jobDate = (o.job_date as string | null) ?? null;
+
+            return {
+                ...o,
+                // legacy/derived keys (queue registry + customer label)
+                _status_display: statusDisplay,
+                _customer_name: custName,
+                _vertical_name: o.vertical_id ? verticalName.get(o.vertical_id) ?? null : null,
+                _customer_email: primary?.email ?? null,
+                _customer_phone: primary?.phone ?? null,
+                _quote_total_display: o.quote_total ?? null,
+                _updated: o.updated_at ?? o.created_at ?? null,
+
+                // namespaced REAL values for Layout V2 refs (person.* / opportunity.*)
+                "person.primary_contact_name": fullName(primary) || custName || null,
+                "person.primary_phone": primary?.phone ?? null,
+                "person.primary_email": primary?.email ?? null,
+                "person.secondary_contact_name": secondary ? fullName(secondary) : null,
+                "person.secondary_phone": secondary?.phone ?? null,
+                "opportunity.status_key": o.status_key ?? (o.status as string | null) ?? null,
+                "opportunity.source": (o.source as string | null) ?? (o.external_source as string | null) ?? null,
+                "opportunity.channel": (o.external_source as string | null) ?? null,
+                "opportunity.campaign": null,
+                "opportunity.tour_date": jobDate,
+                "opportunity.tour_status": null,
+                "opportunity.job_date": jobDate,
+                "opportunity.customer_notes": (o.customer_notes as string | null) ?? null,
+
+                // related collections — no source table for this org/vertical → empty.
+                // The related_list table + widgets render their styled empty state; rows
+                // appear automatically when a childcare/tasks/reminders source exists.
+                children: [] as Record<string, unknown>[],
+                tasks: [] as Record<string, unknown>[],
+                reminders: [] as Record<string, unknown>[],
+            };
+        });
 
         return NextResponse.json({
             lifecycle: {

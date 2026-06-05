@@ -18,7 +18,15 @@ const wrapItem = (item: Record<string, unknown>): LayoutDoc =>
     }) as unknown as LayoutDoc;
 
 function allItems(doc: LayoutDoc) {
-    return doc.sections.flatMap((s) => s.rows).flatMap((r) => r.columns).flatMap((c) => c.items);
+    const out: import("@/lib/layout/layoutV2").LayoutItem[] = [];
+    const walkItem = (it: import("@/lib/layout/layoutV2").LayoutItem) => {
+        out.push(it);
+        // recurse into field_group subgrid rows + flat items
+        (it.rows ?? []).forEach((r) => r.columns.forEach((c) => c.items.forEach(walkItem)));
+        (it.items ?? []).forEach(walkItem);
+    };
+    doc.sections.forEach((s) => s.rows.forEach((r) => r.columns.forEach((c) => c.items.forEach(walkItem))));
+    return out;
 }
 
 describe("adornment schema", () => {
@@ -78,8 +86,8 @@ describe("default Lead layouts include adornment examples", () => {
         expect(tour?.adornment?.icon).toBe("calendar");
         expect(tour?.adornment?.action).toBeUndefined(); // icon only
 
-        const child = items.find((i) => i.refKey === "child.name");
-        expect(child?.adornment?.action?.entity).toBe("child");
+        const childTable = items.find((i) => i.kind === "related_list" && i.displayMode === "table");
+        expect(childTable?.columns?.find((c) => c.refKey === "child.name")?.adornment?.action?.entity).toBe("child");
     });
 
     it("queue card: contact opens person, child opens child; still validates", () => {

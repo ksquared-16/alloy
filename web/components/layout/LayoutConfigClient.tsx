@@ -59,7 +59,7 @@ function statusPill(status: string) {
     );
 }
 
-export default function LayoutConfigClient() {
+export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
     const enabled = isLayoutV2PreviewEnabledClient();
     const [forbidden, setForbidden] = useState(false);
     const canMutate = !forbidden;
@@ -275,10 +275,50 @@ export default function LayoutConfigClient() {
         setPicker(null);
     };
 
+    // Flattened catalog fields for the inline "replace field" control.
+    const catalogFields: LayoutCatalogField[] = (catalog?.groups ?? []).flatMap((g) => g.fields);
+    const replaceField = (sIdx: number, rIdx: number, cIdx: number, itemId: string, f: LayoutCatalogField) => {
+        if (!workingDoc) return;
+        // Preserve placement, condition, adornment, editable — change the field only.
+        op(ops.patchItem(workingDoc, sIdx, rIdx, cIdx, itemId, { refKey: f.refKey, label: f.fieldLabel, renderHint: ops.makeFieldItem(f.refKey, f.fieldLabel, f.fieldType).renderHint, sourceEntity: f.entityKey }));
+    };
+
+    /** Create an editable draft copy of the selected (e.g. published) layout. */
+    const editAsDraft = useCallback(async () => {
+        if (!canMutate || !selectedId || !workingDoc) return;
+        const rec = list?.records.find((r) => r.id === selectedId);
+        setBusy("editdraft");
+        try {
+            const res = await fetch("/api/admin/entity-layouts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    entity_type: workingDoc.entityType,
+                    surface: workingDoc.surface,
+                    layout_key: rec?.layoutKey ?? "default",
+                    name: workingName || rec?.name || "Layout",
+                    doc: workingDoc,
+                }),
+            });
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                throw new Error("Admin access is required to edit layouts.");
+            }
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not create draft");
+            await fetchList();
+            await selectRecord((json as EntityLayoutRecord).id);
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setBusy(null);
+        }
+    }, [canMutate, selectedId, workingDoc, workingName, list, fetchList, selectRecord]);
+
     if (!enabled) {
         return (
             <>
-                <Header />
+                {adminV2Chrome ? null : <Header />}
                 <p className="text-sm text-[#59678b]">Layout configuration is disabled for this environment.</p>
             </>
         );
@@ -286,7 +326,7 @@ export default function LayoutConfigClient() {
 
     return (
         <>
-            <Header />
+            {adminV2Chrome ? null : <Header />}
 
             {error && (
                 <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
@@ -359,7 +399,15 @@ export default function LayoutConfigClient() {
                                         <button type="button" onClick={removeLayout} disabled={!canMutate || busy === "delete"} className="rounded border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50">Delete</button>
                                     </div>
 
-                                    {isPublished && <p className="rounded bg-[#f4f6f9] px-3 py-2 text-xs text-[#59678b]">Published versions are immutable. Create a new draft to edit.</p>}
+                                    {isPublished && (
+                                        <div className="flex flex-wrap items-center gap-2 rounded bg-[#f4f6f9] px-3 py-2 text-xs text-[#59678b]">
+                                            <span>This published version is read-only.</span>
+                                            <button type="button" onClick={editAsDraft} disabled={!canMutate || busy === "editdraft"} className="rounded bg-[#00458C] px-2.5 py-1 text-xs font-medium text-white hover:bg-[#013a76] disabled:opacity-50">
+                                                {busy === "editdraft" ? "Creating draft…" : "Edit a draft of this layout"}
+                                            </button>
+                                            <span className="text-[11px] text-[#9aa4bf]">(creates the next draft version of this same layout)</span>
+                                        </div>
+                                    )}
 
                                     {/* Sections */}
                                     {workingDoc.sections.map((s, sIdx) => (
@@ -409,6 +457,8 @@ export default function LayoutConfigClient() {
                                                                             onRemove={() => op(ops.removeItem(workingDoc, sIdx, rIdx, cIdx, it.id))}
                                                                             onCondition={(cond) => op(ops.setItemCondition(workingDoc, sIdx, rIdx, cIdx, it.id, cond))}
                                                                             onAdornment={(a) => op(ops.setItemAdornment(workingDoc, sIdx, rIdx, cIdx, it.id, a))}
+                                                                            catalogFields={catalogFields}
+                                                                            onReplaceField={(f) => replaceField(sIdx, rIdx, cIdx, it.id, f)}
                                                                         />
                                                                     ))}
                                                                     {editable && (
@@ -491,6 +541,8 @@ function ItemRow({
     onRemove,
     onCondition,
     onAdornment,
+    catalogFields,
+    onReplaceField,
 }: {
     item: LayoutItem;
     editable: boolean;
@@ -503,6 +555,8 @@ function ItemRow({
     onRemove: () => void;
     onCondition: (cond: LayoutCondition | undefined) => void;
     onAdornment: (a: LayoutFieldAdornment | undefined) => void;
+    catalogFields: LayoutCatalogField[];
+    onReplaceField: (f: LayoutCatalogField) => void;
 }) {
     const ad = item.adornment;
     const setIcon = (icon: string) => {
@@ -539,6 +593,26 @@ function ItemRow({
                     {condKey(item.visibleWhen) === "custom" && <option value="custom">Custom (JSON)</option>}
                 </select>
             </div>
+            {item.kind === "field" && catalogFields.length > 0 && (
+                <div className="mt-0.5 flex items-center gap-1">
+                    <span className="text-[9px] text-[#9aa4bf]">field:</span>
+                    <select
+                        value={catalogFields.some((f) => f.refKey === item.refKey) ? item.refKey : ""}
+                        disabled={!editable}
+                        onChange={(e) => {
+                            const f = catalogFields.find((c) => c.refKey === e.target.value);
+                            if (f) onReplaceField(f);
+                        }}
+                        title="Replace this field (keeps placement, condition, icon, editable)"
+                        className="min-w-0 max-w-[180px] truncate rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40"
+                    >
+                        {!catalogFields.some((f) => f.refKey === item.refKey) && <option value="">{item.refKey} (custom)</option>}
+                        {catalogFields.map((f) => (
+                            <option key={f.refKey} value={f.refKey}>{f.entityLabel}: {f.fieldLabel}</option>
+                        ))}
+                    </select>
+                </div>
+            )}
             {item.kind === "field" && (
                 <div className="mt-0.5 flex items-center gap-1">
                     <span className="text-[9px] text-[#9aa4bf]">icon:</span>

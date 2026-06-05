@@ -1,20 +1,17 @@
 "use client";
 
 /**
- * Layout V2 Proof Harness — /adminV2/layout-proof
+ * Layout V2 Proof — /adminV2/layout-proof
  *
- * Proves the adoption path end-to-end, WITHOUT any production cutover:
- *   1. Lists real opportunity records in the Lead Management lifecycle,
- *      filtered to the Qualification stage (status_key = "qualified" by default).
- *   2. Renders the list from the resolved Layout V2 QUEUE config.
- *   3. Clicking a record renders a config-driven drawer from the resolved
- *      Layout V2 DRAWER config, with real field values (placeholder otherwise).
- *   4. Resolution uses the fallback chain (org → default → registry) and the
- *      source actually used is shown as a badge.
+ * Shows what a configured Lead drawer/queue WOULD look like: a work-unit-style
+ * Lead list, and — on click — a drawer-shell that visually mirrors the staging
+ * opportunity drawer (header, status, tabs, lifecycle rail) with a Layout
+ * V2-driven Overview body.
  *
- * Everything here is isolated: it reads the existing entity-layouts resolve API
- * and a dedicated read-only proof query. It does not touch AdminEntityDrawer,
- * DataTable, work-unit runtime, bootstrap, VM perf code, or entityPresentation.
+ * ISOLATED: it reads the entity-layouts resolve API + a read-only proof query,
+ * and mirrors the drawer chrome with proof-only components. It imports NO live
+ * AdminEntityDrawer / VM / work-unit / DataTable / bootstrap code. Mutation
+ * affordances are disabled/simulated. No production cutover.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -22,6 +19,8 @@ import type { LayoutDoc, LayoutResolutionSource } from "@/lib/layout/layoutV2";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import LayoutRecordView from "@/components/layout/LayoutRecordView";
+import ProofRecordModal from "@/components/layout/proofShell/ProofRecordModal";
+import { LEAD_LIFECYCLE_STAGES, leadStageIndexForStatus } from "@/components/layout/proofShell/ProofLifecycleRail";
 
 const ENTITY_TYPE = "opportunities";
 
@@ -36,8 +35,8 @@ type ProofData = {
 };
 type ResolveResp = { resolved: LayoutDoc; source: LayoutResolutionSource };
 
-const TEXT = "#31394d";
-const MUTED = "#59678b";
+const TEXT = "#273F52";
+const MUTED = "rgba(39,63,82,0.65)";
 
 function SourceBadge({ source }: { source: LayoutResolutionSource | null }) {
     if (!source) return <span className="text-xs text-[#9aa4bf]">—</span>;
@@ -48,26 +47,23 @@ function SourceBadge({ source }: { source: LayoutResolutionSource | null }) {
     };
     const s = map[source];
     return (
-        <span
-            className="rounded-full border px-2 py-0.5 text-[11px] font-medium"
-            style={{ backgroundColor: s.bg, color: s.fg, borderColor: s.border }}
-        >
+        <span className="rounded-full border px-2 py-0.5 text-[11px] font-medium" style={{ backgroundColor: s.bg, color: s.fg, borderColor: s.border }}>
             {s.label}
         </span>
     );
 }
 
-function DebugField({ label, children }: { label: string; children: React.ReactNode }) {
-    return (
-        <div className="flex flex-col">
-            <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                {label}
-            </span>
-            <span className="text-sm" style={{ color: TEXT }}>
-                {children}
-            </span>
-        </div>
-    );
+const str = (v: unknown): string => (v === undefined || v === null ? "" : String(v));
+function recordName(rec: Rec): string {
+    return str(rec["_customer_name"]) || str(rec["name"]) || `Lead ${str(rec.id).slice(0, 6)}`;
+}
+function recordSubtitle(rec: Rec): string {
+    const oppName = str(rec["name"]);
+    const email = str(rec["_customer_email"]) || str(rec["primary_email"]);
+    return [oppName, email].filter(Boolean).join(" · ");
+}
+function recordStatusLabel(rec: Rec): string {
+    return str(rec["_status_display"]) || str(rec["status_key"]) || str(rec["status"]) || "—";
 }
 
 export default function LayoutProofClient() {
@@ -86,10 +82,8 @@ export default function LayoutProofClient() {
 
     const onAdornment = useCallback((item: { label?: string; refKey: string }, ad: { action?: { entity: string } }) => {
         const target = ad.action?.entity ?? "record";
-        const msg = `Would open ${target} drawer · ${item.label || item.refKey}`;
-        // Proof harness is isolated — simulate navigation only (no live drawer).
         console.log("[layout-proof] adornment action →", { refKey: item.refKey, action: ad.action });
-        setSimNav(msg);
+        setSimNav(`Would open ${target} drawer · ${item.label || item.refKey}`);
     }, []);
 
     const loadLayouts = useCallback(async () => {
@@ -125,11 +119,7 @@ export default function LayoutProofClient() {
             setLoading(true);
             setError(null);
             try {
-                fetchEntityLabelMap()
-                    .then((m) => {
-                        if (!cancelled) setLabelMap(m);
-                    })
-                    .catch(() => {});
+                fetchEntityLabelMap().then((m) => { if (!cancelled) setLabelMap(m); }).catch(() => {});
                 await loadLayouts();
                 if (!cancelled) await loadRecords(stage);
             } catch (e) {
@@ -138,9 +128,7 @@ export default function LayoutProofClient() {
                 if (!cancelled) setLoading(false);
             }
         })();
-        return () => {
-            cancelled = true;
-        };
+        return () => { cancelled = true; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -163,6 +151,7 @@ export default function LayoutProofClient() {
 
     const records = proof?.records ?? [];
     const selectedRecord = records.find((r) => r.id === selectedId) ?? null;
+    const stages = proof?.lifecycle.stages ?? [{ statusKey: "qualified", label: "Qualified", sortOrder: 0 }];
 
     if (!flagOnClient) {
         return (
@@ -178,133 +167,116 @@ export default function LayoutProofClient() {
 
     return (
         <Shell>
-            {/* Debug / context bar */}
-            <div className="mb-4 rounded-lg border border-[#e6e8ec] bg-white p-3">
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-                    <DebugField label="Feature flag">
-                        <span className="text-green-700">enabled</span>
-                    </DebugField>
-                    <DebugField label="Entity type">{entityTypeLabel(labelMap, ENTITY_TYPE, "singular")}</DebugField>
-                    <DebugField label="Queue source">
-                        <SourceBadge source={queue?.source ?? null} />
-                    </DebugField>
-                    <DebugField label="Drawer source">
-                        <SourceBadge source={drawer?.source ?? null} />
-                    </DebugField>
-                    <DebugField label="Lifecycle">{proof?.lifecycle.label ?? "Lead Management"}</DebugField>
-                    <DebugField label="Stage filter">
-                        <select
-                            value={stage}
-                            onChange={(e) => onStageChange(e.target.value)}
-                            className="rounded border border-[#e6e8ec] bg-white px-2 py-1 text-sm"
-                        >
-                            {(proof?.lifecycle.stages ?? [{ statusKey: "qualified", label: "Qualified", sortOrder: 0 }]).map(
-                                (s) => (
-                                    <option key={s.statusKey} value={s.statusKey}>
-                                        {s.label} ({proof?.counts[s.statusKey] ?? 0})
-                                    </option>
-                                ),
-                            )}
-                        </select>
-                    </DebugField>
-                </div>
-                {proof?.lifecycle.note && (
-                    <p className="mt-2 text-[11px]" style={{ color: MUTED }}>
-                        {proof.lifecycle.note} Surfaces rendered: <strong>queue</strong> (list) + <strong>drawer</strong> (record).
-                    </p>
-                )}
-            </div>
-
             {flagDisabled && (
                 <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                     The server feature flag is OFF (API returned 404). Set{" "}
                     <code className="font-mono text-xs">LAYOUT_V2_PREVIEW_ENABLED=1</code> and reload.
                 </div>
             )}
-            {error && (
-                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>
-            )}
+            {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-                {/* Left: work-unit-style queue list (Layout V2 queue config) */}
-                <div className="rounded-lg border border-[#e6e8ec] bg-white">
-                    <div className="flex items-center justify-between border-b border-[#e6e8ec] px-3 py-2">
+            {/* Work-unit-style Lead list */}
+            <div className="overflow-hidden rounded-xl border border-[rgba(39,63,82,0.14)] bg-white shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(39,63,82,0.12)] bg-[#F6F8FC] px-4 py-2.5">
+                    <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold" style={{ color: TEXT }}>
-                            {proof?.lifecycle.label ?? "Lead Management"} ·{" "}
-                            {proof?.lifecycle.stages.find((s) => s.statusKey === stage)?.label ?? stage}
+                            {proof?.lifecycle.label ?? "Lead Management"}
                         </span>
-                        <span className="text-xs" style={{ color: MUTED }}>
-                            {records.length} record{records.length === 1 ? "" : "s"}
-                        </span>
+                        <span className="text-xs" style={{ color: MUTED }}>· work unit queue</span>
                     </div>
+                    <div className="flex items-center gap-2">
+                        <label className="text-[11px]" style={{ color: MUTED }}>Stage</label>
+                        <select value={stage} onChange={(e) => onStageChange(e.target.value)} className="rounded-md border border-[rgba(39,63,82,0.18)] bg-white px-2 py-1 text-xs">
+                            {stages.map((s) => (
+                                <option key={s.statusKey} value={s.statusKey}>{s.label} ({proof?.counts[s.statusKey] ?? 0})</option>
+                            ))}
+                        </select>
+                        <span className="text-xs" style={{ color: MUTED }}>{records.length} record{records.length === 1 ? "" : "s"}</span>
+                    </div>
+                </div>
 
-                    {loading ? (
-                        <p className="p-4 text-sm" style={{ color: MUTED }}>
-                            Loading…
-                        </p>
-                    ) : records.length === 0 ? (
-                        <p className="p-4 text-sm" style={{ color: MUTED }}>
-                            No records in this stage for your org. Pick another stage above, or move an opportunity into{" "}
-                            this stage. (The proof never injects demo records.)
-                        </p>
-                    ) : (
-                        <div className="flex flex-col gap-2 p-2">
-                            {records.map((rec) => (
+                {loading ? (
+                    <p className="p-4 text-sm" style={{ color: MUTED }}>Loading…</p>
+                ) : records.length === 0 ? (
+                    <p className="p-4 text-sm" style={{ color: MUTED }}>
+                        No records in this stage for your org. Pick another stage above, or move an opportunity into this stage.
+                        (The proof never injects demo records.)
+                    </p>
+                ) : (
+                    <div className="flex flex-col divide-y divide-[rgba(39,63,82,0.08)]">
+                        {records.map((rec) => {
+                            const idx = leadStageIndexForStatus(str(rec["status_key"]) || str(rec["status"]));
+                            return (
                                 <button
                                     key={rec.id}
                                     type="button"
                                     onClick={() => setSelectedId(rec.id)}
-                                    className={`rounded-lg border p-1 text-left transition-colors ${
-                                        selectedId === rec.id ? "border-[#2f6df6] bg-[#f5f8ff]" : "border-[#e6e8ec] bg-white hover:bg-[#f7f9fc]"
-                                    }`}
+                                    className="flex items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#f5f8ff]"
                                 >
-                                    {queue?.resolved ? (
-                                        <LayoutRecordView doc={queue.resolved} record={rec} onAdornmentAction={onAdornment} />
-                                    ) : (
-                                        <span className="px-2 text-sm" style={{ color: MUTED }}>
-                                            {String(rec["name"] ?? rec.id)}
+                                    <span className="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef3fb] text-[11px] font-semibold text-[#00458C]">
+                                        {recordName(rec).slice(0, 1).toUpperCase()}
+                                    </span>
+                                    <span className="min-w-0 flex-1">
+                                        <span className="flex items-center gap-2">
+                                            <span className="truncate text-sm font-semibold" style={{ color: TEXT }}>{recordName(rec)}</span>
+                                            <span className="rounded-full border border-[rgba(39,63,82,0.18)] bg-white px-1.5 py-0.5 text-[10px] font-medium" style={{ color: MUTED }}>
+                                                {recordStatusLabel(rec)}
+                                            </span>
+                                            <span className="ml-auto text-[10px]" style={{ color: MUTED }}>{LEAD_LIFECYCLE_STAGES[idx]?.label}</span>
                                         </span>
-                                    )}
+                                        {queue?.resolved ? (
+                                            <span className="mt-1 block">
+                                                <LayoutRecordView doc={queue.resolved} record={rec} onAdornmentAction={onAdornment} />
+                                            </span>
+                                        ) : null}
+                                    </span>
                                 </button>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Right: config-driven drawer (Layout V2 drawer config) */}
-                <div className="rounded-lg border border-[#e6e8ec] bg-[#fbfcfe] p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-semibold" style={{ color: TEXT }}>
-                            Drawer (config-driven)
-                        </span>
-                        <SourceBadge source={drawer?.source ?? null} />
+                            );
+                        })}
                     </div>
-                    {!selectedRecord ? (
-                        <p className="p-4 text-sm" style={{ color: MUTED }}>
-                            Select a record on the left to render its drawer from the resolved Layout V2 drawer config.
-                        </p>
-                    ) : !drawer?.resolved ? (
-                        <p className="p-4 text-sm" style={{ color: MUTED }}>
-                            No drawer layout resolved.
-                        </p>
-                    ) : (
-                        <LayoutRecordView doc={drawer.resolved} record={selectedRecord} onAdornmentAction={onAdornment} />
-                    )}
-                </div>
+                )}
             </div>
 
-            <p className="mt-4 text-[11px]" style={{ color: MUTED }}>
-                Adoption path: open{" "}
-                <a className="text-[#2f6df6] underline" href="/adminV2/layouts">
-                    /adminV2/layouts
-                </a>
-                , create a draft for <code className="font-mono">opportunities</code> (queue + drawer) from the registry,
-                edit, publish — then reload this page and the source badge flips to <strong>org layout</strong> and your
-                edits appear here.
-            </p>
+            {/* Center modal record drawer (mirrors current staging chrome; Overview = Layout V2) */}
+            <ProofRecordModal
+                open={!!selectedRecord}
+                onClose={() => setSelectedId(null)}
+                title={selectedRecord ? `Lead — ${recordName(selectedRecord)}` : ""}
+                subtitle={selectedRecord ? recordSubtitle(selectedRecord) : undefined}
+                statusLabel={selectedRecord ? recordStatusLabel(selectedRecord) : undefined}
+                attention={selectedRecord ? `Layout V2 proof · Overview below is config-driven (source: ${drawer?.source ?? "—"}).` : null}
+                lifecycleStatusKey={selectedRecord ? (str(selectedRecord["status_key"]) || str(selectedRecord["status"])) : null}
+                footer={
+                    <span>
+                        Proof shell — chrome is mirrored from staging; status/actions are simulated. Overview body source:{" "}
+                        <SourceBadge source={drawer?.source ?? null} />
+                    </span>
+                }
+            >
+                {selectedRecord && drawer?.resolved ? (
+                    <LayoutRecordView doc={drawer.resolved} record={selectedRecord} onAdornmentAction={onAdornment} />
+                ) : (
+                    <p className="text-sm" style={{ color: MUTED }}>No drawer layout resolved.</p>
+                )}
+            </ProofRecordModal>
+
+            {/* Proof details (collapsed by default — not the dominant visual) */}
+            <details className="mt-4 rounded-lg border border-[rgba(39,63,82,0.12)] bg-white px-3 py-2 text-sm">
+                <summary className="cursor-pointer text-[12px] font-medium" style={{ color: MUTED }}>Proof details</summary>
+                <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <Detail label="Feature flag"><span className="text-green-700">enabled</span></Detail>
+                    <Detail label="Entity type">{entityTypeLabel(labelMap, ENTITY_TYPE, "singular")}</Detail>
+                    <Detail label="Queue source"><SourceBadge source={queue?.source ?? null} /></Detail>
+                    <Detail label="Drawer source"><SourceBadge source={drawer?.source ?? null} /></Detail>
+                </div>
+                <p className="mt-2 text-[11px]" style={{ color: MUTED }}>
+                    {proof?.lifecycle.note}{" "}Configure at{" "}
+                    <a className="text-[#00458C] underline" href="/adminV2/settings/layouts">/adminV2/settings/layouts</a>{" "}— publish a Lead drawer/queue and reload; the source badge flips to <strong>org layout</strong> and edits appear here.
+                </p>
+            </details>
 
             {simNav && (
-                <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-lg border border-[#2f6df6] bg-white px-4 py-2 text-sm shadow-lg" role="status">
+                <div className="fixed bottom-4 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-[#00458C] bg-white px-4 py-2 text-sm shadow-lg" role="status">
                     <span style={{ color: TEXT }}>{simNav}</span>
                     <span className="ml-2 text-[11px] text-[#9aa4bf]">(simulated — proof only)</span>
                     <button type="button" onClick={() => setSimNav(null)} className="ml-3 text-[#59678b]">✕</button>
@@ -314,16 +286,23 @@ export default function LayoutProofClient() {
     );
 }
 
+function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+    return (
+        <div className="flex flex-col">
+            <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{label}</span>
+            <span className="text-sm" style={{ color: TEXT }}>{children}</span>
+        </div>
+    );
+}
+
 function Shell({ children }: { children: React.ReactNode }) {
     return (
-        <div className="mx-auto max-w-[1200px] px-6 py-6">
+        <div className="mx-auto max-w-[1100px] px-6 py-6">
             <header className="mb-5">
-                <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#1d2433" }}>
-                    Layout V2 — Proof Harness
-                </h1>
+                <h1 className="text-2xl font-bold tracking-tight" style={{ color: "#273F52" }}>Lead layout proof</h1>
                 <p className="mt-1 text-sm" style={{ color: MUTED }}>
-                    Isolated proof that Layout Config V2 can drive a work-unit-style list and a config-driven drawer.
-                    Not connected to live drawers, queues, or AdminV2 runtime.
+                    What a configured Lead queue and drawer would look like. Click a Lead to open the drawer shell — its
+                    Overview is driven by your Layout V2 config. Not connected to live drawers, queues, or AdminV2 runtime.
                 </p>
             </header>
             {children}

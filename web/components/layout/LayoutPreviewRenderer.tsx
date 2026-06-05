@@ -22,7 +22,7 @@ import {
     type LayoutRow,
     type LayoutSection,
 } from "@/lib/layout/layoutV2";
-import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
+import AdornmentIcon from "@/components/layout/AdornmentIcon";
 
 const BORDER = "#e6e8ec";
 const TEXT = "#31394d";
@@ -67,8 +67,8 @@ function FieldPreview({ item }: { item: LayoutItem }) {
             </div>
             <div className="mt-0.5 flex items-center gap-1 text-sm text-[#31394d]">
                 {item.adornment && item.adornment.position !== "right" ? (
-                    <span title={item.adornment.action ? `Opens ${item.adornment.action.entity} drawer` : undefined}>
-                        {ADORNMENT_ICON_GLYPH[item.adornment.icon]}
+                    <span className="inline-flex items-center text-[#00458C]" title={item.adornment.action ? `Opens ${item.adornment.action.entity} drawer` : undefined}>
+                        <AdornmentIcon icon={item.adornment.icon} />
                     </span>
                 ) : null}
                 <span>
@@ -83,8 +83,8 @@ function FieldPreview({ item }: { item: LayoutItem }) {
                     )}
                 </span>
                 {item.adornment && item.adornment.position === "right" ? (
-                    <span title={item.adornment.action ? `Opens ${item.adornment.action.entity} drawer` : undefined}>
-                        {ADORNMENT_ICON_GLYPH[item.adornment.icon]}
+                    <span className="inline-flex items-center text-[#00458C]" title={item.adornment.action ? `Opens ${item.adornment.action.entity} drawer` : undefined}>
+                        <AdornmentIcon icon={item.adornment.icon} />
                     </span>
                 ) : null}
             </div>
@@ -93,16 +93,25 @@ function FieldPreview({ item }: { item: LayoutItem }) {
 }
 
 function GroupPreview({ item }: { item: LayoutItem }) {
+    const hasSubgrid = Array.isArray(item.rows) && item.rows.length > 0;
     return (
         <div className="rounded-md border border-[#e6e8ec] bg-[#fbfcfe] p-2.5">
             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#59678b]">
                 {item.label || item.refKey}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-                {(item.items ?? []).map((c) => (
-                    <FieldPreview key={c.id} item={c} />
-                ))}
-            </div>
+            {hasSubgrid ? (
+                <div className="flex flex-col gap-2">
+                    {item.rows!.map((row) => (
+                        <RowPreview key={row.id} row={row} />
+                    ))}
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-2">
+                    {(item.items ?? []).map((c) => (
+                        <FieldPreview key={c.id} item={c} />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
