@@ -62,6 +62,8 @@ export type ApplyRegistryResolvedActionHost = {
     /** Capture-first add person — same modal for add_family_member / add_related_person. */
     openAddPerson?: (actionKey: string) => void;
     openCreateLead?: () => void;
+    /** VM / legacy drawer — open create-work modal without relying on window listeners. */
+    openCreateWork?: (detail: OpportunityOpenCreateWorkModalDetail) => void;
     /**
      * Optional invalidation hook to refresh local data without blowing away UI state.
      * When omitted, we fall back to `router.refresh()` (legacy behavior).
@@ -322,17 +324,23 @@ export async function applyRegistryResolvedActionClient(
             return { ok: true };
         }
         if (actionKey === "create_task" || intent === "create_task") {
-            if (eid && typeof window !== "undefined") {
-                window.dispatchEvent(
-                    new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
-                        detail: { opportunity_id: eid },
-                    })
-                );
-                window.dispatchEvent(
-                    new CustomEvent<OpportunityOpenCreateWorkModalDetail>(ADMIN_V2_OPEN_CREATE_WORK_MODAL, {
-                        detail: { opportunity_id: eid },
-                    })
-                );
+            if (eid) {
+                if (host.openCreateWork) {
+                    host.openCreateWork({ opportunity_id: eid });
+                    return { ok: true };
+                }
+                if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                        new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
+                            detail: { opportunity_id: eid },
+                        })
+                    );
+                    window.dispatchEvent(
+                        new CustomEvent<OpportunityOpenCreateWorkModalDetail>(ADMIN_V2_OPEN_CREATE_WORK_MODAL, {
+                            detail: { opportunity_id: eid },
+                        })
+                    );
+                }
             } else if (typeof window !== "undefined") {
                 window.dispatchEvent(new CustomEvent("adminv2:open-tasks-panel", { detail: { opportunity_id: null } }));
             }

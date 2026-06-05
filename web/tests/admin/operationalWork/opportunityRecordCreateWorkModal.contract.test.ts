@@ -11,7 +11,11 @@ const client = join(
     dirname(fileURLToPath(import.meta.url)),
     "../../../lib/admin/actions/applyRegistryResolvedActionClient.ts"
 );
-const drawer = join(dirname(fileURLToPath(import.meta.url)), "../../../components/admin/AdminEntityDrawer.tsx");
+const vmRegistryModals = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals.tsx"
+);
+const drawerRouter = join(dirname(fileURLToPath(import.meta.url)), "../../../components/admin/AdminEntityDrawer.tsx");
 
 describe("OpportunityRecordCreateWorkModal", () => {
     it("uses operator language and posts through operational task API", () => {
@@ -34,13 +38,21 @@ describe("create_task registry routing", () => {
         const src = readFileSync(client, "utf8");
         expect(src).toContain('actionKey === "create_task"');
         expect(src).toContain("ADMIN_V2_OPEN_CREATE_WORK_MODAL");
+        expect(src).toContain("host.openCreateWork");
         expect(src).not.toMatch(/create_task[\s\S]*adminv2:open-tasks-panel[\s\S]*opportunity_id: eid \|\| null/);
     });
 
-    it("drawer mounts create work modal and listens for open event", () => {
-        const src = readFileSync(drawer, "utf8");
-        expect(src).toContain("OpportunityRecordCreateWorkModal");
-        expect(src).toContain("ADMIN_V2_OPEN_CREATE_WORK_MODAL");
-        expect(src).toContain("isOperationalWorkV1Enabled()");
+    it("VM opportunity drawer mounts create work modal and listens for open event", () => {
+        const runtime = readFileSync(
+            join(dirname(fileURLToPath(import.meta.url)), "../../../components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        const host = readFileSync(vmRegistryModals, "utf8");
+        expect(runtime).toContain("useOpportunityDrawerVmRegistryModals");
+        expect(host).toContain("OpportunityRecordCreateWorkModal");
+        expect(host).toContain("ADMIN_V2_OPEN_CREATE_WORK_MODAL");
+        expect(host).toContain("openCreateWorkDirect");
+        expect(runtime).toContain("data-vm-drawer-action-modals-host");
+        expect(readFileSync(drawerRouter, "utf8")).toContain("OpportunityDrawerVmRuntime");
     });
 });
