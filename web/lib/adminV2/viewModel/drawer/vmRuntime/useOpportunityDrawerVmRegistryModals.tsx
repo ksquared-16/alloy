@@ -275,7 +275,7 @@ export function useOpportunityDrawerVmRegistryModals({ opportunityId, record, ca
                         open={launchPacketOpen}
                         opportunityId={oid}
                         opportunityLabel={entityLabel ?? "Opportunity"}
-                        opportunityRecord={record}
+                        opportunityRecord={record ?? null}
                         canMutate={canMutate}
                         onDismiss={() => setLaunchPacketOpen(false)}
                     />
