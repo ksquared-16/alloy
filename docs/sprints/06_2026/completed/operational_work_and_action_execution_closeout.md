@@ -39,6 +39,8 @@ The VM drawer action fixes restored operator trust in the primary enrollment CRM
 
 **Operational Work is now a first-class platform primitive.**
 
+Alongside Lifecycle, Readiness, Needs Attention, Actions, and BOS, Operational Work now forms part of Alloy’s core operating model and is expected to remain a long-lived platform capability rather than a feature-specific implementation.
+
 Before this sprint, Alloy could identify issues, evaluate readiness, and surface awareness — but it did not have a canonical execution framework for human obligations. Operational Work fills that gap.
 
 The platform can now:
@@ -82,7 +84,7 @@ Readiness, Needs Attention, and Operational Work are **complementary and intenti
 
 - **Readiness** identifies what is missing.
 - **Needs Attention** identifies what requires awareness.
-- **Operational Work** identifies what someone must do.
+- **Operational Work** identifies, assigns, and tracks what someone must do.
 
 Readiness does not create work. Needs Attention does not create work. Operational Work does not determine readiness.
 
