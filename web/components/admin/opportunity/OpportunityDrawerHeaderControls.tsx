@@ -6,7 +6,9 @@ import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperat
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { OpportunityDrawerHeaderActionsMenu } from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsMenu";
 import { ActionPreflightBlockedPanel } from "@/components/admin/opportunity/ActionPreflightBlockedPanel";
+import { OpportunityDrawerRegistryActionFeedbackBanner } from "@/components/admin/opportunity/OpportunityDrawerRegistryActionFeedbackBanner";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
+import type { OpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/useOpportunityDrawerRegistryActionFeedback";
 import { DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 
 type Props = {
@@ -22,6 +24,9 @@ type Props = {
     onActionSelect: (action: ResolvedActionForClient) => void;
     actionPreflightBlocked?: ActionPreflightUiPayload | null;
     onDismissActionPreflightBlocked?: () => void;
+    registryActionFeedback?: OpportunityDrawerRegistryActionFeedback | null;
+    /** Explains why the Actions menu is disabled (read-only record, loading, etc.). */
+    actionsDisabledReason?: string | null;
     /**
      * `composed` — legacy sidebar: attention + actions in one shrink-0 right column.
      * `modal-attention` / `modal-actions` — AdminV2 center modal three-column header.
@@ -40,6 +45,7 @@ function OpportunityDrawerHeaderActionsRow({
     canMutate,
     actionLoadingKey = null,
     onActionSelect,
+    disabledReason = null,
 }: Pick<
     Props,
     | "opportunityId"
@@ -52,7 +58,7 @@ function OpportunityDrawerHeaderActionsRow({
     | "canMutate"
     | "actionLoadingKey"
     | "onActionSelect"
->) {
+> & { disabledReason?: string | null }) {
     return (
         <div
             className="flex shrink-0 flex-nowrap items-center justify-end gap-2 self-start"
@@ -71,6 +77,10 @@ function OpportunityDrawerHeaderActionsRow({
                     actions={menuActions}
                     inquiryWorkflow={inquiryWorkflow}
                     disabled={!canMutate || !!actionLoadingKey}
+                    disabledReason={
+                        disabledReason ??
+                        (!canMutate ? "You don't have permission to run actions on this record." : null)
+                    }
                     busyKey={actionLoadingKey}
                     onSelect={onActionSelect}
                 />
@@ -93,6 +103,8 @@ export function OpportunityDrawerHeaderControls({
     onActionSelect,
     actionPreflightBlocked = null,
     onDismissActionPreflightBlocked,
+    registryActionFeedback = null,
+    actionsDisabledReason = null,
     layout = "composed",
 }: Props) {
     if (layout === "modal-attention") {
@@ -125,6 +137,7 @@ export function OpportunityDrawerHeaderControls({
                     canMutate={canMutate}
                     actionLoadingKey={actionLoadingKey}
                     onActionSelect={onActionSelect}
+                    disabledReason={actionsDisabledReason}
                 />
                 {actionPreflightBlocked ?
                     <ActionPreflightBlockedPanel
@@ -132,6 +145,9 @@ export function OpportunityDrawerHeaderControls({
                         preflight={actionPreflightBlocked}
                         onDismiss={onDismissActionPreflightBlocked}
                     />
+                :   null}
+                {registryActionFeedback ?
+                    <OpportunityDrawerRegistryActionFeedbackBanner feedback={registryActionFeedback} />
                 :   null}
             </div>
         );
@@ -161,6 +177,7 @@ export function OpportunityDrawerHeaderControls({
                     canMutate={canMutate}
                     actionLoadingKey={actionLoadingKey}
                     onActionSelect={onActionSelect}
+                    disabledReason={actionsDisabledReason}
                 />
             </div>
             {actionPreflightBlocked ?
@@ -169,6 +186,9 @@ export function OpportunityDrawerHeaderControls({
                     preflight={actionPreflightBlocked}
                     onDismiss={onDismissActionPreflightBlocked}
                 />
+            :   null}
+            {registryActionFeedback ?
+                <OpportunityDrawerRegistryActionFeedbackBanner feedback={registryActionFeedback} />
             :   null}
         </div>
     );

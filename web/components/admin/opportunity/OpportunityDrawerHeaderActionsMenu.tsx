@@ -16,6 +16,8 @@ type Props = {
     actions: ResolvedActionForClient[];
     inquiryWorkflow?: boolean;
     disabled?: boolean;
+    /** Shown on trigger and menu items when actions are globally disabled. */
+    disabledReason?: string | null;
     busyKey?: string | null;
     onSelect: (action: ResolvedActionForClient) => void;
 };
@@ -25,6 +27,7 @@ export function OpportunityDrawerHeaderActionsMenu({
     actions,
     inquiryWorkflow = false,
     disabled = false,
+    disabledReason = null,
     busyKey = null,
     onSelect,
 }: Props) {
@@ -61,6 +64,16 @@ export function OpportunityDrawerHeaderActionsMenu({
 
     if (!actions.length) return null;
 
+    const menuDisabledReason =
+        disabledReason?.trim() ||
+        (disabled ? "Actions are unavailable for this record right now." : null);
+    const itemClassName = (index: number) =>
+        `block w-full min-w-0 max-w-[16rem] truncate whitespace-nowrap px-3 py-2 text-left text-[12px] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-alloy-blue/30 disabled:cursor-not-allowed disabled:opacity-45 ${
+            disabled ?
+                "cursor-not-allowed text-alloy-midnight/45"
+            :   "text-alloy-midnight/88 hover:bg-alloy-blue/[0.09] active:bg-alloy-blue/[0.14] focus-visible:bg-alloy-blue/[0.08]"
+        } ${index === activeIndex && !disabled ? "bg-alloy-blue/[0.06]" : ""}`;
+
     const onTriggerKeyDown = (ev: ReactKeyboardEvent<HTMLButtonElement>) => {
         if (ev.key === "ArrowDown" || ev.key === "Enter" || ev.key === " ") {
             ev.preventDefault();
@@ -96,11 +109,17 @@ export function OpportunityDrawerHeaderActionsMenu({
             <button
                 type="button"
                 disabled={disabled}
-                className={`${btnClass} inline-flex items-center gap-1`}
+                title={menuDisabledReason ?? undefined}
+                className={`${btnClass} inline-flex items-center gap-1 transition-colors ${
+                    disabled ? "cursor-not-allowed opacity-55" : "hover:bg-alloy-blue/[0.06] active:bg-alloy-blue/[0.11]"
+                }`}
                 aria-expanded={open}
                 aria-haspopup="menu"
                 aria-controls={menuId}
-                onClick={() => setOpen((v) => !v)}
+                onClick={() => {
+                    if (disabled) return;
+                    setOpen((v) => !v);
+                }}
                 onKeyDown={onTriggerKeyDown}
             >
                 <span>Actions</span>
@@ -123,13 +142,17 @@ export function OpportunityDrawerHeaderActionsMenu({
                             type="button"
                             role="menuitem"
                             disabled={disabled || busyKey === a.key}
-                            title={a.label}
+                            title={
+                                busyKey === a.key ? "Action in progress…"
+                                : menuDisabledReason ?
+                                    menuDisabledReason
+                                :   a.label
+                            }
                             aria-current={index === activeIndex ? "true" : undefined}
-                            className={`block w-full min-w-0 max-w-[16rem] truncate whitespace-nowrap px-3 py-2 text-left text-[12px] font-medium leading-none text-alloy-midnight/88 transition-colors hover:bg-alloy-blue/[0.07] focus-visible:bg-alloy-blue/[0.08] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-alloy-blue/30 disabled:opacity-50 ${
-                                index === activeIndex ? "bg-alloy-blue/[0.05]" : ""
-                            }`}
+                            className={itemClassName(index)}
                             onMouseEnter={() => setActiveIndex(index)}
                             onClick={() => {
+                                if (disabled || busyKey === a.key) return;
                                 close();
                                 onSelect(a);
                             }}

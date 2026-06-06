@@ -13762,7 +13762,6 @@ export function AdminEntityDrawerLegacy() {
                     })
                     : undefined
             }
-            runtimeDebug={null}
         >
             <div
                 className="relative"

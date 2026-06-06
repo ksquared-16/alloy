@@ -22,6 +22,7 @@ type Props = {
     opportunityLabel: string;
     familyLabel?: string | null;
     canMutate: boolean;
+    onSent?: () => void;
 };
 
 /** Opportunity drawer — pick a form and send to existing family (Card 3). */
@@ -32,6 +33,7 @@ export default function SendFormToOpportunityModal({
     opportunityLabel,
     familyLabel = null,
     canMutate,
+    onSent,
 }: Props) {
     const [forms, setForms] = useState<FormRow[]>([]);
     const [loading, setLoading] = useState(false);
@@ -100,6 +102,7 @@ export default function SendFormToOpportunityModal({
                 d?.embed_url ??
                 (typeof window !== "undefined" && d?.embed_path ? `${window.location.origin}${d.embed_path}` : null);
             setCreated({ embed_url: embedUrl, embed_path: d?.embed_path ?? "" });
+            onSent?.();
         } catch (e) {
             setSendErr(e instanceof Error ? e.message : "Send failed");
         } finally {

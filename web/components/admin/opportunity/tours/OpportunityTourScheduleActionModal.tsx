@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
+import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
 
 export type OpportunityTourScheduleActionModalProps = {
     open: boolean;
@@ -19,6 +20,8 @@ export type OpportunityTourScheduleActionModalProps = {
 };
 
 type SlotPhase = "bootstrapping" | "duplicate_guard" | "schedule" | "reschedule";
+
+const SUCCESS_DISMISS_MS = 2000;
 
 function formatBookingWhen(row: TourBookingRow, viewerTz: string | null | undefined): string {
     try {
@@ -74,6 +77,21 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
     const [slotPhase, setSlotPhase] = useState<SlotPhase>("bootstrapping");
     const [activeBookings, setActiveBookings] = useState<TourBookingRow[]>([]);
     const [bootstrapErr, setBootstrapErr] = useState<string | null>(null);
+    const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+    const defaultSuccessMessage = useMemo(() => {
+        const label = (submitLabel ?? title ?? "").toLowerCase();
+        return label.includes("reschedule") ? "Tour rescheduled." : "Tour scheduled.";
+    }, [submitLabel, title]);
+
+    const completeWithSuccess = useCallback(
+        async (result: { booking?: TourBookingRow } | undefined, message: string) => {
+            await onSlotBooked(result);
+            setSuccessMessage(message);
+            window.setTimeout(() => onClose(), SUCCESS_DISMISS_MS);
+        },
+        [onClose, onSlotBooked]
+    );
 
     const loadActiveBookings = useCallback(async () => {
         if (!oid) {
@@ -108,6 +126,7 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
             setSlotPhase("bootstrapping");
             setActiveBookings([]);
             setBootstrapErr(null);
+            setSuccessMessage(null);
             return;
         }
         setPanel(hasSite ? "slots" : "legacy");
@@ -124,6 +143,34 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
     const primaryActive = useMemo(() => activeBookings[0] ?? null, [activeBookings]);
 
     if (!open) return null;
+
+    if (successMessage) {
+        return (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+                <div
+                    className="w-full max-w-md overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white p-5 shadow-2xl"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <div className="text-base font-semibold text-alloy-midnight">{title}</div>
+                    <div className="mt-4 space-y-3">
+                        <ActionModalStatusMessage type="success" message={successMessage} />
+                        <p className="text-xs text-alloy-midnight/65">
+                            Tour date in the inquiry summary has been updated.
+                        </p>
+                        <div className="flex justify-end pt-1">
+                            <button
+                                type="button"
+                                className="rounded-lg bg-alloy-midnight px-3 py-2 text-sm font-medium text-white"
+                                onClick={onClose}
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const showSlotChrome = hasSite && panel === "slots";
 
@@ -185,8 +232,7 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                         primaryBooking={null}
                         onCancel={onClose}
                         onSuccess={async (result) => {
-                            await onSlotBooked(result);
-                            onClose();
+                            await completeWithSuccess(result, defaultSuccessMessage);
                         }}
                         footerSlot={
                             <div className="space-y-1">
@@ -216,8 +262,7 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                         primaryBooking={primaryActive}
                         onCancel={() => setSlotPhase(activeBookings.length > 0 ? "duplicate_guard" : "schedule")}
                         onSuccess={async (result) => {
-                            await onSlotBooked(result);
-                            onClose();
+                            await completeWithSuccess(result, defaultSuccessMessage);
                         }}
                         footerSlot={
                             <p className="text-[11px] text-alloy-midnight/60">
@@ -261,6 +306,7 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                                     : "Manual entry updates metadata via the existing action workflow (does not create a tour_booking row)."
                             }
                             submitLabel={submitLabel}
+                            successMessage={defaultSuccessMessage}
                             initialTourDate={initialTourDate}
                             initialTourTime={initialTourTime}
                             onClose={onClose}

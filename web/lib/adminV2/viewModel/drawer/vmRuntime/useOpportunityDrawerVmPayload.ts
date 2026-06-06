@@ -17,6 +17,15 @@ import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/
 import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
 import { peekOpportunityDrawerDisplayVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerPayloadPeekSeed";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
+import {
+    ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH,
+    isTourSurfaceActionKey,
+    parseOpportunityDrawerRecordPatchDetail,
+} from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { OPPORTUNITY_QUEUE_UPDATED_EVENT, parseOpportunityQueueUpdatedDetail } from "@/lib/admin/opportunityQueueRefreshEvent";
+import { fetchOpportunityDrawerHeaderActionsFromRecord } from "@/lib/admin/opportunityDrawerHeaderActionsPrefetch";
+import { patchOpportunityDrawerVmDisplayRecord } from "@/lib/adminV2/viewModel/drawer/vmRuntime/patchOpportunityDrawerVmDisplayRecord";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 export type OpportunityDrawerVmPayloadState = {
     activeVm: OpportunityDrawerViewModel | null;
@@ -25,6 +34,9 @@ export type OpportunityDrawerVmPayloadState = {
     error: string | null;
     suppressFullDrawerLoading: boolean;
     holdPriorPayload: boolean;
+    patchDisplayRecord: (
+        patchFn: (prev: Record<string, unknown>) => Record<string, unknown>
+    ) => void;
 };
 
 export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState {
@@ -198,6 +210,61 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
         applyVm,
     ]);
 
+    const patchDisplayRecord = useCallback(
+        (patchFn: (prev: Record<string, unknown>) => Record<string, unknown>) => {
+            const applyPatch = (vm: OpportunityDrawerViewModel | null) => {
+                if (!vm || String(vm.entity.id) !== String(drawer.id)) return vm;
+                const currentRecord = vm.above_fold.record ?? {};
+                const nextRecord = patchFn({ ...currentRecord });
+                return patchOpportunityDrawerVmDisplayRecord(vm, nextRecord);
+            };
+            setDisplayVm(applyPatch);
+            setActiveVm(applyPatch);
+        },
+        [drawer.id]
+    );
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        const oid = drawer.id.trim();
+
+        const onRecordPatch = (ev: Event) => {
+            const detail = parseOpportunityDrawerRecordPatchDetail(ev);
+            if (!detail || detail.opportunity_id !== oid) return;
+            patchDisplayRecord(() => detail.record);
+        };
+
+        const onQueueUpdated = (ev: Event) => {
+            const detail = parseOpportunityQueueUpdatedDetail(ev);
+            const id = (detail?.id ?? "").trim();
+            if (!id || id !== oid) return;
+            const actionKey = (detail?.action_key ?? "").trim();
+            if (!isTourSurfaceActionKey(actionKey)) return;
+
+            const record = (displayVm?.above_fold.record ?? {}) as Record<string, unknown>;
+            void fetchOpportunityDrawerHeaderActionsFromRecord(
+                oid,
+                drawer.opportunityWorkspaceContext ?? null,
+                record,
+                workspaceDataFetchInit()
+            ).then((resolved) => {
+                const applyHeaderRefresh = (vm: OpportunityDrawerViewModel | null) => {
+                    if (!vm || String(vm.entity.id) !== oid) return vm;
+                    return patchOpportunityDrawerVmDisplayRecord(vm, vm.above_fold.record ?? {}, resolved);
+                };
+                setDisplayVm(applyHeaderRefresh);
+                setActiveVm(applyHeaderRefresh);
+            });
+        };
+
+        window.addEventListener(ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH, onRecordPatch as EventListener);
+        window.addEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated as EventListener);
+        return () => {
+            window.removeEventListener(ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH, onRecordPatch as EventListener);
+            window.removeEventListener(OPPORTUNITY_QUEUE_UPDATED_EVENT, onQueueUpdated as EventListener);
+        };
+    }, [drawer.type, drawer.id, drawer.opportunityWorkspaceContext, displayVm?.above_fold.record, patchDisplayRecord]);
+
     const holdPriorPayload =
         shouldHoldPriorDrawerContent(drawerRuntimePhase.phase) &&
         displayVm != null &&
@@ -221,5 +288,6 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
         error,
         suppressFullDrawerLoading,
         holdPriorPayload,
+        patchDisplayRecord,
     };
 }

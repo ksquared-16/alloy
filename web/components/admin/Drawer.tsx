@@ -54,6 +54,8 @@ interface DrawerProps {
     headerExtra?: React.ReactNode;
     /** Optional: compact strip below tab row (e.g. lifecycle rail). Only body scrolls. */
     postTabStrip?: React.ReactNode;
+    /** Optional: fixed overlays (action modals) — rendered in panel shell above scroll body. */
+    overlayChildren?: React.ReactNode;
     /** Optional: use higher z-index when stacking drawers (e.g. 60/70) */
     zIndexBackdrop?: number;
     zIndexPanel?: number;
@@ -97,6 +99,7 @@ export default function Drawer({
     headerSignals,
     headerExtra,
     postTabStrip,
+    overlayChildren,
     children,
     zIndexBackdrop = 40,
     zIndexPanel = 50,
@@ -438,6 +441,11 @@ export default function Drawer({
                     </div>
                 )}
             </div>
+            {overlayChildren != null && overlayChildren !== false ?
+                <div className="relative shrink-0" data-adminv2-drawer-overlay-host="true">
+                    {overlayChildren}
+                </div>
+            :   null}
             <div
                 data-adminv2-record-modal-scroll
                 className={`flex-1 overflow-y-auto min-h-0 ${isModal ? (cleaningRecordModalTone ? "px-4 py-2.5 sm:px-5 sm:py-3.5" : "px-4 py-3 sm:px-5 sm:py-4") : "p-6"} ${isV2 ? "[scrollbar-gutter:stable]" : "bg-admin-surface-card"}`}

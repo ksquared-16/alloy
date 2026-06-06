@@ -53,6 +53,7 @@ describe("create_task registry routing", () => {
         expect(host).toContain("ADMIN_V2_OPEN_CREATE_WORK_MODAL");
         expect(host).toContain("openCreateWorkDirect");
         expect(runtime).toContain("data-vm-drawer-action-modals-host");
+        expect(runtime).toContain("overlayChildren");
         expect(readFileSync(drawerRouter, "utf8")).toContain("OpportunityDrawerVmRuntime");
     });
 });
