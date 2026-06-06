@@ -35,7 +35,60 @@ This sprint established **Operational Work** as Alloy's execution home for human
 
 The VM drawer action fixes restored operator trust in the primary enrollment CRM surface — the place where most operational work is created and completed today.
 
+### Major milestone achieved
+
+**Operational Work is now a first-class platform primitive.**
+
+Alongside Lifecycle, Readiness, Needs Attention, Actions, and BOS, Operational Work now forms part of Alloy’s core operating model and is expected to remain a long-lived platform capability rather than a feature-specific implementation.
+
+Before this sprint, Alloy could identify issues, evaluate readiness, and surface awareness — but it did not have a canonical execution framework for human obligations. Operational Work fills that gap.
+
+The platform can now:
+
+- Define work
+- Create work
+- Assign work
+- Complete work
+- Deduplicate work
+- Track provenance
+- Create work from workflows
+- Surface work across operator experiences
+
+This is not a UI polish pass or a task-list refactor. It is a durable platform layer that future modules — enrollment, billing, compliance, subsidy, and beyond — can build on without inventing parallel obligation models.
+
+### First complete execution loop
+
+Alloy now has its first complete end-to-end execution loop:
+
+```
+Lifecycle
+        ↓
+Event
+        ↓
+Workflow
+        ↓
+Operational Work
+        ↓
+Human Action
+        ↓
+System Update
+```
+
+Previous systems could evaluate conditions and surface awareness. Operational Work introduces a durable mechanism for **assigning responsibility** and **tracking completion**.
+
+The enrollment tour path demonstrates this loop in production: a record moves through lifecycle stages, a tour-scheduled event fires a workflow, the workflow instantiates `record_tour_outcome` work, an operator completes that obligation (and may execute registry actions such as recording the outcome), and underlying record truth updates — after which lifecycle, readiness, and attention signals re-evaluate from authoritative state.
+
 ### Fit in the Alloy operating model
+
+Readiness, Needs Attention, and Operational Work are **complementary and intentionally separate**:
+
+- **Readiness** identifies what is missing.
+- **Needs Attention** identifies what requires awareness.
+- **Operational Work** identifies, assigns, and tracks what someone must do.
+
+Readiness does not create work. Needs Attention does not create work. Operational Work does not determine readiness.
+
+Each layer answers a different operator question. Together they form Alloy's evaluation → awareness → execution stack without collapsing responsibilities into a single system.
 
 | Layer | Role | Relationship to Operational Work |
 |-------|------|----------------------------------|
@@ -455,11 +508,13 @@ Manual ad hoc uses `manual_ad_hoc` definition with weak dedupe.
 
 ## 5. Known Gaps
 
-### Must do before Layout Config
+### High-priority follow-ups during Layout Configuration
 
-| Gap | Rationale |
-|-----|-----------|
-| **VM opportunity work strip parity** | Layout Config will reorganize drawer IA; strip must render and refresh correctly in VM runtime first |
+The Operational Work sprint is complete. These items are **not blockers to starting Layout Configuration** — they are follow-ups best addressed while drawer and queue IA is actively being configured.
+
+| Follow-up | Rationale |
+|-----------|-----------|
+| **VM Opportunity Work strip refresh parity** | The VM Opportunity Work strip should render and live-refresh correctly in the VM drawer runtime. Complete this during the Layout Configuration sprint while drawer section placement is in flux — not as a prerequisite to beginning layout work |
 | **Contract test updates for VM router** | `opportunityOperationalCompactStrip.contract.test.ts` fails — tests still assert Legacy `AdminEntityDrawer.tsx` wiring |
 | **Tour schedule UX tests** | `opportunityTourScheduleUx.test.ts` partially fails — same VM migration debt |
 
@@ -551,6 +606,25 @@ Load:
 - docs/system/adminv2-runtime-performance-doctrine.md
 - Layout V2 foundation docs and d226d295 / 76fc9785 merge artifacts
 ```
+
+---
+
+## Future direction
+
+Operational Work is expected to become the foundation for:
+
+- Tasks
+- Checklists
+- Reviews
+- Approvals
+- Compliance work
+- Billing work
+- Subsidy work
+- BOS-generated execution recommendations
+
+The framework was intentionally designed to support **multiple future work shapes** beyond the V1 task implementation. Work Definitions describe outcome intent and policy; Work Instances carry runtime assignee, due, and status; provenance and dedupe apply regardless of shape. V1 ships task-shaped instances in `operational_tasks`, but the abstraction does not assume tasks are the only or final form of operational work.
+
+As Alloy expands across industries and operational domains, new shapes should extend this framework — not fork parallel obligation systems.
 
 ---
 
