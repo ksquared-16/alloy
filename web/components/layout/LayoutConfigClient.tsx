@@ -49,6 +49,18 @@ const RENDER_MODES: { key: LayoutRenderHint; label: string }[] = [
 /** Column width buckets (no raw CSS); shared by the related-list column editor. */
 const WIDTH_OPTIONS: LayoutColumnWidth[] = [...LAYOUT_COLUMN_WIDTHS];
 
+/** Friendly labels for the bounded queue-card zones (shown in the zone picker). */
+const QUEUE_ZONE_LABEL: Record<string, string> = {
+    "header.title": "Header · Household title",
+    "header.status": "Header · Status pill",
+    "header.attention": "Header · Attention line",
+    "header.location": "Header · Location",
+    "body.contact": "Contact row",
+    "body.children": "Children rows",
+    "body.tour": "Tour row",
+    "actions.stack": "Action stack",
+};
+
 const ACTION_ENTITY_OPTIONS: { value: "" | LayoutAdornmentActionEntity; label: string }[] = [
     { value: "", label: "Icon only" },
     { value: "person", label: "Open person drawer" },
@@ -554,9 +566,15 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                                         expanded
                                                     </label>
                                                 )}
-                                                <button type="button" onClick={() => op(ops.moveSection(workingDoc, sIdx, -1))} disabled={!editable || sIdx === 0} className="rounded border border-[#e6e8ec] px-1.5 text-sm disabled:opacity-40">↑</button>
-                                                <button type="button" onClick={() => op(ops.moveSection(workingDoc, sIdx, 1))} disabled={!editable || sIdx === workingDoc.sections.length - 1} className="rounded border border-[#e6e8ec] px-1.5 text-sm disabled:opacity-40">↓</button>
-                                                <button type="button" onClick={() => op(ops.removeSection(workingDoc, sIdx))} disabled={!editable} className="rounded border border-red-200 px-1.5 text-sm text-red-600 disabled:opacity-40" title="Delete section">✕</button>
+                                                {workingDoc.surface === "queue" ? (
+                                                    <span className="rounded bg-[#eef1f6] px-1.5 py-0.5 text-[10px] font-medium text-[#59678b]">queue card</span>
+                                                ) : (
+                                                    <>
+                                                        <button type="button" onClick={() => op(ops.moveSection(workingDoc, sIdx, -1))} disabled={!editable || sIdx === 0} className="rounded border border-[#e6e8ec] px-1.5 text-sm disabled:opacity-40">↑</button>
+                                                        <button type="button" onClick={() => op(ops.moveSection(workingDoc, sIdx, 1))} disabled={!editable || sIdx === workingDoc.sections.length - 1} className="rounded border border-[#e6e8ec] px-1.5 text-sm disabled:opacity-40">↓</button>
+                                                        <button type="button" onClick={() => op(ops.removeSection(workingDoc, sIdx))} disabled={!editable} className="rounded border border-red-200 px-1.5 text-sm text-red-600 disabled:opacity-40" title="Delete section">✕</button>
+                                                    </>
+                                                )}
                                             </div>
 
                                             <div className="flex flex-col gap-2 p-2">
@@ -641,13 +659,16 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                                     </div>
                                                 ))}
                                                 {editable && (
-                                                    <button type="button" onClick={() => op(ops.addRow(workingDoc, sIdx, 2))} className="self-start rounded border border-[#e6e8ec] px-2 py-1 text-[11px] text-[#31394d] hover:bg-[#F4F6F9]">+ Add row</button>
+                                                    <button type="button" onClick={() => op(ops.addRow(workingDoc, sIdx, 2))} className="self-start rounded border border-[#e6e8ec] px-2 py-1 text-[11px] text-[#31394d] hover:bg-[#F4F6F9]">{workingDoc.surface === "queue" ? "+ Add card row" : "+ Add row"}</button>
                                                 )}
                                             </div>
                                         </div>
                                     ))}
-                                    {editable && (
+                                    {editable && workingDoc.surface !== "queue" && (
                                         <button type="button" onClick={() => op(ops.addSection(workingDoc))} className="self-start rounded border border-[#e6e8ec] px-3 py-1.5 text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9]">+ Add section</button>
+                                    )}
+                                    {workingDoc.surface === "queue" && (
+                                        <p className="text-[11px] text-[#9aa4bf]">A queue card is a single card — add fields/lists above and give each a <span className="font-medium">card zone</span>. Layout is driven by zones, not extra sections.</p>
                                     )}
 
                                     {/* JSON escape hatch */}
@@ -763,7 +784,7 @@ function ItemRow({
                     <span className="text-[9px] text-[#9aa4bf]">card zone:</span>
                     <select value={currentZone} disabled={!editable} onChange={(e) => onPatch({ metadata: { ...(item.metadata ?? {}), zone: e.target.value || undefined } })} title="Where this item renders in the queue card" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
                         <option value="">(auto)</option>
-                        {LAYOUT_QUEUE_ZONES.map((zk) => <option key={zk} value={zk}>{zk}</option>)}
+                        {LAYOUT_QUEUE_ZONES.map((zk) => <option key={zk} value={zk}>{QUEUE_ZONE_LABEL[zk] ?? zk}</option>)}
                     </select>
                 </div>
             )}
@@ -1114,7 +1135,7 @@ function RelatedListEditor({
                     <span className="text-[9px] text-[#9aa4bf]">card zone:</span>
                     <select value={currentZone} disabled={!editable} onChange={(e) => onPatchItem({ metadata: { ...(item.metadata ?? {}), zone: e.target.value || undefined } })} title="Where this list renders in the queue card" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
                         <option value="">(auto)</option>
-                        {LAYOUT_QUEUE_ZONES.map((zk) => <option key={zk} value={zk}>{zk}</option>)}
+                        {LAYOUT_QUEUE_ZONES.map((zk) => <option key={zk} value={zk}>{QUEUE_ZONE_LABEL[zk] ?? zk}</option>)}
                     </select>
                 </div>
             )}

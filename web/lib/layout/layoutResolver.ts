@@ -19,6 +19,7 @@
 
 import type { EntityPresentationType } from "@/lib/entityPresentation";
 import { layoutDocFromRegistry } from "./migrateFromRegistry";
+import { buildLeadDefaultDoc } from "./defaultLeadLayouts";
 import type {
     EntityLayoutRecord,
     LayoutResolution,
@@ -58,6 +59,15 @@ export function resolveLayout(input: ResolveLayoutInput): LayoutResolution {
     const defaultRecord = latestPublished(input.defaultRecords, input.surface);
     if (defaultRecord) {
         return { doc: defaultRecord.doc, source: "default", record: defaultRecord };
+    }
+
+    // Curated default — for entities with a hand-built Lead default (opportunities),
+    // prefer it over the raw registry conversion so an un-configured org still gets
+    // the correct household queue card / Lead drawer (not the generic table columns,
+    // which surface the opportunity name/title and a raw location column).
+    const curated = buildLeadDefaultDoc(input.entityType, input.surface);
+    if (curated) {
+        return { doc: curated, source: "default" };
     }
 
     // Layer 0 fallback — convert entityPresentation.ts. Unknown entity types

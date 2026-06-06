@@ -40,6 +40,14 @@ const MUTED = "rgba(39,63,82,0.6)";
 const CARD_BORDER = "rgba(0,162,131,0.22)";
 const PILL_BORDER = "rgba(0,162,131,0.38)";
 const PILL_BG = "rgba(0,162,131,0.12)";
+const ROW_DIVIDER = "rgba(39,63,82,0.08)";
+// Action chips — mirror workspace.css: Open = dark pine/teal primary; the rest
+// are quiet neutral secondaries (NOT the alloy-blue used elsewhere).
+const ACTION_OPEN_BG = "#0a8f78"; // color-mix(d-pine 92%, #0f172a)
+const ACTION_OPEN_BORDER = "#0a8f78";
+const ACTION_QUIET_BG = "#f5f8fc";
+const ACTION_QUIET_BORDER = "rgba(39,63,82,0.16)";
+const ACTION_QUIET_TEXT = "#39485a";
 
 type AdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
 const QueueAdornCtx = createContext<{ onAdorn?: AdornmentActionHandler }>({});
@@ -74,8 +82,14 @@ function flattenItems(doc: LayoutDoc): LayoutItem[] {
     return out;
 }
 
-/** Infer a queue zone for an item that has no explicit `metadata.zone`. */
-function inferZone(item: LayoutItem): LayoutQueueZone {
+/**
+ * Infer a queue zone for an item that has no explicit `metadata.zone`. Returns
+ * null for items that don't clearly belong to a zone (e.g. a stray opportunity
+ * name/title) — those are NOT rendered, so the card never surfaces a record
+ * name/title unless the layout explicitly places it. (Prevents the
+ * "Family inquiry — Nguyen / North Campus" leak from generic table columns.)
+ */
+function inferZone(item: LayoutItem): LayoutQueueZone | null {
     if (item.kind === "widget_placeholder" && item.refKey === "actions") return "actions.stack";
     if (item.kind === "related_list") return "body.children";
     const ref = item.refKey;
@@ -85,8 +99,10 @@ function inferZone(item: LayoutItem): LayoutQueueZone {
     if (ref === "opportunity.location" || item.adornment?.icon === "location") return "header.location";
     if (ref.includes("tour")) return "body.tour";
     if (ref.startsWith("person.") || ["phone", "mail", "person"].includes(item.adornment?.icon ?? "")) return "body.contact";
+    // A computed display template (other than household) is still a title candidate.
     if (typeof item.template === "string") return "header.title";
-    return "body.contact";
+    // Unknown plain fields (name/title/etc.) are intentionally skipped.
+    return null;
 }
 
 function extractZones(doc: LayoutDoc): QueueZones {
@@ -94,6 +110,7 @@ function extractZones(doc: LayoutDoc): QueueZones {
     for (const item of flattenItems(doc)) {
         const explicit = (item.metadata as { zone?: string } | undefined)?.zone as LayoutQueueZone | undefined;
         const zoneKey = explicit ?? inferZone(item);
+        if (!zoneKey) continue;
         switch (zoneKey) {
             case "header.title": z.title = item; break;
             case "header.status": z.status = item; break;
@@ -303,15 +320,21 @@ export default function QueueCardProofRenderer({
                         </div>
                     ) : null}
 
-                    {/* contact row */}
-                    <ContactRow items={z.contact} record={record} />
+                    {/* body rows — each zone stacks as its own card row with a divider */}
+                    {z.contact.length > 0 ? (
+                        <div className="pt-1.5" style={{ borderTop: `1px solid ${ROW_DIVIDER}` }}>
+                            <ContactRow items={z.contact} record={record} />
+                        </div>
+                    ) : null}
 
-                    {/* children rows */}
-                    {z.children ? <ChildRows item={z.children} record={record} /> : null}
+                    {z.children ? (
+                        <div className="pt-1.5" style={{ borderTop: `1px solid ${ROW_DIVIDER}` }}>
+                            <ChildRows item={z.children} record={record} />
+                        </div>
+                    ) : null}
 
-                    {/* tour row */}
                     {z.tour ? (
-                        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: MIDNIGHT }}>
+                        <div className="flex items-center gap-1.5 pt-1.5 text-[11px]" style={{ color: MIDNIGHT, borderTop: `1px solid ${ROW_DIVIDER}` }}>
                             <AdornmentIcon icon="calendar" className="h-3 w-3 text-[rgba(39,63,82,0.5)]" />
                             <span className="font-medium">{z.tour.label || "Tour"}</span>
                             <span style={{ color: MUTED }}>{tourText && !tourText.isPlaceholder ? tourText.display : "—"}</span>
@@ -333,11 +356,11 @@ export default function QueueCardProofRenderer({
                                     else onAction?.(label);
                                 }}
                                 title={isOpen ? "Open record" : `${label} (simulated)`}
-                                className="rounded-md px-2 py-1 text-[11px] font-medium"
+                                className="rounded-[5px] px-2.5 py-1 text-[10px] leading-tight"
                                 style={
                                     isOpen
-                                        ? { background: "#00458C", color: "#fff" }
-                                        : { border: "1px solid rgba(39,63,82,0.18)", background: "#fff", color: "#00458C" }
+                                        ? { background: ACTION_OPEN_BG, border: `1px solid ${ACTION_OPEN_BORDER}`, color: "#fff", fontWeight: 800, letterSpacing: "0.05em" }
+                                        : { border: `1px solid ${ACTION_QUIET_BORDER}`, background: ACTION_QUIET_BG, color: ACTION_QUIET_TEXT, fontWeight: 650 }
                                 }
                             >
                                 {label}
