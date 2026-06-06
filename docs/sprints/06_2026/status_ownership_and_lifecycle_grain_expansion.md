@@ -1,59 +1,85 @@
-# Status Ownership & Lifecycle Grain Expansion — Discovery Sprint
+# Status Ownership & Lifecycle Grain — Architecture Contract
 
 **Path:** `docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md`  
-**Date:** 2026-06-06  
-**Status:** **Discovery complete — architecture frozen before Automation and BOS expansion**  
-**Scope:** Define Alloy's long-term **status ownership model** and **lifecycle grain** doctrine. No migrations, no implementation, no workflow changes, no lifecycle rewrites.
+**Date:** 2026-06-06 (initial discovery) · **2026-06-07** (contract refinement)  
+**Status:** **Frozen — runtime contracts for Layout Configuration, queues, stages, work, attention, automations, and BOS**  
+**Scope:** Status ownership, lifecycle grain, **lifecycle subject**, queue row context, drawer context, status display, and layout compatibility. **Architecture / documentation only.**
 
-**Canonical inputs (frozen):**
+**Prerequisites (shipped — do not redesign):**
 
+- Lifecycle Builder Hardening
 - [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md)
 - [`completed/readiness_phase_1_closeout.md`](./completed/readiness_phase_1_closeout.md)
-- [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md)
+- Needs Attention Phase 1 (readiness projection + resolver v2)
 - [`completed/operational_work_and_action_execution_closeout.md`](./completed/operational_work_and_action_execution_closeout.md)
 
-**Related planning baselines (informative, not superseding this doc):**
+**Parallel work (must not block):**
 
+- **Layout Configuration** — may proceed using contracts in §4–§6 and §10; must not hardcode enrollment-specific subject logic.
+
+**Canonical inputs:**
+
+- [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md)
 - [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md) §7–§8
 - [`../05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`](../05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md)
-- [`lifecycle_runtime_alignment_matrix_v1.md`](./lifecycle_runtime_alignment_matrix_v1.md)
 
-**Authority:** This document is the canonical reference for **status ownership** and **lifecycle grain** before Automations expansion and BOS operational depth. Product copy, queue filters, resolver extensions, and workflow trigger design should align with §2–§7 unless an explicit exception is recorded in §8.
+**Authority:** Product copy, queue contracts, layout blocks, resolver extensions, and workflow design align with §2–§10 unless an explicit exception is recorded in §11.
+
+---
+
+## No implementation in this sprint
+
+This sprint **freezes contracts only**. It does **not** change production runtime behavior.
+
+| Do **not** (this sprint) | Do **(this sprint)** |
+|--------------------------|----------------------|
+| Migrate statuses | Update this architecture document |
+| Refactor queues | Add contract sections with examples |
+| Implement child-grain queues (new runtime paths) | Identify impacted future implementation phases |
+| Alter `lifecycleVisibilityEvaluator` behavior | Document what Layout Configuration must avoid hardcoding |
+| Change drawer / queue production UX | Freeze `lifecycle_subject` and row context shape |
+
+**Runtime note:** Some child/candidate grain queue paths exist from prior convergence work (`childGrainEnrollmentQueue`, `candidateGrainWaitlistQueue`). This sprint **does not extend or refactor** them — it defines the **target contract** those paths and Layout Configuration must converge on.
 
 ---
 
 ## Executive summary
 
-Alloy operates enrollment and future verticals with **multiple status-bearing grains** on one household record. Today the platform is **mid-convergence**: child lifecycle truth exists on `opportunity_customer_members.outcome_status_key`, case coordination still uses pipeline `opportunities.status_key`, and queue v2 already mixes **case**, **child**, and **candidate** grains in one pipeline work unit.
+Alloy enrollment (and future verticals) requires **multiple lifecycle subjects** under one household case. Queue membership, counts, row labels, and drawer focus must follow the **subject that caused the row** — not always `opportunities.status_key`.
 
-This sprint resolves four architectural questions that block safe Automation and BOS expansion:
+| Contract | Locked rule |
+|----------|-------------|
+| **Lifecycle subject** | Generic entity whose stage/status creates queue membership (`case`, `child`, `candidate`, future `customer` / `vendor` / `associate` / `agent`) |
+| **Queue membership grain** | Work unit queue membership and **counts** use the work unit's lifecycle subject grain |
+| **Queue row context** | Child/candidate rows **must** include case/family context for operator comprehension |
+| **Drawer context** | Row click opens **case drawer** with **active subject** highlighted |
+| **Status display** | Primary stage/status in queue/drawer comes from **row lifecycle subject**; case status is intentionally **boring** (open/closed/archived) |
+| **Operational work** | Repeatable obligations (e.g. contact attempts 1–3) are **work**, not lifecycle statuses |
+| **Layout configuration** | Configurable system blocks; runtime resolves subject from work unit grain — no hardcoded child/opportunity logic in layout JSON |
 
-| Question | Locked answer |
-|----------|---------------|
-| **Who owns status?** | **Entity-scoped authoritative fields** — case status on opportunity, child enrollment disposition on OCM, waitlist position on placement candidate. No single household status column. |
-| **What is "lifecycle"?** | **Configured visibility lenses** (Lifecycle Builder stages / queue views) over authoritative status fields — not exclusive record ownership. |
-| **How do mixed households work?** | **Per-child truth + read-only household summary + domain-specific queue grain.** One opportunity may appear in multiple stage lanes when different children match different child-grain filters. Case status does not auto-encode mixed outcomes. |
-| **How do downstream systems consume status?** | **Read authoritative fields; never infer household truth from queue membership.** Readiness, Attention, Operational Work, and Automations each consume status at declared grain — they do not own it. |
-
-**Target ownership spine (frozen):**
+**Target spine (frozen):**
 
 ```
 status_definitions (vocabulary, per entity_type)
         ↓
-Authoritative status fields (case / child / candidate / roster)
+Authoritative status per lifecycle_subject
         ↓
-Events (opportunity_status_changed, child_lifecycle_status_changed)
+Events (grain-specific status changed)
         ↓
-Lifecycle Builder stage lenses (status key sets + queue grain)
+Work unit queue (lifecycle_subject grain + stage lens)
         ↓
-Consumers (queues, readiness, attention, work, automations, BOS)
+QueueRowContext (subject + case context + summaries)
+        ↓
+Drawer (case shell + active_subject focus)
+        ↓
+Consumers (readiness, attention, work, automations, BOS)
 ```
-
-**Explicit non-goals for this sprint:** schema migrations, rollup policy implementation, Builder UI for child-grain stage filters, new workflow actions, or redesign of Operational Work / Needs Attention.
 
 ---
 
 ## 1. Current-state audit
+
+*Unchanged baseline from discovery — summarizes production today; target contracts in §3–§6 may differ where noted.*
 
 ### 1.1 Opportunity (case) status model
 
@@ -61,533 +87,638 @@ Consumers (queues, readiness, attention, work, automations, BOS)
 |--------|---------------|
 | **Authoritative field** | `opportunities.status_key` |
 | **Vocabulary** | `status_definitions` where `entity_type = 'opportunities'` |
-| **Metadata** | `status_definitions.metadata.lifecycle_stage` — universal stages (`intake`, `qualification`, `execution`, `decision`, `success`, `failure`, `case`) |
-| **Assignment home** | `opportunities.work_unit_id` — execution routing; **separate** from lifecycle visibility in builder-owned mode |
-| **Canonical pipeline keys (legacy active)** | `new_inquiry`, `contact_attempted`, `tour_scheduled`, `tour_completed`, `tour_no_show`, `follow_up_attempted`, `enrolling`, `waitlisted`, `enrolled`, `lost` (`CANONICAL_ENROLLMENT_PIPELINE_STATUS_KEYS`) |
-| **Case convergence keys (seeded, partial adoption)** | `open`, `closed`, `inactive`, `archived` — broad case/container states (`20260601110000_opportunity_case_status_definitions_v2.sql`) |
-| **Events** | `opportunity_status_changed` via `emitStatusChangedEvent` / `updateOpportunityStatusWithEvent` |
-| **Mutation grain** | Default `row_grain: case` in `resolveStatusMutationGrain` |
+| **Pipeline keys (legacy active)** | `new_inquiry`, `contact_attempted`, `tour_scheduled`, … `enrolled`, `lost` |
+| **Case convergence keys (partial)** | `open`, `closed`, `inactive`, `archived` |
+| **Events** | `opportunity_status_changed` |
+| **Target role** | **Case container only** — not per-child enrollment truth (§5) |
 
-**Role today:** Case status is the **primary filter** for case-grain queue lanes (lead, qualification, tour, lost) and the **primary input** to `resolveOpportunityAttention`. It still encodes **per-child outcomes** in transitional tenants where operators have not split case vs child updates — this is the main ownership tension.
-
-**Doctrine (locked, from vocabulary):** Opportunity status and child status are **separate concepts**. Lead status vs Child status must be qualified in operator copy.
+**Tension:** Case status still encodes pipeline semantics (`tour_scheduled`, `waitlisted`, `enrolled`) in many tenants. Contract refinement **freezes the target**: those semantics belong on **child/candidate lifecycle subjects**, not case status.
 
 ### 1.2 Child (inquiry / enrollment) status model
 
 | Aspect | Current state |
 |--------|---------------|
-| **Authoritative field** | `opportunity_customer_members.outcome_status_key` (nullable) |
+| **Authoritative field** | `opportunity_customer_members.outcome_status_key` |
 | **Vocabulary** | `status_definitions` where `entity_type = 'opportunity_customer_members'` |
-| **Original seed keys** | `interested`, `waitlisted`, `enrolling`, `enrolled`, `not_enrolling`, `deferred` |
-| **V2 additive keys** | `new_inquiry`, `tour_requested`, `tour_scheduled`, `tour_completed`, `offer_pending`, `withdrawn` (`20260601100000_child_lifecycle_status_definitions_v2.sql`) |
-| **Alias** | `interested` → deprecated, `metadata.alias_of = new_inquiry` |
-| **Events** | `child_lifecycle_status_changed` via `emitChildLifecycleStatusChangedEvent` |
-| **Mutation grain** | `row_grain: child` or `candidate` — requires explicit `opportunity_customer_member_id`; **cannot** patch `outcome_status_key` on `opportunities` entity (`assertWorkflowStatusMutationGrain`) |
-| **Waitlist orchestration** | `placement_candidates` — ordering grain (`active`, `paused`, `withdrawn`, `placed`); not a lifecycle status column |
+| **Events** | `child_lifecycle_status_changed` |
+| **Lifecycle subject type** | `child` |
 
-**Separate from inquiry lifecycle:** `customer_members.status_key` (roster membership) and `persons` child profile statuses (`active`, `future_start`, `withdrawn`, `graduated`, etc.) model **enrolled-child operations** — not inquiry pipeline disposition.
+### 1.3 Stage membership logic (today)
 
-**Role today:** OCM `outcome_status_key` is **source of truth for per-child enrollment lifecycle**. Child-grain queues (`enrollment_offers`, `enrollment_completed`) and candidate-grain waitlist queue filter on this field (directly or via join).
+Builder stages map **opportunity** `status_keys` to stage queue views. Child disposition keys are configured in `queue_definition` v2 for some domains — **not** yet in Lifecycle Builder stage checkboxes.
 
-### 1.3 Stage membership logic
+**Target (frozen):** Stage membership = predicate on the work unit's declared **lifecycle subject grain** and status field (§3, §4).
 
-Lifecycle Builder stages map **opportunity status keys** to stage queue views. Stage membership is **not** a persisted column — it is evaluated at query time.
+### 1.4 Work unit filtering logic (today)
 
-| Mechanism | Location | Behavior |
-|-----------|----------|----------|
-| **Builder save** | `saveLifecycleStageRuntimeConfig.ts` | Persists selected opportunity `status_keys` on stage metadata + `work_units.lifecycle_wu_{stageKey}` |
-| **Visibility predicate** | `lifecycleVisibilityEvaluator.ts` | Builder-owned WUs: `query_mode: lifecycle_visibility` — `opportunities.status_key ∈ stage status set`; **no** `work_unit_id` gate |
-| **Legacy pipeline** | `ENROLLMENT_PIPELINE_WORK_UNIT_KEY` | `query_mode: legacy_pipeline` — still gates on `work_unit_id` |
-| **Classic WU** | Non-builder WUs | `query_mode: assignment_home` — `opportunities.work_unit_id = work_unit_id` |
-| **Status key resolution** | `resolveLifecycleVisibilityStatusKeys` | Merges explicit param → `work_units.metadata.status_keys` → `queue_definition` filters |
+`enrollmentPipelineQueueDefinitionV2` mixes grains: case lanes (lead, tour follow-up), candidate waitlist, child enrolling/enrolled. Builder-owned `lifecycle_wu_{stage}` uses case visibility today.
 
-**Builder-owned doctrine:** Stage configures a **visibility lens**. Publishing a stage saves the queue view (`lifecycle_wu_{stageKey}`) — work unit is a **runtime host**, not a peer config object.
+### 1.5–1.7
 
-**Gap:** Builder stage status assignment is **opportunity-key-only** today. Child disposition keys are **not** configurable stage filter inputs in Lifecycle Builder — child/candidate grain is encoded in `queue_definition` v2 domain queues, not builder stage checkboxes.
-
-### 1.4 Work unit filtering logic
-
-Two runtime patterns coexist:
-
-#### A. Legacy / transitional — `enrollment_pipeline` (v1 + v2)
-
-`enrollmentPipelineQueueDefinitionV2.ts` defines **domain queues with explicit grain**:
-
-| Queue key | Domain | Grain | Filter source |
-|-----------|--------|-------|---------------|
-| `new_leads`, `communications_followup`, `tours`, `tours_follow_up`, `case_closed` | Lead / tour / archive | **case** | `case_status` → `opportunities.status_key` |
-| `waitlist` | Waitlist | **candidate** | `placement_candidates` + `child_lifecycle_status` on OCM |
-| `enrollment_offers`, `enrollment_completed` | Enrollment | **child** | `child_lifecycle_status` → OCM `outcome_status_key` |
-| `needs_attention` | Overlay | **case** | Resolver filter (`exception exists`) — not status membership |
-
-`filters_compat_v1` preserves v1 behavior (case `status` filter) for rollback — transitional bridge.
-
-#### B. Builder-owned — `lifecycle_wu_{stageKey}`
-
-Per-stage work units use `lifecycle_visibility` mode: opportunity rows appear when `status_key` matches stage-configured set, regardless of `work_unit_id` assignment (assignment home remains on opportunity for routing).
-
-**Child-grain execution modules (shipped):**
-
-- `childGrainEnrollmentQueue.ts` — queries `opportunity_customer_members` directly; row id `ocmrow:{opportunityId}:{ocmId}`
-- `candidateGrainWaitlistQueue.ts` — candidate rows with OCM join
-
-**Invariant:** Queue rows are **previews**. Grain determines which entity id opens on selection — case drawer vs child-scoped actions.
-
-### 1.5 Lifecycle visibility behavior
-
-| Concept | Definition | Code / config |
-|---------|------------|---------------|
-| **Visibility lens** | Which records appear in a stage queue view | `lifecycleVisibilityEvaluator`, stage `status_keys` |
-| **Assignment home** | Where opportunity is routed for execution ownership | `opportunities.work_unit_id` |
-| **Overlay** | Attention lane — orthogonal to stage membership | `needs_attention` queue, `resolveOpportunityAttention` |
-
-**Locked rule:** Visibility lenses do not require `opportunities.work_unit_id = lifecycle_wu_*` in builder-owned mode. Collapsing visibility and assignment recreates pre-hardening queue bugs.
-
-**Ready check** (`validateLifecycleActivationRuntime`) validates structural wiring — status sets match queue filters, records query, actions placed — not business rollup correctness.
-
-### 1.6 Existing child enrollment outcome fields
-
-Beyond `outcome_status_key`, inquiry children carry enrollment context used by readiness, queues, and placement:
-
-| Field / area | Table | Role |
-|--------------|-------|------|
-| `outcome_status_key` | `opportunity_customer_members` | Child enrollment lifecycle disposition |
-| `desired_start_date`, `desired_program_type`, `desired_schedule_type` | OCM | Readiness / queue preview |
-| `location_id`, `program_room_cohort_key` | OCM | Site/cohort scoping |
-| `notes` | OCM | Operator context |
-| Placement linkage | `placement_candidates` | Waitlist rank, pin overrides, cohort |
-| Child profile dates | `person` fields `enrollment_date`, `start_date` | Post-enrollment operations |
-
-**Status definitions** for OCM are org-scoped and editable in Settings → Statuses. No CHECK constraint enforces allowed keys — platform validates at action/workflow boundaries.
-
-### 1.7 Existing mixed-household behavior
-
-| Surface | Behavior today |
-|---------|----------------|
-| **Derived summary** | `buildOpportunityChildLifecycleSummary` — read-only; `is_mixed`, count fragments, `case_status_secondary_note`; **does not mutate** `opportunities.status_key` |
-| **Drawer** | Inquiry children list per-child `outcome_status_key`; summary attached via `attachOpportunityChildLifecycleSummary` |
-| **Queue membership** | Mixed household can appear in **multiple lanes**: case-grain lane from `opportunities.status_key` **and** child/candidate lanes per matching children |
-| **Attention** | Opportunity-primary resolver — **no** `mixed_child_disposition` reason yet (planned in NA V2) |
-| **Readiness** | Phase 1 **record scope** — evaluates opportunity + person + child snapshots; does not resolve household rollup |
-| **Operational Work** | Subject link `entity_type: opportunities` — household-level obligations; no per-child work grain in V1 catalog |
-| **Strict-mode diagnostics** | `ocmLifecycleStrictModeReadiness.ts` reports `opportunities_with_mixed_children` for migration readiness |
-
-**Example (Child A enrolled, Child B waitlisted, Child C touring):**
-
-| Dimension | Current behavior |
-|-----------|------------------|
-| OCM truth | Three distinct `outcome_status_key` values |
-| Case status | Single `opportunities.status_key` — operator-maintained or legacy pipeline key; **not auto-derived** |
-| Stage / queue visibility | Case may appear in tour lane (case status) **and** waitlist lane (Child B candidate row) **and** enrolled lane (Child A child row) simultaneously |
-| Attention | Case-level stale/SLA reasons from opportunity status — mixed signal gap |
-| Work | Case-scoped instances (e.g. `record_tour_outcome`) — no automatic per-child work split |
+See discovery audit: visibility vs assignment home, OCM fields, mixed-household behavior (`buildOpportunityChildLifecycleSummary`). Production gaps vs target contract are expected until implementation phases §12.
 
 ---
 
 ## 2. Status ownership framework
 
-### 2.1 Evaluation dimensions
+### 2.1 Ownership model (frozen)
 
-| Model | Definition | Verdict |
-|-------|------------|---------|
-| **1. Opportunity status** | Single `opportunities.status_key` owns all household progression | **Reject** as enrollment truth — contradicts child lifecycle convergence |
-| **2. Child status** | OCM `outcome_status_key` owns all progression | **Reject** as sole model — case coordination (tours, threads, household comms) needs case grain |
-| **3. Derived status** | Computed household status from child rollups | **Display / policy only** — never authoritative storage in Lifecycle Builder |
-| **4. Explicit lifecycle membership** | Persisted stage membership column | **Reject** — membership is lens evaluation over authoritative status fields |
+| Lifecycle subject type | Authoritative field | Owns |
+|------------------------|---------------------|------|
+| **case** (`opportunities`) | `status_key` | Case open/closed, household coordination shell, case-grain attention |
+| **child** (`opportunity_customer_members`) | `outcome_status_key` | Per-child enrollment lifecycle (touring, waitlisted, enrolled, …) |
+| **candidate** (`placement_candidates`) | candidate `status` + ordering | Waitlist position — not a substitute for child disposition |
+| **Future subjects** | Entity-specific `status_key` | Vertical lifecycle (vendor onboarding, associate credentialing, …) |
 
-### 2.2 Recommended ownership model (frozen)
+**Rejected:** Single household status column; derived status as source of truth; persisted `lifecycle_stage_membership` column.
 
-| Grain | Authoritative field | Owns | Does not own |
-|-------|---------------------|------|--------------|
-| **Case (opportunity)** | `opportunities.status_key` | Family coordination, case-grain queues, tour scheduling context, case-scoped attention, comms/forms case binding | Per-child waitlist rank, per-child enrolled truth |
-| **Child inquiry (OCM)** | `opportunity_customer_members.outcome_status_key` | Per-child enrollment lifecycle, child-grain queues, child lifecycle events | Case-wide tour schedule alone, household thread ownership |
-| **Waitlist candidate** | `placement_candidates.status` + ordering metadata | Waitlist position, candidate-grain queue rows | Case status, global lifecycle stage labels |
-| **Roster child** | `customer_members.status_key`, person profile fields | Active care operations post-enrollment | Inquiry pipeline while still opportunity-bound |
-| **Lifecycle Builder** | Stage `status_keys` config (opportunity keys today) | Visibility lens for case-grain stages | Status values, rollup policies, child filter sets (until explicitly extended) |
-| **Derived rollup** | `buildOpportunityChildLifecycleSummary`, future policy functions | Operator headline, BOS context, reporting hints | Queue membership, attention membership, workflow triggers |
+### 2.2 Status change authority
 
-### 2.3 Status change authority
+Unchanged from discovery — only actions/workflows mutate authoritative fields; Builder, Readiness, Attention, Work, BOS do not.
 
-| Actor | May change case status | May change child disposition | Notes |
-|-------|------------------------|------------------------------|-------|
-| **Operator actions** | Yes (`row_grain: case`) | Yes (`row_grain: child`) | Grain explicit in action payload |
-| **Workflows** | Yes — `update_entity` on opportunities | Yes — `update_entity` on `opportunity_customer_members` | `assertWorkflowStatusMutationGrain` blocks ambiguous patches |
-| **Lifecycle Builder** | No | No | Configures lenses only |
-| **Readiness engine** | No | No | Evaluates only |
-| **Needs Attention** | No | No | Surfaces only |
-| **Operational Work** | No | No | Completion does not imply status change |
-| **BOS** | No | No | Proposals route through governed apply paths |
-| **Derived summary** | No | No | Read-only |
+### 2.3 Transitional state
 
-### 2.4 Transitional state (enrollment)
-
-Until case status migration completes, **pipeline keys on opportunity remain in active use** alongside OCM child keys. Operators and legacy workflows may still write `enrolled` / `waitlisted` to case status while children have distinct OCM dispositions.
-
-**Migration direction (documented, not this sprint):** Case trends toward `open` / `closed` / `inactive` / `archived`; child disposition carries enrollment truth. Queue v2 child/candidate grains already assume this split.
-
-### 2.5 Explicit lifecycle membership — when to use
-
-**Do not introduce** `lifecycle_stage_membership` columns or builder-persisted "current stage" on opportunities.
-
-**Instead:**
-
-- **Stage membership** = predicate: `status_key ∈ stage.status_keys` (case) or `outcome_status_key ∈ queue.child_lifecycle_statuses` (child) or candidate filters (waitlist)
-- **Explicit membership** is appropriate only for **non-status domains** (e.g. placement candidate active/paused) — not a substitute for enrollment disposition
+Pipeline keys on `opportunities.status_key` remain in production until **case status migration** implementation phase. Contracts in §5 define **target** case vocabulary regardless.
 
 ---
 
-## 3. Lifecycle grain model
+## 3. Lifecycle subject model
 
-### 3.1 Grain taxonomy (frozen)
+### 3.1 Definition
 
-| Grain | Row identity | Primary status source | Typical stages / domains |
-|-------|--------------|----------------------|---------------------------|
-| **case** | `opportunities.id` | `opportunities.status_key` | Lead, Qualification, Tour, Lost |
-| **child** | `opportunity_customer_members.id` (queue row `ocmrow:*`) | `outcome_status_key` | Enrolling, Enrolled |
-| **candidate** | `placement_candidates.id` | candidate status + OCM disposition filters | Waitlist |
-| **household** | *Not a queue grain* | Derived summary only | Drawer headline, future reporting |
-| **future entity** | Entity-specific | Entity `status_key` or domain equivalent | Jobs, service requests, compliance cases |
+A **`lifecycle_subject`** is the entity whose lifecycle stage and status **create work unit queue membership** for a given work unit / queue view.
 
-### 3.2 Lifecycle planes
+| Property | Meaning |
+|----------|---------|
+| **Generic** | Not hardcoded to opportunity, child, or candidate — enrollment is the first vertical instance |
+| **Authoritative** | Subject carries the status field that membership predicates evaluate |
+| **Stage-bound** | Each work unit queue view declares which subject grain it uses |
+| **Case-anchored** | Non-case subjects still link to a **case anchor** (e.g. opportunity id) for household context |
 
-| Plane | What it is | Authoritative for |
-|-------|------------|-------------------|
-| **Opportunity lifecycle** | Case coordination pipeline | Tours, intake, household comms, case attention |
-| **Child lifecycle** | Per-inquiry-child enrollment disposition | Waitlist, offer, enrolling, enrolled per child |
-| **Household lifecycle** | Derived composite | Display, conflict detection, optional rollup **policy output** |
-| **Future entity lifecycle** | Vertical-specific | Same pattern: entity-owned status + builder lens |
+### 3.2 Lifecycle subject types (platform vocabulary)
 
-### 3.3 Authoritative sources by question
+| `subject_type` | Entity / table | Status field | Enrollment example |
+|----------------|----------------|--------------|-------------------|
+| `case` | `opportunities` | `status_key` | Smith Household enrollment case |
+| `child` | `opportunity_customer_members` | `outcome_status_key` | Child B — touring |
+| `candidate` | `placement_candidates` | `status` (+ child disposition filters) | Child C — waitlist row |
+| `customer` | `customers` (future) | TBD | Household account lifecycle |
+| `vendor` | vendor entity (future) | TBD | Vendor onboarding |
+| `associate` | staff entity (future) | TBD | Credentialing |
+| `agent` | agent entity (future) | TBD | Licensing |
 
-| Operator question | Authoritative source | Never use |
-|-------------------|---------------------|-----------|
-| "What stage is this **family** in for tours?" | `opportunities.status_key` + case-grain queue | Child OCM rollup |
-| "Is **this child** waitlisted?" | OCM `outcome_status_key` + placement candidate | Case status alone |
-| "Where is this child on the **waitlist**?" | `placement_candidates` ordering | Opportunity status |
-| "Are **children mixed**?" | `buildOpportunityChildLifecycleSummary` | Case status label |
-| "What **lane** should they appear in?" | Queue `grain` + filters in `queue_definition` | Attention overlay |
-| "Is required info missing?" | `ReadinessResult` | Status key |
+**Internal contract shape (documentation — not a migration):**
 
-### 3.4 Builder vs runtime grain configuration
+```typescript
+type LifecycleSubjectType =
+    | "case"
+    | "child"
+    | "candidate"
+    | "customer"
+    | "vendor"
+    | "associate"
+    | "agent";
 
-| Config surface | Today | Recommended expansion |
-|----------------|-------|----------------------|
-| **Lifecycle Builder stage status step** | Opportunity keys → stage | Add optional **filter grain** per stage: `case` (default) \| `child` \| `candidate` |
-| **Queue view publish** | Writes `queue_definition` + `status_keys` metadata | Child-grain stages publish `child_lifecycle_status` filters, not opportunity keys |
-| **Ready check** | Validates case-grain wiring | Extend to validate grain-appropriate filter non-empty |
+type LifecycleSubjectRef = {
+    subject_type: LifecycleSubjectType;
+    subject_id: string;
+    /** Process scope — e.g. enrollment department lifecycle */
+    lifecycle_key: string;
+    /** Builder stage or queue domain stage */
+    stage_key: string;
+    /** Authoritative status for this subject */
+    status_key: string;
+    /** When subject_type !== case — links to household/case shell */
+    case_anchor?: {
+        entity_type: "opportunities";
+        entity_id: string;
+    };
+};
+```
 
-**Principle:** Builder stage is the operator mental model; **grain** is the machine contract for which status field powers visibility.
+### 3.3 Queue membership grain
 
-### 3.5 Multi-work-unit visibility
+**Locked:** Work unit queue **membership** and **counts** are based on the work unit queue's **lifecycle subject grain**, not always the opportunity.
 
-An opportunity **may appear in multiple stage work units simultaneously** when:
+| Work unit / queue (examples) | Subject grain | Count unit | Membership predicate (conceptual) |
+|------------------------------|---------------|------------|-----------------------------------|
+| New Lead follow-up | `case` | families / cases | `opportunities.status_key` ∈ stage set |
+| Touring | `child` | **children** | `OCM.outcome_status_key` ∈ touring set |
+| Waitlist | `candidate` | **candidates** (children) | candidate active + child disposition |
+| Enrolled | `child` | **children** | `OCM.outcome_status_key` = enrolled |
+| Needs Attention | `case` (overlay) | families | resolver — not stage membership |
 
-1. Case status matches a case-grain stage lens, **and**
-2. One or more children match child/candidate-grain stage lenses
+**Count rule:** Lane badge and KPI totals use the queue's `count_unit` — **never** assume one row per household when grain is `child` or `candidate`.
 
-This is **expected** for mixed households. Assignment home (`work_unit_id`) remains **singular** — default routing, not exclusive visibility.
+### 3.4 Lifecycle key
+
+`lifecycle_key` identifies the configured process (e.g. `enrollment` for enrollment department). Stages (`tour`, `waitlist`, `enrolled`) are scoped under a lifecycle. Future verticals add new lifecycle keys without renaming work units.
+
+### 3.5 Multi-queue visibility
+
+One case anchor may produce **multiple queue rows** across work units when different lifecycle subjects match different stage lenses. This is **expected** — not duplicate records.
 
 ---
 
-## 4. Mixed-household model
+## 4. Lifecycle subject + queue row context contract
 
-### 4.1 Reference scenario
+### 4.1 UX rule (locked)
 
-**Household X — one opportunity, three inquiry children:**
+> A work unit queue row may be **child-grain** or **candidate-grain** for membership and counting, but it **must** include **case/family context** so operators understand why the row appears and how siblings relate.
 
-| Child | OCM `outcome_status_key` | Placement |
-|-------|--------------------------|-----------|
-| Child A | `enrolled` | — |
-| Child B | `waitlisted` | `placement_candidates` active |
-| Child C | `tour_scheduled` (or case via tour pipeline) | — |
+Without case context, child-grain rows feel orphaned and break mixed-household comprehension.
 
-Assume case status `tour_scheduled` or `open` (coordination still active).
+### 4.2 Queue row context contract
 
-### 4.2 Stage membership (recommended)
+Runtime (or API normalization layer) should attach a **`QueueRowContext`** to every queue row. Layout Configuration consumes this contract — it does not compute grain logic.
 
-| Lane / stage | Grain | Appears? | Row shape |
-|--------------|-------|----------|-----------|
-| Tour (case) | case | **Yes** if `opportunities.status_key` ∈ tour set | One row — household |
-| Waitlist | candidate | **Yes** — Child B candidate row | One row per waitlisted child |
-| Enrolled | child | **Yes** — Child A | One row per enrolled child |
-| Enrolling | child | **No** (unless Child A still `enrolling`) | — |
-| Needs Attention | overlay | **Maybe** — case resolver + future conflict reasons | Case row |
+```typescript
+type QueueRowContext = {
+    // --- Why this row exists (membership) ---
+    row_subject: {
+        subject_type: LifecycleSubjectType;
+        subject_id: string;
+        display_name: string;           // e.g. "Child B"
+    };
+    row_stage: string;                  // operator stage label — e.g. "Touring"
+    row_lifecycle_key: string;          // e.g. "enrollment"
+    row_status_key: string;             // authoritative status for row_subject
+    row_status_label: string;         // operator label for row status
 
-**Case status recommendation:** Keep case status at **coordination phase** (`open`, `tour_scheduled`, or post-tour case state) — **do not** force `enrolled` on case when only one child enrolled.
+    // --- Household / case shell (always for non-case grains) ---
+    case_context: {
+        case_id: string;
+        display_name: string;           // e.g. "Smith Household"
+        case_type_label: string;        // e.g. "Enrollment Case"
+        case_status_key: string;        // boring case status — §5
+        case_status_label: string;
+    };
+    primary_contact: {
+        display_name: string;           // e.g. "Sarah Smith"
+        phone?: string | null;
+        email?: string | null;
+    } | null;
 
-### 4.3 Queue visibility
+    // --- Sibling / related subject awareness ---
+    related_subjects_summary: Array<{
+        subject_type: LifecycleSubjectType;
+        subject_id: string;
+        display_name: string;
+        status_label: string;           // e.g. "Enrolled", "Touring", "Waitlisted"
+    }>;
 
-| Rule | Detail |
-|------|--------|
-| **Independent lenses** | Each queue evaluates its grain filter independently |
-| **No dedupe across grains** | Same opportunity id may surface multiple rows in different domains (different `ocmrow:*` ids for child grain) |
-| **Preview semantics** | Queue row opens correct scope — child row opens drawer with child context |
-| **Count units** | Child/candidate queues use `count_unit: children` in v2 definition |
+    // --- Consumer summaries (read-only projections) ---
+    attention_summary: {
+        needs_attention: boolean;
+        primary_reason_label: string | null;
+    } | null;
+    work_summary: {
+        open_count: number;
+        primary_open_label: string | null;
+    } | null;
+    next_best_action: {
+        label: string;
+        action_key?: string;
+        source: "recommendation" | "action_placement" | "none";
+    } | null;
 
-### 4.4 Attention behavior
+    // --- Navigation ---
+    drawer_open: {
+        entity_type: "opportunities";
+        entity_id: string;              // always case drawer
+        active_subject: LifecycleSubjectRef;
+    };
+};
+```
 
-| Signal | Grain | Recommended |
-|--------|-------|-------------|
-| Stale tour / follow-up | case | Existing resolver — opportunity status + metadata |
-| Missing required info | case (record scope) | Readiness projection — `missing_required_info` |
-| **Mixed child disposition** | household | **New reason** `mixed_child_disposition` — `buildOpportunityChildLifecycleSummary.is_mixed` + policy (Conflict category) |
-| Per-child waitlist SLA | child/candidate | Future candidate-grain resolver entry — **do not** overload opportunity resolver |
+### 4.3 Example — Smith Household (mixed)
 
-**Severity:** Mixed disposition = **high** (Conflict) — operator should reconcile case vs children, not auto-dismiss.
+**Truth:**
 
-### 4.5 Work generation
+| Child | Lifecycle subject | Status |
+|-------|-------------------|--------|
+| Child A | `child` | Enrolled |
+| Child B | `child` | Touring |
+| Child C | `child` / `candidate` | Waitlisted |
+
+**Case:** `open` (active enrollment case) — not `enrolled` or `tour_scheduled`.
+
+**Queue counts (same household, three lanes):**
+
+| Lane | Grain | Count contribution |
+|------|-------|------------------|
+| Touring | child | **1** (Child B only) |
+| Waitlist | candidate | **1** (Child C) |
+| Enrolled | child | **1** (Child A) |
+
+**Example row — Touring lane (Child B):**
+
+```json
+{
+  "row_subject": {
+    "subject_type": "child",
+    "subject_id": "ocm-child-b-uuid",
+    "display_name": "Child B"
+  },
+  "row_stage": "Touring",
+  "row_lifecycle_key": "enrollment",
+  "row_status_key": "tour_scheduled",
+  "row_status_label": "Touring",
+  "case_context": {
+    "case_id": "opp-smith-uuid",
+    "display_name": "Smith Household",
+    "case_type_label": "Enrollment Case",
+    "case_status_key": "open",
+    "case_status_label": "Active"
+  },
+  "primary_contact": {
+    "display_name": "Sarah Smith"
+  },
+  "related_subjects_summary": [
+    { "subject_type": "child", "subject_id": "ocm-a", "display_name": "Child A", "status_label": "Enrolled" },
+    { "subject_type": "child", "subject_id": "ocm-b", "display_name": "Child B", "status_label": "Touring" },
+    { "subject_type": "child", "subject_id": "ocm-c", "display_name": "Child C", "status_label": "Waitlisted" }
+  ],
+  "attention_summary": { "needs_attention": true, "primary_reason_label": "Tour date passed" },
+  "work_summary": { "open_count": 1, "primary_open_label": "Record tour outcome" },
+  "next_best_action": { "label": "Record tour outcome", "action_key": "record_tour_outcome", "source": "recommendation" },
+  "drawer_open": {
+    "entity_type": "opportunities",
+    "entity_id": "opp-smith-uuid",
+    "active_subject": {
+      "subject_type": "child",
+      "subject_id": "ocm-child-b-uuid",
+      "lifecycle_key": "enrollment",
+      "stage_key": "tour",
+      "status_key": "tour_scheduled",
+      "case_anchor": { "entity_type": "opportunities", "entity_id": "opp-smith-uuid" }
+    }
+  }
+}
+```
+
+### 4.4 Drawer context contract
+
+**Locked navigation rule:**
+
+| User action | Result |
+|-------------|--------|
+| Click queue row (any grain) | Open **case/opportunity drawer** for `case_context.case_id` |
+| Active subject | `drawer_open.active_subject` — Child B highlighted / focused |
+| Lifecycle visual | Stage context reflects **active subject's** stage (`Touring`), not case pipeline status |
+| Family context | Full children list + `related_subjects_summary` remains visible |
+| Case details | Case status, contacts, threads, case-scoped actions always available |
+
+**Do not** open a separate child-only drawer shell for enrollment — case drawer is the shell; subject focus is runtime state (query param, session context, or drawer VM `active_subject`).
+
+```typescript
+type DrawerSubjectContext = {
+    active_subject: LifecycleSubjectRef;
+    focus_mode: "case_default" | "subject_highlight";
+    lifecycle_visual_stage_key: string;   // from active_subject
+    related_subjects: QueueRowContext["related_subjects_summary"];
+};
+```
+
+### 4.5 Queue preview vs authority
+
+Queue rows remain **previews**. `QueueRowContext` is a **presentation contract** — authoritative truth stays on lifecycle subject status fields and case anchor record.
+
+---
+
+## 5. Status display contract
+
+Operators see multiple "status-like" concepts. **Do not collapse them in UI or copy.**
+
+### 5.1 Concept separation (locked)
+
+| Concept | What it is | Example | Where shown |
+|---------|------------|---------|-------------|
+| **Case status** | Case container / household coordination state | Active, Closed, Archived | Case header (secondary); not primary queue chip for child rows |
+| **Lifecycle stage** | Operator stage in configured process | Touring, Waitlist, Enrolled | Primary queue row stage label; lifecycle visual |
+| **Subject outcome status** | Authoritative disposition for lifecycle subject | `tour_scheduled`, `waitlisted`, `enrolled` on OCM | Row status chip; child drawer slots |
+| **Operational work state** | Human obligation progress | Contact Attempt 2/3; open work count | Work summary block — **not** a CRM status |
+| **Attention state** | Awareness overlay | "Tour date passed"; "Required info missing" | Attention summary — **not** membership |
+
+### 5.2 Primary display rule (locked)
+
+> The **primary** stage/status shown in a work unit queue row or drawer focus header comes from the **lifecycle subject that caused the row to appear** (`row_subject` + `row_stage` + `row_status_label`) — **not** blindly from `opportunities.status_key`.
+
+| Surface | Primary label source |
+|---------|---------------------|
+| Child-grain touring row | Child B — **Touring** (`outcome_status_key`) |
+| Candidate waitlist row | Child C — **Waitlisted** |
+| Case-grain new lead row | Case — **New Lead** (case `status_key` until migration) |
+| Case drawer header (child-focused open) | **Child B — Touring** with case status subordinate |
+
+### 5.3 Case status — intentionally boring (target)
+
+Case `status_key` should converge to **container semantics only**:
+
+| Target case status | Meaning |
+|--------------------|---------|
+| **Active / Open** | Household case in progress |
+| **Closed** | Resolved — lost, fully complete, or inactive |
+| **Archived** | Historical — hidden from default queues |
+| **Duplicate** | Merged duplicate case |
+| **Converted / Fully enrolled** | All policy-defined children terminal (optional automation) |
+| **Lost / No longer interested** | Case closed — not enrolling |
+
+**Case status must not pretend to be:**
+
+| Wrong on case | Why |
+|---------------|-----|
+| Touring | Child B can be touring while Child A is enrolled |
+| Waitlisted | Per-child — lives on child/candidate subject |
+| Enrolled | Per-child — lives on child subject |
+| Contact attempt 2 of 3 | Operational work — §5.4 |
+
+Legacy pipeline keys (`tour_scheduled`, `waitlisted`, `enrolled` on opportunity) are **transitional** — display contract applies fully after case migration phase.
+
+### 5.4 Operational work is not lifecycle status
+
+**Locked boundary:** Repeatable operational requirements are **Operational Work**, not status vocabulary.
+
+**Example — New Lead stage:**
+
+| Layer | Correct modeling |
+|-------|------------------|
+| **Lifecycle stage** | New Lead |
+| **Operational work** | Contact Attempt 1/3, 2/3, 3/3 (work instances or checklist items) |
+| **Attention** | "Contact requirement incomplete" / "Contact overdue" |
+| **Readiness** | Required information complete? |
+| **Automation** | May advance stage **only if explicitly configured** — not implicit on attempt count |
+
+**Do not create statuses:** `contact_attempt_1`, `contact_attempt_2`, `contact_attempt_3`.
+
+| If operator asks… | Answer from… |
+|-------------------|--------------|
+| "How many contact attempts?" | Open/completed **work** instances |
+| "Are they still a new lead?" | **Lifecycle stage** / subject status |
+| "Is intake info missing?" | **Readiness** |
+| "Should I call today?" | **Attention** + **BOS** recommendation |
+
+### 5.5 Display hierarchy (queue row)
+
+Recommended visual priority:
+
+1. **Row subject name** + **lifecycle stage** (why row is here)
+2. **Attention** indicator (if any)
+3. **Work** open count (if any)
+4. **Case name** + **primary contact** (context)
+5. **Related subjects summary** (siblings)
+6. **Case status** (de-emphasized — "Active")
+
+---
+
+## 6. Mixed-household model (canonical example)
+
+### 6.1 Smith Household reference
+
+| Child | Subject | Status | Lanes |
+|-------|---------|--------|-------|
+| Child A | child | **Enrolled** | Enrolled queue → count 1 |
+| Child B | child | **Touring** | Touring queue → count 1 |
+| Child C | child + candidate | **Waitlisted** | Waitlist queue → count 1 |
+
+**Case status:** `open` (Active).
+
+### 6.2 Operator questions answered
+
+| Question | Answer |
+|----------|--------|
+| Why does Smith appear three times? | Three different lifecycle subjects in three stage queues |
+| What is Smith's "status"? | **No single answer** — show related subjects summary |
+| Which drawer opens from Touring row? | Smith Household case drawer, **Child B focused** |
+| What is the touring count? | **1 child** — Child B only |
+| Should case show "Enrolled"? | **No** — case shows Active; Child A enrolled is in summary |
+
+### 6.3 Attention, readiness, work (target)
+
+| Layer | Smith household behavior |
+|-------|--------------------------|
+| **Readiness** | Record scope — may gap on case or child fields |
+| **Attention** | Case resolver + future `mixed_child_disposition`; row-level attention in `attention_summary` |
+| **Work** | Case-scoped by default; Child B row may show tour outcome work |
+| **Automation** | Optional rollup: all enrolled → case `closed` — explicit workflow only |
+
+---
+
+## 7. Operational Work integration
+
+Unchanged core doctrine: work is execution home; does not own status.
+
+**Additional boundary (§5.4):** Work tracks obligations (contact attempts, record tour outcome, collect documents). Stage progression is a **separate** lifecycle subject status change — optionally linked by automation policy.
+
+| Work context field (future) | Purpose |
+|-----------------------------|---------|
+| `context_snapshot.lifecycle_subject` | Subject work applies to |
+| `context_snapshot.lifecycle_stage_key` | Stage at creation |
+| `context_snapshot.case_anchor_id` | Household link |
+
+Work completion **does not** imply stage advance unless an action/workflow mutates subject status.
+
+---
+
+## 8. Attention integration
+
+Attention consumes status at declared grain; does not create work or mutate status.
+
+| Display | Source |
+|---------|--------|
+| Row `attention_summary` | Resolver output for case anchor + optional subject-scoped reasons (future) |
+| Primary queue chip | **Not** attention — lifecycle subject stage (§5) |
+
+Readiness → `missing_required_info` projection remains read-only bridge per NA Phase 1.
+
+---
+
+## 9. Automation integration
+
+Automations mutate authoritative lifecycle subject fields — never `QueueRowContext` or layout state.
+
+| Trigger | Target grain |
+|---------|--------------|
+| `opportunity_status_changed` | case |
+| `child_lifecycle_status_changed` | child |
+| Work completed | **No default status change** |
+
+Stage advance from contact attempts requires **explicit** workflow configuration.
+
+---
+
+## 10. Layout Configuration compatibility
+
+Layout Configuration may proceed **in parallel** with this contract freeze. It must align with runtime contracts — not block on queue refactors.
+
+### 10.1 Principles (locked)
 
 | Principle | Detail |
 |-----------|--------|
-| **Default subject** | Operational Work V1 remains **opportunity-scoped** for household obligations (tour outcome, contact family) |
-| **Child-scoped work** | Future — work definition `allowed_subjects` may add `opportunity_customer_members` when templates require per-child obligations |
-| **No auto-fan-out** | Mixed household does **not** automatically create N work instances per child |
-| **Automation** | Workflows may instantiate work on `child_lifecycle_status_changed` with explicit OCM id in provenance — policy-driven, not resolver-driven |
+| **No grain hardcoding in layout JSON** | Layout declares **blocks** and placement — not `if child then …` |
+| **Runtime resolves subject** | Work unit metadata / queue grain → `LifecycleSubjectRef` + `QueueRowContext` |
+| **Blocks consume contracts** | Each block reads from normalized context payload |
+| **Case drawer is universal shell** | Layout sections target case drawer; `active_subject` drives focus |
 
-### 4.6 Optional case rollup policy (automations only)
+### 10.2 Configurable system blocks (target)
 
-When org policy wants case status to reflect household milestones:
+Layout Configuration should support these **system block types** (names illustrative):
 
-| Policy example | Trigger | Action |
-|----------------|---------|--------|
-| All children terminal | `child_lifecycle_status_changed` | Workflow sets case → `closed` |
-| Any child waitlisted | same | Set case → `open` (no change) or metadata flag only |
-| All children enrolled | same | Set case → `closed` or `inactive` |
+| Block key | Consumes | Hardcode risk to avoid |
+|-----------|----------|------------------------|
+| `lifecycle_visual` | `active_subject.stage_key`, process config | Enrollment-only stage names in layout |
+| `focused_subject` | `active_subject`, `row_status_label` | Assuming `opportunity` entity only |
+| `family_case_context` | `case_context`, `primary_contact` | — |
+| `related_subjects_summary` | `related_subjects_summary[]` | Parsing `_inquiry_children` directly in layout |
+| `operational_work_summary` | `work_summary` | Embedding work definition keys |
+| `attention_summary` | `attention_summary` | Duplicating resolver rules |
+| `next_best_action` | `next_best_action` | BOS logic in layout JSON |
+| `readiness_gaps` | `ReadinessResult` attach | Re-evaluating rules in UI |
 
-**Locked:** Rollup is **Automation configuration**, not Lifecycle Builder save, not derived field write from summary function.
+### 10.3 What Layout Configuration must avoid
 
----
+| Avoid | Instead |
+|-------|---------|
+| `entity_type === 'opportunity_customer_members'` branches in layout config | `focused_subject` block driven by runtime |
+| Queue row templates that only show `opportunities.status_key` | `row_stage` + `row_status_label` from `QueueRowContext` |
+| Separate drawer layouts per grain | One case drawer + `active_subject` focus state |
+| Count assumptions (1 row = 1 family) | Respect work unit `count_unit` from queue definition |
+| Contact attempt labels as status chips | `operational_work_summary` block |
 
-## 5. Operational Work integration
+### 10.4 Runtime payload for layout (target)
 
-Operational Work is the **execution home** for human obligations. It **does not own status** and **does not determine readiness**.
+```typescript
+type WorkUnitSurfaceContext = {
+    work_unit_id: string;
+    queue_grain: LifecycleSubjectType;
+    lifecycle_key: string;
+    // Queue list rows
+    rows: Array<{ id: string; queue_row_context: QueueRowContext }>;
+    // Drawer (when open)
+    drawer?: DrawerSubjectContext & {
+        case_record: unknown;
+        readiness?: ReadinessResult;
+        attention?: OpportunityAttentionResult;
+        work_instances?: unknown[];
+    };
+};
+```
 
-### 5.1 How work consumes status today
-
-| Mechanism | Consumption |
-|-----------|-------------|
-| **Work instance subject** | `entity_type: opportunities` — household case link |
-| **Context snapshot** | `metadata.work.context_snapshot.lifecycle_stage_key` at creation — **point-in-time**, not live membership |
-| **Stage bindings** | `PLATFORM_DEFAULT_WORK_DEFINITION_STAGE_BINDINGS` — catalog defaults by builder stage key (`intake`, `tour`, etc.) |
-| **Workflow instantiate** | Tour outcome seed binds `lifecycle_stage_key: "tour"` + `opportunity_status_changed` trigger |
-| **Dedupe** | Per definition + subject — status change does not auto-close work |
-
-### 5.2 Recommended consumption model (frozen)
-
-| Rule | Detail |
-|------|--------|
-| **Read status for routing hints only** | Suggested definitions may filter by `lifecycle_stage_key` from **snapshot at creation** — not live re-evaluation on every status change |
-| **Do not gate completion on status** | Completing work does not require status transition; actions may optionally mutate status separately |
-| **Grain in provenance** | When work relates to a child, future: `context_snapshot.row_grain: child` + `opportunity_customer_member_id` |
-| **No status ownership** | `instantiateWork` must not write `status_key` or `outcome_status_key` |
-| **Mixed household** | Prefer **one case-scoped obligation** (e.g. "Contact family about enrollment split") unless template explicitly per-child |
-
-### 5.3 Automation → work patterns (design only)
-
-| Event | Work instantiation |
-|-------|-------------------|
-| `opportunity_status_changed` → `tour_scheduled` | `record_tour_outcome` (shipped seed) |
-| `child_lifecycle_status_changed` → `waitlisted` | Future: `collect_missing_information` or waitlist packet work — **explicit workflow** |
-| Readiness gap | **No** direct work — optional automation if org enables |
-| Attention reason | **No** direct work — optional automation if org enables |
-
-Aligns with [`operational_work_creation_model_discovery.md`](./operational_work_creation_model_discovery.md): Readiness and Attention **signal only** by default.
+Layout renderer selects blocks; **platform-owned resolvers** populate `WorkUnitSurfaceContext`.
 
 ---
 
-## 6. Attention integration
+## 11. Risks and architectural traps
 
-Needs Attention is a **consumer** — surfaces operational awareness, does not evaluate readiness or create work.
+| Trap | Mitigation |
+|------|------------|
+| **Layout hardcodes enrollment grains** | System blocks + `WorkUnitSurfaceContext` (§10) |
+| **Queue row without case context** | Mandatory `case_context` for non-case grains (§4.1) |
+| **Primary chip from case status on child row** | Status display contract (§5.2) |
+| **Contact attempts as statuses** | Operational work boundary (§5.4) |
+| **Separate child drawer app** | Case drawer + `active_subject` (§4.4) |
+| **Count = households when grain is child** | `count_unit` per queue (§3.3) |
+| **Collapsing lifecycle_subject into opportunity** | Generic `subject_type` enum (§3) |
+| **Implementing queues before contract** | This doc frozen first; implementation §12 |
+| **Blocking Layout Config on queue refactor** | Parallel safe with §10 guardrails |
 
-### 6.1 How attention consumes status today
-
-| Input | Source | Notes |
-|-------|--------|-------|
-| Primary entity | `opportunities` row | Resolver v2 opportunity-primary |
-| Status predicates | `opportunity.status_key` | Stale rules, queue lane exclusions, lifecycle stage mapping |
-| Lifecycle stage | `resolveEffectiveOpportunityLifecycleStage` | Drives `stale_new_inquiry`, quote-era codes |
-| Child disposition | **Not consumed** | Gap — no `mixed_child_disposition` |
-| Readiness | `ReadinessResult` via `projectReadinessToAttentionReasons` | Phase 0/1 bridge — `missing_required_info` when profile active |
-| Wait buckets | `metadata.enrollment_operational.wait_bucket` | Case metadata — not OCM |
-
-### 6.2 Recommended consumption model (frozen)
-
-| Status concept | Attention use |
-|----------------|---------------|
-| **Case status** | Activity/SLA collectors, terminal exclusion, stage-aware stale thresholds |
-| **Child disposition** | Conflict category only — mixed summary, candidate/case divergence |
-| **Derived summary** | Input to `mixed_child_disposition` — **not** stored on record |
-| **Stage membership** | **No** — attention is overlay, not lens |
-| **Readiness gaps** | Projected reasons — evaluator stays in Readiness engine |
-
-### 6.3 Grain expansion for attention
-
-| Grain | Resolver | Status inputs |
-|-------|----------|---------------|
-| **case** | `resolveOpportunityAttention` (existing) | `opportunities.status_key`, metadata |
-| **child / candidate** | **Future** `resolveCandidateAttention` or row plugin | OCM `outcome_status_key`, candidate age, pin state |
-| **household** | Conflict reasons on case resolver | `is_mixed` + optional policy |
-
-**Locked:** Needs Attention **must not** evaluate required information independently — readiness projection only.
+*Plus traps from discovery §8:* derived status as SoT, attention creates status, `work_unit_id` visibility gate, etc.
 
 ---
 
-## 7. Automation integration
+## 12. Phased roadmap
 
-Automations (workflows) are the **execution authority** for standardized mutations. Status ownership doctrine defines **what workflows may write**, not how builder configures stages.
+### Phase 0 — Discovery ✅
 
-### 7.1 How workflows consume status today
+Initial audit and ownership model.
 
-| Event | Emitted when | Typical workflow use |
-|-------|--------------|---------------------|
-| `opportunity_status_changed` | Case `status_key` changes | Messages, work instantiation, entity updates |
-| `child_lifecycle_status_changed` | OCM `outcome_status_key` changes | Placement hooks, future rollup policies |
-| `form_submitted` | Forms pipeline | Field patches — may indirectly affect readiness |
-| Action execute | `executeAdminAction` | May change status at declared grain |
+### Phase 1 — Contract refinement ✅ (this sprint)
 
-**Grain guards:** `assertWorkflowStatusMutationGrain`, `resolveStatusMutationGrain`, `assertChildLifecycleMutationTarget` — prevent ambiguous status patches.
+Freeze `lifecycle_subject`, `QueueRowContext`, drawer context, status display, layout compatibility, operational work vs status boundary.
 
-### 7.2 Recommended consumption model (frozen)
+### Phase 2 — Layout Configuration alignment (parallel)
 
-| Pattern | Recommendation |
-|---------|----------------|
-| **Trigger on authoritative change** | Subscribe to grain-specific events — do not trigger on derived summary |
-| **Update case from children** | Explicit org **rollup workflow** — never implicit in builder save |
-| **Update children from case** | Discouraged — case status should not bulk-overwrite OCM dispositions |
-| **Stage entry** | **No** `stage_entered` event today — use status-changed with stage profile mapping or future event |
-| **Readiness / attention** | Workflows may **react** to projected signals via future events — not inline evaluator calls |
-| **BOS** | May recommend status-changing actions — execution through `executeAdminAction` / workflow apply only |
+- Implement system blocks against `WorkUnitSurfaceContext` shape (stub/runtime attach OK)
+- Case drawer `active_subject` focus state
+- No queue grain refactor required to start
 
-### 7.3 Pre-expansion checklist for automation authors
+### Phase 3 — Queue row context API (implementation)
 
-Before adding enrollment automations:
+- Normalize `QueueRowContext` in QueueService / workspace APIs
+- `related_subjects_summary` from `buildOpportunityChildLifecycleSummary` + subject list
+- Wire `drawer_open.active_subject` through queue row click
 
-1. Declare **target grain** (`case` | `child` | `candidate`) in workflow payload
-2. Use correct **entity type** for `update_entity` (`opportunities` vs `opportunity_customer_members`)
-3. Do not infer OCM id from case id alone
-4. Do not patch `outcome_status_key` on opportunities row
-5. Treat queue membership as **downstream effect** — not workflow precondition for truth
+### Phase 4 — Builder lifecycle subject grain (config)
 
-### 7.4 BOS expansion boundary
-
-BOS may **read** status ownership model for recommendations:
-
-| BOS capability | Status consumption |
-|----------------|-------------------|
-| **Insight** | Explain case vs child summary |
-| **Recommendation** | Suggest next action keyed to correct grain |
-| **Proposal** | Task Assist drafts — case-scoped default |
-| **Execution** | Never writes status without governed apply |
-
-BOS must not invent household rollup or collapse child/case labels in operator copy.
-
----
-
-## 8. Risks and architectural traps
-
-| Trap | Why dangerous | Mitigation |
-|------|---------------|------------|
-| **Collapsing case + child status** | Mixed households become unrepresentable; queue grain breaks | Frozen vocabulary; separate fields; qualified copy |
-| **Derived status as SoT** | Race conditions, audit failure, automation loops | Summary read-only; rollups via explicit workflow policy |
-| **Stage membership column** | Duplicates status truth; drifts from CRM | Lens predicates only |
-| **Attention creates status** | Shadow pipeline | Resolver surfaces only |
-| **Work completion implies status** | Operators think obligation = progression | Separate completion from `executeAdminAction` |
-| **Builder child filters without grain** | Operators configure OCM keys on case stage — silent empty queues | Explicit filter grain in builder |
-| **Single resolver for all grains** | Waitlist candidate rows forced into opportunity heuristics | Separate resolver entry points |
-| **`work_unit_id` as visibility gate** | Builder-owned lenses break | `lifecycle_visibility` mode |
-| **Pipeline keys forever** | Case status carries child semantics | Migration to case keys + OCM truth |
-| **Auto work fan-out on mixed** | Task storms per child | Case-scoped default; explicit per-child templates |
-| **Readiness re-evaluation in attention** | Duplicate rule engines | Projection bridge only |
-| **BOS "household status"** | Operators trust AI over CRM | Recommendations cite authoritative fields |
-
----
-
-## 9. Phased roadmap
-
-### Phase 0 — Discovery (this document) ✅
-
-Freeze status ownership, grain taxonomy, mixed-household rules, consumer boundaries.
-
-### Phase 1 — Vocabulary & operator clarity (low risk)
-
-- Consistent **Lead status** / **Child status** copy in drawer, queues, actions
-- Surface `case_status_secondary_note` everywhere case + children shown together
-- Document grain in queue row preview (`count_unit: children` already in v2)
-- No schema changes
-
-### Phase 2 — Builder filter grain (config)
-
-- Lifecycle Builder stage save: `filter_grain: case | child | candidate`
-- Child-grain stages configure OCM status sets, not opportunity keys
+- Stage save: `lifecycle_subject_grain` + status sets per grain
 - Ready check validates grain-appropriate filters
-- Depends on: builder hardening stable
+- Touring stage defaults to **child** grain per contract
 
-### Phase 3 — Case status migration (data + workflows)
+### Phase 5 — Case status migration
 
-- Move active enrollment orgs toward case keys (`open` / `closed` / …)
-- Redirect legacy pipeline writes to OCM where appropriate
-- Update workflow triggers to grain-specific events
-- Queue `filters_compat_v1` removal after cutover
+- Boring case statuses (`open` / `closed` / …)
+- Remove pipeline semantics from opportunity `status_key`
+- Status display contract fully live
 
-### Phase 4 — Attention grain expansion
+### Phase 6 — Child/candidate queue convergence
 
-- Ship `mixed_child_disposition` on case resolver
-- Readiness projection GA per dept profile
-- Candidate-grain attention plugin for waitlist SLA
-- Per [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md) — no redesign
+- Align existing `childGrainEnrollmentQueue` / `candidateGrainWaitlistQueue` to `QueueRowContext`
+- Extend touring to child-grain membership ( **implementation** — not this sprint)
+- Count units verified per lane
 
-### Phase 5 — Operational Work grain context
+### Phase 7 — Attention / work / automation depth
 
-- Optional `opportunity_customer_member_id` subject for per-child work definitions
-- Context snapshot includes `row_grain`
-- No automatic instantiation from attention
-
-### Phase 6 — Automation & BOS expansion
-
-- Rollup policy templates (org opt-in workflows)
-- Stage orchestration links in builder (read-only + deep link)
-- BOS recommendations grain-aware
-- **Gate:** Phases 0–3 complete so automations target stable ownership
-
-### Explicitly deferred
-
-| Item | Reason |
-|------|--------|
-| Household `status_key` column | Derived display sufficient |
-| Lifecycle-owned task table | Operational Work is execution home |
-| Builder-embedded workflow editor | Automations settings remain execution plane |
-| Person pipeline status | Identity layer separate from inquiry |
+- `mixed_child_disposition`, subject-scoped work, grain-aware BOS
+- Contact-attempt work templates (not statuses)
 
 ---
 
-## 10. Success criteria
+## 13. Future implementation sprint (after contract freeze)
+
+The **next implementation sprint** should:
+
+1. **Define `QueueRowContext` TypeScript types** in `web/lib/` (queue or workspace module) matching §4.2
+2. **Attach partial context** to existing queue rows without changing membership predicates (case context + related summary first)
+3. **Add `active_subject` to drawer open path** (query param or drawer VM) — Layout Config can highlight focused child
+4. **Update queue row preview** to prefer `row_stage` / `row_status_label` over raw `opportunities.status_key` where context exists
+5. **Document work unit `count_unit`** in builder/queue publish path for child lanes
+6. **Not** migrate case statuses or switch touring to child-grain SQL until Phase 5–6
+
+**Exit criteria for implementation sprint:**
+
+- Clicking Child B touring row opens case drawer with Child B focused
+- Touring lane count = children in touring status, not households
+- Layout blocks read `WorkUnitSurfaceContext` — no new enrollment branches in layout JSON
+
+---
+
+## 14. Success criteria
 
 | Criterion | Status |
 |-----------|--------|
-| Current-state audit documented | **Yes** — §1 |
-| Status ownership framework with recommendations | **Yes** — §2 |
-| Lifecycle grain model with authoritative sources | **Yes** — §3 |
-| Mixed-household model (membership, visibility, attention, work) | **Yes** — §4 |
-| Operational Work integration (no redesign) | **Yes** — §5 |
-| Attention integration (no redesign) | **Yes** — §6 |
-| Automation integration (no implementation) | **Yes** — §7 |
-| Risks and architectural traps | **Yes** — §8 |
-| Phased roadmap | **Yes** — §9 |
-| Safe to freeze before Automation and BOS expansion | **Yes** |
+| `lifecycle_subject` generic model | **Yes** — §3 |
+| Queue membership grain + counts | **Yes** — §3.3 |
+| Queue row context contract + example | **Yes** — §4 |
+| Drawer context contract | **Yes** — §4.4 |
+| Status display contract | **Yes** — §5 |
+| Operational work ≠ status (contact attempts) | **Yes** — §5.4 |
+| Layout Configuration compatibility | **Yes** — §10 |
+| Smith mixed household example | **Yes** — §4.3, §6 |
+| No implementation in this sprint | **Yes** — top section |
+| Future implementation sprint scoped | **Yes** — §13 |
 
 ---
 
-## 11. Document maintenance
+## 15. Document maintenance
 
-Update this file when:
+Update when:
 
-- Case status migration completes (§1.1 transitional note)
-- Builder filter grain ships (§3.4)
-- `mixed_child_disposition` or candidate attention resolver ships (§4.4, §6)
-- Operational Work adds child subject grain (§5)
-- A recorded exception to frozen doctrine is approved
+- `QueueRowContext` ships in API/types
+- Layout system blocks ship
+- Case status migration completes
+- Builder `lifecycle_subject_grain` ships
 
-**Do not** update for routine status label or seed changes without ownership impact.
+**Do not** update for layout spacing/typography-only changes.
 
 ---
 
@@ -595,9 +726,7 @@ Update this file when:
 
 | Doc | Role |
 |-----|------|
-| [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md) | Operator + internal vocabulary |
-| [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md) | V2 sections baseline |
-| [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md) | Attention consumer doctrine |
-| [`completed/operational_work_and_action_execution_closeout.md`](./completed/operational_work_and_action_execution_closeout.md) | Work execution spine |
-| [`operational_work_creation_model_discovery.md`](./operational_work_creation_model_discovery.md) | Work instantiation doctrine |
-| [`../05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`](../05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md) | Child lifecycle convergence shipped |
+| [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md) | Operator vocabulary |
+| [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md) | Attention doctrine |
+| [`completed/operational_work_and_action_execution_closeout.md`](./completed/operational_work_and_action_execution_closeout.md) | Work execution |
+| [`operational_work_creation_model_discovery.md`](./operational_work_creation_model_discovery.md) | Work instantiation |
