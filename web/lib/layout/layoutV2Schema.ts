@@ -24,6 +24,7 @@ import {
     isLayoutItemKind,
     isLayoutRenderHint,
     isLayoutSurface,
+    isLayoutWidthBehavior,
     type LayoutCollectionColumn,
     type LayoutColumn,
     type LayoutCondition,
@@ -218,11 +219,16 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
                     }
                     const col: LayoutCollectionColumn = { label: asString(c.label) ?? colRef, refKey: colRef };
                     if (isLayoutColumnWidth(c.width)) col.width = c.width;
+                    if (isLayoutWidthBehavior(c.widthBehavior)) col.widthBehavior = c.widthBehavior;
                     if (c.renderHint !== undefined && isLayoutRenderHint(c.renderHint)) col.renderHint = c.renderHint;
                     const ce = asBool(c.editable);
                     if (ce !== undefined) col.editable = ce;
                     const cad = parseAdornment(c.adornment, `${path}.columns[${ci}]`);
                     if (cad) col.adornment = cad;
+                    const ctpl = asString(c.template);
+                    if (ctpl !== undefined) col.template = ctpl;
+                    const ccond = parseCondition(c.visibleWhen, `${path}.columns[${ci}]`);
+                    if (ccond) col.visibleWhen = ccond;
                     cols.push(col);
                 });
                 item.columns = cols;
@@ -237,6 +243,11 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
 
         const sourceEntity = asString(raw.sourceEntity);
         if (sourceEntity !== undefined) item.sourceEntity = sourceEntity;
+
+        const template = asString(raw.template);
+        if (template !== undefined) item.template = template;
+
+        if (isLayoutWidthBehavior(raw.widthBehavior)) item.widthBehavior = raw.widthBehavior;
 
         const adornment = parseAdornment(raw.adornment, path);
         if (adornment) item.adornment = adornment;

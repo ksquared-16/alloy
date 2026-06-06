@@ -25,8 +25,17 @@ import {
 import { parseRefKey } from "./fieldCatalog";
 
 const PERSON_LINK: LayoutFieldAdornment = { position: "left", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "opportunity.primary_person_id" } };
-const CHILD_LINK: LayoutFieldAdornment = { position: "left", icon: "child", action: { type: "open_drawer", entity: "child" } };
 const CALENDAR_ICON: LayoutFieldAdornment = { position: "left", icon: "calendar" };
+const HOME_ICON: LayoutFieldAdornment = { position: "left", icon: "home" };
+const LOCATION_ICON: LayoutFieldAdornment = { position: "left", icon: "location" };
+const PHONE_ICON: LayoutFieldAdornment = { position: "left", icon: "phone" };
+
+/** Display-text (computed) item: static text + {token} replacement. */
+function templateItem(base: string, key: string, template: string, label: string, adornment?: LayoutFieldAdornment): LayoutItem {
+    const item: LayoutItem = { id: id(base, "t", key), kind: "field", refKey: "_template", label, renderHint: "text", template };
+    if (adornment) item.adornment = adornment;
+    return item;
+}
 
 function id(...parts: string[]): string {
     return parts.join("-");
@@ -194,27 +203,70 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
     };
 }
 
-/** Lead queue card default: resembles the work-unit Lead queue record (a card, not a table). */
+/**
+ * Lead queue card default — mirrors the work-unit record card:
+ *   left (main, flexible width): house icon + "{last_name} Household" title,
+ *   status pill, attention/urgent line (conditional), location label row,
+ *   contact row, and a children related-list (each child renders as its own row).
+ *   right (action stack): Open / Message / Update Status / Ask BOS.
+ *
+ * Uses computed display text for the household title, pill display for status,
+ * the location LABEL (not location.id), and an icon adornment incl. the house.
+ */
 export function buildLeadQueueDefaultDoc(): LayoutDoc {
     const base = id("opportunities", "lead", "queue_card");
-    const card = section("lead_card", "Lead card", [
-        row(id(base, "r0"), [
-            col(id(base, "r0"), 0, HALF, [fieldItem(id(base, "r0c0"), "person.primary_contact_name", "Contact", "text", undefined, PERSON_LINK)]),
-            col(id(base, "r0"), 1, HALF, [fieldItem(id(base, "r0c1"), "opportunity.status_key", "Status", "status")]),
-        ]),
-        row(id(base, "r1"), [
-            col(id(base, "r1"), 0, HALF, [fieldItem(id(base, "r1c0"), "opportunity.tour_date", "Tour / next action", "date")]),
-            col(id(base, "r1"), 1, HALF, [fieldItem(id(base, "r1c1"), "child.desired_start_date", "Desired start", "date")]),
-        ]),
-        row(id(base, "r2"), [
-            col(id(base, "r2"), 0, HALF, [fieldItem(id(base, "r2c0"), "child.name", "Child", "text", undefined, CHILD_LINK)]),
-            col(id(base, "r2"), 1, HALF, [fieldItem(id(base, "r2c1"), "child.program", "Program", "text")]),
-        ]),
-        row(id(base, "r3"), [
-            col(id(base, "r3"), 0, HALF, [widgetItem(id(base, "r3c0"), "tasks", "Tasks / attention")]),
-            col(id(base, "r3"), 1, HALF, [widgetItem(id(base, "r3c1"), "recent_communication", "Last activity", "feed")]),
-        ]),
-    ], { defaultExpanded: true });
+    const LEFT = 9;
+    const RIGHT = LAYOUT_GRID_COLUMNS - LEFT; // 3
+
+    // Children related-list: each child is its own row (compact columns).
+    const childrenRows: LayoutItem = {
+        id: id(base, "children"),
+        kind: "related_list",
+        refKey: "children",
+        label: "Children",
+        source: "children",
+        displayMode: "rows",
+        related: { entityType: "child" },
+        columns: [
+            { label: "Child", refKey: "child.name", width: "flexible", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
+            { label: "Program", refKey: "child.program", width: "medium" },
+            { label: "Status", refKey: "child.status", width: "small", renderHint: "badge" },
+        ],
+    };
+
+    const leftItems: LayoutItem[] = [
+        // Household title (computed display text) + house icon.
+        templateItem(base, "title", "{last_name} Household", "Household", HOME_ICON),
+        // Status as a pill/badge.
+        fieldItem(id(base, "status"), "opportunity.status_key", "Status", "status"),
+        // Attention / urgent line — only when present.
+        templateItem(base, "attn", "{_attention}", "Attention", undefined),
+        // Location LABEL (not id) with a location icon.
+        fieldItem(id(base, "loc"), "opportunity.location", "Location", "text", undefined, LOCATION_ICON),
+        // Contact row: name + phone.
+        fieldItem(id(base, "contact"), "person.primary_contact_name", "Contact", "text", undefined, PERSON_LINK),
+        fieldItem(id(base, "phone"), "person.primary_phone", "Phone", "phone", undefined, PHONE_ICON),
+        // Children rows.
+        childrenRows,
+    ];
+    // Tag the attention item with a visibility condition (renders only if present).
+    leftItems[2].visibleWhen = { type: "exists", path: "_attention" };
+
+    const actionStack: LayoutItem = widgetItem(id(base, "actions"), "actions", "Actions", "buttons");
+    // Card action stack labels (presentation hint consumed by the renderer).
+    actionStack.metadata = { actions: ["Open", "Message", "Update Status", "Ask BOS"], layout: "stack" };
+
+    const card = section(
+        "lead_card",
+        "Lead card",
+        [
+            row(id(base, "r0"), [
+                col(id(base, "r0"), 0, LEFT, leftItems),
+                col(id(base, "r0"), 1, RIGHT, [actionStack]),
+            ]),
+        ],
+        { defaultExpanded: true },
+    );
 
     return {
         formatVersion: LAYOUT_DOC_FORMAT_VERSION,

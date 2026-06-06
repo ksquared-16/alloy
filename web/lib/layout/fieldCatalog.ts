@@ -105,6 +105,7 @@ function field(
 export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> = {
     opportunity: [
         field("opportunity", "status_key", "Status", "status"),
+        field("opportunity", "location", "Location", "text"),
         field("opportunity", "source", "Source", "text"),
         field("opportunity", "channel", "Channel", "text"),
         field("opportunity", "campaign", "Campaign", "text"),

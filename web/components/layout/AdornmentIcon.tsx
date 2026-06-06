@@ -9,7 +9,7 @@
  * <option>; everywhere the icon is shown visually, this component is used.
  */
 
-import { Baby, Calendar, CheckSquare, FileText, MessageSquare, Target, User } from "lucide-react";
+import { Baby, Calendar, CheckSquare, FileText, Home, Mail, MapPin, MessageSquare, Phone, Target, User } from "lucide-react";
 import type { LayoutAdornmentIcon } from "@/lib/layout/layoutV2";
 
 const ICON_MAP: Record<LayoutAdornmentIcon, typeof User> = {
@@ -20,6 +20,10 @@ const ICON_MAP: Record<LayoutAdornmentIcon, typeof User> = {
     task: CheckSquare,
     message: MessageSquare,
     document: FileText,
+    home: Home,
+    phone: Phone,
+    mail: Mail,
+    location: MapPin,
 };
 
 export default function AdornmentIcon({

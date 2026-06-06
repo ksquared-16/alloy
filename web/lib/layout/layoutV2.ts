@@ -110,6 +110,10 @@ export const LAYOUT_ADORNMENT_ICONS = [
     "task",
     "message",
     "document",
+    "home",
+    "phone",
+    "mail",
+    "location",
 ] as const;
 export type LayoutAdornmentIcon = (typeof LAYOUT_ADORNMENT_ICONS)[number];
 
@@ -134,8 +138,22 @@ export function isLayoutAdornmentActionEntity(v: unknown): v is LayoutAdornmentA
     return typeof v === "string" && (LAYOUT_ADORNMENT_ACTION_ENTITIES as readonly string[]).includes(v);
 }
 
-export const LAYOUT_COLUMN_WIDTHS = ["small", "medium", "large"] as const;
+export const LAYOUT_COLUMN_WIDTHS = ["small", "medium", "large", "flexible"] as const;
 export type LayoutColumnWidth = (typeof LAYOUT_COLUMN_WIDTHS)[number];
+
+/**
+ * Width behavior for rows/columns and related-list columns (presentation only;
+ * no raw CSS exposed). Maps to a closed flex/grid behavior in the renderer.
+ *  - equal: share remaining space evenly
+ *  - content: size to content (shrink)
+ *  - small/medium/large: fixed-ish proportional buckets
+ *  - flexible: grow to fill remaining space
+ */
+export const LAYOUT_WIDTH_BEHAVIORS = ["equal", "content", "small", "medium", "large", "flexible"] as const;
+export type LayoutWidthBehavior = (typeof LAYOUT_WIDTH_BEHAVIORS)[number];
+export function isLayoutWidthBehavior(v: unknown): v is LayoutWidthBehavior {
+    return typeof v === "string" && (LAYOUT_WIDTH_BEHAVIORS as readonly string[]).includes(v);
+}
 
 /** A column definition for a related_list rendered as a collection table. */
 export interface LayoutCollectionColumn {
@@ -143,9 +161,15 @@ export interface LayoutCollectionColumn {
     /** Namespaced ref resolved against each row (e.g. "child.name"). */
     refKey: string;
     width?: LayoutColumnWidth;
+    /** Width behavior (preferred over `width`; presentation-only buckets). */
+    widthBehavior?: LayoutWidthBehavior;
     renderHint?: LayoutRenderHint;
     editable?: boolean;
     adornment?: LayoutFieldAdornment;
+    /** Optional condition controlling whether the column renders for a row. */
+    visibleWhen?: LayoutCondition;
+    /** Static text + `{token}` replacement resolved against each row. */
+    template?: string;
 }
 export function isLayoutColumnWidth(v: unknown): v is LayoutColumnWidth {
     return typeof v === "string" && (LAYOUT_COLUMN_WIDTHS as readonly string[]).includes(v);
@@ -203,6 +227,15 @@ export interface LayoutItem {
     sourceEntity?: string;
     /** Optional field action icon (V1.1); fields only. */
     adornment?: LayoutFieldAdornment;
+    /**
+     * Display-text template (computed item): static text with `{token}` slots
+     * resolved against the record (e.g. "{last_name} Household"). When present,
+     * the item renders the interpolated string instead of a single ref value.
+     * Tokens are bare field keys or namespaced refs (e.g. "{person.last_name}").
+     */
+    template?: string;
+    /** Width behavior for this column/item slot (presentation-only buckets). */
+    widthBehavior?: LayoutWidthBehavior;
     /**
      * Presentation-only metadata bag (e.g. queue column `sortable`, group hints).
      * Never carries styling, color, or business rules.

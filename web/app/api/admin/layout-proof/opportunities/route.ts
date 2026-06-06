@@ -27,6 +27,13 @@ const ENTITY_TYPE = "opportunities";
 const DEFAULT_STAGE = "qualified";
 const MAX_RECORDS = 50;
 
+/** Minimal date label for the derived attention line (avoids client formatters). */
+function formatProofDate(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
 type OppRow = Record<string, unknown> & {
     id: string;
     customer_id: string | null;
@@ -157,6 +164,11 @@ export async function GET(request: NextRequest) {
             const custContacts = o.customer_id ? contactsByCustomer.get(o.customer_id) ?? [] : [];
             const secondary = custContacts.find((c) => c.id !== primaryId);
             const jobDate = (o.job_date as string | null) ?? null;
+            const locationLabel = o.location_id ? locationName.get(o.location_id as string) || null : null;
+            // Household last name derives from the primary contact (queue card title token).
+            const lastName = primary?.last_name?.trim() || (custName ? custName.split(" ").slice(-1)[0] : null) || null;
+            // Attention/urgent line for the queue card (simple derived hint; empty → hidden).
+            const attention = jobDate ? `Tour ${formatProofDate(jobDate)} — confirm details` : null;
 
             return {
                 ...o,
@@ -164,11 +176,15 @@ export async function GET(request: NextRequest) {
                 _status_display: statusDisplay,
                 _customer_name: custName,
                 _vertical_name: o.vertical_id ? verticalName.get(o.vertical_id) ?? null : null,
-                _location_name: o.location_id ? locationName.get(o.location_id as string) || null : null,
+                _location_name: locationLabel,
                 _customer_email: primary?.email ?? null,
                 _customer_phone: primary?.phone ?? null,
                 _quote_total_display: o.quote_total ?? null,
                 _updated: o.updated_at ?? o.created_at ?? null,
+                // queue-card display tokens (computed display text + location label).
+                last_name: lastName,
+                _attention: attention,
+                "opportunity.location": locationLabel,
 
                 // namespaced REAL values for Layout V2 refs (person.* / opportunity.*)
                 "person.primary_contact_name": fullName(primary) || custName || null,

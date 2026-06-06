@@ -63,6 +63,21 @@ function resolveRaw(record: Record<string, unknown>, refKey: string): unknown {
 }
 
 /**
+ * Resolve a display-text template: static text with `{token}` slots. Each token
+ * is a bare field key or a namespaced ref (e.g. "{last_name} Household",
+ * "{person.primary_contact_name}"). Tokens that resolve to empty are replaced
+ * with an empty string; surrounding whitespace is collapsed so a missing token
+ * does not leave a double space.
+ */
+export function resolveTemplate(record: Record<string, unknown>, template: string): string {
+    const out = template.replace(/\{([^}]+)\}/g, (_m, token: string) => {
+        const v = resolveRaw(record, token.trim());
+        return hasValue(v) ? String(v) : "";
+    });
+    return out.replace(/\s{2,}/g, " ").trim();
+}
+
+/**
  * Resolve a single item's value from a record.
  *
  * Status items prefer a hydrated `_status_display` label when present (the
@@ -71,6 +86,17 @@ function resolveRaw(record: Record<string, unknown>, refKey: string): unknown {
  */
 export function resolveItemValue(record: Record<string, unknown>, item: LayoutItem): ResolvedValue {
     const hint = item.renderHint ?? "text";
+
+    // Display-text template (computed item): static text + {token} replacement.
+    if (typeof item.template === "string" && item.template.length > 0) {
+        const text = resolveTemplate(record, item.template);
+        return {
+            display: text.length ? text : null,
+            isPlaceholder: text.length === 0,
+            renderHint: hint,
+            raw: text,
+        };
+    }
 
     // Status: prefer the hydrated display label, else the raw key value.
     if (hint === "status") {

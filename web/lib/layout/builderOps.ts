@@ -9,6 +9,7 @@
 
 import {
     LAYOUT_GRID_COLUMNS,
+    type LayoutCollectionColumn,
     type LayoutColumn,
     type LayoutCondition,
     type LayoutDoc,
@@ -214,6 +215,50 @@ export function makeFieldItem(refKey: string, label: string, fieldType: string, 
     const item: LayoutItem = { id: makeId("item"), kind: "field", refKey, label, renderHint, editable: true };
     if (sourceEntity) item.sourceEntity = sourceEntity;
     return item;
+}
+
+/**
+ * Build a display-text (computed) LayoutItem: static text + `{token}` slots.
+ * Renders as plain text via the renderer's template path (e.g. household title).
+ */
+export function makeTemplateItem(template: string, label: string): LayoutItem {
+    return { id: makeId("item"), kind: "field", refKey: "_template", label, renderHint: "text", template };
+}
+
+// --- related_list collection columns ---------------------------------------
+// A related_list item lives at (sIdx,rIdx,cIdx,itemId); its `columns` define the
+// table columns. Each child record renders as its own row in the renderer.
+
+function relatedItemOf(doc: LayoutDoc, loc: GroupLoc): LayoutItem | undefined {
+    const it = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((x) => x.id === loc.itemId);
+    if (it && !Array.isArray(it.columns)) it.columns = [];
+    return it;
+}
+
+export function relatedAddColumn(doc: LayoutDoc, loc: GroupLoc, col: LayoutCollectionColumn): LayoutDoc {
+    const next = clone(doc);
+    relatedItemOf(next, loc)?.columns!.push(col);
+    return next;
+}
+export function relatedRemoveColumn(doc: LayoutDoc, loc: GroupLoc, colIdx: number): LayoutDoc {
+    const next = clone(doc);
+    relatedItemOf(next, loc)?.columns!.splice(colIdx, 1);
+    return next;
+}
+export function relatedMoveColumn(doc: LayoutDoc, loc: GroupLoc, colIdx: number, dir: -1 | 1): LayoutDoc {
+    const next = clone(doc);
+    const cols = relatedItemOf(next, loc)?.columns;
+    if (!cols) return doc;
+    const t = colIdx + dir;
+    if (t < 0 || t >= cols.length) return doc;
+    [cols[colIdx], cols[t]] = [cols[t], cols[colIdx]];
+    return next;
+}
+export function relatedPatchColumn(doc: LayoutDoc, loc: GroupLoc, colIdx: number, patch: Partial<LayoutCollectionColumn>): LayoutDoc {
+    const next = clone(doc);
+    const cols = relatedItemOf(next, loc)?.columns;
+    if (cols && cols[colIdx]) cols[colIdx] = { ...cols[colIdx], ...patch };
+    return next;
 }
 
 /** Build a widget_placeholder LayoutItem from a catalog widget. */

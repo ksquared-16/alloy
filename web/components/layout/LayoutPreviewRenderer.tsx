@@ -14,6 +14,8 @@
  * or theme customization (constraint compliance).
  */
 
+import { useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import {
     LAYOUT_GRID_COLUMNS,
     type LayoutColumn,
@@ -72,7 +74,9 @@ function FieldPreview({ item }: { item: LayoutItem }) {
                     </span>
                 ) : null}
                 <span>
-                    {item.renderHint === "status" ? (
+                    {item.template ? (
+                        <span className="text-[#31394d]">{item.template}</span>
+                    ) : item.renderHint === "status" || item.renderHint === "badge" ? (
                         <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs text-[#31394d]">Status</span>
                     ) : item.renderHint === "money" ? (
                         "$0.00"
@@ -117,13 +121,31 @@ function GroupPreview({ item }: { item: LayoutItem }) {
 }
 
 function RelatedPreview({ item }: { item: LayoutItem }) {
+    const cols = item.columns ?? [];
+    const noun = item.related?.entityType ?? "row";
     return (
         <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] p-2.5">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#4063b0]">Related list</div>
+            <div className="flex items-center justify-between">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-[#4063b0]">
+                    Related list{item.displayMode ? ` · ${item.displayMode}` : ""}
+                </div>
+                <div className="text-[10px] text-[#59678b]">each {noun} = one row</div>
+            </div>
             <div className="mt-0.5 text-sm font-medium text-[#31394d]">
                 {item.label || item.refKey}
                 {item.related ? <span className="ml-1 text-xs text-[#59678b]">({item.related.entityType})</span> : null}
             </div>
+            {cols.length ? (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                    {cols.map((c, i) => (
+                        <span key={`${c.refKey}-${i}`} className="inline-flex items-center gap-1 rounded border border-[#cdd9f5] bg-white px-1.5 py-0.5 text-[10px] text-[#4063b0]">
+                            {c.adornment ? <AdornmentIcon icon={c.adornment.icon} className="h-3 w-3" /> : null}
+                            {c.label}
+                            {c.width ? <span className="text-[#9aa4bf]">· {c.widthBehavior ?? c.width}</span> : null}
+                        </span>
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
 }
@@ -180,31 +202,57 @@ function RowPreview({ row }: { row: LayoutRow }) {
 }
 
 function SectionPreview({ section }: { section: LayoutSection }) {
+    // Honor defaultExpanded: collapsed sections show header only; toggle expands.
+    const collapsible = section.collapsible !== false;
+    const [open, setOpen] = useState<boolean>(section.defaultExpanded !== false);
+    const showBody = !collapsible || open;
     return (
         <div className="rounded-lg border border-[#e6e8ec] bg-white">
-            <div className="flex items-center justify-between border-b border-[#e6e8ec] px-3 py-2">
-                <div className="text-sm font-semibold" style={{ color: TEXT }}>
+            <button
+                type="button"
+                onClick={() => collapsible && setOpen((v) => !v)}
+                aria-expanded={collapsible ? open : undefined}
+                className={`flex w-full items-center justify-between border-b border-[#e6e8ec] px-3 py-2 text-left ${collapsible ? "hover:bg-[#f7f9fc]" : "cursor-default"}`}
+            >
+                <div className="flex items-center gap-1.5 text-sm font-semibold" style={{ color: TEXT }}>
+                    {collapsible ? (open ? <ChevronDown className="h-3.5 w-3.5 text-[#59678b]" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5 text-[#59678b]" aria-hidden />) : null}
                     {section.title}
                 </div>
                 <div className="text-[11px]" style={{ color: MUTED }}>
-                    {section.collapsible ? (section.defaultExpanded ? "▾ expanded" : "▸ collapsed") : ""}
+                    {collapsible ? (open ? "expanded" : "collapsed (default)") : ""}
                 </div>
-            </div>
-            <div className="flex flex-col gap-3 p-3">
-                {section.rows.length === 0 ? (
-                    <div className="text-sm" style={{ color: MUTED }}>
-                        (no rows)
-                    </div>
-                ) : (
-                    section.rows.map((row) => <RowPreview key={row.id} row={row} />)
-                )}
-            </div>
+            </button>
+            {showBody ? (
+                <div className="flex flex-col gap-3 p-3">
+                    {section.rows.length === 0 ? (
+                        <div className="text-sm" style={{ color: MUTED }}>
+                            (no rows)
+                        </div>
+                    ) : (
+                        section.rows.map((row) => <RowPreview key={row.id} row={row} />)
+                    )}
+                </div>
+            ) : null}
         </div>
     );
 }
 
-/** Queue surface renders the single "table" section's items as column headers. */
+/**
+ * Queue surface preview. A card-style queue (`metadata.renderAs === "card"`)
+ * renders its sections like a record card; otherwise it falls back to the
+ * table-of-columns preview.
+ */
 function QueuePreview({ doc }: { doc: LayoutDoc }) {
+    if ((doc.metadata as { renderAs?: string } | undefined)?.renderAs === "card") {
+        return (
+            <div className="flex flex-col gap-3">
+                <div className="text-[11px] font-medium uppercase tracking-wide" style={{ color: MUTED }}>Queue card preview</div>
+                {doc.sections.map((section) => (
+                    <SectionPreview key={section.id} section={section} />
+                ))}
+            </div>
+        );
+    }
     const items = doc.sections[0]?.rows[0]?.columns[0]?.items ?? [];
     return (
         <div className="overflow-x-auto rounded-lg border border-[#e6e8ec] bg-white">

@@ -91,13 +91,21 @@ describe("default Lead layouts", () => {
         expect(childTable?.columns?.some((c) => c.refKey === "child.name")).toBe(true);
     });
 
-    it("queue default is a card (multi-row) and validates", () => {
+    it("queue default is a record-style card and validates", () => {
         const doc = buildLeadQueueDefaultDoc();
         expect(doc.surface).toBe("queue");
         const res = parseLayoutDoc(doc);
         expect(res.ok, res.errors.join("; ")).toBe(true);
-        expect(doc.sections[0].rows.length).toBeGreaterThan(1); // card, not single table row
         expect(doc.metadata?.renderAs).toBe("card");
+        // card = main content column (multiple stacked items) + a right action stack
+        const row0 = doc.sections[0].rows[0];
+        expect(row0.columns.length).toBe(2);
+        const [main, side] = row0.columns;
+        expect(main.items.length).toBeGreaterThan(1); // household title, status, location, contact, children…
+        expect(side.items.some((i) => i.refKey === "actions")).toBe(true);
+        // action stack labels include Open / Message / Update Status / Ask BOS
+        const actions = side.items.find((i) => i.refKey === "actions");
+        expect((actions?.metadata as { actions?: string[] } | undefined)?.actions).toContain("Ask BOS");
     });
 
     it("buildLeadDefaultDoc returns null for non-opportunities", () => {
