@@ -142,6 +142,27 @@ export const LAYOUT_COLUMN_WIDTHS = ["small", "medium", "large", "flexible"] as 
 export type LayoutColumnWidth = (typeof LAYOUT_COLUMN_WIDTHS)[number];
 
 /**
+ * Bounded queue-card zones (work-unit card). An item placed on a `queue` surface
+ * card may carry `metadata.zone` to declare where it renders in the card; the
+ * queue renderer also infers a zone heuristically when none is set. This is the
+ * only queue-specific placement vocabulary — NOT a second layout system.
+ */
+export const LAYOUT_QUEUE_ZONES = [
+    "header.title",
+    "header.status",
+    "header.attention",
+    "header.location",
+    "body.contact",
+    "body.children",
+    "body.tour",
+    "actions.stack",
+] as const;
+export type LayoutQueueZone = (typeof LAYOUT_QUEUE_ZONES)[number];
+export function isLayoutQueueZone(v: unknown): v is LayoutQueueZone {
+    return typeof v === "string" && (LAYOUT_QUEUE_ZONES as readonly string[]).includes(v);
+}
+
+/**
  * Width behavior for rows/columns and related-list columns (presentation only;
  * no raw CSS exposed). Maps to a closed flex/grid behavior in the renderer.
  *  - equal: share remaining space evenly

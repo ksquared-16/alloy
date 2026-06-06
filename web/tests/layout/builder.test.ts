@@ -96,7 +96,7 @@ describe("default Lead layouts", () => {
         expect(doc.surface).toBe("queue");
         const res = parseLayoutDoc(doc);
         expect(res.ok, res.errors.join("; ")).toBe(true);
-        expect(doc.metadata?.renderAs).toBe("card");
+        expect(doc.metadata?.renderAs).toBe("work_unit_card");
         // card = main content column (multiple stacked items) + a right action stack
         const row0 = doc.sections[0].rows[0];
         expect(row0.columns.length).toBe(2);

@@ -19,8 +19,8 @@ import type { LayoutDoc, LayoutResolutionSource } from "@/lib/layout/layoutV2";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import LayoutRecordView from "@/components/layout/LayoutRecordView";
+import QueueCardProofRenderer from "@/components/layout/QueueCardProofRenderer";
 import ProofRecordModal from "@/components/layout/proofShell/ProofRecordModal";
-import { LEAD_LIFECYCLE_STAGES, leadStageIndexForStatus } from "@/components/layout/proofShell/ProofLifecycleRail";
 
 const ENTITY_TYPE = "opportunities";
 
@@ -198,36 +198,23 @@ export default function LayoutProofClient() {
                         (The proof never injects demo records.)
                     </p>
                 ) : (
-                    <div className="flex flex-col divide-y divide-[rgba(39,63,82,0.08)]">
-                        {records.map((rec) => {
-                            const idx = leadStageIndexForStatus(str(rec["status_key"]) || str(rec["status"]));
-                            return (
-                                <button
+                    <div className="flex flex-col gap-2 p-3">
+                        {records.map((rec) =>
+                            queue?.resolved ? (
+                                <QueueCardProofRenderer
                                     key={rec.id}
-                                    type="button"
-                                    onClick={() => setSelectedId(rec.id)}
-                                    className="flex items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#f5f8ff]"
-                                >
-                                    <span className="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef3fb] text-[11px] font-semibold text-[#00458C]">
-                                        {recordName(rec).slice(0, 1).toUpperCase()}
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                        <span className="flex items-center gap-2">
-                                            <span className="truncate text-sm font-semibold" style={{ color: TEXT }}>{recordName(rec)}</span>
-                                            <span className="rounded-full border border-[rgba(39,63,82,0.18)] bg-white px-1.5 py-0.5 text-[10px] font-medium" style={{ color: MUTED }}>
-                                                {recordStatusLabel(rec)}
-                                            </span>
-                                            <span className="ml-auto text-[10px]" style={{ color: MUTED }}>{LEAD_LIFECYCLE_STAGES[idx]?.label}</span>
-                                        </span>
-                                        {queue?.resolved ? (
-                                            <span className="mt-1 block">
-                                                <LayoutRecordView doc={queue.resolved} record={rec} onAdornmentAction={onAdornment} />
-                                            </span>
-                                        ) : null}
-                                    </span>
+                                    doc={queue.resolved}
+                                    record={rec}
+                                    onOpen={() => setSelectedId(rec.id)}
+                                    onAction={(label) => setSimNav(`${label} · ${recordName(rec)}`)}
+                                    onAdornmentAction={onAdornment}
+                                />
+                            ) : (
+                                <button key={rec.id} type="button" onClick={() => setSelectedId(rec.id)} className="rounded-lg border border-[rgba(39,63,82,0.14)] px-4 py-2.5 text-left text-sm font-semibold hover:bg-[#f5f8ff]" style={{ color: TEXT }}>
+                                    {recordName(rec)} · {recordStatusLabel(rec)}
                                 </button>
-                            );
-                        })}
+                            ),
+                        )}
                     </div>
                 )}
             </div>

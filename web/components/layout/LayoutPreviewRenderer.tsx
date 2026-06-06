@@ -25,6 +25,28 @@ import {
     type LayoutSection,
 } from "@/lib/layout/layoutV2";
 import AdornmentIcon from "@/components/layout/AdornmentIcon";
+import QueueCardProofRenderer from "@/components/layout/QueueCardProofRenderer";
+
+/**
+ * Placeholder record for the queue-card preview: feeds two sample children so
+ * the builder clearly shows that child rows REPEAT (one row per child), plus
+ * representative header/contact/tour values.
+ */
+const QUEUE_PREVIEW_RECORD: Record<string, unknown> = {
+    last_name: "Nguyen",
+    _status_display: "Qualified",
+    "opportunity.status_key": "Qualified",
+    _attention: "Tour Jun 12 — confirm details",
+    "opportunity.location": "North Campus",
+    "person.primary_contact_name": "Jordan Nguyen",
+    "person.primary_phone": "(555) 010-2244",
+    "person.primary_email": "jordan@example.com",
+    "opportunity.tour_date": "2026-06-12",
+    children: [
+        { id: "c1", "child.name": "Avery", "child.age_band": "3y", "child.program": "Preschool", "child.status": "Inquiry" },
+        { id: "c2", "child.name": "Bryce", "child.age_band": "1y", "child.program": "Infant", "child.status": "Waitlist" },
+    ],
+};
 
 const BORDER = "#e6e8ec";
 const TEXT = "#31394d";
@@ -243,13 +265,12 @@ function SectionPreview({ section }: { section: LayoutSection }) {
  * table-of-columns preview.
  */
 function QueuePreview({ doc }: { doc: LayoutDoc }) {
-    if ((doc.metadata as { renderAs?: string } | undefined)?.renderAs === "card") {
+    const renderAs = (doc.metadata as { renderAs?: string } | undefined)?.renderAs;
+    if (renderAs === "work_unit_card" || renderAs === "card") {
         return (
-            <div className="flex flex-col gap-3">
-                <div className="text-[11px] font-medium uppercase tracking-wide" style={{ color: MUTED }}>Queue card preview</div>
-                {doc.sections.map((section) => (
-                    <SectionPreview key={section.id} section={section} />
-                ))}
+            <div className="flex flex-col gap-2">
+                <div className="text-[11px] font-medium uppercase tracking-wide" style={{ color: MUTED }}>Queue card preview · sample data (child rows repeat per child)</div>
+                <QueueCardProofRenderer doc={doc} record={QUEUE_PREVIEW_RECORD} />
             </div>
         );
     }

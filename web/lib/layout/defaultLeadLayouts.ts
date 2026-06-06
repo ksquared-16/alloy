@@ -29,6 +29,7 @@ const CALENDAR_ICON: LayoutFieldAdornment = { position: "left", icon: "calendar"
 const HOME_ICON: LayoutFieldAdornment = { position: "left", icon: "home" };
 const LOCATION_ICON: LayoutFieldAdornment = { position: "left", icon: "location" };
 const PHONE_ICON: LayoutFieldAdornment = { position: "left", icon: "phone" };
+const MAIL_ICON: LayoutFieldAdornment = { position: "left", icon: "mail" };
 
 /** Display-text (computed) item: static text + {token} replacement. */
 function templateItem(base: string, key: string, template: string, label: string, adornment?: LayoutFieldAdornment): LayoutItem {
@@ -203,62 +204,74 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
     };
 }
 
+/** Attach a queue-card zone hint to an item (bounded vocabulary). */
+function zone(item: LayoutItem, z: string): LayoutItem {
+    item.metadata = { ...(item.metadata ?? {}), zone: z };
+    return item;
+}
+
 /**
- * Lead queue card default — mirrors the work-unit record card:
- *   left (main, flexible width): house icon + "{last_name} Household" title,
- *   status pill, attention/urgent line (conditional), location label row,
- *   contact row, and a children related-list (each child renders as its own row).
- *   right (action stack): Open / Message / Update Status / Ask BOS.
+ * Lead queue card default — mirrors the production work-unit queue card
+ * (web/app/adminV2/components/workspace/blocks/QueueBlock.tsx +
+ * QueueRowOperationalBands.tsx). Items carry a bounded `metadata.zone`; the
+ * queue renderer places them in the card's header / body / actions zones:
  *
- * Uses computed display text for the household title, pill display for status,
- * the location LABEL (not location.id), and an icon adornment incl. the house.
+ *   header:  house icon + "{last_name} Household" title · status pill ·
+ *            attention/urgent line (conditional) · location label
+ *   body:    contact row (person icon, name, phone, email) ·
+ *            one row per child (child icon, name + age, program) · tour row
+ *   actions: Open / Message / Update Status / Ask BOS (simulated)
+ *
+ * Computed display text for the title, pill display for status, the location
+ * LABEL (not location.id), and lucide/Alloy icon adornments.
  */
 export function buildLeadQueueDefaultDoc(): LayoutDoc {
     const base = id("opportunities", "lead", "queue_card");
     const LEFT = 9;
     const RIGHT = LAYOUT_GRID_COLUMNS - LEFT; // 3
 
-    // Children related-list: each child is its own row (compact columns).
-    const childrenRows: LayoutItem = {
-        id: id(base, "children"),
-        kind: "related_list",
-        refKey: "children",
-        label: "Children",
-        source: "children",
-        displayMode: "rows",
-        related: { entityType: "child" },
-        columns: [
-            { label: "Child", refKey: "child.name", width: "flexible", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
-            { label: "Program", refKey: "child.program", width: "medium" },
-            { label: "Status", refKey: "child.status", width: "small", renderHint: "badge" },
-        ],
-    };
+    // Children related-list: each child renders as its OWN row in the card.
+    const childrenRows: LayoutItem = zone(
+        {
+            id: id(base, "children"),
+            kind: "related_list",
+            refKey: "children",
+            label: "Children",
+            source: "children",
+            displayMode: "rows",
+            related: { entityType: "child" },
+            columns: [
+                { label: "Child", refKey: "child.name", width: "flexible", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
+                { label: "Age", refKey: "child.age_band", width: "small" },
+                { label: "Program", refKey: "child.program", width: "medium" },
+                { label: "Status", refKey: "child.status", width: "small", renderHint: "badge" },
+            ],
+        },
+        "body.children",
+    );
 
-    const leftItems: LayoutItem[] = [
-        // Household title (computed display text) + house icon.
-        templateItem(base, "title", "{last_name} Household", "Household", HOME_ICON),
-        // Status as a pill/badge.
-        fieldItem(id(base, "status"), "opportunity.status_key", "Status", "status"),
-        // Attention / urgent line — only when present.
-        templateItem(base, "attn", "{_attention}", "Attention", undefined),
-        // Location LABEL (not id) with a location icon.
-        fieldItem(id(base, "loc"), "opportunity.location", "Location", "text", undefined, LOCATION_ICON),
-        // Contact row: name + phone.
-        fieldItem(id(base, "contact"), "person.primary_contact_name", "Contact", "text", undefined, PERSON_LINK),
-        fieldItem(id(base, "phone"), "person.primary_phone", "Phone", "phone", undefined, PHONE_ICON),
-        // Children rows.
-        childrenRows,
-    ];
-    // Tag the attention item with a visibility condition (renders only if present).
-    leftItems[2].visibleWhen = { type: "exists", path: "_attention" };
+    // Header zone.
+    const title = zone(templateItem(base, "title", "{last_name} Household", "Household", HOME_ICON), "header.title");
+    const status = zone(fieldItem(id(base, "status"), "opportunity.status_key", "Status", "status"), "header.status");
+    const attention = zone(templateItem(base, "attn", "{_attention}", "Attention", undefined), "header.attention");
+    attention.visibleWhen = { type: "exists", path: "_attention" };
+    const location = zone(fieldItem(id(base, "loc"), "opportunity.location", "Location", "text", undefined, LOCATION_ICON), "header.location");
 
-    const actionStack: LayoutItem = widgetItem(id(base, "actions"), "actions", "Actions", "buttons");
-    // Card action stack labels (presentation hint consumed by the renderer).
-    actionStack.metadata = { actions: ["Open", "Message", "Update Status", "Ask BOS"], layout: "stack" };
+    // Body zone — contact row (name/phone/email) + children + tour.
+    const contactName = zone(fieldItem(id(base, "contact"), "person.primary_contact_name", "Contact", "text", undefined, PERSON_LINK), "body.contact");
+    const contactPhone = zone(fieldItem(id(base, "phone"), "person.primary_phone", "Phone", "phone", undefined, PHONE_ICON), "body.contact");
+    const contactEmail = zone(fieldItem(id(base, "email"), "person.primary_email", "Email", "text", undefined, MAIL_ICON), "body.contact");
+    const tour = zone(fieldItem(id(base, "tour"), "opportunity.tour_date", "Tour", "date", undefined, CALENDAR_ICON), "body.tour");
+
+    const leftItems: LayoutItem[] = [title, status, attention, location, contactName, contactPhone, contactEmail, childrenRows, tour];
+
+    // Action stack zone — operational actions (simulated; not layout fields).
+    const actionStack = zone(widgetItem(id(base, "actions"), "actions", "Actions", "buttons"), "actions.stack");
+    actionStack.metadata = { ...actionStack.metadata, actions: ["Open", "Message", "Update Status", "Ask BOS"], layout: "stack" };
 
     const card = section(
         "lead_card",
-        "Lead card",
+        "Lead queue card",
         [
             row(id(base, "r0"), [
                 col(id(base, "r0"), 0, LEFT, leftItems),
@@ -273,7 +286,7 @@ export function buildLeadQueueDefaultDoc(): LayoutDoc {
         surface: "queue",
         entityType: "opportunities",
         sections: [card],
-        metadata: { seededFrom: "lead_default", template: "lead_queue_card_v1", renderAs: "card" },
+        metadata: { seededFrom: "lead_default", template: "lead_queue_card_v1", renderAs: "work_unit_card" },
     };
 }
 

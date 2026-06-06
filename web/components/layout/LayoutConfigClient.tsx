@@ -17,7 +17,7 @@ import LayoutPreviewRenderer from "@/components/layout/LayoutPreviewRenderer";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
-import { LAYOUT_ADORNMENT_ICONS, LAYOUT_COLUMN_WIDTHS } from "@/lib/layout/layoutV2";
+import { LAYOUT_ADORNMENT_ICONS, LAYOUT_COLUMN_WIDTHS, LAYOUT_QUEUE_ZONES } from "@/lib/layout/layoutV2";
 import type {
     EntityLayoutRecord,
     LayoutAdornmentActionEntity,
@@ -533,6 +533,16 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                         </div>
                                     )}
 
+                                    {workingDoc.surface === "queue" && (
+                                        <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-3 py-2 text-[11px] text-[#4063b0]">
+                                            <strong>You&apos;re editing a queue card</strong> — not a drawer section. Items render in fixed card zones:
+                                            {" "}<span className="font-medium">Header</span> (title · status · attention · location),
+                                            {" "}<span className="font-medium">Body</span> (contact · children · tour), and a right-side
+                                            {" "}<span className="font-medium">Actions</span> stack (Open / Message / Update Status / Ask BOS — simulated).
+                                            {" "}Set each item&apos;s <span className="font-medium">zone</span> below; the preview shows the live card with sample children.
+                                        </div>
+                                    )}
+
                                     {/* Sections */}
                                     {workingDoc.sections.map((s, sIdx) => (
                                         <div key={s.id} className="rounded-lg border border-[#e6e8ec] bg-white">
@@ -590,6 +600,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                                                                 onMove={(dir) => op(ops.moveItemVertical(workingDoc, sIdx, rIdx, cIdx, it.id, dir))}
                                                                                 onRemove={() => op(ops.removeItem(workingDoc, sIdx, rIdx, cIdx, it.id))}
                                                                                 onPatchItem={(patch) => op(ops.patchItem(workingDoc, sIdx, rIdx, cIdx, it.id, patch))}
+                                                                                showQueueZone={workingDoc.surface === "queue"}
                                                                                 onAddColumn={(col) => op(ops.relatedAddColumn(workingDoc, { sIdx, rIdx, cIdx, itemId: it.id }, col))}
                                                                                 onRemoveColumn={(ci) => op(ops.relatedRemoveColumn(workingDoc, { sIdx, rIdx, cIdx, itemId: it.id }, ci))}
                                                                                 onMoveColumn={(ci, dir) => op(ops.relatedMoveColumn(workingDoc, { sIdx, rIdx, cIdx, itemId: it.id }, ci, dir))}
@@ -610,6 +621,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                                                                 onCondition={(cond) => op(ops.setItemCondition(workingDoc, sIdx, rIdx, cIdx, it.id, cond))}
                                                                                 onAdornment={(a) => op(ops.setItemAdornment(workingDoc, sIdx, rIdx, cIdx, it.id, a))}
                                                                                 onPatch={(patch) => op(ops.patchItem(workingDoc, sIdx, rIdx, cIdx, it.id, patch))}
+                                                                                showQueueZone={workingDoc.surface === "queue"}
                                                                                 catalogFields={catalogFields}
                                                                                 onReplaceField={(f) => replaceField(sIdx, rIdx, cIdx, it.id, f)}
                                                                             />
@@ -701,6 +713,7 @@ function ItemRow({
     onCondition,
     onAdornment,
     onPatch,
+    showQueueZone = false,
     catalogFields,
     onReplaceField,
 }: {
@@ -716,11 +729,13 @@ function ItemRow({
     onCondition: (cond: LayoutCondition | undefined) => void;
     onAdornment: (a: LayoutFieldAdornment | undefined) => void;
     onPatch: (patch: Partial<LayoutItem>) => void;
+    showQueueZone?: boolean;
     catalogFields: LayoutCatalogField[];
     onReplaceField: (f: LayoutCatalogField) => void;
 }) {
     const ad = item.adornment;
     const isTemplate = typeof item.template === "string";
+    const currentZone = (item.metadata as { zone?: string } | undefined)?.zone ?? "";
     const setIcon = (icon: string) => {
         if (!icon) return onAdornment(undefined);
         onAdornment({ position: ad?.position ?? "left", icon: icon as LayoutAdornmentIcon, ...(ad?.action ? { action: ad.action } : {}) });
@@ -743,6 +758,15 @@ function ItemRow({
                 <button type="button" onClick={onRight} disabled={!editable || !canRight} className="px-0.5 disabled:opacity-30" title="Move right">→</button>
                 <button type="button" onClick={onRemove} disabled={!editable} className="px-0.5 text-red-600 disabled:opacity-30" title="Remove">✕</button>
             </div>
+            {showQueueZone && (
+                <div className="mt-0.5 flex items-center gap-1">
+                    <span className="text-[9px] text-[#9aa4bf]">card zone:</span>
+                    <select value={currentZone} disabled={!editable} onChange={(e) => onPatch({ metadata: { ...(item.metadata ?? {}), zone: e.target.value || undefined } })} title="Where this item renders in the queue card" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
+                        <option value="">(auto)</option>
+                        {LAYOUT_QUEUE_ZONES.map((zk) => <option key={zk} value={zk}>{zk}</option>)}
+                    </select>
+                </div>
+            )}
             {isTemplate && (
                 <div className="mt-0.5 flex flex-col gap-0.5">
                     <input value={item.label ?? ""} disabled={!editable} onChange={(e) => onPatch({ label: e.target.value })} placeholder="Label" className="w-full rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40" />
@@ -1051,6 +1075,7 @@ function RelatedListEditor({
     onMove,
     onRemove,
     onPatchItem,
+    showQueueZone = false,
     onAddColumn,
     onRemoveColumn,
     onMoveColumn,
@@ -1062,12 +1087,14 @@ function RelatedListEditor({
     onMove: (dir: -1 | 1) => void;
     onRemove: () => void;
     onPatchItem: (patch: Partial<LayoutItem>) => void;
+    showQueueZone?: boolean;
     onAddColumn: (col: LayoutCollectionColumn) => void;
     onRemoveColumn: (ci: number) => void;
     onMoveColumn: (ci: number, dir: -1 | 1) => void;
     onPatchColumn: (ci: number, patch: Partial<LayoutCollectionColumn>) => void;
 }) {
     const cols = item.columns ?? [];
+    const currentZone = (item.metadata as { zone?: string } | undefined)?.zone ?? "";
     return (
         <div className="rounded border border-[#dbe7ff] bg-[#f7faff] p-1.5">
             <div className="flex items-center gap-1">
@@ -1082,6 +1109,15 @@ function RelatedListEditor({
                 <button type="button" onClick={() => onMove(1)} disabled={!editable} className="px-0.5 text-[11px] disabled:opacity-30" title="Move down">↓</button>
                 <button type="button" onClick={onRemove} disabled={!editable} className="px-0.5 text-[11px] text-red-600 disabled:opacity-30" title="Remove list">✕</button>
             </div>
+            {showQueueZone && (
+                <div className="mt-0.5 flex items-center gap-1">
+                    <span className="text-[9px] text-[#9aa4bf]">card zone:</span>
+                    <select value={currentZone} disabled={!editable} onChange={(e) => onPatchItem({ metadata: { ...(item.metadata ?? {}), zone: e.target.value || undefined } })} title="Where this list renders in the queue card" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
+                        <option value="">(auto)</option>
+                        {LAYOUT_QUEUE_ZONES.map((zk) => <option key={zk} value={zk}>{zk}</option>)}
+                    </select>
+                </div>
+            )}
             <p className="mt-0.5 px-0.5 text-[9px] text-[#9aa4bf]">Each {item.related?.entityType ?? "child"} renders as its own row.</p>
             <div className="mt-1 flex flex-col gap-1">
                 {cols.length === 0 && <p className="px-0.5 text-[9px] text-[#9aa4bf]">No columns yet.</p>}
