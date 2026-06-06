@@ -93,6 +93,10 @@ import {
 import { logQueueLaneParityDebug } from "@/lib/queues/queueLaneParityDebug";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
+import {
+    attachOpportunityQueueRowsWithRowContext,
+    type OpportunityQueueRowContextLaneParams,
+} from "@/lib/workUnits/attachQueueRowContextToItems";
 import { findAllRecordsQueueKey, workUnitScopeTotalFromSummaries } from "@/lib/workspace/workUnitQueueDerived";
 import { logQueueSummaryPerf } from "@/lib/queues/queueSummaryPerf";
 import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
@@ -139,6 +143,12 @@ type OpportunityRowPreview = {
     updated_at: string;
     metadata?: Record<string, unknown> | null;
 };
+
+/** Additive `_queue_row_context` on opportunity queue rows — no membership/count changes. */
+function withOpportunityQueueRowContext(items: unknown[], lane: OpportunityQueueRowContextLaneParams): unknown[] {
+    if (!items.length || lane.entityType !== "opportunity") return items;
+    return attachOpportunityQueueRowsWithRowContext(items, lane);
+}
 
 /** Parallel phase wall + per-branch elapsed (branches overlap; sums may exceed `enrichment_ms`). */
 export type QueueListEnrichmentSubtimingsMs = {
@@ -1571,6 +1581,7 @@ async function enrichOpportunityRows(params: {
                 : {}),
         };
     });
+    // QueueRowContext attached on API return via withOpportunityQueueRowContext (QueueService finalize paths).
     const mapMs = Date.now() - tMap0;
     const enrichMs = Date.now() - tEnrich0;
     const queueListSubtimings: QueueListEnrichmentSubtimingsMs | undefined =
@@ -2468,6 +2479,16 @@ export async function getWorkUnitQueueSummaries(params: {
             return calendar_meta ? { ...summary, calendar_meta } : summary;
         };
 
+        const rowContextLane: OpportunityQueueRowContextLaneParams = {
+            entityType: def.entity_type,
+            requestedQueueKey: q.key,
+            executableQueueKey: q.key,
+            queueLabel: q.label,
+            normalized,
+        };
+        const previewWithRowContext = (preview: unknown[]) =>
+            withOpportunityQueueRowContext(preview, rowContextLane);
+
         if (def.entity_type === "job") {
             const { ops, sort, calendar_meta } = buildJobPlan(q, operationalDay);
 
@@ -2623,7 +2644,7 @@ export async function getWorkUnitQueueSummaries(params: {
                             priority: q.priority ?? "standard",
                             display: q.display ?? "list",
                             count: candLoad.total,
-                            preview: candLoad.items as unknown[],
+                            preview: previewWithRowContext(candLoad.items as unknown[]),
                             grain: "candidate",
                             domain: waitlistGrainCtx.queueEntry.domain ?? "waitlist",
                         },
@@ -2708,7 +2729,7 @@ export async function getWorkUnitQueueSummaries(params: {
                             priority: q.priority ?? "standard",
                             display: q.display ?? "list",
                             count: childLoad.total,
-                            preview: childLoad.items as unknown[],
+                            preview: previewWithRowContext(childLoad.items as unknown[]),
                             grain: "child",
                             domain: enrollmentChildGrainCtx.queueEntry.domain ?? "enrollment_offers",
                         },
@@ -2837,7 +2858,7 @@ export async function getWorkUnitQueueSummaries(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                     count: matched.length,
-                    preview: preview as unknown[],
+                    preview: previewWithRowContext(preview as unknown[]),
                     opportunity_needs_attention_semantics,
                 },
                 undefined
@@ -2941,7 +2962,7 @@ export async function getWorkUnitQueueSummaries(params: {
                 priority: q.priority ?? "standard",
                 display: q.display ?? "list",
                 count: count ?? 0,
-                preview: preview as unknown[],
+                preview: previewWithRowContext(preview as unknown[]),
             },
             calendar_meta
         );
@@ -3357,6 +3378,13 @@ export async function getWorkUnitQueueItems(params: {
     const q = findQueueByKey(def, executableQueueKey);
     const rowListUi = resolveWorkUnitRowListUi(def, workUnitKey, workUnitMetadata);
     const queueListRelationPlan = queueListRelationFetchPlan(rowListUi);
+    const rowContextLane: OpportunityQueueRowContextLaneParams = {
+        entityType: def.entity_type,
+        requestedQueueKey: params.queueKey,
+        executableQueueKey,
+        queueLabel: q.label,
+        normalized,
+    };
 
     const scopeFilter = params.recordScopeConstraints ?? null;
 
@@ -3616,7 +3644,7 @@ export async function getWorkUnitQueueItems(params: {
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
                     },
-                    items: candLoad.items as unknown[],
+                    items: withOpportunityQueueRowContext(candLoad.items as unknown[], rowContextLane),
                     total: candLoad.total,
                     limit: effectiveLimit,
                     offset: effectiveOffset,
@@ -3692,7 +3720,7 @@ export async function getWorkUnitQueueItems(params: {
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
                     },
-                    items: childLoad.items as unknown[],
+                    items: withOpportunityQueueRowContext(childLoad.items as unknown[], rowContextLane),
                     total: childLoad.total,
                     limit: effectiveLimit,
                     offset: effectiveOffset,
@@ -3821,7 +3849,7 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: placementPack.rows as unknown[],
+                items: withOpportunityQueueRowContext(placementPack.rows as unknown[], rowContextLane),
                 total: matched.length,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
@@ -3946,7 +3974,7 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: placementPackOmit.rows as unknown[],
+                items: withOpportunityQueueRowContext(placementPackOmit.rows as unknown[], rowContextLane),
                 total: 0,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
@@ -4079,7 +4107,7 @@ export async function getWorkUnitQueueItems(params: {
                 priority: q.priority ?? "standard",
                 display: q.display ?? "list",
             },
-            items: placementPackFull.rows as unknown[],
+            items: withOpportunityQueueRowContext(placementPackFull.rows as unknown[], rowContextLane),
             total: count ?? 0,
             limit: effectiveLimit,
             offset: effectiveOffset,
