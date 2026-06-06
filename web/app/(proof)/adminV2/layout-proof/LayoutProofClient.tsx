@@ -20,6 +20,8 @@ import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import LayoutRecordView from "@/components/layout/LayoutRecordView";
 import QueueCardProofRenderer from "@/components/layout/QueueCardProofRenderer";
+import WaitlistCandidateCardProofRenderer from "@/components/layout/WaitlistCandidateCardProofRenderer";
+import type { WaitlistCandidateCardVM } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
 import ProofRecordModal from "@/components/layout/proofShell/ProofRecordModal";
 
 const ENTITY_TYPE = "opportunities";
@@ -61,6 +63,22 @@ function recordStatusLabel(rec: Rec): string {
     return str(rec["_status_display"]) || str(rec["status_key"]) || str(rec["status"]) || "—";
 }
 
+/**
+ * Group candidate cards by cohort section for display only. This is presentation
+ * grouping (preserves API order within a group) — NOT the runtime's ranked
+ * sectioning, which the proof does not re-implement.
+ */
+function groupWaitlist(cards: WaitlistCandidateCardVM[]): [string, WaitlistCandidateCardVM[]][] {
+    const order: string[] = [];
+    const bySection = new Map<string, WaitlistCandidateCardVM[]>();
+    for (const vm of cards) {
+        const key = vm.waitlist.cohortSectionTitle || vm.waitlist.cohortLabel || "Waitlist";
+        if (!bySection.has(key)) { bySection.set(key, []); order.push(key); }
+        bySection.get(key)!.push(vm);
+    }
+    return order.map((k) => [k, bySection.get(k)!]);
+}
+
 export default function LayoutProofClient() {
     const flagOnClient = isLayoutV2PreviewEnabledClient();
 
@@ -74,6 +92,38 @@ export default function LayoutProofClient() {
     const [flagDisabled, setFlagDisabled] = useState(false);
     const [labelMap, setLabelMap] = useState<EntityLabelMap>({});
     const [simNav, setSimNav] = useState<string | null>(null);
+
+    // Waitlist proof mode (placement_candidate card surface).
+    const [mode, setMode] = useState<"leads" | "waitlist">("leads");
+    const [waitlistDoc, setWaitlistDoc] = useState<ResolveResp | null>(null);
+    const [waitlistCards, setWaitlistCards] = useState<WaitlistCandidateCardVM[] | null>(null);
+    const [waitlistLoading, setWaitlistLoading] = useState(false);
+
+    const loadWaitlist = useCallback(async () => {
+        setWaitlistLoading(true);
+        try {
+            const [layoutRes, candRes] = await Promise.all([
+                fetch(`/api/admin/entity-layouts?entity_type=placement_candidate&surface=queue`),
+                fetch(`/api/admin/layout-proof/waitlist-candidates`),
+            ]);
+            if (layoutRes.ok) setWaitlistDoc((await layoutRes.json()) as ResolveResp);
+            if (candRes.ok) {
+                const j = (await candRes.json()) as { candidates: WaitlistCandidateCardVM[] };
+                setWaitlistCards(j.candidates ?? []);
+            } else if (candRes.status === 404) {
+                setFlagDisabled(true);
+            }
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setWaitlistLoading(false);
+        }
+    }, []);
+
+    const switchMode = useCallback((next: "leads" | "waitlist") => {
+        setMode(next);
+        if (next === "waitlist" && waitlistCards === null) void loadWaitlist();
+    }, [waitlistCards, loadWaitlist]);
 
     const onAdornment = useCallback((item: { label?: string; refKey: string }, ad: { action?: { entity: string } }) => {
         const target = ad.action?.entity ?? "record";
@@ -175,22 +225,66 @@ export default function LayoutProofClient() {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(39,63,82,0.12)] bg-[#F6F8FC] px-4 py-2.5">
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold" style={{ color: TEXT }}>
-                            {proof?.lifecycle.label ?? "Lead Management"}
+                            {mode === "waitlist" ? "Waitlist candidates" : proof?.lifecycle.label ?? "Lead Management"}
                         </span>
-                        <span className="text-xs" style={{ color: MUTED }}>· work unit queue</span>
+                        <span className="text-xs" style={{ color: MUTED }}>· {mode === "waitlist" ? "placement_candidate card" : "work unit queue"}</span>
+                        <span className="inline-flex overflow-hidden rounded-md border border-[rgba(39,63,82,0.18)] text-[11px]">
+                            {(["leads", "waitlist"] as const).map((m) => (
+                                <button key={m} type="button" onClick={() => switchMode(m)} className={`px-2 py-0.5 ${mode === m ? "bg-[#273F52] text-white" : "bg-white text-[#273F52]"}`}>
+                                    {m === "leads" ? "Leads" : "Waitlist"}
+                                </button>
+                            ))}
+                        </span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <label className="text-[11px]" style={{ color: MUTED }}>Stage</label>
-                        <select value={stage} onChange={(e) => onStageChange(e.target.value)} className="rounded-md border border-[rgba(39,63,82,0.18)] bg-white px-2 py-1 text-xs">
-                            {stages.map((s) => (
-                                <option key={s.statusKey} value={s.statusKey}>{s.label} ({proof?.counts[s.statusKey] ?? 0})</option>
-                            ))}
-                        </select>
-                        <span className="text-xs" style={{ color: MUTED }}>{records.length} record{records.length === 1 ? "" : "s"}</span>
+                        {mode === "leads" ? (
+                            <>
+                                <label className="text-[11px]" style={{ color: MUTED }}>Stage</label>
+                                <select value={stage} onChange={(e) => onStageChange(e.target.value)} className="rounded-md border border-[rgba(39,63,82,0.18)] bg-white px-2 py-1 text-xs">
+                                    {stages.map((s) => (
+                                        <option key={s.statusKey} value={s.statusKey}>{s.label} ({proof?.counts[s.statusKey] ?? 0})</option>
+                                    ))}
+                                </select>
+                                <span className="text-xs" style={{ color: MUTED }}>{records.length} record{records.length === 1 ? "" : "s"}</span>
+                            </>
+                        ) : (
+                            <span className="text-xs" style={{ color: MUTED }}>{waitlistCards?.length ?? 0} candidate{(waitlistCards?.length ?? 0) === 1 ? "" : "s"}</span>
+                        )}
                     </div>
                 </div>
 
-                {loading ? (
+                {mode === "waitlist" ? (
+                    waitlistLoading ? (
+                        <p className="p-4 text-sm" style={{ color: MUTED }}>Loading…</p>
+                    ) : !waitlistCards || waitlistCards.length === 0 ? (
+                        <p className="p-4 text-sm" style={{ color: MUTED }}>
+                            No active placement candidates for your org. The proof never injects demo candidates.
+                            Tier and position are computed by the placement runtime and shown blank here (proof renders, never ranks).
+                        </p>
+                    ) : (
+                        <div className="flex flex-col gap-3 p-3">
+                            {groupWaitlist(waitlistCards).map(([section, cards]) => (
+                                <div key={section} className="flex flex-col gap-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{section} ({cards.length})</div>
+                                    {cards.map((vm) =>
+                                        waitlistDoc?.resolved ? (
+                                            <WaitlistCandidateCardProofRenderer
+                                                key={vm.candidateId}
+                                                doc={waitlistDoc.resolved}
+                                                vm={vm}
+                                                onOpen={() => setSimNav(`Open candidate · ${vm.child.name}`)}
+                                                onAction={(label) => setSimNav(`${label} · ${vm.child.name}`)}
+                                            />
+                                        ) : null,
+                                    )}
+                                </div>
+                            ))}
+                            <p className="text-[11px]" style={{ color: MUTED }}>
+                                Cohort grouping shown for readability (no new ranking logic). Tier/position come from the placement runtime in a later phase.
+                            </p>
+                        </div>
+                    )
+                ) : loading ? (
                     <p className="p-4 text-sm" style={{ color: MUTED }}>Loading…</p>
                 ) : records.length === 0 ? (
                     <p className="p-4 text-sm" style={{ color: MUTED }}>

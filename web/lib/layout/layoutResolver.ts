@@ -20,6 +20,7 @@
 import type { EntityPresentationType } from "@/lib/entityPresentation";
 import { layoutDocFromRegistry } from "./migrateFromRegistry";
 import { buildLeadDefaultDoc } from "./defaultLeadLayouts";
+import { buildWaitlistDefaultDoc } from "./defaultWaitlistLayouts";
 import type {
     EntityLayoutRecord,
     LayoutResolution,
@@ -61,13 +62,21 @@ export function resolveLayout(input: ResolveLayoutInput): LayoutResolution {
         return { doc: defaultRecord.doc, source: "default", record: defaultRecord };
     }
 
-    // Curated default — for entities with a hand-built Lead default (opportunities),
-    // prefer it over the raw registry conversion so an un-configured org still gets
-    // the correct household queue card / Lead drawer (not the generic table columns,
-    // which surface the opportunity name/title and a raw location column).
-    const curated = buildLeadDefaultDoc(input.entityType, input.surface);
+    // Curated default — for entities with a hand-built default, prefer it over the
+    // raw registry conversion so an un-configured org still gets the correct card.
+    //  - opportunities → Lead household card / Lead drawer
+    //  - placement_candidate → Waitlist candidate card (presentation only)
+    const curated =
+        buildWaitlistDefaultDoc(input.entityType, input.surface) ??
+        buildLeadDefaultDoc(input.entityType, input.surface);
     if (curated) {
         return { doc: curated, source: "default" };
+    }
+
+    // placement_candidate has no entityPresentation registry entry; never attempt
+    // a raw registry conversion for it (would yield an empty/incorrect doc).
+    if (input.entityType === "placement_candidate") {
+        return { doc: buildWaitlistDefaultDoc("placement_candidate", "queue")!, source: "default" };
     }
 
     // Layer 0 fallback — convert entityPresentation.ts. Unknown entity types

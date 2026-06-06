@@ -20,6 +20,14 @@ import { resolveLayout } from "@/lib/layout/layoutResolver";
 import { layoutDocFromRegistry, ALL_ENTITY_PRESENTATION_TYPES } from "@/lib/layout/migrateFromRegistry";
 import { seedLayoutDocFromCurrent } from "@/lib/layout/seedFromCurrentPresentation";
 import { buildLeadDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import { buildWaitlistDefaultDoc } from "@/lib/layout/defaultWaitlistLayouts";
+import { WAITLIST_CANDIDATE_ENTITY_TYPE } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
+
+/** Layout entity types beyond the entityPresentation registry (curated-only). */
+const EXTRA_LAYOUT_ENTITY_TYPES: readonly string[] = [WAITLIST_CANDIDATE_ENTITY_TYPE];
+function isAllowedLayoutEntityType(t: string): boolean {
+    return (ALL_ENTITY_PRESENTATION_TYPES as readonly string[]).includes(t) || EXTRA_LAYOUT_ENTITY_TYPES.includes(t);
+}
 import {
     createDraft,
     listAllForOrg,
@@ -101,7 +109,7 @@ export async function POST(request: NextRequest) {
     // Only entity types known to the registry may have layouts. Prevents
     // creating rows for typos/bogus entities (and a registry-seed for an
     // unknown type would silently yield a near-empty doc).
-    if (!(ALL_ENTITY_PRESENTATION_TYPES as readonly string[]).includes(entityType)) {
+    if (!isAllowedLayoutEntityType(entityType)) {
         return NextResponse.json({ error: "Unknown entity_type" }, { status: 400 });
     }
 
@@ -131,8 +139,12 @@ export async function POST(request: NextRequest) {
     let doc;
     let seededFrom: string;
     if (fromDefault) {
+        const waitlist = buildWaitlistDefaultDoc(entityType, surface);
         const lead = seedMode === "lead_default" ? buildLeadDefaultDoc(entityType, surface) : null;
-        if (lead) {
+        if (waitlist) {
+            doc = waitlist;
+            seededFrom = "waitlist_default";
+        } else if (lead) {
             doc = lead;
             seededFrom = "lead_default";
         } else {

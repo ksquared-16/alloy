@@ -19,6 +19,7 @@ import {
     CURATED_FIELDS,
     LAYOUT_ENTITY_GROUPS,
     LAYOUT_WIDGET_CATALOG,
+    catalogGroupsForEntityType,
     fieldDefToCatalog,
     type LayoutCatalogField,
     type LayoutCatalogGroup,
@@ -74,8 +75,13 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || "opportunities";
-    // V1 catalog is scoped to the Leads/opportunities groups regardless of entity.
-    void entityType;
+
+    // Waitlist candidate surface uses a curated, presentation-only catalog
+    // (no field_definitions); other entities use the Leads/opportunities groups.
+    const curatedGroups = catalogGroupsForEntityType(entityType);
+    if (curatedGroups) {
+        return NextResponse.json({ groups: curatedGroups, widgets: LAYOUT_WIDGET_CATALOG });
+    }
 
     const supabase = createAdminClient();
     try {

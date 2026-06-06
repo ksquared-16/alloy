@@ -148,6 +148,7 @@ export type LayoutColumnWidth = (typeof LAYOUT_COLUMN_WIDTHS)[number];
  * only queue-specific placement vocabulary — NOT a second layout system.
  */
 export const LAYOUT_QUEUE_ZONES = [
+    // Lead/work-unit card zones
     "header.title",
     "header.status",
     "header.attention",
@@ -156,6 +157,15 @@ export const LAYOUT_QUEUE_ZONES = [
     "body.children",
     "body.tour",
     "actions.stack",
+    // Waitlist candidate-card zones (presentation only; runtime computes the values)
+    "header.identity",
+    "header.priority",
+    "header.position",
+    "body.child",
+    "body.household",
+    "body.program_fit",
+    "body.availability",
+    "body.override_flags",
 ] as const;
 export type LayoutQueueZone = (typeof LAYOUT_QUEUE_ZONES)[number];
 export function isLayoutQueueZone(v: unknown): v is LayoutQueueZone {

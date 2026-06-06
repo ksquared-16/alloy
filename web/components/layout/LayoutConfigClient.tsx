@@ -264,6 +264,31 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
         [canMutate, fetchList, selectRecord],
     );
 
+    /** Create a Waitlist candidate card layout (placement_candidate / queue). */
+    const createWaitlist = useCallback(async () => {
+        if (!canMutate) return;
+        setBusy("create_waitlist");
+        try {
+            const res = await fetch("/api/admin/entity-layouts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ entity_type: "placement_candidate", surface: "queue", layout_key: "waitlist_candidate_card", from_registry: true }),
+            });
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                throw new Error("Admin access is required to create layouts.");
+            }
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
+            await fetchList();
+            await selectRecord((json as EntityLayoutRecord).id);
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setBusy(null);
+        }
+    }, [canMutate, fetchList, selectRecord]);
+
     const saveDraft = useCallback(async () => {
         if (!canMutate || !selectedId || !workingDoc) return;
         if (showJson && jsonError) return;
@@ -459,7 +484,10 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                 <button type="button" onClick={() => createDefault("queue")} disabled={!!busy} className="rounded border border-[#2f6df6] px-3 py-2 text-sm font-medium text-[#2f6df6] hover:bg-[#f5f8ff] disabled:opacity-50">
                                     {busy === "create_queue" ? "Creating…" : "New Leads queue"}
                                 </button>
-                                <p className="text-[11px] text-[#9aa4bf]">Starts from the curated Lead default; edit and publish below.</p>
+                                <button type="button" onClick={createWaitlist} disabled={!!busy} className="rounded border border-[#0a8f78] px-3 py-2 text-sm font-medium text-[#0a8f78] hover:bg-[#f0fbf8] disabled:opacity-50">
+                                    {busy === "create_waitlist" ? "Creating…" : "New Waitlist candidate card"}
+                                </button>
+                                <p className="text-[11px] text-[#9aa4bf]">Lead layouts start from the curated Lead default; the Waitlist card composes the placement candidate face (ranking/position stay in the runtime). Edit and publish below.</p>
                             </div>
                         )}
                     </SectionCard>
