@@ -443,7 +443,6 @@ export default function OpportunityDrawerVmRuntime() {
                                         aria-hidden="true"
                                         hidden
                                         data-layout-runtime-shadow-mount="opportunity"
-                                        data-opportunity-id={drawer.id}
                                         data-shadow-parity-score={
                                             layoutRuntimeShadow.telemetry?.parityScore ?? ""
                                         }
