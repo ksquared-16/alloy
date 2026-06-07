@@ -155,14 +155,16 @@ function makeRelatedListItem(): LayoutItem {
     };
 }
 
-/** Settings catalog grouping for a layout (Record / Queue / System). */
-const LAYOUT_CATEGORIES = ["Record Layouts", "Queue Layouts", "System Layouts"] as const;
+/** Settings catalog grouping for a layout (Record / Queue / Specialized). */
+const LAYOUT_CATEGORIES = ["Record Layouts", "Queue Layouts", "Specialized Layouts"] as const;
 type LayoutCategory = (typeof LAYOUT_CATEGORIES)[number];
 
 function layoutCategory(g: { entityType: string; surface: string }): LayoutCategory {
+    // Waitlist candidate card is a specialized queue variant.
+    if (g.entityType === "placement_candidate") return "Specialized Layouts";
     if (g.surface === "drawer") return "Record Layouts";
     if (g.surface === "queue") return "Queue Layouts";
-    return "System Layouts";
+    return "Specialized Layouts";
 }
 
 /** Friendly settings-card title for a layout group. */
@@ -315,6 +317,31 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ entity_type: "placement_candidate", surface: "queue", layout_key: "waitlist_candidate_card", from_registry: true }),
+            });
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                throw new Error("Admin access is required to create layouts.");
+            }
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
+            await fetchList();
+            await selectRecord((json as EntityLayoutRecord).id);
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setBusy(null);
+        }
+    }, [canMutate, fetchList, selectRecord]);
+
+    /** Create a record drawer layout (person / child) from its curated default. */
+    const createRecordDrawer = useCallback(async (entityType: "person" | "child") => {
+        if (!canMutate) return;
+        setBusy(`create_${entityType}`);
+        try {
+            const res = await fetch("/api/admin/entity-layouts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ entity_type: entityType, surface: "drawer", from_registry: true }),
             });
             if (res.status === 401 || res.status === 403) {
                 setForbidden(true);
@@ -560,9 +587,17 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                             <p className="text-sm text-[#59678b]">You have read-only access. Admin access is required to create layouts.</p>
                         ) : (
                             <div className="flex flex-col gap-1.5">
+                                <div className="text-[10px] font-semibold uppercase tracking-wide text-[#9aa4bf]">Record</div>
                                 <button type="button" onClick={() => createDefault("drawer")} disabled={!!busy} className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-left text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9] disabled:opacity-50">
                                     {busy === "create_drawer" ? "Creating…" : "+ Lead Drawer"}
                                 </button>
+                                <button type="button" onClick={() => createRecordDrawer("person")} disabled={!!busy} className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-left text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9] disabled:opacity-50">
+                                    {busy === "create_person" ? "Creating…" : "+ Person Drawer"}
+                                </button>
+                                <button type="button" onClick={() => createRecordDrawer("child")} disabled={!!busy} className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-left text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9] disabled:opacity-50">
+                                    {busy === "create_child" ? "Creating…" : "+ Child Drawer"}
+                                </button>
+                                <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-[#9aa4bf]">Queue &amp; specialized</div>
                                 <button type="button" onClick={() => createDefault("queue")} disabled={!!busy} className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-left text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9] disabled:opacity-50">
                                     {busy === "create_queue" ? "Creating…" : "+ Lead Queue Card"}
                                 </button>
@@ -822,6 +857,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
             {picker && catalog && (
                 <PickerOverlay
                     catalog={catalog}
+                    surface={workingDoc?.surface ?? "drawer"}
                     tab={pickerTab}
                     setTab={setPickerTab}
                     group={pickerGroup}
@@ -983,8 +1019,11 @@ function ItemRow({
     );
 }
 
+const WIDGET_CATEGORY_ORDER = ["Work", "Communication", "Enrollment", "Waitlist", "System"];
+
 function PickerOverlay({
     catalog,
+    surface,
     tab,
     setTab,
     group,
@@ -994,6 +1033,7 @@ function PickerOverlay({
     onClose,
 }: {
     catalog: CatalogResponse;
+    surface: "drawer" | "queue";
     tab: "field" | "widget";
     setTab: (t: "field" | "widget") => void;
     group: string;
@@ -1003,6 +1043,10 @@ function PickerOverlay({
     onClose: () => void;
 }) {
     const groupFields = catalog.groups.find((g) => g.entityKey === group)?.fields ?? [];
+    const widgetIsRelevant = (w: LayoutCatalogWidget) => !w.relevantSurfaces || w.relevantSurfaces.includes(surface);
+    const byCategory = WIDGET_CATEGORY_ORDER
+        .map((cat) => ({ cat, widgets: catalog.widgets.filter((w) => (w.category ?? "Work") === cat) }))
+        .filter((x) => x.widgets.length > 0);
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
             <div className="max-h-[80vh] w-full max-w-md overflow-auto rounded-lg border border-[#e6e8ec] bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -1022,18 +1066,31 @@ function PickerOverlay({
                             {groupFields.map((f) => (
                                 <button key={f.refKey} type="button" onClick={() => onPickField(f)} className="flex items-center justify-between rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm hover:bg-[#f5f8ff]">
                                     <span>{f.fieldLabel}</span>
-                                    <span className="font-mono text-[10px] text-[#9aa4bf]">{f.refKey}</span>
+                                    <span className="rounded bg-[#f4f6f9] px-1.5 py-0.5 text-[10px] text-[#59678b]">{f.entityLabel}</span>
                                 </button>
                             ))}
                         </div>
                     </>
                 ) : (
-                    <div className="flex flex-col gap-1">
-                        {catalog.widgets.map((w) => (
-                            <button key={w.widgetKey} type="button" onClick={() => onPickWidget(w)} className="flex items-center justify-between rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm hover:bg-[#f5f8ff]">
-                                <span>{w.label}</span>
-                                <span className="font-mono text-[10px] text-[#9aa4bf]">{w.widgetKey}</span>
-                            </button>
+                    <div className="flex flex-col gap-3">
+                        {byCategory.map(({ cat, widgets }) => (
+                            <div key={cat}>
+                                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#9aa4bf]">{cat}</div>
+                                <div className="flex flex-col gap-1">
+                                    {widgets.map((w) => {
+                                        const relevant = widgetIsRelevant(w);
+                                        return (
+                                            <button key={w.widgetKey} type="button" disabled={!relevant} onClick={() => relevant && onPickWidget(w)} title={relevant ? w.description : `${w.description ?? ""} — available on ${(w.relevantSurfaces ?? []).join("/")} cards`} className={`flex items-start justify-between gap-2 rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm ${relevant ? "hover:bg-[#f5f8ff]" : "opacity-50"}`}>
+                                                <span className="min-w-0">
+                                                    <span className="font-medium text-[#31394d]">{w.label}</span>
+                                                    {w.description ? <span className="block text-[11px] text-[#59678b]">{w.description}</span> : null}
+                                                </span>
+                                                {!relevant ? <span className="shrink-0 rounded bg-[#f4f6f9] px-1.5 py-0.5 text-[10px] text-[#9aa4bf]">queue only</span> : null}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         ))}
                     </div>
                 )}

@@ -21,10 +21,11 @@ import { layoutDocFromRegistry, ALL_ENTITY_PRESENTATION_TYPES } from "@/lib/layo
 import { seedLayoutDocFromCurrent } from "@/lib/layout/seedFromCurrentPresentation";
 import { buildLeadDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildWaitlistDefaultDoc } from "@/lib/layout/defaultWaitlistLayouts";
+import { buildRecordDrawerDefaultDoc } from "@/lib/layout/defaultRecordDrawers";
 import { WAITLIST_CANDIDATE_ENTITY_TYPE } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
 
 /** Layout entity types beyond the entityPresentation registry (curated-only). */
-const EXTRA_LAYOUT_ENTITY_TYPES: readonly string[] = [WAITLIST_CANDIDATE_ENTITY_TYPE];
+const EXTRA_LAYOUT_ENTITY_TYPES: readonly string[] = [WAITLIST_CANDIDATE_ENTITY_TYPE, "person", "child"];
 function isAllowedLayoutEntityType(t: string): boolean {
     return (ALL_ENTITY_PRESENTATION_TYPES as readonly string[]).includes(t) || EXTRA_LAYOUT_ENTITY_TYPES.includes(t);
 }
@@ -140,10 +141,14 @@ export async function POST(request: NextRequest) {
     let seededFrom: string;
     if (fromDefault) {
         const waitlist = buildWaitlistDefaultDoc(entityType, surface);
+        const recordDrawer = buildRecordDrawerDefaultDoc(entityType, surface);
         const lead = seedMode === "lead_default" ? buildLeadDefaultDoc(entityType, surface) : null;
         if (waitlist) {
             doc = waitlist;
             seededFrom = "waitlist_default";
+        } else if (recordDrawer) {
+            doc = recordDrawer;
+            seededFrom = `${entityType}_default`;
         } else if (lead) {
             doc = lead;
             seededFrom = "lead_default";

@@ -11,6 +11,7 @@ import { resolveBuiltinQueueLayoutVariant } from "./defaultQueueLayoutVariants";
 import { layoutDocFromRegistry } from "./migrateFromRegistry";
 import { resolveQueueLayoutVariantFromRecords } from "./resolveQueueLayoutVariant";
 import { buildWaitlistDefaultDoc } from "./defaultWaitlistLayouts";
+import { buildRecordDrawerDefaultDoc } from "./defaultRecordDrawers";
 import type {
     EntityLayoutRecord,
     LayoutResolution,
@@ -103,7 +104,7 @@ export function resolveLayout(input: ResolveLayoutInput): ExtendedLayoutResoluti
     // strict registry parity here (Layer 0); their curated lead/waitlist cards come
     // from the builtin queue-variant path above (keyed by queue_context), preserving
     // the runtime-adoption parity guardrail (runtimeParity.test.ts).
-    const curatedNoRegistry = buildWaitlistDefaultDoc(entityType, surface);
+    const curatedNoRegistry = buildWaitlistDefaultDoc(entityType, surface) ?? buildRecordDrawerDefaultDoc(entityType, surface);
     if (curatedNoRegistry) {
         const layoutKey = (curatedNoRegistry.metadata as { layoutKey?: string } | undefined)?.layoutKey;
         return { doc: curatedNoRegistry, source: "default", layoutKey };

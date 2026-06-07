@@ -18,7 +18,6 @@ import { isLayoutV2PreviewEnabledServer } from "@/lib/layout/featureFlag";
 import {
     CURATED_FIELDS,
     LAYOUT_ENTITY_GROUPS,
-    LAYOUT_WIDGET_CATALOG,
     catalogGroupsForEntityType,
     catalogWidgetsForEntityType,
     fieldDefToCatalog,
@@ -77,11 +76,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || "opportunities";
 
-    // Waitlist candidate surface uses a curated, presentation-only catalog
-    // (no field_definitions); other entities use the Leads/opportunities groups.
+    // Candidate / Person / Child surfaces use curated, presentation-only catalogs
+    // (no field_definitions); other entities use the Lead groups. Widgets are a
+    // single GLOBAL catalog on every surface (no surface-specific disappearance).
     const curatedGroups = catalogGroupsForEntityType(entityType);
     if (curatedGroups) {
-        return NextResponse.json({ groups: curatedGroups, widgets: catalogWidgetsForEntityType(entityType) });
+        return NextResponse.json({ groups: curatedGroups, widgets: catalogWidgetsForEntityType() });
     }
 
     const supabase = createAdminClient();
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
             const fields = await loadGroupFields(supabase, ctx.orgId, g.entityKey);
             groups.push({ entityKey: g.entityKey, entityLabel: g.entityLabel, fields });
         }
-        return NextResponse.json({ groups, widgets: LAYOUT_WIDGET_CATALOG });
+        return NextResponse.json({ groups, widgets: catalogWidgetsForEntityType() });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }

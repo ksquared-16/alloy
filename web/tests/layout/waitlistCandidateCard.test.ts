@@ -170,7 +170,7 @@ describe("waitlist field & widget catalog (Goals 4/5)", () => {
         const groups = catalogGroupsForEntityType("placement_candidate");
         expect(groups).not.toBeNull();
         const labels = (groups ?? []).map((g) => g.entityLabel);
-        for (const cat of ["Placement Candidate", "Child", "Parent", "Household", "Location", "Program", "Lifecycle", "System"]) {
+        for (const cat of ["Candidate", "Child", "Parent", "Household", "Location", "Program", "Lifecycle", "System"]) {
             expect(labels).toContain(cat);
         }
         // bucket keys are unique (the picker keys on entityKey)
@@ -183,10 +183,13 @@ describe("waitlist field & widget catalog (Goals 4/5)", () => {
             expect(widgets).toContain(w);
         }
     });
-    it("non-waitlist entities keep the Lead widget catalog", () => {
-        const widgets = catalogWidgetsForEntityType("opportunities").map((w) => w.widgetKey);
-        expect(widgets).toContain("tasks");
-        expect(widgets).not.toContain("waitlist_adjustment");
+    it("widgets are a single global catalog on every surface (relevance-flagged, not hidden)", () => {
+        const widgets = catalogWidgetsForEntityType("opportunities");
+        const keys = widgets.map((w) => w.widgetKey);
+        expect(keys).toContain("tasks");
+        // global catalog still lists waitlist widgets, but flagged queue-relevant
+        expect(keys).toContain("waitlist_adjustment");
+        expect(widgets.find((w) => w.widgetKey === "waitlist_adjustment")?.relevantSurfaces).toEqual(["queue"]);
     });
 });
 
