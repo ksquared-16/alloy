@@ -3,10 +3,10 @@
  *
  *   GET /api/admin/entity-layouts/field-catalog?entity_type=opportunities
  *
- * Returns the V1 entity groups (Lead/Opportunity, Person/Contact, Child,
- * Children Inquiry) with normalized fields, plus the widget catalog. Lead and
- * Person fields are sourced from field_definitions (singular field-entity key);
- * Child / Children-Inquiry use curated fields (no clean field-def surface yet).
+ * Returns the V1 entity groups with normalized canonical refKeys, plus the
+ * widget catalog. Opportunity, person, and inquiry_child load from
+ * field_definitions; child (durable) loads person registry rows as an interim
+ * bridge (person ≠ child — durable truth is customer_member).
  *
  * Read-only, org-scoped, flag-gated. Does not touch live runtime.
  */
@@ -21,26 +21,33 @@ import {
     catalogGroupsForEntityType,
     catalogWidgetsForEntityType,
     fieldDefToCatalog,
+    mergeCatalogWithCuratedFallback,
     type LayoutCatalogField,
     type LayoutCatalogGroup,
     type LayoutEntityGroupKey,
 } from "@/lib/layout/fieldCatalog";
+import { INQUIRY_CHILD_ENTITY_TYPE, INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS } from "@/lib/fields/inquiryChildFieldRegistry";
 
-/** Group → which field_definitions entity_type to read (null = curated only). */
+/**
+ * Group → field_definitions entity_type (null = curated-only bootstrap).
+ * child group reads person rows as interim bridge — not person == child.
+ */
 const GROUP_FIELD_ENTITY: Record<LayoutEntityGroupKey, string | null> = {
     opportunity: "opportunity",
     person: "person",
-    child: null,
-    child_inquiry: null,
+    child: "person",
+    inquiry_child: INQUIRY_CHILD_ENTITY_TYPE,
 };
 
 async function loadGroupFields(
     supabase: ReturnType<typeof createAdminClient>,
     orgId: string,
     group: LayoutEntityGroupKey,
-): Promise<LayoutCatalogField[]> {
+): Promise<{ fields: LayoutCatalogField[]; curatedFallback: boolean }> {
     const fieldEntity = GROUP_FIELD_ENTITY[group];
-    if (!fieldEntity) return CURATED_FIELDS[group];
+    if (!fieldEntity) {
+        return { fields: CURATED_FIELDS[group], curatedFallback: true };
+    }
 
     const { data, error } = await supabase
         .from("field_definitions")
@@ -52,16 +59,31 @@ async function loadGroupFields(
         .order("sort_order", { ascending: true });
 
     if (error || !data || data.length === 0) {
-        // Fall back to curated fields so the picker is never empty.
-        return CURATED_FIELDS[group];
+        return { fields: CURATED_FIELDS[group], curatedFallback: true };
     }
-    return data.map((r) =>
+
+    const registryFields = data.map((r) =>
         fieldDefToCatalog(group, {
             field_key: String((r as { field_key: string }).field_key),
             label: (r as { label?: string | null }).label ?? null,
             field_type: (r as { field_type?: string | null }).field_type ?? null,
         }),
     );
+
+    if (group === "inquiry_child") {
+        const present = new Set(registryFields.map((f) => f.fieldKey));
+        const missingNative = INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS.filter((k) => !present.has(k));
+        const fields =
+            missingNative.length > 0 ? mergeCatalogWithCuratedFallback(group, registryFields) : registryFields;
+        return { fields, curatedFallback: missingNative.length > 0 };
+    }
+
+    if (group === "child") {
+        // Interim: person-backed child profile defs + durable curated fallback keys.
+        return { fields: mergeCatalogWithCuratedFallback(group, registryFields), curatedFallback: false };
+    }
+
+    return { fields: registryFields, curatedFallback: false };
 }
 
 export async function GET(request: NextRequest) {
@@ -77,8 +99,8 @@ export async function GET(request: NextRequest) {
     const entityType = searchParams.get("entity_type")?.trim() || "opportunities";
 
     // Candidate / Person / Child surfaces use curated, presentation-only catalogs
-    // (no field_definitions); other entities use the Lead groups. Widgets are a
-    // single GLOBAL catalog on every surface (no surface-specific disappearance).
+    // (no field_definitions); other entities use the field-definition-backed Lead
+    // groups below. Widgets are a single GLOBAL catalog on every surface.
     const curatedGroups = catalogGroupsForEntityType(entityType);
     if (curatedGroups) {
         return NextResponse.json({ groups: curatedGroups, widgets: catalogWidgetsForEntityType() });
@@ -87,11 +109,18 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     try {
         const groups: LayoutCatalogGroup[] = [];
+        const catalogMeta: { curatedFallbackGroups: LayoutEntityGroupKey[] } = { curatedFallbackGroups: [] };
+
         for (const g of LAYOUT_ENTITY_GROUPS) {
-            const fields = await loadGroupFields(supabase, ctx.orgId, g.entityKey);
+            const { fields, curatedFallback } = await loadGroupFields(supabase, ctx.orgId, g.entityKey);
+            if (curatedFallback) catalogMeta.curatedFallbackGroups.push(g.entityKey);
             groups.push({ entityKey: g.entityKey, entityLabel: g.entityLabel, fields });
         }
-        return NextResponse.json({ groups, widgets: catalogWidgetsForEntityType() });
+        return NextResponse.json({
+            groups,
+            widgets: catalogWidgetsForEntityType(),
+            catalogMeta,
+        });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
     }

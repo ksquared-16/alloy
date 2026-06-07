@@ -115,8 +115,8 @@ describe("default Lead layouts", () => {
 });
 
 describe("field catalog", () => {
-    it("exposes exactly the four V1 entity groups", () => {
-        expect(LAYOUT_ENTITY_GROUPS.map((g) => g.entityKey)).toEqual(["opportunity", "person", "child", "child_inquiry"]);
+    it("exposes exactly the four V1 entity groups with canonical inquiry_child", () => {
+        expect(LAYOUT_ENTITY_GROUPS.map((g) => g.entityKey)).toEqual(["opportunity", "person", "child", "inquiry_child"]);
     });
     it("widget catalog has the V1 widgets", () => {
         expect(LAYOUT_WIDGET_CATALOG.map((w) => w.widgetKey)).toEqual(
@@ -124,13 +124,14 @@ describe("field catalog", () => {
         );
     });
     it("namespaces refKeys and parses them back", () => {
-        expect(makeRefKey("person", "primary_phone")).toBe("person.primary_phone");
-        expect(parseRefKey("person.primary_phone")).toEqual({ entityKey: "person", fieldKey: "primary_phone" });
+        expect(makeRefKey("person", "phone")).toBe("person.phone");
+        expect(parseRefKey("person.primary_phone")).toEqual({ entityKey: "person", fieldKey: "phone" });
         expect(parseRefKey("bare_key")).toEqual({ entityKey: "opportunity", fieldKey: "bare_key" });
     });
-    it("curated fields exist for child + children inquiry (no field-def source)", () => {
+    it("curated fields exist for child + inquiry_child with canonical refKeys", () => {
         expect(CURATED_FIELDS.child.length).toBeGreaterThan(0);
-        expect(CURATED_FIELDS.child_inquiry.length).toBeGreaterThan(0);
+        expect(CURATED_FIELDS.inquiry_child.length).toBeGreaterThan(0);
+        expect(CURATED_FIELDS.inquiry_child.every((f) => f.refKey.startsWith("inquiry_child."))).toBe(true);
     });
 });
 

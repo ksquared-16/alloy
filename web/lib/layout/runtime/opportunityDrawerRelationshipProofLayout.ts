@@ -198,18 +198,18 @@ export function buildOpportunityDrawerRelationshipProofLayout(): LayoutDoc {
             displayMode: "table",
             related: { entityType: "customer_members", filterKey: "opportunity" },
             columns: [
-                { label: "Child", refKey: "child_inquiry.child_name", width: "medium" },
-                { label: "Desired start", refKey: "child_inquiry.desired_start_date", width: "medium", renderHint: "date" },
-                { label: "Site preference", refKey: "child_inquiry.location_id", width: "medium" },
-                { label: "Program room cohort", refKey: "child_inquiry.program_room_cohort_key", width: "medium" },
-                { label: "Status", refKey: "child_inquiry.outcome_status_key", width: "medium", renderHint: "status" },
+                { label: "Child", refKey: "child.name", width: "medium" },
+                { label: "Desired start", refKey: "inquiry_child.desired_start_date", width: "medium", renderHint: "date" },
+                { label: "Site preference", refKey: "inquiry_child.location_id", width: "medium" },
+                { label: "Program room cohort", refKey: "inquiry_child.program_room_cohort_key", width: "medium" },
+                { label: "Status", refKey: "inquiry_child.outcome_status_key", width: "medium", renderHint: "status" },
             ],
         },
         {
             bindingClass: "repeater",
             contractBlockKind: "repeater",
             relationKey: "enrollment_children",
-            sourceEntity: "child_inquiry",
+            sourceEntity: "inquiry_child",
         },
     );
 

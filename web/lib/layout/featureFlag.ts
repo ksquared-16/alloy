@@ -36,6 +36,20 @@ export function isLayoutRuntimeEnabledClient(): boolean {
     return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED, false);
 }
 
+/** Shadow parity compare (Phase 3). Default: off. Proof API may also allow preview flag. */
+export function isLayoutRuntimeShadowEnabledServer(): boolean {
+    return readFlag(process.env.LAYOUT_RUNTIME_SHADOW_ENABLED, false);
+}
+
+export function isLayoutRuntimeShadowEnabledClient(): boolean {
+    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_SHADOW_ENABLED, false);
+}
+
+/** Proof shadow parity when explicit shadow flag OR layout preview is on. Never enables live cutover. */
+export function isLayoutRuntimeShadowReadPathEnabled(): boolean {
+    return isLayoutRuntimeShadowEnabledServer() || isLayoutV2PreviewEnabledServer();
+}
+
 /**
  * Effective API + server resolve may read entity_layouts when preview OR runtime is on.
  * Live renderers must additionally check isLayoutRuntimeEnabled* before mounting.

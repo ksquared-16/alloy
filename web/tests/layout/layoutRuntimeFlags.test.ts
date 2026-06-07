@@ -7,6 +7,7 @@ import {
     isLayoutRuntimeEnabledClient,
     isLayoutRuntimeEnabledServer,
     isLayoutRuntimeReadPathEnabled,
+    isLayoutRuntimeShadowEnabledServer,
     isLayoutV2PreviewEnabledServer,
 } from "@/lib/layout/featureFlag";
 
@@ -39,5 +40,9 @@ describe("layout runtime feature flags", () => {
         delete process.env.LAYOUT_RUNTIME_ENABLED;
         process.env.LAYOUT_V2_PREVIEW_ENABLED = "true";
         expect(isLayoutRuntimeReadPathEnabled()).toBe(true);
+    });
+
+    it("LAYOUT_RUNTIME_SHADOW_ENABLED defaults off", () => {
+        expect(isLayoutRuntimeShadowEnabledServer()).toBe(false);
     });
 });

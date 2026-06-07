@@ -53,7 +53,7 @@ function inferBindingClass(
     if (parsed.entityKey !== anchorEntity && parsed.entityKey !== "opportunity") {
         return "relationship_field";
     }
-    if (parsed.entityKey === "child_inquiry") {
+    if (parsed.entityKey === "child_inquiry" || parsed.entityKey === "inquiry_child" || parsed.entityKey === "child") {
         return "relationship_field";
     }
     return "base_field";
