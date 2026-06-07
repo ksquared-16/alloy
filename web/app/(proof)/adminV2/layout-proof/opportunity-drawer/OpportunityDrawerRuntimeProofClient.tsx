@@ -14,6 +14,7 @@ import { isLayoutV2PreviewEnabledClient, isLayoutRuntimeEnabledClient, isLayoutR
 import {
     buildLayoutRuntimePlan,
     buildOpportunityDrawerRelationshipProofLayout,
+    appendOpportunityFutureTabPlaceholders,
 } from "@/lib/layout/runtime";
 import { buildProofOpportunityRecord } from "@/lib/layout/runtime/buildProofOpportunityRecord";
 import LayoutRuntimePlanView from "@/components/layout/LayoutRuntimePlanView";
@@ -33,7 +34,10 @@ export default function OpportunityDrawerRuntimeProofClient() {
     const opportunityId = searchParams.get("opportunityId")?.trim() ?? "";
     const [shadowReport, setShadowReport] = useState<RealRecordShadowValidationReport | null>(null);
 
-    const doc = useMemo(() => buildOpportunityDrawerRelationshipProofLayout(), []);
+    const doc = useMemo(
+        () => appendOpportunityFutureTabPlaceholders(buildOpportunityDrawerRelationshipProofLayout()),
+        [],
+    );
     const plan = useMemo(() => buildLayoutRuntimePlan(doc), [doc]);
     const record = useMemo(() => buildProofOpportunityRecord(), []);
 

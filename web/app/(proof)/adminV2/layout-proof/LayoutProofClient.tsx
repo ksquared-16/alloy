@@ -374,11 +374,20 @@ export default function LayoutProofClient() {
                 </p>
                 <p className="mt-2 text-[11px]">
                     <Link className="text-[#00458C] underline" href="/adminV2/layout-proof/opportunity-drawer">
-                        Phase 2–4: Opportunity drawer runtime proof →
+                        Opportunity drawer runtime proof →
                     </Link>
                     <span className="text-[10px]" style={{ color: MUTED }}>
-                        Add ?opportunityId=&lt;uuid&gt; for real-record shadow validation
+                        {" "}Add ?opportunityId=&lt;uuid&gt; for real-record shadow validation
                     </span>
+                </p>
+                <p className="mt-1 text-[11px]">
+                    <Link className="text-[#00458C] underline" href="/adminV2/layout-proof/person-drawer">
+                        Person drawer runtime proof →
+                    </Link>
+                    {" · "}
+                    <Link className="text-[#00458C] underline" href="/adminV2/layout-proof/child-drawer">
+                        Child drawer runtime proof →
+                    </Link>
                 </p>
             </details>
 
