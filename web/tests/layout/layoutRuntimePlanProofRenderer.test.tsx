@@ -115,14 +115,17 @@ describe("LayoutRuntimePlanView — proof renderer", () => {
         expect(html).toContain("enrollment context");
     });
 
-    it("enrollment repeater columns use child_inquiry labels not OCM table names", () => {
+    it("enrollment repeater uses canonical child.* and inquiry_child.* refKeys", () => {
         const doc = buildOpportunityDrawerRelationshipProofLayout();
         const record = buildProofOpportunityRecord();
         const html = renderToStaticMarkup(<LayoutRuntimePlanView doc={doc} record={record} />);
 
         expect(html).toContain("Child");
         expect(html).toContain("Desired start");
+        expect(html).toContain("Alex Johnson");
         expect(html.toLowerCase()).not.toContain("ocm");
+        expect(html.toLowerCase()).not.toContain("child_inquiry");
+        expect(html.toLowerCase()).not.toContain("inquiry_child");
     });
 
     it("includes widget and base field sections from lead default", () => {
@@ -144,6 +147,6 @@ describe("classifyLayoutItemBinding — parity with proof resolution", () => {
         const binding = classifyLayoutItemBinding(repeater, "opportunities");
         expect(binding.bindingClass).toBe("repeater");
         expect(binding.relationKey).toBe("enrollment_children");
-        expect(binding.sourceEntity).toBe("child_inquiry");
+        expect(binding.sourceEntity).toBe("inquiry_child");
     });
 });

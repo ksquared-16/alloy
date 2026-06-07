@@ -157,7 +157,7 @@ function RepeaterCellContent({ row, col }: { row: ProofRuntimeRecord; col: Layou
         renderHint: col.renderHint,
         adornment: col.adornment,
     };
-    // Row objects already carry namespaced child_inquiry.* values in enrollment context.
+    // Row objects carry namespaced child.* / inquiry_child.* values in enrollment context.
     const r = resolveItemValue(row, synthetic);
     return (
         <span className="inline-flex items-center gap-1">
