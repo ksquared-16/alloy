@@ -40,6 +40,8 @@ form schema_json           → WHICH fields appear on a form version (capture)
 
 Convergence unifies **identity** (first column). It does **not** merge behavior, readiness, or form schema into one JSON blob.
 
+**Child Model doctrine (ratified — governs every `inquiry_child` task below):** Per [`child_model_convergence_audit.md`](./child_model_convergence_audit.md) §FINAL DECISION, **`inquiry_child` is kept as a technical/config field-catalog projection over OCM (`opportunity_customer_members`), but is NOT a primary product-facing layout configuration surface.** The `inquiry_child` tasks here (registry entity_type, native OCM-column manifest, `child_inquiry` refKey namespace, layout catalog API rows) are the **config/catalog plumbing for OCM-scoped fields** — not an endorsement of `inquiry_child` as a product-facing layout entity. Accordingly: durable child truth lives on the **Child / `customer_member`** record; **layout configuration prefers the durable Child / Customer Member concept**; OCM-scoped fields appear in layouts only through an **enrollment-child context** (relationship section / repeater / widget), never as a standalone "Inquiry Child" entity layout; raw table names (OCM) are never exposed in UX; no separate inquiry-child runtime or presentation system is introduced; and existing waitlist / readiness / lifecycle / child-grain queue dependencies are preserved unchanged.
+
 ---
 
 ## Authority model
@@ -173,7 +175,7 @@ Layout consumers **compose and behave** using registry keys; they must not maint
 |----------|--------|
 | **All layout pickers** | Read active `field_definitions` for entity group; refKey = `{entity_type}.{field_key}` |
 | **`field_placements_v1`** | Unchanged role (Layout Contract V1); keys must exist in registry |
-| **Layout V2 catalog API** | `child_inquiry` group → `entity_type: inquiry_child`; deprecate `CURATED_FIELDS` except empty-org bootstrap |
+| **Layout V2 catalog API** | `child_inquiry` group → `entity_type: inquiry_child` (config/catalog plumbing only — see Child Model doctrine; `inquiry_child` is not a product-facing layout surface, and these OCM-scoped fields surface via an enrollment-child context, not a standalone entity layout); deprecate `CURATED_FIELDS` except empty-org bootstrap |
 | **Policy adapter** | Resolve storage from registry `config.storage` (FC-0.4) |
 | **Person drawer** | Dedicated key specs removed; layout sections reference person registry keys only |
 | **LayoutDoc items** | Field items carry registry ref; widgets remain separate catalog |
@@ -239,7 +241,7 @@ Lifecycle **does not become** the field catalog. It **consumes** registry keys t
 | FC-3.3 | **form_capture_keys trim** — Derive capture aliases from `systemFieldRegistry` ids + registry field_key where possible; reduce manual string lists | One source for intake field ids per rule |
 | FC-3.4 | **Custom rule validation** — Stage save rejects `custom:*` rules whose field_key no longer exists in registry | PATCH lifecycle-requirements validation |
 | FC-3.5 | **Object-label deprecation path** — New UI surfaces use rule ids only; object labels generated via `deriveObjectLabelsFromFieldRules` | No new features on label-only config |
-| FC-3.6 | **Grain documentation** — Lock: Child rules = inquiry_child registry + OCM paths until household child entity type exists | Matches child-fields audit; no customer_member rules without architecture change |
+| FC-3.6 | **Grain documentation** — Lock: Child *field/config* rules = inquiry_child registry + OCM paths (technical projection, not a product-facing layout surface — Child Model doctrine). Durable child truth = Child / `customer_member`; OCM-scoped fields reach layouts via enrollment-child context only | Matches child-model decision; no separate inquiry-child product entity/runtime; no `customer_member` rule changes without architecture sign-off |
 
 **Do not:** Move stage requirements into `field_definitions`. **Do not:** Merge lifecycle builder into Fields Settings.
 
