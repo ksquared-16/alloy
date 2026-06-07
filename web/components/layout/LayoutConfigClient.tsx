@@ -50,16 +50,26 @@ const RENDER_MODES: { key: LayoutRenderHint; label: string }[] = [
 /** Column width buckets (no raw CSS); shared by the related-list column editor. */
 const WIDTH_OPTIONS: LayoutColumnWidth[] = [...LAYOUT_COLUMN_WIDTHS];
 
-/** Friendly labels for the bounded queue-card zones (shown in the zone picker). */
+/** Friendly area labels for the unified queue-card areas (Header/Context/Body/Actions). */
 const QUEUE_ZONE_LABEL: Record<string, string> = {
-    "header.title": "Header · Household title",
-    "header.status": "Header · Status pill",
-    "header.attention": "Header · Attention line",
+    "header.title": "Header · Title",
+    "header.identity": "Header · Identity",
+    "header.status": "Header · Status",
+    "header.priority": "Header · Priority",
+    "header.position": "Header · Position",
     "header.location": "Header · Location",
-    "body.contact": "Contact row",
-    "body.children": "Children rows",
-    "body.tour": "Tour row",
-    "actions.stack": "Action stack",
+    "header.attention": "Header · Attention",
+    "context.primary": "Context · Primary",
+    "context.secondary": "Context · More",
+    "body.contact": "Body · Contact",
+    "body.children": "Body · Children",
+    "body.tour": "Body · Tour",
+    "body.child": "Body · Child",
+    "body.household": "Body · Household",
+    "body.program_fit": "Body · Program fit",
+    "body.availability": "Body · Availability",
+    "body.override_flags": "Body · Override flags",
+    "actions.stack": "Actions",
 };
 
 const ACTION_ENTITY_OPTIONS: { value: "" | LayoutAdornmentActionEntity; label: string }[] = [
@@ -620,16 +630,17 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                         return (
                                             <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] p-3 text-[11px] text-[#4063b0]">
                                                 <div className="mb-2">
-                                                    <strong>You&apos;re editing a {isWaitlist ? "waitlist candidate card" : "queue card"}</strong> — not a drawer section. Add fields/widgets above and give each a <span className="font-medium">card zone</span>; the card stacks zones top-to-bottom with a right-side action stack.
+                                                    <strong>{isWaitlist ? "Waitlist candidate card" : "Lead queue card"}</strong> — same queue-card engine. Add fields/widgets above and choose the <span className="font-medium">area</span> each renders in. The card stacks areas top-to-bottom with an actions column on the right.
                                                 </div>
-                                                {/* Visual zone legend — where content renders */}
+                                                {/* Visual area map — Header / Context / Body / Actions */}
                                                 <div className="grid grid-cols-[1fr_auto] gap-2">
                                                     <div className="flex flex-col gap-1">
-                                                        <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1"><span className="font-semibold">Header zone</span> · {isWaitlist ? "identity · priority · position · location" : "title · status · attention · location"}</div>
-                                                        <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1"><span className="font-semibold">Body zone</span> · {isWaitlist ? "child · program fit · availability · household · override flags" : "contact · children · tour"}</div>
+                                                        <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1"><span className="font-semibold">Header</span> · {isWaitlist ? "identity · status · priority · location" : "title · status · location"}</div>
+                                                        <div className="rounded border border-[#bfe9dd] bg-[#f0fbf8] px-2 py-1 text-[#0a8f78]"><span className="font-semibold">Context</span> · {isWaitlist ? "position · waitlisted since · sibling · adjust" : "next step · follow-up"}</div>
+                                                        <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1"><span className="font-semibold">Body</span> · {isWaitlist ? "contact · program fit · availability · overrides" : "contact · children · tour"}</div>
                                                     </div>
                                                     <div className="flex items-stretch">
-                                                        <div className="flex flex-col justify-center rounded border border-[#cdd9f5] bg-white px-2 py-1 text-center"><span className="font-semibold">Actions</span><span className="text-[#7a8bbf]">stack →</span></div>
+                                                        <div className="flex flex-col justify-center rounded border border-[#cdd9f5] bg-white px-2 py-1 text-center"><span className="font-semibold">Actions</span><span className="text-[#7a8bbf]">→</span></div>
                                                     </div>
                                                 </div>
                                                 {isWaitlist ? (
@@ -783,7 +794,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                         <button type="button" onClick={() => op(ops.addSection(workingDoc))} className="self-start rounded border border-[#e6e8ec] px-3 py-1.5 text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9]">+ Add section</button>
                                     )}
                                     {workingDoc.surface === "queue" && (
-                                        <p className="text-[11px] text-[#9aa4bf]">A queue card is a single card — add fields/lists above and give each a <span className="font-medium">card zone</span>. Layout is driven by zones, not extra sections.</p>
+                                        <p className="text-[11px] text-[#9aa4bf]">A queue card is a single card — add fields/widgets above and choose each one&apos;s <span className="font-medium">area</span> (Header · Context · Body · Actions). No extra sections needed.</p>
                                     )}
 
                                     {/* JSON escape hatch */}
@@ -896,7 +907,7 @@ function ItemRow({
             </div>
             {showQueueZone && (
                 <div className="mt-0.5 flex items-center gap-1">
-                    <span className="text-[9px] text-[#9aa4bf]">card zone:</span>
+                    <span className="text-[9px] text-[#9aa4bf]">area:</span>
                     <select value={currentZone} disabled={!editable} onChange={(e) => onPatch({ metadata: { ...(item.metadata ?? {}), zone: e.target.value || undefined } })} title="Where this item renders in the queue card" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
                         <option value="">(auto)</option>
                         {LAYOUT_QUEUE_ZONES.map((zk) => <option key={zk} value={zk}>{QUEUE_ZONE_LABEL[zk] ?? zk}</option>)}
@@ -1247,7 +1258,7 @@ function RelatedListEditor({
             </div>
             {showQueueZone && (
                 <div className="mt-0.5 flex items-center gap-1">
-                    <span className="text-[9px] text-[#9aa4bf]">card zone:</span>
+                    <span className="text-[9px] text-[#9aa4bf]">area:</span>
                     <select value={currentZone} disabled={!editable} onChange={(e) => onPatchItem({ metadata: { ...(item.metadata ?? {}), zone: e.target.value || undefined } })} title="Where this list renders in the queue card" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
                         <option value="">(auto)</option>
                         {LAYOUT_QUEUE_ZONES.map((zk) => <option key={zk} value={zk}>{QUEUE_ZONE_LABEL[zk] ?? zk}</option>)}

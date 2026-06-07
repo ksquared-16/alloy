@@ -148,24 +148,30 @@ export type LayoutColumnWidth = (typeof LAYOUT_COLUMN_WIDTHS)[number];
  * only queue-specific placement vocabulary — NOT a second layout system.
  */
 export const LAYOUT_QUEUE_ZONES = [
-    // Lead/work-unit card zones
+    // Header area
     "header.title",
+    "header.identity",
     "header.status",
-    "header.attention",
+    "header.priority",
+    "header.position",
     "header.location",
+    // Context area — the configurable contextual band shared by every queue card
+    // (lead: urgent follow-up / next step; waitlist: position / waitlisted-since /
+    //  sibling). Display only; runtime computes the values.
+    "context.primary",
+    "context.secondary",
+    // Body area
     "body.contact",
     "body.children",
     "body.tour",
-    "actions.stack",
-    // Waitlist candidate-card zones (presentation only; runtime computes the values)
-    "header.identity",
-    "header.priority",
-    "header.position",
     "body.child",
     "body.household",
     "body.program_fit",
     "body.availability",
     "body.override_flags",
+    "header.attention",
+    // Actions area
+    "actions.stack",
 ] as const;
 export type LayoutQueueZone = (typeof LAYOUT_QUEUE_ZONES)[number];
 export function isLayoutQueueZone(v: unknown): v is LayoutQueueZone {

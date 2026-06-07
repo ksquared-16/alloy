@@ -138,6 +138,7 @@ export function waitlistCardVmToProofRecord(vm: WaitlistCandidateCardVM): Record
         "waitlist.desiredStartDate": vm.waitlist.desiredStartDate ?? null,
         "waitlist.status": vm.waitlist.status ?? null,
         "waitlist.linkModeLabel": vm.waitlist.linkModeLabel ?? null,
+        "waitlist.siblingContext": vm.waitlist.siblingContextLines?.length ? vm.waitlist.siblingContextLines.join(" · ") : null,
         // override flags (display)
         "overrides.flags": flags.length ? flags.join(" · ") : null,
         "overrides.reason": vm.overrides.reason ?? null,

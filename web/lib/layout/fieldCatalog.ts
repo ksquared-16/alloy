@@ -239,14 +239,23 @@ export const WAITLIST_CANDIDATE_CATALOG_GROUPS: LayoutCatalogGroup[] = [
     },
 ];
 
-/** Waitlist widget catalog (Goal 5) — placeable widgets, NOT fields. */
-export const WAITLIST_WIDGET_CATALOG: LayoutCatalogWidget[] = [
-    { widgetKey: "waitlist_position", label: "Waitlist Position", defaultDisplayMode: "badge" },
-    { widgetKey: "waitlist_tier", label: "Waitlist Tier", defaultDisplayMode: "badge" },
-    { widgetKey: "waitlist_override", label: "Waitlist Override", defaultDisplayMode: "badge" },
-    { widgetKey: "waitlist_adjustment", label: "Waitlist Adjustment", defaultDisplayMode: "control" },
+/**
+ * Context widgets — reusable across queue cards (Context Area). The same engine
+ * powers Lead and Waitlist; these widgets are simply placeable in any card's
+ * Context Area. NOT fields. (Goal 3/5 — one engine, different widgets.)
+ */
+export const CONTEXT_WIDGET_CATALOG: LayoutCatalogWidget[] = [
+    { widgetKey: "waitlist_position", label: "Position", defaultDisplayMode: "badge" },
+    { widgetKey: "waitlist_tier", label: "Priority Tier", defaultDisplayMode: "badge" },
+    { widgetKey: "waitlisted_since", label: "Waitlisted Since", defaultDisplayMode: "text" },
+    { widgetKey: "waitlist_adjustment", label: "Adjust Position", defaultDisplayMode: "control" },
+    { widgetKey: "sibling_context", label: "Sibling Context", defaultDisplayMode: "text" },
+    { widgetKey: "waitlist_override", label: "Override", defaultDisplayMode: "badge" },
     { widgetKey: "capacity_recommendation", label: "Capacity Recommendation", defaultDisplayMode: "summary" },
 ];
+
+/** Waitlist widget catalog — Context widgets the candidate card can place. */
+export const WAITLIST_WIDGET_CATALOG: LayoutCatalogWidget[] = CONTEXT_WIDGET_CATALOG;
 
 /** Catalog groups for a layout entity type (waitlist candidate vs. the Lead groups). */
 export function catalogGroupsForEntityType(entityType: string): LayoutCatalogGroup[] | null {

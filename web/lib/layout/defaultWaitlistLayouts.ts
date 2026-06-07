@@ -53,6 +53,18 @@ function fieldItem(
 
 const ICON = (icon: LayoutFieldAdornment["icon"]): LayoutFieldAdornment => ({ position: "left", icon });
 
+/** Context/body widget placed in a card zone (Context Area = shared engine). */
+function widgetItem(base: string, widgetKey: string, label: string, zone: string, displayMode?: string): LayoutItem {
+    return {
+        id: id(base, "w", widgetKey),
+        kind: "widget_placeholder",
+        refKey: widgetKey,
+        label,
+        widget: { widgetKey: `placement_candidate.${widgetKey}`, displayMode, note: `${label} widget` },
+        metadata: { zone },
+    };
+}
+
 /** Build the default Waitlist Candidate Card queue doc. */
 export function buildWaitlistCandidateCardDefaultDoc(): LayoutDoc {
     const base = id("placement_candidate", "waitlist_card");
@@ -60,31 +72,26 @@ export function buildWaitlistCandidateCardDefaultDoc(): LayoutDoc {
     const RIGHT = LAYOUT_GRID_COLUMNS - LEFT; // 3
 
     const leftItems: LayoutItem[] = [
-        // header.identity — child name + house icon
+        // HEADER — identity, status, priority tier, location (same header area as Lead)
         fieldItem(base, "child.name", "Child", "header.identity", "text", ICON("child")),
-        // header.priority — tier/bucket pill (runtime-computed)
+        fieldItem(base, "waitlist.status", "Status", "header.status", "status"),
         fieldItem(base, "waitlist.tierLabel", "Priority tier", "header.priority", "badge"),
-        // header.position — "Position 3/12" (runtime-computed)
-        fieldItem(base, "waitlist.positionLabel", "Position", "header.position", "text"),
+        fieldItem(base, "household.locationName", "Location", "header.location", "text", ICON("location")),
 
-        // body.child — program fit + age + desired start
-        fieldItem(base, "child.programLabel", "Program", "body.child", "text"),
-        fieldItem(base, "child.ageLabel", "Age", "body.child", "text"),
+        // CONTEXT AREA — waitlist-specific context, as reusable widgets (not a
+        // special path): position, waitlisted-since, sibling, adjust.
+        widgetItem(base, "waitlist_position", "Position", "context.primary", "badge"),
+        widgetItem(base, "waitlisted_since", "Waitlisted since", "context.primary", "text"),
+        widgetItem(base, "sibling_context", "Sibling context", "context.secondary", "text"),
+        widgetItem(base, "waitlist_adjustment", "Adjust position", "context.secondary", "control"),
 
-        // body.program_fit — cohort context
+        // BODY — contact row + program fit + availability + override flags
+        fieldItem(base, "household.primaryContactName", "Contact", "body.contact", "text", ICON("person")),
+        fieldItem(base, "household.phone", "Phone", "body.contact", "phone", ICON("phone")),
+        fieldItem(base, "household.email", "Email", "body.contact", "text", ICON("mail")),
+        fieldItem(base, "child.programLabel", "Program", "body.program_fit", "text"),
         fieldItem(base, "waitlist.cohortSectionTitle", "Cohort", "body.program_fit", "text"),
-
-        // body.availability — desired start / wait since
-        fieldItem(base, "waitlist.waitSince", "Waitlisted since", "body.availability", "text", ICON("calendar")),
         fieldItem(base, "child.desiredStartDate", "Desired start", "body.availability", "date", ICON("calendar")),
-
-        // body.household — contact row
-        fieldItem(base, "household.primaryContactName", "Contact", "body.household", "text", ICON("person")),
-        fieldItem(base, "household.phone", "Phone", "body.household", "phone", ICON("phone")),
-        fieldItem(base, "household.email", "Email", "body.household", "text", ICON("mail")),
-        fieldItem(base, "household.locationName", "Location", "body.household", "text", ICON("location")),
-
-        // body.override_flags — pinned / adjusted badges (display only)
         fieldItem(base, "overrides.flags", "Overrides", "body.override_flags", "badge"),
     ];
 

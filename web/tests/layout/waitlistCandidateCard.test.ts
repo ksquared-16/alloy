@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { resolveLayout } from "@/lib/layout/layoutResolver";
 import { buildWaitlistCandidateCardDefaultDoc, buildWaitlistDefaultDoc, readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
-import { catalogGroupsForEntityType, catalogWidgetsForEntityType } from "@/lib/layout/fieldCatalog";
+import { catalogGroupsForEntityType, catalogWidgetsForEntityType, CONTEXT_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
+import { buildLeadQueueDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import { LAYOUT_QUEUE_ZONES } from "@/lib/layout/layoutV2";
 import { placementCandidateVmToCardVm } from "@/lib/layout/waitlist/placementRowToCardVm";
 import { waitlistCardVmToProofRecord, WAITLIST_CARD_RENDER_AS } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
@@ -128,11 +130,21 @@ describe("default waitlist preset", () => {
         expect(doc.entityType).toBe("placement_candidate");
         expect(doc.metadata?.renderAs).toBe(WAITLIST_CARD_RENDER_AS);
     });
-    it("places items in the waitlist card zones", () => {
+    it("places items in the unified card zones incl. the Context Area", () => {
         const zones = zonesOf(doc);
-        for (const z of ["header.identity", "header.priority", "header.position", "body.child", "body.household", "actions.stack"]) {
+        for (const z of ["header.identity", "header.status", "header.priority", "context.primary", "body.contact", "actions.stack"]) {
             expect(zones.has(z), z).toBe(true);
         }
+    });
+    it("moves waitlist-specific content into the Context Area (not a special path)", () => {
+        const ctxItems = doc.sections
+            .flatMap((s) => s.rows).flatMap((r) => r.columns).flatMap((c) => c.items)
+            .filter((it) => String((it.metadata as { zone?: string } | undefined)?.zone ?? "").startsWith("context."));
+        const refs = ctxItems.map((i) => i.refKey);
+        expect(refs).toContain("waitlist_position");
+        expect(refs).toContain("waitlisted_since");
+        expect(refs).toContain("sibling_context");
+        expect(refs).toContain("waitlist_adjustment");
     });
     it("reserves the action stack without owning behavior", () => {
         const action = doc.sections[0].rows[0].columns[1].items.find((i) => i.refKey === "actions");
@@ -175,6 +187,38 @@ describe("waitlist field & widget catalog (Goals 4/5)", () => {
         const widgets = catalogWidgetsForEntityType("opportunities").map((w) => w.widgetKey);
         expect(widgets).toContain("tasks");
         expect(widgets).not.toContain("waitlist_adjustment");
+    });
+});
+
+describe("one queue-card engine — Context Area + reuse", () => {
+    it("Context Area is part of the shared queue zone vocabulary", () => {
+        expect(LAYOUT_QUEUE_ZONES).toContain("context.primary");
+        expect(LAYOUT_QUEUE_ZONES).toContain("context.secondary");
+    });
+    it("context widgets are reusable (not waitlist-only architecture)", () => {
+        const keys = CONTEXT_WIDGET_CATALOG.map((w) => w.widgetKey);
+        for (const k of ["waitlist_position", "waitlisted_since", "sibling_context", "waitlist_adjustment"]) {
+            expect(keys).toContain(k);
+        }
+    });
+    it("Lead queue and Waitlist card share the same engine concepts (zones + actions)", () => {
+        const lead = buildLeadQueueDefaultDoc();
+        const wl = buildWaitlistCandidateCardDefaultDoc();
+        const zonesOfDoc = (d: LayoutDoc) =>
+            new Set(
+                d.sections.flatMap((s) => s.rows).flatMap((r) => r.columns).flatMap((c) => c.items)
+                    .map((it) => String((it.metadata as { zone?: string } | undefined)?.zone ?? "")),
+            );
+        // Both place an Actions stack and use the same bounded zone vocabulary.
+        expect(zonesOfDoc(lead).has("actions.stack")).toBe(true);
+        expect(zonesOfDoc(wl).has("actions.stack")).toBe(true);
+        // Every zone used by either doc is a member of the shared vocabulary.
+        for (const z of [...zonesOfDoc(lead), ...zonesOfDoc(wl)].filter(Boolean)) {
+            expect(LAYOUT_QUEUE_ZONES as readonly string[]).toContain(z);
+        }
+        // Both are the queue surface — the only differences are fields/widgets/group display.
+        expect(lead.surface).toBe("queue");
+        expect(wl.surface).toBe("queue");
     });
 });
 
