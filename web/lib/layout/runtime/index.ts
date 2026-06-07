@@ -1,5 +1,5 @@
 /**
- * Layout runtime — public exports (Phase 0–1).
+ * Layout runtime — public exports (Phase 0–4).
  */
 
 export { buildLayoutRuntimePlan, layoutDocSupportsAllSprint1ItemKinds } from "./layoutRuntimePlan";
@@ -34,3 +34,18 @@ export { buildOpportunityDrawerRelationshipProofLayout } from "./opportunityDraw
 export { buildProofOpportunityRecord, mergeApiRecordIntoProofRecord } from "./buildProofOpportunityRecord";
 export { isOpaqueIdValue, readProofComputed, readProofRelation, type ProofRelationHandle, type ProofRuntimeRecord } from "./proofRecordContext";
 export { resolveProofBindingValue, shouldRenderProofItem, type ProofBindingResolution } from "./resolveProofBindingValue";
+
+export {
+    buildOpportunityDrawerShadowParityReport,
+    buildRealRecordShadowValidationFromVm,
+    runRealOpportunityShadowValidation,
+    captureVmOpportunityDrawerStructure,
+    captureLayoutRuntimeDrawerStructure,
+    compareOpportunityDrawerShadowParity,
+    enrichShadowParityReport,
+    normalizeFieldRefKeyForParity,
+    type ShadowParityReport,
+    type ShadowParityMismatch,
+    type DrawerStructureSnapshot,
+    type RealRecordShadowValidationReport,
+} from "./shadow";

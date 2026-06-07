@@ -10,15 +10,17 @@
  * NOT connected to AdminEntityDrawer, VM, or production queues.
  */
 
-import { useMemo } from "react";
-import Link from "next/link";
-import { isLayoutV2PreviewEnabledClient, isLayoutRuntimeEnabledClient } from "@/lib/layout/featureFlag";
+import { isLayoutV2PreviewEnabledClient, isLayoutRuntimeEnabledClient, isLayoutRuntimeShadowEnabledClient } from "@/lib/layout/featureFlag";
 import {
     buildLayoutRuntimePlan,
     buildOpportunityDrawerRelationshipProofLayout,
 } from "@/lib/layout/runtime";
 import { buildProofOpportunityRecord } from "@/lib/layout/runtime/buildProofOpportunityRecord";
 import LayoutRuntimePlanView from "@/components/layout/LayoutRuntimePlanView";
+import type { RealRecordShadowValidationReport } from "@/lib/layout/runtime";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 const TEXT = "#273F52";
 const MUTED = "rgba(39,63,82,0.65)";
@@ -26,10 +28,25 @@ const MUTED = "rgba(39,63,82,0.65)";
 export default function OpportunityDrawerRuntimeProofClient() {
     const previewOn = isLayoutV2PreviewEnabledClient();
     const runtimeFlagOn = isLayoutRuntimeEnabledClient();
+    const shadowFlagOn = isLayoutRuntimeShadowEnabledClient();
+    const searchParams = useSearchParams();
+    const opportunityId = searchParams.get("opportunityId")?.trim() ?? "";
+    const [shadowReport, setShadowReport] = useState<RealRecordShadowValidationReport | null>(null);
 
     const doc = useMemo(() => buildOpportunityDrawerRelationshipProofLayout(), []);
     const plan = useMemo(() => buildLayoutRuntimePlan(doc), [doc]);
     const record = useMemo(() => buildProofOpportunityRecord(), []);
+
+    useEffect(() => {
+        if (!previewOn) return;
+        const qs = opportunityId ? `?opportunityId=${encodeURIComponent(opportunityId)}` : "";
+        fetch(`/api/admin/layout-proof/opportunity-drawer-shadow${qs}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((json) => {
+                if (json?.report) setShadowReport(json.report as RealRecordShadowValidationReport);
+            })
+            .catch(() => {});
+    }, [previewOn, opportunityId]);
 
     if (!previewOn) {
         return (
@@ -49,8 +66,30 @@ export default function OpportunityDrawerRuntimeProofClient() {
                     ← Lead layout proof
                 </Link>
                 <span>Runtime flag: {runtimeFlagOn ? "on" : "off (default)"}</span>
+                <span>Shadow flag: {shadowFlagOn ? "on" : "off (default)"}</span>
                 <span>Plan template: {plan.layoutKey ?? "—"}</span>
             </div>
+
+            {shadowReport ? (
+                <div className="mb-4 rounded-md border border-[rgba(39,63,82,0.14)] bg-white p-3 text-sm" style={{ color: TEXT }}>
+                    <strong>Phase {opportunityId ? "4 real-record" : "3 fixture"} shadow parity.</strong>{" "}
+                    {opportunityId ? `Opportunity ${opportunityId.slice(0, 8)}… · ` : ""}
+                    Score: {shadowReport.parityScore}% · Fields: {shadowReport.coverage.fields.percent}% · Readiness:{" "}
+                    {shadowReport.readiness.level}
+                    <div className="mt-1 text-xs" style={{ color: MUTED }}>
+                        {shadowReport.summary}
+                    </div>
+                    {shadowReport.topGaps.length > 0 ? (
+                        <ul className="mt-2 max-h-40 overflow-y-auto text-xs" style={{ color: MUTED }}>
+                            {shadowReport.topGaps.slice(0, 6).map((g, i) => (
+                                <li key={i}>
+                                    [{g.impact}] {g.key}: {g.detail}
+                                </li>
+                            ))}
+                        </ul>
+                    ) : null}
+                </div>
+            ) : null}
 
             <div className="mb-4 rounded-md border border-[#dbe7ff] bg-[#f5f8ff] p-3 text-sm" style={{ color: TEXT }}>
                 <strong>Phase 2 proof integration.</strong> This drawer body is rendered from{" "}
