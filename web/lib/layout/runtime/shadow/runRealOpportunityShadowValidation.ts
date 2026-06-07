@@ -10,7 +10,10 @@ import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel";
 import { resolveLayoutForOrg } from "@/lib/layout/resolveLayoutRuntime";
-import { isLayoutRuntimeShadowReadPathEnabled } from "@/lib/layout/featureFlag";
+import {
+    isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled,
+    isLayoutRuntimeShadowReadPathEnabled,
+} from "@/lib/layout/featureFlag";
 import { buildOpportunityDrawerShadowParityReport } from "./buildOpportunityDrawerShadowParityReport";
 import { captureLayoutRuntimeDrawerStructure } from "./captureLayoutRuntimeDrawerStructure";
 import { captureVmOpportunityDrawerStructure } from "./captureVmOpportunityDrawerStructure";
@@ -18,13 +21,25 @@ import { enrichShadowParityReport } from "./enrichShadowParityReport";
 import type { RealRecordShadowValidationReport } from "./drawerStructureSnapshot";
 import type { DrawerStructureSnapshot } from "./drawerStructureSnapshot";
 
+/** Which flag gate authorizes shadow evaluation. */
+export type OpportunityShadowValidationGate = "proof" | "c1a_opportunity_drawer";
+
 export type RunRealOpportunityShadowValidationInput = {
     opportunityId: string;
     gate: AdminRouteGateSuccess;
     supabase: SupabaseClient;
     departmentId?: string | null;
     workUnitId?: string | null;
+    /** Default `proof` — layout-proof API. `c1a_opportunity_drawer` for production shadow mount. */
+    readPathGate?: OpportunityShadowValidationGate;
 };
+
+function isShadowValidationReadPathEnabled(readPathGate: OpportunityShadowValidationGate): boolean {
+    if (readPathGate === "c1a_opportunity_drawer") {
+        return isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled();
+    }
+    return isLayoutRuntimeShadowReadPathEnabled();
+}
 
 export type RealOpportunityShadowValidationResult =
     | {
@@ -48,7 +63,8 @@ export type RealOpportunityShadowValidationResult =
 export async function runRealOpportunityShadowValidation(
     input: RunRealOpportunityShadowValidationInput,
 ): Promise<RealOpportunityShadowValidationResult> {
-    if (!isLayoutRuntimeShadowReadPathEnabled()) {
+    const readPathGate = input.readPathGate ?? "proof";
+    if (!isShadowValidationReadPathEnabled(readPathGate)) {
         return { ok: false, status: 404, reason: "shadow_read_path_disabled" };
     }
 

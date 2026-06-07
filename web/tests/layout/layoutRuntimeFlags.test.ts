@@ -6,6 +6,8 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import {
     isLayoutRuntimeEnabledClient,
     isLayoutRuntimeEnabledServer,
+    isLayoutRuntimeOpportunityDrawerEnabledServer,
+    isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled,
     isLayoutRuntimeReadPathEnabled,
     isLayoutRuntimeShadowEnabledServer,
     isLayoutV2PreviewEnabledServer,
@@ -44,5 +46,10 @@ describe("layout runtime feature flags", () => {
 
     it("LAYOUT_RUNTIME_SHADOW_ENABLED defaults off", () => {
         expect(isLayoutRuntimeShadowEnabledServer()).toBe(false);
+    });
+
+    it("LAYOUT_RUNTIME_OPPORTUNITY_DRAWER defaults off", () => {
+        expect(isLayoutRuntimeOpportunityDrawerEnabledServer()).toBe(false);
+        expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled()).toBe(false);
     });
 });

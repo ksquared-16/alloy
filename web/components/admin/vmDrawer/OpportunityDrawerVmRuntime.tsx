@@ -30,6 +30,8 @@ import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
+import { useOpportunityDrawerLayoutRuntimeShadow } from "@/lib/layout/runtime/shadow/useOpportunityDrawerLayoutRuntimeShadow";
+import OpportunityDrawerLayoutRuntimeShadowDiagnostics from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeShadowDiagnostics";
 
 const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
 
@@ -158,6 +160,13 @@ export default function OpportunityDrawerVmRuntime() {
             String(drawer.id) === String(displayVm?.entity.id),
         [vmMatchesRender, drawer.type, drawer.id, displayVm?.entity.id]
     );
+
+    const layoutRuntimeShadow = useOpportunityDrawerLayoutRuntimeShadow({
+        opportunityId: committedVisible ? drawer.id : null,
+        vmReady: Boolean(displayVm?.structureSettled && committedVisible),
+        departmentId: displayVm?.workspace.department_id,
+        workUnitId: displayVm?.workspace.work_unit_id,
+    });
 
     const committedTitleRef = useRef(opportunitySingular);
 
@@ -429,6 +438,26 @@ export default function OpportunityDrawerVmRuntime() {
                                     opportunitySingular={opportunitySingular}
                                     onSelectTab={onTabSelect}
                                 />
+                                {layoutRuntimeShadow.shadowEnabled ?
+                                    <div
+                                        aria-hidden="true"
+                                        hidden
+                                        data-layout-runtime-shadow-mount="opportunity"
+                                        data-shadow-parity-score={
+                                            layoutRuntimeShadow.telemetry?.parityScore ?? ""
+                                        }
+                                        data-shadow-readiness={
+                                            layoutRuntimeShadow.telemetry?.readinessLevel ?? ""
+                                        }
+                                    />
+                                :   null}
+                                {layoutRuntimeShadow.diagnosticsEnabled ?
+                                    <OpportunityDrawerLayoutRuntimeShadowDiagnostics
+                                        telemetry={layoutRuntimeShadow.telemetry}
+                                        evaluating={layoutRuntimeShadow.evaluating}
+                                        lastError={layoutRuntimeShadow.lastError}
+                                    />
+                                :   null}
                             </div>
                         :   <OpportunityDrawerVmTabPanes
                                 drawerId={String(displayVm.entity.id)}
