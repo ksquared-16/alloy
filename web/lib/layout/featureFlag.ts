@@ -50,6 +50,35 @@ export function isLayoutRuntimeShadowReadPathEnabled(): boolean {
     return isLayoutRuntimeShadowEnabledServer() || isLayoutV2PreviewEnabledServer();
 }
 
+/** Per-entity cutover gate — opportunity drawer (C1a/C1b). Default: off. */
+export function isLayoutRuntimeOpportunityDrawerEnabledServer(): boolean {
+    return readFlag(process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER, false);
+}
+
+export function isLayoutRuntimeOpportunityDrawerEnabledClient(): boolean {
+    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER, false);
+}
+
+/**
+ * C1a production shadow mount — requires master runtime + opportunity drawer flag.
+ * Does NOT enable visible layout runtime body. Default: off.
+ */
+export function isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled(): boolean {
+    return isLayoutRuntimeEnabledServer() && isLayoutRuntimeOpportunityDrawerEnabledServer();
+}
+
+export function isLayoutRuntimeOpportunityDrawerShadowReadPathEnabledClient(): boolean {
+    return isLayoutRuntimeEnabledClient() && isLayoutRuntimeOpportunityDrawerEnabledClient();
+}
+
+/** Optional dev/staging diagnostics panel inside opportunity drawer. Default: off. */
+export function isLayoutRuntimeOpportunityDrawerShadowDiagnosticsEnabledClient(): boolean {
+    return (
+        isLayoutRuntimeOpportunityDrawerShadowReadPathEnabledClient() &&
+        readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_SHADOW_DIAGNOSTICS, false)
+    );
+}
+
 /**
  * Effective API + server resolve may read entity_layouts when preview OR runtime is on.
  * Live renderers must additionally check isLayoutRuntimeEnabled* before mounting.

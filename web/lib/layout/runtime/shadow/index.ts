@@ -28,7 +28,13 @@ export {
     buildRealRecordShadowValidationFromVm,
     type RunRealOpportunityShadowValidationInput,
     type RealOpportunityShadowValidationResult,
+    type OpportunityShadowValidationGate,
 } from "./runRealOpportunityShadowValidation";
+export {
+    buildOpportunityDrawerShadowTelemetry,
+    logOpportunityDrawerShadowTelemetry,
+    type OpportunityDrawerShadowTelemetry,
+} from "./opportunityDrawerShadowTelemetry";
 export type { RealRecordShadowValidationReport, ShadowParityCoverageMetrics, MigrationReadinessAssessment, ShadowConvergenceGap } from "./drawerStructureSnapshot";
 export {
     OPPORTUNITY_VM_TO_LAYOUT_SECTION_ALIASES,
