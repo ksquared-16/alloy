@@ -44,6 +44,7 @@ function SourceBadge({ source }: { source: LayoutResolutionSource | null }) {
         org: { bg: "#ecfdf3", fg: "#067647", border: "#abefc6", label: "org layout" },
         default: { bg: "#eff8ff", fg: "#175cd3", border: "#b2ddff", label: "default layout" },
         registry: { bg: "#fffaeb", fg: "#b54708", border: "#fedf89", label: "registry fallback" },
+        builtin: { bg: "#f4f3ff", fg: "#5925dc", border: "#d9d6fe", label: "builtin variant" },
     };
     const s = map[source];
     return (

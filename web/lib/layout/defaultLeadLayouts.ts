@@ -221,7 +221,76 @@ export function buildLeadQueueDefaultDoc(): LayoutDoc {
         surface: "queue",
         entityType: "opportunities",
         sections: [card],
-        metadata: { seededFrom: "lead_default", template: "lead_queue_card_v1", renderAs: "card" },
+        metadata: {
+            seededFrom: "lead_default",
+            template: "lead_queue_card_v1",
+            renderAs: "card",
+            queue_context: {
+                lifecycle_key: "enrollment",
+                queue_type: "pipeline",
+                grain: "case",
+            },
+        },
+    };
+}
+
+/**
+ * Waitlist queue row variant — candidate grain, structurally distinct from pipeline case row.
+ * Canonical specialized variant per layout_contract_v1.md §3.4.2.
+ */
+export function buildEnrollmentWaitlistQueueDoc(): LayoutDoc {
+    const base = id("opportunities", "waitlist", "queue_card");
+
+    const candidateHeader = section("waitlist_candidate", "Candidate", [
+        row(id(base, "r0"), [
+            col(id(base, "r0"), 0, HALF, [
+                fieldItem(id(base, "r0c0"), "child.name", "Child", "text", undefined, CHILD_LINK),
+            ]),
+            col(id(base, "r0"), 1, HALF, [
+                fieldItem(id(base, "r0c1"), "child.status", "Enrollment status", "status"),
+            ]),
+        ]),
+    ], { defaultExpanded: true });
+
+    const programSite = section("waitlist_program_site", "Program & site", [
+        row(id(base, "r1"), [
+            col(id(base, "r1"), 0, HALF, [fieldItem(id(base, "r1c0"), "child.program", "Program", "text")]),
+            col(id(base, "r1"), 1, HALF, [fieldItem(id(base, "r1c1"), "child.location", "Site / location", "text")]),
+        ]),
+        row(id(base, "r2"), [
+            col(id(base, "r2"), 0, HALF, [fieldItem(id(base, "r2c0"), "child.desired_start_date", "Desired start", "date")]),
+            col(id(base, "r2"), 1, HALF, [fieldItem(id(base, "r2c1"), "child.room", "Room preference", "text")]),
+        ]),
+    ]);
+
+    const placement = section("waitlist_placement", "Placement", [
+        row(id(base, "r3"), [
+            col(id(base, "r3"), 0, LAYOUT_GRID_COLUMNS, [
+                widgetItem(id(base, "r3c0"), "waitlist_placement_v2", "Placement priority", "badge"),
+            ]),
+        ]),
+        row(id(base, "r4"), [
+            col(id(base, "r4"), 0, LAYOUT_GRID_COLUMNS, [
+                widgetItem(id(base, "r4c0"), "waitlist_program_category_group", "Program category section", "group"),
+            ]),
+        ]),
+    ]);
+
+    return {
+        formatVersion: LAYOUT_DOC_FORMAT_VERSION,
+        surface: "queue",
+        entityType: "opportunities",
+        sections: [candidateHeader, programSite, placement],
+        metadata: {
+            seededFrom: "waitlist_default",
+            template: "enrollment_waitlist_candidate_v1",
+            renderAs: "card",
+            queue_context: {
+                lifecycle_key: "enrollment",
+                queue_type: "waitlist",
+                grain: "candidate",
+            },
+        },
     };
 }
 

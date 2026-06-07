@@ -18,9 +18,9 @@
  *    them; behavior (required, status, workflow, actions, permissions) is owned
  *    elsewhere. Lifecycle references layouts; layouts do not own lifecycle.
  *
- * This is a FOUNDATION sprint: nothing here is wired into the live runtime.
- * The preview renderer and config UI consume these types; production drawers
- * and queues remain on the existing renderers until a later adoption sprint.
+ * Phase 0 (Runtime Convergence): resolver, queue variant contract, and runtime
+ * read path are implemented under `web/lib/layout/` — gated by LAYOUT_RUNTIME_ENABLED
+ * (default off). Production drawers and queues are NOT wired until later phases.
  */
 
 /** Document format version. Bump only on a breaking change to the doc shape. */
@@ -272,7 +272,7 @@ export interface EntityLayoutRecord {
 }
 
 /** Where a resolved layout came from (for diagnostics + the preview UI banner). */
-export type LayoutResolutionSource = "org" | "default" | "registry";
+export type LayoutResolutionSource = "org" | "default" | "registry" | "builtin";
 
 export interface LayoutResolution {
     doc: LayoutDoc;

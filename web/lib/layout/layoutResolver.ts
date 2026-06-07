@@ -1,29 +1,28 @@
 /**
- * Layout V2 — resolver (Deliverable A).
+ * Layout runtime — extended resolution (Phase 0).
  *
- * Resolution order (per design doc):
- *
- *     Org Layout (published)
- *         ↓
- *     Default Layout (published, org_id NULL / industry default)
- *         ↓
- *     entityPresentation.ts  ← Layer 0, must always remain intact
- *
- * The resolver is a PURE function: callers fetch candidate `entity_layouts`
- * records (org + default) however they like, and pass them in. When neither a
- * published org layout nor a published default exists, the resolver converts
- * the legacy registry on the fly via the migration utility — so an org with no
- * Layout V2 rows behaves exactly as today (zero runtime impact / full backward
- * compatibility). Nothing here touches the live drawer/queue runtime.
+ * Extends the pure resolver with queue variant matching and builtin curated
+ * fallbacks. Does NOT wire into live drawer/queue renderers — callers opt in
+ * when LAYOUT_RUNTIME_ENABLED is on (see featureFlag.ts).
  */
 
 import type { EntityPresentationType } from "@/lib/entityPresentation";
+import { resolveBuiltinQueueLayoutVariant } from "./defaultQueueLayoutVariants";
 import { layoutDocFromRegistry } from "./migrateFromRegistry";
+import { resolveQueueLayoutVariantFromRecords } from "./resolveQueueLayoutVariant";
 import type {
     EntityLayoutRecord,
     LayoutResolution,
     LayoutSurface,
 } from "./layoutV2";
+import type { QueueLayoutContextRequest } from "./queueLayoutContext";
+import { isQueueLayoutContextEmpty } from "./queueLayoutContext";
+
+export type ExtendedLayoutResolution = LayoutResolution & {
+    layoutKey?: string;
+    matchedQueueContext?: QueueLayoutContextRequest;
+    matchTier?: string;
+};
 
 export interface ResolveLayoutInput {
     entityType: string;
@@ -32,11 +31,15 @@ export interface ResolveLayoutInput {
     orgRecords?: EntityLayoutRecord[];
     /** Candidate default records (org_id NULL or is_system_default). */
     defaultRecords?: EntityLayoutRecord[];
+    /** Queue surface only: lane/work-unit discriminators for variant selection. */
+    queueContext?: QueueLayoutContextRequest;
 }
 
-/** Pick the highest published version from a candidate list (or null). */
-function latestPublished(records: EntityLayoutRecord[] | undefined, surface: LayoutSurface): EntityLayoutRecord | null {
-    if (!records || records.length === 0) return null;
+function latestPublished(
+    records: EntityLayoutRecord[] | undefined,
+    surface: LayoutSurface,
+): EntityLayoutRecord | null {
+    if (!records?.length) return null;
     const published = records
         .filter((r) => r.status === "published" && r.surface === surface)
         .sort((a, b) => b.version - a.version);
@@ -46,31 +49,60 @@ function latestPublished(records: EntityLayoutRecord[] | undefined, surface: Lay
 /**
  * Resolve the effective layout for an (entity_type, surface).
  *
- * Falls back to the legacy registry conversion when no published org/default
- * record is supplied. The registry fallback is total: it always yields a doc.
+ * Drawer: org → default → registry (Layer 0 — unchanged parity).
+ * Queue: DB variant match → builtin variant (when context provided) → registry.
  */
-export function resolveLayout(input: ResolveLayoutInput): LayoutResolution {
-    const orgRecord = latestPublished(input.orgRecords, input.surface);
-    if (orgRecord) {
-        return { doc: orgRecord.doc, source: "org", record: orgRecord };
+export function resolveLayout(input: ResolveLayoutInput): ExtendedLayoutResolution {
+    const { entityType, surface, orgRecords, defaultRecords, queueContext } = input;
+
+    if (surface === "queue") {
+        const variantMatch = resolveQueueLayoutVariantFromRecords(orgRecords, defaultRecords, queueContext);
+        if (variantMatch) {
+            return {
+                doc: variantMatch.record.doc,
+                source: variantMatch.record.orgId ? "org" : "default",
+                record: variantMatch.record,
+                layoutKey: variantMatch.record.layoutKey,
+                matchedQueueContext: queueContext,
+                matchTier: variantMatch.tier,
+            };
+        }
+
+        if (queueContext && !isQueueLayoutContextEmpty(queueContext)) {
+            const builtin = resolveBuiltinQueueLayoutVariant(entityType, queueContext);
+            if (builtin) {
+                return {
+                    doc: builtin.doc,
+                    source: "builtin",
+                    layoutKey: builtin.variant.layoutKey,
+                    matchedQueueContext: queueContext,
+                    matchTier: "builtin",
+                };
+            }
+        }
+    } else {
+        const orgRecord = latestPublished(orgRecords, surface);
+        if (orgRecord) {
+            return { doc: orgRecord.doc, source: "org", record: orgRecord, layoutKey: orgRecord.layoutKey };
+        }
+
+        const defaultRecord = latestPublished(defaultRecords, surface);
+        if (defaultRecord) {
+            return {
+                doc: defaultRecord.doc,
+                source: "default",
+                record: defaultRecord,
+                layoutKey: defaultRecord.layoutKey,
+            };
+        }
     }
 
-    const defaultRecord = latestPublished(input.defaultRecords, input.surface);
-    if (defaultRecord) {
-        return { doc: defaultRecord.doc, source: "default", record: defaultRecord };
-    }
-
-    // Layer 0 fallback — convert entityPresentation.ts. Unknown entity types
-    // resolve to the registry's safe empty config (see getEntityPresentation).
-    const doc = layoutDocFromRegistry(input.entityType as EntityPresentationType, input.surface);
+    const doc = layoutDocFromRegistry(entityType as EntityPresentationType, surface);
     return { doc, source: "registry" };
 }
 
-/**
- * Convenience for the preview path: resolve straight from the registry,
- * bypassing the DB entirely. Used by the config UI's "import from registry".
- */
-export function resolveFromRegistry(entityType: string, surface: LayoutSurface): LayoutResolution {
+/** Convenience: resolve straight from the registry, bypassing the DB entirely. */
+export function resolveFromRegistry(entityType: string, surface: LayoutSurface): ExtendedLayoutResolution {
     return {
         doc: layoutDocFromRegistry(entityType as EntityPresentationType, surface),
         source: "registry",
