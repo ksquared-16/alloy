@@ -29,9 +29,37 @@ export {
     getOpportunityRelation,
 } from "./opportunityRelationRegistry";
 
+export {
+    PERSON_DRAWER_RELATIONS,
+    PERSON_LAYOUT_ANCHOR_ENTITY,
+    getPersonRelation,
+} from "./personRelationRegistry";
+
+export {
+    CHILD_DRAWER_RELATIONS,
+    CHILD_COMPUTE_KEYS,
+    CHILD_LAYOUT_ANCHOR_ENTITY,
+    getChildRelation,
+} from "./childRelationRegistry";
+
 export { buildOpportunityDrawerRelationshipProofLayout } from "./opportunityDrawerRelationshipProofLayout";
+export {
+    appendOpportunityFutureTabPlaceholders,
+    OPPORTUNITY_FUTURE_DRAWER_MODULES,
+} from "./opportunityFutureTabProofLayout";
+export {
+    buildPersonDrawerRelationshipProofLayout,
+    PERSON_FUTURE_DRAWER_MODULES,
+} from "./personDrawerRelationshipProofLayout";
+export {
+    buildChildDrawerRelationshipProofLayout,
+    CHILD_FUTURE_DRAWER_MODULES,
+} from "./childDrawerRelationshipProofLayout";
 
 export { buildProofOpportunityRecord, mergeApiRecordIntoProofRecord } from "./buildProofOpportunityRecord";
+export { buildProofPersonRecord } from "./buildProofPersonRecord";
+export { buildProofChildRecord } from "./buildProofChildRecord";
+export { FUTURE_MODULE_METADATA_KEY } from "./proofLayoutHelpers";
 export { isOpaqueIdValue, readProofComputed, readProofRelation, type ProofRelationHandle, type ProofRuntimeRecord } from "./proofRecordContext";
 export { resolveProofBindingValue, shouldRenderProofItem, type ProofBindingResolution } from "./resolveProofBindingValue";
 

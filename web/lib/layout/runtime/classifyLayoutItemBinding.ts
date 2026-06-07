@@ -50,10 +50,22 @@ function inferBindingClass(
     if (explicit?.locationRole || explicit?.relationKey?.includes("location") || explicit?.relationKey?.includes("address")) {
         return "reference_field";
     }
-    if (parsed.entityKey !== anchorEntity && parsed.entityKey !== "opportunity") {
+    const anchorNamespace =
+        anchorEntity === "opportunities" ? "opportunity"
+        : anchorEntity === "persons" ? "person"
+        : anchorEntity === "customer_members" ? "child"
+        : anchorEntity;
+
+    if (parsed.entityKey !== anchorEntity && parsed.entityKey !== anchorNamespace) {
+        if (parsed.entityKey === "child_inquiry" || parsed.entityKey === "inquiry_child") {
+            return "relationship_field";
+        }
         return "relationship_field";
     }
-    if (parsed.entityKey === "child_inquiry" || parsed.entityKey === "inquiry_child" || parsed.entityKey === "child") {
+    if (parsed.entityKey === "child" && anchorEntity !== "customer_members") {
+        return "relationship_field";
+    }
+    if (parsed.entityKey === "inquiry_child" || parsed.entityKey === "child_inquiry") {
         return "relationship_field";
     }
     return "base_field";
@@ -67,7 +79,12 @@ export function classifyLayoutItemBinding(item: LayoutItem, anchorEntity: string
     const fieldKey = explicit?.fieldKey ?? parsed.fieldKey;
     const bindingClass = inferBindingClass(item, anchorEntity, { entityKey: sourceEntity, fieldKey }, explicit);
     const contractBlockKind = explicit?.contractBlockKind ?? contractBlockForItemKind(item.kind, bindingClass);
-    const isCrossEntity = sourceEntity !== anchorEntity && sourceEntity !== "opportunity";
+    const anchorNamespace =
+        anchorEntity === "opportunities" ? "opportunity"
+        : anchorEntity === "persons" ? "person"
+        : anchorEntity === "customer_members" ? "child"
+        : anchorEntity;
+    const isCrossEntity = sourceEntity !== anchorEntity && sourceEntity !== anchorNamespace;
 
     return {
         itemId: item.id,

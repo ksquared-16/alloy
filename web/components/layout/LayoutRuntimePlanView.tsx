@@ -28,6 +28,7 @@ import {
 } from "@/lib/layout/runtime/resolveProofBindingValue";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
+import { FUTURE_MODULE_METADATA_KEY } from "@/lib/layout/runtime/proofLayoutHelpers";
 import AdornmentIcon from "@/components/layout/AdornmentIcon";
 
 const TEXT = "#31394d";
@@ -257,9 +258,35 @@ function widgetRows(record: ProofRuntimeRecord, key: string): { label: string; m
     });
 }
 
+function FutureModulePlaceholder({ title }: { title: string }) {
+    return (
+        <div className="rounded-md border border-dashed border-[#c9d4e8] bg-[#f8fafc] px-3 py-4 text-center">
+            <div className="text-xs font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                Future module
+            </div>
+            <div className="mt-1 text-sm font-medium" style={{ color: TEXT }}>
+                {title}
+            </div>
+            <div className="mt-1 text-[10px]" style={{ color: MUTED }}>
+                Placeholder only — not implemented in layout runtime
+            </div>
+        </div>
+    );
+}
+
 function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: LayoutItem }) {
     const key = item.refKey;
     const title = item.label || key;
+    const isFutureModule = item.metadata?.[FUTURE_MODULE_METADATA_KEY] === true;
+
+    if (isFutureModule) {
+        return (
+            <WidgetChrome title={title}>
+                <FutureModulePlaceholder title={title} />
+            </WidgetChrome>
+        );
+    }
+
     const empty = <span className="text-xs text-[#9aa4bf]">No {title.toLowerCase()} in proof context</span>;
 
     if (key === "tasks" || key === "reminders") {
