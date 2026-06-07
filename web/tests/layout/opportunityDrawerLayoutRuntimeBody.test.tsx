@@ -20,6 +20,14 @@ import {
     resolveOpportunityOverviewBodyPresentation,
 } from "@/lib/layout/runtime/useOpportunityDrawerLayoutRuntimeBody";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyErrorBoundary";
+
+function assertLayoutRuntimeBodyErrorState(error: Error): { hasError: boolean } {
+    const derive = OpportunityDrawerLayoutRuntimeBodyErrorBoundary as unknown as {
+        getDerivedStateFromError: (err: Error) => { hasError: boolean };
+    };
+    return derive.getDerivedStateFromError(error);
+}
 
 describe("C1b opportunity drawer body gates", () => {
     const env = { ...process.env };
@@ -175,5 +183,9 @@ describe("LayoutRuntimeDrawerBodyView production renderer", () => {
 
     it("layout failure path keeps VM presentation resolver on VM", () => {
         expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "fallback" })).toBe("vm");
+    });
+
+    it("error boundary class is wired for layout overview render protection", () => {
+        expect(assertLayoutRuntimeBodyErrorState(new Error("boom"))).toEqual({ hasError: true });
     });
 });

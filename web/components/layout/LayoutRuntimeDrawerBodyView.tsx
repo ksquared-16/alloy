@@ -3,7 +3,8 @@
 /**
  * C1b — production-safe layout runtime drawer body renderer.
  *
- * Thin wrapper over LayoutRuntimePlanView with operator-safe production variant.
+ * Read-only display parity for the opportunity overview pilot. No inline editing,
+ * save orchestration, or mutation paths — those remain VM/legacy-owned.
  */
 
 import LayoutRuntimePlanView, { type LayoutRuntimePlanViewProps } from "@/components/layout/LayoutRuntimePlanView";

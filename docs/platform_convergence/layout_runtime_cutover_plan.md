@@ -203,7 +203,9 @@ Shadow parity readiness levels (`enrichShadowParityReport.ts`) — **gate for cu
 
 **First operator-visible change (C1b — pilot org):**
 
-- Opportunity drawer **overview tab body** renders from `LayoutRuntimeRenderer` fed by resolved `entity_layouts` doc.
+- Opportunity drawer **overview tab body** renders from `LayoutRuntimeDrawerBodyView` fed by resolved `entity_layouts` doc.
+- **Read-only display parity** — layout runtime body shows field values only; no inline editing or save paths in C1b. Any editable sections in the VM overview remain VM/legacy-owned until a later sprint. Drawer shell save orchestration (header actions, status mutation, registry modals) stays VM-owned.
+- Render-phase failures are caught by `OpportunityDrawerLayoutRuntimeBodyErrorBoundary` → VM overview fallback (same as fetch/resolve failures).
 - Header, tabs, lifecycle rail, actions, status mutation, and reveal gates **remain VM-owned** until reveal convergence complete.
 - Pilot: 1–2 orgs with published opportunity drawer layout + shadow readiness `approaching` or better.
 
