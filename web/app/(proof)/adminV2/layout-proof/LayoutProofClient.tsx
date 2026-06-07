@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { LayoutDoc, LayoutResolutionSource } from "@/lib/layout/layoutV2";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
@@ -273,6 +274,11 @@ export default function LayoutProofClient() {
                 <p className="mt-2 text-[11px]" style={{ color: MUTED }}>
                     {proof?.lifecycle.note}{" "}Configure at{" "}
                     <a className="text-[#00458C] underline" href="/adminV2/settings/layouts">/adminV2/settings/layouts</a>{" "}— publish a Lead drawer/queue and reload; the source badge flips to <strong>org layout</strong> and edits appear here.
+                </p>
+                <p className="mt-2 text-[11px]">
+                    <Link className="text-[#00458C] underline" href="/adminV2/layout-proof/opportunity-drawer">
+                        Phase 2: Opportunity drawer runtime plan proof →
+                    </Link>
                 </p>
             </details>
 

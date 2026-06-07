@@ -30,3 +30,7 @@ export {
 } from "./opportunityRelationRegistry";
 
 export { buildOpportunityDrawerRelationshipProofLayout } from "./opportunityDrawerRelationshipProofLayout";
+
+export { buildProofOpportunityRecord, mergeApiRecordIntoProofRecord } from "./buildProofOpportunityRecord";
+export { isOpaqueIdValue, readProofComputed, readProofRelation, type ProofRelationHandle, type ProofRuntimeRecord } from "./proofRecordContext";
+export { resolveProofBindingValue, shouldRenderProofItem, type ProofBindingResolution } from "./resolveProofBindingValue";
