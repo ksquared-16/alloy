@@ -72,16 +72,21 @@ describe("resolveItemValue", () => {
 });
 
 describe("opportunities layout source selection", () => {
-    it("falls back to the curated Lead default drawer for opportunities (not the raw registry)", () => {
+    it("preserves registry parity for the drawer when no DB record exists", () => {
+        // Unified model: resolveLayout is registry-parity at Layer 0; curated cards
+        // come from the builtin queue-variant path (queue_context), not a fallback.
         const r = resolveLayout({ entityType: "opportunities", surface: "drawer" });
-        // Curated default is preferred over the raw entityPresentation conversion.
-        expect(r.source).toBe("default");
+        expect(r.source).toBe("registry");
         expect(r.doc.sections.length).toBeGreaterThan(0);
     });
 
-    it("falls back to the curated work-unit queue card for opportunities (no name/title leak)", () => {
-        const r = resolveLayout({ entityType: "opportunities", surface: "queue" });
-        expect(r.source).toBe("default");
+    it("resolves the curated lead queue card via the builtin pipeline variant (no name leak)", () => {
+        const r = resolveLayout({
+            entityType: "opportunities",
+            surface: "queue",
+            queueContext: { lifecycle_key: "enrollment", queue_type: "pipeline", grain: "case" },
+        });
+        expect(r.source).toBe("builtin");
         expect(r.doc.metadata?.renderAs).toBe("work_unit_card");
         const refKeys = r.doc.sections
             .flatMap((s) => s.rows)
@@ -91,6 +96,17 @@ describe("opportunities layout source selection", () => {
         // The curated card must NOT surface the opportunity name/title as a column.
         expect(refKeys).not.toContain("name");
         expect(refKeys).not.toContain("title");
+    });
+
+    it("resolves the waitlist candidate card via the builtin waitlist variant (same engine)", () => {
+        const r = resolveLayout({
+            entityType: "opportunities",
+            surface: "queue",
+            queueContext: { lifecycle_key: "enrollment", queue_type: "waitlist", grain: "candidate" },
+        });
+        expect(r.source).toBe("builtin");
+        // Same queue-card engine — only the queue_context (and fields/widgets) differ.
+        expect(r.doc.metadata?.queue_context).toMatchObject({ queue_type: "waitlist" });
     });
 
     it("still converts the raw registry directly when asked (resolveFromRegistry)", () => {

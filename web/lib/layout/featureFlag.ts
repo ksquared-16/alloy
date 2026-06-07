@@ -1,19 +1,11 @@
 /**
- * Layout V2 — feature flag.
+ * Layout V2 — feature flags.
  *
- * Layout V2 is a FOUNDATION sprint with NO runtime adoption. This flag exists so
- * the config/preview surface can be hidden by default and, later, so the live
- * renderers can branch on it during the adoption sprint. While off, no live
- * drawer, queue, or workspace behavior changes in any way.
+ * Preview/config surface: LAYOUT_V2_PREVIEW_ENABLED (default off).
+ * Runtime read path (Phase 0): LAYOUT_RUNTIME_ENABLED (default off).
  *
- * Server: LAYOUT_V2_PREVIEW_ENABLED.
- * Client: NEXT_PUBLIC_LAYOUT_V2_PREVIEW_ENABLED (for the admin UI gate).
- *
- * Default: DISABLED. This is an un-adopted foundation; the preview/config
- * surface stays inert until explicitly enabled (and the entity_layouts
- * migration has been applied). When off, the API routes return 404 and the
- * admin page shows a disabled notice — so an un-migrated or isolated deploy is
- * inert by default. Set the env var to "1"/"true" to turn it on.
+ * While runtime flag is off, no live drawer, queue, or workspace behavior changes.
+ * The runtime modules resolve safely for tests and the effective API only.
  */
 
 function readFlag(raw: string | undefined, defaultValue: boolean): boolean {
@@ -32,4 +24,22 @@ export function isLayoutV2PreviewEnabledServer(): boolean {
 /** Client-side gate for the Layout V2 admin UI. Default: off. */
 export function isLayoutV2PreviewEnabledClient(): boolean {
     return readFlag(process.env.NEXT_PUBLIC_LAYOUT_V2_PREVIEW_ENABLED, false);
+}
+
+/** Server-side gate for layout runtime read path (Phase 0). Default: off. */
+export function isLayoutRuntimeEnabledServer(): boolean {
+    return readFlag(process.env.LAYOUT_RUNTIME_ENABLED, false);
+}
+
+/** Client-side gate for layout runtime adoption (future cutover). Default: off. */
+export function isLayoutRuntimeEnabledClient(): boolean {
+    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED, false);
+}
+
+/**
+ * Effective API + server resolve may read entity_layouts when preview OR runtime is on.
+ * Live renderers must additionally check isLayoutRuntimeEnabled* before mounting.
+ */
+export function isLayoutRuntimeReadPathEnabled(): boolean {
+    return isLayoutV2PreviewEnabledServer() || isLayoutRuntimeEnabledServer();
 }
