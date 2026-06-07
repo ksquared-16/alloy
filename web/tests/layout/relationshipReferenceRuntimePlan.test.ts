@@ -97,11 +97,14 @@ describe("relationshipReferenceRuntimePlan — proof layout", () => {
         expect(binding.bindingClass).toBe("repeater");
         expect(binding.contractBlockKind).toBe("repeater");
         expect(binding.relationKey).toBe("enrollment_children");
-        expect(binding.sourceEntity).toBe("child_inquiry");
+        expect(binding.sourceEntity).toBe("inquiry_child");
 
         const relation = OPPORTUNITY_DRAWER_RELATIONS.enrollment_children;
         expect(relation.enrollmentChildContext).toBe(true);
-        expect(repeater!.columns?.every((c) => c.refKey.startsWith("child_inquiry."))).toBe(true);
+        const columnRefKeys = repeater!.columns?.map((c) => c.refKey) ?? [];
+        expect(columnRefKeys.some((k) => k.startsWith("child."))).toBe(true);
+        expect(columnRefKeys.some((k) => k.startsWith("inquiry_child."))).toBe(true);
+        expect(columnRefKeys.every((k) => !k.startsWith("child_inquiry."))).toBe(true);
     });
 
     it("includes widget and field_group from lead default alongside relationship items", () => {
