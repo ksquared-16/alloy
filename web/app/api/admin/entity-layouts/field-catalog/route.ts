@@ -18,7 +18,8 @@ import { isLayoutV2PreviewEnabledServer } from "@/lib/layout/featureFlag";
 import {
     CURATED_FIELDS,
     LAYOUT_ENTITY_GROUPS,
-    LAYOUT_WIDGET_CATALOG,
+    catalogGroupsForEntityType,
+    catalogWidgetsForEntityType,
     fieldDefToCatalog,
     mergeCatalogWithCuratedFallback,
     type LayoutCatalogField,
@@ -96,7 +97,14 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || "opportunities";
-    void entityType;
+
+    // Candidate / Person / Child surfaces use curated, presentation-only catalogs
+    // (no field_definitions); other entities use the field-definition-backed Lead
+    // groups below. Widgets are a single GLOBAL catalog on every surface.
+    const curatedGroups = catalogGroupsForEntityType(entityType);
+    if (curatedGroups) {
+        return NextResponse.json({ groups: curatedGroups, widgets: catalogWidgetsForEntityType() });
+    }
 
     const supabase = createAdminClient();
     try {
@@ -108,10 +116,9 @@ export async function GET(request: NextRequest) {
             if (curatedFallback) catalogMeta.curatedFallbackGroups.push(g.entityKey);
             groups.push({ entityKey: g.entityKey, entityLabel: g.entityLabel, fields });
         }
-
         return NextResponse.json({
             groups,
-            widgets: LAYOUT_WIDGET_CATALOG,
+            widgets: catalogWidgetsForEntityType(),
             catalogMeta,
         });
     } catch (e) {

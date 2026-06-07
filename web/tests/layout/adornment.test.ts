@@ -95,7 +95,12 @@ describe("default Lead layouts include adornment examples", () => {
         expect(parseLayoutDoc(doc).ok).toBe(true);
         const items = allItems(doc);
         expect(items.find((i) => i.refKey === "person.primary_contact_name")?.adornment?.icon).toBe("person");
-        expect(items.find((i) => i.refKey === "child.name")?.adornment?.action?.entity).toBe("child");
+        // children now live in a related_list (each child = one row); child link is a column adornment
+        const childList = items.find((i) => i.kind === "related_list" && i.refKey === "children");
+        expect(childList?.columns?.find((c) => c.refKey === "child.name")?.adornment?.action?.entity).toBe("child");
+        // household title is a computed display-text item with a house icon
+        const title = items.find((i) => typeof i.template === "string" && i.template.includes("Household"));
+        expect(title?.adornment?.icon).toBe("home");
     });
 });
 

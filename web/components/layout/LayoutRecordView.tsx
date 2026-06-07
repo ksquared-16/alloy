@@ -13,16 +13,19 @@
  * both the layout doc and the record.
  */
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useState, type CSSProperties, type ReactNode } from "react";
+import { Calendar, ChevronDown, ChevronRight } from "lucide-react";
 import {
     LAYOUT_GRID_COLUMNS,
     type LayoutCollectionColumn,
     type LayoutColumn,
+    type LayoutColumnWidth,
     type LayoutDoc,
     type LayoutFieldAdornment,
     type LayoutItem,
     type LayoutRow,
     type LayoutSection,
+    type LayoutWidthBehavior,
 } from "@/lib/layout/layoutV2";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import AdornmentIcon from "@/components/layout/AdornmentIcon";
@@ -32,6 +35,34 @@ const MUTED = "#59678b";
 const BORDER = "#e6e8ec";
 
 type Rec = Record<string, unknown>;
+
+/**
+ * Map a closed width bucket (presentation only; no raw CSS) to a table-cell
+ * style. `flexible` grows to fill; the rest are proportional min-widths.
+ */
+function columnWidthStyle(width?: LayoutColumnWidth, behavior?: LayoutWidthBehavior): CSSProperties {
+    const b = behavior ?? width;
+    switch (b) {
+        case "small":
+            return { width: "1%", minWidth: 64, whiteSpace: "nowrap" };
+        case "content":
+            return { width: "1%", whiteSpace: "nowrap" };
+        case "large":
+            return { minWidth: 200 };
+        case "flexible":
+            return { width: "auto" };
+        case "equal":
+            return {};
+        case "medium":
+        default:
+            return { minWidth: 120 };
+    }
+}
+
+/** Render a status/badge value as a pill (shared by field + collection cells). */
+function isPillHint(hint?: string): boolean {
+    return hint === "status" || hint === "badge";
+}
 
 export type AdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
 const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
@@ -68,8 +99,8 @@ function Adorn({ item }: { item: LayoutItem }) {
 function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
     const r = resolveItemValue(record, item);
     return (
-        <div className="rounded border border-[#eef0f4] bg-white px-2.5 py-1.5">
-            <div className="flex items-center gap-1 text-[11px] font-medium" style={{ color: MUTED }}>
+        <div className="px-0.5 py-0.5">
+            <div className="flex items-center gap-1 text-xs font-medium text-alloy-midnight/80">
                 {item.label || item.refKey}
                 {item.locked ? (
                     <span
@@ -93,7 +124,7 @@ function ValueCell({ record, item }: { record: Rec; item: LayoutItem }) {
                 <span>
                     {r.isPlaceholder ? (
                         <span title="Configured field not present on this record">— (placeholder)</span>
-                    ) : r.renderHint === "status" ? (
+                    ) : isPillHint(r.renderHint) ? (
                         <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{r.display}</span>
                     ) : r.renderHint === "link" ? (
                         <span className="text-[#2f6df6]">{r.display}</span>
@@ -133,13 +164,13 @@ function GroupCell({ record, item }: { record: Rec; item: LayoutItem }) {
 
 /** Resolve + render one collection-table cell (value + optional action icon). */
 function CellContent({ row, col }: { row: Rec; col: LayoutCollectionColumn }) {
-    const synthetic: LayoutItem = { id: col.refKey, kind: "field", refKey: col.refKey, renderHint: col.renderHint, adornment: col.adornment };
+    const synthetic: LayoutItem = { id: col.refKey, kind: "field", refKey: col.refKey, renderHint: col.renderHint, adornment: col.adornment, template: col.template };
     const r = resolveItemValue(row, synthetic);
     return (
         <span className="inline-flex items-center gap-1">
             {col.adornment && col.adornment.position !== "right" ? <Adorn item={synthetic} /> : null}
             <span style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
-                {r.isPlaceholder ? "—" : col.renderHint === "status" ? (
+                {r.isPlaceholder ? "—" : isPillHint(col.renderHint) ? (
                     <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-[11px]">{r.display}</span>
                 ) : (
                     r.display
@@ -151,23 +182,54 @@ function CellContent({ row, col }: { row: Rec; col: LayoutCollectionColumn }) {
 }
 
 function RelatedCell({ record, item }: { record: Rec; item: LayoutItem }) {
-    const isTable = item.displayMode === "table" && Array.isArray(item.columns) && item.columns.length > 0;
-    if (isTable) {
-        const columns = item.columns as LayoutCollectionColumn[];
-        const raw = record[item.source ?? item.refKey];
-        const rows: Rec[] = Array.isArray(raw) ? (raw as Rec[]) : [];
+    const hasColumns = Array.isArray(item.columns) && item.columns.length > 0;
+    const mode = item.displayMode ?? "table";
+    const columns = (item.columns ?? []) as LayoutCollectionColumn[];
+    const raw = record[item.source ?? item.refKey];
+    const rows: Rec[] = Array.isArray(raw) ? (raw as Rec[]) : [];
+    const entityNoun = item.related?.entityType ?? "row";
+
+    // Compact "rows"/"list" mode — each child renders as its OWN stacked row
+    // (no table header). Used by the queue card children list.
+    if (hasColumns && (mode === "rows" || mode === "list")) {
         return (
             <div className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white">
                 <div className="flex items-center justify-between border-b border-[#eef0f4] px-2.5 py-1.5">
                     <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{item.label || item.refKey}</span>
-                    <span className="text-[10px]" style={{ color: MUTED }}>{rows.length} {item.related?.entityType ?? "row"}{rows.length === 1 ? "" : "s"}</span>
+                    <span className="text-[10px]" style={{ color: MUTED }}>{rows.length} {entityNoun}{rows.length === 1 ? "" : "s"} · one row each</span>
+                </div>
+                {rows.length === 0 ? (
+                    <div className="px-2.5 py-2 text-xs text-[#9aa4bf]">No {entityNoun}s on this record.</div>
+                ) : (
+                    <ul className="divide-y divide-[#f5f6f9]">
+                        {rows.map((rw, i) => (
+                            <li key={(rw.id as string) ?? i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-2.5 py-1.5 text-xs">
+                                {columns.map((c) => (
+                                    <span key={c.refKey} className="inline-flex items-center gap-1">
+                                        <CellContent row={rw} col={c} />
+                                    </span>
+                                ))}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        );
+    }
+
+    if (hasColumns) {
+        return (
+            <div className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white">
+                <div className="flex items-center justify-between border-b border-[#eef0f4] px-2.5 py-1.5">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{item.label || item.refKey}</span>
+                    <span className="text-[10px]" style={{ color: MUTED }}>{rows.length} {entityNoun}{rows.length === 1 ? "" : "s"} · one row each</span>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[640px] text-left text-xs">
                         <thead>
                             <tr className="border-b border-[#eef0f4]" style={{ color: MUTED }}>
                                 {columns.map((c) => (
-                                    <th key={c.refKey} className="px-2 py-1.5 font-semibold">{c.label}</th>
+                                    <th key={c.refKey} className="px-2 py-1.5 font-semibold" style={columnWidthStyle(c.width, c.widthBehavior)}>{c.label}</th>
                                 ))}
                             </tr>
                         </thead>
@@ -175,14 +237,14 @@ function RelatedCell({ record, item }: { record: Rec; item: LayoutItem }) {
                             {rows.length === 0 ? (
                                 <tr>
                                     <td colSpan={columns.length} className="px-2 py-3 text-[#9aa4bf]">
-                                        No {item.related?.entityType ?? "rows"} on this record.
+                                        No {entityNoun}s on this record.
                                     </td>
                                 </tr>
                             ) : (
                                 rows.map((rw, i) => (
                                     <tr key={(rw.id as string) ?? i} className="border-b border-[#f5f6f9]">
                                         {columns.map((c) => (
-                                            <td key={c.refKey} className="px-2 py-1.5" style={{ color: TEXT }}>
+                                            <td key={c.refKey} className="px-2 py-1.5" style={{ color: TEXT, ...columnWidthStyle(c.width, c.widthBehavior) }}>
                                                 <CellContent row={rw} col={c} />
                                             </td>
                                         ))}
@@ -247,16 +309,19 @@ function WidgetCell({ record, item }: { record: Rec; item: LayoutItem }) {
         );
     }
     if (key === "actions") {
-        const actions = ["Call", "Email", "Schedule tour", "Update status"];
+        const meta = (item.metadata ?? {}) as { actions?: unknown; layout?: unknown };
+        const configured = Array.isArray(meta.actions) ? (meta.actions as unknown[]).map((a) => String(a)) : null;
+        const actions = configured && configured.length ? configured : ["Call", "Email", "Schedule tour", "Update status"];
+        const stack = meta.layout === "stack";
         return (
             <WidgetChrome title={title}>
-                <div className="flex flex-wrap gap-1.5">
+                <div className={stack ? "flex flex-col items-stretch gap-1.5" : "flex flex-wrap gap-1.5"}>
                     {actions.map((a) => (
-                        <button key={a} type="button" disabled title="Simulated — no live mutation" className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2 py-1 text-[11px] font-medium text-[#00458C] disabled:opacity-90">
+                        <button key={a} type="button" disabled title="Simulated — no live mutation" className={`rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2 py-1 text-[11px] font-medium text-[#00458C] disabled:opacity-90 ${stack ? "text-left" : ""}`}>
                             {a}
                         </button>
                     ))}
-                    <span className="self-center text-[10px]" style={{ color: MUTED }}>(simulated)</span>
+                    <span className={`text-[10px] ${stack ? "" : "self-center"}`} style={{ color: MUTED }}>(simulated)</span>
                 </div>
             </WidgetChrome>
         );
@@ -268,7 +333,7 @@ function WidgetCell({ record, item }: { record: Rec; item: LayoutItem }) {
             <WidgetChrome title={title}>
                 {date || status ? (
                     <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: TEXT }}>
-                        {date ? <span>📅 {String(date)}</span> : null}
+                        {date ? <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5 text-[rgba(39,63,82,0.55)]" aria-hidden /> {String(date)}</span> : null}
                         {status ? <span className="rounded-full bg-[#eef1f6] px-2 py-0.5 text-[11px]">{String(status)}</span> : null}
                         <button type="button" disabled className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2 py-1 text-[11px] font-medium text-[#00458C] disabled:opacity-90">Reschedule</button>
                     </div>
@@ -319,18 +384,38 @@ function RowView({ record, row }: { record: Rec; row: LayoutRow }) {
 }
 
 function SectionView({ record, section }: { record: Rec; section: LayoutSection }) {
-    // Branded to match the staging drawer "premium" section: bend-pine left
-    // accent, subtle ring, tinted header.
+    // Mirrors the staging drawer "premium" section exactly (EntityDrawerSection):
+    // bend-pine left accent, alloy-stone ring, emerald-tinted header, no uppercase.
+    //
+    // Honors defaultExpanded: a collapsible section that is not expanded by
+    // default renders the header/title only; the body mounts only when expanded.
+    const collapsible = section.collapsible !== false && section.defaultExpanded === false;
+    const [open, setOpen] = useState<boolean>(section.defaultExpanded !== false);
+    const showBody = !collapsible || open;
     return (
-        <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.08)] border-l-[3px] border-l-[#00A283] bg-white shadow-sm ring-1 ring-[rgba(0,0,0,0.06)]">
-            <div className="border-b border-[rgba(0,0,0,0.08)] bg-[rgba(0,0,0,0.025)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "rgba(39,63,82,0.8)" }}>
-                {section.title}
-            </div>
-            <div className="flex flex-col gap-3 p-3">
-                {section.rows.map((row) => (
-                    <RowView key={row.id} record={record} row={row} />
-                ))}
-            </div>
+        <div className="overflow-hidden rounded-lg border border-alloy-stone/[0.1] border-l-[3px] border-l-[rgb(0,162,131)] bg-white/[0.97] shadow-sm ring-1 ring-alloy-stone/[0.06]">
+            {collapsible ? (
+                <button
+                    type="button"
+                    onClick={() => setOpen((v) => !v)}
+                    aria-expanded={open}
+                    className="flex w-full items-center gap-2 border-b border-alloy-stone/10 bg-emerald-50/20 px-2.5 py-1.5 text-left hover:bg-emerald-50/40"
+                >
+                    {open ? <ChevronDown className="h-3.5 w-3.5 text-alloy-forge/70" aria-hidden /> : <ChevronRight className="h-3.5 w-3.5 text-alloy-forge/70" aria-hidden />}
+                    <span className="min-w-0 truncate text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80">{section.title}</span>
+                </button>
+            ) : (
+                <div className="flex items-center gap-2 border-b border-alloy-stone/10 bg-emerald-50/20 px-2.5 py-1.5">
+                    <span className="min-w-0 truncate text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80">{section.title}</span>
+                </div>
+            )}
+            {showBody ? (
+                <div className="flex flex-col gap-2.5 px-3 py-2.5">
+                    {section.rows.map((row) => (
+                        <RowView key={row.id} record={record} row={row} />
+                    ))}
+                </div>
+            ) : null}
         </div>
     );
 }

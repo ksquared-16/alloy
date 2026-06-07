@@ -79,6 +79,11 @@ interface DrawerProps {
      * CSS variables from `recordSurfaceContextStyle` — aligns modal chrome with workspace operational context.
      */
     recordModalContextStyle?: CSSProperties;
+    /**
+     * Optional diagnostics node accepted for caller compatibility (e.g. legacy
+     * drawer). Type-only: not rendered here, so behavior is unchanged.
+     */
+    runtimeDebug?: React.ReactNode;
 }
 
 export default function Drawer({

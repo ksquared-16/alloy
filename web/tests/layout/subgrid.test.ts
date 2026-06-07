@@ -73,6 +73,61 @@ describe("field_group subgrid (column-in-column)", () => {
     });
 });
 
+describe("group subgrid builder ops", () => {
+    function base(): LayoutDoc {
+        let d: LayoutDoc = { formatVersion: 1, surface: "drawer", entityType: "opportunities", sections: [] };
+        d = ops.addSection(d);
+        return d;
+    }
+
+    it("addGroup adds a field_group with one 2-column subgrid row; doc validates", () => {
+        const d = ops.addGroup(base(), 0, 0, 0);
+        const grp = d.sections[0].rows[0].columns[0].items.find((i) => i.kind === "field_group")!;
+        expect(grp.rows?.length).toBe(1);
+        expect(grp.rows?.[0].columns.length).toBe(2);
+        expect(parseLayoutDoc(d).ok).toBe(true);
+    });
+
+    it("supports add row / set column count / add + replace + move + remove inside the block", () => {
+        let d = ops.addGroup(base(), 0, 0, 0);
+        const grpId = d.sections[0].rows[0].columns[0].items.find((i) => i.kind === "field_group")!.id;
+        const loc = { sIdx: 0, rIdx: 0, cIdx: 0, itemId: grpId };
+
+        // row 0 → 2 cols already; add a first-name | last-name pair
+        const fn = ops.makeFieldItem("person.first_name", "First name", "text", "person");
+        const ln = ops.makeFieldItem("person.last_name", "Last name", "text", "person");
+        d = ops.groupAddItem(d, loc, 0, 0, fn);
+        d = ops.groupAddItem(d, loc, 0, 1, ln);
+
+        // add a second row (email|phone)
+        d = ops.groupAddRow(d, loc, 2);
+        d = ops.groupAddItem(d, loc, 1, 0, ops.makeFieldItem("person.primary_email", "Email", "text", "person"));
+        d = ops.groupAddItem(d, loc, 1, 1, ops.makeFieldItem("person.primary_phone", "Phone", "phone", "person"));
+
+        let grp = d.sections[0].rows[0].columns[0].items.find((i) => i.id === grpId)!;
+        expect(grp.rows?.length).toBe(2);
+        expect(parseLayoutDoc(d).ok, parseLayoutDoc(d).errors.join("; ")).toBe(true);
+
+        // replace first name → full name, preserving id
+        d = ops.groupPatchItem(d, loc, 0, 0, fn.id, { refKey: "person.full_name", label: "Full name" });
+        grp = d.sections[0].rows[0].columns[0].items.find((i) => i.id === grpId)!;
+        expect(grp.rows?.[0].columns[0].items[0].id).toBe(fn.id);
+        expect(grp.rows?.[0].columns[0].items[0].refKey).toBe("person.full_name");
+
+        // set row 0 to 1 column (merges)
+        d = ops.groupSetRowColumnCount(d, loc, 0, 1);
+        grp = d.sections[0].rows[0].columns[0].items.find((i) => i.id === grpId)!;
+        expect(grp.rows?.[0].columns.length).toBe(1);
+        expect(grp.rows?.[0].columns[0].items.length).toBe(2);
+
+        // remove an item
+        d = ops.groupRemoveItem(d, loc, 1, 1, grp.rows![1].columns[1].items[0].id);
+        grp = d.sections[0].rows[0].columns[0].items.find((i) => i.id === grpId)!;
+        expect(grp.rows?.[1].columns[1].items.length).toBe(0);
+        expect(parseLayoutDoc(d).ok).toBe(true);
+    });
+});
+
 describe("field replacement preserves placement metadata (patchItem)", () => {
     it("changes refKey/label/renderHint but keeps id, condition, adornment, editable", () => {
         let d: LayoutDoc = { formatVersion: 1, surface: "drawer", entityType: "opportunities", sections: [] };

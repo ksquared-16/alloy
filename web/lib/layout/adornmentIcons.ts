@@ -13,6 +13,10 @@ export const ADORNMENT_ICON_GLYPH: Record<LayoutAdornmentIcon, string> = {
     task: "✅",
     message: "💬",
     document: "📄",
+    home: "🏠",
+    phone: "📞",
+    mail: "✉️",
+    location: "📍",
 };
 
 export const ADORNMENT_ICON_LABEL: Record<LayoutAdornmentIcon, string> = {
@@ -23,4 +27,8 @@ export const ADORNMENT_ICON_LABEL: Record<LayoutAdornmentIcon, string> = {
     task: "Task",
     message: "Message",
     document: "Document",
+    home: "Household (house)",
+    phone: "Phone",
+    mail: "Email",
+    location: "Location",
 };

@@ -20,8 +20,11 @@ import type { LayoutDoc, LayoutResolutionSource } from "@/lib/layout/layoutV2";
 import { isLayoutV2PreviewEnabledClient } from "@/lib/layout/featureFlag";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import LayoutRecordView from "@/components/layout/LayoutRecordView";
+import QueueCardProofRenderer from "@/components/layout/QueueCardProofRenderer";
+import WaitlistCandidateCardProofRenderer from "@/components/layout/WaitlistCandidateCardProofRenderer";
+import type { WaitlistCandidateCardVM } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
+import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
 import ProofRecordModal from "@/components/layout/proofShell/ProofRecordModal";
-import { LEAD_LIFECYCLE_STAGES, leadStageIndexForStatus } from "@/components/layout/proofShell/ProofLifecycleRail";
 
 const ENTITY_TYPE = "opportunities";
 
@@ -59,13 +62,24 @@ const str = (v: unknown): string => (v === undefined || v === null ? "" : String
 function recordName(rec: Rec): string {
     return str(rec["_customer_name"]) || str(rec["name"]) || `Lead ${str(rec.id).slice(0, 6)}`;
 }
-function recordSubtitle(rec: Rec): string {
-    const oppName = str(rec["name"]);
-    const email = str(rec["_customer_email"]) || str(rec["primary_email"]);
-    return [oppName, email].filter(Boolean).join(" · ");
-}
 function recordStatusLabel(rec: Rec): string {
     return str(rec["_status_display"]) || str(rec["status_key"]) || str(rec["status"]) || "—";
+}
+
+/**
+ * Group candidate cards by cohort section for display only. This is presentation
+ * grouping (preserves API order within a group) — NOT the runtime's ranked
+ * sectioning, which the proof does not re-implement.
+ */
+function groupWaitlist(cards: WaitlistCandidateCardVM[]): [string, WaitlistCandidateCardVM[]][] {
+    const order: string[] = [];
+    const bySection = new Map<string, WaitlistCandidateCardVM[]>();
+    for (const vm of cards) {
+        const key = vm.waitlist.cohortLabel || "Waitlist";
+        if (!bySection.has(key)) { bySection.set(key, []); order.push(key); }
+        bySection.get(key)!.push(vm);
+    }
+    return order.map((k) => [k, bySection.get(k)!]);
 }
 
 export default function LayoutProofClient() {
@@ -81,6 +95,38 @@ export default function LayoutProofClient() {
     const [flagDisabled, setFlagDisabled] = useState(false);
     const [labelMap, setLabelMap] = useState<EntityLabelMap>({});
     const [simNav, setSimNav] = useState<string | null>(null);
+
+    // Waitlist proof mode (placement_candidate card surface).
+    const [mode, setMode] = useState<"leads" | "waitlist">("leads");
+    const [waitlistDoc, setWaitlistDoc] = useState<ResolveResp | null>(null);
+    const [waitlistCards, setWaitlistCards] = useState<WaitlistCandidateCardVM[] | null>(null);
+    const [waitlistLoading, setWaitlistLoading] = useState(false);
+
+    const loadWaitlist = useCallback(async () => {
+        setWaitlistLoading(true);
+        try {
+            const [layoutRes, candRes] = await Promise.all([
+                fetch(`/api/admin/entity-layouts?entity_type=placement_candidate&surface=queue`),
+                fetch(`/api/admin/layout-proof/waitlist-candidates`),
+            ]);
+            if (layoutRes.ok) setWaitlistDoc((await layoutRes.json()) as ResolveResp);
+            if (candRes.ok) {
+                const j = (await candRes.json()) as { candidates: WaitlistCandidateCardVM[] };
+                setWaitlistCards(j.candidates ?? []);
+            } else if (candRes.status === 404) {
+                setFlagDisabled(true);
+            }
+        } catch (e) {
+            setError((e as Error).message);
+        } finally {
+            setWaitlistLoading(false);
+        }
+    }, []);
+
+    const switchMode = useCallback((next: "leads" | "waitlist") => {
+        setMode(next);
+        if (next === "waitlist" && waitlistCards === null) void loadWaitlist();
+    }, [waitlistCards, loadWaitlist]);
 
     const onAdornment = useCallback((item: { label?: string; refKey: string }, ad: { action?: { entity: string } }) => {
         const target = ad.action?.entity ?? "record";
@@ -177,27 +223,91 @@ export default function LayoutProofClient() {
             )}
             {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
+            {/* Deprecation-prep notice (Goal 3): the builder preview is now the primary surface. */}
+            <div className="mb-4 rounded-md border border-[rgba(39,63,82,0.18)] bg-[#F6F8FC] px-3 py-2 text-[12px]" style={{ color: MUTED }}>
+                <strong style={{ color: TEXT }}>Internal preview.</strong> This standalone proof is slated to become internal-only — the builder preview in{" "}
+                <a className="text-[#00458C] underline" href="/adminV2/settings/layouts">Settings → Layouts</a>{" "}now renders the same drawer, queue, and waitlist cards live while you edit. Kept for now for full-data review; not a primary navigation surface.
+            </div>
+
             {/* Work-unit-style Lead list */}
             <div className="overflow-hidden rounded-xl border border-[rgba(39,63,82,0.14)] bg-white shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(39,63,82,0.12)] bg-[#F6F8FC] px-4 py-2.5">
                     <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold" style={{ color: TEXT }}>
-                            {proof?.lifecycle.label ?? "Lead Management"}
+                            {mode === "waitlist" ? "Waitlist candidates" : proof?.lifecycle.label ?? "Lead Management"}
                         </span>
-                        <span className="text-xs" style={{ color: MUTED }}>· work unit queue</span>
+                        <span className="text-xs" style={{ color: MUTED }}>· {mode === "waitlist" ? "placement_candidate card" : "work unit queue"}</span>
+                        <span className="inline-flex overflow-hidden rounded-md border border-[rgba(39,63,82,0.18)] text-[11px]">
+                            {(["leads", "waitlist"] as const).map((m) => (
+                                <button key={m} type="button" onClick={() => switchMode(m)} className={`px-2 py-0.5 ${mode === m ? "bg-[#273F52] text-white" : "bg-white text-[#273F52]"}`}>
+                                    {m === "leads" ? "Leads" : "Waitlist"}
+                                </button>
+                            ))}
+                        </span>
                     </div>
                     <div className="flex items-center gap-2">
-                        <label className="text-[11px]" style={{ color: MUTED }}>Stage</label>
-                        <select value={stage} onChange={(e) => onStageChange(e.target.value)} className="rounded-md border border-[rgba(39,63,82,0.18)] bg-white px-2 py-1 text-xs">
-                            {stages.map((s) => (
-                                <option key={s.statusKey} value={s.statusKey}>{s.label} ({proof?.counts[s.statusKey] ?? 0})</option>
-                            ))}
-                        </select>
-                        <span className="text-xs" style={{ color: MUTED }}>{records.length} record{records.length === 1 ? "" : "s"}</span>
+                        {mode === "leads" ? (
+                            <>
+                                <label className="text-[11px]" style={{ color: MUTED }}>Stage</label>
+                                <select value={stage} onChange={(e) => onStageChange(e.target.value)} className="rounded-md border border-[rgba(39,63,82,0.18)] bg-white px-2 py-1 text-xs">
+                                    {stages.map((s) => (
+                                        <option key={s.statusKey} value={s.statusKey}>{s.label} ({proof?.counts[s.statusKey] ?? 0})</option>
+                                    ))}
+                                </select>
+                                <span className="text-xs" style={{ color: MUTED }}>{records.length} record{records.length === 1 ? "" : "s"}</span>
+                            </>
+                        ) : (
+                            <span className="text-xs" style={{ color: MUTED }}>{waitlistCards?.length ?? 0} candidate{(waitlistCards?.length ?? 0) === 1 ? "" : "s"}</span>
+                        )}
                     </div>
                 </div>
 
-                {loading ? (
+                {mode === "waitlist" ? (
+                    waitlistLoading ? (
+                        <p className="p-4 text-sm" style={{ color: MUTED }}>Loading…</p>
+                    ) : !waitlistCards || waitlistCards.length === 0 ? (
+                        <p className="p-4 text-sm" style={{ color: MUTED }}>
+                            No active placement candidates for your org. The proof never injects demo candidates.
+                            Tier and position are computed by the placement runtime and shown blank here (proof renders, never ranks).
+                        </p>
+                    ) : (
+                        <div className="flex flex-col gap-3 p-3">
+                            {(() => {
+                                const cfg = readWaitlistGroupConfig(waitlistDoc?.resolved);
+                                return groupWaitlist(waitlistCards).map(([cohort, cards]) => {
+                                    const header = cfg.headerTemplate.replace(/\{label\}/g, cohort).replace(/\{count\}/g, String(cards.length));
+                                    return (
+                                        <div key={cohort} className="flex flex-col gap-2">
+                                            {cfg.showGroupHeader ? (
+                                                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                                                    <span>{header}</span>
+                                                    {cfg.showGroupCount ? <span className="text-[rgba(39,63,82,0.45)]">({cards.length})</span> : null}
+                                                    {cfg.showGroupBadge ? <span className="rounded-full bg-[rgba(0,162,131,0.12)] px-1.5 py-0.5 text-[9px] font-medium normal-case text-[#0a8f78]">cohort</span> : null}
+                                                </div>
+                                            ) : null}
+                                            {cards.map((vm) =>
+                                                waitlistDoc?.resolved ? (
+                                                    <WaitlistCandidateCardProofRenderer
+                                                        key={vm.candidateId}
+                                                        doc={waitlistDoc.resolved}
+                                                        vm={vm}
+                                                        showRuntimePosition={cfg.showRuntimePosition}
+                                                        onOpen={() => setSimNav(`Open candidate · ${vm.child.name}`)}
+                                                        onAction={(label) => setSimNav(`${label} · ${vm.child.name}`)}
+                                                    />
+                                                ) : null,
+                                            )}
+                                        </div>
+                                    );
+                                });
+                            })()}
+                            <p className="text-[11px]" style={{ color: MUTED }}>
+                                <strong>This is a repeating candidate card</strong> — one card renders for each candidate in the group.
+                                Cohort grouping + header styling are display only; ranking, ordering, and cohort membership stay in the placement runtime.
+                            </p>
+                        </div>
+                    )
+                ) : loading ? (
                     <p className="p-4 text-sm" style={{ color: MUTED }}>Loading…</p>
                 ) : records.length === 0 ? (
                     <p className="p-4 text-sm" style={{ color: MUTED }}>
@@ -205,36 +315,23 @@ export default function LayoutProofClient() {
                         (The proof never injects demo records.)
                     </p>
                 ) : (
-                    <div className="flex flex-col divide-y divide-[rgba(39,63,82,0.08)]">
-                        {records.map((rec) => {
-                            const idx = leadStageIndexForStatus(str(rec["status_key"]) || str(rec["status"]));
-                            return (
-                                <button
+                    <div className="flex flex-col gap-2 p-3">
+                        {records.map((rec) =>
+                            queue?.resolved ? (
+                                <QueueCardProofRenderer
                                     key={rec.id}
-                                    type="button"
-                                    onClick={() => setSelectedId(rec.id)}
-                                    className="flex items-start gap-3 px-4 py-2.5 text-left transition-colors hover:bg-[#f5f8ff]"
-                                >
-                                    <span className="mt-1 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#eef3fb] text-[11px] font-semibold text-[#00458C]">
-                                        {recordName(rec).slice(0, 1).toUpperCase()}
-                                    </span>
-                                    <span className="min-w-0 flex-1">
-                                        <span className="flex items-center gap-2">
-                                            <span className="truncate text-sm font-semibold" style={{ color: TEXT }}>{recordName(rec)}</span>
-                                            <span className="rounded-full border border-[rgba(39,63,82,0.18)] bg-white px-1.5 py-0.5 text-[10px] font-medium" style={{ color: MUTED }}>
-                                                {recordStatusLabel(rec)}
-                                            </span>
-                                            <span className="ml-auto text-[10px]" style={{ color: MUTED }}>{LEAD_LIFECYCLE_STAGES[idx]?.label}</span>
-                                        </span>
-                                        {queue?.resolved ? (
-                                            <span className="mt-1 block">
-                                                <LayoutRecordView doc={queue.resolved} record={rec} onAdornmentAction={onAdornment} />
-                                            </span>
-                                        ) : null}
-                                    </span>
+                                    doc={queue.resolved}
+                                    record={rec}
+                                    onOpen={() => setSelectedId(rec.id)}
+                                    onAction={(label) => setSimNav(`${label} · ${recordName(rec)}`)}
+                                    onAdornmentAction={onAdornment}
+                                />
+                            ) : (
+                                <button key={rec.id} type="button" onClick={() => setSelectedId(rec.id)} className="rounded-lg border border-[rgba(39,63,82,0.14)] px-4 py-2.5 text-left text-sm font-semibold hover:bg-[#f5f8ff]" style={{ color: TEXT }}>
+                                    {recordName(rec)} · {recordStatusLabel(rec)}
                                 </button>
-                            );
-                        })}
+                            ),
+                        )}
                     </div>
                 )}
             </div>
@@ -244,7 +341,7 @@ export default function LayoutProofClient() {
                 open={!!selectedRecord}
                 onClose={() => setSelectedId(null)}
                 title={selectedRecord ? `Lead — ${recordName(selectedRecord)}` : ""}
-                subtitle={selectedRecord ? recordSubtitle(selectedRecord) : undefined}
+                location={selectedRecord ? str(selectedRecord["_location_name"]) || null : null}
                 statusLabel={selectedRecord ? recordStatusLabel(selectedRecord) : undefined}
                 attention={selectedRecord ? `Layout V2 proof · Overview below is config-driven (source: ${drawer?.source ?? "—"}).` : null}
                 lifecycleStatusKey={selectedRecord ? (str(selectedRecord["status_key"]) || str(selectedRecord["status"])) : null}
