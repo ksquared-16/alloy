@@ -1,6 +1,6 @@
 # Convergence Review — FC-1 (Layout Field Catalog Namespace Alignment)
 
-**Verdict: APPROVED WITH CONCERNS**
+**Verdict: APPROVED** — *(updated 2026-06-07; the documentation-governance concern is resolved after rebase `2e11a9a7`. Original verdict below was APPROVED WITH CONCERNS @ `cd2f8a54`. See the Re-review addendum at the end.)*
 **Reviewed:** `origin/cursor/field-catalog-fc1` @ `cd2f8a54` ("Align layout field catalog to canonical refKey namespaces (FC-1)"), single commit on merge-base `8dd0f2f1`. Net: 10 files, +574/−49. **0 migrations. No lifecycle/readiness/evaluator/runtime/production/seed files touched.**
 **Reviewer:** Convergence Review Authority · rubric [`convergence_review_rubric.md`](./convergence_review_rubric.md) · naming [`child_namespace_decision.md`](./child_namespace_decision.md) / [`child_namespace_addendum.md`](./child_namespace_addendum.md).
 
@@ -48,3 +48,33 @@
 - The single substantive concern is **documentation governance** (duplicate decision doc), not implementation — hence **APPROVED WITH CONCERNS**, conditional on follow-up 1 before merge.
 
 *Convergence review of FC-1 @ `cd2f8a54`. Evidence-based; reconcile the duplicate decision doc before staging merge.*
+
+---
+
+# Re-review — Documentation governance patch (2026-06-07)
+
+**Verdict: APPROVED** (supersedes "APPROVED WITH CONCERNS" — the sole concern, Concern 1, is resolved).
+**Reviewed:** `origin/cursor/field-catalog-fc1` @ `2e11a9a7`, **rebased onto `d10a6895`** (the canonical reconciliation commit on staging). Scope per task: only the documentation-governance concern.
+
+## Checks
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | One canonical `child_namespace_decision.md` | **PASS** | The FC-1 branch's `child_namespace_decision.md` is **byte-identical** to `origin/staging`'s canonical (`diff` empty; header "Child Namespace Decision (final, canonical)"), inherited from the merge-base `d10a6895`. |
+| 2 | FC-1 no longer introduces a competing decision doc | **PASS** | FC-1's net diff vs `d10a6895` (9 files) **does not touch** `child_namespace_decision.md` (`git diff --name-status` empty for that path). The former 43-line FC-1 ratification doc is gone; its ND-1…ND-8 table now lives **inside** the single canonical doc as §8. |
+| 3a | Alias-on-read kept | **PASS** | `layoutRefKeyAliases.ts:5` "alias-on-read only"; `normalizeRefKeyOnRead` / `parseLayoutRefKey` map `child_inquiry.* → inquiry_child.*` (unchanged after rebase). |
+| 3b | Deprecate-on-write kept | **PASS** | `layoutRefKeyAliases.ts:5` "reject on write"; `validateRefKeyForWrite` + `builderOps.makeFieldItem` throw; tests retained (`layoutRefKeyAliases.test.ts` +157). |
+| 3c | `child_inquiry.*` deprecated | **PASS** | `DEPRECATED_LAYOUT_REFKEY_NAMESPACES = ["child_inquiry"]`; excluded from canonical set. |
+| 3d | Temporary person bridge documented | **PASS** | `layoutRefKeyAliases.ts:8` "the child.* picker group may temporarily bridge person registry rows — that is **NOT** person == child"; report `fc1_registry_completeness_report.md` G2 (deferral). |
+| 4 | No runtime/lifecycle/drawer cutover added | **PASS** | Net diff (9 files) touches **no** migrations / `AdminEntityDrawer*` / `vmDrawer` / lifecycle / readiness / evaluator / `featureFlag` / seed / `drawerPipeline` / `QueueBlock`. Field-catalog + builder + alias module + tests + completeness report only. |
+
+## Outcome
+
+The only reason FC-1 was "APPROVED WITH CONCERNS" — two competing `child_namespace_decision.md` docs — is **resolved**: there is now exactly one canonical decision doc (on staging and inherited unchanged by FC-1), and FC-1 introduces no rival. The FC-1 **code** was already approved (all six task checks PASS) and is **unchanged** by the rebase (alias-on-read, deprecate-on-write, `child_inquiry.*` deprecated, person-bridge-is-temporary all intact); no runtime/lifecycle/drawer cutover. → **APPROVED.**
+
+## Forward notes (advisory, carried over)
+
+- The **person-bridge for durable `child.*` is interim** — track `customer_member` (or a person child-profile) as the durable registry `entity_type` so the bridge is removed (FC-2+). Guard "NOT person == child" stays until then.
+- Builder picker should offer only genuinely-durable `child.*` keys (e.g. `child.name`) as durable options; participation `child.*` keys are deprecated-by-alias.
+
+*Re-review of FC-1 doc-governance patch `2e11a9a7` on `origin/cursor/field-catalog-fc1`. Evidence-based; concern cleared.*
