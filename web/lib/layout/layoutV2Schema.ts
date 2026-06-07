@@ -14,6 +14,7 @@
  *  - Integer grid widths within [1, 12].
  */
 
+import { collectDeprecatedRefKeyWarnings, collectRefKeysFromLayoutDoc } from "./layoutRefKeyAliases";
 import {
     LAYOUT_DOC_FORMAT_VERSION,
     LAYOUT_GRID_COLUMNS,
@@ -325,6 +326,8 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
         sections,
     };
     if (isObject(input.metadata)) doc.metadata = input.metadata;
+
+    warnings.push(...collectDeprecatedRefKeyWarnings(collectRefKeysFromLayoutDoc(doc)));
 
     return { ok: true, doc, errors, warnings };
 }

@@ -20,6 +20,7 @@ import {
 } from "@/lib/adminFormatters";
 import type { LayoutItem } from "./layoutV2";
 import { parseRefKey } from "./fieldCatalog";
+import { normalizeRefKeyOnRead } from "./layoutRefKeyAliases";
 
 export interface ResolvedValue {
     /** Rendered display string (or null when placeholder). */
@@ -57,6 +58,8 @@ function formatMoney(refKey: string, value: unknown): string {
  */
 function resolveRaw(record: Record<string, unknown>, refKey: string): unknown {
     if (record[refKey] !== undefined) return record[refKey];
+    const normalized = normalizeRefKeyOnRead(refKey);
+    if (normalized !== refKey && record[normalized] !== undefined) return record[normalized];
     const { entityKey, fieldKey } = parseRefKey(refKey);
     if (entityKey === "opportunity") return record[fieldKey];
     return record[fieldKey]; // related-entity field not hydrated on this record → undefined

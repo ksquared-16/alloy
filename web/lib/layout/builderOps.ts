@@ -16,6 +16,7 @@ import {
     type LayoutItem,
     type LayoutSection,
 } from "./layoutV2";
+import { validateRefKeyForWrite } from "./layoutRefKeyAliases";
 
 let _seq = 0;
 export function makeId(prefix: string): string {
@@ -197,6 +198,9 @@ export function setItemAdornment(
 
 /** Build a field LayoutItem from a catalog field. */
 export function makeFieldItem(refKey: string, label: string, fieldType: string, sourceEntity?: string): LayoutItem {
+    const writeCheck = validateRefKeyForWrite(refKey);
+    if (!writeCheck.ok) throw new Error(writeCheck.reason);
+
     const renderHint =
         fieldType === "date"
             ? "date"

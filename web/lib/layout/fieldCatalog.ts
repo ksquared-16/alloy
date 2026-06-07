@@ -3,19 +3,23 @@
  *
  * Normalizes fields from several sources into a single shape the builder's
  * field picker can use, restricted to the V1 entity groups (Lead/Opportunity,
- * Person/Contact, Child, Children Inquiry). Layout entity_type stays
+ * Person/Contact, Child, Enrollment participation). Layout entity_type stays
  * `opportunities`; fields reference related entities via NAMESPACED refKeys
- * (e.g. `opportunity.status_key`, `person.primary_phone`, `child.name`).
+ * (e.g. `opportunity.status_key`, `person.phone`, `child.first_name`,
+ * `inquiry_child.desired_start_date`).
+ *
+ * Canonical namespaces (FC-1): child.*, inquiry_child.*, person.*, opportunity.*
+ * Deprecated: child_inquiry.* (alias-on-read via layoutRefKeyAliases).
  *
  * Normalized field entry:
  *   { entityKey, entityLabel, fieldKey, fieldLabel, fieldType, refKey }
- *
- * Where exact hydration of a related field isn't available yet, the layout
- * still preserves the intended source (refKey) and the proof renderer shows a
- * placeholder.
  */
 
-export type LayoutEntityGroupKey = "opportunity" | "person" | "child" | "child_inquiry";
+import { INQUIRY_CHILD_NATIVE_FIELD_MANIFEST } from "@/lib/fields/inquiryChildFieldRegistry";
+import { parseLayoutRefKey } from "./layoutRefKeyAliases";
+
+/** Canonical layout catalog entity groups (FC-1). */
+export type LayoutEntityGroupKey = "opportunity" | "person" | "child" | "inquiry_child";
 
 export interface LayoutCatalogField {
     entityKey: LayoutEntityGroupKey;
@@ -23,7 +27,7 @@ export interface LayoutCatalogField {
     fieldKey: string;
     fieldLabel: string;
     fieldType: string;
-    /** Namespaced source ref used as the layout item refKey. */
+    /** Namespaced source ref used as the layout item refKey (canonical namespace). */
     refKey: string;
 }
 
@@ -49,7 +53,7 @@ export const LAYOUT_ENTITY_GROUPS: { entityKey: LayoutEntityGroupKey; entityLabe
     { entityKey: "opportunity", entityLabel: "Lead / Opportunity" },
     { entityKey: "person", entityLabel: "Person / Contact" },
     { entityKey: "child", entityLabel: "Child" },
-    { entityKey: "child_inquiry", entityLabel: "Children Inquiry" },
+    { entityKey: "inquiry_child", entityLabel: "Children Inquiry" },
 ];
 
 /** V1 widget options (render as widget_placeholder; selectable + placeable). */
@@ -67,18 +71,17 @@ export function makeRefKey(entityKey: LayoutEntityGroupKey, fieldKey: string): s
     return `${entityKey}.${fieldKey}`;
 }
 
-/** Split a namespaced refKey into { entityKey, fieldKey }. Bare keys → opportunity. */
+/** Split a namespaced refKey into { entityKey, fieldKey }. Bare keys → opportunity. Applies alias-on-read. */
 export function parseRefKey(refKey: string): { entityKey: string; fieldKey: string } {
-    const dot = refKey.indexOf(".");
-    if (dot === -1) return { entityKey: "opportunity", fieldKey: refKey };
-    return { entityKey: refKey.slice(0, dot), fieldKey: refKey.slice(dot + 1) };
+    const parsed = parseLayoutRefKey(refKey);
+    return { entityKey: parsed.entityKey, fieldKey: parsed.fieldKey };
 }
 
 const ENTITY_LABEL: Record<LayoutEntityGroupKey, string> = {
     opportunity: "Lead / Opportunity",
     person: "Person / Contact",
     child: "Child",
-    child_inquiry: "Children Inquiry",
+    inquiry_child: "Children Inquiry",
 };
 
 function field(
@@ -98,9 +101,9 @@ function field(
 }
 
 /**
- * Curated fallback fields per group, used when no field_definitions source is
- * available (child / children-inquiry have no clean field-def surface today,
- * and opportunity/person fall back to these if the org has no field defs).
+ * Bootstrap fallback fields per group when field_definitions has no rows.
+ * Shrunk in FC-1: inquiry_child uses manifest; child uses durable-only keys;
+ * person/opportunity use canonical refKeys (not legacy primary_* where mapped).
  */
 export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> = {
     opportunity: [
@@ -115,24 +118,26 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
     ],
     person: [
         field("person", "primary_contact_name", "Primary contact name", "text"),
-        field("person", "primary_phone", "Phone", "phone"),
-        field("person", "primary_email", "Email", "text"),
+        field("person", "phone", "Phone", "phone"),
+        field("person", "email", "Email", "text"),
         field("person", "secondary_contact_name", "Secondary contact name", "text"),
         field("person", "secondary_phone", "Secondary phone", "phone"),
     ],
+    /**
+     * Durable child attributes only. Interim catalog bridge: rows may load from
+     * person entity_type in field_definitions — person ≠ child; durable truth
+     * remains customer_member per Child Model doctrine.
+     */
     child: [
+        field("child", "first_name", "First name", "text"),
+        field("child", "last_name", "Last name", "text"),
         field("child", "name", "Child name", "text"),
-        field("child", "program", "Program", "text"),
-        field("child", "desired_start_date", "Desired start date", "date"),
-        field("child", "status", "Status", "status"),
+        field("child", "date_of_birth", "Date of birth", "date"),
         field("child", "age_band", "Age band", "text"),
     ],
-    child_inquiry: [
-        field("child_inquiry", "child_name", "Child name", "text"),
-        field("child_inquiry", "program", "Program", "text"),
-        field("child_inquiry", "desired_start_date", "Desired start date", "date"),
-        field("child_inquiry", "status", "Status", "status"),
-    ],
+    inquiry_child: INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((row) =>
+        field("inquiry_child", row.field_key, row.label, row.field_type),
+    ),
 };
 
 /** Map a DB field_definitions row into a normalized catalog field for a group. */
@@ -146,4 +151,17 @@ export function fieldDefToCatalog(
         (row.label ?? row.field_key).trim() || row.field_key,
         (row.field_type ?? "text") || "text",
     );
+}
+
+/** Merge registry rows with curated fallback for keys missing from parity (narrow fallback). */
+export function mergeCatalogWithCuratedFallback(
+    group: LayoutEntityGroupKey,
+    registryFields: LayoutCatalogField[],
+): LayoutCatalogField[] {
+    if (registryFields.length === 0) return CURATED_FIELDS[group];
+    const byKey = new Map(registryFields.map((f) => [f.fieldKey, f]));
+    for (const curated of CURATED_FIELDS[group]) {
+        if (!byKey.has(curated.fieldKey)) byKey.set(curated.fieldKey, curated);
+    }
+    return [...byKey.values()].sort((a, b) => a.fieldKey.localeCompare(b.fieldKey));
 }
