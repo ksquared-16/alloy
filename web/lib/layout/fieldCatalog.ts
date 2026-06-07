@@ -18,7 +18,9 @@
 export type LayoutEntityGroupKey = "opportunity" | "person" | "child" | "child_inquiry";
 
 export interface LayoutCatalogField {
-    entityKey: LayoutEntityGroupKey;
+    /** Opaque display-grouping id + sourceEntity hint (string so non-Lead
+     *  surfaces — e.g. waitlist — can use their own bucket keys). */
+    entityKey: string;
     entityLabel: string;
     fieldKey: string;
     fieldLabel: string;
@@ -28,7 +30,7 @@ export interface LayoutCatalogField {
 }
 
 export interface LayoutCatalogGroup {
-    entityKey: LayoutEntityGroupKey;
+    entityKey: string;
     entityLabel: string;
     fields: LayoutCatalogField[];
 }
@@ -142,52 +144,120 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
  * Bucket `entityKey`s reuse existing valid keys purely as display groupings;
  * the refKey (not entityKey) drives resolution. Presentation-only.
  */
-function wlField(entityKey: LayoutEntityGroupKey, refKey: string, fieldLabel: string, fieldType: string): LayoutCatalogField {
-    return { entityKey, entityLabel: ENTITY_LABEL[entityKey], fieldKey: refKey, fieldLabel, fieldType, refKey };
+function wlField(entityKey: string, entityLabel: string, refKey: string, fieldLabel: string, fieldType: string): LayoutCatalogField {
+    return { entityKey, entityLabel, fieldKey: refKey, fieldLabel, fieldType, refKey };
 }
 
+/**
+ * Full Waitlist Candidate Card catalog — the builder must NOT artificially limit
+ * fields (Goal 4). Grouped into the operator-facing categories. refKeys are flat
+ * dot-paths matching `waitlistCardVmToProofRecord()`; runtime-computed values
+ * (tier/position) are exposed too — they render blank until the runtime supplies
+ * them. Presentation only.
+ */
 export const WAITLIST_CANDIDATE_CATALOG_GROUPS: LayoutCatalogGroup[] = [
     {
-        entityKey: "child",
-        entityLabel: "Candidate (child)",
+        entityKey: "placement_candidate",
+        entityLabel: "Placement Candidate",
         fields: [
-            wlField("child", "child.name", "Child name", "text"),
-            wlField("child", "child.ageLabel", "Age", "text"),
-            wlField("child", "child.programLabel", "Program", "text"),
-            wlField("child", "child.desiredStartDate", "Desired start", "date"),
-            wlField("child", "child.schedulePreference", "Schedule preference", "text"),
+            wlField("placement_candidate", "Placement Candidate", "candidateId", "Candidate ID", "text"),
+            wlField("placement_candidate", "Placement Candidate", "waitlist.status", "Candidate status", "status"),
+            wlField("placement_candidate", "Placement Candidate", "waitlist.waitSince", "Waitlisted since", "text"),
+            wlField("placement_candidate", "Placement Candidate", "waitlist.desiredStartDate", "Desired start", "date"),
         ],
     },
     {
-        entityKey: "person",
-        entityLabel: "Household / contact",
+        entityKey: "wl_child",
+        entityLabel: "Child",
         fields: [
-            wlField("person", "household.name", "Household", "text"),
-            wlField("person", "household.primaryContactName", "Primary contact", "text"),
-            wlField("person", "household.phone", "Phone", "phone"),
-            wlField("person", "household.email", "Email", "text"),
-            wlField("person", "household.locationName", "Location", "text"),
+            wlField("wl_child", "Child", "child.name", "Child name", "text"),
+            wlField("wl_child", "Child", "child.ageLabel", "Age", "text"),
+            wlField("wl_child", "Child", "child.birthdate", "Birthdate", "date"),
+            wlField("wl_child", "Child", "child.desiredStartDate", "Desired start", "date"),
+            wlField("wl_child", "Child", "child.schedulePreference", "Schedule preference", "text"),
         ],
     },
     {
-        entityKey: "opportunity",
+        entityKey: "wl_parent",
+        entityLabel: "Parent",
+        fields: [
+            wlField("wl_parent", "Parent", "household.primaryContactName", "Primary contact", "text"),
+            wlField("wl_parent", "Parent", "household.phone", "Phone", "phone"),
+            wlField("wl_parent", "Parent", "household.email", "Email", "text"),
+        ],
+    },
+    {
+        entityKey: "wl_household",
+        entityLabel: "Household",
+        fields: [
+            wlField("wl_household", "Household", "household.name", "Household name", "text"),
+        ],
+    },
+    {
+        entityKey: "wl_location",
+        entityLabel: "Location",
+        fields: [
+            wlField("wl_location", "Location", "household.locationName", "Location", "text"),
+        ],
+    },
+    {
+        entityKey: "wl_program",
+        entityLabel: "Program",
+        fields: [
+            wlField("wl_program", "Program", "child.programLabel", "Program / classroom", "text"),
+            wlField("wl_program", "Program", "waitlist.cohortLabel", "Cohort", "text"),
+            wlField("wl_program", "Program", "waitlist.cohortSectionTitle", "Cohort section", "text"),
+        ],
+    },
+    {
+        entityKey: "wl_lifecycle",
+        entityLabel: "Lifecycle",
+        fields: [
+            wlField("wl_lifecycle", "Lifecycle", "waitlist.status", "Lifecycle status", "status"),
+        ],
+    },
+    {
+        entityKey: "wl_waitlist",
         entityLabel: "Waitlist (runtime-computed)",
         fields: [
-            wlField("opportunity", "waitlist.tierLabel", "Priority tier", "status"),
-            wlField("opportunity", "waitlist.positionLabel", "Position", "text"),
-            wlField("opportunity", "waitlist.cohortLabel", "Cohort", "text"),
-            wlField("opportunity", "waitlist.cohortSectionTitle", "Cohort section", "text"),
-            wlField("opportunity", "waitlist.waitSince", "Waitlisted since", "text"),
-            wlField("opportunity", "waitlist.status", "Status", "status"),
-            wlField("opportunity", "overrides.flags", "Override flags", "status"),
+            wlField("wl_waitlist", "Waitlist", "waitlist.tierLabel", "Priority tier", "status"),
+            wlField("wl_waitlist", "Waitlist", "waitlist.positionLabel", "Position", "text"),
+            wlField("wl_waitlist", "Waitlist", "waitlist.waitSince", "Waitlisted since", "text"),
+            wlField("wl_waitlist", "Waitlist", "overrides.flags", "Override flags", "status"),
+            wlField("wl_waitlist", "Waitlist", "overrides.reason", "Override reason", "text"),
         ],
     },
+    {
+        entityKey: "wl_system",
+        entityLabel: "System",
+        fields: [
+            wlField("wl_system", "System", "candidateId", "Candidate ID", "text"),
+            wlField("wl_system", "System", "opportunityId", "Opportunity ID", "text"),
+            wlField("wl_system", "System", "householdId", "Household ID", "text"),
+            wlField("wl_system", "System", "childId", "Child ID", "text"),
+        ],
+    },
+];
+
+/** Waitlist widget catalog (Goal 5) — placeable widgets, NOT fields. */
+export const WAITLIST_WIDGET_CATALOG: LayoutCatalogWidget[] = [
+    { widgetKey: "waitlist_position", label: "Waitlist Position", defaultDisplayMode: "badge" },
+    { widgetKey: "waitlist_tier", label: "Waitlist Tier", defaultDisplayMode: "badge" },
+    { widgetKey: "waitlist_override", label: "Waitlist Override", defaultDisplayMode: "badge" },
+    { widgetKey: "waitlist_adjustment", label: "Waitlist Adjustment", defaultDisplayMode: "control" },
+    { widgetKey: "capacity_recommendation", label: "Capacity Recommendation", defaultDisplayMode: "summary" },
 ];
 
 /** Catalog groups for a layout entity type (waitlist candidate vs. the Lead groups). */
 export function catalogGroupsForEntityType(entityType: string): LayoutCatalogGroup[] | null {
     if (entityType === "placement_candidate") return WAITLIST_CANDIDATE_CATALOG_GROUPS;
     return null; // null → caller uses the default LAYOUT_ENTITY_GROUPS (field-def backed)
+}
+
+/** Widget catalog for a layout entity type (waitlist widgets vs. the Lead widgets). */
+export function catalogWidgetsForEntityType(entityType: string): LayoutCatalogWidget[] {
+    if (entityType === "placement_candidate") return WAITLIST_WIDGET_CATALOG;
+    return LAYOUT_WIDGET_CATALOG;
 }
 
 /** Map a DB field_definitions row into a normalized catalog field for a group. */

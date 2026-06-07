@@ -22,6 +22,7 @@ import LayoutRecordView from "@/components/layout/LayoutRecordView";
 import QueueCardProofRenderer from "@/components/layout/QueueCardProofRenderer";
 import WaitlistCandidateCardProofRenderer from "@/components/layout/WaitlistCandidateCardProofRenderer";
 import type { WaitlistCandidateCardVM } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
+import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
 import ProofRecordModal from "@/components/layout/proofShell/ProofRecordModal";
 
 const ENTITY_TYPE = "opportunities";
@@ -72,7 +73,7 @@ function groupWaitlist(cards: WaitlistCandidateCardVM[]): [string, WaitlistCandi
     const order: string[] = [];
     const bySection = new Map<string, WaitlistCandidateCardVM[]>();
     for (const vm of cards) {
-        const key = vm.waitlist.cohortSectionTitle || vm.waitlist.cohortLabel || "Waitlist";
+        const key = vm.waitlist.cohortLabel || "Waitlist";
         if (!bySection.has(key)) { bySection.set(key, []); order.push(key); }
         bySection.get(key)!.push(vm);
     }
@@ -220,6 +221,12 @@ export default function LayoutProofClient() {
             )}
             {error && <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
 
+            {/* Deprecation-prep notice (Goal 3): the builder preview is now the primary surface. */}
+            <div className="mb-4 rounded-md border border-[rgba(39,63,82,0.18)] bg-[#F6F8FC] px-3 py-2 text-[12px]" style={{ color: MUTED }}>
+                <strong style={{ color: TEXT }}>Internal preview.</strong> This standalone proof is slated to become internal-only — the builder preview in{" "}
+                <a className="text-[#00458C] underline" href="/adminV2/settings/layouts">Settings → Layouts</a>{" "}now renders the same drawer, queue, and waitlist cards live while you edit. Kept for now for full-data review; not a primary navigation surface.
+            </div>
+
             {/* Work-unit-style Lead list */}
             <div className="overflow-hidden rounded-xl border border-[rgba(39,63,82,0.14)] bg-white shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[rgba(39,63,82,0.12)] bg-[#F6F8FC] px-4 py-2.5">
@@ -263,24 +270,38 @@ export default function LayoutProofClient() {
                         </p>
                     ) : (
                         <div className="flex flex-col gap-3 p-3">
-                            {groupWaitlist(waitlistCards).map(([section, cards]) => (
-                                <div key={section} className="flex flex-col gap-2">
-                                    <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{section} ({cards.length})</div>
-                                    {cards.map((vm) =>
-                                        waitlistDoc?.resolved ? (
-                                            <WaitlistCandidateCardProofRenderer
-                                                key={vm.candidateId}
-                                                doc={waitlistDoc.resolved}
-                                                vm={vm}
-                                                onOpen={() => setSimNav(`Open candidate · ${vm.child.name}`)}
-                                                onAction={(label) => setSimNav(`${label} · ${vm.child.name}`)}
-                                            />
-                                        ) : null,
-                                    )}
-                                </div>
-                            ))}
+                            {(() => {
+                                const cfg = readWaitlistGroupConfig(waitlistDoc?.resolved);
+                                return groupWaitlist(waitlistCards).map(([cohort, cards]) => {
+                                    const header = cfg.headerTemplate.replace(/\{label\}/g, cohort).replace(/\{count\}/g, String(cards.length));
+                                    return (
+                                        <div key={cohort} className="flex flex-col gap-2">
+                                            {cfg.showGroupHeader ? (
+                                                <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                                                    <span>{header}</span>
+                                                    {cfg.showGroupCount ? <span className="text-[rgba(39,63,82,0.45)]">({cards.length})</span> : null}
+                                                    {cfg.showGroupBadge ? <span className="rounded-full bg-[rgba(0,162,131,0.12)] px-1.5 py-0.5 text-[9px] font-medium normal-case text-[#0a8f78]">cohort</span> : null}
+                                                </div>
+                                            ) : null}
+                                            {cards.map((vm) =>
+                                                waitlistDoc?.resolved ? (
+                                                    <WaitlistCandidateCardProofRenderer
+                                                        key={vm.candidateId}
+                                                        doc={waitlistDoc.resolved}
+                                                        vm={vm}
+                                                        showRuntimePosition={cfg.showRuntimePosition}
+                                                        onOpen={() => setSimNav(`Open candidate · ${vm.child.name}`)}
+                                                        onAction={(label) => setSimNav(`${label} · ${vm.child.name}`)}
+                                                    />
+                                                ) : null,
+                                            )}
+                                        </div>
+                                    );
+                                });
+                            })()}
                             <p className="text-[11px]" style={{ color: MUTED }}>
-                                Cohort grouping shown for readability (no new ranking logic). Tier/position come from the placement runtime in a later phase.
+                                <strong>This is a repeating candidate card</strong> — one card renders for each candidate in the group.
+                                Cohort grouping + header styling are display only; ranking, ordering, and cohort membership stay in the placement runtime.
                             </p>
                         </div>
                     )

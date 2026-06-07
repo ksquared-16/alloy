@@ -20,6 +20,7 @@ import {
     LAYOUT_ENTITY_GROUPS,
     LAYOUT_WIDGET_CATALOG,
     catalogGroupsForEntityType,
+    catalogWidgetsForEntityType,
     fieldDefToCatalog,
     type LayoutCatalogField,
     type LayoutCatalogGroup,
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
     // (no field_definitions); other entities use the Leads/opportunities groups.
     const curatedGroups = catalogGroupsForEntityType(entityType);
     if (curatedGroups) {
-        return NextResponse.json({ groups: curatedGroups, widgets: LAYOUT_WIDGET_CATALOG });
+        return NextResponse.json({ groups: curatedGroups, widgets: catalogWidgetsForEntityType(entityType) });
     }
 
     const supabase = createAdminClient();

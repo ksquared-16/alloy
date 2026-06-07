@@ -31,8 +31,9 @@ import type {
     LayoutRenderHint,
 } from "@/lib/layout/layoutV2";
 import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
-import type { LayoutCatalogField, LayoutCatalogWidget, LayoutEntityGroupKey } from "@/lib/layout/fieldCatalog";
+import type { LayoutCatalogField, LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
 import * as ops from "@/lib/layout/builderOps";
+import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
 
 /** Display/render modes a user can pick per field or related-list column. */
 const RENDER_MODES: { key: LayoutRenderHint; label: string }[] = [
@@ -113,7 +114,7 @@ function groupLayouts(records: EntityLayoutRecord[]): LayoutGroup[] {
 
 type ListResponse = { records: EntityLayoutRecord[]; entityTypes: string[]; surfaces: ("drawer" | "queue")[] };
 type CatalogResponse = {
-    groups: { entityKey: LayoutEntityGroupKey; entityLabel: string; fields: LayoutCatalogField[] }[];
+    groups: { entityKey: string; entityLabel: string; fields: LayoutCatalogField[] }[];
     widgets: LayoutCatalogWidget[];
 };
 
@@ -142,6 +143,31 @@ function makeRelatedListItem(): LayoutItem {
         related: { entityType: "child" },
         columns: [{ label: "Name", refKey: "child.name", width: "medium", renderHint: "text" }],
     };
+}
+
+/** Settings catalog grouping for a layout (Record / Queue / System). */
+const LAYOUT_CATEGORIES = ["Record Layouts", "Queue Layouts", "System Layouts"] as const;
+type LayoutCategory = (typeof LAYOUT_CATEGORIES)[number];
+
+function layoutCategory(g: { entityType: string; surface: string }): LayoutCategory {
+    if (g.surface === "drawer") return "Record Layouts";
+    if (g.surface === "queue") return "Queue Layouts";
+    return "System Layouts";
+}
+
+/** Friendly settings-card title for a layout group. */
+function layoutDisplayName(g: { entityType: string; surface: string; layoutKey: string }, fallback: string): string {
+    const key = `${g.entityType}/${g.surface}/${g.layoutKey}`;
+    const map: Record<string, string> = {
+        "opportunities/drawer/default": "Lead Drawer",
+        "opportunities/queue/default": "Lead Queue Card",
+        "placement_candidate/queue/waitlist_candidate_card": "Waitlist Candidate Card",
+        "person/drawer/default": "Person Drawer",
+        "child/drawer/default": "Child Drawer",
+    };
+    if (map[key]) return map[key];
+    const surfaceLabel = g.surface === "drawer" ? "Drawer" : g.surface === "queue" ? "Queue Card" : g.surface;
+    return `${fallback} ${surfaceLabel}`;
 }
 
 function statusPill(status: string) {
@@ -177,7 +203,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
 
     const [picker, setPicker] = useState<PickerTarget>(null);
     const [pickerTab, setPickerTab] = useState<"field" | "widget">("field");
-    const [pickerGroup, setPickerGroup] = useState<LayoutEntityGroupKey>("opportunity");
+    const [pickerGroup, setPickerGroup] = useState<string>("opportunity");
 
     const fetchList = useCallback(async () => {
         try {
@@ -228,7 +254,13 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
             setShowJson(false);
             fetch(`/api/admin/entity-layouts/field-catalog?entity_type=${encodeURIComponent(rec.entityType)}`)
                 .then((r) => (r.ok ? r.json() : null))
-                .then((j) => setCatalog(j as CatalogResponse))
+                .then((j) => {
+                    const cat = j as CatalogResponse | null;
+                    setCatalog(cat);
+                    // Default the field-picker group to the first available group
+                    // (waitlist catalogs don't have an "opportunity" group).
+                    if (cat?.groups?.length) setPickerGroup(cat.groups[0].entityKey);
+                })
                 .catch(() => setCatalog(null));
         } catch (e) {
             setError((e as Error).message);
@@ -471,55 +503,65 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
             )}
 
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-                {/* Left: create + list */}
+                {/* Left: layout catalog (settings-style cards grouped by type) */}
                 <div className="flex flex-col gap-4">
-                    <SectionCard title="New Lead layout">
-                        {!canMutate ? (
-                            <p className="text-sm text-[#59678b]">You have read-only access. Admin access is required to create layouts.</p>
+                    <SectionCard title="Layout catalog">
+                        {loading ? (
+                            <p className="text-sm text-[#59678b]">Loading…</p>
+                        ) : groups.length === 0 ? (
+                            <p className="text-sm text-[#59678b]">No layouts yet. Add one below.</p>
                         ) : (
-                            <div className="flex flex-col gap-2">
-                                <button type="button" onClick={() => createDefault("drawer")} disabled={!!busy} className="rounded bg-[#2f6df6] px-3 py-2 text-sm font-medium text-white hover:bg-[#2a61dd] disabled:opacity-50">
-                                    {busy === "create_drawer" ? "Creating…" : "New Leads drawer"}
-                                </button>
-                                <button type="button" onClick={() => createDefault("queue")} disabled={!!busy} className="rounded border border-[#2f6df6] px-3 py-2 text-sm font-medium text-[#2f6df6] hover:bg-[#f5f8ff] disabled:opacity-50">
-                                    {busy === "create_queue" ? "Creating…" : "New Leads queue"}
-                                </button>
-                                <button type="button" onClick={createWaitlist} disabled={!!busy} className="rounded border border-[#0a8f78] px-3 py-2 text-sm font-medium text-[#0a8f78] hover:bg-[#f0fbf8] disabled:opacity-50">
-                                    {busy === "create_waitlist" ? "Creating…" : "New Waitlist candidate card"}
-                                </button>
-                                <p className="text-[11px] text-[#9aa4bf]">Lead layouts start from the curated Lead default; the Waitlist card composes the placement candidate face (ranking/position stay in the runtime). Edit and publish below.</p>
+                            <div className="flex flex-col gap-4">
+                                {LAYOUT_CATEGORIES.map((cat) => {
+                                    const inCat = groups.filter((g) => layoutCategory(g) === cat);
+                                    if (inCat.length === 0) return null;
+                                    return (
+                                        <div key={cat}>
+                                            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#9aa4bf]">{cat}</div>
+                                            <div className="flex flex-col gap-1.5">
+                                                {inCat.map((g) => {
+                                                    const selected = g.versions.some((v) => v.id === selectedId);
+                                                    return (
+                                                        <div key={g.key} className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 ${selected ? "border-[#2f6df6] bg-[#f5f8ff]" : "border-[#e6e8ec] bg-white"}`}>
+                                                            <div className="min-w-0">
+                                                                <div className="truncate text-sm font-semibold text-[#31394d]">{layoutDisplayName(g, entityTypeLabel(labelMap, g.entityType))}</div>
+                                                                <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-[#59678b]">
+                                                                    {statusPill(g.primary.status)}
+                                                                    <span>Version {g.primary.version}</span>
+                                                                    {g.isDefault ? <span className="text-[#9aa4bf]">· default</span> : null}
+                                                                </div>
+                                                            </div>
+                                                            <button type="button" onClick={() => selectRecord(g.primary.id)} className={`shrink-0 rounded-md border px-3 py-1 text-xs font-medium ${selected ? "border-[#2f6df6] text-[#2f6df6]" : "border-[#e6e8ec] text-[#31394d] hover:bg-[#F4F6F9]"}`}>
+                                                                {selected ? "Editing" : "Edit"}
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
                     </SectionCard>
 
-                    <SectionCard title="Layouts">
-                        {loading ? (
-                            <p className="text-sm text-[#59678b]">Loading…</p>
-                        ) : groups.length === 0 ? (
-                            <p className="text-sm text-[#59678b]">No layouts yet. Create one above.</p>
+                    <SectionCard title="Add a layout">
+                        {!canMutate ? (
+                            <p className="text-sm text-[#59678b]">You have read-only access. Admin access is required to create layouts.</p>
                         ) : (
-                            <ul className="flex flex-col gap-1">
-                                {groups.map((g) => {
-                                    const selected = g.versions.some((v) => v.id === selectedId);
-                                    const versionCount = g.versions.length;
-                                    return (
-                                        <li key={g.key}>
-                                            <button type="button" onClick={() => selectRecord(g.primary.id)} className={`flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-[#F4F6F9] ${selected ? "bg-[#eef1f6]" : ""}`}>
-                                                <span className="min-w-0 truncate">
-                                                    <span className="font-medium text-[#31394d]">{entityTypeLabel(labelMap, g.entityType)}</span>
-                                                    <span className="ml-1 text-xs text-[#59678b]">
-                                                        {g.surface}{g.isDefault ? " · default" : ""}
-                                                        {versionCount > 1 ? ` · ${versionCount} versions` : ""}
-                                                    </span>
-                                                </span>
-                                                {statusPill(g.primary.status)}
-                                            </button>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
+                            <div className="flex flex-col gap-1.5">
+                                <button type="button" onClick={() => createDefault("drawer")} disabled={!!busy} className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-left text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9] disabled:opacity-50">
+                                    {busy === "create_drawer" ? "Creating…" : "+ Lead Drawer"}
+                                </button>
+                                <button type="button" onClick={() => createDefault("queue")} disabled={!!busy} className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-left text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9] disabled:opacity-50">
+                                    {busy === "create_queue" ? "Creating…" : "+ Lead Queue Card"}
+                                </button>
+                                <button type="button" onClick={createWaitlist} disabled={!!busy} className="rounded-md border border-[#e6e8ec] px-3 py-1.5 text-left text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9] disabled:opacity-50">
+                                    {busy === "create_waitlist" ? "Creating…" : "+ Waitlist Candidate Card"}
+                                </button>
+                                <p className="text-[11px] text-[#9aa4bf]">Starts from the curated default; edit and publish in the builder.</p>
+                            </div>
                         )}
-                        <p className="mt-2 text-[11px] text-[#9aa4bf]">One row per layout. Pick a version inside the builder.</p>
                     </SectionCard>
                 </div>
 
@@ -573,15 +615,60 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                         </div>
                                     )}
 
-                                    {workingDoc.surface === "queue" && (
-                                        <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-3 py-2 text-[11px] text-[#4063b0]">
-                                            <strong>You&apos;re editing a queue card</strong> — not a drawer section. Items render in fixed card zones:
-                                            {" "}<span className="font-medium">Header</span> (title · status · attention · location),
-                                            {" "}<span className="font-medium">Body</span> (contact · children · tour), and a right-side
-                                            {" "}<span className="font-medium">Actions</span> stack (Open / Message / Update Status / Ask BOS — simulated).
-                                            {" "}Set each item&apos;s <span className="font-medium">zone</span> below; the preview shows the live card with sample children.
-                                        </div>
-                                    )}
+                                    {workingDoc.surface === "queue" && (() => {
+                                        const isWaitlist = (workingDoc.metadata as { renderAs?: string } | undefined)?.renderAs === "waitlist_candidate_card";
+                                        return (
+                                            <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] p-3 text-[11px] text-[#4063b0]">
+                                                <div className="mb-2">
+                                                    <strong>You&apos;re editing a {isWaitlist ? "waitlist candidate card" : "queue card"}</strong> — not a drawer section. Add fields/widgets above and give each a <span className="font-medium">card zone</span>; the card stacks zones top-to-bottom with a right-side action stack.
+                                                </div>
+                                                {/* Visual zone legend — where content renders */}
+                                                <div className="grid grid-cols-[1fr_auto] gap-2">
+                                                    <div className="flex flex-col gap-1">
+                                                        <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1"><span className="font-semibold">Header zone</span> · {isWaitlist ? "identity · priority · position · location" : "title · status · attention · location"}</div>
+                                                        <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1"><span className="font-semibold">Body zone</span> · {isWaitlist ? "child · program fit · availability · household · override flags" : "contact · children · tour"}</div>
+                                                    </div>
+                                                    <div className="flex items-stretch">
+                                                        <div className="flex flex-col justify-center rounded border border-[#cdd9f5] bg-white px-2 py-1 text-center"><span className="font-semibold">Actions</span><span className="text-[#7a8bbf]">stack →</span></div>
+                                                    </div>
+                                                </div>
+                                                {isWaitlist ? (
+                                                    <div className="mt-2 rounded border border-[#bfe9dd] bg-[#f0fbf8] px-2 py-1 text-[#0a8f78]">
+                                                        <strong>This is a repeating candidate card.</strong> One card renders for each candidate in a cohort group — not just one. Ranking, ordering, and cohort membership stay in the placement runtime; you configure the card face + group header display only.
+                                                    </div>
+                                                ) : null}
+                                                {isWaitlist ? (() => {
+                                                    const cfg = readWaitlistGroupConfig(workingDoc);
+                                                    const setGroupCfg = (patch: Record<string, unknown>) =>
+                                                        applyDoc({ ...workingDoc, metadata: { ...(workingDoc.metadata ?? {}), group: { ...(workingDoc.metadata?.group as Record<string, unknown> ?? {}), ...patch } } });
+                                                    const toggles: { key: keyof typeof cfg; label: string }[] = [
+                                                        { key: "showGroupHeader", label: "Show group header" },
+                                                        { key: "showGroupCount", label: "Show group count" },
+                                                        { key: "showGroupBadge", label: "Show group badge" },
+                                                        { key: "showRuntimePosition", label: "Show runtime position" },
+                                                    ];
+                                                    return (
+                                                        <div className="mt-2 rounded border border-[#cdd9f5] bg-white px-2 py-1.5">
+                                                            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#7a8bbf]">Group display (display only — runtime owns grouping)</div>
+                                                            <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                                                {toggles.map((t) => (
+                                                                    <label key={t.key} className="flex items-center gap-1 text-[#31394d]">
+                                                                        <input type="checkbox" disabled={!editable} checked={Boolean(cfg[t.key])} onChange={(e) => setGroupCfg({ [t.key]: e.target.checked })} />
+                                                                        {t.label}
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                            <label className="mt-1 flex items-center gap-1 text-[#31394d]">
+                                                                <span className="text-[#7a8bbf]">Header:</span>
+                                                                <input value={cfg.headerTemplate} disabled={!editable} onChange={(e) => setGroupCfg({ headerTemplate: e.target.value })} placeholder="{label} waitlist" className="flex-1 rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px]" />
+                                                            </label>
+                                                            <div className="mt-0.5 text-[10px] text-[#9aa4bf]">{`Tokens: {label} = cohort label, {count} = group size. e.g. "Infant Waitlist (12)" or "Priority Infant Candidates".`}</div>
+                                                        </div>
+                                                    );
+                                                })() : null}
+                                            </div>
+                                        );
+                                    })()}
 
                                     {/* Sections */}
                                     {workingDoc.sections.map((s, sIdx) => (
@@ -898,8 +985,8 @@ function PickerOverlay({
     catalog: CatalogResponse;
     tab: "field" | "widget";
     setTab: (t: "field" | "widget") => void;
-    group: LayoutEntityGroupKey;
-    setGroup: (g: LayoutEntityGroupKey) => void;
+    group: string;
+    setGroup: (g: string) => void;
     onPickField: (f: LayoutCatalogField) => void;
     onPickWidget: (w: LayoutCatalogWidget) => void;
     onClose: () => void;
@@ -917,7 +1004,7 @@ function PickerOverlay({
                 </div>
                 {tab === "field" ? (
                     <>
-                        <select value={group} onChange={(e) => setGroup(e.target.value as LayoutEntityGroupKey)} className="mb-2 w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm">
+                        <select value={group} onChange={(e) => setGroup(e.target.value)} className="mb-2 w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm">
                             {catalog.groups.map((g) => <option key={g.entityKey} value={g.entityKey}>{g.entityLabel}</option>)}
                         </select>
                         <div className="flex flex-col gap-1">

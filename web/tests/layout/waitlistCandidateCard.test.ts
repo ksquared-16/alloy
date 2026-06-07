@@ -6,7 +6,8 @@
 import { describe, expect, it } from "vitest";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { resolveLayout } from "@/lib/layout/layoutResolver";
-import { buildWaitlistCandidateCardDefaultDoc, buildWaitlistDefaultDoc } from "@/lib/layout/defaultWaitlistLayouts";
+import { buildWaitlistCandidateCardDefaultDoc, buildWaitlistDefaultDoc, readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
+import { catalogGroupsForEntityType, catalogWidgetsForEntityType } from "@/lib/layout/fieldCatalog";
 import { placementCandidateVmToCardVm } from "@/lib/layout/waitlist/placementRowToCardVm";
 import { waitlistCardVmToProofRecord, WAITLIST_CARD_RENDER_AS } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
@@ -149,5 +150,48 @@ describe("resolver targeting", () => {
     it("buildWaitlistDefaultDoc returns null for unrelated entities/surfaces", () => {
         expect(buildWaitlistDefaultDoc("opportunities", "queue")).toBeNull();
         expect(buildWaitlistDefaultDoc("placement_candidate", "drawer")).toBeNull();
+    });
+});
+
+describe("waitlist field & widget catalog (Goals 4/5)", () => {
+    it("exposes the full waitlist field catalog (not artificially limited)", () => {
+        const groups = catalogGroupsForEntityType("placement_candidate");
+        expect(groups).not.toBeNull();
+        const labels = (groups ?? []).map((g) => g.entityLabel);
+        for (const cat of ["Placement Candidate", "Child", "Parent", "Household", "Location", "Program", "Lifecycle", "System"]) {
+            expect(labels).toContain(cat);
+        }
+        // bucket keys are unique (the picker keys on entityKey)
+        const keys = (groups ?? []).map((g) => g.entityKey);
+        expect(new Set(keys).size).toBe(keys.length);
+    });
+    it("returns waitlist widgets including a placeable Waitlist Adjustment", () => {
+        const widgets = catalogWidgetsForEntityType("placement_candidate").map((w) => w.widgetKey);
+        for (const w of ["waitlist_position", "waitlist_tier", "waitlist_override", "waitlist_adjustment", "capacity_recommendation"]) {
+            expect(widgets).toContain(w);
+        }
+    });
+    it("non-waitlist entities keep the Lead widget catalog", () => {
+        const widgets = catalogWidgetsForEntityType("opportunities").map((w) => w.widgetKey);
+        expect(widgets).toContain("tasks");
+        expect(widgets).not.toContain("waitlist_adjustment");
+    });
+});
+
+describe("waitlist group display config (Goal 6 — display only)", () => {
+    it("ships sensible defaults on the preset", () => {
+        const cfg = readWaitlistGroupConfig(buildWaitlistCandidateCardDefaultDoc());
+        expect(cfg.showGroupHeader).toBe(true);
+        expect(cfg.showRuntimePosition).toBe(true);
+        expect(cfg.headerTemplate).toContain("{label}");
+    });
+    it("reads overrides and falls back safely", () => {
+        const cfg = readWaitlistGroupConfig({ metadata: { group: { showGroupHeader: false, headerTemplate: "Priority {label}" } } });
+        expect(cfg.showGroupHeader).toBe(false);
+        expect(cfg.headerTemplate).toBe("Priority {label}");
+        expect(cfg.showGroupCount).toBe(true); // default preserved
+        // empty/absent metadata → all defaults
+        const def = readWaitlistGroupConfig(null);
+        expect(def.showGroupHeader).toBe(true);
     });
 });

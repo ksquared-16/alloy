@@ -125,7 +125,46 @@ export function buildWaitlistCandidateCardDefaultDoc(): LayoutDoc {
             template: "waitlist_candidate_card_v1",
             renderAs: WAITLIST_CARD_RENDER_AS,
             layoutKey: WAITLIST_CANDIDATE_CARD_LAYOUT_KEY,
+            // Display-only group config (Goal 6). Runtime owns ranking/grouping/
+            // ordering/cohort membership; Layout V2 only styles the group header.
+            group: {
+                showGroupHeader: true,
+                showGroupCount: true,
+                showGroupBadge: false,
+                showRuntimePosition: true,
+                /** Header template: {label} = cohort label, {count} = group size. */
+                headerTemplate: "{label} waitlist",
+            },
         },
+    };
+}
+
+/** Display-only group-header config (Goal 6) — never affects grouping logic. */
+export type WaitlistGroupDisplayConfig = {
+    showGroupHeader: boolean;
+    showGroupCount: boolean;
+    showGroupBadge: boolean;
+    showRuntimePosition: boolean;
+    headerTemplate: string;
+};
+
+export const DEFAULT_WAITLIST_GROUP_CONFIG: WaitlistGroupDisplayConfig = {
+    showGroupHeader: true,
+    showGroupCount: true,
+    showGroupBadge: false,
+    showRuntimePosition: true,
+    headerTemplate: "{label} waitlist",
+};
+
+/** Read the (display-only) group config off a resolved doc, with safe defaults. */
+export function readWaitlistGroupConfig(doc: { metadata?: Record<string, unknown> | null } | null | undefined): WaitlistGroupDisplayConfig {
+    const raw = (doc?.metadata?.group ?? {}) as Partial<WaitlistGroupDisplayConfig>;
+    return {
+        showGroupHeader: raw.showGroupHeader ?? DEFAULT_WAITLIST_GROUP_CONFIG.showGroupHeader,
+        showGroupCount: raw.showGroupCount ?? DEFAULT_WAITLIST_GROUP_CONFIG.showGroupCount,
+        showGroupBadge: raw.showGroupBadge ?? DEFAULT_WAITLIST_GROUP_CONFIG.showGroupBadge,
+        showRuntimePosition: raw.showRuntimePosition ?? DEFAULT_WAITLIST_GROUP_CONFIG.showRuntimePosition,
+        headerTemplate: typeof raw.headerTemplate === "string" && raw.headerTemplate.trim() ? raw.headerTemplate : DEFAULT_WAITLIST_GROUP_CONFIG.headerTemplate,
     };
 }
 
