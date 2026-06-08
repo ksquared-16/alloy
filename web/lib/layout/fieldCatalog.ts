@@ -41,6 +41,10 @@ export interface LayoutCatalogField {
 export interface LayoutCatalogGroup {
     entityKey: string;
     entityLabel: string;
+    /** Optional section subtitle (e.g. Enrollment details under Child). */
+    groupSubtitle?: string;
+    /** Short helper copy for the picker group. */
+    groupDescription?: string;
     fields: LayoutCatalogField[];
 }
 
@@ -64,12 +68,81 @@ export interface LayoutFieldCatalog {
     widgets: LayoutCatalogWidget[];
 }
 
+/** Operator-facing picker copy for internal inquiry_child.* refKeys. */
+export const INQUIRY_CHILD_PICKER_PRESENTATION = {
+    groupLabel: "Child",
+    groupSubtitle: "Enrollment details",
+    groupDescription: "Child fields used during lead and enrollment",
+    fieldEntityLabel: "Child",
+} as const;
+
+/** Picker-only field label overrides (registry labels unchanged). */
+const INQUIRY_CHILD_PICKER_FIELD_LABELS: Partial<Record<string, string>> = {
+    desired_start_date: "Desired start date",
+    outcome_status_key: "Enrollment status",
+};
+
+export function inquiryChildPickerFieldLabel(fieldKey: string, fallbackLabel: string): string {
+    return INQUIRY_CHILD_PICKER_FIELD_LABELS[fieldKey] ?? fallbackLabel;
+}
+
+/** Combined label for group dropdowns when subtitle disambiguates duplicate group names. */
+export function catalogGroupDisplayLabel(group: Pick<LayoutCatalogGroup, "entityLabel" | "groupSubtitle">): string {
+    return group.groupSubtitle ? `${group.entityLabel} — ${group.groupSubtitle}` : group.entityLabel;
+}
+
+export function finalizeCatalogGroupForPicker(group: LayoutCatalogGroup): LayoutCatalogGroup {
+    if (group.entityKey !== "inquiry_child") return group;
+    return {
+        ...group,
+        entityLabel: INQUIRY_CHILD_PICKER_PRESENTATION.groupLabel,
+        groupSubtitle: INQUIRY_CHILD_PICKER_PRESENTATION.groupSubtitle,
+        groupDescription: INQUIRY_CHILD_PICKER_PRESENTATION.groupDescription,
+        fields: group.fields.map((f) => ({
+            ...f,
+            entityLabel: INQUIRY_CHILD_PICKER_PRESENTATION.fieldEntityLabel,
+            fieldLabel: inquiryChildPickerFieldLabel(f.fieldKey, f.fieldLabel),
+        })),
+    };
+}
+
+export function finalizeCatalogGroupsForPicker(groups: LayoutCatalogGroup[]): LayoutCatalogGroup[] {
+    return groups.map(finalizeCatalogGroupForPicker);
+}
+
+/** User-facing strings from catalog groups (for copy guard tests). */
+export function collectUserFacingCatalogCopy(groups: LayoutCatalogGroup[]): string[] {
+    const out: string[] = [];
+    for (const g of groups) {
+        out.push(g.entityLabel);
+        if (g.groupSubtitle) out.push(g.groupSubtitle);
+        if (g.groupDescription) out.push(g.groupDescription);
+        for (const f of g.fields) {
+            out.push(f.fieldLabel, f.entityLabel);
+        }
+    }
+    return out;
+}
+
+/** Banned inquiry-participation wording in operator-facing catalog copy. */
+export const BANNED_INQUIRY_CATALOG_PHRASES = [
+    /child\s*inquiry/i,
+    /inquiry\s*child/i,
+    /children\s*inquiry/i,
+    /child_inquiry/i,
+    /\binquiry_child\b/i,
+] as const;
+
+export function catalogCopyContainsBannedInquiryPhrase(text: string): boolean {
+    return BANNED_INQUIRY_CATALOG_PHRASES.some((re) => re.test(text));
+}
+
 /** Field groups for the Lead/Opportunity drawer, in display order (user-facing). */
 export const LAYOUT_ENTITY_GROUPS: { entityKey: LayoutEntityGroupKey; entityLabel: string }[] = [
     { entityKey: "opportunity", entityLabel: "Lead" },
     { entityKey: "person", entityLabel: "Contact / Parent" },
     { entityKey: "child", entityLabel: "Child" },
-    { entityKey: "inquiry_child", entityLabel: "Child · Enrollment" },
+    { entityKey: "inquiry_child", entityLabel: INQUIRY_CHILD_PICKER_PRESENTATION.groupLabel },
 ];
 
 /**
@@ -88,7 +161,7 @@ export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
     { widgetKey: "notes", label: "Notes", category: "Communication", description: "Internal notes", defaultDisplayMode: "list" },
     // Enrollment
     { widgetKey: "tour_summary", label: "Tour Summary", category: "Enrollment", description: "Tour date & follow-up", defaultDisplayMode: "summary" },
-    { widgetKey: "children_list", label: "Children List", category: "Enrollment", description: "Children on this inquiry", defaultDisplayMode: "list" },
+    { widgetKey: "children_list", label: "Children List", category: "Enrollment", description: "Children on this lead", defaultDisplayMode: "list" },
     // Waitlist (queue-meaningful; shown disabled on drawer surfaces)
     { widgetKey: "waitlist_position", label: "Waitlist Position", category: "Waitlist", description: "Computed waitlist position", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },
     { widgetKey: "waitlist_tier", label: "Waitlist Tier", category: "Waitlist", description: "Priority tier / bucket", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },
@@ -116,7 +189,7 @@ const ENTITY_LABEL: Record<LayoutEntityGroupKey, string> = {
     opportunity: "Lead",
     person: "Contact / Parent",
     child: "Child",
-    inquiry_child: "Child · Enrollment",
+    inquiry_child: INQUIRY_CHILD_PICKER_PRESENTATION.fieldEntityLabel,
 };
 
 function field(
@@ -170,7 +243,7 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
         field("child", "age_band", "Age band", "text"),
     ],
     inquiry_child: INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((row) =>
-        field("inquiry_child", row.field_key, row.label, row.field_type),
+        field("inquiry_child", row.field_key, inquiryChildPickerFieldLabel(row.field_key, row.label), row.field_type),
     ),
 };
 
@@ -322,13 +395,15 @@ export const CHILD_DRAWER_CATALOG_GROUPS: LayoutCatalogGroup[] = [
     },
     {
         entityKey: "inquiry_child",
-        entityLabel: "Child · Enrollment",
+        entityLabel: INQUIRY_CHILD_PICKER_PRESENTATION.groupLabel,
+        groupSubtitle: INQUIRY_CHILD_PICKER_PRESENTATION.groupSubtitle,
+        groupDescription: INQUIRY_CHILD_PICKER_PRESENTATION.groupDescription,
         fields: INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((row) =>
             wlField(
                 "inquiry_child",
-                "Child · Enrollment",
+                INQUIRY_CHILD_PICKER_PRESENTATION.fieldEntityLabel,
                 `inquiry_child.${row.field_key}`,
-                row.label,
+                inquiryChildPickerFieldLabel(row.field_key, row.label),
                 row.field_type,
             ),
         ),
@@ -361,10 +436,10 @@ export function catalogGroupsForEntityType(entityType: string): LayoutCatalogGro
     if (entityType === "placement_candidate") return WAITLIST_CANDIDATE_CATALOG_GROUPS;
     const anchor = layoutPickerAnchorForEntityType(entityType);
     if (entityType === "person") {
-        return filterCatalogGroupsForLayoutPicker(PERSON_DRAWER_CATALOG_GROUPS, anchor);
+        return finalizeCatalogGroupsForPicker(filterCatalogGroupsForLayoutPicker(PERSON_DRAWER_CATALOG_GROUPS, anchor));
     }
     if (entityType === "child") {
-        return filterCatalogGroupsForLayoutPicker(CHILD_DRAWER_CATALOG_GROUPS, anchor);
+        return finalizeCatalogGroupsForPicker(filterCatalogGroupsForLayoutPicker(CHILD_DRAWER_CATALOG_GROUPS, anchor));
     }
     return null; // null → caller uses the default LAYOUT_ENTITY_GROUPS (field-def backed)
 }
@@ -375,7 +450,8 @@ export function buildLeadLayoutPickerGroups(
     anchor: LayoutPickerAnchorEntity = "opportunities",
 ): LayoutCatalogGroup[] {
     const filtered = filterCatalogGroupsForLayoutPicker(groups, anchor);
-    return [...filtered, ...(buildOptionalReferencePickerGroups(anchor) as LayoutCatalogGroup[])];
+    const withOptional = [...filtered, ...(buildOptionalReferencePickerGroups(anchor) as LayoutCatalogGroup[])];
+    return finalizeCatalogGroupsForPicker(withOptional);
 }
 
 /**
@@ -392,12 +468,10 @@ export function fieldDefToCatalog(
     entityKey: LayoutEntityGroupKey,
     row: { field_key: string; label?: string | null; field_type?: string | null },
 ): LayoutCatalogField {
-    return field(
-        entityKey,
-        row.field_key,
-        (row.label ?? row.field_key).trim() || row.field_key,
-        (row.field_type ?? "text") || "text",
-    );
+    const rawLabel = (row.label ?? row.field_key).trim() || row.field_key;
+    const fieldLabel =
+        entityKey === "inquiry_child" ? inquiryChildPickerFieldLabel(row.field_key, rawLabel) : rawLabel;
+    return field(entityKey, row.field_key, fieldLabel, (row.field_type ?? "text") || "text");
 }
 
 /** Merge registry rows with curated fallback for keys missing from parity (narrow fallback). */

@@ -6,7 +6,10 @@ import { describe, expect, it } from "vitest";
 import {
     buildLeadLayoutPickerGroups,
     catalogGroupsForEntityType,
+    catalogCopyContainsBannedInquiryPhrase,
+    collectUserFacingCatalogCopy,
     CURATED_FIELDS,
+    INQUIRY_CHILD_PICKER_PRESENTATION,
     LAYOUT_ENTITY_GROUPS,
 } from "@/lib/layout/fieldCatalog";
 import {
@@ -88,6 +91,39 @@ describe("field catalog picker — FC-2 canonical refKeys", () => {
         const groups = catalogGroupsForEntityType("placement_candidate") ?? [];
         expect(groups.length).toBeGreaterThan(0);
         expect(groups.some((g) => g.fields.some((f) => f.refKey.startsWith("waitlist.")))).toBe(true);
+    });
+
+    it("presents inquiry_child as Child enrollment fields (no Inquiry wording in copy)", () => {
+        const groups = leadPickerFromCuratedFallback();
+        const enrollment = groups.find((g) => g.entityKey === "inquiry_child");
+        expect(enrollment?.entityLabel).toBe("Child");
+        expect(enrollment?.groupSubtitle).toBe("Enrollment details");
+        expect(enrollment?.groupDescription).toContain("lead");
+        expect(enrollment?.fields[0]?.entityLabel).toBe("Child");
+        expect(enrollment?.fields.some((f) => f.refKey === "inquiry_child.desired_start_date")).toBe(true);
+        expect(enrollment?.fields.find((f) => f.refKey === "inquiry_child.desired_start_date")?.fieldLabel).toBe(
+            "Desired start date",
+        );
+    });
+
+    it("user-facing catalog copy never mentions Inquiry Child / Child Inquiry", () => {
+        const surfaces = [
+            leadPickerFromCuratedFallback(),
+            catalogGroupsForEntityType("person") ?? [],
+            catalogGroupsForEntityType("child") ?? [],
+        ];
+        for (const groups of surfaces) {
+            for (const copy of collectUserFacingCatalogCopy(groups)) {
+                expect(catalogCopyContainsBannedInquiryPhrase(copy)).toBe(false);
+            }
+        }
+    });
+
+    it("machine fields may still use inquiry_child refKeys and groupKey", () => {
+        const groups = leadPickerFromCuratedFallback();
+        const enrollment = groups.find((g) => g.entityKey === "inquiry_child");
+        expect(enrollment?.entityKey).toBe("inquiry_child");
+        expect(enrollment?.fields.every((f) => f.refKey.startsWith("inquiry_child."))).toBe(true);
     });
 });
 

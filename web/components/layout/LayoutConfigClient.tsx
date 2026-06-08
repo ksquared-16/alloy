@@ -4,7 +4,7 @@
  * Layout Builder V1 — configure Lead drawer / queue layouts without JSON.
  *
  * FOUNDATION / PROOF surface only: nothing here changes how live drawers or
- * queues render. Lets a user add fields (Lead/Person/Child/Children Inquiry)
+ * queues render. Lets a user add fields (Lead/Person/Child enrollment fields)
  * and widgets (Tasks, Reminders, Actions, Tour, Recent comms, Notes, Children
  * list), build sections with rows and 1/2/3-column placement, set light "show
  * when" conditions, save drafts, and publish — then see the proof page update.
@@ -30,7 +30,11 @@ import type {
     LayoutRenderHint,
 } from "@/lib/layout/layoutV2";
 import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
-import type { LayoutCatalogField, LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
+import {
+    catalogGroupDisplayLabel,
+    type LayoutCatalogField,
+    type LayoutCatalogWidget,
+} from "@/lib/layout/fieldCatalog";
 import * as ops from "@/lib/layout/builderOps";
 import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
 
@@ -123,7 +127,13 @@ function groupLayouts(records: EntityLayoutRecord[]): LayoutGroup[] {
 
 type ListResponse = { records: EntityLayoutRecord[]; entityTypes: string[]; surfaces: ("drawer" | "queue")[] };
 type CatalogResponse = {
-    groups: { entityKey: string; entityLabel: string; fields: LayoutCatalogField[] }[];
+    groups: {
+        entityKey: string;
+        entityLabel: string;
+        groupSubtitle?: string;
+        groupDescription?: string;
+        fields: LayoutCatalogField[];
+    }[];
     widgets: LayoutCatalogWidget[];
 };
 
@@ -1032,6 +1042,7 @@ function PickerOverlay({
     onClose: () => void;
 }) {
     const groupFields = catalog.groups.find((g) => g.entityKey === group)?.fields ?? [];
+    const activeGroup = catalog.groups.find((g) => g.entityKey === group);
     const widgetIsRelevant = (w: LayoutCatalogWidget) => !w.relevantSurfaces || w.relevantSurfaces.includes(surface);
     const byCategory = WIDGET_CATEGORY_ORDER
         .map((cat) => ({ cat, widgets: catalog.widgets.filter((w) => (w.category ?? "Work") === cat) }))
@@ -1049,8 +1060,13 @@ function PickerOverlay({
                 {tab === "field" ? (
                     <>
                         <select value={group} onChange={(e) => setGroup(e.target.value)} className="mb-2 w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm">
-                            {catalog.groups.map((g) => <option key={g.entityKey} value={g.entityKey}>{g.entityLabel}</option>)}
+                            {catalog.groups.map((g) => (
+                                <option key={g.entityKey} value={g.entityKey}>{catalogGroupDisplayLabel(g)}</option>
+                            ))}
                         </select>
+                        {activeGroup?.groupDescription ? (
+                            <p className="mb-2 text-[11px] leading-snug text-[#59678b]">{activeGroup.groupDescription}</p>
+                        ) : null}
                         <div className="flex flex-col gap-1">
                             {groupFields.map((f) => (
                                 <button key={f.refKey} type="button" onClick={() => onPickField(f)} className="flex items-center justify-between rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm hover:bg-[#f5f8ff]">

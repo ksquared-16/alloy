@@ -10,6 +10,7 @@ import {
     catalogGroupsForEntityType,
     catalogWidgetsForEntityType,
     GLOBAL_WIDGET_CATALOG,
+    INQUIRY_CHILD_PICKER_PRESENTATION,
     LAYOUT_ENTITY_GROUPS,
     WIDGET_CATEGORIES,
 } from "@/lib/layout/fieldCatalog";
@@ -86,6 +87,7 @@ describe("field catalog cleanup (user-facing labels)", () => {
         expect(labels).toContain("Contact / Parent");
         expect(labels).not.toContain("Lead / Opportunity");
         expect(labels).not.toContain("Children Inquiry");
+        expect(labels.filter((l) => l === "Child").length).toBeGreaterThan(0);
     });
     it("waitlist groups are friendly (Candidate, Waitlist — not technical)", () => {
         const labels = (catalogGroupsForEntityType("placement_candidate") ?? []).map((g) => g.entityLabel);
@@ -96,7 +98,10 @@ describe("field catalog cleanup (user-facing labels)", () => {
     });
     it("person/child surfaces get their own curated catalogs", () => {
         expect((catalogGroupsForEntityType("person") ?? []).map((g) => g.entityLabel)).toContain("Contact / Parent");
-        expect((catalogGroupsForEntityType("child") ?? []).map((g) => g.entityLabel)).toContain("Child · Enrollment");
+        const childGroups = catalogGroupsForEntityType("child") ?? [];
+        const enrollment = childGroups.find((g) => g.entityKey === "inquiry_child");
+        expect(enrollment?.entityLabel).toBe(INQUIRY_CHILD_PICKER_PRESENTATION.groupLabel);
+        expect(enrollment?.groupSubtitle).toBe(INQUIRY_CHILD_PICKER_PRESENTATION.groupSubtitle);
     });
 });
 
