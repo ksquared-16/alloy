@@ -8,7 +8,6 @@ import { useEffect, useRef, useState } from "react";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
-    DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS,
     resolveDrawerLayoutRuntimeBodyPresentation,
     type DrawerLayoutRuntimeBodyPhase,
     type DrawerLayoutRuntimeBodyPresentation,
@@ -78,23 +77,10 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         setPhase("loading");
         setLastError(null);
 
-        const timeoutId = window.setTimeout(() => {
-            if (cancelled) return;
-            setPhase((current) => {
-                if (current !== "loading" && current !== "idle") return current;
-                setLastError("layout_fetch_timeout");
-                if (typeof console !== "undefined") {
-                    console.info(`[layout_runtime_body:${logTag}_fallback]`, {
-                        entityId: id,
-                        reason: "layout_fetch_timeout",
-                        maxHoldMs: DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS,
-                    });
-                }
-                return "fallback";
-            });
-        }, DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS);
-
-        const clearHoldTimeout = () => window.clearTimeout(timeoutId);
+        // No false timeout flip: while the request is in flight we stay in the
+        // coordinated hold/loading state. Only a genuine failure (non-ok /
+        // incomplete body / rejection) moves to "fallback". This removes the
+        // `layout_fetch_timeout` flicker that appeared before the (slow) response.
         const qs = new URLSearchParams();
         qs.set(getPrimaryQueryKey(apiPath), id);
         Object.entries(queryParams ?? {}).forEach(([key, value]) => {
@@ -104,7 +90,6 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         fetch(`${apiPath}?${qs.toString()}`)
             .then(async (res) => {
                 if (cancelled) return;
-                clearHoldTimeout();
                 if (!res.ok) {
                     const json = await res.json().catch(() => ({}));
                     const reason = (json as { error?: string }).error ?? `http_${res.status}`;
@@ -130,21 +115,21 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
                 setRecord(json.record);
                 setLayoutSource(json.layoutSource ?? null);
                 setLayoutKey(json.layoutKey ?? json.plan?.layoutKey ?? null);
-                setLayoutRecordId(json.layoutRecordId ?? null);
                 setLayoutVersion(json.layoutVersion ?? null);
+                setLayoutRecordId(json.layoutRecordId ?? null);
+                // A successful body response clears any stale error from a prior attempt.
+                setLastError(null);
                 setPhase("ready");
                 readyIdRef.current = id;
             })
             .catch((err) => {
                 if (cancelled) return;
-                clearHoldTimeout();
                 setLastError(err instanceof Error ? err.message : String(err));
                 setPhase("fallback");
             });
 
         return () => {
             cancelled = true;
-            clearHoldTimeout();
         };
         // queryParams referenced by content via queryParamsKey (stable).
         // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -206,9 +206,13 @@ function RepeaterCellContent({ row, col }: { row: ProofRuntimeRecord; col: Layou
 function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const variant = useContext(LayoutRuntimeVariantContext);
     const binding = classifyLayoutItemBinding(item, anchorEntity);
-    const isTable = item.displayMode === "table" && Array.isArray(item.columns) && item.columns.length > 0;
+    // A configured collection (any displayMode — table/rows/list) renders its rows
+    // whenever it has columns. This matches isLayoutItemSupportedForProduction
+    // (which accepts table|rows) so a configured children list is never counted
+    // as supported yet silently dropped in production.
+    const hasColumns = Array.isArray(item.columns) && item.columns.length > 0;
 
-    if (!isTable) {
+    if (!hasColumns) {
         if (variant === "production") return null;
         return (
             <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2.5 py-2 text-xs text-[#9aa4bf]">
