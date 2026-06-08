@@ -57,6 +57,8 @@ describe("opportunity queue layout runtime flags", () => {
     beforeEach(() => {
         delete process.env.LAYOUT_RUNTIME_ENABLED;
         delete process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE;
+        process.env.NEXT_PUBLIC_APP_ENV = "production";
+        process.env.VERCEL_ENV = "production";
     });
 
     afterEach(() => {

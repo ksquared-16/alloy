@@ -1904,12 +1904,43 @@ function WorkUnitQueueLane({
                     Opening…
                   </span>
                 ) : null}
-                {useLayoutQueueRows && queueLayoutRuntime.doc ?
+                {useLayoutQueueRows && queueLayoutRuntime.doc && crm ?
                   <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split">
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <LayoutRuntimeQueueRowView
                         doc={queueLayoutRuntime.doc}
                         record={buildOpportunityQueueRowRecordFromPreview(item)}
+                        queueRowKey={item.id}
+                        variant={hasCandidatePlacementRows ? "waitlist" : "pipeline"}
+                        vmFallback={
+                          <CrmCompactQueuePreview
+                            slots={crm}
+                            urgencyTier={tier}
+                            operationalAttentionBadge={attentionAccent}
+                            scanMode
+                            drawerRecordIconHandlers={drawerRecordIconHandlers}
+                            waitlistCandidateRow={
+                              item.placementWaitlistCandidate && placementShowBucketChip
+                                ? item.placementWaitlistCandidate
+                                : undefined
+                            }
+                            waitlistPlacementV2={
+                              !item.placementWaitlistCandidate && item.placementPriorityV2 && placementShowBucketChip
+                                ? item.placementPriorityV2
+                                : undefined
+                            }
+                            waitlistPlacementPreview={
+                              !item.placementWaitlistCandidate &&
+                              !item.placementPriorityV2 &&
+                              item.placementPriority &&
+                              placementShowBucketChip
+                                ? item.placementPriority
+                                : undefined
+                            }
+                            waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
+                            workUnitKey={queue.drillWorkUnitKey ?? null}
+                          />
+                        }
                       />
                     </div>
                   </div>

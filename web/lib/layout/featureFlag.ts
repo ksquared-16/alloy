@@ -2,11 +2,16 @@
  * Layout V2 — feature flags.
  *
  * Preview/config surface: LAYOUT_V2_PREVIEW_ENABLED (default off).
- * Runtime read path (Phase 0): LAYOUT_RUNTIME_ENABLED (default off).
+ * Runtime read path: LAYOUT_RUNTIME_ENABLED — default ON on staging, OFF on production.
  *
- * While runtime flag is off, no live drawer, queue, or workspace behavior changes.
- * The runtime modules resolve safely for tests and the effective API only.
+ * Staging detection: `NEXT_PUBLIC_APP_ENV=staging` (+ server `VERCEL_ENV=preview`).
+ * Emergency rollback: LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK=1 restores VM paths.
  */
+
+import {
+    isLayoutRuntimeStagingDefaultOnClient,
+    isLayoutRuntimeStagingDefaultOnServer,
+} from "./layoutRuntimeEnvironment";
 
 function readFlag(raw: string | undefined, defaultValue: boolean): boolean {
     if (raw === undefined || raw === "") return defaultValue;
@@ -14,6 +19,29 @@ function readFlag(raw: string | undefined, defaultValue: boolean): boolean {
     if (v === "0" || v === "false" || v === "off" || v === "no") return false;
     if (v === "1" || v === "true" || v === "on" || v === "yes") return true;
     return defaultValue;
+}
+
+/** Runtime flag with staging-default-on, production-default-off. */
+function readLayoutRuntimeMasterFlag(raw: string | undefined, client: boolean): boolean {
+    const stagingDefault = client ?
+        isLayoutRuntimeStagingDefaultOnClient()
+    :   isLayoutRuntimeStagingDefaultOnServer();
+    return readFlag(raw, stagingDefault);
+}
+
+/** Per-entity cutover flag — ON on staging when master runtime is on; explicit env overrides. */
+function readLayoutRuntimeEntityFlag(raw: string | undefined, client: boolean): boolean {
+    if (raw !== undefined && raw !== "") {
+        return readFlag(raw, false);
+    }
+    const masterOn = client
+        ? readLayoutRuntimeMasterFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED, true)
+        : readLayoutRuntimeMasterFlag(process.env.LAYOUT_RUNTIME_ENABLED, false);
+    if (!masterOn) return false;
+    const stagingDefault = client
+        ? isLayoutRuntimeStagingDefaultOnClient()
+        : isLayoutRuntimeStagingDefaultOnServer();
+    return stagingDefault;
 }
 
 /** Client-side gate for the Layout V2 admin UI. Default: off. Also on when hard cutover runtime is active. */
@@ -59,14 +87,14 @@ export function isLayoutV2PreviewEnabledServer(): boolean {
     return readFlag(process.env.LAYOUT_V2_PREVIEW_ENABLED, false);
 }
 
-/** Server-side gate for layout runtime read path (Phase 0). Default: off. */
+/** Server-side gate for layout runtime read path. Staging default: on. Production default: off. */
 export function isLayoutRuntimeEnabledServer(): boolean {
-    return readFlag(process.env.LAYOUT_RUNTIME_ENABLED, false);
+    return readLayoutRuntimeMasterFlag(process.env.LAYOUT_RUNTIME_ENABLED, false);
 }
 
-/** Client-side gate for layout runtime adoption (future cutover). Default: off. */
+/** Client-side gate for layout runtime adoption. Staging default: on. Production default: off. */
 export function isLayoutRuntimeEnabledClient(): boolean {
-    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED, false);
+    return readLayoutRuntimeMasterFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED, true);
 }
 
 /** Shadow parity compare (Phase 3). Default: off. Proof API may also allow preview flag. */
@@ -83,13 +111,13 @@ export function isLayoutRuntimeShadowReadPathEnabled(): boolean {
     return isLayoutRuntimeShadowEnabledServer() || isLayoutV2PreviewEnabledServer();
 }
 
-/** Per-entity cutover gate — opportunity drawer (C1a/C1b). Default: off. */
+/** Per-entity cutover gate — opportunity drawer. Staging default: on (when master on). */
 export function isLayoutRuntimeOpportunityDrawerEnabledServer(): boolean {
-    return readFlag(process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER, false);
+    return readLayoutRuntimeEntityFlag(process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER, false);
 }
 
 export function isLayoutRuntimeOpportunityDrawerEnabledClient(): boolean {
-    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER, false);
+    return readLayoutRuntimeEntityFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER, true);
 }
 
 /**
@@ -130,13 +158,13 @@ export function isLayoutRuntimeOpportunityDrawerBodyEnabledClient(): boolean {
     );
 }
 
-/** Per-entity cutover gate — person drawer body. Default: off. */
+/** Per-entity cutover gate — person drawer body. Staging default: on (when master on). */
 export function isLayoutRuntimePersonDrawerEnabledServer(): boolean {
-    return readFlag(process.env.LAYOUT_RUNTIME_PERSON_DRAWER, false);
+    return readLayoutRuntimeEntityFlag(process.env.LAYOUT_RUNTIME_PERSON_DRAWER, false);
 }
 
 export function isLayoutRuntimePersonDrawerEnabledClient(): boolean {
-    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_PERSON_DRAWER, false);
+    return readLayoutRuntimeEntityFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_PERSON_DRAWER, true);
 }
 
 export function isLayoutRuntimePersonDrawerBodyEnabledServer(): boolean {
@@ -147,13 +175,13 @@ export function isLayoutRuntimePersonDrawerBodyEnabledClient(): boolean {
     return isLayoutRuntimeHardCutoverActiveClient() && isLayoutRuntimePersonDrawerEnabledClient();
 }
 
-/** Per-entity cutover gate — child drawer body. Default: off. */
+/** Per-entity cutover gate — child drawer body. Staging default: on (when master on). */
 export function isLayoutRuntimeChildDrawerEnabledServer(): boolean {
-    return readFlag(process.env.LAYOUT_RUNTIME_CHILD_DRAWER, false);
+    return readLayoutRuntimeEntityFlag(process.env.LAYOUT_RUNTIME_CHILD_DRAWER, false);
 }
 
 export function isLayoutRuntimeChildDrawerEnabledClient(): boolean {
-    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_CHILD_DRAWER, false);
+    return readLayoutRuntimeEntityFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_CHILD_DRAWER, true);
 }
 
 export function isLayoutRuntimeChildDrawerBodyEnabledServer(): boolean {
@@ -164,13 +192,13 @@ export function isLayoutRuntimeChildDrawerBodyEnabledClient(): boolean {
     return isLayoutRuntimeHardCutoverActiveClient() && isLayoutRuntimeChildDrawerEnabledClient();
 }
 
-/** Per-entity cutover gate — opportunity queue rows (C4 foundation). Default: off. */
+/** Per-entity cutover gate — opportunity queue rows. Staging default: on (when master on). */
 export function isLayoutRuntimeOpportunityQueueEnabledServer(): boolean {
-    return readFlag(process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE, false);
+    return readLayoutRuntimeEntityFlag(process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE, false);
 }
 
 export function isLayoutRuntimeOpportunityQueueEnabledClient(): boolean {
-    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_QUEUE, false);
+    return readLayoutRuntimeEntityFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_QUEUE, true);
 }
 
 /** C4 shadow/proof read path — when queue body cutover is off. Default: off. */

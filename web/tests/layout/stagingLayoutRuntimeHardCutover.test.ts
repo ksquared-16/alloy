@@ -25,11 +25,14 @@ describe("staging hard cutover flags", () => {
 
     beforeEach(() => {
         delete process.env.LAYOUT_RUNTIME_ENABLED;
+        delete process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED;
         delete process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK;
         delete process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER;
         delete process.env.LAYOUT_RUNTIME_PERSON_DRAWER;
         delete process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE;
         delete process.env.LAYOUT_V2_PREVIEW_ENABLED;
+        process.env.NEXT_PUBLIC_APP_ENV = "production";
+        process.env.VERCEL_ENV = "production";
     });
 
     afterEach(() => {
@@ -57,6 +60,16 @@ describe("staging hard cutover flags", () => {
         expect(isLayoutRuntimePersonDrawerBodyEnabledServer()).toBe(true);
         expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
         expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
+    });
+
+    it("staging env enables full cutover without manual layout flags", () => {
+        process.env.NEXT_PUBLIC_APP_ENV = "staging";
+        process.env.VERCEL_ENV = "preview";
+        delete process.env.LAYOUT_RUNTIME_ENABLED;
+        delete process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER;
+        expect(isLayoutRuntimeHardCutoverActiveServer()).toBe(true);
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(true);
+        expect(isLayoutV2ConfigEnabledServer()).toBe(true);
     });
 
     it("hold presentation during loading — no VM flash", () => {
