@@ -11,7 +11,11 @@ import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawe
 import type { LayoutDoc } from "../layoutV2";
 import { resolveLayoutForOrg } from "../resolveLayoutRuntime";
 import { buildLayoutRuntimePlan, layoutDocSupportsAllSprint1ItemKinds, type LayoutRuntimePlan } from "./layoutRuntimePlan";
-import { buildOpportunityLayoutRuntimeRecordFromVm } from "./buildOpportunityLayoutRuntimeRecordFromVm";
+import {
+    buildLayoutRuntimeRecordBindingEvidence,
+    buildOpportunityLayoutRuntimeRecordFromVm,
+    type LayoutRuntimeRecordBindingEvidence,
+} from "./buildOpportunityLayoutRuntimeRecordFromVm";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import {
     isLayoutItemSupportedForProduction,
@@ -39,6 +43,8 @@ export type EvaluateOpportunityLayoutRuntimeBodySuccess = {
     layoutRecordId: string | null;
     layoutVersion: number | null;
     layoutFallbackReason?: string;
+    /** RefKey → record binding evidence (configured refKeys vs record keys). */
+    binding: LayoutRuntimeRecordBindingEvidence;
 };
 
 export type EvaluateOpportunityLayoutRuntimeBodyFailure = {
@@ -120,6 +126,7 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         statusDisplay:
             vm.header.status.renderAs !== "hidden" ? vm.header.status.label : null,
         summaries: vm.summaries,
+        doc,
     });
 
     const plan = buildLayoutRuntimePlan(doc);
@@ -134,6 +141,7 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         layoutRecordId: effective.usedFallback ? null : (layoutResolution.record?.id ?? null),
         layoutVersion: effective.usedFallback ? null : (layoutResolution.record?.version ?? null),
         layoutFallbackReason: effective.usedFallback ? effective.fallbackReason : undefined,
+        binding: buildLayoutRuntimeRecordBindingEvidence(doc, record),
     };
 }
 
@@ -153,6 +161,7 @@ export function evaluateOpportunityLayoutRuntimeBodyFromVm(input: {
         vmRecord: input.vmRecord,
         opportunityId: input.opportunityId,
         statusDisplay: input.statusDisplay,
+        doc: input.doc,
     });
 
     return {
@@ -164,6 +173,7 @@ export function evaluateOpportunityLayoutRuntimeBodyFromVm(input: {
         layoutKey: input.doc.metadata?.layoutKey as string | undefined ?? null,
         layoutRecordId: null,
         layoutVersion: null,
+        binding: buildLayoutRuntimeRecordBindingEvidence(input.doc, record),
     };
 }
 

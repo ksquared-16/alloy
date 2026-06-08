@@ -6,13 +6,90 @@
 
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import type { LayoutDoc } from "../layoutV2";
+import { normalizeRefKeyOnRead } from "../layoutRefKeyAliases";
 import { OPPORTUNITY_COMPUTE_KEYS } from "./opportunityRelationRegistry";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
 import { mapVmInquiryChildrenToLayoutRuntimeRows } from "./mapLayoutRuntimeChildrenRows";
+import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import {
     buildPrimaryContactPersonRelation,
     resolveOpportunityPrimaryContactPerson,
 } from "./resolveOpportunityPrimaryContactPerson";
+
+/**
+ * Top-level field refKeys a LayoutDoc binds against the drawer record. Excludes
+ * related_list collection columns (those bind per-row) and widget keys. Used to
+ * guarantee every configured field is present on the runtime record so it renders
+ * a label + value-or-placeholder rather than being silently absent.
+ */
+export function collectLayoutDocFieldRefKeys(doc: LayoutDoc): string[] {
+    const seen = new Set<string>();
+    for (const item of collectLayoutItems(doc)) {
+        if (item.kind === "field" && item.refKey && item.refKey !== "_template") seen.add(item.refKey);
+    }
+    return [...seen];
+}
+
+function asDisplayValue(raw: unknown): string | null {
+    if (raw == null) return null;
+    const text = String(raw).trim();
+    if (!text || isOpaqueIdValue(text)) return null;
+    return text;
+}
+
+/**
+ * Map one configured field refKey to a value from the VM record. Tries: the exact
+ * key, the alias-on-read key, then namespace heuristics (opportunity.* ↔ bare key,
+ * person.* from the already-resolved contact keys). Returns "" when no source
+ * exists so the field still renders a label + blank placeholder ("—").
+ */
+function mapFieldRefKeyValue(refKey: string, vmRecord: Record<string, unknown>, record: Record<string, unknown>): string {
+    const direct = asDisplayValue(vmRecord[refKey]);
+    if (direct != null) return direct;
+
+    const alias = normalizeRefKeyOnRead(refKey);
+    if (alias !== refKey) {
+        const aliased = asDisplayValue(vmRecord[alias] ?? record[alias]);
+        if (aliased != null) return aliased;
+    }
+
+    const dot = refKey.indexOf(".");
+    const entity = dot === -1 ? "opportunity" : refKey.slice(0, dot);
+    const fieldKey = dot === -1 ? refKey : refKey.slice(dot + 1);
+
+    if (entity === "opportunity") {
+        const v = asDisplayValue(vmRecord[fieldKey] ?? vmRecord[`opportunity.${fieldKey}`]);
+        if (v != null) return v;
+    }
+    if (entity === "person") {
+        // contact = Person record; reuse the keys the contact resolver already set.
+        const v = asDisplayValue(record[`person.${fieldKey}`] ?? vmRecord[`person.${fieldKey}`]);
+        if (v != null) return v;
+    }
+    return "";
+}
+
+/** Evidence payload: which doc refKeys exist on the runtime record after mapping. */
+export type LayoutRuntimeRecordBindingEvidence = {
+    layoutItemRefKeys: string[];
+    runtimeRecordKeys: string[];
+    /** Field refKeys still absent on the record (should be empty after ensure). */
+    missingRefKeys: string[];
+};
+
+export function buildLayoutRuntimeRecordBindingEvidence(
+    doc: LayoutDoc,
+    record: ProofRuntimeRecord,
+): LayoutRuntimeRecordBindingEvidence {
+    const layoutItemRefKeys = collectLayoutDocFieldRefKeys(doc);
+    const recordKeys = new Set(Object.keys(record));
+    return {
+        layoutItemRefKeys,
+        runtimeRecordKeys: [...recordKeys],
+        missingRefKeys: layoutItemRefKeys.filter((rk) => !recordKeys.has(rk)),
+    };
+}
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -40,13 +117,19 @@ export type BuildOpportunityLayoutRuntimeRecordInput = {
     opportunityId: string;
     statusDisplay?: string | null;
     summaries?: OpportunityDrawerViewModel["summaries"];
+    /**
+     * The effective/published LayoutDoc. When provided, every configured field
+     * refKey is guaranteed present on the record (mapped from the VM or set to
+     * "") so configured fields resolve and render rather than being absent.
+     */
+    doc?: LayoutDoc | null;
 };
 
 /** Build operator-safe layout runtime record from settled VM payload. */
 export function buildOpportunityLayoutRuntimeRecordFromVm(
     input: BuildOpportunityLayoutRuntimeRecordInput,
 ): ProofRuntimeRecord {
-    const { vmRecord, opportunityId, statusDisplay, summaries } = input;
+    const { vmRecord, opportunityId, statusDisplay, summaries, doc } = input;
 
     const householdName = pickDisplay(vmRecord.name, vmRecord.title, vmRecord._customer_name);
     const lastName = parseHouseholdLastName(householdName);
@@ -170,6 +253,17 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
             ...(placementPriority ? { [OPPORTUNITY_COMPUTE_KEYS.placement_priority]: placementPriority } : {}),
         },
     };
+
+    // Doc-driven completeness: every configured field refKey must exist on the
+    // record (mapped from the VM where possible, else "") so production renders a
+    // label + value-or-placeholder instead of an absent/blank field.
+    if (doc) {
+        const mutable = record as Record<string, unknown>;
+        for (const refKey of collectLayoutDocFieldRefKeys(doc)) {
+            if (mutable[refKey] !== undefined) continue;
+            mutable[refKey] = mapFieldRefKeyValue(refKey, vmRecord, mutable);
+        }
+    }
 
     return record;
 }

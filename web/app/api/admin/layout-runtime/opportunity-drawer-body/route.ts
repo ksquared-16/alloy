@@ -59,6 +59,8 @@ export async function GET(req: NextRequest) {
             opportunity_id: opportunityId,
             layout_source: result.layoutSource,
             section_count: result.doc.sections.length,
+            configured_field_count: result.binding.layoutItemRefKeys.length,
+            missing_refkey_count: result.binding.missingRefKeys.length,
         });
 
         return NextResponse.json({
@@ -74,6 +76,8 @@ export async function GET(req: NextRequest) {
                 layoutKey: result.plan.layoutKey,
                 entityType: result.plan.entityType,
             },
+            // RefKey → record binding evidence (acceptance criterion 4).
+            binding: result.binding,
         });
     } catch (err) {
         logDrawerVmRuntimeServer("compose_error", {

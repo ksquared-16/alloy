@@ -9,7 +9,12 @@ import {
     isLayoutRuntimeOpportunityDrawerBodyEnabledServer,
 } from "@/lib/layout/featureFlag";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
-import { buildOpportunityLayoutRuntimeRecordFromVm } from "@/lib/layout/runtime/buildOpportunityLayoutRuntimeRecordFromVm";
+import {
+    buildLayoutRuntimeRecordBindingEvidence,
+    buildOpportunityLayoutRuntimeRecordFromVm,
+    collectLayoutDocFieldRefKeys,
+} from "@/lib/layout/runtime/buildOpportunityLayoutRuntimeRecordFromVm";
+import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
     evaluateOpportunityLayoutRuntimeBodyFromVm,
     isOpportunityLayoutDocRenderable,
@@ -134,6 +139,81 @@ describe("buildOpportunityLayoutRuntimeRecordFromVm", () => {
         expect(JSON.stringify(record.enrollment_children)).not.toContain("cm-secret");
         expect(JSON.stringify(record.enrollment_children)).not.toContain("ocm-secret");
         expect(record._relations?.primary_contact?.handle).toBe("Jamie Johnson");
+    });
+});
+
+/** A LayoutDoc whose field refKeys are NOT in the old hardcoded record subset. */
+function customRefKeyDoc(): LayoutDoc {
+    const field = (id: string, refKey: string, label: string) => ({
+        id, kind: "field" as const, refKey, label, renderHint: "text" as const,
+    });
+    return {
+        formatVersion: 1,
+        surface: "drawer",
+        entityType: "opportunities",
+        sections: [
+            {
+                id: "sec1",
+                key: "summary",
+                title: "Summary",
+                rows: [
+                    {
+                        id: "r0",
+                        columns: [
+                            {
+                                id: "c0",
+                                width: 12,
+                                items: [
+                                    field("f-quote", "opportunity.quote_total", "Quote total"),
+                                    field("f-custom", "opportunity.custom_unmapped_field", "Custom field"),
+                                    field("f-rel", "person.relationship", "Relationship"),
+                                ],
+                            },
+                        ],
+                    },
+                ],
+            },
+        ],
+    } as unknown as LayoutDoc;
+}
+
+describe("doc-driven refKey → runtime record binding (blank-body fix)", () => {
+    it("carries every configured field refKey, mapping VM values where present", () => {
+        const doc = customRefKeyDoc();
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-1",
+            vmRecord: { name: "Nguyen Family", quote_total: "$4,200", person: undefined },
+            doc,
+        });
+        // VM-backed custom refKey resolves to its value…
+        expect(record["opportunity.quote_total"]).toBe("$4,200");
+        // …refKeys with no VM source are still PRESENT (set to ""), so the field
+        // renders a label + "—" instead of vanishing.
+        expect(record["opportunity.custom_unmapped_field"]).toBe("");
+        expect(record).toHaveProperty("person.relationship");
+    });
+
+    it("emits binding evidence with no missing refKeys after mapping", () => {
+        const doc = customRefKeyDoc();
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-1",
+            vmRecord: { quote_total: "$4,200" },
+            doc,
+        });
+        const evidence = buildLayoutRuntimeRecordBindingEvidence(doc, record);
+        expect(evidence.layoutItemRefKeys).toEqual(
+            expect.arrayContaining(["opportunity.quote_total", "opportunity.custom_unmapped_field", "person.relationship"]),
+        );
+        expect(evidence.missingRefKeys).toEqual([]);
+        expect(collectLayoutDocFieldRefKeys(doc)).toContain("opportunity.custom_unmapped_field");
+    });
+
+    it("without doc, unmapped refKeys remain absent (regression guard for the bug)", () => {
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-1",
+            vmRecord: { quote_total: "$4,200" },
+        });
+        expect(record["opportunity.custom_unmapped_field"]).toBeUndefined();
     });
 });
 
