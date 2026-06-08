@@ -57,6 +57,13 @@ export {
 } from "./childDrawerRelationshipProofLayout";
 
 export { buildProofOpportunityRecord, mergeApiRecordIntoProofRecord } from "./buildProofOpportunityRecord";
+export { buildOpportunityLayoutRuntimeRecordFromVm } from "./buildOpportunityLayoutRuntimeRecordFromVm";
+export {
+    evaluateOpportunityLayoutRuntimeBody,
+    evaluateOpportunityLayoutRuntimeBodyFromVm,
+    isOpportunityLayoutDocRenderable,
+} from "./evaluateOpportunityLayoutRuntimeBody";
+export { isLayoutItemSupportedForProduction, layoutDocHasProductionSupportedItems } from "./isLayoutItemSupportedForProduction";
 export { buildProofPersonRecord } from "./buildProofPersonRecord";
 export { buildProofChildRecord } from "./buildProofChildRecord";
 export { FUTURE_MODULE_METADATA_KEY } from "./proofLayoutHelpers";

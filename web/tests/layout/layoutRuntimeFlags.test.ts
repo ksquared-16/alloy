@@ -7,6 +7,7 @@ import {
     isLayoutRuntimeEnabledClient,
     isLayoutRuntimeEnabledServer,
     isLayoutRuntimeOpportunityDrawerEnabledServer,
+    isLayoutRuntimeOpportunityDrawerBodyEnabledServer,
     isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled,
     isLayoutRuntimeReadPathEnabled,
     isLayoutRuntimeShadowEnabledServer,
@@ -51,5 +52,6 @@ describe("layout runtime feature flags", () => {
     it("LAYOUT_RUNTIME_OPPORTUNITY_DRAWER defaults off", () => {
         expect(isLayoutRuntimeOpportunityDrawerEnabledServer()).toBe(false);
         expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled()).toBe(false);
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
     });
 });

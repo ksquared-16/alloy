@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
-import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview";
+import OpportunityDrawerOverviewBody from "@/components/admin/vmDrawer/OpportunityDrawerOverviewBody";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
 import OpportunityDrawerQueueNavigatorControls from "@/components/admin/OpportunityDrawerQueueNavigatorControls";
@@ -31,7 +31,6 @@ import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/dra
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
 import { useOpportunityDrawerLayoutRuntimeShadow } from "@/lib/layout/runtime/shadow/useOpportunityDrawerLayoutRuntimeShadow";
-import OpportunityDrawerLayoutRuntimeShadowDiagnostics from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeShadowDiagnostics";
 
 const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
 
@@ -427,38 +426,16 @@ export default function OpportunityDrawerVmRuntime() {
                             />
                         :   null}
                         {drawerTab === "overview" ?
-                            <div
-                                className="space-y-4"
-                                data-adminv2-opportunity-drawer-body="true"
-                                data-drawer-vm-runtime-overview="true"
-                            >
-                                <OpportunityDrawerInquiryWorkflowOverview
-                                    displayVm={displayVm}
-                                    drawerId={String(displayVm.entity.id)}
-                                    opportunitySingular={opportunitySingular}
-                                    onSelectTab={onTabSelect}
-                                />
-                                {layoutRuntimeShadow.shadowEnabled ?
-                                    <div
-                                        aria-hidden="true"
-                                        hidden
-                                        data-layout-runtime-shadow-mount="opportunity"
-                                        data-shadow-parity-score={
-                                            layoutRuntimeShadow.telemetry?.parityScore ?? ""
-                                        }
-                                        data-shadow-readiness={
-                                            layoutRuntimeShadow.telemetry?.readinessLevel ?? ""
-                                        }
-                                    />
-                                :   null}
-                                {layoutRuntimeShadow.diagnosticsEnabled ?
-                                    <OpportunityDrawerLayoutRuntimeShadowDiagnostics
-                                        telemetry={layoutRuntimeShadow.telemetry}
-                                        evaluating={layoutRuntimeShadow.evaluating}
-                                        lastError={layoutRuntimeShadow.lastError}
-                                    />
-                                :   null}
-                            </div>
+                            <OpportunityDrawerOverviewBody
+                                displayVm={displayVm}
+                                drawerId={String(displayVm.entity.id)}
+                                opportunitySingular={opportunitySingular}
+                                onSelectTab={onTabSelect}
+                                vmReady={Boolean(displayVm.structureSettled && committedVisible)}
+                                departmentId={displayVm.workspace.department_id}
+                                workUnitId={displayVm.workspace.work_unit_id}
+                                layoutRuntimeShadow={layoutRuntimeShadow}
+                            />
                         :   <OpportunityDrawerVmTabPanes
                                 drawerId={String(displayVm.entity.id)}
                                 drawerTab={drawerTab}

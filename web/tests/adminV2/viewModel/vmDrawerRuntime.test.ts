@@ -183,7 +183,8 @@ describe("VM drawer runtime wiring", () => {
         expect(vm).not.toContain("VmOpportunityStatusControl");
         expect(vm).not.toContain("statusBadge");
         expect(vm).not.toContain("postTabStrip=");
-        expect(vm).toContain("OpportunityDrawerInquiryWorkflowOverview");
+        expect(vm).toContain("OpportunityDrawerOverviewBody");
+        expect(vm).not.toContain("OpportunityDrawerInquiryWorkflowOverview");
         expect(vm).not.toContain("VmInquiryRightColumn");
         expect(vm).not.toContain("opportunityInquiryWorkflowHeaderStatus");
         expect(vm).not.toContain("opportunityDrawerOverviewRevealReady");

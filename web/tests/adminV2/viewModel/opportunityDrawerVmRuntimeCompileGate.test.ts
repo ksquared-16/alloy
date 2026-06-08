@@ -7,11 +7,15 @@
 
 import { describe, expect, it } from "vitest";
 import OpportunityDrawerVmRuntime from "@/components/admin/vmDrawer/OpportunityDrawerVmRuntime";
+import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyErrorBoundary";
+import OpportunityDrawerOverviewBody from "@/components/admin/vmDrawer/OpportunityDrawerOverviewBody";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
 
 describe("opportunityDrawerVmRuntime compile gate", () => {
     it("exports the production VM runtime drawer component", () => {
         expect(typeof OpportunityDrawerVmRuntime).toBe("function");
+        expect(typeof OpportunityDrawerOverviewBody).toBe("function");
+        expect(typeof OpportunityDrawerLayoutRuntimeBodyErrorBoundary).toBe("function");
     });
 
     it("resolveOpportunityQueueNavigatorPosition is linked (queuePosition useMemo dependency)", () => {

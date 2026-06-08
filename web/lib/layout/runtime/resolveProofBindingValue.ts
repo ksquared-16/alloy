@@ -56,6 +56,10 @@ function resolveRelationshipField(
 ): ProofBindingResolution {
     const relationKey = binding.relationKey;
     if (!relationKey) {
+        const direct = record[item.refKey];
+        if (direct !== undefined && direct !== null && direct !== "") {
+            return withBinding(safeDisplay(direct, item), binding);
+        }
         return withBinding(
             { display: null, isPlaceholder: true, renderHint: item.renderHint ?? "text", raw: null },
             binding,

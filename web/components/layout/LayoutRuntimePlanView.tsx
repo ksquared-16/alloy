@@ -29,6 +29,8 @@ import {
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { FUTURE_MODULE_METADATA_KEY } from "@/lib/layout/runtime/proofLayoutHelpers";
+import { isLayoutItemSupportedForProduction } from "@/lib/layout/runtime/isLayoutItemSupportedForProduction";
+import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
 import AdornmentIcon from "@/components/layout/AdornmentIcon";
 
 const TEXT = "#31394d";
@@ -37,6 +39,22 @@ const BORDER = "#e6e8ec";
 
 export type AdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
 const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
+const LayoutRuntimeVariantContext = createContext<"proof" | "production">("proof");
+
+const INTERNAL_OPERATOR_TOKENS =
+    /\b(inquiry_child|customer_member|ocm_id|child_inquiry)\b|^[0-9a-f-]{36}$/i;
+
+function sanitizeOperatorDisplay(display: string | null | undefined): string | null {
+    if (display == null) return null;
+    const text = String(display).trim();
+    if (!text || isOpaqueIdValue(text) || INTERNAL_OPERATOR_TOKENS.test(text)) return null;
+    return text;
+}
+
+function operatorLabel(item: LayoutItem, variant: "proof" | "production"): string {
+    if (variant === "production") return item.label?.trim() || "";
+    return item.label || item.refKey;
+}
 
 function Adorn({ item }: { item: LayoutItem }) {
     const onAction = useContext(AdornmentActionContext);
@@ -93,32 +111,36 @@ function ValueCell({
     item: LayoutItem;
     anchorEntity: string;
 }) {
+    const variant = useContext(LayoutRuntimeVariantContext);
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
+    const label = operatorLabel(item, variant);
+    const display =
+        variant === "production" ?
+            sanitizeOperatorDisplay(r.isPlaceholder ? null : r.display)
+        :   r.display;
 
     return (
         <div className="rounded border border-[#eef0f4] bg-white px-2.5 py-1.5">
-            <div className="flex flex-wrap items-center gap-1 text-[11px] font-medium" style={{ color: MUTED }}>
-                {item.label || item.refKey}
-                <BindingBadge resolution={r} />
-                {r.relationHandle ? (
-                    <span className="truncate text-[10px] font-normal text-[#4063b0]" title="Related entity handle">
-                        · {r.relationHandle}
-                    </span>
-                ) : null}
-            </div>
-            <div className="mt-0.5 flex items-center gap-1 text-sm" style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
+            {label ?
+                <div className="flex flex-wrap items-center gap-1 text-[11px] font-medium" style={{ color: MUTED }}>
+                    {label}
+                    {variant === "proof" ? <BindingBadge resolution={r} /> : null}
+                    {variant === "proof" && r.relationHandle ?
+                        <span className="truncate text-[10px] font-normal text-[#4063b0]" title="Related entity handle">
+                            · {r.relationHandle}
+                        </span>
+                    :   null}
+                </div>
+            :   null}
+            <div className="mt-0.5 flex items-center gap-1 text-sm" style={{ color: display ? TEXT : "#9aa4bf" }}>
                 {item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
                 <span>
-                    {r.isPlaceholder ? (
-                        <span title={r.reason ?? "Value unavailable in proof context"}>—</span>
-                    ) : r.renderHint === "status" ? (
-                        <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{r.display}</span>
-                    ) : r.renderHint === "primary_yes_no" ? (
-                        <span>{r.display}</span>
-                    ) : (
-                        r.display
-                    )}
+                    {!display ?
+                        <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>—</span>
+                    : r.renderHint === "status" ?
+                        <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{display}</span>
+                    :   display}
                 </span>
                 {item.adornment && item.adornment.position === "right" ? <Adorn item={item} /> : null}
             </div>
@@ -127,12 +149,16 @@ function ValueCell({
 }
 
 function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
+    const variant = useContext(LayoutRuntimeVariantContext);
     const hasSubgrid = Array.isArray(item.rows) && item.rows.length > 0;
+    const title = operatorLabel(item, variant);
     return (
         <div className="rounded-md border border-[#e6e8ec] bg-[#fbfcfe] p-2.5">
-            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                {item.label || item.refKey}
-            </div>
+            {title ?
+                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                    {title}
+                </div>
+            :   null}
             {hasSubgrid ? (
                 <div className="flex flex-col gap-2">
                     {item.rows!.map((row) => (
@@ -176,10 +202,12 @@ function RepeaterCellContent({ row, col }: { row: ProofRuntimeRecord; col: Layou
 }
 
 function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
+    const variant = useContext(LayoutRuntimeVariantContext);
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const isTable = item.displayMode === "table" && Array.isArray(item.columns) && item.columns.length > 0;
 
     if (!isTable) {
+        if (variant === "production") return null;
         return (
             <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2.5 py-2 text-xs text-[#9aa4bf]">
                 Repeater preview unavailable
@@ -190,18 +218,20 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
     const columns = item.columns as LayoutCollectionColumn[];
     const raw = record[item.source ?? item.refKey];
     const rows: ProofRuntimeRecord[] = Array.isArray(raw) ? (raw as ProofRuntimeRecord[]) : [];
-    const isEnrollmentChild = binding.relationKey === "enrollment_children";
+    const title = operatorLabel(item, variant);
 
     return (
         <div className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white">
             <div className="flex items-center justify-between border-b border-[#eef0f4] px-2.5 py-1.5">
                 <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                    {item.label || item.refKey}
+                    {title || "Related records"}
                 </span>
-                <span className="text-[10px]" style={{ color: MUTED }}>
-                    {rows.length} row{rows.length === 1 ? "" : "s"}
-                    {isEnrollmentChild ? " · enrollment context" : ""}
-                </span>
+                {variant === "proof" ?
+                    <span className="text-[10px]" style={{ color: MUTED }}>
+                        {rows.length} row{rows.length === 1 ? "" : "s"}
+                        {binding.relationKey === "enrollment_children" ? " · enrollment context" : ""}
+                    </span>
+                :   null}
             </div>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[640px] text-left text-xs">
@@ -216,7 +246,7 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
                         {rows.length === 0 ? (
                             <tr>
                                 <td colSpan={columns.length} className="px-2 py-3 text-[#9aa4bf]">
-                                    No rows in proof context.
+                                    {variant === "production" ? "No rows yet." : "No rows in proof context."}
                                 </td>
                             </tr>
                         ) : (
@@ -275,29 +305,27 @@ function FutureModulePlaceholder({ title }: { title: string }) {
 }
 
 function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: LayoutItem }) {
+    const variant = useContext(LayoutRuntimeVariantContext);
     const key = item.refKey;
-    const title = item.label || key;
+    const title = operatorLabel(item, variant) || "Details";
     const isFutureModule = item.metadata?.[FUTURE_MODULE_METADATA_KEY] === true;
 
-    if (isFutureModule) {
-        return (
-            <WidgetChrome title={title}>
-                <FutureModulePlaceholder title={title} />
-            </WidgetChrome>
-        );
+    if (isFutureModule || (variant === "production" && key === "actions")) {
+        return null;
     }
 
-    const empty = <span className="text-xs text-[#9aa4bf]">No {title.toLowerCase()} in proof context</span>;
+    const empty = <span className="text-xs text-[#9aa4bf]">No {title.toLowerCase()} yet</span>;
 
     if (key === "tasks" || key === "reminders") {
         const rows = widgetRows(record, key);
+        if (variant === "production" && rows.length === 0) return null;
         return (
             <WidgetChrome title={title}>
                 {rows.length === 0 ? empty : (
                     <ul className="flex flex-col gap-1">
                         {rows.map((r, i) => (
                             <li key={i} className="flex items-center justify-between rounded bg-[#f7f9fc] px-2 py-1 text-xs" style={{ color: TEXT }}>
-                                <span className="truncate">{r.label}</span>
+                                <span className="truncate">{sanitizeOperatorDisplay(r.label) ?? "—"}</span>
                                 {r.meta ? <span className="ml-2 shrink-0 text-[10px]" style={{ color: MUTED }}>{r.meta}</span> : null}
                             </li>
                         ))}
@@ -320,10 +348,12 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             </WidgetChrome>
         );
     }
-    return <WidgetChrome title={title}>{empty}</WidgetChrome>;
+    return variant === "production" ? null : <WidgetChrome title={title}>{empty}</WidgetChrome>;
 }
 
 function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
+    const variant = useContext(LayoutRuntimeVariantContext);
+    if (variant === "production" && !isLayoutItemSupportedForProduction(item)) return null;
     if (!shouldRenderProofItem(item)) return null;
 
     switch (item.kind) {
@@ -381,9 +411,17 @@ export type LayoutRuntimePlanViewProps = {
     record: ProofRuntimeRecord;
     plan?: LayoutRuntimePlan;
     onAdornmentAction?: AdornmentActionHandler;
+    /** `proof` shows binding diagnostics; `production` is operator-safe (C1b). */
+    variant?: "proof" | "production";
 };
 
-export default function LayoutRuntimePlanView({ doc, record, plan: planProp, onAdornmentAction }: LayoutRuntimePlanViewProps) {
+export default function LayoutRuntimePlanView({
+    doc,
+    record,
+    plan: planProp,
+    onAdornmentAction,
+    variant = "proof",
+}: LayoutRuntimePlanViewProps) {
     const plan = useMemo(() => planProp ?? buildLayoutRuntimePlan(doc), [planProp, doc]);
     const anchorEntity = plan.entityType;
 
@@ -392,20 +430,24 @@ export default function LayoutRuntimePlanView({ doc, record, plan: planProp, onA
     }
 
     return (
-        <AdornmentActionContext.Provider value={onAdornmentAction}>
-            <div className="flex flex-col gap-3" style={{ border: `0 solid ${BORDER}` }}>
-                <div className="rounded-md border border-[#e6e8ec] bg-[#fbfcfe] px-3 py-2 text-[11px]" style={{ color: MUTED }}>
-                    Runtime plan · {plan.layoutKey ?? "default"} · bindings:{" "}
-                    {Object.entries(plan.bindingClassCounts)
-                        .filter(([, n]) => n > 0)
-                        .map(([k, n]) => `${k}=${n}`)
-                        .join(", ")}
+        <LayoutRuntimeVariantContext.Provider value={variant}>
+            <AdornmentActionContext.Provider value={onAdornmentAction}>
+                <div className="flex flex-col gap-3" style={{ border: `0 solid ${BORDER}` }}>
+                    {variant === "proof" ?
+                        <div className="rounded-md border border-[#e6e8ec] bg-[#fbfcfe] px-3 py-2 text-[11px]" style={{ color: MUTED }}>
+                            Runtime plan · {plan.layoutKey ?? "default"} · bindings:{" "}
+                            {Object.entries(plan.bindingClassCounts)
+                                .filter(([, n]) => n > 0)
+                                .map(([k, n]) => `${k}=${n}`)
+                                .join(", ")}
+                        </div>
+                    :   null}
+                    {doc.sections.map((section) => (
+                        <SectionView key={section.id} record={record} section={section} anchorEntity={anchorEntity} />
+                    ))}
                 </div>
-                {doc.sections.map((section) => (
-                    <SectionView key={section.id} record={record} section={section} anchorEntity={anchorEntity} />
-                ))}
-            </div>
-        </AdornmentActionContext.Provider>
+            </AdornmentActionContext.Provider>
+        </LayoutRuntimeVariantContext.Provider>
     );
 }
 

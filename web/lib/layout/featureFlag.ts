@@ -71,6 +71,18 @@ export function isLayoutRuntimeOpportunityDrawerShadowReadPathEnabledClient(): b
     return isLayoutRuntimeEnabledClient() && isLayoutRuntimeOpportunityDrawerEnabledClient();
 }
 
+/**
+ * C1b — visible opportunity drawer overview body from layout runtime.
+ * Requires master runtime + per-entity opportunity drawer flag. Default: off.
+ */
+export function isLayoutRuntimeOpportunityDrawerBodyEnabledServer(): boolean {
+    return isLayoutRuntimeEnabledServer() && isLayoutRuntimeOpportunityDrawerEnabledServer();
+}
+
+export function isLayoutRuntimeOpportunityDrawerBodyEnabledClient(): boolean {
+    return isLayoutRuntimeEnabledClient() && isLayoutRuntimeOpportunityDrawerEnabledClient();
+}
+
 /** Optional dev/staging diagnostics panel inside opportunity drawer. Default: off. */
 export function isLayoutRuntimeOpportunityDrawerShadowDiagnosticsEnabledClient(): boolean {
     return (
