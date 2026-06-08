@@ -72,9 +72,16 @@ describe("field catalog picker — childcare starter catalog", () => {
 });
 
 describe("childcare catalog coverage", () => {
-    it("lead catalog includes tour and program fields", () => {
+    it("lead catalog includes tour fields but defers enrollment to child group", () => {
         const keys = childcareCatalogRefKeysForOperatorEntity("lead");
         expect(keys).toContain("opportunity.tour_date");
-        expect(keys).toContain("opportunity.program_type");
+        expect(keys).not.toContain("opportunity.program_type");
+    });
+
+    it("household catalog excludes relationship-projection duplicates", () => {
+        const keys = childcareCatalogRefKeysForOperatorEntity("household");
+        expect(keys).toContain("customer.name");
+        expect(keys).not.toContain("customer.primary_contact");
+        expect(keys).not.toContain("customer.address_line1");
     });
 });

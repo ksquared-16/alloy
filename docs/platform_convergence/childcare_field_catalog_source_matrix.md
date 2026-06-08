@@ -2,9 +2,9 @@
 
 **Path:** `docs/platform_convergence/childcare_field_catalog_source_matrix.md`  
 **Date:** 2026-06-08  
-**Scope:** Audit / correction pass — **no new seeds or picker changes until reviewed**  
-**Catalog under review:** `web/lib/layout/childcareLayoutFieldCatalog.ts` (56 fields)  
-**Related migration (review only, do not extend):** `supabase/migrations/20260608120000_childcare_layout_field_catalog_seed.sql`
+**Scope:** Audit / correction pass — catalog + migration **draft** updated; **no commit, no migration apply** until sign-off  
+**Catalog under review:** `web/lib/layout/childcareLayoutFieldCatalog.ts`  
+**Related migration (DRAFT — do not apply):** `supabase/migrations/20260608120000_childcare_layout_field_catalog_seed.sql`
 
 ---
 
@@ -72,19 +72,19 @@ Split into **durable child profile**, **enrollment/participation (OCM)**, **medi
 |---|---|---|---|---|---|---|---|---|
 | Child | First name | `child.first_name` | Native column | `customer_members` | `customer_members.first_name` | Yes | **Fix refKey** | Catalog maps to `person` field_def — **wrong**. Durable child ≠ person row unless `person_id` bridge |
 | Child | Last name | `child.last_name` | Native column | `customer_members` | `customer_members.last_name` | Yes | **Fix refKey** | Same correction |
-| Child | Preferred name | `child.preferred_name` | Native column | `persons` (when bridged) | `persons.preferred_name` via `customer_members.person_id` | Yes | **Defer** | Native on **`persons`**, not `customer_members`. Only valid when child has `person_id` link |
-| Child | Date of birth | `child.date_of_birth` | Native column | `customer_members` | `customer_members.dob` | Yes | **Fix refKey** | Catalog uses `person.date_of_birth` — use **`customer_members.dob`** as SoT per entity-model |
-| Child | Age | `child.age` | Computed field | `customer_members` / `persons` | Derived from DOB | No | **Yes** | Computed projection; blank until FC-3 |
-| Child | Gender | `person.gender` | Config field | `persons` (via bridge) | `field_values` (entity_type=person) | Yes | **Fix refKey** | No native gender column; seeded select. RefKey should be **`child.gender`** with resolver via member→person or config on member |
-| Child | Program interest | `inquiry_child.desired_program_type` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_program_type` | Yes | **Yes** | Enrollment grain; internal namespace OK |
+| Child | Preferred name | `child.preferred_name` | Config field | `customer_members` | `field_values` (entity_type=**customer_member**) | Yes | **Yes** | **Moved from `person.preferred_name`.** Not a native `customer_members` column; requires FC-CM-1 migration |
+| Child | Date of birth | `child.date_of_birth` | Native column | `customer_members` | `customer_members.dob` | Yes | **Yes** | |
+| Child | Age | `child.age` | Computed field | `customer_members` | Derived from `customer_members.dob` | No | **Yes** | Computed projection; blank until FC-3 |
+| Child | Gender | `child.gender` | Config field | `customer_members` | `field_values` (entity_type=**customer_member**) | Yes | **Yes** | **Moved from `person.gender`.** Legacy person seed (`20260529220000`) is adult/legacy bridge only — not childcare child profile SoT |
+| Child | Program interest | `inquiry_child.desired_program_type` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_program_type` | Yes | **Yes** | Enrollment grain only — not on Lead |
 | Child | Schedule interest | `inquiry_child.desired_schedule_type` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_schedule_type` | Yes | **Yes** | |
-| Child | Desired start date | `inquiry_child.desired_start_date` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_start_date` | Yes | **Yes** | Per-child; may inherit opportunity-level date in UI |
-| Child | Room / cohort | `inquiry_child.program_room_cohort_key` | Native column | `opportunity_customer_members` | `opportunity_customer_members.program_room_cohort_key` | Yes | **Yes** | Usually unit `locations.id` or org cohort key |
-| Child | Location / school | `inquiry_child.location_id` | Native column (FK) | `opportunity_customer_members` → `locations` | `opportunity_customer_members.location_id` | Yes | **Yes** | Displays site **label** via relationship — not raw UUID in UI |
+| Child | Desired start date | `inquiry_child.desired_start_date` | Native column | `opportunity_customer_members` | `opportunity_customer_members.desired_start_date` | Yes | **Yes** | Per-child; not duplicated on Lead |
+| Child | Room / cohort | `inquiry_child.program_room_cohort_key` | Native column | `opportunity_customer_members` | `opportunity_customer_members.program_room_cohort_key` | Yes | **Yes** | |
+| Child | Location / school | `inquiry_child.location_id` | Native column (FK) | `opportunity_customer_members` → `locations` | `opportunity_customer_members.location_id` | Yes | **Yes** | School/site address ≠ household address |
 | Child | Enrollment status | `inquiry_child.outcome_status_key` | Native column | `opportunity_customer_members` | `opportunity_customer_members.outcome_status_key` | Yes | **Yes** | Per-child lifecycle SoT |
-| Child | Allergies | `person.allergies` | Config field | `persons` (child profile) | `field_values` (entity_type=person) | Yes | **Fix refKey** | Childcare seed on **person** entity; display on Child group but storage is person config — OK only if child has `person_id` |
-| Child | Medical notes | `person.medical_notes` | Config field | `persons` | `field_values` | Yes | **Fix refKey** | Same as allergies |
-| Child | Special instructions | `person.special_instructions` | Config field | `persons` | `field_values` | Yes | **Hide until confirmed** | Seeded in `20260608120000` only — verify product intent vs `authorized_pickup_notes` |
+| Child | Allergies | `child.allergies` | Config field | `customer_members` | `field_values` (entity_type=**customer_member**) | Yes | **Yes** | **Moved from `person.allergies`.** Legacy MVP seed on person is deprecated for child layouts |
+| Child | Medical notes | `child.medical_notes` | Config field | `customer_members` | `field_values` (entity_type=**customer_member**) | Yes | **Yes** | **Moved from `person.medical_notes`** |
+| Child | Special instructions | `child.special_instructions` | Config field | `customer_members` | `field_values` (entity_type=**customer_member**) | Yes | **Yes** | Distinct from person `authorized_pickup_notes` (household pickup policy) |
 | Child | Notes | `inquiry_child.notes` | Native column | `opportunity_customer_members` | `opportunity_customer_members.notes` | Yes | **Yes** | Enrollment-context notes, not durable child profile |
 
 ---
@@ -121,7 +121,7 @@ Household = **`customers`** table (no separate `household` table). Family addres
 | Household | Secondary contact | `customer.secondary_contact` | Relationship projection | `customer_persons` | Non-primary household person | Partial | **Fix refKey** | Same — relationship, not config |
 | Household | Address | `customer.address_line1` | Relationship projection | `customers` → `locations` | Primary household **`locations.address1`** (+ city/state/zip) | Partial | **Fix refKey** | **Do not duplicate on person.** Seeded `customer.address_line1` config is interim only |
 | Household | Family notes | `customer.family_notes` | Config field | `customers` | `field_values` (entity_type=customer) | Yes | **Yes** | Childcare MVP seed |
-| Household | Household status | `customer.household_status` | Config field / native overlap | `customers` | `field_values` **or** native `customers.status` / `status_key` | Partial | **Fix** | Native `customers.status` exists; seeded `household_status` may duplicate — pick one SoT |
+| Household | Household status | `customer.status_key` | Native column | `customers` | **`customers.status_key`** (not config `household_status`) | Partial | **Yes** | Native SoT; hide config duplicate `household_status` |
 | Household | Family number | `customer.customer_number` | Native column | `customers` | `customers.customer_number` | No | **Yes** | System-assigned record number; display OK, not editable |
 
 ---
@@ -132,14 +132,16 @@ Site/school address ≠ household address. Location rows use native address colu
 
 | Operator Group | Display Field | RefKey | Source Type | Source Table / Relation | Storage Path | Editable? | Picker? | Notes |
 |---|---|---|---|---|---|---|---|---|
-| Location | Location name | `location.name` | Native column | `locations` | **`locations.label`** (not `name`) | Yes | **Fix refKey** | Migration seeded metadata `name` — **misaligned with schema** |
-| Location | Address | `location.address_line1` | Native column | `locations` | **`locations.address1`** (+ address2, city, state, postal_code) | Yes | **Fix refKey** | Migration seeded metadata `address_line1` — use native columns |
-| Location | Phone | `location.site_phone` | Config field | `locations` | `locations.metadata` via field_def (`site_phone`) | Yes | **Yes** | From `20260529160000` convergence |
+| Location | Location name | `location.label` | Native column | `locations` | **`locations.label`** | Yes | **Yes** | Fixed refKey (was metadata `name`) |
+| Location | Address line 1 | `location.address1` | Native column | `locations` | **`locations.address1`** | Yes | **Yes** | School/site address only |
+| Location | City | `location.city` | Native column | `locations` | `locations.city` | Yes | **Yes** | |
+| Location | State | `location.state` | Native column | `locations` | `locations.state` | Yes | **Yes** | |
+| Location | ZIP code | `location.postal_code` | Native column | `locations` | `locations.postal_code` | Yes | **Yes** | |
+| Location | Phone | `location.site_phone` | Config field | `locations` | `locations.metadata.site_phone` via field_def | Yes | **Yes** | Confirmed in `20260529160000` |
 | Location | Director | `location.director_name` | Config field | `locations` | `locations.metadata.director_name` | Yes | **Yes** | |
 | Location | Capacity | `location.capacity` | Config field | `locations` | `locations.metadata.capacity` | Yes | **Yes** | |
-| Location | Programs offered | `location.category` | Config field | `locations` | `locations.metadata.category` (option_set) | Yes | **Yes** | Room/site program category — not lead program interest |
-| Location | Hours | `location.operating_hours` | Config field | `locations` | `field_values` / metadata | Partial | **Yes** | Seeded in `20260608120000` only |
-| Location | Status | `location.status` | Native column / config overlap | `locations` | Native **`locations.status_key`** + seeded metadata `status` | Partial | **Fix** | Prefer native `status_key`; remove duplicate config if redundant |
+| Location | Programs offered | `location.category` | Config field | `locations` | `locations.metadata.category` (option_set) | Yes | **Yes** | Site program category — not lead program interest |
+| Location | Status | `location.status_key` | Native column | `locations` | **`locations.status_key`** | Partial | **Yes** | Prefer native; hide metadata duplicate `location.status` |
 
 ---
 
@@ -169,7 +171,11 @@ Reference: `docs/platform_convergence/relationship_reference_runtime_notes.md` �
 | `location.name` | Wrong path (metadata vs `label`) | **Hide** until refKey → `location.label` |
 | `location.address_line1` | Wrong path | **Hide** until refKey maps to native address columns |
 | `opportunity.program_type` / `schedule_type` / `desired_start_date` | Grain overlap with OCM | **Defer** or keep with explicit “lead-level” subtitle |
-| `person.special_instructions` | Overlap with `authorized_pickup_notes` | **Review** before picker exposure |
+| `person.gender` | Legacy person-entity child profile seed | **Remove from childcare picker**; use `child.gender` on customer_member |
+| `person.allergies` | Legacy person-entity child medical seed | **Remove**; use `child.allergies` on customer_member |
+| `person.medical_notes` | Legacy person-entity child medical seed | **Remove**; use `child.medical_notes` on customer_member |
+| `person.preferred_name` | Native on persons but wrong grain for child profile | **Remove from Child group**; use `child.preferred_name` on customer_member |
+| `person.special_instructions` | Wrong entity / overlaps pickup notes | **Remove**; use `child.special_instructions` on customer_member |
 
 ---
 
@@ -202,26 +208,148 @@ Optional FC-3 relationship fields (do not seed as person config):
 | `location.name`, `location.address_line1` | Metadata storage vs native `label`/`address1` | **Follow-up migration** to align field_def config with native columns or remove |
 | `person.sms_opt_in`, `email_opt_in` | Coexist with `communication_opt_out` | Document opt-in vs opt-out semantics before production |
 
-**No new migration** until product sign-off on this matrix.
+**No migration apply** until product sign-off on § Final source corrections below.
 
 ---
 
-## Picker vs runtime (unchanged this pass)
+## Final source corrections before commit
 
-- Layout picker may list a field before FC-3 resolver exists — values render blank per doctrine.
-- This audit does **not** change drawer runtime, VM composers, queue runtime, or reveal gates.
-- Next code step (after review): update `childcareLayoutFieldCatalog.ts` refKeys + hide list only — **no seed expansion**.
+**Date:** 2026-06-08 (final pass)  
+**Status:** Catalog + migration **draft** updated in working tree — **not committed, not applied**
+
+### Doctrine applied
+
+| Entity | Role | Layout picker group |
+|--------|------|---------------------|
+| `persons` | Adult/contact identity only | Parent / Contact |
+| `customer_members` | Durable child profile (name, DOB, medical config) | Child |
+| `opportunity_customer_members` | Per-child enrollment on a lead | Child — Enrollment details |
+| `customers` | Household / family | Household |
+| `locations` | School/site (and separately, household address via FK — FC-3) | Location |
+| `opportunities` | Lead / case coordination | Lead |
+
+**Child ≠ person.** Optional `customer_members.person_id` bridge exists for legacy/sync but is **not** the layout catalog storage path for child profile or medical fields.
 
 ---
 
-## Sign-off checklist
+### 1. Fields moved from `person.*` to `child.*` / `customer_member`
 
-- [ ] Product confirms lead-level vs child-level program/schedule/start grain
-- [ ] Product confirms household address = customer location link (not person config)
-- [ ] Employee fields added to catalog with native refKeys
-- [ ] Incorrectly seeded field_definitions marked deprecated in Settings
-- [ ] FC-3 mapper tickets filed per corrected storage paths
+| Display label | Old refKey (wrong) | New refKey (correct) | Storage path |
+|---------------|-------------------|----------------------|--------------|
+| Preferred name | `child.preferred_name` → person bridge | `child.preferred_name` | `field_values` entity_type=`customer_member` |
+| Gender | `person.gender` | `child.gender` | `field_values` entity_type=`customer_member` |
+| Allergies | `person.allergies` | `child.allergies` | `field_values` entity_type=`customer_member` |
+| Medical notes | `person.medical_notes` | `child.medical_notes` | `field_values` entity_type=`customer_member` |
+| Special instructions | `person.special_instructions` | `child.special_instructions` | `field_values` entity_type=`customer_member` |
+
+**Already correct (native `customer_members`):** `child.first_name`, `child.last_name`, `child.date_of_birth` → columns `first_name`, `last_name`, `dob`.
+
+**Already correct (OCM):** all `inquiry_child.*` enrollment fields.
+
+**Computed:** `child.age` from `customer_members.dob`.
 
 ---
 
-*Audit pass only. Catalog file and migration unchanged in this commit.*
+### 2. Fields removed from picker
+
+| RefKey | Reason |
+|--------|--------|
+| `person.gender`, `person.allergies`, `person.medical_notes`, `person.preferred_name`, `person.special_instructions` | Legacy person-entity child profile — superseded by `child.*` |
+| `person.address_line1`, `person.secondary_phone`, `person.relationship_to_child` | Wrong grain / relationship projection |
+| `customer.primary_contact`, `customer.secondary_contact`, `customer.address_line1`, `customer.household_status` | Config duplicates; use relationship or native `status_key` |
+| `location.name`, `location.address_line1`, `location.status`, `location.operating_hours` | Misaligned metadata keys |
+| `opportunity.program_type`, `opportunity.schedule_type`, `opportunity.desired_start_date`, `opportunity.campaign`, `opportunity.channel` | Per-child enrollment belongs on OCM only |
+
+---
+
+### 3. Fields deferred to FC-3 relationship projections
+
+| Suggested refKey | Source | Notes |
+|------------------|--------|-------|
+| `customer.household_address` | `customers` → primary household `locations` (`location_type=address`) | **Not** person address; **not** site address |
+| `customer.primary_contact_name` | `customers.primary_contact_id` → `persons` | Display projection |
+| `person.secondary_contact_phone` | Secondary household person → `persons.phone` | Not a native person column on primary contact |
+
+---
+
+### 4. Fields requiring a future Supabase migration (FC-CM-1)
+
+Before child config fields can persist correctly:
+
+1. Add **`customer_member`** to `FIELD_DEFINITION_ENTITY_TYPES` allowlist (`inquiryChildFieldRegistry.ts` / admin field API).
+2. Seed `field_definitions` for entity_type **`customer_member`**:
+   - `preferred_name` (text)
+   - `gender` (select; option_set `child_gender` or reuse `person_gender` with new entity binding)
+   - `allergies` (text)
+   - `medical_notes` (text)
+   - `special_instructions` (text)
+3. Ensure PATCH/`field_values` write path accepts `entity_type=customer_member`, `entity_id=customer_members.id`.
+4. **Do not** migrate existing person-entity `field_values` automatically — data audit required for orgs that stored child medical data on linked `person_id`.
+
+Catalog constant: `CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS` in `childcareLayoutFieldCatalog.ts`.
+
+---
+
+### 5. Fields safe to seed now (layout catalog migration draft)
+
+| entity_type | field_key | Notes |
+|-------------|-----------|-------|
+| `opportunity` | `tour_date`, `tour_time`, `tour_status` | Case-level tour scheduling |
+| `person` | `communication_preference`, `sms_opt_in`, `email_opt_in`, `employer`, `contact_notes` | Person/contact-level only |
+| `customer` | `family_notes` | Household config |
+
+**Native columns — no field_def seed required for picker:** `person.is_employee`, `person.employee_id`, `customer.name`, `customer.status_key`, `customer.customer_number`, all `location.label` / address columns, `location.status_key`, OCM native columns (already in `20260607120000` parity migration).
+
+**Already seeded elsewhere — do not duplicate in layout catalog migration:** `location.site_phone`, `director_name`, `capacity`, `category` (`20260529160000`); person `allergies`/`medical_notes` on person entity from childcare MVP (`20260430211000`) — **leave for person drawer legacy; do not re-seed for layout child group**.
+
+---
+
+### 6. Fields not safe to seed yet
+
+| Field | Why |
+|-------|-----|
+| `child.gender`, `child.allergies`, `child.medical_notes`, `child.preferred_name`, `child.special_instructions` | Need FC-CM-1 `customer_member` field_definitions + write path |
+| `customer.household_address` | FC-3 relationship resolver |
+| `customer.primary_contact` / `secondary_contact` | FC-3 relationship resolver |
+| `person.address_line1` | FC-3 household address projection |
+| `opportunity.program_type` / `schedule_type` / `desired_start_date` | Wrong grain — OCM only unless product adds explicit case-level SoT |
+
+---
+
+### Parent / Contact — confirmed person-owned
+
+| Field | Storage | Picker |
+|-------|---------|--------|
+| `person.first_name`, `last_name`, `email`, `phone` | Native `persons` | Yes |
+| `person.is_employee`, `employee_id` | Native `persons` | Yes |
+| `person.communication_preference`, `sms_opt_in`, `email_opt_in` | `field_values` on person | Yes — contact consent |
+| `person.employer`, `contact_notes` | `field_values` on person | Yes — adult contact context |
+
+---
+
+### Lead vs child enrollment — no duplication
+
+| Field | Lead (`opportunity.*`) | Child enrollment (`inquiry_child.*`) |
+|-------|------------------------|--------------------------------------|
+| Program interest | **Removed** | `desired_program_type` |
+| Schedule interest | **Removed** | `desired_schedule_type` |
+| Desired start date | **Removed** | `desired_start_date` |
+
+Case-level tour fields remain on Lead only.
+
+---
+
+### Sign-off checklist (updated)
+
+- [x] Child medical/profile fields no longer use `person.*` refKeys in catalog
+- [x] Durable child name/DOB on `customer_members` native columns
+- [x] Lead enrollment duplicates removed from Lead group
+- [x] Household status uses native `customer.status_key`
+- [x] Location uses native address columns + confirmed metadata config
+- [ ] FC-CM-1 migration authored and applied (customer_member field_definitions)
+- [ ] FC-3 household address / contact projections
+- [ ] Data audit for legacy person-entity child medical values
+
+---
+
+*Final correction pass — catalog and migration draft updated; awaiting commit approval.*

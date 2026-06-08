@@ -227,10 +227,9 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
     opportunity: [
         field("opportunity", "status_key", "Lead status", "status"),
         field("opportunity", "source", "Lead source", "text"),
-        field("opportunity", "channel", "Channel", "text"),
-        field("opportunity", "campaign", "Campaign", "text"),
         field("opportunity", "tour_status", "Tour status", "status"),
         field("opportunity", "tour_date", "Tour date", "date"),
+        field("opportunity", "tour_time", "Tour time", "text"),
         field("opportunity", "customer_notes", "Lead notes", "text"),
     ],
     person: [
@@ -238,19 +237,14 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
         field("person", "last_name", "Last name", "text"),
         field("person", "phone", "Phone", "phone"),
         field("person", "email", "Email", "text"),
-        field("person", "secondary_phone", "Secondary phone", "phone"),
+        field("person", "is_employee", "Employee", "boolean"),
+        field("person", "employee_id", "Employee ID", "text"),
     ],
-    /**
-     * Durable child attributes only. Interim catalog bridge: rows may load from
-     * person entity_type in field_definitions — person ≠ child; durable truth
-     * remains customer_member per Child Model doctrine.
-     */
+    /** Durable child profile — customer_members (manifest bootstrap when no field_definitions). */
     child: [
         field("child", "first_name", "First name", "text"),
         field("child", "last_name", "Last name", "text"),
-        field("child", "name", "Child name", "text"),
         field("child", "date_of_birth", "Date of birth", "date"),
-        field("child", "age_band", "Age band", "text"),
     ],
     inquiry_child: INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((row) =>
         field("inquiry_child", row.field_key, inquiryChildPickerFieldLabel(row.field_key, row.label), row.field_type),
@@ -388,8 +382,8 @@ export const PERSON_DRAWER_CATALOG_GROUPS: LayoutCatalogGroup[] = [
             wlField("person", "Parent / Contact", "person.email", "Email", "text"),
             wlField("person", "Parent / Contact", "person.first_name", "First name", "text"),
             wlField("person", "Parent / Contact", "person.last_name", "Last name", "text"),
-            wlField("person", "Parent / Contact", "person.secondary_contact_name", "Secondary contact", "text"),
-            wlField("person", "Parent / Contact", "person.secondary_phone", "Secondary phone", "phone"),
+            wlField("person", "Parent / Contact", "person.is_employee", "Employee", "boolean"),
+            wlField("person", "Parent / Contact", "person.employee_id", "Employee ID", "text"),
         ],
     },
 ];
@@ -400,9 +394,9 @@ export const CHILD_DRAWER_CATALOG_GROUPS: LayoutCatalogGroup[] = [
         entityKey: "child",
         entityLabel: "Child",
         fields: [
-            wlField("child", "Child", "child.name", "Child name", "text"),
+            wlField("child", "Child", "child.first_name", "First name", "text"),
+            wlField("child", "Child", "child.last_name", "Last name", "text"),
             wlField("child", "Child", "child.date_of_birth", "Date of birth", "date"),
-            wlField("child", "Child", "child.age_band", "Age band", "text"),
         ],
     },
     {

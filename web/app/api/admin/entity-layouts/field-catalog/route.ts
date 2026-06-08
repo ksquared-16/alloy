@@ -4,8 +4,8 @@
  *   GET /api/admin/entity-layouts/field-catalog?entity_type=opportunities
  *
  * Returns canonical, manifest-filtered refKeys safe for /adminV2/settings/layouts.
- * Opportunity, person, and inquiry_child load from field_definitions; child
- * (durable) loads person registry rows as an interim bridge (person ≠ child).
+ * Opportunity, person, inquiry_child, customer, and location load from
+ * field_definitions where seeded; durable child profile bootstraps from manifest.
  *
  * Read-only, org-scoped, flag-gated. Does not touch live runtime.
  */
@@ -37,19 +37,19 @@ import {
     collectRefKeysFromCatalogGroups,
     isBlockedLayoutPickerRefKey,
 } from "@/lib/layout/platformFieldResolutionManifest";
-import { isChildcareCatalogRefKey } from "@/lib/layout/childcareLayoutFieldCatalog";
+import {
+    CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP,
+    isChildcareCatalogRefKey,
+} from "@/lib/layout/childcareLayoutFieldCatalog";
 
-/**
- * Group → field_definitions entity_type (null = curated-only bootstrap).
- * child group reads person rows as interim bridge — not person == child.
- */
+/** Group → field_definitions entity_type (null = manifest bootstrap only). */
 const GROUP_FIELD_ENTITY: Record<LayoutEntityGroupKey, string | null> = {
-    opportunity: "opportunity",
-    person: "person",
-    child: "person",
+    opportunity: CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP.opportunity,
+    person: CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP.person,
+    child: CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP.child,
     inquiry_child: INQUIRY_CHILD_ENTITY_TYPE,
-    customer: "customer",
-    location: "location",
+    customer: CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP.customer,
+    location: CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP.location,
 };
 
 function filterLoadedFields(
