@@ -18,6 +18,8 @@ import { isLayoutItemSupportedForProduction } from "@/lib/layout/runtime/isLayou
 import { futureModuleWidget } from "@/lib/layout/runtime/proofLayoutHelpers";
 import {
     resolveOpportunityOverviewBodyPresentation,
+    shouldFallbackLayoutFetchOnTimeout,
+    OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS,
 } from "@/lib/layout/runtime/useOpportunityDrawerLayoutRuntimeBody";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
 import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyErrorBoundary";
@@ -67,6 +69,30 @@ describe("resolveOpportunityOverviewBodyPresentation", () => {
         expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "loading" })).toBe("hold");
         expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "fallback" })).toBe("vm");
         expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "ready" })).toBe("layout");
+    });
+
+    it("max hold timeout falls back to VM presentation", () => {
+        expect(OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS).toBeGreaterThanOrEqual(1500);
+        expect(OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS).toBeLessThanOrEqual(2000);
+
+        const started = 1_000_000;
+        expect(
+            shouldFallbackLayoutFetchOnTimeout({
+                cutoverEnabled: true,
+                phase: "loading",
+                fetchStartedAtMs: started,
+                nowMs: started + OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS - 1,
+            }),
+        ).toBe(false);
+        expect(
+            shouldFallbackLayoutFetchOnTimeout({
+                cutoverEnabled: true,
+                phase: "loading",
+                fetchStartedAtMs: started,
+                nowMs: started + OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS,
+            }),
+        ).toBe(true);
+        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "fallback" })).toBe("vm");
     });
 });
 

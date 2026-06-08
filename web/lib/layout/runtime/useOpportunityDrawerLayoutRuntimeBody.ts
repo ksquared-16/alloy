@@ -40,6 +40,22 @@ export type UseOpportunityDrawerLayoutRuntimeBodyResult = {
 
 export type OpportunityLayoutRuntimeBodyPresentation = "vm" | "hold" | "layout";
 
+/** Max coordinated hold before falling back to VM body when layout fetch hangs. */
+export const OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS = 1750;
+
+export function shouldFallbackLayoutFetchOnTimeout(input: {
+    cutoverEnabled: boolean;
+    phase: OpportunityLayoutRuntimeBodyPhase;
+    fetchStartedAtMs: number | null;
+    nowMs?: number;
+}): boolean {
+    if (!input.cutoverEnabled) return false;
+    if (input.phase !== "loading" && input.phase !== "idle") return false;
+    if (input.fetchStartedAtMs == null) return false;
+    const now = input.nowMs ?? Date.now();
+    return now - input.fetchStartedAtMs >= OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS;
+}
+
 export function resolveOpportunityOverviewBodyPresentation(input: {
     cutoverEnabled: boolean;
     phase: OpportunityLayoutRuntimeBodyPhase;
@@ -87,6 +103,24 @@ export function useOpportunityDrawerLayoutRuntimeBody(
         setPhase("loading");
         setLastError(null);
 
+        const timeoutId = window.setTimeout(() => {
+            if (cancelled) return;
+            setPhase((current) => {
+                if (current !== "loading" && current !== "idle") return current;
+                setLastError("layout_fetch_timeout");
+                if (typeof console !== "undefined") {
+                    console.info("[layout_runtime_body:opportunity_drawer_fallback]", {
+                        opportunityId: oid,
+                        reason: "layout_fetch_timeout",
+                        maxHoldMs: OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS,
+                    });
+                }
+                return "fallback";
+            });
+        }, OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS);
+
+        const clearHoldTimeout = () => window.clearTimeout(timeoutId);
+
         const run = () => {
             const qs = new URLSearchParams({ opportunityId: oid });
             if (args.departmentId) qs.set("departmentId", String(args.departmentId));
@@ -95,6 +129,7 @@ export function useOpportunityDrawerLayoutRuntimeBody(
             fetch(`/api/admin/layout-runtime/opportunity-drawer-body?${qs.toString()}`)
                 .then(async (res) => {
                     if (cancelled) return;
+                    clearHoldTimeout();
                     if (!res.ok) {
                         const json = await res.json().catch(() => ({}));
                         const reason = (json as { error?: string }).error ?? `http_${res.status}`;
@@ -131,6 +166,7 @@ export function useOpportunityDrawerLayoutRuntimeBody(
                 })
                 .catch((err) => {
                     if (cancelled) return;
+                    clearHoldTimeout();
                     const message = err instanceof Error ? err.message : String(err);
                     setLastError(message);
                     setPhase("fallback");
@@ -146,6 +182,7 @@ export function useOpportunityDrawerLayoutRuntimeBody(
         run();
         return () => {
             cancelled = true;
+            clearHoldTimeout();
         };
     }, [cutoverEnabled, args.opportunityId, args.vmReady, args.departmentId, args.workUnitId]);
 
