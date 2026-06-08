@@ -1,9 +1,10 @@
 # C1b Staging Pilot Results — Opportunity Drawer Overview Body Layout Runtime
 
 **Path:** `docs/platform_convergence/c1b_staging_pilot_results.md`  
-**Date:** 2026-06-07  
-**Status:** Merge + automated verification complete; **live staging UI pilot pending operator execution post-deploy**  
-**Staging merge commit:** `a80b793dbd20784d2a4dce6d01160b424ba5f0a5` (C1b @ `5b19e871`, review doc @ `7cf2cfdc`)  
+**Date:** 2026-06-07 (updated staging cutover acceleration)  
+**Status:** Flicker fix + max-hold merged to staging; **enable Vercel staging flags + redeploy for live pilot**  
+**Staging tip:** `0134cc0b` — flicker fix, max-hold timeout (1750ms), queue shadow foundation, effective layout inspector  
+**Prior C1b merge:** `a80b793d` (initial overview body pilot @ `5b19e871`)  
 **Review:** [`convergence_review_c1b_opportunity_overview_body.md`](./convergence_review_c1b_opportunity_overview_body.md) — APPROVED
 
 ---
@@ -12,8 +13,8 @@
 
 | Layer | Status | Notes |
 |-------|--------|-------|
-| Merge to `origin/staging` | **PASS** | `a80b793d` pushed 2026-06-07 |
-| Automated test suite (40 tests) | **PASS** | See §Automated verification |
+| Merge to `origin/staging` | **PASS** | `0134cc0b` (flicker + max-hold + queue shadow) |
+| Automated test suite | **PASS** | 27 layout/C1b tests + compile gate (2026-06-07) |
 | Code-level flag defaults | **PASS** | All C1b gates default **off** |
 | Live staging flag-off UI | **PENDING** | Requires post-deploy manual QA (§A) |
 | Live staging flag-on pilot | **PENDING** | Requires Vercel env + manual QA (§B) |
@@ -90,15 +91,27 @@ Targeted `tsc --noEmit` on C1b paths: **clean**.
 **Enable in Vercel staging env (then redeploy):**
 
 ```
+# Required — opportunity drawer overview body cutover
 LAYOUT_RUNTIME_ENABLED=1
 NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED=1
 LAYOUT_RUNTIME_OPPORTUNITY_DRAWER=1
 NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER=1
 ```
 
+**Optional — queue layout shadow telemetry only (no visible row change):**
+
+```
+LAYOUT_RUNTIME_OPPORTUNITY_QUEUE=1
+NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_QUEUE=1
+```
+
+Queue shadow requires master runtime flags above. Console emits `[layout_runtime_shadow:opportunity_queue_row]` when an opportunity lane mounts.
+
+**Max hold:** layout fetch falls back to VM body after **1750ms** (`layout_fetch_timeout`) if the API hangs.
+
 | # | Check | Expected | Result | Notes |
 |---|-------|----------|--------|-------|
-| B1 | Overview body source | `data-drawer-layout-runtime-overview="true"` after idle fetch | **PENDING** | VM body may flash first (by design) |
+| B1 | Overview body source | Hold skeleton → `data-drawer-layout-runtime-overview="true"` (no VM flash) | **PENDING** | Flicker fix @ `2816cc40` |
 | B2 | Read-only | `data-layout-runtime-readonly="true"`; no inline field editors in layout body | **PENDING** | |
 | B3 | Header / tabs / status / actions | VM-owned; visually unchanged | **PENDING** | |
 | B4 | Lifecycle rail | VM-owned; unchanged | **PENDING** | |
@@ -108,6 +121,8 @@ NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER=1
 | B8 | Unsupported items | Omitted (fail-closed), not crash | **PENDING** | Future-module widgets absent |
 | B9 | Disable flags → redeploy | VM overview restored | **PENDING** | Rollback drill |
 | B10 | Console on render error | `[layout_runtime_body:render_error]` diagnostic only; operator sees VM body | **PENDING** | |
+| B11 | Effective layout inspector | `/adminV2/settings/layouts/effective` resolves source/key | **PENDING** | Also in drawer C1b debug `<details>` |
+| B12 | Fetch timeout fallback | VM body after ~1.75s if API hangs | **PENDING** | `layout_fetch_timeout` in debug panel |
 
 **Tested org:** _TBD_  
 **Tested opportunity IDs:** _TBD — use workflow_v1 inquiry opportunities with published/default drawer layout_  
@@ -137,7 +152,7 @@ _Live staging defects to be recorded here after §A/§B manual QA._
 
 ## Operator QA procedure (quick reference)
 
-1. Confirm staging deploy SHA ≥ `a80b793d`.
+1. Confirm staging deploy SHA ≥ `0134cc0b`.
 2. Run §A checklist with flags **unset** (default).
 3. Set the four C1b flags in Vercel staging → redeploy.
 4. Run §B checklist on 1–2 known inquiry opportunities.
