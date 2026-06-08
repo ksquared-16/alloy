@@ -153,6 +153,7 @@ import {
     buildWorkUnitQueueCrmCompactRowSlice,
     buildWorkUnitQueueCrmCompactRowSliceForPlacementCandidate,
 } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import { buildQueueRowLayoutRuntimeEnrichment } from "@/lib/layout/runtime/queueRowLayoutRuntimeEnrichment";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -4597,6 +4598,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                           : placementPriority
                             ? waitlistQueueItemGrouping({ placementPriority })
                             : {}),
+                    layoutRuntimeEnrichment: buildQueueRowLayoutRuntimeEnrichment(r as Record<string, unknown>),
                 };
             });
 

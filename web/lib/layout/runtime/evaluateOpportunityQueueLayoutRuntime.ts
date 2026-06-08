@@ -12,6 +12,7 @@ import {
 } from "./queue/buildOpportunityQueueLayoutContext";
 import { isLayoutDocRenderableForProduction } from "./isLayoutDocRenderableForProduction";
 import type { LayoutDoc } from "../layoutV2";
+import { resolveEffectiveProductionLayoutDoc } from "./resolveEffectiveProductionLayoutDoc";
 
 export type OpportunityQueueLayoutRuntimeResult =
     | {
@@ -21,6 +22,7 @@ export type OpportunityQueueLayoutRuntimeResult =
           layoutSource: string;
           layoutKey?: string;
           matchTier?: string;
+          layoutFallbackReason?: string;
       }
     | { ok: false; reason: string };
 
@@ -43,17 +45,47 @@ export async function evaluateOpportunityQueueLayoutRuntime(input: {
     });
 
     if (!isLayoutDocRenderableForProduction(resolution.doc)) {
-        return { ok: false, reason: "layout_not_resolved" };
+        const effective = resolveEffectiveProductionLayoutDoc({
+            doc: resolution.doc,
+            source: resolution.source,
+            layoutKey: resolution.layoutKey,
+            entityType,
+            surface: "queue",
+            isWaitlist,
+        });
+        if (!isLayoutDocRenderableForProduction(effective.doc)) {
+            return { ok: false, reason: "layout_not_resolved" };
+        }
+        const plan = buildLayoutRuntimePlan(effective.doc);
+        return {
+            ok: true,
+            doc: effective.doc,
+            entityType,
+            layoutSource: effective.source,
+            layoutKey: effective.layoutKey ?? plan.layoutKey,
+            matchTier: resolution.matchTier,
+            layoutFallbackReason: effective.fallbackReason,
+        };
     }
 
-    const plan = buildLayoutRuntimePlan(resolution.doc!);
+    const effective = resolveEffectiveProductionLayoutDoc({
+        doc: resolution.doc,
+        source: resolution.source,
+        layoutKey: resolution.layoutKey,
+        entityType,
+        surface: "queue",
+        isWaitlist,
+    });
+
+    const plan = buildLayoutRuntimePlan(effective.doc);
 
     return {
         ok: true,
-        doc: resolution.doc!,
+        doc: effective.doc,
         entityType,
-        layoutSource: resolution.source,
-        layoutKey: resolution.layoutKey ?? plan.layoutKey,
+        layoutSource: effective.usedFallback ? effective.source : resolution.source,
+        layoutKey: effective.layoutKey ?? resolution.layoutKey ?? plan.layoutKey,
         matchTier: resolution.matchTier,
+        layoutFallbackReason: effective.usedFallback ? effective.fallbackReason : undefined,
     };
 }

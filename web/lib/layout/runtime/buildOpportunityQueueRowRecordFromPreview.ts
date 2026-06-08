@@ -2,8 +2,10 @@
  * Map queue preview item VM → operator-safe layout runtime queue row record.
  */
 
+import { parseQueueRowCrmChildrenStructured } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { CrmCompactChildLineVm, CrmCompactRowSemanticSlots, QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
+import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnrichment";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -26,6 +28,17 @@ function parseHouseholdLastName(primaryIdentity: string | null | undefined, titl
     return parts[parts.length - 1] ?? parts[0] ?? "";
 }
 
+function parseContactNameFromLine(contactLine: string | null | undefined): string | null {
+    if (!contactLine) return null;
+    const parts = contactLine.split(/\s*·\s*/).map((p) => p.trim()).filter(Boolean);
+    for (const part of parts) {
+        if (part.includes("@")) continue;
+        if (/^[\d\s\-+().]+$/.test(part) && part.replace(/\D/g, "").length >= 10) continue;
+        return part;
+    }
+    return parts[0] ?? null;
+}
+
 function mapCrmChildLine(line: CrmCompactChildLineVm, index: number, crm: CrmCompactRowSemanticSlots): ProofRuntimeRecord {
     return {
         id: line.personId ?? `child-${index}`,
@@ -37,7 +50,18 @@ function mapCrmChildLine(line: CrmCompactChildLineVm, index: number, crm: CrmCom
     };
 }
 
-function mapCrmChildren(crm: CrmCompactRowSemanticSlots): ProofRuntimeRecord[] {
+function mapStructuredChildLine(line: CrmCompactChildLineVm, index: number, enrichment?: QueueRowLayoutRuntimeEnrichment | null): ProofRuntimeRecord {
+    return {
+        id: line.personId ?? `child-${index}`,
+        "child.name": pickDisplay(line.primary) ?? "—",
+        "child.age_band": pickDisplay(line.secondary) ?? "",
+        "child.program": pickDisplay(line.programInline, line.secondary, enrichment?.programLabel) ?? "",
+        "child.status": pickDisplay(enrichment?.statusDisplay) ?? "",
+        "child.location": pickDisplay(enrichment?.locationLabel) ?? "",
+    };
+}
+
+function mapCrmChildren(crm: CrmCompactRowSemanticSlots, enrichment?: QueueRowLayoutRuntimeEnrichment | null): ProofRuntimeRecord[] {
     if (crm.childrenLines && crm.childrenLines.length > 0) {
         return crm.childrenLines.map((line, i) => mapCrmChildLine(line, i, crm));
     }
@@ -53,16 +77,33 @@ function mapCrmChildren(crm: CrmCompactRowSemanticSlots): ProofRuntimeRecord[] {
             },
         ];
     }
+    const structured = parseQueueRowCrmChildrenStructured(enrichment?.crmCompactChildren);
+    if (structured.length > 0) return structured.map((line, i) => mapStructuredChildLine(line, i, enrichment));
+    if (enrichment?.childDisplayName) {
+        return [
+            {
+                id: "child-enrichment",
+                "child.name": enrichment.childDisplayName,
+                "child.program": pickDisplay(enrichment.programLabel) ?? "",
+                "child.location": pickDisplay(enrichment.locationLabel) ?? "",
+            },
+        ];
+    }
     return [];
 }
 
-function resolveTourDate(crm: CrmCompactRowSemanticSlots, metaLines?: QueuePreviewItemVm["metaLines"]): string {
+function resolveTourDate(
+    crm: CrmCompactRowSemanticSlots | undefined,
+    enrichment: QueueRowLayoutRuntimeEnrichment | null | undefined,
+    metaLines?: QueuePreviewItemVm["metaLines"],
+): string {
     const fromMeta = metaLines?.find((m) => /tour/i.test(m.label))?.value;
     return (
         pickDisplay(
-            crm.rowPreviewLabelTourDate && crm.tourContext ? crm.tourContext : null,
-            crm.tourContext,
-            crm.crmCompactTimingValueLine,
+            enrichment?.tourDisplay,
+            crm?.rowPreviewLabelTourDate && crm.tourContext ? crm.tourContext : null,
+            crm?.tourContext,
+            crm?.crmCompactTimingValueLine,
             fromMeta,
         ) ?? ""
     );
@@ -71,6 +112,7 @@ function resolveTourDate(crm: CrmCompactRowSemanticSlots, metaLines?: QueuePrevi
 /** Build layout runtime record for one queue preview row. */
 export function buildOpportunityQueueRowRecordFromPreview(item: QueuePreviewItemVm): ProofRuntimeRecord {
     const crm = item.semanticCrmCompact;
+    const enrichment = item.layoutRuntimeEnrichment ?? null;
     const waitlist = item.placementWaitlistCandidate;
 
     if (waitlist) {
@@ -99,28 +141,41 @@ export function buildOpportunityQueueRowRecordFromPreview(item: QueuePreviewItem
         };
     }
 
-    const primaryIdentity = pickDisplay(crm?.primaryIdentity, item.title) ?? "—";
-    const lastName = parseHouseholdLastName(crm?.primaryIdentity, item.title);
-    const statusLabel = pickDisplay(crm?.statusLabel, crm?.stageLabel, item.subtitle);
-    const layoutChildren = crm ? mapCrmChildren(crm) : [];
+    const householdName = pickDisplay(enrichment?.customerName, crm?.primaryIdentity, item.title) ?? "—";
+    const lastName = parseHouseholdLastName(enrichment?.customerName ?? crm?.primaryIdentity, item.title);
+    const statusLabel = pickDisplay(
+        enrichment?.statusDisplay,
+        crm?.statusLabel,
+        crm?.stageLabel,
+        item.subtitle,
+        enrichment?.statusKey,
+    );
+    const layoutChildren = mapCrmChildren(crm ?? ({} as CrmCompactRowSemanticSlots), enrichment);
+    const contactName = pickDisplay(
+        crm?.contactDisplayName,
+        parseContactNameFromLine(enrichment?.contactLine),
+        enrichment?.contactLine,
+        crm?.contactSnippet,
+    );
+    const tourDate = resolveTourDate(crm, enrichment, item.metaLines);
 
     return {
         id: item.id,
-        name: primaryIdentity,
+        name: householdName,
         last_name: lastName,
-        "person.primary_contact_name": pickDisplay(crm?.contactDisplayName, crm?.contactSnippet) ?? "",
-        "person.primary_phone": pickDisplay(crm?.contactPhoneDisplay, crm?.contactSnippet) ?? "",
-        "person.primary_email": pickDisplay(crm?.contactEmail) ?? "",
+        "person.primary_contact_name": contactName ?? "",
+        "person.primary_phone": pickDisplay(crm?.contactPhoneDisplay, enrichment?.primaryPhone, crm?.contactSnippet) ?? "",
+        "person.primary_email": pickDisplay(crm?.contactEmail, enrichment?.primaryEmail) ?? "",
         status_key: statusLabel ?? "",
         _status_display: statusLabel ?? "",
         "opportunity.status_key": statusLabel ?? "",
-        "opportunity.location": pickDisplay(crm?.locationContext, crm?.roomContext, crm?.programContext) ?? "",
-        "opportunity.attention_reason": pickDisplay(crm?.attentionReason, crm?.queuePriorityExplanation) ?? "",
-        _attention: pickDisplay(crm?.attentionReason, crm?.queuePriorityExplanation) ?? "",
+        "opportunity.location": pickDisplay(enrichment?.locationLabel, crm?.locationContext, crm?.roomContext, crm?.programContext) ?? "",
+        "opportunity.attention_reason": pickDisplay(enrichment?.attentionReason, crm?.attentionReason, crm?.queuePriorityExplanation) ?? "",
+        _attention: pickDisplay(enrichment?.attentionReason, crm?.attentionReason, crm?.queuePriorityExplanation) ?? "",
         next_step: pickDisplay(crm?.nextStep) ?? "",
         last_activity: pickDisplay(crm?.lastActivity) ?? "",
-        "opportunity.tour_date": resolveTourDate(crm ?? ({} as CrmCompactRowSemanticSlots), item.metaLines),
-        tour_scheduled_at: resolveTourDate(crm ?? ({} as CrmCompactRowSemanticSlots), item.metaLines),
+        "opportunity.tour_date": tourDate,
+        tour_scheduled_at: tourDate,
         children: layoutChildren,
         enrollment_children: layoutChildren,
     };

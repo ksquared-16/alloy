@@ -301,6 +301,11 @@ export type QueueItemVm = {
     placementCandidateId?: string;
     opportunityCustomerMemberId?: string;
     childLifecycleStatus?: string | null;
+    /**
+     * Un-gated queue row enrichment for layout runtime record binding.
+     * Populated from QueueService fields regardless of row_preview gates.
+     */
+    layoutRuntimeEnrichment?: import("@/lib/layout/runtime/queueRowLayoutRuntimeEnrichment").QueueRowLayoutRuntimeEnrichment;
 };
 
 /** Candidate-row waitlist queue presentation (`_placement_waitlist_row`). */

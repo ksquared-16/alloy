@@ -5,7 +5,7 @@
  */
 
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyErrorBoundary";
 import OpportunityDrawerLayoutRuntimeOverviewHold from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeOverviewHold";
 import DrawerLayoutRuntimeStagingDiagnostic from "@/components/admin/vmDrawer/DrawerLayoutRuntimeStagingDiagnostic";
@@ -14,6 +14,11 @@ import {
     isLayoutRuntimeHardCutoverActiveClient,
 } from "@/lib/layout/featureFlag";
 import { computeLayoutRuntimeBodyRenderStats } from "@/lib/layout/runtime/layoutRuntimeBodyRenderStats";
+import {
+    buildLayoutRuntimeDrawerEvidence,
+    logLayoutRuntimeDrawerEvidence,
+} from "@/lib/layout/runtime/layoutRuntimeEvidence";
+import { shouldLogLayoutRuntimeEvidence } from "@/lib/layout/runtime/layoutRuntimeEvidenceClient";
 import type { LayoutRuntimeDrawerSurface } from "@/lib/layout/runtime/logLayoutRuntimeBodyRenderFailure";
 import type { UseDrawerLayoutRuntimeBodyResult } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 
@@ -45,6 +50,28 @@ export default function DrawerLayoutRuntimeOverviewBody({
         [layoutBody.doc, layoutBody.record],
     );
 
+    const evidence = useMemo(
+        () =>
+            buildLayoutRuntimeDrawerEvidence({
+                opportunityId: entityId,
+                doc: layoutBody.doc,
+                record: layoutBody.record,
+                layoutSource: layoutBody.layoutSource,
+                layoutKey: layoutBody.layoutKey,
+                phase: layoutBody.phase,
+                bodyReady: layoutBody.bodyReady,
+                showHold: layoutBody.showHold,
+                useVmFallback: layoutBody.useVmFallback,
+                lastError: layoutBody.lastError,
+            }),
+        [entityId, layoutBody],
+    );
+
+    useEffect(() => {
+        if (!shouldLogLayoutRuntimeEvidence()) return;
+        logLayoutRuntimeDrawerEvidence(evidence);
+    }, [evidence]);
+
     const showStagingDiagnostic = shouldShowStagingDiagnostic();
     const useEmptyBodyFallback =
         layoutBody.bodyReady &&
@@ -75,6 +102,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                             stats={renderStats}
                             surface={surface}
                             lastError={layoutBody.lastError}
+                            evidence={evidence}
                         />
                     :   null}
                     <LayoutRuntimeDrawerBodyView doc={layoutBody.doc} record={layoutBody.record} />
@@ -96,6 +124,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                         stats={renderStats}
                         surface={surface}
                         lastError={layoutBody.lastError ?? renderStats.fallbackReason}
+                        evidence={evidence}
                     />
                 :   null}
                 {vmFallback}

@@ -402,6 +402,15 @@ export default function OpportunityDrawerVmRuntime() {
         );
     }, [headerSubtitleBelowTitle, headerTitleRight, layoutCutoverHeader]);
 
+    const drawerHeaderSignals = useMemo(() => {
+        if (!layoutCutoverHeader || !headerAttentionCenter) return undefined;
+        return (
+            <div className="px-0" data-opportunity-drawer-header-attention-signals="true">
+                {headerAttentionCenter}
+            </div>
+        );
+    }, [headerAttentionCenter, layoutCutoverHeader]);
+
     return (
         <>
         <Drawer
@@ -409,8 +418,9 @@ export default function OpportunityDrawerVmRuntime() {
             onClose={closeDrawer}
             title={drawerTitleNode}
             headerSubtitle={layoutCutoverHeader ? undefined : headerSubtitleBelowTitle}
-            headerTitleCenter={headerAttentionCenter}
+            headerTitleCenter={layoutCutoverHeader ? undefined : headerAttentionCenter}
             headerTitleRight={headerTitleRightResolved}
+            headerSignals={drawerHeaderSignals}
             headerExtra={drawerHeaderTabStrip}
             postTabStrip={layoutCutoverHeader ? lifecycleRail : undefined}
             variant="adminV2"

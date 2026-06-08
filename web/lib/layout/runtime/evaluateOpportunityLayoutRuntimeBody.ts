@@ -17,6 +17,7 @@ import {
     isLayoutItemSupportedForProduction,
     layoutDocHasProductionSupportedItems,
 } from "./isLayoutItemSupportedForProduction";
+import { resolveEffectiveProductionLayoutDoc } from "./resolveEffectiveProductionLayoutDoc";
 import type { ProofRuntimeRecord } from "./proofRecordContext";
 
 export type EvaluateOpportunityLayoutRuntimeBodyInput = {
@@ -33,6 +34,7 @@ export type EvaluateOpportunityLayoutRuntimeBodySuccess = {
     record: ProofRuntimeRecord;
     plan: LayoutRuntimePlan;
     layoutSource: string;
+    layoutFallbackReason?: string;
 };
 
 export type EvaluateOpportunityLayoutRuntimeBodyFailure = {
@@ -95,7 +97,15 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         fetchPublishedLayouts: true,
     });
 
-    const doc = layoutResolution.doc;
+    const effective = resolveEffectiveProductionLayoutDoc({
+        doc: layoutResolution.doc,
+        source: layoutResolution.source,
+        layoutKey: layoutResolution.layoutKey,
+        entityType: "opportunities",
+        surface: "drawer",
+    });
+
+    const doc = effective.doc;
     if (!isOpportunityLayoutDocRenderable(doc)) {
         return { ok: false, reason: "layout_not_renderable", status: 422 };
     }
@@ -115,7 +125,8 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         doc,
         record,
         plan,
-        layoutSource: layoutResolution.source,
+        layoutSource: effective.usedFallback ? effective.source : layoutResolution.source,
+        layoutFallbackReason: effective.usedFallback ? effective.fallbackReason : undefined,
     };
 }
 

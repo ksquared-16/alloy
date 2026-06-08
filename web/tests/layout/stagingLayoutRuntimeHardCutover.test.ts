@@ -129,6 +129,28 @@ describe("layout runtime record mappers", () => {
         expect(Array.isArray(record.children) && record.children[0]?.["child.name"]).toBe("Alex");
     });
 
+    it("maps queue preview using un-gated layoutRuntimeEnrichment when CRM slots are sparse", () => {
+        const item: QueuePreviewItemVm = {
+            id: "opp-1",
+            title: "Johnson Family",
+            quickActions: [],
+            layoutRuntimeEnrichment: {
+                customerName: "Johnson Family",
+                contactLine: "Jamie Johnson",
+                primaryPhone: "(555) 234-8901",
+                tourDisplay: "Jun 12",
+                statusDisplay: "Qualified",
+                childDisplayName: "Alex Johnson",
+                crmCompactChildren: [{ primary: "Alex Johnson", secondary: "Infant AM" }],
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item);
+        expect(record.last_name).toBe("Johnson");
+        expect(record["person.primary_contact_name"]).toBe("Jamie Johnson");
+        expect(record["opportunity.tour_date"]).toBe("Jun 12");
+        expect(Array.isArray(record.children) && record.children.length).toBe(1);
+    });
+
     it("maps waitlist candidate preview to layout row record", () => {
         const item: QueuePreviewItemVm = {
             id: "cand-1",

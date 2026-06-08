@@ -301,7 +301,14 @@ export default function QueueCardProofRenderer({
                             {titleItem?.adornment ? <AdornmentIcon icon={titleItem.adornment.icon} className="h-3.5 w-3.5" /> : <HomeIcon className="h-3.5 w-3.5" aria-hidden />}
                         </span>
                         <span className="min-w-0 truncate text-[13px] font-bold" style={{ color: MIDNIGHT }}>
-                            {titleText && !titleText.isPlaceholder ? titleText.display : "Record"}
+                            {titleText && !titleText.isPlaceholder ?
+                                titleText.display
+                            :   (() => {
+                                    const fallbackName = [record.name, record.last_name, record.title]
+                                        .map((v) => (v == null ? "" : String(v).trim()))
+                                        .find((v) => v.length > 0);
+                                    return fallbackName || "Record";
+                                })()}
                         </span>
                         {statusItem ? (() => { const v = txt(record, statusItem); return v.placeholder ? null : <Pill>{v.text}</Pill>; })() : null}
                         {priorityItems.map((it) => { const v = txt(record, it); return v.placeholder ? null : <Pill key={it.id}>{v.text}</Pill>; })}

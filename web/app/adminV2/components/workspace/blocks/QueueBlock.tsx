@@ -1910,6 +1910,10 @@ function WorkUnitQueueLane({
                       <LayoutRuntimeQueueRowView
                         doc={queueLayoutRuntime.doc}
                         record={buildOpportunityQueueRowRecordFromPreview(item)}
+                        item={item}
+                        layoutSource={queueLayoutRuntime.layoutSource}
+                        layoutKey={queueLayoutRuntime.layoutKey}
+                        workUnitKey={queue.drillWorkUnitKey ?? null}
                         queueRowKey={item.id}
                         variant={hasCandidatePlacementRows ? "waitlist" : "pipeline"}
                         vmFallback={
