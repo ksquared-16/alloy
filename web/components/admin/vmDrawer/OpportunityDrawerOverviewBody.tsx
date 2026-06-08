@@ -19,7 +19,7 @@
  * 4. Render-phase error (Error Boundary) → VM overview.
  */
 
-import type { ReactNode } from "react";
+import { useMemo } from "react";
 import DrawerLayoutRuntimeOverviewBody from "@/components/admin/vmDrawer/DrawerLayoutRuntimeOverviewBody";
 import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview";
 import OpportunityDrawerLayoutRuntimeBodyStatus from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyStatus";
@@ -74,12 +74,18 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         layoutRuntimeShadow,
     } = props;
 
+    // Memoized so the hook's fetch effect doesn't re-run (and cancel the in-flight
+    // request) on every parent re-render — prevents the repeated-fetch loop.
+    const layoutQueryParams = useMemo(
+        () => ({ departmentId, workUnitId }),
+        [departmentId, workUnitId],
+    );
     const layoutBody = useDrawerLayoutRuntimeBody({
         cutoverEnabled: isLayoutRuntimeOpportunityDrawerBodyEnabledClient(),
         entityId: drawerId,
         vmReady,
         apiPath: "/api/admin/layout-runtime/opportunity-drawer-body",
-        queryParams: { departmentId, workUnitId },
+        queryParams: layoutQueryParams,
         logTag: "opportunity_drawer",
     });
 

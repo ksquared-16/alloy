@@ -4,6 +4,8 @@
 
 import { parseQueueRowCrmChildrenStructured } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { CrmCompactChildLineVm, CrmCompactRowSemanticSlots, QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
+import type { LayoutDoc } from "../layoutV2";
+import { collectLayoutDocFieldRefKeys } from "./buildOpportunityLayoutRuntimeRecordFromVm";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
 import {
     buildPrimaryContactPersonRelation,
@@ -113,14 +115,33 @@ function resolveTourDate(
     );
 }
 
+/**
+ * Doc-driven completeness: every configured queue-card field refKey must exist on
+ * the row record so the card renders a value-or-placeholder ("—") rather than an
+ * absent field. The standard refKeys are mapped above from the raw item/CRM/
+ * enrichment; anything the published doc adds that has no source resolves to "".
+ * (Collection-column child.* refKeys bind per-row and are excluded.)
+ */
+function ensureQueueDocRefKeys(record: ProofRuntimeRecord, doc?: LayoutDoc | null): ProofRuntimeRecord {
+    if (!doc) return record;
+    const mutable = record as Record<string, unknown>;
+    for (const refKey of collectLayoutDocFieldRefKeys(doc)) {
+        if (mutable[refKey] === undefined) mutable[refKey] = "";
+    }
+    return record;
+}
+
 /** Build layout runtime record for one queue preview row. */
-export function buildOpportunityQueueRowRecordFromPreview(item: QueuePreviewItemVm): ProofRuntimeRecord {
+export function buildOpportunityQueueRowRecordFromPreview(
+    item: QueuePreviewItemVm,
+    doc?: LayoutDoc | null,
+): ProofRuntimeRecord {
     const crm = item.semanticCrmCompact;
     const enrichment = item.layoutRuntimeEnrichment ?? null;
     const waitlist = item.placementWaitlistCandidate;
 
     if (waitlist) {
-        return {
+        return ensureQueueDocRefKeys({
             id: item.id,
             name: pickDisplay(waitlist.familyDisplayName, waitlist.childDisplayName, item.title) ?? "—",
             last_name: parseHouseholdLastName(waitlist.familyDisplayName, item.title),
@@ -142,7 +163,7 @@ export function buildOpportunityQueueRowRecordFromPreview(item: QueuePreviewItem
             "person.primary_contact_name": pickDisplay(waitlist.parentDisplayName, waitlist.familyDisplayName) ?? "",
             children: [],
             enrollment_children: [],
-        };
+        }, doc);
     }
 
     const householdName = pickDisplay(enrichment?.customerName, crm?.primaryIdentity, item.title) ?? "—";
@@ -195,5 +216,5 @@ export function buildOpportunityQueueRowRecordFromPreview(item: QueuePreviewItem
         },
     };
 
-    return baseRecord;
+    return ensureQueueDocRefKeys(baseRecord, doc);
 }

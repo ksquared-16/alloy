@@ -1913,7 +1913,7 @@ function WorkUnitQueueLane({
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <LayoutRuntimeQueueRowView
                         doc={queueLayoutRuntime.doc}
-                        record={buildOpportunityQueueRowRecordFromPreview(item)}
+                        record={buildOpportunityQueueRowRecordFromPreview(item, queueLayoutRuntime.doc)}
                         item={item}
                         layoutSource={queueLayoutRuntime.layoutSource}
                         layoutKey={queueLayoutRuntime.layoutKey}

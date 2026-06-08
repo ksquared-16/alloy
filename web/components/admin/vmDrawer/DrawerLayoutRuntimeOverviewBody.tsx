@@ -101,6 +101,14 @@ export default function DrawerLayoutRuntimeOverviewBody({
                     data-layout-runtime-readonly="true"
                     data-drawer-layout-runtime-renderable-count={renderStats.renderableItemCount}
                 >
+                    {process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG === "1" ?
+                        <div
+                            className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900"
+                            data-drawer-layout-runtime-mounted-marker="true"
+                        >
+                            Layout runtime body mounted · sections={renderStats.sectionCount} · fields={renderStats.productionSupportedCount} · with value={renderStats.itemsWithValueCount}
+                        </div>
+                    :   null}
                     {showStagingDiagnostic ?
                         <DrawerLayoutRuntimeStagingDiagnostic
                             layoutSource={layoutBody.layoutSource}

@@ -41,6 +41,10 @@ export type UseDrawerLayoutRuntimeBodyResult = {
 
 export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs): UseDrawerLayoutRuntimeBodyResult {
     const { cutoverEnabled, entityId, vmReady, apiPath, queryParams, logTag } = args;
+    // Stable serialization so an inline `queryParams` object from the caller does
+    // NOT re-trigger the fetch effect every render (that cancelled the in-flight
+    // 5–6s request and looped, leaving the body stuck → blank).
+    const queryParamsKey = JSON.stringify(queryParams ?? {});
 
     const [phase, setPhase] = useState<DrawerLayoutRuntimeBodyPhase>("idle");
     const [doc, setDoc] = useState<LayoutDoc | null>(null);
@@ -142,7 +146,9 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
             cancelled = true;
             clearHoldTimeout();
         };
-    }, [cutoverEnabled, entityId, vmReady, apiPath, logTag, queryParams]);
+        // queryParams referenced by content via queryParamsKey (stable).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cutoverEnabled, entityId, vmReady, apiPath, logTag, queryParamsKey]);
 
     useEffect(() => {
         if (!entityId?.trim()) {
