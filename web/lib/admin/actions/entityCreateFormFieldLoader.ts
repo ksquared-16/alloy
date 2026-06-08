@@ -1,5 +1,9 @@
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
-import { INQUIRY_CHILD_NATIVE_FIELD_MANIFEST } from "@/lib/fields/inquiryChildFieldRegistry";
+import { resolveSelectFieldBinding } from "@/lib/fields/resolveSelectFieldBinding";
+import {
+    fallbackOptionSetKeyForInquiryChildField,
+    INQUIRY_CHILD_NATIVE_FIELD_MANIFEST,
+} from "@/lib/fields/inquiryChildFieldRegistry";
 
 export type EntityCreateFormField = {
     field_key: string;
@@ -10,9 +14,17 @@ export type EntityCreateFormField = {
     help_text: string | null;
     section_key: string | null;
     sort_order: number;
+    option_set_key: string | null;
 };
 
 function normalizeRow(row: FieldDef): EntityCreateFormField {
+    const fallback =
+        row.entity_type === "inquiry_child" ? fallbackOptionSetKeyForInquiryChildField(row.field_key) : null;
+    const selectBinding = resolveSelectFieldBinding({
+        field_type: row.field_type,
+        config: row.config,
+        fallbackOptionSetKey: fallback,
+    });
     return {
         field_key: row.field_key,
         label: (row.label ?? row.field_key).trim(),
@@ -22,6 +34,7 @@ function normalizeRow(row: FieldDef): EntityCreateFormField {
         help_text: row.help_text,
         section_key: row.section_key,
         sort_order: row.sort_order ?? 0,
+        option_set_key: selectBinding.option_set_key,
     };
 }
 
@@ -58,16 +71,24 @@ export async function fetchEntityCreateFormFields(
 /** Merge API form fields with native inquiry_child manifest when API is sparse. */
 export function mergeInquiryChildCreateFormFields(apiFields: EntityCreateFormField[]): EntityCreateFormField[] {
     if (apiFields.length > 0) return apiFields;
-    return INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.filter((row) => row.is_visible_in_form).map((row) => ({
-        field_key: row.field_key,
-        label: row.label,
-        field_type: row.field_type,
-        is_required: false,
-        placeholder: null,
-        help_text: null,
-        section_key: row.section_key,
-        sort_order: row.sort_order,
-    }));
+    return INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.filter((row) => row.is_visible_in_form).map((row) => {
+        const selectBinding = resolveSelectFieldBinding({
+            field_type: row.field_type,
+            config: null,
+            fallbackOptionSetKey: fallbackOptionSetKeyForInquiryChildField(row.field_key),
+        });
+        return {
+            field_key: row.field_key,
+            label: row.label,
+            field_type: row.field_type,
+            is_required: false,
+            placeholder: null,
+            help_text: null,
+            section_key: row.section_key,
+            sort_order: row.sort_order,
+            option_set_key: selectBinding.option_set_key,
+        };
+    });
 }
 
 /** Default person create fields when org has no configured form surface. */
@@ -81,6 +102,7 @@ export const PERSON_CREATE_FORM_FALLBACK: EntityCreateFormField[] = [
         help_text: null,
         section_key: "identity",
         sort_order: 10,
+        option_set_key: null,
     },
     {
         field_key: "last_name",
@@ -91,6 +113,7 @@ export const PERSON_CREATE_FORM_FALLBACK: EntityCreateFormField[] = [
         help_text: null,
         section_key: "identity",
         sort_order: 20,
+        option_set_key: null,
     },
     {
         field_key: "email",
@@ -101,6 +124,7 @@ export const PERSON_CREATE_FORM_FALLBACK: EntityCreateFormField[] = [
         help_text: null,
         section_key: "contact",
         sort_order: 30,
+        option_set_key: null,
     },
     {
         field_key: "phone",
@@ -111,6 +135,7 @@ export const PERSON_CREATE_FORM_FALLBACK: EntityCreateFormField[] = [
         help_text: null,
         section_key: "contact",
         sort_order: 40,
+        option_set_key: null,
     },
 ];
 
@@ -125,6 +150,7 @@ export const CHILD_IDENTITY_CREATE_FORM_FALLBACK: EntityCreateFormField[] = [
         help_text: null,
         section_key: "identity",
         sort_order: 10,
+        option_set_key: null,
     },
     {
         field_key: "last_name",
@@ -135,6 +161,7 @@ export const CHILD_IDENTITY_CREATE_FORM_FALLBACK: EntityCreateFormField[] = [
         help_text: null,
         section_key: "identity",
         sort_order: 20,
+        option_set_key: null,
     },
     {
         field_key: "date_of_birth",
@@ -145,5 +172,6 @@ export const CHILD_IDENTITY_CREATE_FORM_FALLBACK: EntityCreateFormField[] = [
         help_text: "Required when age group is not provided.",
         section_key: "identity",
         sort_order: 30,
+        option_set_key: null,
     },
 ];

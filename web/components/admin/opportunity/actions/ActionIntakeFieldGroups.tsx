@@ -2,6 +2,8 @@
 
 import type { ActionIntakeFieldSpec, ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { ActionIntakePasteFieldMeta } from "@/lib/lifecycle/actionIntakePasteParserTypes";
+import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
+import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
 
 const LABEL = "text-[11px] font-semibold tracking-wide text-alloy-forge/50";
 const INPUT =
@@ -44,10 +46,21 @@ export function ActionIntakeFieldGroups({
     extraFields = [],
     dataTestIdPrefix = "action-intake",
 }: Props) {
+    const allFields = spec.groups.flatMap((g) => g.fields);
+    const setKeys = allFields.map((f) => f.option_set_key);
+    const { optionsBySetKey } = useOptionSetSelectOptions(setKeys);
+
     const renderField = (field: ActionIntakeFieldSpec) => {
         const badge = assistBadge(fieldMeta[field.payload_key]);
         const inputType =
-            field.value_kind === "email" ? "email" : field.value_kind === "phone" ? "tel" : field.value_kind === "date" ? "date" : "text";
+            field.value_kind === "email" ? "email"
+            : field.value_kind === "phone" ? "tel"
+            : field.value_kind === "date" ? "date"
+            : "text";
+        const selectOptions =
+            field.value_kind === "select" && field.option_set_key ?
+                (optionsBySetKey[field.option_set_key] ?? [])
+            :   [];
 
         return (
             <div key={field.rule_id} data-testid={`${dataTestIdPrefix}-field-${field.rule_id}`}>
@@ -74,17 +87,28 @@ export function ActionIntakeFieldGroups({
                         <span className="text-[10px] text-alloy-midnight/45">{tierLabel(field.tier)}</span>
                     </div>
                 </div>
-                <input
-                    value={values[field.payload_key] ?? ""}
-                    disabled={disabled}
-                    onChange={(e) => onFieldChange(field.payload_key, e.target.value)}
-                    className={`${INPUT} mt-0.5`}
-                    type={inputType}
-                    autoComplete={
-                        field.value_kind === "email" ? "email" : field.value_kind === "phone" ? "tel" : "off"
-                    }
-                    data-testid={`${dataTestIdPrefix}-input-${field.payload_key}`}
-                />
+                {field.value_kind === "select" ?
+                    <SelectFieldControl
+                        value={values[field.payload_key] ?? ""}
+                        disabled={disabled}
+                        onChange={(v) => onFieldChange(field.payload_key, v)}
+                        options={selectOptions}
+                        className={`${INPUT} mt-0.5`}
+                        data-testid={`${dataTestIdPrefix}-select-${field.payload_key}`}
+                        aria-label={field.field_label}
+                    />
+                :   <input
+                        value={values[field.payload_key] ?? ""}
+                        disabled={disabled}
+                        onChange={(e) => onFieldChange(field.payload_key, e.target.value)}
+                        className={`${INPUT} mt-0.5`}
+                        type={inputType}
+                        autoComplete={
+                            field.value_kind === "email" ? "email" : field.value_kind === "phone" ? "tel" : "off"
+                        }
+                        data-testid={`${dataTestIdPrefix}-input-${field.payload_key}`}
+                    />
+                }
             </div>
         );
     };

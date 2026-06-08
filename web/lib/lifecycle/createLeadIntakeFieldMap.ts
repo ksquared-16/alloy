@@ -39,7 +39,12 @@ export function createLeadPayloadKeyForRule(ruleId: string): string | null {
     return CREATE_LEAD_PAYLOAD_KEY_BY_RULE[ruleId] ?? null;
 }
 
-export function inferActionIntakeValueKind(ruleId: string, fieldKey: string | null): ActionIntakeValueKind {
+export function inferActionIntakeValueKind(
+    ruleId: string,
+    fieldKey: string | null,
+    optionSetKey?: string | null,
+): ActionIntakeValueKind {
+    if ((optionSetKey ?? "").trim()) return "select";
     if (ruleId.includes("email") || fieldKey === "email") return "email";
     if (ruleId.includes("phone") || fieldKey === "phone") return "phone";
     if (

@@ -37,8 +37,10 @@ export type SystemFieldRegistryEntry = {
     suggested_kind: SystemFieldValueKind;
     /** When false, show a warning if used on a public intake form (soft guard in UI only for V1). */
     public_intake_safe: boolean;
-    /** Inline select rows `value|label` per line when `suggested_kind === "select"`. */
+    /** Inline select rows `value|label` per line when `suggested_kind === "select"` and no default_option_set_key. */
     select_options_lines?: string;
+    /** Org option set for select fields — preferred over placeholder static_options_lines. */
+    default_option_set_key?: string;
 };
 
 const EMAIL_PATTERN = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
@@ -204,6 +206,7 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         default_required: false,
         suggested_kind: "select",
         public_intake_safe: true,
+        default_option_set_key: "childcare_program_type",
     },
     {
         id: "desired_schedule_type",
@@ -215,6 +218,7 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         default_required: false,
         suggested_kind: "select",
         public_intake_safe: true,
+        default_option_set_key: "childcare_schedule_type",
     },
     {
         id: "opportunity_interest_notes",

@@ -30,6 +30,9 @@ import {
     mergeLifecycleFieldPaletteForStage,
     type LifecycleFieldPaletteEntry,
 } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+import { resolveSelectFieldBinding } from "@/lib/fields/resolveSelectFieldBinding";
+import { fallbackOptionSetKeyForInquiryChildField } from "@/lib/fields/inquiryChildFieldRegistry";
+import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 
 export type ResolveActionIntakeSpecInput = {
     action_key: string;
@@ -63,10 +66,21 @@ function paletteByRuleId(
     return new Map(palette.map((p) => [p.rule_id, p]));
 }
 
+function orgFieldDefForKey(
+    orgDefs: Partial<Record<LifecycleRequirementEntityKey, OrgFieldDefinitionRow[]>> | null | undefined,
+    entity: LifecycleRequirementEntityKey,
+    fieldKey: string | null
+): OrgFieldDefinitionRow | null {
+    if (!fieldKey?.trim()) return null;
+    const list = orgDefs?.[entity];
+    return list?.find((d) => d.field_key === fieldKey) ?? null;
+}
+
 function buildFieldSpec(
     ruleId: string,
     tier: ActionIntakeFieldTier,
-    paletteEntry: LifecycleFieldPaletteEntry | null
+    paletteEntry: LifecycleFieldPaletteEntry | null,
+    org_field_definitions?: Partial<Record<LifecycleRequirementEntityKey, OrgFieldDefinitionRow[]>> | null
 ): ActionIntakeFieldSpec | null {
     const payloadKey = createLeadPayloadKeyForRule(ruleId);
     if (!payloadKey) return null;
@@ -78,7 +92,15 @@ function buildFieldSpec(
 
     const fieldKey = paletteEntry?.field_key ?? binding?.field_key ?? null;
     const fieldLabel = paletteEntry?.field_label ?? catalog?.field_label ?? ruleId;
-    const valueKind = inferActionIntakeValueKind(ruleId, fieldKey);
+    const orgDef = orgFieldDefForKey(org_field_definitions, entity, fieldKey);
+    const fallbackOptionSetKey =
+        entity === "child" && fieldKey ? fallbackOptionSetKeyForInquiryChildField(fieldKey) : null;
+    const selectBinding = resolveSelectFieldBinding({
+        field_type: orgDef?.field_type ?? (fallbackOptionSetKey ? "select" : "text"),
+        config: orgDef?.config,
+        fallbackOptionSetKey,
+    });
+    const valueKind = inferActionIntakeValueKind(ruleId, fieldKey, selectBinding.option_set_key);
 
     return {
         rule_id: ruleId,
@@ -88,6 +110,7 @@ function buildFieldSpec(
         tier,
         field_key: fieldKey,
         value_kind: valueKind,
+        option_set_key: selectBinding.option_set_key,
         payload_key: payloadKey,
         form_capture_keys: binding?.form_capture_keys ?? [],
         validation: validationRulesForIntakeField(valueKind, tier),
@@ -178,12 +201,12 @@ export function resolveCreateLeadActionIntakeSpec(input: {
     const optional: ActionIntakeFieldSpec[] = [];
 
     for (const ruleId of policy.requiredIds) {
-        const spec = buildFieldSpec(ruleId, "required", byRule.get(ruleId) ?? null);
+        const spec = buildFieldSpec(ruleId, "required", byRule.get(ruleId) ?? null, input.org_field_definitions);
         if (spec) required.push(spec);
     }
     for (const ruleId of policy.recommendedIds) {
         if (policy.requiredIds.includes(ruleId)) continue;
-        const spec = buildFieldSpec(ruleId, "recommended", byRule.get(ruleId) ?? null);
+        const spec = buildFieldSpec(ruleId, "recommended", byRule.get(ruleId) ?? null, input.org_field_definitions);
         if (spec) recommended.push(spec);
     }
 
@@ -191,7 +214,7 @@ export function resolveCreateLeadActionIntakeSpec(input: {
     for (const entry of palette) {
         if (allRuleIds.has(entry.rule_id)) continue;
         if (!CREATE_LEAD_INTAKE_ENTITIES.includes(entry.entity)) continue;
-        const spec = buildFieldSpec(entry.rule_id, "optional", entry);
+        const spec = buildFieldSpec(entry.rule_id, "optional", entry, input.org_field_definitions);
         if (spec) optional.push(spec);
     }
 

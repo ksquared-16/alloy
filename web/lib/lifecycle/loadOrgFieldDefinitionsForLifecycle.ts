@@ -6,6 +6,8 @@ export type OrgFieldDefinitionRow = {
     field_key: string;
     label: string;
     entity_type: string;
+    field_type?: string;
+    config?: Record<string, unknown> | null;
     is_system: boolean;
     is_active: boolean;
 };
@@ -19,7 +21,7 @@ export async function loadOrgFieldDefinitionsForLifecycle(
 ): Promise<Partial<Record<LifecycleRequirementEntityKey, OrgFieldDefinitionRow[]>>> {
     const { data, error } = await supabase
         .from("field_definitions")
-        .select("field_key, label, entity_type, is_system, is_active")
+        .select("field_key, label, entity_type, field_type, config, is_system, is_active")
         .eq("org_id", orgId)
         .eq("is_active", true)
         .in("entity_type", [...LIFECYCLE_FIELD_ENTITY_TYPES]);
@@ -32,6 +34,8 @@ export async function loadOrgFieldDefinitionsForLifecycle(
             field_key?: string;
             label?: string | null;
             entity_type?: string;
+            field_type?: string;
+            config?: Record<string, unknown> | null;
             is_system?: boolean;
             is_active?: boolean;
         };
@@ -45,6 +49,8 @@ export async function loadOrgFieldDefinitionsForLifecycle(
             field_key,
             label,
             entity_type: String(r.entity_type ?? ""),
+            field_type: r.field_type ? String(r.field_type) : undefined,
+            config: r.config ?? null,
             is_system: r.is_system === true,
             is_active: r.is_active !== false,
         });

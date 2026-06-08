@@ -5,7 +5,7 @@ export type ActionIntakeMode = "structured" | "hybrid";
 
 export type ActionIntakeFieldTier = "required" | "recommended" | "optional";
 
-export type ActionIntakeValueKind = "text" | "email" | "phone" | "date";
+export type ActionIntakeValueKind = "text" | "email" | "phone" | "date" | "select";
 
 export type ActionIntakeValidationRule =
     | { kind: "non_empty" }
@@ -21,6 +21,8 @@ export type ActionIntakeFieldSpec = {
     tier: ActionIntakeFieldTier;
     field_key: string | null;
     value_kind: ActionIntakeValueKind;
+    /** When set, intake UI loads options from this org option set. */
+    option_set_key?: string | null;
     /** Key on create_lead execute payload (person + optional child_*). */
     payload_key: string;
     form_capture_keys: readonly string[];

@@ -50,12 +50,19 @@ export function formFieldFromRegistryEntry(entry: SystemFieldRegistryEntry, o: O
         case "checkbox":
             return { ...baseCommon, type: "boolean" };
         case "select": {
-            const lines = o.static_options_lines ?? entry.select_options_lines ?? "a|Option A\nb|Option B";
-            return {
-                ...baseCommon,
-                type: "select",
-                static_options: linesToStaticOptions(lines),
-            };
+            const optionSetKey = (entry.default_option_set_key ?? "").trim();
+            if (optionSetKey) {
+                return { ...baseCommon, type: "select", option_set_key: optionSetKey };
+            }
+            const lines = o.static_options_lines ?? entry.select_options_lines;
+            if (lines?.trim()) {
+                return {
+                    ...baseCommon,
+                    type: "select",
+                    static_options: linesToStaticOptions(lines),
+                };
+            }
+            return { ...baseCommon, type: "select" };
         }
         case "signature":
             return { ...baseCommon, type: "signature", signature: {} };

@@ -41,6 +41,19 @@ export const INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS = [
 
 export type InquiryChildNativeOcmFieldKey = (typeof INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS)[number];
 
+/** Default option_set_key for native inquiry_child select fields (fallback when field_definitions.config absent). */
+export const INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS: Partial<
+    Record<InquiryChildNativeOcmFieldKey, string>
+> = {
+    desired_program_type: "childcare_program_type",
+    desired_schedule_type: "childcare_schedule_type",
+};
+
+export function fallbackOptionSetKeyForInquiryChildField(fieldKey: string): string | null {
+    const k = fieldKey.trim() as InquiryChildNativeOcmFieldKey;
+    return INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS[k] ?? null;
+}
+
 export type InquiryChildNativeFieldManifestRow = {
     field_key: InquiryChildNativeOcmFieldKey;
     field_type: "date" | "text" | "select";
