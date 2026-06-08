@@ -1906,9 +1906,9 @@ function WorkUnitQueueLane({
                     Opening…
                   </span>
                 ) : null}
-                {showLayoutQueueHold && crm ?
+                {showLayoutQueueHold ?
                   <LayoutRuntimeQueueRowHold />
-                : useLayoutQueueRows && queueLayoutRuntime.doc && crm ?
+                : useLayoutQueueRows && queueLayoutRuntime.doc ?
                   <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split">
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <LayoutRuntimeQueueRowView
@@ -1921,6 +1921,7 @@ function WorkUnitQueueLane({
                         queueRowKey={item.id}
                         variant={hasCandidatePlacementRows ? "waitlist" : "pipeline"}
                         vmFallback={
+                          crm ? (
                           <CrmCompactQueuePreview
                             slots={crm}
                             urgencyTier={tier}
@@ -1948,6 +1949,7 @@ function WorkUnitQueueLane({
                             waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
                             workUnitKey={queue.drillWorkUnitKey ?? null}
                           />
+                          ) : null
                         }
                       />
                     </div>

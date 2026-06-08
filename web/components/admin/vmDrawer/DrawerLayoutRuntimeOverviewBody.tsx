@@ -10,6 +10,7 @@ import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/
 import OpportunityDrawerLayoutRuntimeOverviewHold from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeOverviewHold";
 import DrawerLayoutRuntimeStagingDiagnostic from "@/components/admin/vmDrawer/DrawerLayoutRuntimeStagingDiagnostic";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import LayoutRuntimeErrorPanel from "@/components/layout/LayoutRuntimeErrorPanel";
 import {
     isLayoutRuntimeHardCutoverActiveClient,
 } from "@/lib/layout/featureFlag";
@@ -43,7 +44,6 @@ export default function DrawerLayoutRuntimeOverviewBody({
     vmFallback,
     entityId,
     surface,
-    dataAttribute = "drawer-layout-runtime-overview",
 }: Props) {
     const renderStats = useMemo(
         () => computeLayoutRuntimeBodyRenderStats(layoutBody.doc, layoutBody.record),
@@ -79,11 +79,27 @@ export default function DrawerLayoutRuntimeOverviewBody({
     const useEmptyBodyFallback =
         layoutBody.bodyReady && renderStats.fallbackReason === "no_production_supported_items";
 
+    // Hard cutover: NEVER show the legacy VM overview body. When the layout can't
+    // render (fetch fail / timeout / render throw / no supported items), surface a
+    // visible error panel instead of silently falling back to the old drawer.
+    const hardCutover = isLayoutRuntimeHardCutoverActiveClient();
+    const fallbackNode = hardCutover ? (
+        <LayoutRuntimeErrorPanel
+            surface={surface}
+            reason={layoutBody.lastError ?? renderStats.fallbackReason ?? layoutBody.phase}
+            layoutSource={layoutBody.layoutSource}
+            layoutKey={layoutBody.layoutKey}
+            detail={{ phase: layoutBody.phase, bodyReady: layoutBody.bodyReady, sectionCount: renderStats.sectionCount }}
+        />
+    ) : (
+        vmFallback
+    );
+
     if (layoutBody.bodyReady && layoutBody.doc && layoutBody.record && !useEmptyBodyFallback) {
         const noRenderedItems = evidence.renderedItemCount === 0 && evidence.itemEvidence.length > 0;
         return (
             <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
-                fallback={vmFallback}
+                fallback={fallbackNode}
                 logContext={{
                     entityId,
                     layoutSource: layoutBody.layoutSource,
@@ -148,7 +164,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                         evidence={evidence}
                     />
                 :   null}
-                {vmFallback}
+                {fallbackNode}
             </div>
         );
     }
@@ -164,7 +180,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                     evidence={evidence}
                 />
             :   null}
-            {vmFallback}
+            {fallbackNode}
         </>
     );
 }

@@ -10,6 +10,8 @@ import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import QueueCardProofRenderer from "@/components/layout/QueueCardProofRenderer";
 import LayoutRuntimeQueueRowErrorBoundary from "@/components/layout/LayoutRuntimeQueueRowErrorBoundary";
+import LayoutRuntimeQueueRowErrorCard from "@/components/layout/LayoutRuntimeQueueRowErrorCard";
+import { isLayoutRuntimeHardCutoverActiveClient } from "@/lib/layout/featureFlag";
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 import {
     buildLayoutRuntimeQueueRowEvidence,
@@ -62,9 +64,17 @@ export default function LayoutRuntimeQueueRowView({
         logLayoutRuntimeQueueRowEvidence(evidence);
     }, [evidence]);
 
+    // Hard cutover: a row render failure shows a visible error card, never the
+    // legacy VM queue card.
+    const errorFallback = isLayoutRuntimeHardCutoverActiveClient() ? (
+        <LayoutRuntimeQueueRowErrorCard reason="queue_row_render_failed" queueRowKey={queueRowKey} />
+    ) : (
+        vmFallback
+    );
+
     return (
         <LayoutRuntimeQueueRowErrorBoundary
-            fallback={vmFallback}
+            fallback={errorFallback}
             queueRowKey={queueRowKey}
             variant={variant}
         >
