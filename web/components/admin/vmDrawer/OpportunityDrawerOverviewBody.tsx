@@ -14,12 +14,16 @@
  * ## Fallback chain
  *
  * 1. Flags off → VM overview only.
- * 2. Fetch/resolve/evaluate failure → VM overview.
- * 3. Render-phase error (Error Boundary) → VM overview.
+ * 2. Flags on + loading → coordinated hold (no VM flash).
+ * 3. Fetch/resolve/evaluate failure → VM overview.
+ * 4. Render-phase error (Error Boundary) → VM overview.
  */
 
+import type { ReactNode } from "react";
 import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview";
 import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyErrorBoundary";
+import OpportunityDrawerLayoutRuntimeBodyStatus from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyStatus";
+import OpportunityDrawerLayoutRuntimeOverviewHold from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeOverviewHold";
 import OpportunityDrawerLayoutRuntimeShadowDiagnostics from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeShadowDiagnostics";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -84,27 +88,45 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         />
     );
 
+    let overviewBody: ReactNode;
+    if (layoutBody.bodyReady && layoutBody.doc && layoutBody.record) {
+        overviewBody = (
+            <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
+                fallback={vmFallback}
+                logContext={{
+                    opportunityId: drawerId,
+                    layoutSource: layoutBody.layoutSource,
+                    surface: "opportunity_drawer_overview",
+                }}
+            >
+                <div
+                    className="space-y-4"
+                    data-drawer-layout-runtime-overview="true"
+                    data-layout-runtime-source={layoutBody.layoutSource ?? ""}
+                    data-layout-runtime-readonly="true"
+                >
+                    <LayoutRuntimeDrawerBodyView doc={layoutBody.doc} record={layoutBody.record} />
+                </div>
+            </OpportunityDrawerLayoutRuntimeBodyErrorBoundary>
+        );
+    } else if (layoutBody.showHold) {
+        overviewBody = <OpportunityDrawerLayoutRuntimeOverviewHold />;
+    } else {
+        overviewBody = vmFallback;
+    }
+
     return (
         <div className="space-y-4" data-adminv2-opportunity-drawer-body="true">
-            {layoutBody.bodyReady && layoutBody.doc && layoutBody.record ?
-                <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
-                    fallback={vmFallback}
-                    logContext={{
-                        opportunityId: drawerId,
-                        layoutSource: layoutBody.layoutSource,
-                        surface: "opportunity_drawer_overview",
-                    }}
-                >
-                    <div
-                        className="space-y-4"
-                        data-drawer-layout-runtime-overview="true"
-                        data-layout-runtime-source={layoutBody.layoutSource ?? ""}
-                        data-layout-runtime-readonly="true"
-                    >
-                        <LayoutRuntimeDrawerBodyView doc={layoutBody.doc} record={layoutBody.record} />
-                    </div>
-                </OpportunityDrawerLayoutRuntimeBodyErrorBoundary>
-            :   vmFallback}
+            {overviewBody}
+            {layoutBody.cutoverEnabled ?
+                <OpportunityDrawerLayoutRuntimeBodyStatus
+                    phase={layoutBody.phase}
+                    layoutSource={layoutBody.layoutSource}
+                    layoutKey={layoutBody.layoutKey}
+                    lastError={layoutBody.lastError}
+                    opportunityId={drawerId}
+                />
+            :   null}
             {layoutRuntimeShadow.shadowEnabled && layoutBody.useVmFallback ?
                 <div
                     aria-hidden="true"

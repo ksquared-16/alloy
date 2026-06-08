@@ -9,6 +9,8 @@ import {
     isLayoutRuntimeOpportunityDrawerEnabledServer,
     isLayoutRuntimeOpportunityDrawerBodyEnabledServer,
     isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled,
+    isLayoutRuntimeOpportunityQueueEnabledServer,
+    isLayoutRuntimeOpportunityQueueShadowReadPathEnabled,
     isLayoutRuntimeReadPathEnabled,
     isLayoutRuntimeShadowEnabledServer,
     isLayoutV2PreviewEnabledServer,
@@ -53,5 +55,16 @@ describe("layout runtime feature flags", () => {
         expect(isLayoutRuntimeOpportunityDrawerEnabledServer()).toBe(false);
         expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled()).toBe(false);
         expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
+    });
+
+    it("LAYOUT_RUNTIME_OPPORTUNITY_QUEUE defaults off and requires master runtime for shadow", () => {
+        expect(isLayoutRuntimeOpportunityQueueEnabledServer()).toBe(false);
+        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
+
+        process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE = "1";
+        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
+
+        process.env.LAYOUT_RUNTIME_ENABLED = "1";
+        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(true);
     });
 });

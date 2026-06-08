@@ -1,5 +1,7 @@
 import LayoutsSettingsHubClient from "./LayoutsSettingsHubClient";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
+import EffectiveLayoutInspectorClient from "@/components/adminV2/settings/EffectiveLayoutInspectorClient";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,15 @@ export default async function AdminV2SettingsLayoutsPage({ searchParams }: PageP
             </header>
 
             <LayoutConfigClient adminV2Chrome />
+
+            <EffectiveLayoutInspectorClient initialEntityType={sp.entity ?? "opportunities"} initialSurface="drawer" />
+
+            <p className="text-xs text-alloy-midnight/55">
+                <Link href="/adminV2/settings/layouts/effective" className="text-alloy-blue underline">
+                    Full-screen effective layout inspector
+                </Link>
+                {" "}· also linked from C1b drawer debug panel when runtime flags are on.
+            </p>
 
             <details className="rounded-lg border border-alloy-stone/30 bg-white/70 px-3 py-2">
                 <summary className="cursor-pointer text-xs font-medium text-alloy-midnight/60">

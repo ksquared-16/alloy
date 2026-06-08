@@ -62,8 +62,9 @@ describe("resolveOpportunityOverviewBodyPresentation", () => {
         expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: false, phase: "ready" })).toBe("vm");
     });
 
-    it("flags on renders layout body only when ready", () => {
-        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "loading" })).toBe("vm");
+    it("flags on holds during idle/loading and renders layout when ready", () => {
+        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "idle" })).toBe("hold");
+        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "loading" })).toBe("hold");
         expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "fallback" })).toBe("vm");
         expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "ready" })).toBe("layout");
     });

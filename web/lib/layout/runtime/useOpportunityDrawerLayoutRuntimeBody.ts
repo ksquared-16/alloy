@@ -3,7 +3,7 @@
 /**
  * C1b — load layout runtime overview body for opportunity drawer (flag-gated).
  *
- * Non-blocking: VM overview remains visible until layout body resolves successfully.
+ * Coordinated hold while layout body loads — no VM flash when cutover flags are on.
  * Failures fall back to VM body without operator-visible errors.
  */
 
@@ -24,23 +24,31 @@ export type UseOpportunityDrawerLayoutRuntimeBodyArgs = {
 export type UseOpportunityDrawerLayoutRuntimeBodyResult = {
     cutoverEnabled: boolean;
     phase: OpportunityLayoutRuntimeBodyPhase;
-    /** True when operator should see VM overview body. */
+    presentation: OpportunityLayoutRuntimeBodyPresentation;
+    /** True when operator should see VM overview body (fallback or flags off). */
     useVmFallback: boolean;
+    /** True when coordinated hold placeholder should show. */
+    showHold: boolean;
     /** True when layout runtime body should render. */
     bodyReady: boolean;
     doc: LayoutDoc | null;
     record: ProofRuntimeRecord | null;
     layoutSource: string | null;
+    layoutKey: string | null;
     lastError: string | null;
 };
+
+export type OpportunityLayoutRuntimeBodyPresentation = "vm" | "hold" | "layout";
 
 export function resolveOpportunityOverviewBodyPresentation(input: {
     cutoverEnabled: boolean;
     phase: OpportunityLayoutRuntimeBodyPhase;
-}): "vm" | "layout" {
+}): OpportunityLayoutRuntimeBodyPresentation {
     if (!input.cutoverEnabled) return "vm";
     if (input.phase === "ready") return "layout";
-    return "vm";
+    if (input.phase === "fallback") return "vm";
+    // idle + loading: hold coordinated placeholder — never flash VM before layout
+    return "hold";
 }
 
 export function useOpportunityDrawerLayoutRuntimeBody(
@@ -52,6 +60,7 @@ export function useOpportunityDrawerLayoutRuntimeBody(
     const [doc, setDoc] = useState<LayoutDoc | null>(null);
     const [record, setRecord] = useState<ProofRuntimeRecord | null>(null);
     const [layoutSource, setLayoutSource] = useState<string | null>(null);
+    const [layoutKey, setLayoutKey] = useState<string | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
     const lastLoadedIdRef = useRef<string | null>(null);
     const readyIdRef = useRef<string | null>(null);
@@ -62,6 +71,7 @@ export function useOpportunityDrawerLayoutRuntimeBody(
             setDoc(null);
             setRecord(null);
             setLayoutSource(null);
+            setLayoutKey(null);
             setLastError(null);
             lastLoadedIdRef.current = null;
             readyIdRef.current = null;
@@ -103,6 +113,7 @@ export function useOpportunityDrawerLayoutRuntimeBody(
                         doc?: LayoutDoc;
                         record?: ProofRuntimeRecord;
                         layoutSource?: string;
+                        plan?: { layoutKey?: string };
                     };
 
                     if (!json.doc?.sections?.length || !json.record) {
@@ -114,6 +125,7 @@ export function useOpportunityDrawerLayoutRuntimeBody(
                     setDoc(json.doc);
                     setRecord(json.record);
                     setLayoutSource(json.layoutSource ?? null);
+                    setLayoutKey(json.plan?.layoutKey ?? null);
                     setPhase("ready");
                     readyIdRef.current = oid;
                 })
@@ -131,18 +143,9 @@ export function useOpportunityDrawerLayoutRuntimeBody(
                 });
         };
 
-        if (typeof requestIdleCallback === "function") {
-            const idleId = requestIdleCallback(run, { timeout: 1500 });
-            return () => {
-                cancelled = true;
-                cancelIdleCallback(idleId);
-            };
-        }
-
-        const timerId = setTimeout(run, 0);
+        run();
         return () => {
             cancelled = true;
-            clearTimeout(timerId);
         };
     }, [cutoverEnabled, args.opportunityId, args.vmReady, args.departmentId, args.workUnitId]);
 
@@ -154,20 +157,26 @@ export function useOpportunityDrawerLayoutRuntimeBody(
             setDoc(null);
             setRecord(null);
             setLayoutSource(null);
+            setLayoutKey(null);
             setLastError(null);
         }
     }, [args.opportunityId]);
 
-    const useVmFallback = resolveOpportunityOverviewBodyPresentation({ cutoverEnabled, phase }) === "vm";
+    const presentation = resolveOpportunityOverviewBodyPresentation({ cutoverEnabled, phase });
+    const useVmFallback = presentation === "vm";
+    const showHold = presentation === "hold";
 
     return {
         cutoverEnabled,
         phase,
+        presentation,
         useVmFallback,
+        showHold,
         bodyReady: phase === "ready" && doc != null && record != null,
         doc,
         record,
         layoutSource,
+        layoutKey,
         lastError,
     };
 }

@@ -83,6 +83,24 @@ export function isLayoutRuntimeOpportunityDrawerBodyEnabledClient(): boolean {
     return isLayoutRuntimeEnabledClient() && isLayoutRuntimeOpportunityDrawerEnabledClient();
 }
 
+/** Per-entity cutover gate — opportunity queue rows (C4 foundation). Default: off. */
+export function isLayoutRuntimeOpportunityQueueEnabledServer(): boolean {
+    return readFlag(process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE, false);
+}
+
+export function isLayoutRuntimeOpportunityQueueEnabledClient(): boolean {
+    return readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_QUEUE, false);
+}
+
+/** C4 shadow/proof read path — master runtime + opportunity queue flag. Default: off. */
+export function isLayoutRuntimeOpportunityQueueShadowReadPathEnabled(): boolean {
+    return isLayoutRuntimeEnabledServer() && isLayoutRuntimeOpportunityQueueEnabledServer();
+}
+
+export function isLayoutRuntimeOpportunityQueueShadowReadPathEnabledClient(): boolean {
+    return isLayoutRuntimeEnabledClient() && isLayoutRuntimeOpportunityQueueEnabledClient();
+}
+
 /** Optional dev/staging diagnostics panel inside opportunity drawer. Default: off. */
 export function isLayoutRuntimeOpportunityDrawerShadowDiagnosticsEnabledClient(): boolean {
     return (

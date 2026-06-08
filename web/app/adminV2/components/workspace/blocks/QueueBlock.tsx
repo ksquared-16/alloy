@@ -28,6 +28,7 @@ import { prepareDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/drawerMod
 import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
+import OpportunityQueueRowLayoutRuntimeShadowMount from "@/components/admin/workspace/OpportunityQueueRowLayoutRuntimeShadowMount";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import {
   resolveWorkUnitQueueRowPresentationPlan,
@@ -2103,6 +2104,14 @@ function WorkUnitQueueLane({
           );
         })}
         </ul>
+        {queue.queueEntityType === "opportunity" ?
+            <OpportunityQueueRowLayoutRuntimeShadowMount
+                rowKey={`${queue.id}:${queue.drillWorkUnitKey ?? "lane"}`}
+                drillWorkUnitKey={queue.drillWorkUnitKey}
+                isWaitlistCandidate={hasCandidatePlacementRows}
+                grain={hasCandidatePlacementRows ? "candidate" : "case"}
+            />
+        :   null}
       </div>
     </section>
   );
