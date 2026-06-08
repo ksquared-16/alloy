@@ -126,6 +126,9 @@ describe("buildOpportunityLayoutRuntimeRecordFromVm", () => {
         expect(record["person.primary_contact_name"]).toBe("Jamie Johnson");
         const children = record.enrollment_children;
         expect(Array.isArray(children) && children[0]?.["child.name"]).toBe("Alex Johnson");
+        expect(Array.isArray(record.children) && record.children.length).toBe(children?.length ?? 0);
+        expect(children?.[0]?.["child.program"]).toBe("Infant AM");
+        expect(record["opportunity.tour_date"]).toBeDefined();
         expect(JSON.stringify(record.enrollment_children)).not.toContain("cm-secret");
         expect(JSON.stringify(record.enrollment_children)).not.toContain("ocm-secret");
         expect(record._relations?.primary_contact?.handle).toBe("Jamie Johnson");
@@ -197,15 +200,37 @@ describe("LayoutRuntimeDrawerBodyView production renderer", () => {
                 name: "Johnson Family",
                 "person.primary_contact_name": "Jamie Johnson",
                 "person.primary_phone": "(555) 234-8901",
+                _inquiry_children: [
+                    {
+                        id: "row-1",
+                        display_name: "Alex Johnson",
+                        program_room_cohort_label: "Infant AM",
+                    },
+                ],
             },
         });
         const html = renderToStaticMarkup(<LayoutRuntimeDrawerBodyView doc={doc} record={record} />);
         expect(html).toContain("Jamie Johnson");
+        expect(html).toContain("Alex Johnson");
         expect(html).not.toContain("Runtime plan ·");
         expect(html).not.toContain("computed");
         expect(html).not.toContain("person.primary_contact_name");
         expect(html).not.toContain("inquiry_child");
         expect(html).not.toContain("customer_member");
+    });
+
+    it("children repeater binds via children source alias", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-1",
+            vmRecord: {
+                name: "Johnson Family",
+                _inquiry_children: [{ id: "row-1", display_name: "Alex Johnson" }],
+            },
+        });
+        expect(Array.isArray(record.children) && record.children[0]?.["child.name"]).toBe("Alex Johnson");
+        const html = renderToStaticMarkup(<LayoutRuntimeDrawerBodyView doc={doc} record={record} />);
+        expect(html).toContain("Alex Johnson");
     });
 
     it("layout failure path keeps VM presentation resolver on VM", () => {

@@ -98,10 +98,13 @@ describe("layout runtime record mappers", () => {
         const item: QueuePreviewItemVm = {
             id: "opp-1",
             title: "Johnson Family",
+            quickActions: [],
             semanticCrmCompact: {
                 primaryIdentity: "Johnson Family",
                 childName: "Alex",
                 contactDisplayName: "Jamie Johnson",
+                contactPhoneDisplay: "(555) 234-8901",
+                contactEmail: "jamie@example.com",
                 programContext: "Infant AM",
                 statusLabel: "Qualified",
                 stageLabel: null,
@@ -111,12 +114,55 @@ describe("layout runtime record mappers", () => {
                 contactSnippet: "(555) 234-8901",
                 roomContext: "Main Campus",
                 ageContext: null,
-                attentionReason: null,
+                attentionReason: "Tour overdue",
                 familyNote: null,
+                tourContext: "Jun 12",
+                locationContext: "Main Campus",
             },
         };
         const record = buildOpportunityQueueRowRecordFromPreview(item);
         expect(record.name).toBe("Johnson Family");
+        expect(record.last_name).toBe("Johnson");
         expect(record["person.primary_contact_name"]).toBe("Jamie Johnson");
+        expect(record["opportunity.tour_date"]).toBe("Jun 12");
+        expect(record._attention).toBe("Tour overdue");
+        expect(Array.isArray(record.children) && record.children[0]?.["child.name"]).toBe("Alex");
+    });
+
+    it("maps waitlist candidate preview to layout row record", () => {
+        const item: QueuePreviewItemVm = {
+            id: "cand-1",
+            title: "Alex Johnson",
+            quickActions: [],
+            placementWaitlistCandidate: {
+                placementCandidateId: "pc-1",
+                opportunityId: "opp-1",
+                childDisplayName: "Alex Johnson",
+                familyDisplayName: "Johnson Family",
+                parentDisplayName: "Jamie Johnson",
+                cohortKey: "infant-am",
+                cohortLabel: "Infant AM",
+                cohortSectionTitle: "Main Campus · Infant",
+                bucketLabel: "Priority 1",
+                waitSinceLabel: "14 days",
+                linkModeLabel: null,
+                isSyntheticFallback: false,
+                hasActiveOverride: false,
+                activeOverrideKinds: [],
+                activeOverrides: [],
+                hasManualPositionAdjustment: false,
+                manualAdjustmentReason: null,
+                pinOverrideId: null,
+                shadowMode: false,
+                forecastHints: [],
+                siblingLabel: null,
+                siblingCohorts: [],
+                siblingContextLines: [],
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item);
+        expect(record["child.name"]).toBe("Alex Johnson");
+        expect(record["child.program"]).toBe("Infant AM");
+        expect(record["opportunity.status_key"]).toBe("Priority 1");
     });
 });

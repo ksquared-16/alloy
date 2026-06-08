@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
+import { MapPin } from "lucide-react";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
 import OpportunityDrawerOverviewBody from "@/components/admin/vmDrawer/OpportunityDrawerOverviewBody";
@@ -31,6 +32,8 @@ import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/dra
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
 import { useOpportunityDrawerLayoutRuntimeShadow } from "@/lib/layout/runtime/shadow/useOpportunityDrawerLayoutRuntimeShadow";
+import { isLayoutRuntimeHardCutoverActiveClient } from "@/lib/layout/featureFlag";
+import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 
 const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
 
@@ -334,15 +337,82 @@ export default function OpportunityDrawerVmRuntime() {
         drawerVmRender.type === "opportunities" &&
         Boolean(drawerVmRender.id);
 
+    const layoutCutoverHeader = isLayoutRuntimeHardCutoverActiveClient();
+
+    const drawerTitleNode = useMemo(() => {
+        if (!layoutCutoverHeader || !record) return drawerTitle;
+        const location = opportunityDisplayLocationFromRecord(record);
+        const locationLabel =
+            location.kind === "single" ? location.label
+            : location.kind === "multiple" ? location.label
+            : null;
+        return (
+            <div className="flex flex-wrap items-center gap-2" data-opportunity-drawer-header-title="true">
+                <span>{drawerTitle}</span>
+                {locationLabel ?
+                    <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70">
+                        <MapPin className="h-3 w-3" aria-hidden />
+                        {locationLabel}
+                    </span>
+                :   null}
+            </div>
+        );
+    }, [drawerTitle, layoutCutoverHeader, record]);
+
+    const drawerHeaderTabStrip = useMemo(() => {
+        if (!layoutCutoverHeader || !committedVisible) return undefined;
+        return (
+            <div
+                className="flex min-h-0 flex-wrap gap-0.5 rounded-lg border border-[rgba(0,0,0,0.14)] bg-white px-1.5 py-1.5"
+                data-opportunity-drawer-tab-strip="true"
+            >
+                {tabs.map((tab) => (
+                    <button
+                        key={tab}
+                        type="button"
+                        onClick={() => onTabSelect(tab)}
+                        className={clsx(
+                            "rounded-md px-3 py-1.5 text-xs font-medium leading-snug transition-colors",
+                            drawerTab === tab ?
+                                "bg-[#273F52] text-white shadow-sm"
+                            :   "text-[#273F52]/80 hover:bg-[rgba(0,0,0,0.05)]",
+                        )}
+                        style={
+                            drawerTab === tab ?
+                                { borderBottom: "2px solid rgba(0,162,131,0.45)" }
+                            :   undefined
+                        }
+                        data-opportunity-drawer-tab={tab}
+                    >
+                        {OPPORTUNITY_TAB_LABELS[tab] ?? tab}
+                    </button>
+                ))}
+            </div>
+        );
+    }, [committedVisible, drawerTab, layoutCutoverHeader, onTabSelect, tabs]);
+
+    const headerTitleRightResolved = useMemo(() => {
+        if (!headerTitleRight) return undefined;
+        if (!layoutCutoverHeader || !headerSubtitleBelowTitle) return headerTitleRight;
+        return (
+            <div className="flex shrink-0 items-start gap-2" data-opportunity-drawer-header-title-right="true">
+                <div className="pt-0.5">{headerSubtitleBelowTitle}</div>
+                {headerTitleRight}
+            </div>
+        );
+    }, [headerSubtitleBelowTitle, headerTitleRight, layoutCutoverHeader]);
+
     return (
         <>
         <Drawer
             isOpen={drawerOpen}
             onClose={closeDrawer}
-            title={drawerTitle}
-            headerSubtitle={headerSubtitleBelowTitle}
+            title={drawerTitleNode}
+            headerSubtitle={layoutCutoverHeader ? undefined : headerSubtitleBelowTitle}
             headerTitleCenter={headerAttentionCenter}
-            headerTitleRight={headerTitleRight}
+            headerTitleRight={headerTitleRightResolved}
+            headerExtra={drawerHeaderTabStrip}
+            postTabStrip={layoutCutoverHeader ? lifecycleRail : undefined}
             variant="adminV2"
             presentation="modal"
             panelClassName="max-w-7xl"
@@ -390,34 +460,38 @@ export default function OpportunityDrawerVmRuntime() {
                     </div>
                 :   committedVisible && displayVm && record ?
                     <>
-                        <div
-                            className="mb-3 flex flex-wrap gap-0.5 border-b border-alloy-stone/15 pb-2"
-                            data-opportunity-drawer-tab-strip="true"
-                        >
-                            {tabs.map((tab) => (
-                                <button
-                                    key={tab}
-                                    type="button"
-                                    onClick={() => onTabSelect(tab)}
-                                    className={clsx(
-                                        "rounded-md px-3 py-1.5 text-xs font-semibold capitalize",
-                                        drawerTab === tab ?
-                                            "bg-alloy-blue/10 text-alloy-blue"
-                                        :   "text-alloy-midnight/60 hover:bg-alloy-stone/10"
-                                    )}
-                                    data-opportunity-drawer-tab={tab}
+                        {!layoutCutoverHeader ?
+                            <>
+                                <div
+                                    className="mb-3 flex flex-wrap gap-0.5 border-b border-alloy-stone/15 pb-2"
+                                    data-opportunity-drawer-tab-strip="true"
                                 >
-                                    {OPPORTUNITY_TAB_LABELS[tab] ?? tab}
-                                </button>
-                            ))}
-                        </div>
-                        {lifecycleRail ?
-                            <div
-                                className="mb-3"
-                                data-opportunity-drawer-lifecycle-rail-wrap="true"
-                            >
-                                {lifecycleRail}
-                            </div>
+                                    {tabs.map((tab) => (
+                                        <button
+                                            key={tab}
+                                            type="button"
+                                            onClick={() => onTabSelect(tab)}
+                                            className={clsx(
+                                                "rounded-md px-3 py-1.5 text-xs font-semibold capitalize",
+                                                drawerTab === tab ?
+                                                    "bg-alloy-blue/10 text-alloy-blue"
+                                                :   "text-alloy-midnight/60 hover:bg-alloy-stone/10",
+                                            )}
+                                            data-opportunity-drawer-tab={tab}
+                                        >
+                                            {OPPORTUNITY_TAB_LABELS[tab] ?? tab}
+                                        </button>
+                                    ))}
+                                </div>
+                                {lifecycleRail ?
+                                    <div
+                                        className="mb-3"
+                                        data-opportunity-drawer-lifecycle-rail-wrap="true"
+                                    >
+                                        {lifecycleRail}
+                                    </div>
+                                :   null}
+                            </>
                         :   null}
                         {drawer.id ?
                             <CommunicationsDrawerBackgroundLoader

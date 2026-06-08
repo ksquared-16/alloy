@@ -5,11 +5,15 @@
  */
 
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyErrorBoundary";
 import OpportunityDrawerLayoutRuntimeOverviewHold from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeOverviewHold";
+import DrawerLayoutRuntimeStagingDiagnostic from "@/components/admin/vmDrawer/DrawerLayoutRuntimeStagingDiagnostic";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
-import type { LayoutDoc } from "@/lib/layout/layoutV2";
-import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import {
+    isLayoutRuntimeHardCutoverActiveClient,
+} from "@/lib/layout/featureFlag";
+import { computeLayoutRuntimeBodyRenderStats } from "@/lib/layout/runtime/layoutRuntimeBodyRenderStats";
 import type { LayoutRuntimeDrawerSurface } from "@/lib/layout/runtime/logLayoutRuntimeBodyRenderFailure";
 import type { UseDrawerLayoutRuntimeBodyResult } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 
@@ -21,6 +25,14 @@ type Props = {
     dataAttribute?: string;
 };
 
+function shouldShowStagingDiagnostic(): boolean {
+    return (
+        isLayoutRuntimeHardCutoverActiveClient() ||
+        process.env.NEXT_PUBLIC_APP_ENV === "staging" ||
+        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG === "1"
+    );
+}
+
 export default function DrawerLayoutRuntimeOverviewBody({
     layoutBody,
     vmFallback,
@@ -28,7 +40,18 @@ export default function DrawerLayoutRuntimeOverviewBody({
     surface,
     dataAttribute = "drawer-layout-runtime-overview",
 }: Props) {
-    if (layoutBody.bodyReady && layoutBody.doc && layoutBody.record) {
+    const renderStats = useMemo(
+        () => computeLayoutRuntimeBodyRenderStats(layoutBody.doc, layoutBody.record),
+        [layoutBody.doc, layoutBody.record],
+    );
+
+    const showStagingDiagnostic = shouldShowStagingDiagnostic();
+    const useEmptyBodyFallback =
+        layoutBody.bodyReady &&
+        renderStats.renderableItemCount === 0 &&
+        renderStats.fallbackReason != null;
+
+    if (layoutBody.bodyReady && layoutBody.doc && layoutBody.record && !useEmptyBodyFallback) {
         return (
             <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
                 fallback={vmFallback}
@@ -44,7 +67,16 @@ export default function DrawerLayoutRuntimeOverviewBody({
                     data-layout-runtime-surface={surface}
                     data-layout-runtime-source={layoutBody.layoutSource ?? ""}
                     data-layout-runtime-readonly="true"
+                    data-drawer-layout-runtime-renderable-count={renderStats.renderableItemCount}
                 >
+                    {showStagingDiagnostic ?
+                        <DrawerLayoutRuntimeStagingDiagnostic
+                            layoutSource={layoutBody.layoutSource}
+                            stats={renderStats}
+                            surface={surface}
+                            lastError={layoutBody.lastError}
+                        />
+                    :   null}
                     <LayoutRuntimeDrawerBodyView doc={layoutBody.doc} record={layoutBody.record} />
                 </div>
             </OpportunityDrawerLayoutRuntimeBodyErrorBoundary>
@@ -53,6 +85,22 @@ export default function DrawerLayoutRuntimeOverviewBody({
 
     if (layoutBody.showHold) {
         return <OpportunityDrawerLayoutRuntimeOverviewHold />;
+    }
+
+    if (useEmptyBodyFallback) {
+        return (
+            <div className="space-y-4" data-drawer-layout-runtime-empty-fallback="true">
+                {showStagingDiagnostic ?
+                    <DrawerLayoutRuntimeStagingDiagnostic
+                        layoutSource={layoutBody.layoutSource}
+                        stats={renderStats}
+                        surface={surface}
+                        lastError={layoutBody.lastError ?? renderStats.fallbackReason}
+                    />
+                :   null}
+                {vmFallback}
+            </div>
+        );
     }
 
     return <>{vmFallback}</>;
