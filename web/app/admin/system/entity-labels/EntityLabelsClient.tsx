@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import ConfigLockBanner from "@/components/admin/ConfigLockBanner";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
@@ -32,7 +33,10 @@ const GENERIC_VALUE = "__generic__";
 /** Legacy entity types hidden from primary Entity Labels UI (contacts, customer_members). */
 const LEGACY_ENTITY_TYPES = new Set(["contacts", "customer_members"]);
 
-export default function EntityLabelsClient() {
+const ENTITY_LABELS_SUBTITLE =
+    "Industry drives default labels for People, Customers, Vendors, Person Roles, Relationship Types, and other entities. Override per type below.";
+
+export default function EntityLabelsClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const { refreshEntityLabels } = useEntityLabels();
     const [data, setData] = useState<ApiResponse | null>(null);
@@ -218,7 +222,11 @@ export default function EntityLabelsClient() {
     if (loading) {
         return (
             <>
-                <AdminPageHeader title="Entity Labels" subtitle="Industry drives default labels for People, Customers, Vendors, Person Roles, Relationship Types, and other entities. Override per type below." />
+                {adminV2Chrome ? (
+                    <SettingsPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
+                ) : (
+                    <AdminPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
+                )}
                 <p className="text-sm text-[#59678b]">Loading…</p>
             </>
         );
@@ -227,7 +235,11 @@ export default function EntityLabelsClient() {
     if (error || !data) {
         return (
             <>
-                <AdminPageHeader title="Entity Labels" subtitle="Industry drives default labels for People, Customers, Vendors, Person Roles, Relationship Types, and other entities. Override per type below." />
+                {adminV2Chrome ? (
+                    <SettingsPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
+                ) : (
+                    <AdminPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
+                )}
                 <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error ?? "Failed to load"}</div>
             </>
         );
@@ -239,7 +251,11 @@ export default function EntityLabelsClient() {
 
     return (
         <>
-            <AdminPageHeader title="Entity Labels" subtitle="Industry drives default labels for People, Customers, Vendors, Person Roles, Relationship Types, and other entities. Override per type below." />
+            {adminV2Chrome ? (
+                <SettingsPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
+            ) : (
+                <AdminPageHeader title="Entity Labels" subtitle={ENTITY_LABELS_SUBTITLE} />
+            )}
             {locked && <ConfigLockBanner />}
             {!canMutate && (
                 <p className="mb-4 text-sm text-[#59678b]">You can view entity labels. Only admins can edit.</p>

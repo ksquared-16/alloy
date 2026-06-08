@@ -1,0 +1,44 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const root = resolve(__dirname, "../../..");
+
+function read(rel: string): string {
+    return readFileSync(resolve(root, rel), "utf8");
+}
+
+describe("person drawer perf follow-up wiring", () => {
+    it("AdminEntityDrawer prefetches linked persons after opportunity reveal", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("prefetchLinkedPersonsFromOpportunityRecord");
+        expect(drawer).toContain("opportunity_drawer_idle");
+        expect(drawer).toContain("opportunityDrawerOverviewRevealReady");
+        expect(drawer).toContain("scheduleAdminV2BackgroundWork");
+    });
+
+    it("AdminEntityDrawer applies cache-first person open and back restore in layout effect", () => {
+        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        expect(drawer).toContain("drawerEntityTargetKeyPrevRef");
+        expect(drawer).toContain("putDrawerStackRestoreSnapshot");
+        expect(drawer).toContain("peekDrawerStackRestoreSnapshot");
+        expect(drawer).toContain("logDrawerBackRestore");
+        expect(drawer).toContain("logPersonDrawerOpen");
+    });
+
+    it("View Person hover and pointerdown prefetch uses persons entity endpoint", () => {
+        const card = read("components/admin/opportunity/EditablePersonContactCard.tsx");
+        expect(card).toContain("prefetchViewPersonOnHover");
+        expect(card).toContain("prefetchViewPersonOnPointerDown");
+    });
+
+    it("prefetch and open modules emit perf log tags", () => {
+        const prefetch = read("lib/admin/prefetchPersonDrawerSnapshot.ts");
+        const open = read("lib/admin/drawer/openViewPersonFromOpportunity.ts");
+        const logs = read("lib/admin/drawer/personDrawerPerfLogs.ts");
+        expect(prefetch).toContain("logPersonPrefetch");
+        expect(open).toContain("isPersonDrawerSnapshotWarm");
+        expect(logs).toContain("[person-drawer-open]");
+        expect(logs).toContain("[drawer-back-restore]");
+    });
+});

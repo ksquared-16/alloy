@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import { inferJobDiscountSelectionToken, parseJobDiscountSelectionInput, resolveJobDiscountSelection, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
@@ -20,6 +21,12 @@ import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineI
 import { buildOverrideLinesFromAdminJobRow, overrideJobPricing } from "@/lib/pricing/overrideJobPricing";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import {
+    enforceDrawerFieldPoliciesOnPatch,
+    fieldPolicyValidationResponse,
+} from "@/lib/fields/enforceDrawerFieldPoliciesOnPatch";
 
 const ALLOWED_KEYS = [
     "title",
@@ -53,8 +60,12 @@ export async function GET(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    const dim = scopeDimensionsFromAccess(access);
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -72,6 +83,14 @@ export async function GET(
     }
 
     const j = job as Record<string, unknown>;
+    if (
+        !(await assertJobInAccessScope(supabase, ctx.orgId, dim, {
+            work_unit_id: j.work_unit_id as string | null | undefined,
+            location_id: j.location_id as string | null | undefined,
+        }))
+    ) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const customerId = j.customer_id as string | null | undefined;
     const vendorId = j.assigned_vendor_id as string | null | undefined;
     const primaryPersonId = j.primary_person_id as string | null | undefined;
@@ -167,7 +186,7 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -182,18 +201,50 @@ export async function PATCH(
 
         const { data: existingJob, error: existingErr } = await supabase
             .from("jobs")
-            .select("status_key, customer_id, assigned_vendor_id")
+            .select("status_key, customer_id, assigned_vendor_id, work_unit_id, location_id")
             .eq("id", id)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
         if (existingErr || !existingJob) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
+
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+        const scopeDim = scopeDimensionsFromAccess(access);
+        const ej = existingJob as { work_unit_id?: string | null; location_id?: string | null };
+        if (!(await assertJobInAccessScope(supabase, ctx.orgId, scopeDim, { work_unit_id: ej.work_unit_id ?? null, location_id: ej.location_id ?? null }))) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+
         const oldStatusKey = (existingJob as { status_key?: string | null }).status_key ?? null;
 
         const updates: Record<string, unknown> = {};
 
         const action = body.action as string | undefined;
+        if (!action || !(JOB_ACTIONS as readonly string[]).includes(action)) {
+            const { data: jobFull, error: jobFullErr } = await supabase
+                .from("jobs")
+                .select("*")
+                .eq("id", id)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            if (jobFullErr || !jobFull) {
+                return NextResponse.json({ error: "Not found" }, { status: 404 });
+            }
+            const policyCheck = await enforceDrawerFieldPoliciesOnPatch({
+                supabase,
+                orgId: ctx.orgId,
+                entityType: "job",
+                entityId: id,
+                body,
+                persistedRow: jobFull as Record<string, unknown>,
+            });
+            if (!policyCheck.ok) {
+                return NextResponse.json(fieldPolicyValidationResponse(policyCheck.violations), { status: 400 });
+            }
+        }
+
         if (action && (JOB_ACTIONS as readonly string[]).includes(action)) {
             const { data: jobRow } = await supabase
                 .from("jobs")
@@ -205,17 +256,37 @@ export async function PATCH(
                 let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "job_action").eq("entity_type", "job");
                 wq = wq.or(`org_id.eq.${ctx.orgId},org_id.is.null`);
                 const { data: wfs } = await wq;
+                const occurredAt = new Date().toISOString();
                 const eventPayload: Record<string, unknown> = {
                     event_type: "job_action",
-                    occurred_at: new Date().toISOString(),
+                    occurred_at: occurredAt,
                     org_id: ctx.orgId,
                     action,
                     job: jobRow,
                 };
+                let eventId: string | null = null;
+                try {
+                    eventId = await emitEvent({
+                        org_id: ctx.orgId,
+                        event_type: "job_action",
+                        entity_type: "job",
+                        entity_id: id,
+                        occurred_at: occurredAt,
+                        payload: {
+                            ...eventPayload,
+                            actor_user_id: ctx.userId ?? null,
+                        },
+                    });
+                } catch (e) {
+                    console.error("[ADMIN_PATCH_JOB] job_action emitEvent", e);
+                }
                 for (const wf of wfs ?? []) {
                     try {
-                        await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
-                    } catch (_) {
+                        await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                            event_id: eventId,
+                            org_id: ctx.orgId,
+                        });
+                    } catch {
                         // log and continue
                     }
                 }

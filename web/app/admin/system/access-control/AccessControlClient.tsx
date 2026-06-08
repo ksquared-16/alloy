@@ -11,6 +11,7 @@ type UserRow = {
     user_id: string;
     email: string | null;
     role: string;
+    role_keys?: string[];
     created_at: string;
 };
 
@@ -228,12 +229,23 @@ export default function AccessControlClient() {
                                                                         {r.role_label}
                                                                     </option>
                                                                 ))}
-                                                                {!roles.some((r) => r.role_key === u.role) && (
+                                                                {(u.role_keys ?? [])
+                                                                    .filter((rk) => !roles.some((r) => r.role_key === rk))
+                                                                    .map((rk) => (
+                                                                        <option key={rk} value={rk}>
+                                                                            {rk}
+                                                                        </option>
+                                                                    ))}
+                                                                {!roles.some((r) => r.role_key === u.role) && !(u.role_keys ?? []).includes(u.role) ? (
                                                                     <option value={u.role}>{u.role}</option>
-                                                                )}
+                                                                ) : null}
                                                             </select>
                                                         ) : (
-                                                            <span>{roles.find((r) => r.role_key === u.role)?.role_label ?? u.role}</span>
+                                                            <span>
+                                                                {(u.role_keys?.length ?? 0) > 1
+                                                                    ? `${(u.role_keys ?? []).join(", ")}`
+                                                                    : roles.find((r) => r.role_key === u.role)?.role_label ?? u.role}
+                                                            </span>
                                                         )}
                                                     </td>
                                                     <td className="py-2 pr-4">{u.created_at ? formatDateTime(u.created_at) : "—"}</td>

@@ -356,8 +356,8 @@ body {
 .public-form-section-title {
   font-size: 0.6875rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.06em;
+  text-transform: none;
   color: var(--color-alloy-pine);
   margin-bottom: 1rem;
   padding: 0.5625rem 0 0.5625rem 0.875rem;

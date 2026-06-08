@@ -484,7 +484,7 @@ export function AdminCollectPaymentModal({
         <div className="space-y-5 text-sm mt-4">
           {collect && (
             <div className="rounded-lg border border-alloy-stone/35 bg-gradient-to-b from-alloy-stone/5 to-transparent px-4 py-3 space-y-2.5">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75">Receivables summary</p>
+              <p className="text-[11px] font-semibold tracking-wider text-alloy-forge/75">Receivables summary</p>
               <div className="flex justify-between gap-3 text-sm">
                 <span className="text-alloy-midnight/65">{jobTotalSummaryLabel(collect.job.receivable_source ?? undefined)}</span>
                 <span className="font-medium tabular-nums">{money(collect.job.job_total_cents ?? collect.job.original_cents)}</span>
@@ -517,7 +517,7 @@ export function AdminCollectPaymentModal({
           ) : null}
 
           <div>
-            <span className="block text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75 mb-2">
+            <span className="block text-[11px] font-semibold tracking-wider text-alloy-forge/75 mb-2">
               Charge type
             </span>
             <div className="space-y-2.5">
@@ -553,7 +553,7 @@ export function AdminCollectPaymentModal({
 
           {target === "adhoc" && (
             <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-alloy-forge/90 mb-1">
+              <label className="block text-xs font-semibold tracking-wide text-alloy-forge/90 mb-1">
                 Charge type / reason <span className="text-alloy-ember">*</span>
               </label>
               <select
@@ -571,7 +571,7 @@ export function AdminCollectPaymentModal({
           )}
 
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-alloy-forge/90 mb-1">
+            <label className="block text-xs font-semibold tracking-wide text-alloy-forge/90 mb-1">
               Amount (USD)
               {target === "adhoc" && <span className="text-alloy-ember"> *</span>}
             </label>
@@ -589,7 +589,7 @@ export function AdminCollectPaymentModal({
           </div>
 
           <div>
-            <span className="block text-xs font-semibold uppercase tracking-wide text-alloy-forge/90 mb-2">
+            <span className="block text-xs font-semibold tracking-wide text-alloy-forge/90 mb-2">
               Payment method
             </span>
             <div className="space-y-2">

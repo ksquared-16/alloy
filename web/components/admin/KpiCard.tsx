@@ -28,7 +28,7 @@ export default function KpiCard({ value, label, href, delta, accent = "neutral",
         <div className={`rounded-xl border border-admin-border border-l-4 bg-admin-surface-card p-5 shadow-sm transition-shadow hover:shadow-md ${borderClass}`}>
             <div className="flex items-start justify-between gap-2">
                 <div>
-                    <p className="text-xs font-medium uppercase tracking-wider text-alloy-muted">{label}</p>
+                    <p className="text-xs font-medium tracking-wider text-alloy-muted">{label}</p>
                     <p className="mt-1 text-2xl font-bold text-alloy-midnight">{value}</p>
                     {delta != null && delta !== "" && <p className="mt-0.5 text-xs text-alloy-muted">{delta}</p>}
                 </div>

@@ -42,6 +42,23 @@ let didWarnAuthUrlMismatch = false;
 export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
 
+    /**
+     * Provider delivery webhooks (Twilio SMS status callbacks, Resend lifecycle) are intentionally
+     * **public HTTPS endpoints**. They MUST NOT rely on Alloy admin/session auth at the edge.
+     * Authorization is enforced **inside each route** via Twilio signature validation (`X-Twilio-Signature`)
+     * or Resend Svix signing headers (`svix-*`), using server-side secrets (`TWILIO_AUTH_TOKEN`,
+     * `RESEND_WEBHOOK_SECRET`).
+     *
+     * Skip Supabase session refresh entirely so webhook traffic reaches the Route Handler reliably
+     * and does not contend with incidental auth/session behavior at the middleware layer.
+     */
+    if (
+        pathname === "/api/webhooks/twilio/sms-status" ||
+        pathname === "/api/webhooks/resend"
+    ) {
+        return NextResponse.next();
+    }
+
     let response = NextResponse.next({
         request: {
             headers: request.headers,

@@ -2,9 +2,23 @@
 
 import { ReactNode } from "react";
 
-const LABEL_CLASS = "block text-xs font-medium text-alloy-midnight/80 mb-1";
-const VALUE_CLASS = "text-sm text-alloy-forge min-h-[2rem] flex items-center";
+const LABEL_DEFAULT = "block text-xs font-medium text-alloy-midnight/80 mb-1";
+/** Schedule/job record snapshot rows — subtle label, emphasized value (aligned with JobRecordModalV2 snapshot cells). */
+const LABEL_COMPACT = "block text-[10px] font-semibold tracking-[0.08em] text-alloy-forge/65 mb-0.5";
+const VALUE_DEFAULT = "text-sm text-alloy-forge min-h-[2rem] flex items-center";
+const VALUE_COMPACT = "text-sm font-medium text-alloy-midnight/90 min-h-[1.375rem] flex items-center leading-snug";
+/** Schedule snapshot row tiers — aligns with JobRecordModalV2 snapshot rhythm */
+const VALUE_COMPACT_PRIMARY =
+  "text-[15px] font-semibold tracking-tight text-alloy-midnight min-h-[1.5rem] flex items-center leading-snug";
+const VALUE_COMPACT_SECONDARY = VALUE_COMPACT;
+const VALUE_COMPACT_SUPPORTING =
+  "text-xs font-normal text-alloy-forge/80 min-h-[1.25rem] flex items-center leading-snug";
 const VALUE_EDIT_WRAP = "min-h-[2rem] flex items-stretch";
+const VALUE_EDIT_WRAP_COMPACT = "min-h-[1.375rem] flex items-stretch";
+const VALUE_EDIT_WRAP_COMPACT_PRIMARY = "min-h-[1.5rem] flex items-stretch";
+const VALUE_EDIT_WRAP_COMPACT_SUPPORTING = "min-h-[1.25rem] flex items-stretch";
+
+const INPUT_ERROR_CLASS = "border-alloy-ember/60 focus:border-alloy-ember focus:ring-alloy-ember/25";
 
 /**
  * Vertical field block: label on top, value below.
@@ -21,22 +35,73 @@ interface EntityDrawerFieldProps {
   /** When true, show editNode; otherwise show value. */
   isEditing?: boolean;
   className?: string;
+  /** Tighter label/value rhythm for config-driven schedule overview rows. */
+  density?: "default" | "compact";
+  /** When false, label is omitted (parent provides label, e.g. ScheduleSnapCell). Default true. */
+  showLabel?: boolean;
+  /** Schedule overview snapshot rows only (`density=compact`): value typography tier. Omit for default compact styling. */
+  valueEmphasis?: "primary" | "secondary" | "supporting";
+  /** Server validation message for this field (Card 4). */
+  errorMessage?: string | null;
+  /** Policy read-only hint shown under value when not editing. */
+  readOnlyHint?: string | null;
 }
 
-export default function EntityDrawerField({ label, value, span = 1, editNode, isEditing, className = "" }: EntityDrawerFieldProps) {
+export { INPUT_ERROR_CLASS };
+
+export default function EntityDrawerField({
+  label,
+  value,
+  span = 1,
+  editNode,
+  isEditing,
+  className = "",
+  density = "default",
+  showLabel = true,
+  valueEmphasis,
+  errorMessage,
+  readOnlyHint,
+}: EntityDrawerFieldProps) {
   const showEdit = isEditing && editNode != null;
+  const compact = density === "compact";
+  const valueCompactClass =
+    compact && valueEmphasis === "primary"
+      ? VALUE_COMPACT_PRIMARY
+      : compact && valueEmphasis === "supporting"
+        ? VALUE_COMPACT_SUPPORTING
+        : compact && valueEmphasis === "secondary"
+          ? VALUE_COMPACT_SECONDARY
+          : compact
+            ? VALUE_COMPACT
+            : VALUE_DEFAULT;
+  const editWrapCompactClass =
+    compact && valueEmphasis === "primary"
+      ? VALUE_EDIT_WRAP_COMPACT_PRIMARY
+      : compact && valueEmphasis === "supporting"
+        ? VALUE_EDIT_WRAP_COMPACT_SUPPORTING
+        : VALUE_EDIT_WRAP_COMPACT;
   return (
     <div
       className={`${span === 2 ? "col-span-2" : ""} ${className}`}
       data-entity-field
+      data-field-density={compact ? "compact" : "default"}
       data-span={span}
+      data-has-error={errorMessage ? "true" : undefined}
     >
-      <label className={LABEL_CLASS}>{label}</label>
+      {showLabel ? <label className={compact ? LABEL_COMPACT : LABEL_DEFAULT}>{label}</label> : null}
       {showEdit ? (
-        <div className={VALUE_EDIT_WRAP}>{editNode}</div>
+        <div className={compact ? editWrapCompactClass : VALUE_EDIT_WRAP}>{editNode}</div>
       ) : (
-        <div className={VALUE_CLASS}>{value ?? "—"}</div>
+        <div
+          className={`${compact ? valueCompactClass : VALUE_DEFAULT} ${readOnlyHint ? "text-alloy-midnight/70" : ""}`}
+        >
+          {value ?? "—"}
+        </div>
       )}
+      {readOnlyHint && !showEdit ? (
+        <p className="mt-0.5 text-[11px] text-alloy-midnight/50">{readOnlyHint}</p>
+      ) : null}
+      {errorMessage ? <p className="mt-1 text-xs text-alloy-ember">{errorMessage}</p> : null}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
-import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { getAdminAuthCached, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { assertAllowedStatusKey, resolveStatusLabel } from "@/lib/admin/statusDefinitionsResolve";
 import { resolveVendorStatusById, resolveVendorStatusByKey } from "@/lib/vendors/vendorStatusSync";
 
@@ -53,10 +53,10 @@ export async function PATCH(
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     try {
-        const ctx = await getAdminContext();
+        const ctx = await getAdminContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
         const body = await request.json();
-        const auth = await getAdminAuth();
+        const auth = await getAdminAuthCached();
         if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const supabase = createAdminClient();

@@ -194,7 +194,7 @@ export default function SettingsClient() {
 
     return (
         <div className="space-y-10">
-            <h1 className="text-3xl font-bold text-alloy-midnight">Settings</h1>
+            <h1 className="text-3xl font-bold text-alloy-midnight">Pipelines & stages</h1>
 
             {/* Pipelines */}
             <section>

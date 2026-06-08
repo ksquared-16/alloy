@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertScheduleInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /** GET: vendors that can be assigned to this schedule (org + job vertical + status_key = active per assignment policy). */
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: scheduleId } = await context.params;
     if (!scheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });
@@ -19,11 +21,20 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const supabase = createAdminClient();
     const { data: schedule, error: sErr } = await supabase
         .from("schedules")
-        .select("job_id, org_id")
+        .select("job_id, org_id, location_id")
         .eq("id", scheduleId)
         .eq("org_id", ctx.orgId)
         .single();
     if (sErr || !schedule) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    const sch = schedule as { job_id?: string | null; location_id?: string | null; org_id?: string };
+    if (!(await assertScheduleInAccessScope(supabase, ctx.orgId, dim, { job_id: sch.job_id ?? null, location_id: sch.location_id ?? null }))) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
+
     const jobId = (schedule as { job_id?: string }).job_id;
     const orgId = (schedule as { org_id?: string }).org_id;
     if (!jobId) return NextResponse.json({ vendors: [] });

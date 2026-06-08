@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingScheduleMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { maybeCreateCancellationFeeCharge } from "@/lib/charges/cancellationFeeCharge";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
@@ -15,7 +17,7 @@ export async function POST(
   request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -36,7 +38,7 @@ export async function POST(
 
   const { data: before, error: fetchErr } = await supabase
     .from("schedules")
-    .select("id, job_id, org_id, start_at, canceled_at, status_key, schedule_status_id, assigned_vendor_id")
+    .select("id, job_id, org_id, location_id, start_at, canceled_at, status_key, schedule_status_id, assigned_vendor_id")
     .eq("id", id)
     .eq("org_id", ctx.orgId)
     .maybeSingle();
@@ -45,6 +47,13 @@ export async function POST(
   if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if ((before as { canceled_at?: string | null }).canceled_at) {
     return NextResponse.json({ error: "Schedule is already canceled" }, { status: 400 });
+  }
+
+  const access = await getAdminAccessContextCached();
+  if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+  const scopeDim = scopeDimensionsFromAccess(access);
+  if (!(await assertExistingScheduleMutableInAdminScope(supabase, ctx.orgId, scopeDim, id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const b = before as {

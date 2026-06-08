@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitEvent } from "@/lib/emitEvent";
 import { postVendorPayoutCashForSchedule, type PostCashEventError } from "@/lib/admin/postCashEvent";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingScheduleMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 function isPostError(result: { entry_id?: string; code?: string }): result is PostCashEventError {
     return !("entry_id" in result && result.entry_id);
@@ -9,13 +12,13 @@ function isPostError(result: { entry_id?: string; code?: string }): result is Po
 
 /**
  * POST: Post vendor payout (cash out) for a completed schedule. Idempotent.
- * Auth: getAdminContext(); requires admin. Requires schedule status_key === 'completed' (case-insensitive).
+ * Auth: getAdminContextCached(); requires admin. Requires schedule status_key === 'completed' (case-insensitive).
  */
 export async function POST(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -30,6 +33,19 @@ export async function POST(
     if (!scheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });
 
     const supabase = createAdminClient();
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json(
+            { error: access.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: access.status }
+        );
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingScheduleMutableInAdminScope(supabase, ctx.orgId, dim, scheduleId))) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
+
     const result = await postVendorPayoutCashForSchedule({
         supabase,
         orgId: ctx.orgId,
@@ -55,6 +71,25 @@ export async function POST(
                 { status: 400 }
             );
         }
+    }
+
+    const okResult = result as { entry_id: string; ledger_transaction_id: string; schedule_id: string; amount_cents: number; mapping_keys_used: string[] };
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "schedule_vendor_payout_gl_posted",
+            entity_type: "schedule",
+            entity_id: scheduleId,
+            payload: {
+                gl_journal_entry_id: okResult.entry_id,
+                ledger_transaction_id: okResult.ledger_transaction_id,
+                amount_cents: okResult.amount_cents,
+                mapping_keys_used: okResult.mapping_keys_used,
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[post-vendor-payout] emitEvent", e instanceof Error ? e.message : e);
     }
 
     return NextResponse.json(result);

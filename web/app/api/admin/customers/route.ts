@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { fetchScopedCustomerIdsForRestrictedAdmin, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 type CustomerRow = {
@@ -27,7 +29,7 @@ type CustomerRow = {
 
 /** GET: list customers for org. Returns full rows with derived fields for table; also used by dropdowns (id, name). */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -40,6 +42,11 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Number(searchParams.get("limit")) || 500, 500);
 
     const supabase = createAdminClient();
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    const scopedCustomerIds = await fetchScopedCustomerIdsForRestrictedAdmin(supabase, ctx.orgId, dim);
+
     const selectCols =
         "id, customer_number, created_at, updated_at, name, status, status_key, customer_type, primary_contact_id, vertical_id, org_id, metadata, stripe_customer_id, external_source, external_id, default_payment_method_id, payment_method_brand, payment_method_last4, setup_intent_id";
     let q = supabase
@@ -48,6 +55,12 @@ export async function GET(request: NextRequest) {
         .eq("org_id", ctx.orgId)
         .order("updated_at", { ascending: false, nullsFirst: false })
         .limit(limit);
+    if (scopedCustomerIds !== null) {
+        if (scopedCustomerIds.length === 0) {
+            return NextResponse.json({ customers: [], total: 0 });
+        }
+        q = q.in("id", scopedCustomerIds);
+    }
     if (statusKey) q = q.eq("status_key", statusKey);
 
     const { data: rows, error, count } = await q;

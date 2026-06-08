@@ -1,0 +1,133 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../..");
+
+function read(rel: string): string {
+    return readFileSync(join(webRoot, rel), "utf8");
+}
+
+describe("Inbox foundation UI contracts", () => {
+    it("header Inbox opens modal without navigation", () => {
+        const nav = read("app/adminV2/components/TopNavBar.tsx");
+        expect(nav).toContain("InboxNavLink");
+        expect(nav).toContain("InboxModal");
+        expect(nav).toContain("onOpenModal={openInboxModal}");
+        expect(nav).toContain("setInboxModalOpen(true)");
+
+        const link = read("app/adminV2/components/InboxNavLink.tsx");
+        expect(link).toContain('type="button"');
+        expect(link).toContain("onClick={onOpenModal}");
+        expect(link).not.toContain('href="/adminV2/messages"');
+        expect(link).not.toContain("next/link");
+    });
+
+    it("InboxNavLink polls unread-count API and renders badge", () => {
+        const link = read("app/adminV2/components/InboxNavLink.tsx");
+        expect(link).toContain("/api/admin/communications/unread-count");
+        expect(link).toContain("data-adminv2-inbox-unread-badge");
+        expect(link).toContain("Inbox");
+        expect(link).toContain("INBOX_UNREAD_REFRESH_EVENT");
+        expect(read("lib/adminV2/inboxNavUnreadCache.ts")).toContain("alloy-comms-unread-refresh");
+    });
+
+    it("InboxModal follows tasks pop-out pattern", () => {
+        const modal = read("app/adminV2/components/InboxModal.tsx");
+        expect(modal).toContain('data-adminv2-inbox-modal="true"');
+        expect(modal).toContain('role="dialog"');
+        expect(modal).toContain("InboxPanel");
+        expect(modal).not.toContain("useRouter");
+        expect(modal).not.toContain("Open full inbox");
+    });
+
+    it("header Inbox modal does not promote full inbox route", () => {
+        const panel = read("app/adminV2/messages/InboxPanel.tsx");
+        expect(panel).not.toContain("Open full inbox");
+        expect(panel).not.toContain('href="/adminV2/messages"');
+    });
+
+    it("selected thread can open record drawer when entity resolves", () => {
+        const panel = read("app/adminV2/messages/InboxPanel.tsx");
+        expect(panel).toContain("resolveInboxEntityDrawerTarget");
+        expect(panel).toContain("useAdminDrawerOptional");
+        expect(panel).toContain("Open record");
+        expect(panel).toContain("adminDrawer.openDrawer");
+        expect(read("lib/communications/inboxEntityDrawerTarget.ts")).toContain("opportunities");
+        expect(read("lib/communications/inboxEntityDrawerTarget.ts")).toContain("persons");
+    });
+
+    it("header modal uses compact inbox fetch", () => {
+        const panel = read("app/adminV2/messages/InboxPanel.tsx");
+        expect(panel).toContain("compact=1");
+        expect(panel).toContain("MODAL_THREAD_LIMIT");
+        expect(panel).toContain("inboxFoldersToPrefetch");
+        expect(panel).toContain("folderCache");
+    });
+
+    it("prefetches folders and keeps side-by-side detail panel with thread history", () => {
+        const panel = read("app/adminV2/messages/InboxPanel.tsx");
+        expect(panel).toContain("mergeFolderCacheEntry");
+        expect(panel).toContain("InboxThreadReplyBox");
+        expect(panel).toContain("InboxThreadMessageHistory");
+        expect(panel).toContain("context_display");
+        expect(panel).toContain("preview_lead");
+        expect(read("lib/communications/inboxFolderCache.ts")).toContain("inboxFoldersToPrefetch");
+    });
+
+    it("reply box uses shared composer frame and send API", () => {
+        const reply = read("components/adminV2/messaging/InboxThreadReplyBox.tsx");
+        expect(reply).toContain("MessagingComposerFrame");
+        expect(reply).toContain("/api/admin/communications/send");
+        expect(reply).toContain("data-adminv2-inbox-reply");
+        expect(read("components/adminV2/messaging/ComposerChannelToggle.tsx")).toContain("(unavailable)");
+        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("Send now");
+        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("Send later");
+        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("BOS Assist");
+    });
+
+    it("inbox panel avoids Family inquiry boilerplate and dark message bubbles", () => {
+        const panel = read("app/adminV2/messages/InboxPanel.tsx");
+        expect(panel).not.toContain("entity_chip.label");
+        expect(panel).not.toContain("Family inquiry");
+        expect(panel).not.toContain("bg-alloy-midnight/[0.9]");
+        expect(read("lib/adminV2/messaging/messagingMessageBubbleClasses.ts")).toContain("#E8F6F2");
+        expect(panel).toContain("Compose New");
+        expect(panel).toContain("w-[min(18rem,52%)]");
+        expect(panel).toContain("related_children_display");
+        expect(panel).toContain("formatMessagingThreadMetadataLine");
+    });
+
+    it("AdminV2 shell schedules inbox warm load", () => {
+        const shell = read("app/adminV2/components/AdminV2Shell.tsx");
+        expect(shell).toContain("scheduleInboxWarmLoad");
+        expect(read("lib/adminV2/inboxWarmLoadCache.ts")).toContain("warmInboxFolderCache");
+    });
+
+    it("full /adminV2/messages route still loads InboxClient", () => {
+        const page = read("app/adminV2/messages/page.tsx");
+        expect(page).toContain("InboxClient");
+        const client = read("app/adminV2/messages/InboxClient.tsx");
+        expect(client).toContain("InboxPanel");
+        expect(client).toContain('layout="page"');
+        const panel = read("app/adminV2/messages/InboxPanel.tsx");
+        expect(panel).toContain("/api/admin/inbox/threads");
+        expect(panel).toContain("Archive");
+    });
+});
+
+describe("Drawer communications API unchanged", () => {
+    it("entity threads route still requires entity_type and entity_id", () => {
+        const route = read("app/api/admin/communications/threads/route.ts");
+        expect(route).toContain("entity_type and valid entity_id");
+        expect(route).toContain("attachLastPreviews");
+        expect(route).toContain("fetchRelatedPersonIdsForCommunicationsDrawer");
+    });
+
+    it("inbox threads route is separate org-wide API", () => {
+        const route = read("app/api/admin/inbox/threads/route.ts");
+        expect(route).toContain("listInboxThreads");
+        expect(route).toContain("parseInboxFolder");
+    });
+});

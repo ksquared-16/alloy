@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 
 export type EnsureCustomerAddressLocationParams = {
   org_id: string | null;
@@ -248,10 +249,9 @@ export async function ensureCanonicalBookingLocation(
 
   const createdOrFound = await ensureCustomerAddressLocation(supabase, locParams);
   if (createdOrFound) {
-    const { error: linkErr } = await supabase
-      .from("opportunities")
-      .update({ location_id: createdOrFound })
-      .eq("id", opportunity_id);
+    const oppLocPatch: Record<string, unknown> = { location_id: createdOrFound };
+    await normalizeOpportunityWritePayload(supabase, oppLocPatch, "bookingLocations:link-location-to-opp");
+    const { error: linkErr } = await supabase.from("opportunities").update(oppLocPatch).eq("id", opportunity_id);
     if (linkErr) {
       console.warn("[BOOKING_LOCATIONS] failed to set opportunity.location_id", linkErr);
     }

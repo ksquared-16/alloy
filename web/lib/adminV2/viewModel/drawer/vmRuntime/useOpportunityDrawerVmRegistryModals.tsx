@@ -1,0 +1,496 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+
+import OpportunityRecordCreateWorkModal from "@/components/admin/opportunity/OpportunityRecordCreateWorkModal";
+import SendFormToOpportunityModal from "@/components/admin/opportunity/SendFormToOpportunityModal";
+import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
+import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
+import { RecordTourOutcomeModal } from "@/components/admin/opportunity/actions/RecordTourOutcomeModal";
+import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
+import type { ApplyRegistryResolvedActionHost } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
+import {
+    resolveOpportunityRegistryActionErrorMessage,
+} from "@/lib/admin/actions/resolveOpportunityRegistryActionFeedbackMessage";
+import {
+    ADMIN_V2_OPEN_CREATE_WORK_MODAL,
+    type OpportunityOpenCreateWorkModalDetail,
+} from "@/lib/adminV2/opportunityDrawerTaskEvents";
+import {
+    dispatchOpportunityDrawerOperationalTasksRefresh,
+    dispatchOpportunityDrawerScopedUpdate,
+} from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { patchOpportunityDrawerRecordAfterTourBooking } from "@/lib/admin/opportunityDrawerTourBookingRefresh";
+import {
+    ADMINV2_OPEN_TOUR_OUTCOME_MODAL,
+    ADMINV2_OPEN_TOUR_SCHEDULE_MODAL,
+} from "@/lib/tours/actions/tourBookingActionClient";
+import type { TourBookingRow } from "@/lib/tours/bookings/types";
+
+type ActionFormState = {
+    form_key: string;
+    action: ResolvedActionForClient;
+};
+
+export type OpportunityDrawerVmRegistryModalHost = {
+    patchRecord: (patchFn: (prev: Record<string, unknown>) => Record<string, unknown>) => void;
+};
+
+type Params = {
+    opportunityId: string | null | undefined;
+    record: Record<string, unknown> | null | undefined;
+    canMutate: boolean;
+    actionHost: OpportunityDrawerVmRegistryModalHost;
+};
+
+function readStringField(record: Record<string, unknown> | null | undefined, key: string): string | null {
+    if (!record || typeof record !== "object") return null;
+    const v = record[key];
+    return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+type ExecuteResult =
+    | { ok: true; execution_result?: Record<string, unknown> }
+    | {
+          ok: false;
+          error: string;
+          action_preflight?: ActionPreflightUiPayload;
+          completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
+      };
+
+async function executeOpportunityHeaderAction(params: {
+    opportunityId: string;
+    actionKey: string;
+    workUnitId?: string | null;
+    payload?: Record<string, unknown>;
+}): Promise<ExecuteResult> {
+    const res = await fetch("/api/admin/actions/execute", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            action_key: params.actionKey,
+            entity_type: "opportunity",
+            entity_id: params.opportunityId,
+            context: { surface: "record_header", work_unit_id: params.workUnitId ?? null },
+            payload: params.payload,
+        }),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+        action_preflight?: ActionPreflightUiPayload;
+        completion_requirements?: import("@/lib/completion/requirementValidationTypes").RequirementValidationResult;
+        execution_result?: Record<string, unknown>;
+    };
+    if (!res.ok || !json.ok) {
+        return {
+            ok: false,
+            error: resolveOpportunityRegistryActionErrorMessage(json.error),
+            action_preflight: json.action_preflight,
+            completion_requirements: json.completion_requirements,
+        };
+    }
+    return { ok: true, execution_result: json.execution_result };
+}
+
+/**
+ * VM opportunity drawer: registry actions dispatch window events and open_form callbacks
+ * that Legacy used to own. Without this host, header Actions menu clicks are silent no-ops.
+ */
+export function useOpportunityDrawerVmRegistryModals({
+    opportunityId,
+    record,
+    canMutate,
+    actionHost,
+}: Params): {
+    modals: ReactNode;
+    registryHostExtensions: Pick<ApplyRegistryResolvedActionHost, "openForm" | "openCreateWork">;
+} {
+    const oid = opportunityId?.trim() ?? "";
+    const { patchRecord } = actionHost;
+    const [createWorkOpen, setCreateWorkOpen] = useState(false);
+    const [createWorkPrefill, setCreateWorkPrefill] = useState<
+        OpportunityOpenCreateWorkModalDetail["prefill"] | undefined
+    >(undefined);
+    const [sendFormOpen, setSendFormOpen] = useState(false);
+    const [launchPacketOpen, setLaunchPacketOpen] = useState(false);
+    const [actionFormState, setActionFormState] = useState<ActionFormState | null>(null);
+    const pendingTourScheduleRef = useRef<{ id: string; action_key?: string } | null>(null);
+    const prevOidRef = useRef<string | null>(null);
+
+    /** Direct host callback from header actions — always targets the mounted drawer. */
+    const openCreateWorkDirect = useCallback((detail: OpportunityOpenCreateWorkModalDetail) => {
+        setCreateWorkPrefill(detail.prefill ?? undefined);
+        setCreateWorkOpen(true);
+    }, []);
+
+    const openCreateWorkFromEvent = useCallback(
+        (detail: OpportunityOpenCreateWorkModalDetail) => {
+            const id = detail.opportunity_id?.trim() ?? "";
+            if (!id || id !== oid) return;
+            openCreateWorkDirect(detail);
+        },
+        [oid, openCreateWorkDirect]
+    );
+
+    const openForm = useCallback(
+        (opts: { form_key: string; action: ResolvedActionForClient }) => {
+            if (!oid) return;
+            setActionFormState({ form_key: opts.form_key, action: opts.action });
+        },
+        [oid]
+    );
+
+    useEffect(() => {
+        if (!oid) return;
+
+        const matchesDrawer = (id: string) => id === oid;
+
+        const onOpenCreateWork = (ev: Event) => {
+            const detail = (ev as CustomEvent<OpportunityOpenCreateWorkModalDetail>).detail;
+            const id = detail?.opportunity_id?.trim() ?? "";
+            if (!matchesDrawer(id)) return;
+            openCreateWorkFromEvent(detail);
+        };
+
+        const onOpenSendForm = (ev: Event) => {
+            const id = typeof (ev as CustomEvent<{ opportunity_id?: string }>).detail?.opportunity_id === "string"
+                ? (ev as CustomEvent<{ opportunity_id?: string }>).detail!.opportunity_id!.trim()
+                : "";
+            if (!matchesDrawer(id)) return;
+            setSendFormOpen(true);
+        };
+
+        const onOpenEnrollmentPacket = (ev: Event) => {
+            const id = typeof (ev as CustomEvent<{ opportunity_id?: string }>).detail?.opportunity_id === "string"
+                ? (ev as CustomEvent<{ opportunity_id?: string }>).detail!.opportunity_id!.trim()
+                : "";
+            if (!matchesDrawer(id)) return;
+            setLaunchPacketOpen(true);
+        };
+
+        const onOpenTourSchedule = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string; action_key?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id) return;
+            const actionKey = ce.detail?.action_key;
+            pendingTourScheduleRef.current = { id, action_key: actionKey };
+            if (!matchesDrawer(id)) return;
+            pendingTourScheduleRef.current = null;
+            setActionFormState({
+                form_key: "schedule_tour",
+                action: {
+                    key: actionKey === "reschedule_tour" ? "reschedule_tour" : "schedule_tour",
+                    label: actionKey === "reschedule_tour" ? "Reschedule tour" : "Schedule tour",
+                    description: null,
+                    action_type: "open_form",
+                    icon: null,
+                    style: null,
+                    display_style: "button",
+                    payload: { form_key: "schedule_tour" },
+                    workflow_id: null,
+                },
+            });
+        };
+
+        const onOpenTourOutcome = (ev: Event) => {
+            const id = typeof (ev as CustomEvent<{ opportunity_id?: string }>).detail?.opportunity_id === "string"
+                ? (ev as CustomEvent<{ opportunity_id?: string }>).detail!.opportunity_id!.trim()
+                : "";
+            if (!matchesDrawer(id)) return;
+            setActionFormState({
+                form_key: "record_tour_outcome",
+                action: {
+                    key: "record_tour_outcome",
+                    label: "Record tour outcome",
+                    description: null,
+                    action_type: "open_form",
+                    icon: null,
+                    style: null,
+                    display_style: "button",
+                    payload: { form_key: "record_tour_outcome" },
+                    workflow_id: null,
+                },
+            });
+        };
+
+        window.addEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
+        window.addEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
+        window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
+        window.addEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
+        window.addEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
+
+        return () => {
+            window.removeEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
+            window.removeEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
+            window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
+        };
+    }, [oid, openCreateWorkFromEvent]);
+
+    useEffect(() => {
+        const pending = pendingTourScheduleRef.current;
+        if (!pending || pending.id !== oid) return;
+        pendingTourScheduleRef.current = null;
+        setActionFormState({
+            form_key: "schedule_tour",
+            action: {
+                key: pending.action_key === "reschedule_tour" ? "reschedule_tour" : "schedule_tour",
+                label: pending.action_key === "reschedule_tour" ? "Reschedule tour" : "Schedule tour",
+                description: null,
+                action_type: "open_form",
+                icon: null,
+                style: null,
+                display_style: "button",
+                payload: { form_key: "schedule_tour" },
+                workflow_id: null,
+            },
+        });
+    }, [oid]);
+
+    useEffect(() => {
+        const prev = prevOidRef.current;
+        prevOidRef.current = oid;
+        if (prev != null && prev !== oid) {
+            setCreateWorkOpen(false);
+            setCreateWorkPrefill(undefined);
+            setSendFormOpen(false);
+            setLaunchPacketOpen(false);
+            setActionFormState(null);
+        }
+    }, [oid]);
+
+    const entityLabel = readStringField(record, "name");
+    const lifecycleStageKey = readStringField(record, "_effective_lifecycle_stage");
+    const recordOwnerUserId = readStringField(record, "assigned_to");
+    const locationId = readStringField(record, "location_id") ?? readStringField(record, "_location_id");
+    const workUnitId = readStringField(record, "work_unit_id");
+    const metadata =
+        record && typeof record.metadata === "object" && record.metadata != null ?
+            (record.metadata as Record<string, unknown>)
+        :   null;
+    const initialTourDate = typeof metadata?.tour_date === "string" ? metadata.tour_date.trim() : null;
+    const initialTourTime = typeof metadata?.tour_time === "string" ? metadata.tour_time.trim() : null;
+
+    const applyTourBookingPatch = useCallback(
+        (booking: {
+            start_at: string;
+            timezone: string;
+            status_key: string;
+            booking_id?: string | null;
+            mirror_override?: { tour_date: string; tour_time: string } | null;
+        }) => {
+            patchRecord((prev) => patchOpportunityDrawerRecordAfterTourBooking(prev, booking));
+        },
+        [patchRecord]
+    );
+
+    const modals = useMemo(() => {
+        if (!oid) return null;
+
+        const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "";
+
+        return (
+            <>
+                {createWorkOpen ?
+                    <OpportunityRecordCreateWorkModal
+                        open={createWorkOpen}
+                        opportunityId={oid}
+                        entityLabel={entityLabel}
+                        prefill={createWorkPrefill}
+                        lifecycleStageKey={lifecycleStageKey}
+                        recordOwnerUserId={recordOwnerUserId}
+                        onClose={() => {
+                            setCreateWorkOpen(false);
+                            setCreateWorkPrefill(undefined);
+                        }}
+                        onCreated={() => {
+                            dispatchOpportunityDrawerOperationalTasksRefresh(oid);
+                        }}
+                    />
+                :   null}
+                {sendFormOpen ?
+                    <SendFormToOpportunityModal
+                        open={sendFormOpen}
+                        opportunityId={oid}
+                        opportunityLabel={entityLabel ?? "Opportunity"}
+                        familyLabel={readStringField(record, "_customer_name")}
+                        canMutate={canMutate}
+                        onDismiss={() => setSendFormOpen(false)}
+                        onSent={() => {
+                            dispatchOpportunityDrawerScopedUpdate(oid, "send_form", ["documents", "activity"]);
+                        }}
+                    />
+                :   null}
+                {launchPacketOpen ?
+                    <OpportunityEnrollmentPacketModal
+                        open={launchPacketOpen}
+                        opportunityId={oid}
+                        opportunityLabel={entityLabel ?? "Opportunity"}
+                        opportunityRecord={record ?? null}
+                        canMutate={canMutate}
+                        onDismiss={() => setLaunchPacketOpen(false)}
+                    />
+                :   null}
+                <OpportunityTourScheduleActionModal
+                    open={
+                        actionFormState?.form_key === "schedule_tour" || actionFormState?.action?.key === "reschedule_tour"
+                    }
+                    onClose={() => setActionFormState(null)}
+                    title={actionFormState?.action?.label ?? "Schedule tour"}
+                    submitLabel={actionFormState?.action?.label ?? "Save"}
+                    opportunityId={oid}
+                    locationId={locationId}
+                    initialTourDate={initialTourDate}
+                    initialTourTime={initialTourTime}
+                    onSlotBooked={async (result) => {
+                        const booking = result?.booking;
+                        if (booking && typeof booking.start_at === "string" && typeof booking.timezone === "string") {
+                            applyTourBookingPatch({
+                                start_at: booking.start_at,
+                                timezone: booking.timezone,
+                                status_key: String(booking.status_key ?? "confirmed"),
+                                booking_id: typeof booking.id === "string" ? booking.id : null,
+                            });
+                        }
+                        dispatchOpportunityDrawerScopedUpdate(oid, actionKey || "schedule_tour", [
+                            "tour_surfaces",
+                            "header_actions",
+                        ]);
+                    }}
+                    onLegacySubmit={async (payload) => {
+                        const resolvedActionKey = actionKey || "schedule_tour";
+                        const locId = locationId ?? "";
+                        if (locId) {
+                            const res = await fetch("/api/admin/tours/bookings", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    opportunity_id: oid,
+                                    location_id: locId,
+                                    tour_date: payload.tour_date,
+                                    tour_time: payload.tour_time,
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as {
+                                booking?: TourBookingRow;
+                                error?: string;
+                            };
+                            if (!res.ok) {
+                                throw new Error(json.error ?? "Failed to schedule tour");
+                            }
+                            const booking = json.booking;
+                            if (
+                                booking &&
+                                typeof booking.start_at === "string" &&
+                                typeof booking.timezone === "string"
+                            ) {
+                                applyTourBookingPatch({
+                                    start_at: booking.start_at,
+                                    timezone: booking.timezone,
+                                    status_key: String(booking.status_key ?? "confirmed"),
+                                    booking_id: typeof booking.id === "string" ? booking.id : null,
+                                    mirror_override: {
+                                        tour_date: payload.tour_date,
+                                        tour_time: payload.tour_time,
+                                    },
+                                });
+                            }
+                            dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, [
+                                "tour_surfaces",
+                                "header_actions",
+                            ]);
+                            return;
+                        }
+
+                        const result = await executeOpportunityHeaderAction({
+                            opportunityId: oid,
+                            actionKey: resolvedActionKey,
+                            workUnitId,
+                            payload,
+                        });
+                        if (!result.ok) {
+                            throw new Error(result.error);
+                        }
+                        dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, [
+                            "tour_surfaces",
+                            "header_actions",
+                        ]);
+                    }}
+                />
+                <RecordTourOutcomeModal
+                    open={actionFormState?.form_key === "record_tour_outcome"}
+                    onClose={() => setActionFormState(null)}
+                    title={actionFormState?.action?.label ?? "Record tour outcome"}
+                    onSubmit={async (payload) => {
+                        const resolvedActionKey = actionKey || "record_tour_outcome";
+                        const result = await executeOpportunityHeaderAction({
+                            opportunityId: oid,
+                            actionKey: resolvedActionKey,
+                            workUnitId,
+                            payload: { outcome: payload.outcome },
+                        });
+                        if (!result.ok) {
+                            throw new Error(result.error);
+                        }
+                        dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, [
+                            "tour_surfaces",
+                            "header_actions",
+                            "activity",
+                        ]);
+                    }}
+                />
+                <AddNoteModal
+                    open={actionFormState?.form_key === "add_note"}
+                    onClose={() => setActionFormState(null)}
+                    title={actionFormState?.action?.label ?? "Add note"}
+                    onSubmit={async (payload) => {
+                        const resolvedActionKey = actionKey || "add_note";
+                        const result = await executeOpportunityHeaderAction({
+                            opportunityId: oid,
+                            actionKey: resolvedActionKey,
+                            workUnitId,
+                            payload,
+                        });
+                        if (!result.ok) {
+                            throw new Error(result.error);
+                        }
+                        dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, ["activity"]);
+                    }}
+                />
+            </>
+        );
+    }, [
+        actionFormState,
+        applyTourBookingPatch,
+        canMutate,
+        createWorkOpen,
+        createWorkPrefill,
+        entityLabel,
+        initialTourDate,
+        initialTourTime,
+        launchPacketOpen,
+        lifecycleStageKey,
+        locationId,
+        oid,
+        record,
+        recordOwnerUserId,
+        sendFormOpen,
+        workUnitId,
+    ]);
+
+    const registryHostExtensions = useMemo(
+        () => ({
+            openForm,
+            openCreateWork: openCreateWorkDirect,
+        }),
+        [openCreateWorkDirect, openForm]
+    );
+
+    return { modals, registryHostExtensions };
+}

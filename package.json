@@ -1,9 +1,12 @@
 {
   "scripts": {
-    "smoke:field-registry-api": "npx tsx scripts/smoke/api_field_registry_smoke.ts"
+    "smoke:field-registry-api": "npx tsx scripts/smoke/api_field_registry_smoke.ts",
+    "export:supabase-schema": "node scripts/supabase/export_schema_reference.mjs"
   },
   "devDependencies": {
     "@types/node": "^20.19.0",
+    "@types/pg": "^8.15.0",
+    "pg": "^8.14.0",
     "tsx": "^4.19.0"
   },
   "dependencies": {

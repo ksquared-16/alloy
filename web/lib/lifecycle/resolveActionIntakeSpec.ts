@@ -1,0 +1,330 @@
+import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import {
+    effectiveFieldRulesForStage,
+    type LifecycleRequirementsSource,
+} from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
+import type {
+    ActionIntakeConstraint,
+    ActionIntakeEntityGroup,
+    ActionIntakeFieldSpec,
+    ActionIntakeFieldTier,
+    ActionIntakeSpec,
+    ActionIntakeValidationIssue,
+    ActionIntakeValidationRule,
+} from "@/lib/lifecycle/actionIntakeSpecTypes";
+import {
+    CREATE_LEAD_CONTACT_RULE_IDS,
+    CREATE_LEAD_INTAKE_ENTITIES,
+    CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS,
+    createLeadPayloadKeyForRule,
+    inferActionIntakeValueKind,
+    validationRulesForIntakeField,
+} from "@/lib/lifecycle/createLeadIntakeFieldMap";
+import {
+    lifecycleEntityLabel,
+    lifecycleFieldRequirementById,
+} from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
+import {
+    mergeLifecycleFieldPaletteForStage,
+    type LifecycleFieldPaletteEntry,
+} from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+
+export type ResolveActionIntakeSpecInput = {
+    action_key: string;
+    department_id: string;
+    process_id?: string | null;
+    /** Builder or operator stage key; defaults to lead when absent or unmappable. */
+    stage_key?: string | null;
+    department_metadata?: Record<string, unknown> | null;
+    org_field_definitions?: Partial<Record<string, OrgFieldDefinitionRow[]>> | null;
+    primary_record_label?: string;
+};
+
+function asLeadStage(stageKey: string | null | undefined): LifecycleOperatorStage {
+    const t = stageKey?.trim() ?? "";
+    if (
+        t === "lead" ||
+        t === "qualification" ||
+        t === "tour" ||
+        t === "waitlist" ||
+        t === "enrollment" ||
+        t === "enrolled"
+    ) {
+        return t;
+    }
+    return "lead";
+}
+
+function paletteByRuleId(
+    palette: LifecycleFieldPaletteEntry[]
+): Map<string, LifecycleFieldPaletteEntry> {
+    return new Map(palette.map((p) => [p.rule_id, p]));
+}
+
+function buildFieldSpec(
+    ruleId: string,
+    tier: ActionIntakeFieldTier,
+    paletteEntry: LifecycleFieldPaletteEntry | null
+): ActionIntakeFieldSpec | null {
+    const payloadKey = createLeadPayloadKeyForRule(ruleId);
+    if (!payloadKey) return null;
+
+    const catalog = lifecycleFieldRequirementById(ruleId);
+    const binding = lifecycleFieldRuleBinding(ruleId);
+    const entity = paletteEntry?.entity ?? catalog?.entity ?? binding?.entity;
+    if (!entity || !CREATE_LEAD_INTAKE_ENTITIES.includes(entity)) return null;
+
+    const fieldKey = paletteEntry?.field_key ?? binding?.field_key ?? null;
+    const fieldLabel = paletteEntry?.field_label ?? catalog?.field_label ?? ruleId;
+    const valueKind = inferActionIntakeValueKind(ruleId, fieldKey);
+
+    return {
+        rule_id: ruleId,
+        entity,
+        entity_label: lifecycleEntityLabel(entity),
+        field_label: fieldLabel,
+        tier,
+        field_key: fieldKey,
+        value_kind: valueKind,
+        payload_key: payloadKey,
+        form_capture_keys: binding?.form_capture_keys ?? [],
+        validation: validationRulesForIntakeField(valueKind, tier),
+        runtime_enforced: paletteEntry?.runtime_enforced ?? binding?.runtime_enforced ?? false,
+    };
+}
+
+/** create_lead: child rules configured as required do not block capture (added after create or optional). */
+function applyCreateLeadIntakePolicy(fields: {
+    requiredIds: string[];
+    recommendedIds: string[];
+}): { requiredIds: string[]; recommendedIds: string[] } {
+    const requiredIds: string[] = [];
+    const recommendedIds = [...fields.recommendedIds];
+
+    for (const id of fields.requiredIds) {
+        const binding = lifecycleFieldRuleBinding(id);
+        if (binding?.entity === "child") {
+            if (!recommendedIds.includes(id)) recommendedIds.push(id);
+            continue;
+        }
+        if (!requiredIds.includes(id)) requiredIds.push(id);
+    }
+
+    for (const id of CREATE_LEAD_PLATFORM_REQUIRED_RULE_IDS) {
+        if (!requiredIds.includes(id)) requiredIds.push(id);
+    }
+
+    for (const id of fields.recommendedIds) {
+        if (requiredIds.includes(id)) continue;
+        if (!recommendedIds.includes(id)) recommendedIds.push(id);
+    }
+
+    return { requiredIds, recommendedIds };
+}
+
+function dedupeFieldSpecs(specs: ActionIntakeFieldSpec[]): ActionIntakeFieldSpec[] {
+    const seen = new Set<string>();
+    const out: ActionIntakeFieldSpec[] = [];
+    for (const s of specs) {
+        if (seen.has(s.rule_id)) continue;
+        seen.add(s.rule_id);
+        out.push(s);
+    }
+    return out;
+}
+
+function buildGroups(fields: ActionIntakeFieldSpec[]): ActionIntakeEntityGroup[] {
+    const order = CREATE_LEAD_INTAKE_ENTITIES;
+    const groups: ActionIntakeEntityGroup[] = [];
+    for (const entity of order) {
+        const entityFields = fields.filter((f) => f.entity === entity);
+        if (!entityFields.length) continue;
+        groups.push({
+            entity,
+            entity_label: lifecycleEntityLabel(entity),
+            fields: entityFields,
+        });
+    }
+    return groups;
+}
+
+export function resolveCreateLeadActionIntakeSpec(input: {
+    department_id: string;
+    process_id?: string | null;
+    operator_stage: LifecycleOperatorStage;
+    department_metadata?: Record<string, unknown> | null;
+    org_field_definitions?: Partial<Record<string, OrgFieldDefinitionRow[]>> | null;
+    primary_record_label?: string;
+}): ActionIntakeSpec {
+    const { rules, source } = effectiveFieldRulesForStage(
+        input.operator_stage,
+        input.department_metadata ?? null
+    );
+    const palette = mergeLifecycleFieldPaletteForStage(
+        input.operator_stage,
+        input.org_field_definitions ?? null
+    );
+    const byRule = paletteByRuleId(palette);
+
+    const policy = applyCreateLeadIntakePolicy({
+        requiredIds: rules.required_rule_ids,
+        recommendedIds: rules.recommended_rule_ids,
+    });
+
+    const required: ActionIntakeFieldSpec[] = [];
+    const recommended: ActionIntakeFieldSpec[] = [];
+    const optional: ActionIntakeFieldSpec[] = [];
+
+    for (const ruleId of policy.requiredIds) {
+        const spec = buildFieldSpec(ruleId, "required", byRule.get(ruleId) ?? null);
+        if (spec) required.push(spec);
+    }
+    for (const ruleId of policy.recommendedIds) {
+        if (policy.requiredIds.includes(ruleId)) continue;
+        const spec = buildFieldSpec(ruleId, "recommended", byRule.get(ruleId) ?? null);
+        if (spec) recommended.push(spec);
+    }
+
+    const allRuleIds = new Set([...policy.requiredIds, ...policy.recommendedIds]);
+    for (const entry of palette) {
+        if (allRuleIds.has(entry.rule_id)) continue;
+        if (!CREATE_LEAD_INTAKE_ENTITIES.includes(entry.entity)) continue;
+        const spec = buildFieldSpec(entry.rule_id, "optional", entry);
+        if (spec) optional.push(spec);
+    }
+
+    const constraints: ActionIntakeConstraint[] = [
+        {
+            kind: "at_least_one",
+            rule_ids: CREATE_LEAD_CONTACT_RULE_IDS,
+            message: "Phone or email is required.",
+        },
+    ];
+
+    const leadLabel = input.primary_record_label?.trim() || "Lead";
+    const allFields = dedupeFieldSpecs([...required, ...recommended, ...optional]);
+
+    return {
+        action_key: "create_lead",
+        department_id: input.department_id,
+        process_id: input.process_id?.trim() || null,
+        operator_stage: input.operator_stage,
+        mode: "structured",
+        requirements_source: source as LifecycleRequirementsSource,
+        groups: buildGroups(allFields),
+        required: dedupeFieldSpecs(required),
+        recommended: dedupeFieldSpecs(recommended),
+        optional: dedupeFieldSpecs(optional),
+        constraints,
+        copy: {
+            title: `Create ${leadLabel}`,
+            help: "Collect required information from your lifecycle configuration. Review the summary before creating the record.",
+        },
+    };
+}
+
+export function resolveActionIntakeSpec(input: ResolveActionIntakeSpecInput): ActionIntakeSpec | null {
+    const actionKey = input.action_key.trim();
+    if (actionKey !== "create_lead") return null;
+
+    return resolveCreateLeadActionIntakeSpec({
+        department_id: input.department_id,
+        process_id: input.process_id,
+        operator_stage: asLeadStage(input.stage_key),
+        department_metadata: input.department_metadata,
+        org_field_definitions: input.org_field_definitions,
+        primary_record_label: input.primary_record_label,
+    });
+}
+
+function valueForRule(values: Record<string, string>, spec: ActionIntakeFieldSpec): string {
+    return (values[spec.payload_key] ?? values[spec.rule_id] ?? "").trim();
+}
+
+function passesValidationRule(value: string, rule: ActionIntakeValidationRule): boolean {
+    switch (rule.kind) {
+        case "non_empty":
+            return value.length > 0;
+        case "email":
+            return value.length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+        case "phone":
+            return value.length === 0 || value.replace(/\D/g, "").length >= 7;
+        case "date_iso":
+            return value.length === 0 || /^\d{4}-\d{2}-\d{2}$/.test(value);
+        default:
+            return true;
+    }
+}
+
+export function validateActionIntakePayload(
+    spec: ActionIntakeSpec,
+    values: Record<string, string>
+): { ok: true } | { ok: false; issues: ActionIntakeValidationIssue[] } {
+    const issues: ActionIntakeValidationIssue[] = [];
+
+    for (const field of spec.required) {
+        const value = valueForRule(values, field);
+        for (const rule of field.validation) {
+            if (rule.kind === "non_empty" && !passesValidationRule(value, rule)) {
+                issues.push({
+                    rule_id: field.rule_id,
+                    field_label: field.field_label,
+                    message: `${field.field_label} is required.`,
+                });
+                break;
+            }
+            if (rule.kind !== "non_empty" && value && !passesValidationRule(value, rule)) {
+                issues.push({
+                    rule_id: field.rule_id,
+                    field_label: field.field_label,
+                    message: `Enter a valid ${field.field_label.toLowerCase()}.`,
+                });
+            }
+        }
+    }
+
+    for (const constraint of spec.constraints) {
+        if (constraint.kind !== "at_least_one") continue;
+        const anyFilled = constraint.rule_ids.some((ruleId) => {
+            const field = spec.required.find((f) => f.rule_id === ruleId) ??
+                spec.recommended.find((f) => f.rule_id === ruleId) ??
+                spec.optional.find((f) => f.rule_id === ruleId);
+            if (!field) return false;
+            return valueForRule(values, field).length > 0;
+        });
+        if (!anyFilled) {
+            issues.push({
+                rule_id: constraint.rule_ids[0] ?? "contact",
+                field_label: "Contact",
+                message: constraint.message,
+            });
+        }
+    }
+
+    if (issues.length) return { ok: false, issues };
+    return { ok: true };
+}
+
+export function mapActionIntakeValuesToCreateLeadPayload(
+    spec: ActionIntakeSpec,
+    values: Record<string, string>
+): Record<string, string> {
+    const out: Record<string, string> = {};
+    const all = [...spec.required, ...spec.recommended, ...spec.optional];
+    for (const field of all) {
+        const v = valueForRule(values, field);
+        if (v) out[field.payload_key] = v;
+    }
+    return out;
+}
+
+export function missingRequiredFieldLabels(
+    spec: ActionIntakeSpec,
+    values: Record<string, string>
+): string[] {
+    const result = validateActionIntakePayload(spec, values);
+    if (result.ok) return [];
+    return result.issues.map((i) => i.field_label);
+}

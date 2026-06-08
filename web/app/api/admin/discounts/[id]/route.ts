@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     deleteDiscountProgram,
     updateDiscountProgram,
@@ -10,7 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 /** DELETE: remove discount program and related benefit/qualifier/commitment rows (not legacy discount_codes). */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -39,7 +39,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
 
 /** PATCH: update program + upsert primary benefit, vertical qualifier, commitment rule when applicable. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

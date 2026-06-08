@@ -1,9 +1,14 @@
 /**
- * Canonical workflow event bridge: emit entity_status_changed into workflow_events
- * when an entity's status_key changes. Used by admin PATCH routes.
+ * When an entity's status_key changes: inserts `workflow_events` via `emitEvent`, then runs
+ * enabled workflows matching `event_type` + `entity_type` (org or global) with `executeWorkflowRun`
+ * and `event_id` set (same pattern as schedule assign / action-link consume).
+ *
+ * Opportunity rows use `opportunity_status_changed`; all other entity types use `entity_status_changed`.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { emitEvent } from "@/lib/emitEvent";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
 export type EmitStatusChangedEventParams = {
     supabase: SupabaseClient;
@@ -13,6 +18,8 @@ export type EmitStatusChangedEventParams = {
     oldStatusKey: string | null;
     newStatusKey: string | null;
     metadata?: Record<string, unknown>;
+    /** Staff user who performed the change (Activity Log actor). */
+    actorUserId?: string | null;
 };
 
 export type WorkflowEventRow = {
@@ -32,7 +39,7 @@ export type WorkflowEventRow = {
  * Otherwise insert workflow_events row and return it. Throws on insert failure.
  */
 export async function emitStatusChangedEvent(params: EmitStatusChangedEventParams): Promise<WorkflowEventRow | null> {
-    const { supabase, orgId, entityType, entityId, oldStatusKey, newStatusKey, metadata = {} } = params;
+    const { supabase, orgId, entityType, entityId, oldStatusKey, newStatusKey, metadata = {}, actorUserId } = params;
 
     const oldNorm = oldStatusKey == null ? null : String(oldStatusKey).trim();
     const newNorm = newStatusKey == null ? null : String(newStatusKey).trim();
@@ -47,26 +54,62 @@ export async function emitStatusChangedEvent(params: EmitStatusChangedEventParam
         changed_at: now,
         ...metadata,
     };
-
-    const { data, error } = await supabase
-        .from("workflow_events")
-        .insert({
-            org_id: orgId,
-            event_type: "entity_status_changed",
-            entity_type: entityType,
-            entity_id: entityId,
-            action_type: null,
-            payload,
-            occurred_at: now,
-        })
-        .select("id, org_id, event_type, entity_type, entity_id, action_type, payload, occurred_at, created_at")
-        .single();
-
-    if (error) {
-        throw new Error(`emitStatusChangedEvent: ${error.message}`);
+    if (actorUserId != null && String(actorUserId).trim() !== "") {
+        payload.actor_user_id = String(actorUserId).trim();
     }
-    if (!data) {
-        throw new Error("emitStatusChangedEvent: no row returned");
+
+    const eventType =
+        String(entityType).trim().toLowerCase() === "opportunities" ? "opportunity_status_changed" : "entity_status_changed";
+
+    const id = await emitEvent({
+        org_id: orgId,
+        event_type: eventType,
+        entity_type: entityType,
+        entity_id: entityId,
+        action_type: null,
+        occurred_at: now,
+        payload,
+    });
+
+    const eventPayload: Record<string, unknown> = {
+        event_type: eventType,
+        occurred_at: now,
+        org_id: orgId,
+        entity_type: entityType,
+        entity_id: entityId,
+        ...payload,
+    };
+    let wq = supabase
+        .from("workflows")
+        .select("id")
+        .eq("enabled", true)
+        .eq("event_type", eventType)
+        .eq("entity_type", entityType);
+    wq = wq.or(`org_id.eq.${orgId},org_id.is.null`);
+    const { data: wfs } = await wq;
+    for (const wf of wfs ?? []) {
+        try {
+            await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                event_id: id,
+                org_id: orgId,
+            });
+        } catch (e) {
+            console.warn(
+                "[emitStatusChangedEvent] executeWorkflowRun",
+                (wf as { id: string }).id,
+                e instanceof Error ? e.message : e
+            );
+        }
     }
-    return data as WorkflowEventRow;
+
+    return {
+        id,
+        org_id: orgId,
+        event_type: eventType,
+        entity_type: entityType,
+        entity_id: entityId,
+        action_type: null,
+        payload,
+        occurred_at: now,
+    };
 }

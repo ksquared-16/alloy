@@ -206,6 +206,17 @@ TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
 
+# Inbound SMS webhook (Card 24). Default: enabled when unset (backward compatible).
+_COMM_SMS_IN = os.getenv("COMMUNICATIONS_SMS_INBOUND_ENABLED", "").strip().lower()
+COMMUNICATIONS_SMS_INBOUND_ENABLED = _COMM_SMS_IN not in ("0", "false", "no", "off")
+
+# Optional: public base URL Twilio uses in webhook config (scheme+host, no path).
+# If unset, inbound signature validation uses the request URL as seen by the app
+# (set behind reverse proxies when Host/public URL differs from internal URL).
+COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL = os.getenv(
+    "COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL", ""
+).strip()
+
 # Internal cron token for POST /internal/messages/process
 INTERNAL_CRON_TOKEN = os.getenv("INTERNAL_CRON_TOKEN")
 

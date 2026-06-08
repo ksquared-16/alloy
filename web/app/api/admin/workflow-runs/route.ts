@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { requireAdminOrOps } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
+import { getOrgLocalTodayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
+import {
+    fetchOperationalTimezoneForOrg,
+} from "@/lib/admin/timezoneContract";
 
 export type WorkflowRunRow = {
     id: string;
@@ -22,14 +25,115 @@ export type WorkflowRunRow = {
 
 /** GET: list workflow_runs for caller org. Enriches with workflow name and event_type/entity_type/entity_id from workflow_events. */
 export async function GET(request: NextRequest) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
-    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const ctx = await requireAdminOrgContextLight();
+    if (ctx instanceof Response) return ctx;
     const orgId = ctx.orgId;
 
     const { searchParams } = new URL(request.url);
     const list = searchParams.get("list");
+
+    if (list === "kpis") {
+        const t0 = Date.now();
+        const supabase = createAdminClient();
+        const now = new Date();
+        const { iana: timezoneEffective, source: timezoneSource } = await fetchOperationalTimezoneForOrg(
+            supabase,
+            orgId
+        );
+        const todayBounds = getOrgLocalTodayUtcBounds(timezoneEffective, now);
+        const dayStartIso = todayBounds.dayStartUtc.toISOString();
+        const dayEndExclusiveIso = todayBounds.dayEndExclusiveUtc.toISOString();
+        const last7d = new Date(now);
+        last7d.setDate(last7d.getDate() - 7);
+
+        const rangeFroms = {
+            last7d: last7d.toISOString(),
+        };
+
+        /** Bounded scan for dashboard KPIs (avoids 6× exact COUNT on large `workflow_runs`). */
+        const KPI_SAMPLE_LIMIT = 12_000;
+
+        const tFetch = Date.now();
+        const { data: runSample, error: sampleErr } = await supabase
+            .from("workflow_runs")
+            .select("id, status, started_at")
+            .eq("org_id", orgId)
+            .gte("started_at", rangeFroms.last7d)
+            .order("started_at", { ascending: false })
+            .limit(KPI_SAMPLE_LIMIT);
+        const fetchSampleMs = Date.now() - tFetch;
+
+        if (sampleErr) {
+            return NextResponse.json({ error: sampleErr.message }, { status: 500 });
+        }
+
+        const rows = (runSample ?? []) as { id: string; status?: string; started_at?: string }[];
+        const sampleCapped = rows.length >= KPI_SAMPLE_LIMIT;
+        let runs7d = 0;
+        let completed7d = 0;
+        let failed7d = 0;
+        let running7d = 0;
+        let skipped7d = 0;
+        let runsToday = 0;
+        for (const r of rows) {
+            runs7d += 1;
+            const st = String(r.status ?? "");
+            if (st === "completed") completed7d += 1;
+            else if (st === "failed") failed7d += 1;
+            else if (st === "running") running7d += 1;
+            else if (st === "skipped") skipped7d += 1;
+            const sa = r.started_at ? String(r.started_at) : "";
+            if (sa >= dayStartIso && sa < dayEndExclusiveIso) runsToday += 1;
+        }
+
+        const recentRunIds = rows.map((r) => r.id);
+        const tFail = Date.now();
+        let failedActionRunIds = new Set<string>();
+        if (recentRunIds.length) {
+            const { data: failedRows } = await supabase
+                .from("workflow_action_runs")
+                .select("workflow_run_id")
+                .eq("org_id", orgId)
+                .in("workflow_run_id", recentRunIds as any)
+                .eq("status", "failed");
+            failedActionRunIds = new Set((failedRows ?? []).map((r) => String((r as { workflow_run_id: string }).workflow_run_id)));
+        }
+        const failedActionsMs = Date.now() - tFail;
+
+        const failedIncludingActionFailures = Math.max(failed7d, failedActionRunIds.size);
+        const denom = completed7d + failedIncludingActionFailures;
+        const successRate = denom > 0 ? completed7d / denom : null;
+
+        const totalMs = Date.now() - t0;
+        if (totalMs > 300) {
+            console.warn("[admin-timing] GET /api/admin/workflow-runs list=kpis", {
+                total_ms: totalMs,
+                fetch_sample_ms: fetchSampleMs,
+                failed_actions_ms: failedActionsMs,
+                sample_rows: rows.length,
+                sample_capped: sampleCapped,
+            });
+        }
+
+        return NextResponse.json({
+            kpis: {
+                runs_today: runsToday,
+                runs_last_7d: runs7d,
+                successful_last_7d: completed7d,
+                failed_last_7d: failedIncludingActionFailures,
+                running_last_7d: running7d,
+                skipped_last_7d: skipped7d,
+                success_rate_last_7d: successRate,
+            },
+            meta: {
+                calendar_type: "operational_day" as const,
+                timezone_effective: timezoneEffective,
+                timezone_source: timezoneSource,
+                day_start_utc: dayStartIso,
+                day_end_exclusive_utc: dayEndExclusiveIso,
+            },
+        });
+    }
 
     if (list === "workflows") {
         const supabase = createAdminClient();
@@ -58,6 +162,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") ?? "";
     const workflowId = searchParams.get("workflow_id") ?? "";
     const eventType = searchParams.get("event_type") ?? "";
+    const entityType = (searchParams.get("entity_type") ?? "").trim();
+    const entityId = (searchParams.get("entity_id") ?? "").trim();
     const range = searchParams.get("range") ?? "";
     const search = (searchParams.get("search") ?? "").trim();
     const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
@@ -94,6 +200,20 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    let eventIdsForEntity: string[] | null = null;
+    if (entityType && entityId) {
+        const { data: evRows } = await supabase
+            .from("workflow_events")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("entity_type", entityType)
+            .eq("entity_id", entityId);
+        eventIdsForEntity = (evRows ?? []).map((r) => (r as { id: string }).id);
+        if (eventIdsForEntity.length === 0) {
+            return NextResponse.json({ runs: [], total: 0, page, limit });
+        }
+    }
+
     let q = supabase
         .from("workflow_runs")
         .select("id, workflow_id, event_id, status, error, started_at, completed_at, event_payload", { count: "exact" })
@@ -104,6 +224,7 @@ export async function GET(request: NextRequest) {
     if (workflowId) q = q.eq("workflow_id", workflowId);
     if (fromIso) q = q.gte("started_at", fromIso);
     if (eventIdsForType && eventIdsForType.length > 0) q = q.in("event_id", eventIdsForType);
+    if (eventIdsForEntity && eventIdsForEntity.length > 0) q = q.in("event_id", eventIdsForEntity);
 
     async function enrichRuns(
         rows: {

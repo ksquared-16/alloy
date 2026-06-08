@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertAllowedStatusKey, displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 /** GET: list locations for current org (dropdowns). Admin + ops. is_active only by default. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const includeInactive = searchParams.get("include_inactive") === "true";
+    const hierarchy = searchParams.get("hierarchy") === "1";
 
     const supabase = createAdminClient();
     // Select * so environments without optional columns (e.g. status_key) still return rows; map defensively below.
@@ -66,6 +67,9 @@ export async function GET(request: NextRequest) {
             is_primary: !!(r.is_primary as boolean | undefined),
             is_active: r.is_active !== false,
             location_type: (r.location_type as string | null | undefined) ?? null,
+            parent_location_id: hierarchy
+                ? ((r.parent_location_id as string | null | undefined) ?? null)
+                : undefined,
             updated_at: (r.updated_at as string | null | undefined) ?? null,
             status_key: sk,
             _customer_name: customer_id ? (customerMap.get(customer_id) ?? null) : null,
@@ -79,7 +83,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create location. Admin only. Org-scoped. customer_id optional (null = org-wide). */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

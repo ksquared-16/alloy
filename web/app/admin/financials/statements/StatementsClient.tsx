@@ -112,7 +112,7 @@ export default function StatementsClient() {
                     {plData && !loading && (
                         <div className="space-y-4">
                             <div>
-                                <h4 className="text-xs font-semibold uppercase text-[#59678b] mb-2">Revenue</h4>
+                                <h4 className="text-xs font-semibold text-[#59678b] mb-2">Revenue</h4>
                                 <table className="w-full text-sm">
                                     <tbody className="divide-y divide-[#e6e8ec]">
                                         {plData.revenue.map((r) => (
@@ -127,7 +127,7 @@ export default function StatementsClient() {
                                 <p className="mt-2 font-semibold border-t border-[#e6e8ec] pt-2">Total Revenue: {formatMoneyFromCents(plData.totalRevenueCents)}</p>
                             </div>
                             <div>
-                                <h4 className="text-xs font-semibold uppercase text-[#59678b] mb-2">Expenses</h4>
+                                <h4 className="text-xs font-semibold text-[#59678b] mb-2">Expenses</h4>
                                 <table className="w-full text-sm">
                                     <tbody className="divide-y divide-[#e6e8ec]">
                                         {plData.expenses.map((e) => (
@@ -154,7 +154,7 @@ export default function StatementsClient() {
                     {bsData && !loading && (
                         <div className="space-y-4">
                             <div>
-                                <h4 className="text-xs font-semibold uppercase text-[#59678b] mb-2">Assets</h4>
+                                <h4 className="text-xs font-semibold text-[#59678b] mb-2">Assets</h4>
                                 <table className="w-full text-sm">
                                     <tbody className="divide-y divide-[#e6e8ec]">
                                         {bsData.assets.map((a) => (
@@ -169,7 +169,7 @@ export default function StatementsClient() {
                                 <p className="mt-2 font-semibold border-t border-[#e6e8ec] pt-2">Total Assets: {formatMoneyFromCents(bsData.totalAssetsCents)}</p>
                             </div>
                             <div>
-                                <h4 className="text-xs font-semibold uppercase text-[#59678b] mb-2">Liabilities</h4>
+                                <h4 className="text-xs font-semibold text-[#59678b] mb-2">Liabilities</h4>
                                 <table className="w-full text-sm">
                                     <tbody className="divide-y divide-[#e6e8ec]">
                                         {bsData.liabilities.map((l) => (
@@ -184,7 +184,7 @@ export default function StatementsClient() {
                                 <p className="mt-2 font-semibold border-t border-[#e6e8ec] pt-2">Total Liabilities: {formatMoneyFromCents(bsData.totalLiabilitiesCents)}</p>
                             </div>
                             <div>
-                                <h4 className="text-xs font-semibold uppercase text-[#59678b] mb-2">Equity</h4>
+                                <h4 className="text-xs font-semibold text-[#59678b] mb-2">Equity</h4>
                                 <table className="w-full text-sm">
                                     <tbody className="divide-y divide-[#e6e8ec]">
                                         {bsData.equity.map((e) => (

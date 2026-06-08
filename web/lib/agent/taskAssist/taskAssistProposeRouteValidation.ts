@@ -1,0 +1,155 @@
+import { parseOptionalExpiresAtIso } from "@/lib/agent/taskAssist/taskAssistProposalPayload";
+import {
+    isTaskAssistV1Uuid,
+    validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
+} from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
+
+const ALLOWED_BODY_KEYS = new Set([
+    "entity_type",
+    "entity_id",
+    "channel",
+    "instruction",
+    "goal",
+    "persist",
+    "expires_at",
+    "communication_objective",
+    "synthesized_draft",
+]);
+
+const MAX_INSTRUCTION_LEN = 8000;
+
+function parseSynthesizedDraft(v: unknown): ParsedTaskAssistProposeRequestV1["synthesizedDraft"] {
+    if (!isRecord(v)) return null;
+    const body = typeof v.body === "string" ? v.body.trim() : "";
+    const sms_body = typeof v.sms_body === "string" ? v.sms_body.trim() : "";
+    if (!body && !sms_body) return null;
+    const subject = typeof v.subject === "string" ? v.subject.trim() : null;
+    return {
+        subject: subject || null,
+        body: (body || sms_body).slice(0, 8000),
+        sms_body: sms_body ? sms_body.slice(0, 8000) : null,
+    };
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+    return v != null && typeof v === "object" && !Array.isArray(v);
+}
+
+export type ParsedTaskAssistProposeRequestV1 = {
+    entity_type: "opportunities";
+    entity_id: string;
+    channel: "sms" | "email";
+    instruction: string;
+    /** When true, server may insert `task_assist_proposals` after a valid proposal (opt-in; default ephemeral). */
+    persist: boolean;
+    expiresAt: string | null;
+    communicationObjective: string | null;
+    synthesizedDraft: {
+        subject: string | null;
+        body: string;
+        sms_body: string | null;
+    } | null;
+};
+
+export function parseTaskAssistProposeRequest(
+    body: unknown
+): { ok: true; value: ParsedTaskAssistProposeRequestV1 } | { ok: false; error: string; status: number; message?: string } {
+    if (!isRecord(body)) {
+        return { ok: false, error: "BAD_JSON_SHAPE", status: 400, message: "Body must be a JSON object." };
+    }
+
+    const workflowErrs = validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys(body);
+    if (workflowErrs.length) {
+        return {
+            ok: false,
+            error: "WORKFLOW_KEYS_FORBIDDEN",
+            status: 400,
+            message: workflowErrs[0],
+        };
+    }
+
+    for (const k of Object.keys(body)) {
+        if (!ALLOWED_BODY_KEYS.has(k)) {
+            return {
+                ok: false,
+                error: "UNKNOWN_BODY_KEYS",
+                status: 400,
+                message: `Unexpected key: ${k}`,
+            };
+        }
+    }
+
+    const entityType = typeof body.entity_type === "string" ? body.entity_type.trim().toLowerCase() : "";
+    if (entityType !== "opportunities") {
+        return {
+            ok: false,
+            error: "ENTITY_TYPE_UNSUPPORTED",
+            status: 400,
+            message: "entity_type must be opportunities.",
+        };
+    }
+
+    const entityId = typeof body.entity_id === "string" ? body.entity_id.trim() : "";
+    if (!entityId || !isTaskAssistV1Uuid(entityId)) {
+        return { ok: false, error: "ENTITY_ID_INVALID", status: 400, message: "entity_id must be a UUID." };
+    }
+
+    const channelRaw = typeof body.channel === "string" ? body.channel.trim().toLowerCase() : "";
+    if (channelRaw !== "sms" && channelRaw !== "email") {
+        return { ok: false, error: "CHANNEL_UNSUPPORTED", status: 400, message: "channel must be sms or email." };
+    }
+
+    const insRaw =
+        typeof body.instruction === "string" && body.instruction.trim()
+            ? body.instruction.trim()
+            : typeof body.goal === "string" && body.goal.trim()
+              ? body.goal.trim()
+              : "";
+    if (!insRaw) {
+        return {
+            ok: false,
+            error: "INSTRUCTION_REQUIRED",
+            status: 400,
+            message: "instruction (or goal) is required and must be non-empty.",
+        };
+    }
+    const instruction = insRaw.length > MAX_INSTRUCTION_LEN ? insRaw.slice(0, MAX_INSTRUCTION_LEN) : insRaw;
+
+    const persist = body.persist === true;
+    const hasExpiresRaw =
+        body.expires_at != null &&
+        body.expires_at !== "" &&
+        !(typeof body.expires_at === "string" && body.expires_at.trim() === "");
+    if (hasExpiresRaw && !persist) {
+        return {
+            ok: false,
+            error: "EXPIRES_AT_REQUIRES_PERSIST",
+            status: 400,
+            message: "expires_at is only allowed when persist is true.",
+        };
+    }
+
+    let expiresAt: string | null = null;
+    if (persist) {
+        const ex = parseOptionalExpiresAtIso(body.expires_at);
+        if (!ex.ok) {
+            return { ok: false, error: "EXPIRES_AT_INVALID", status: 400, message: ex.message };
+        }
+        expiresAt = ex.expiresAt;
+    }
+
+    return {
+        ok: true,
+        value: {
+            entity_type: "opportunities",
+            entity_id: entityId,
+            channel: channelRaw,
+            instruction,
+            persist,
+            expiresAt,
+            communicationObjective:
+                typeof body.communication_objective === "string" ? body.communication_objective.trim() || null : null,
+            synthesizedDraft: parseSynthesizedDraft(body.synthesized_draft),
+        },
+    };
+}

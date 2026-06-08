@@ -24,6 +24,55 @@ def _get_headers() -> Dict[str, str]:
         "Prefer": "return=representation",
     }
 
+def fetch_contact_person_id(contact_uuid: str) -> Optional[str]:
+    """Return contacts.person_id for an internal contact UUID."""
+    if not contact_uuid or not str(contact_uuid).strip():
+        return None
+    base_url = _get_base_url()
+    url = f"{base_url}/contacts"
+    params = {
+        "select": "person_id",
+        "id": f"eq.{str(contact_uuid).strip()}",
+        "limit": "1",
+    }
+    try:
+        response = requests.get(url, headers=_get_headers(), params=params, timeout=15)
+        if not response.ok:
+            return None
+        data = response.json()
+        if data and len(data) > 0 and isinstance(data[0], dict):
+            pid = data[0].get("person_id")
+            if pid is not None and str(pid).strip():
+                return str(pid).strip()
+    except Exception as e:
+        logger.warning("fetch_contact_person_id failed: %s", e)
+    return None
+
+
+def enrich_opportunity_payload_person_first(opportunity_payload: Dict, context: str = "") -> Dict:
+    """Set primary_person_id from primary_contact_id when missing (person-first writes)."""
+    out = dict(opportunity_payload)
+    existing = out.get("primary_person_id")
+    if existing is not None and str(existing).strip():
+        return out
+    cid = out.get("primary_contact_id")
+    if not cid or not str(cid).strip():
+        logger.warning(
+            "OPPORTUNITY_IDENTITY_GUARD opportunity write missing identity keys context=%s",
+            context,
+        )
+        return out
+    pid = fetch_contact_person_id(str(cid).strip())
+    if pid:
+        out["primary_person_id"] = pid
+    else:
+        logger.warning(
+            "OPPORTUNITY_IDENTITY_GUARD unresolved contact-only write contact=%s context=%s",
+            str(cid)[:8],
+            context,
+        )
+    return out
+
 def find_contact_by_unique_keys(email: Optional[str] = None, phone: Optional[str] = None) -> Optional[Dict]:
     """
     Find existing contact by email or phone (for dedupe fallback).
@@ -251,6 +300,9 @@ def upsert_opportunity(opportunity_payload: Dict, internal_id: Optional[str] = N
     Returns:
         Opportunity dict with 'id' field
     """
+    opportunity_payload = enrich_opportunity_payload_person_first(
+        dict(opportunity_payload), "sync.upsert_opportunity"
+    )
     base_url = _get_base_url()
     
     if internal_id:

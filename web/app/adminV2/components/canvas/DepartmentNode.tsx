@@ -177,7 +177,7 @@ function SystemTileContent({
             style={{
               fontSize: 10,
               fontWeight: 700,
-              textTransform: "uppercase",
+              textTransform: "none",
               letterSpacing: "0.06em",
               color: HEALTH_COLOR[data.health],
             }}

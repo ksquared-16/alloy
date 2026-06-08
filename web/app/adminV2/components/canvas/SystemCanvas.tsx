@@ -690,7 +690,7 @@ export default function SystemCanvas({
                         fontSize: 10,
                         fontWeight: 700,
                         color: derived.textSecondary,
-                        textTransform: "uppercase",
+                        textTransform: "none",
                         letterSpacing: "0.08em",
                       }}
                     >

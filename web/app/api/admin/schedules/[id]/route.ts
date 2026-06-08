@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import {
     postScheduleCompletion,
@@ -16,9 +16,11 @@ import {
   fetchScheduleStatusKeyByFk,
   resolveScheduleStatusRowByKey,
 } from "@/lib/admin/scheduleEffectiveStatusKey";
-import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
+import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertScheduleInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
 
@@ -32,8 +34,12 @@ export async function GET(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    const dim = scopeDimensionsFromAccess(access);
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -51,6 +57,14 @@ export async function GET(
     }
 
     const s = schedule as Record<string, unknown>;
+    if (
+        !(await assertScheduleInAccessScope(supabase, ctx.orgId, dim, {
+            job_id: s.job_id as string | null | undefined,
+            location_id: s.location_id as string | null | undefined,
+        }))
+    ) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const jobId = s.job_id as string | null | undefined;
     let _job_title: string | null = null;
     let _customer_name: string | null = null;
@@ -92,7 +106,7 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -128,11 +142,19 @@ export async function PATCH(
         const supabase = createAdminClient();
         const { data: schedule, error: fetchErr } = await supabase
             .from("schedules")
-            .select("job_id, start_at, end_at, status_key, schedule_status_id, assigned_vendor_id, customer_subscription_id")
+            .select("job_id, location_id, start_at, end_at, status_key, schedule_status_id, assigned_vendor_id, customer_subscription_id")
             .eq("id", id)
             .eq("org_id", ctx.orgId)
             .single();
         if (fetchErr || !schedule) {
+            return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+        }
+
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+        const scopeDim = scopeDimensionsFromAccess(access);
+        const sch = schedule as { job_id?: string | null; location_id?: string | null };
+        if (!(await assertScheduleInAccessScope(supabase, ctx.orgId, scopeDim, { job_id: sch.job_id ?? null, location_id: sch.location_id ?? null }))) {
             return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
         }
 
@@ -146,7 +168,7 @@ export async function PATCH(
                 return NextResponse.json(
                     {
                         error:
-                            "To cancel a schedule use POST /api/admin/schedules/[id]/cancel (sets canceled_at, cancel_reason, and fee logic). PATCH cannot set canceled status.",
+                            "Canceled workflow must use POST /api/admin/schedules/[id]/cancel (Cancel visit action). PATCH cannot set canceled status.",
                     },
                     { status: 400 }
                 );

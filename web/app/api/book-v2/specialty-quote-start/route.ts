@@ -10,6 +10,9 @@ import {
   upsertTypedFieldValue,
 } from "@/lib/bookV2/fieldValueUpsert";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
 import {
   normalizePipelineResolveOrgId,
@@ -404,55 +407,72 @@ export async function POST(request: NextRequest) {
 
     if (shouldReuse && existingOppRow) {
       opportunityId = existingOppRow.id;
-      await supabase
-        .from("opportunities")
-        .update({
-          location_id: locationId,
-          pipeline_stage_id: finalStageId,
-          status_key: "needs_a_quote",
-          status: "open",
-          vertical_id: verticalId,
-          estimated_price_cents: null,
-          monetary_value_cents: null,
-          metadata: {
-            quote_input,
-            quote_output,
-            source: SPECIALTY_SOURCE,
-            quote_started_at,
-          },
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", opportunityId);
+      const specialtyReusePatch: Record<string, unknown> = {
+        location_id: locationId,
+        pipeline_stage_id: finalStageId,
+        status_key: "needs_a_quote",
+        status: "open",
+        vertical_id: verticalId,
+        estimated_price_cents: null,
+        monetary_value_cents: null,
+        metadata: {
+          quote_input,
+          quote_output,
+          source: SPECIALTY_SOURCE,
+          quote_started_at,
+        },
+        updated_at: new Date().toISOString(),
+      };
+      const specialtyReuseRest = { ...specialtyReusePatch };
+      delete (specialtyReuseRest as { status_key?: unknown }).status_key;
+      const reuseStatusErr = await updateOpportunityStatusWithEvent({
+        supabase,
+        orgId: orgIdForWrites,
+        opportunityId,
+        newStatusKey: "needs_a_quote",
+        additionalPatch: specialtyReuseRest,
+        actorUserId: null,
+        eventMetadata: {
+          source: "book-v2",
+          flow: "specialty-quote-start",
+          quote_started_at,
+          specialty_cleaning_type: cleaningType,
+          primary_person_id: personId,
+        },
+        normalizeContext: "book-v2/specialty-quote-start:reuse-opp",
+      });
+      if (reuseStatusErr.error) {
+        console.error("[SPECIALTY_QUOTE_START] reuse opportunity status failed:", reuseStatusErr.error.message);
+        return NextResponse.json({ ok: false, message: "Failed to update opportunity" }, { status: 500 });
+      }
     } else {
       const opportunityName =
         personName != null && personName.length > 0
           ? `${personName} — ${cleaningType === "move_out" ? "Move-out" : "Heavy clean"} quote`
           : `${email || phone || "Lead"} — Specialty quote`;
-      const { data: newOpp, error: oppError } = await supabase
-        .from("opportunities")
-        .insert({
-          org_id: orgIdForWrites,
-          vertical_id: verticalId,
-          primary_person_id: personId,
-          primary_contact_id: null,
-          customer_id: null,
-          location_id: locationId,
-          pipeline_stage_id: finalStageId,
-          status_key: "needs_a_quote",
-          name: opportunityName,
-          status: "open",
-          source: "website",
-          estimated_price_cents: null,
-          monetary_value_cents: null,
-          metadata: {
-            quote_input,
-            quote_output,
-            source: SPECIALTY_SOURCE,
-            quote_started_at,
-          },
-        })
-        .select("id")
-        .single();
+      const specialtyInsertPayload: Record<string, unknown> = {
+        org_id: orgIdForWrites,
+        vertical_id: verticalId,
+        primary_person_id: personId,
+        primary_contact_id: null,
+        customer_id: null,
+        location_id: locationId,
+        pipeline_stage_id: finalStageId,
+        status_key: "needs_a_quote",
+        name: opportunityName,
+        status: "open",
+        source: "website",
+        estimated_price_cents: null,
+        monetary_value_cents: null,
+        metadata: {
+          quote_input,
+          quote_output,
+          source: SPECIALTY_SOURCE,
+          quote_started_at,
+        },
+      };
+      await normalizeOpportunityWritePayload(supabase, specialtyInsertPayload, "book-v2/specialty-quote-start:new-opp");
+      const { data: newOpp, error: oppError } = await supabase.from("opportunities").insert(specialtyInsertPayload).select("id").single();
 
       if (oppError || !newOpp) {
         console.error("[SPECIALTY_QUOTE_START] Opportunity insert failed:", oppError);
@@ -460,6 +480,30 @@ export async function POST(request: NextRequest) {
       }
       opportunityId = (newOpp as { id: string }).id;
       created_new_opportunity = true;
+
+      try {
+        await emitStatusChangedEvent({
+          supabase,
+          orgId: orgIdForWrites,
+          entityType: "opportunities",
+          entityId: opportunityId,
+          oldStatusKey: null,
+          newStatusKey: "needs_a_quote",
+          metadata: {
+            source: "book-v2",
+            flow: "specialty-quote-start",
+            quote_started_at,
+            specialty_cleaning_type: cleaningType,
+            primary_person_id: personId,
+          },
+          actorUserId: null,
+        });
+      } catch (emitOppStatus: unknown) {
+        console.error(
+          "[SPECIALTY_QUOTE_START] opportunity_status_changed (insert)",
+          emitOppStatus instanceof Error ? emitOppStatus.message : emitOppStatus
+        );
+      }
 
       const { executeWorkflowRun } = await import("@/lib/workflowRun");
       /** Standard cleaning uses `quote_started`; specialty must not run those workflows (e.g. stage reset). */
@@ -645,18 +689,17 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     const existingMeta = (mdRow?.metadata as Record<string, unknown> | null) ?? {};
     const prevQi = (existingMeta.quote_input as Record<string, unknown> | undefined) ?? {};
-    const { error: metaErr } = await supabase
-      .from("opportunities")
-      .update({
-        metadata: {
-          ...existingMeta,
-          quote_input: {
-            ...prevQi,
-            specialty_quote_photo_documents,
-          },
+    const specialtyPhotoMetaPatch: Record<string, unknown> = {
+      metadata: {
+        ...existingMeta,
+        quote_input: {
+          ...prevQi,
+          specialty_quote_photo_documents,
         },
-      })
-      .eq("id", opportunityId);
+      },
+    };
+    await normalizeOpportunityWritePayload(supabase, specialtyPhotoMetaPatch, "book-v2/specialty-quote-start:photo-metadata");
+    const { error: metaErr } = await supabase.from("opportunities").update(specialtyPhotoMetaPatch).eq("id", opportunityId);
     if (metaErr) {
       console.error("[SPECIALTY_QUOTE_START_METADATA]", metaErr);
     }

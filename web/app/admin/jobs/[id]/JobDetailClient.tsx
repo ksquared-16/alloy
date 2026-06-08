@@ -12,6 +12,7 @@ import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import type { JobPaymentRow, JobPaymentsPaymentSummary } from "@/app/api/admin/jobs/[id]/payments/route";
 import { paymentRowStatusDisplayLabel } from "@/lib/admin/jobPaymentSummary";
+import { useAdminOrgOperationalTimezone } from "@/contexts/AdminOrgOperationalTimezoneContext";
 
 type JobRecord = Record<string, unknown> & {
     _customer_name?: string | null;
@@ -64,12 +65,13 @@ export default function JobDetailClient({
     const [assignVendorId, setAssignVendorId] = useState<string>("");
     const [assignLoading, setAssignLoading] = useState(false);
     const [assignError, setAssignError] = useState<string | null>(null);
+    const orgOpTz = useAdminOrgOperationalTimezone();
     const [createScheduleOpen, setCreateScheduleOpen] = useState(false);
-    const [scheduleForm, setScheduleForm] = useState({ start_at: "", end_at: "", timezone: "America/Los_Angeles" });
+    const [scheduleForm, setScheduleForm] = useState({ start_at: "", end_at: "", timezone: orgOpTz });
     const [scheduleSaveLoading, setScheduleSaveLoading] = useState(false);
     const [scheduleSaveError, setScheduleSaveError] = useState<string | null>(null);
     const [editSchedule, setEditSchedule] = useState<ScheduleRow | null>(null);
-    const [editForm, setEditForm] = useState({ start_at: "", end_at: "", timezone: "America/Los_Angeles" });
+    const [editForm, setEditForm] = useState({ start_at: "", end_at: "", timezone: orgOpTz });
     const [editSaveLoading, setEditSaveLoading] = useState(false);
     const [editSaveError, setEditSaveError] = useState<string | null>(null);
     const [cancelTarget, setCancelTarget] = useState<ScheduleRow | null>(null);
@@ -261,7 +263,7 @@ export default function JobDetailClient({
                 return;
             }
             setCreateScheduleOpen(false);
-            setScheduleForm({ start_at: "", end_at: "", timezone: "America/Los_Angeles" });
+            setScheduleForm({ start_at: "", end_at: "", timezone: orgOpTz });
             setSchedules((prev) => [...prev, data].sort((a, b) => (b.start_at > a.start_at ? 1 : -1)));
         } finally {
             setScheduleSaveLoading(false);
@@ -273,7 +275,7 @@ export default function JobDetailClient({
         setEditForm({
             start_at: s.start_at ? s.start_at.slice(0, 16) : "",
             end_at: s.end_at ? s.end_at.slice(0, 16) : "",
-            timezone: (s as { timezone?: string }).timezone ?? "America/Los_Angeles",
+            timezone: (s as { timezone?: string }).timezone ?? orgOpTz,
         });
         setEditSaveError(null);
     };
@@ -370,7 +372,7 @@ export default function JobDetailClient({
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setScheduleForm({ start_at: "", end_at: "", timezone: "America/Los_Angeles" });
+                                    setScheduleForm({ start_at: "", end_at: "", timezone: orgOpTz });
                                     setScheduleSaveError(null);
                                     setCreateScheduleOpen(true);
                                 }}
@@ -451,7 +453,7 @@ export default function JobDetailClient({
                             </div>
                         </div>
                         <div className="pt-4 border-t border-alloy-stone/20">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-3">
                                 Pricing breakdown
                             </h3>
                             <JobPricingBreakdown record={job} />
@@ -469,21 +471,21 @@ export default function JobDetailClient({
                 {tab === "related" && (
                     <div className="space-y-6">
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Customer</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Customer</h3>
                             <p className="text-sm text-alloy-midnight">{customerName}</p>
                         </div>
                         {((job as { _primary_person_name?: string | null })._primary_person_name ?? (job._primary_contact_name as string)) && (
                             <div>
-                                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Person</h3>
+                                <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Person</h3>
                                 <p className="text-sm text-alloy-midnight">{(job as { _primary_person_name?: string | null })._primary_person_name ?? (job._primary_contact_name as string)}</p>
                             </div>
                         )}
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
                             <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Schedules</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-3">Schedules</h3>
                             {loadingSchedules ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading schedules…</p>
                             ) : (
@@ -579,7 +581,7 @@ export default function JobDetailClient({
                             )}
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Payments</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-3">Payments</h3>
                             {loadingPayments ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading payments…</p>
                             ) : paymentsFetchError ? (

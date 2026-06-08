@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { assertSectionSafeToDelete, parseFieldSectionConfig } from "@/lib/fields/sectionManagement";
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -29,6 +30,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (typeof body.label === "string") updates.label = body.label.trim() || null;
     if (typeof body.description === "string") updates.description = body.description.trim() || null;
     if (typeof body.sort_order === "number" && !Number.isNaN(body.sort_order)) updates.sort_order = body.sort_order;
+    if (body.is_archived !== undefined) updates.is_archived = !!body.is_archived;
+    if (body.section_config !== undefined) {
+        const parsed = parseFieldSectionConfig(body.section_config);
+        if (!parsed.ok) {
+            return NextResponse.json({ error: parsed.error }, { status: 400 });
+        }
+        updates.section_config = parsed.value;
+    }
 
     if (Object.keys(updates).length === 0) {
         return NextResponse.json({ error: "No valid fields" }, { status: 400 });
@@ -59,7 +68,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -74,6 +83,42 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const supabase = createAdminClient();
+    const { data: row, error: loadErr } = await supabase
+        .from("field_section_definitions")
+        .select("entity_type, section_key")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    if (loadErr || !row) {
+        return NextResponse.json({ error: loadErr?.message ?? "Not found" }, { status: 404 });
+    }
+
+    const entity_type = String(row.entity_type);
+    const section_key = String(row.section_key);
+
+    const { count, error: countErr } = await supabase
+        .from("field_definitions")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", ctx.orgId)
+        .eq("entity_type", entity_type)
+        .eq("section_key", section_key);
+
+    if (countErr) {
+        return NextResponse.json({ error: countErr.message }, { status: 500 });
+    }
+    const n = count ?? 0;
+    const safety = assertSectionSafeToDelete(section_key, n);
+    if (!safety.ok) {
+        return NextResponse.json(
+            {
+                error: safety.error,
+                field_definition_count: safety.field_definition_count,
+            },
+            { status: 409 }
+        );
+    }
+
     const { error } = await supabase.from("field_section_definitions").delete().eq("id", id).eq("org_id", ctx.orgId);
 
     if (error) {

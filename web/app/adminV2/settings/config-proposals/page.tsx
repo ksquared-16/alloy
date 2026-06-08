@@ -1,0 +1,36 @@
+import { Suspense } from "react";
+
+import ConfigLayoutProposalsClient from "./ConfigLayoutProposalsClient";
+
+export const dynamic = "force-dynamic";
+
+export default async function ConfigLayoutProposalsPage({
+    searchParams,
+}: {
+    searchParams: Promise<{ id?: string; proposalId?: string }>;
+}) {
+    const sp = await searchParams;
+    const initialId =
+        typeof sp.proposalId === "string"
+            ? sp.proposalId
+            : typeof sp.id === "string"
+              ? sp.id
+              : undefined;
+    return (
+        <div className="w-full min-w-0 space-y-4 pb-4">
+            <header>
+                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">
+                    Configuration proposals
+                </h1>
+                <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
+                    Review, approve, and apply Configuration / Layout Assist proposals. Applies use authoritative
+                    admin services only — no autonomous AI mutation.
+                </p>
+            </header>
+            <Suspense fallback={<p className="text-sm text-alloy-midnight/55">Loading proposals…</p>}>
+                <ConfigLayoutProposalsClient initialId={initialId} />
+            </Suspense>
+        </div>
+    );
+}
+

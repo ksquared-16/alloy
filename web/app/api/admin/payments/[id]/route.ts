@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
@@ -8,6 +8,8 @@ import {
     paymentRowFieldsForStatusKeyChange,
     resolvePaymentStatusIdByKey,
 } from "@/lib/admin/paymentStatusSync";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertPaymentDrawerReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /** PATCH: update status_key, paid_at, notes. Editable fields only. */
 export async function PATCH(
@@ -16,7 +18,7 @@ export async function PATCH(
 ) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { id } = await params;
@@ -49,6 +51,14 @@ export async function PATCH(
     if (prevErr || !prevRow) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertPaymentDrawerReadable(supabase, ctx.orgId, dim, id))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const oldStatusKey = (prevRow as { status_key?: string | null }).status_key ?? null;
 
     if (updates.status_key !== undefined) {

@@ -36,6 +36,44 @@ export async function resolveOptionSetOptions(
     }));
 }
 
+export type FieldOptionWithMetadata = FieldOption & { metadata?: Record<string, unknown> };
+
+/** Like resolveOptionSetOptions, but includes option_set_items.metadata for UI classification. */
+export async function resolveOptionSetOptionsWithMetadata(
+    supabase: SupabaseClient,
+    orgId: string,
+    setKey: string
+): Promise<FieldOptionWithMetadata[]> {
+    const sk = setKey.trim();
+    if (!sk) return [];
+    const { data: setRow, error: setErr } = await supabase
+        .from("option_sets")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("set_key", sk)
+        .maybeSingle();
+    if (setErr || !setRow?.id) {
+        if (setErr) console.warn("[resolveOptionSetOptionsWithMetadata] option_sets", setErr.message);
+        return [];
+    }
+    const { data: items, error: itemErr } = await supabase
+        .from("option_set_items")
+        .select("item_key, label, metadata")
+        .eq("option_set_id", (setRow as { id: string }).id)
+        .order("sort_order", { ascending: true });
+    if (itemErr) {
+        console.warn("[resolveOptionSetOptionsWithMetadata] option_set_items", itemErr.message);
+        return [];
+    }
+    return ((items ?? []) as { item_key: string; label: string; metadata?: Record<string, unknown> }[]).map((r) => ({
+        value: String(r.item_key).trim(),
+        label: (r.label && String(r.label).trim()) || String(r.item_key).trim(),
+        metadata: (r.metadata && typeof r.metadata === "object" && !Array.isArray(r.metadata) ? r.metadata : undefined) as
+            | Record<string, unknown>
+            | undefined,
+    }));
+}
+
 export type OptionSetOptionsMap = Record<string, FieldOption[]>;
 
 /** Batch-load multiple sets in a small number of queries. */

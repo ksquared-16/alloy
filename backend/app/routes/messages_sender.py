@@ -14,6 +14,7 @@ from ..settings import (
     TWILIO_MESSAGING_SERVICE_SID,
     INTERNAL_CRON_TOKEN,
 )
+from ..services.communication_message_sender import process_communication_messages
 from ..services.message_sender import process_queued_messages
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -47,11 +48,17 @@ async def post_process_messages(request: Request, x_cron_token: Optional[str] = 
     if x_cron_token is None or (x_cron_token or "").strip() != token:
         raise HTTPException(status_code=401, detail="Invalid or missing x-cron-token")
 
-    if not TWILIO_ACCOUNT_SID or not TWILIO_AUTH_TOKEN or not TWILIO_MESSAGING_SERVICE_SID:
-        raise HTTPException(
-            status_code=500,
-            detail="Twilio is not configured (missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_MESSAGING_SERVICE_SID)",
-        )
+    if not INTERNAL_CRON_TOKEN:
+        raise HTTPException(status_code=501, detail="INTERNAL_CRON_TOKEN is not configured")
+    token = (INTERNAL_CRON_TOKEN or "").strip()
+    if x_cron_token is None or (x_cron_token or "").strip() != token:
+        raise HTTPException(status_code=401, detail="Invalid or missing x-cron-token")
+
+    twilio_ok = bool(
+        (TWILIO_ACCOUNT_SID or "").strip()
+        and (TWILIO_AUTH_TOKEN or "").strip()
+        and (TWILIO_MESSAGING_SERVICE_SID or "").strip()
+    )
 
     try:
         raw = await request.body()
@@ -66,5 +73,28 @@ async def post_process_messages(request: Request, x_cron_token: Optional[str] = 
     wr_raw = body.get("workflow_run_id")
     wr = wr_raw.strip() if isinstance(wr_raw, str) and wr_raw.strip() else None
 
-    result = process_queued_messages(limit=limit, workflow_run_id=wr)
-    return result
+    legacy: dict
+    if twilio_ok:
+        legacy = process_queued_messages(limit=limit, workflow_run_id=wr)
+    else:
+        logger.warning("MESSAGE_PROCESS_SKIP_LEGACY: Twilio env not fully configured; legacy public.messages unchanged")
+        legacy = {
+            "processed": 0,
+            "sent": 0,
+            "failed": 0,
+            "message_ids": [],
+            "errors": ["legacy pipeline skipped: TWILIO_* not configured"],
+        }
+
+    comm = process_communication_messages(limit=limit, workflow_run_id=wr)
+
+    merged = {
+        "processed": legacy.get("processed", 0) + comm.get("processed", 0),
+        "sent": legacy.get("sent", 0) + comm.get("sent", 0),
+        "failed": legacy.get("failed", 0) + comm.get("failed", 0),
+        "message_ids": (legacy.get("message_ids") or []) + (comm.get("message_ids") or []),
+        "errors": (legacy.get("errors") or []) + (comm.get("errors") or []),
+        "legacy_messages": legacy,
+        "communication_messages": comm,
+    }
+    return merged

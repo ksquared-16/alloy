@@ -150,7 +150,7 @@ export default function GutterLeadForm({ onSuccess }: GutterLeadFormProps = {} a
   };
 
   // Match cleaning form styling exactly
-  const labelClass = "block text-xs font-semibold uppercase tracking-wide mb-1 text-alloy-midnight/70";
+  const labelClass = "block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70";
   const inputBase = "w-full rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2";
   const inputClass = inputBase + " border border-alloy-stone/80 bg-white focus:ring-alloy-blue focus:border-alloy-blue";
   const errorInputClass = inputBase + " border-red-500 bg-white focus:ring-red-500 focus:border-red-500";

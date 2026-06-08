@@ -61,3 +61,38 @@ def send_sms(to_number: str, body: str) -> Dict[str, Any]:
     status = (message.status or "unknown").lower()
     logger.info("Twilio send_sms: sid=%s status=%s", _mask_sid(sid), status)
     return {"sid": sid, "status": status}
+
+
+def send_sms_with_credentials(
+    to_number: str,
+    body: str,
+    *,
+    account_sid: str,
+    auth_token: str,
+    messaging_service_sid: str,
+) -> Dict[str, Any]:
+    """
+    Send SMS using explicit Twilio credentials (tenant binding path).
+    """
+    if not to_number or not str(to_number).strip():
+        raise ValueError("to_number is required and cannot be empty")
+    if not body or not str(body).strip():
+        raise ValueError("body is required and cannot be empty")
+    sid_val = (account_sid or "").strip()
+    token_val = (auth_token or "").strip()
+    messaging_sid = (messaging_service_sid or "").strip()
+    if not sid_val or not token_val:
+        raise RuntimeError("account_sid and auth_token are required for binding send")
+    if not messaging_sid:
+        raise RuntimeError("messaging_service_sid is required for binding send")
+
+    client = Client(sid_val, token_val)
+    message = client.messages.create(
+        body=body.strip(),
+        messaging_service_sid=messaging_sid,
+        to=to_number.strip(),
+    )
+    sid = message.sid or ""
+    status = (message.status or "unknown").lower()
+    logger.info("Twilio send_sms_with_credentials: sid=%s status=%s", _mask_sid(sid), status)
+    return {"sid": sid, "status": status}

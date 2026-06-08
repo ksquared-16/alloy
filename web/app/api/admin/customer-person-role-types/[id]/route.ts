@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 
 const ALLOWED_PATCH_KEYS = ["label", "description", "sort_order", "is_active"] as const;
@@ -10,7 +10,7 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -95,7 +95,7 @@ export async function PATCH(
     return NextResponse.json(updated);
 }
 
-/** DELETE: not implemented. Use is_active=false to deactivate. Records may reference key in customer_persons.role. */
+/** DELETE: not implemented. Use is_active=false to deactivate. Records may reference key in customer_persons.role_type. */
 export async function DELETE() {
     return NextResponse.json(
         { error: "Delete not supported. Set is_active to false to deactivate." },

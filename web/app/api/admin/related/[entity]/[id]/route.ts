@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminPerfEnabled, adminPerfNow, logAdminPerf } from "@/lib/admin/perfTrace";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
+import { mergeOpportunityPacketDocumentsForRelated } from "@/lib/admin/related/mergeOpportunityPacketDocuments";
 import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
-
 const LIMIT = 25;
+/** Opportunity drawer merges direct opportunity uploads with packet-linked submission documents; allow a larger cap so packet PDFs are not dropped behind job noise. */
+const OPPORTUNITY_DOC_MERGE_LIMIT = 50;
 
 /** Fields for schedule rows in Related tabs (workflow + cancellation audit). */
 const SCHEDULE_RELATED_LIST_SELECT =
@@ -13,7 +16,10 @@ const SCHEDULE_RELATED_LIST_SELECT =
 const DOC_SELECT =
     "id, org_id, title, original_filename, doc_type, status, created_at, mime_type, bucket, storage_path, owner_contact_id, entity_type, entity_id";
 
-function mergeDocumentLists(lists: (Record<string, unknown>[] | null | undefined)[]): NormalizedDocumentRow[] {
+function mergeDocumentLists(
+    lists: (Record<string, unknown>[] | null | undefined)[],
+    limit: number = LIMIT
+): NormalizedDocumentRow[] {
     const byId = new Map<string, NormalizedDocumentRow>();
     for (const list of lists) {
         for (const row of list ?? []) {
@@ -26,17 +32,17 @@ function mergeDocumentLists(lists: (Record<string, unknown>[] | null | undefined
         const ta = a.created_at || a.uploaded_at || "";
         const tb = b.created_at || b.uploaded_at || "";
         return tb.localeCompare(ta);
-    }).slice(0, LIMIT);
+    }).slice(0, limit);
 }
 
-export async function GET(
+async function getRelatedImpl(
     request: NextRequest,
     { params }: { params: Promise<{ entity: string; id: string }> }
 ) {
     const { entity, id } = await params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
@@ -45,6 +51,9 @@ export async function GET(
         const supabase = createAdminClient();
 
         if (entity === "contact") {
+            // LEGACY_COMPAT: contact drawer "related" lists are keyed off primary_contact_id, to_contact_id,
+            // owner_contact_id, customer_member_contacts.contact_id, etc. New related-entity work for people
+            // should load via customer_persons / person_relationships and only use contact joins for compatibility.
             const { data: contactRow } = await supabase.from("contacts").select("customer_id, vendor_id").eq("id", id).maybeSingle();
             const customerId = (contactRow as { customer_id?: string | null } | null)?.customer_id ?? null;
             const vendorId = (contactRow as { vendor_id?: string | null } | null)?.vendor_id ?? null;
@@ -52,6 +61,7 @@ export async function GET(
             const [linkedCustomerRes, linkedVendorRes, oppRes, jobsRes, subsRes, cmcRes, vcRes, messagesRes, docByOwner, docByEntityContact, docByEntityContacts, redemptionsRes] = await Promise.all([
                 customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : Promise.resolve({ data: null }),
                 vendorId ? supabase.from("vendors").select("id, name").eq("id", vendorId).maybeSingle() : Promise.resolve({ data: null }),
+                // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id for opportunity match.
                 supabase.from("opportunities").select("id, created_at, name, status, job_date, quote_total").eq("primary_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("jobs").select("id, created_at, title, scheduled_at, opportunity_id").eq("primary_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("customer_subscriptions").select("id, created_at, customer_id, status, start_date").eq("primary_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),
@@ -115,7 +125,7 @@ export async function GET(
                     .order("created_at", { ascending: false })
                     .limit(LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
-                supabase.from("customer_persons").select("id, customer_id, person_id, role, created_at").eq("customer_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("customer_persons").select("id, customer_id, person_id, role_type, created_at").eq("customer_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
             ]);
             const cpRows = cpRes.data ?? [];
             const personIds = [...new Set(cpRows.map((r: { person_id: string }) => r.person_id))];
@@ -123,20 +133,20 @@ export async function GET(
                 ? await supabase.from("persons").select("id, first_name, last_name, email, phone").in("id", personIds)
                 : { data: [] as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }[] };
             const personMap = new Map((personRows ?? []).map((p) => [p.id, p]));
-            const roleKeys = [...new Set(cpRows.map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
+            const roleKeys = [...new Set(cpRows.map((r: { role_type?: string | null }) => r.role_type).filter(Boolean))] as string[];
             const { data: roleTypeRows } = roleKeys.length > 0
                 ? await supabase.from("customer_person_role_types").select("key, label").eq("org_id", ctx.orgId).in("key", roleKeys)
                 : { data: [] as { key: string; label: string | null }[] };
             const roleLabelMap = new Map((roleTypeRows ?? []).map((r) => [r.key, r.label ?? r.key]));
-            const people = cpRows.map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => {
+            const people = cpRows.map((r: { id: string; customer_id: string; person_id: string; role_type?: string | null; created_at?: string }) => {
                 const person = personMap.get(r.person_id);
                 const name = person ? [person.first_name, person.last_name].filter(Boolean).join(" ").trim() || null : null;
                 return {
                     id: r.id,
                     person_id: r.person_id,
                     customer_id: r.customer_id,
-                    role: r.role ?? null,
-                    role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
+                    role_type: r.role_type ?? null,
+                    role_label: r.role_type ? (roleLabelMap.get(r.role_type) ?? r.role_type) : null,
                     _person_name: name,
                     _person_email: person?.email ?? null,
                     _person_phone: person?.phone ?? null,
@@ -184,9 +194,16 @@ export async function GET(
                     .or("entity_type.eq.opportunity,entity_type.eq.opportunities")
                     .eq("entity_id", id)
                     .order("created_at", { ascending: false })
-                    .limit(LIMIT)
+                    .limit(OPPORTUNITY_DOC_MERGE_LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
             ]);
+            const documentsMerged = await mergeOpportunityPacketDocumentsForRelated(
+                supabase,
+                ctx.orgId,
+                id,
+                documentsRes.data,
+                OPPORTUNITY_DOC_MERGE_LIMIT
+            );
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
             let discountRedemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[] = [];
             if (jobIds.length > 0) {
@@ -204,7 +221,7 @@ export async function GET(
             return NextResponse.json({
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
-                documents: normalizeDocumentRows(documentsRes.data ?? []),
+                documents: documentsMerged,
                 discount_redemptions: discountRedemptions,
                 quotes: [],
                 messages: [],
@@ -641,7 +658,7 @@ export async function GET(
             const [customerPersonsRes, relationshipsRes, contactsRes, membersRes, plRes, oppRes, documentsRes] = await Promise.all([
                 supabase
                     .from("customer_persons")
-                    .select("id, customer_id, person_id, role, created_at")
+                    .select("id, customer_id, person_id, role_type, created_at")
                     .eq("person_id", id)
                     .eq("org_id", ctx.orgId)
                     .order("created_at", { ascending: false })
@@ -690,17 +707,17 @@ export async function GET(
             ]);
             const cpRows = customerPersonsRes.data ?? [];
             const customerIds = [...new Set(cpRows.map((r: { customer_id: string }) => r.customer_id))];
-            const roleKeys = [...new Set(cpRows.map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
+            const roleKeys = [...new Set(cpRows.map((r: { role_type?: string | null }) => r.role_type).filter(Boolean))] as string[];
             const [customerRowsRes, roleTypesRes] = await Promise.all([
                 customerIds.length > 0 ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] as { id: string; name: string | null }[] },
                 roleKeys.length > 0 ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", ctx.orgId).in("key", roleKeys) : { data: [] as { key: string; label: string | null }[] },
             ]);
             const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
             const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
-            const customer_persons = cpRows.map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => ({
+            const customer_persons = cpRows.map((r: { id: string; customer_id: string; person_id: string; role_type?: string | null; created_at?: string }) => ({
                 ...r,
                 _customer_name: customerMap.get(r.customer_id) ?? null,
-                _role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
+                _role_label: r.role_type ? (roleLabelMap.get(r.role_type) ?? r.role_type) : null,
             }));
             const relRows = relationshipsRes.data ?? [];
             const relTypeKeys = [...new Set(relRows.map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];
@@ -802,4 +819,17 @@ export async function GET(
         console.error("[ADMIN_RELATED]", e);
         return NextResponse.json({ error: "Failed to fetch related" }, { status: 500 });
     }
+}
+
+/** Phase 0 perf wrapper (Card 0.1): times the handler when ADMIN_PERF_TRACE=1; otherwise a passthrough. */
+export async function GET(
+    request: NextRequest,
+    context: { params: Promise<{ entity: string; id: string }> }
+) {
+    if (!adminPerfEnabled()) return getRelatedImpl(request, context);
+    const t0 = adminPerfNow();
+    const res = await getRelatedImpl(request, context);
+    const { entity, id } = await context.params;
+    logAdminPerf({ route: "related", entity, id, status: res.status, t0 });
+    return res;
 }

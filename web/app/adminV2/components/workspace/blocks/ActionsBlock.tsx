@@ -166,11 +166,14 @@ function PrimaryActionsPanel({
   actions,
   onAction,
   panelClassName,
+  maxSolidButtons = PRIMARY_SOLID_CAP,
 }: {
   sectionTitle: string;
   actions: PrimaryActionVm[];
   onAction: WorkspaceActionHandler;
   panelClassName?: string;
+  /** Cap for solid primary styling; department/work_unit right rails pass all actions here. */
+  maxSolidButtons?: number;
 }) {
   const solidUsed = { n: 0 };
   return (
@@ -186,7 +189,7 @@ function PrimaryActionsPanel({
           <button
             key={a.id}
             type="button"
-            className={primaryTierButtonClass(a, solidUsed, PRIMARY_SOLID_CAP)}
+            className={primaryTierButtonClass(a, solidUsed, maxSolidButtons)}
             style={a.emphasized ? { boxShadow: "0 0 0 2px rgba(0, 162, 131, 0.5)" } : undefined}
             onClick={() => onAction({ type: "actions.block", actionId: a.id })}
           >
@@ -201,9 +204,11 @@ function PrimaryActionsPanel({
 export default function ActionsBlock({ model, onAction, title = "Actions", surface = "default" }: Props) {
   if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     const sysFull = model.systemActions ?? [];
-    /** Max two items in the primary band; remainder surface as operational rows. */
-    const primaryBand = sysFull.slice(0, 2);
-    const demotedSystemActions = sysFull.slice(2);
+    /** Department / work_unit right rails: show every registry-configured system action in the primary band. */
+    const uncappedRail = surface === "department" || surface === "work_unit";
+    const primaryBand = uncappedRail ? sysFull : sysFull.slice(0, 2);
+    const demotedSystemActions = uncappedRail ? [] : sysFull.slice(2);
+    const maxSolidForPrimary = uncappedRail ? Math.max(primaryBand.length, 1) : PRIMARY_SOLID_CAP;
     const quick = model.quickOperations;
     const smart = model.smartSuggestions;
     const recSec = model.recordSecondaryActions?.length ?? 0;
@@ -279,6 +284,7 @@ export default function ActionsBlock({ model, onAction, title = "Actions", surfa
               sectionTitle={systemPanelTitle}
               actions={primaryBand}
               onAction={onAction}
+              maxSolidButtons={maxSolidForPrimary}
               panelClassName={surface === "record" ? "adminv2-ws-actions-rail--record-primary-tier" : undefined}
             />
           ) : null}

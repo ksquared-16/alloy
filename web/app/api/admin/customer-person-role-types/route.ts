@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { resolveOptionsByIndustry, resolveOptionsByVertical } from "@/lib/admin/personTypeSettings";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -23,7 +23,7 @@ export type CustomerPersonRoleType = {
 
 /** GET: list customer_person_role_types for current org. Industry-driven: when active_only=true, uses org.industry_id to resolve options. Optional ?industry_id= override, ?vertical_id= for secondary. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create customer_person_role_type. Admin only. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

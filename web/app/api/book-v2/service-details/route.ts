@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import {
   coalesceBookV2BedBathRaw,
   homeTypeInputToStableKey,
@@ -15,6 +16,7 @@ import {
   loadSqftTiersForVertical,
   normalizeSqftKeyInput,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import { emitEvent } from "@/lib/emitEvent";
 
 export type ServiceDetailsBody = {
   opportunity_id: string;
@@ -177,17 +179,34 @@ export async function POST(request: NextRequest) {
       saved_at: new Date().toISOString(),
     };
 
-    await supabase
-      .from("opportunities")
-      .update({
-        metadata: {
-          ...meta,
-          service_details_saved_at: book_v2_service_property.saved_at,
-          book_v2_service_property,
+    const oppSvcPatch: Record<string, unknown> = {
+      metadata: {
+        ...meta,
+        service_details_saved_at: book_v2_service_property.saved_at,
+        book_v2_service_property,
+      },
+      updated_at: new Date().toISOString(),
+    };
+    await normalizeOpportunityWritePayload(supabase, oppSvcPatch, "book-v2/service-details");
+    await supabase.from("opportunities").update(oppSvcPatch).eq("id", opportunityId);
+
+    try {
+      await emitEvent({
+        org_id: orgId,
+        event_type: "book_v2_service_details_saved",
+        entity_type: "opportunities",
+        entity_id: opportunityId,
+        payload: {
+          location_id: locationId,
+          saved_at: book_v2_service_property.saved_at,
+          city,
+          postal_code: postal,
+          source: "book-v2/service-details",
         },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", opportunityId);
+      });
+    } catch (e) {
+      console.warn("[BOOK_V2_SERVICE_DETAILS] emitEvent", e instanceof Error ? e.message : e);
+    }
 
     return NextResponse.json({ ok: true, location_id: locationId });
   } catch (e) {

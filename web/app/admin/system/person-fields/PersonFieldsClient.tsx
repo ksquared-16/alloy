@@ -3,19 +3,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 import { sortFieldDefinitionsForAdminList } from "@/lib/admin/sortFieldDefinitions";
+import OptionSetKeyPicker from "@/components/admin/OptionSetKeyPicker";
+import {
+    buildConfigWithOptionSetKey,
+    getOptionSetKeyFromConfig,
+    isSelectLikeFieldType,
+} from "@/lib/admin/fieldDefinitionOptionSetConfig";
+import {
+    fetchFieldSectionRegistry,
+    mergeFieldSectionSelectOptions,
+    sectionKeyInOptions,
+    type FieldSectionRegistryRow,
+} from "@/lib/admin/fieldSectionSelectOptions";
 
-const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
-
-const PERSON_SECTION_OPTIONS = [
-    { value: "basic", label: "Basic" },
-    { value: "contact", label: "Contact" },
-    { value: "profile", label: "Profile" },
-    { value: "system", label: "System" },
-    { value: "custom", label: "Custom" },
-] as const;
+const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean", "select", "multiselect"] as const;
 
 function slugifyLabel(label: string): string {
     return label
@@ -56,8 +63,20 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
     };
 }
 
-export default function PersonFieldsClient() {
+export default function PersonFieldsClient({
+    manageOptionSetsHref,
+    adminV2Chrome = false,
+    hideSettingsHeader = false,
+}: { manageOptionSetsHref?: string; adminV2Chrome?: boolean; hideSettingsHeader?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
+    const { labels } = useEntityLabels();
+    const personEntityLabel = useMemo(() => adminFieldEntitySingularLabel(labels, "person"), [labels]);
+    const pageTitle = useMemo(() => `${personEntityLabel} Fields`, [personEntityLabel]);
+    const pageSubtitle = useMemo(
+        () =>
+            `Configure field definitions for the ${personEntityLabel.toLowerCase()} entity. System fields can be customized (labels, visibility, order). Add custom fields for your org.`,
+        [personEntityLabel]
+    );
     const [items, setItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -77,6 +96,7 @@ export default function PersonFieldsClient() {
     const [editSortOrder, setEditSortOrder] = useState(100);
     const [editPlaceholder, setEditPlaceholder] = useState("");
     const [editHelpText, setEditHelpText] = useState("");
+    const [editOptionSetKey, setEditOptionSetKey] = useState("");
     const [editSaving, setEditSaving] = useState(false);
     const [editError, setEditError] = useState<string | null>(null);
 
@@ -95,13 +115,31 @@ export default function PersonFieldsClient() {
     const [createSortable, setCreateSortable] = useState(false);
     const [createPlaceholder, setCreatePlaceholder] = useState("");
     const [createHelpText, setCreateHelpText] = useState("");
+    const [createOptionSetKey, setCreateOptionSetKey] = useState("");
     const [createSaving, setCreateSaving] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
     const createKeyManuallyEditedRef = useRef(false);
     const [deleteSavingId, setDeleteSavingId] = useState<string | null>(null);
     const [deleteError, setDeleteError] = useState<string | null>(null);
 
+    const [sectionRegistry, setSectionRegistry] = useState<FieldSectionRegistryRow[]>([]);
+
     const sortedItems = useMemo(() => sortFieldDefinitionsForAdminList(items), [items]);
+
+    const inUseSectionKeys = useMemo(
+        () =>
+            new Set(
+                items
+                    .map((i) => i.section_key)
+                    .filter((k): k is string => typeof k === "string" && k.trim().length > 0)
+            ),
+        [items]
+    );
+
+    const sectionOptions = useMemo(
+        () => mergeFieldSectionSelectOptions(sectionRegistry, inUseSectionKeys),
+        [sectionRegistry, inUseSectionKeys]
+    );
 
     const fetchItems = useCallback(async () => {
         setLoading(true);
@@ -124,6 +162,17 @@ export default function PersonFieldsClient() {
         fetchItems();
     }, [fetchItems]);
 
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            const reg = await fetchFieldSectionRegistry("person");
+            if (!cancelled) setSectionRegistry(reg);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     const openEdit = (row: FieldDef) => {
         setEditRow(row);
         setEditLabel(row.label ?? "");
@@ -139,6 +188,7 @@ export default function PersonFieldsClient() {
         setEditSortOrder(row.sort_order);
         setEditPlaceholder(row.placeholder ?? "");
         setEditHelpText(row.help_text ?? "");
+        setEditOptionSetKey(getOptionSetKeyFromConfig(row.config));
         setEditError(null);
         setEditOpen(true);
     };
@@ -148,24 +198,28 @@ export default function PersonFieldsClient() {
         setEditSaving(true);
         setEditError(null);
         try {
+            const body: Record<string, unknown> = {
+                label: editLabel.trim() || null,
+                description: editDescription.trim() || null,
+                is_required: editRequired,
+                is_active: editActive,
+                is_visible_in_form: editVisibleForm,
+                is_visible_in_drawer: editVisibleDrawer,
+                is_visible_in_table: editVisibleTable,
+                is_filterable: editFilterable,
+                is_sortable: editSortable,
+                section_key: editSectionKey.trim() || "custom",
+                sort_order: editSortOrder,
+                placeholder: editPlaceholder.trim() || null,
+                help_text: editHelpText.trim() || null,
+            };
+            if (isSelectLikeFieldType(editRow.field_type)) {
+                body.config = buildConfigWithOptionSetKey(editRow.config, editOptionSetKey);
+            }
             const res = await fetch(`/api/admin/field-definitions/${editRow.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    label: editLabel.trim() || null,
-                    description: editDescription.trim() || null,
-                    is_required: editRequired,
-                    is_active: editActive,
-                    is_visible_in_form: editVisibleForm,
-                    is_visible_in_drawer: editVisibleDrawer,
-                    is_visible_in_table: editVisibleTable,
-                    is_filterable: editFilterable,
-                    is_sortable: editSortable,
-                    section_key: editSectionKey.trim() || "custom",
-                    sort_order: editSortOrder,
-                    placeholder: editPlaceholder.trim() || null,
-                    help_text: editHelpText.trim() || null,
-                }),
+                body: JSON.stringify(body),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
@@ -211,6 +265,7 @@ export default function PersonFieldsClient() {
         setCreateSortable(false);
         setCreatePlaceholder("");
         setCreateHelpText("");
+        setCreateOptionSetKey("");
         setCreateError(null);
         createKeyManuallyEditedRef.current = false;
         setCreateOpen(true);
@@ -236,26 +291,30 @@ export default function PersonFieldsClient() {
         setCreateSaving(true);
         setCreateError(null);
         try {
+            const payload: Record<string, unknown> = {
+                entity_type: "person",
+                field_key: key,
+                label: createLabel.trim() || key,
+                description: createDescription.trim() || null,
+                field_type: createFieldType,
+                section_key: createSectionKey.trim() || "custom",
+                sort_order: createSortOrder,
+                is_required: createRequired,
+                is_visible_in_form: createVisibleForm,
+                is_visible_in_drawer: createVisibleDrawer,
+                is_visible_in_table: createVisibleTable,
+                is_filterable: createFilterable,
+                is_sortable: createSortable,
+                placeholder: createPlaceholder.trim() || null,
+                help_text: createHelpText.trim() || null,
+            };
+            if (isSelectLikeFieldType(createFieldType)) {
+                payload.config = buildConfigWithOptionSetKey(null, createOptionSetKey);
+            }
             const res = await fetch("/api/admin/field-definitions", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    entity_type: "person",
-                    field_key: key,
-                    label: createLabel.trim() || key,
-                    description: createDescription.trim() || null,
-                    field_type: createFieldType,
-                    section_key: createSectionKey.trim() || "custom",
-                    sort_order: createSortOrder,
-                    is_required: createRequired,
-                    is_visible_in_form: createVisibleForm,
-                    is_visible_in_drawer: createVisibleDrawer,
-                    is_visible_in_table: createVisibleTable,
-                    is_filterable: createFilterable,
-                    is_sortable: createSortable,
-                    placeholder: createPlaceholder.trim() || null,
-                    help_text: createHelpText.trim() || null,
-                }),
+                body: JSON.stringify(payload),
             });
             const json = await res.json().catch(() => ({}));
             if (res.status === 409) {
@@ -272,23 +331,31 @@ export default function PersonFieldsClient() {
         }
     };
 
+    const compactSubtitle =
+        "System fields: labels, visibility, and order. Add custom fields for your org — same APIs as legacy System pages.";
+
+    const addFieldButton = canMutate ? (
+        <button
+            type="button"
+            onClick={openCreate}
+            className="shrink-0 rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+        >
+            Add custom field
+        </button>
+    ) : null;
+
     return (
         <>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader
-                    title="Person Fields"
-                    subtitle="Configure field definitions for the person entity. System fields can be customized (labels, visibility, order). Add custom fields for your org."
-                />
-                {canMutate && (
-                    <button
-                        type="button"
-                        onClick={openCreate}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
-                    >
-                        Add custom field
-                    </button>
-                )}
-            </div>
+            {adminV2Chrome && !hideSettingsHeader ? (
+                <SettingsPageHeader title={pageTitle} subtitle={compactSubtitle} actions={addFieldButton} />
+            ) : adminV2Chrome ? (
+                addFieldButton ? <div className="mb-3 flex flex-wrap justify-end gap-2">{addFieldButton}</div> : null
+            ) : (
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <AdminPageHeader title={pageTitle} subtitle={pageSubtitle} />
+                    {addFieldButton}
+                </div>
+            )}
 
             {loading && <p className="text-sm text-[#59678b]">Loading…</p>}
             {error && (
@@ -298,7 +365,10 @@ export default function PersonFieldsClient() {
             )}
 
             {!loading && !error && (
-                <SectionCard title="Person field definitions">
+                <SectionCard
+                    title={adminV2Chrome ? "Field definitions" : "Person field definitions"}
+                    surfaceTone={adminV2Chrome ? "settingsPanel" : "default"}
+                >
                     {deleteError && (
                         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{deleteError}</div>
                     )}
@@ -438,12 +508,18 @@ export default function PersonFieldsClient() {
                                 <div>
                                     <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section</label>
                                     <select
-                                        value={PERSON_SECTION_OPTIONS.some((o) => o.value === editSectionKey) ? editSectionKey : "custom"}
+                                        value={
+                                            sectionKeyInOptions(sectionOptions, editSectionKey)
+                                                ? editSectionKey
+                                                : (sectionOptions[0]?.value ?? "custom")
+                                        }
                                         onChange={(e) => setEditSectionKey(e.target.value)}
                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                     >
-                                        {PERSON_SECTION_OPTIONS.map((o) => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        {sectionOptions.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -475,6 +551,17 @@ export default function PersonFieldsClient() {
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
+                            {editRow && isSelectLikeFieldType(editRow.field_type) && (
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Option set</label>
+                                    <OptionSetKeyPicker
+                                        value={editOptionSetKey}
+                                        onChange={setEditOptionSetKey}
+                                        disabled={!canMutate || editSaving}
+                                        manageOptionSetsHref={manageOptionSetsHref}
+                                    />
+                                </div>
+                            )}
                         </div>
                         {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                         <div className="mt-4 flex justify-end gap-2">
@@ -559,12 +646,18 @@ export default function PersonFieldsClient() {
                                 <div>
                                     <label className="block text-xs font-medium text-[#59678b] mb-0.5">Section</label>
                                     <select
-                                        value={PERSON_SECTION_OPTIONS.some((o) => o.value === createSectionKey) ? createSectionKey : "custom"}
+                                        value={
+                                            sectionKeyInOptions(sectionOptions, createSectionKey)
+                                                ? createSectionKey
+                                                : (sectionOptions[0]?.value ?? "custom")
+                                        }
                                         onChange={(e) => setCreateSectionKey(e.target.value)}
                                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                     >
-                                        {PERSON_SECTION_OPTIONS.map((o) => (
-                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                        {sectionOptions.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
                                         ))}
                                     </select>
                                 </div>
@@ -622,6 +715,17 @@ export default function PersonFieldsClient() {
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                 />
                             </div>
+                            {isSelectLikeFieldType(createFieldType) && (
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Option set</label>
+                                    <OptionSetKeyPicker
+                                        value={createOptionSetKey}
+                                        onChange={setCreateOptionSetKey}
+                                        disabled={!canMutate || createSaving}
+                                        manageOptionSetsHref={manageOptionSetsHref}
+                                    />
+                                </div>
+                            )}
                         </div>
                         {createError && <p className="mt-2 text-sm text-red-600">{createError}</p>}
                         <div className="mt-4 flex justify-end gap-2">

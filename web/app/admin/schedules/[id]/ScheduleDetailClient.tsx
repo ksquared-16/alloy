@@ -12,6 +12,7 @@ import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import type { JobPaymentRow, JobPaymentsPaymentSummary } from "@/app/api/admin/jobs/[id]/payments/route";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import { paymentRowStatusDisplayLabel } from "@/lib/admin/jobPaymentSummary";
+import { useAdminOrgOperationalTimezone } from "@/contexts/AdminOrgOperationalTimezoneContext";
 
 type ScheduleRecord = Record<string, unknown> & {
     _job_title?: string | null;
@@ -34,6 +35,7 @@ export default function ScheduleDetailClient({
     initialSchedule: ScheduleRecord;
     role: string;
 }) {
+    const orgOpTz = useAdminOrgOperationalTimezone();
     const [schedule, setSchedule] = useState<ScheduleRecord>(initialSchedule);
     const [tab, setTab] = useState<TabKey>("overview");
     const [payments, setPayments] = useState<JobPaymentRow[]>([]);
@@ -41,7 +43,7 @@ export default function ScheduleDetailClient({
     const [paymentsFetchError, setPaymentsFetchError] = useState<string | null>(null);
     const [loadingPayments, setLoadingPayments] = useState(false);
     const [rescheduleOpen, setRescheduleOpen] = useState(false);
-    const [rescheduleForm, setRescheduleForm] = useState({ start_at: "", end_at: "", timezone: "America/Los_Angeles" });
+    const [rescheduleForm, setRescheduleForm] = useState({ start_at: "", end_at: "", timezone: orgOpTz });
     const [rescheduleLoading, setRescheduleLoading] = useState(false);
     const [rescheduleError, setRescheduleError] = useState<string | null>(null);
     const [cancelOpen, setCancelOpen] = useState(false);
@@ -180,7 +182,7 @@ export default function ScheduleDetailClient({
                                         setRescheduleForm({
                                             start_at: schedule.start_at ? (schedule.start_at as string).slice(0, 16) : "",
                                             end_at: schedule.end_at ? (schedule.end_at as string).slice(0, 16) : "",
-                                            timezone: (schedule.timezone as string) ?? "America/Los_Angeles",
+                                            timezone: (schedule.timezone as string) ?? orgOpTz,
                                         });
                                         setRescheduleError(null);
                                         setRescheduleOpen(true);
@@ -264,7 +266,7 @@ export default function ScheduleDetailClient({
                 {tab === "related" && (
                     <div className="space-y-6">
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Job</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Job</h3>
                             <p className="text-sm text-alloy-midnight">
                                 {jobId ? (
                                     <Link href={`/admin/jobs/${jobId}`} className="text-alloy-blue hover:underline">
@@ -276,15 +278,15 @@ export default function ScheduleDetailClient({
                             </p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Customer</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Customer</h3>
                             <p className="text-sm text-alloy-midnight">{(schedule._customer_name as string) ?? "—"}</p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
                             <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-1">Payments (job)</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-1">Payments (job)</h3>
                             <p className="text-xs text-alloy-midnight/55 mb-3">
                                 Figures are for the linked job. Charges linked to this visit are highlighted in the table below.
                             </p>

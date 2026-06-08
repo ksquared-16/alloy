@@ -1,0 +1,200 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
+import {
+    ensurePacketSessionForPublicLink,
+    findActivePacketSessionItem,
+    listPacketDefinitionItems,
+    loadPacketDefinitionName,
+    loadPacketDefinitionStepSummaries,
+    resolveActiveStepEnvelope,
+} from "@/lib/forms/packets/formPacketService";
+import {
+    resolvePublicFormLinkByToken,
+    type ResolvePublicFormLinkFailure,
+} from "@/lib/public/forms/resolvePublicFormLink";
+
+const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function isPacketPublicLinkMetadata(metadata: Record<string, unknown>): boolean {
+    if (metadata.form_context_mode !== "packet") return false;
+    const pid = typeof metadata.packet_definition_id === "string" ? metadata.packet_definition_id.trim() : "";
+    return UUID_RE.test(pid);
+}
+
+/** Unified resolve target for public embed: single form or current packet step. */
+export type PublicEmbedResolved = {
+    linkId: string;
+    orgId: string;
+    formDefinitionId: string;
+    formDefinitionVersionId: string;
+    schemaJson: unknown | null;
+    pdfMappingJson: unknown | null;
+    expiresAt: string | null;
+    allowedEmbedOrigins: string[] | null;
+    linkMetadata: Record<string, unknown>;
+    formKey: string;
+    formName: string;
+    formKind: string;
+    packetTerminal: boolean;
+    packet: null | {
+        packet_session_id: string;
+        packet_definition_id: string;
+        packet_name: string | null;
+        current_sequence_index: number;
+        total_steps: number;
+        current_session_item_id: string;
+        /** Ordered steps for progress UI (sequence_index + form display name). */
+        step_summaries?: { sequence_index: number; form_name: string }[];
+    };
+};
+
+export async function resolvePublicFormEmbedContext(
+    supabase: SupabaseClient,
+    plaintextToken: string
+): Promise<{ ok: true; value: PublicEmbedResolved } | { ok: false; error: ResolvePublicFormLinkFailure }> {
+    const base = await resolvePublicFormLinkByToken(supabase, plaintextToken);
+    if (!base.ok) return base;
+
+    const v = base.value;
+    const meta = v.linkMetadata ?? {};
+
+    if (!isPacketPublicLinkMetadata(meta)) {
+        return {
+            ok: true,
+            value: {
+                linkId: v.linkId,
+                orgId: v.orgId,
+                formDefinitionId: v.formDefinitionId,
+                formDefinitionVersionId: v.formDefinitionVersionId,
+                schemaJson: v.schemaJson,
+                pdfMappingJson: v.pdfMappingJson,
+                expiresAt: v.expiresAt,
+                allowedEmbedOrigins: v.allowedEmbedOrigins,
+                linkMetadata: meta,
+                formKey: v.formKey,
+                formName: v.formName,
+                formKind: v.formKind,
+                packetTerminal: false,
+                packet: null,
+            },
+        };
+    }
+
+    const packetDefinitionId = String(meta.packet_definition_id).trim();
+    const versionPolicy =
+        typeof meta.packet_step_version_policy === "string" ? meta.packet_step_version_policy.trim() : "follow_latest";
+    const followLatestPublished = versionPolicy !== "pinned";
+
+    let launchFks;
+    try {
+        launchFks = await deriveSubmissionFksFromLaunchMetadata(supabase, v.orgId, meta);
+    } catch {
+        return { ok: false, error: { code: "NOT_FOUND", message: "Packet launch resolve failed" } };
+    }
+
+    const ensured = await ensurePacketSessionForPublicLink(supabase, {
+        orgId: v.orgId,
+        linkId: v.linkId,
+        packetDefinitionId,
+        linkMetadata: meta,
+        launchFks,
+    });
+
+    if (ensured.error || !ensured.session) {
+        return {
+            ok: false,
+            error: {
+                code: "NO_PUBLISHED_VERSION",
+                message: ensured.error?.message ?? "Packet session unavailable",
+            },
+        };
+    }
+
+    const session = ensured.session;
+    const items = ensured.items;
+    const totalSteps = items.length;
+    const packetName = await loadPacketDefinitionName(supabase, v.orgId, packetDefinitionId);
+
+    if (session.status === "completed") {
+        return {
+            ok: true,
+            value: {
+                linkId: v.linkId,
+                orgId: v.orgId,
+                formDefinitionId: v.formDefinitionId,
+                formDefinitionVersionId: v.formDefinitionVersionId,
+                schemaJson: null,
+                pdfMappingJson: null,
+                expiresAt: v.expiresAt,
+                allowedEmbedOrigins: v.allowedEmbedOrigins,
+                linkMetadata: meta,
+                formKey: v.formKey,
+                formName: v.formName,
+                formKind: v.formKind,
+                packetTerminal: true,
+                packet: {
+                    packet_session_id: session.id,
+                    packet_definition_id: packetDefinitionId,
+                    packet_name: packetName,
+                    current_sequence_index: session.current_sequence_index,
+                    total_steps: totalSteps,
+                    current_session_item_id: "",
+                },
+            },
+        };
+    }
+
+    const active = findActivePacketSessionItem(items);
+    if (!active) {
+        return {
+            ok: false,
+            error: { code: "NO_PUBLISHED_VERSION", message: "Packet has no active step" },
+        };
+    }
+
+    const { data: defItems, error: diErr } = await listPacketDefinitionItems(supabase, v.orgId, packetDefinitionId);
+    if (diErr || !defItems?.length) {
+        return { ok: false, error: { code: "NOT_FOUND", message: "Packet definition missing" } };
+    }
+
+    const { data: stepSummaries } = await loadPacketDefinitionStepSummaries(supabase, v.orgId, packetDefinitionId);
+
+    const { envelope, error: envErr } = await resolveActiveStepEnvelope(supabase, v.orgId, active, defItems, {
+        followLatestPublished,
+    });
+    if (envErr || !envelope) {
+        return {
+            ok: false,
+            error: { code: "NO_PUBLISHED_VERSION", message: envErr?.message ?? "Step form unavailable" },
+        };
+    }
+
+    return {
+        ok: true,
+        value: {
+            linkId: v.linkId,
+            orgId: v.orgId,
+            formDefinitionId: envelope.formDefinitionId,
+            formDefinitionVersionId: envelope.formDefinitionVersionId,
+            schemaJson: envelope.schemaJson,
+            pdfMappingJson: envelope.pdfMappingJson,
+            expiresAt: v.expiresAt,
+            allowedEmbedOrigins: v.allowedEmbedOrigins,
+            linkMetadata: meta,
+            formKey: envelope.formKey,
+            formName: envelope.formName,
+            formKind: envelope.formKind,
+            packetTerminal: false,
+            packet: {
+                packet_session_id: session.id,
+                packet_definition_id: packetDefinitionId,
+                packet_name: packetName,
+                current_sequence_index: active.sequence_index,
+                total_steps: totalSteps,
+                current_session_item_id: active.id,
+                step_summaries: stepSummaries ?? undefined,
+            },
+        },
+    };
+}

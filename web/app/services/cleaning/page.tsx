@@ -603,14 +603,14 @@ export default function CleaningPage() {
               </div>
               <div className="p-4 md:p-6 overflow-y-auto space-y-6">
                 <div>
-                  <h3 className="text-sm font-semibold text-alloy-midnight/80 uppercase tracking-wide mb-3">
+                  <h3 className="text-sm font-semibold text-alloy-midnight/80 tracking-wide mb-3">
                     What&apos;s Included
                   </h3>
                   <BulletList items={getModalIncludedItems()} />
                 </div>
                 {activeOption === "standard" && (
                   <div>
-                    <h3 className="text-sm font-semibold text-alloy-midnight/80 uppercase tracking-wide mb-3">
+                    <h3 className="text-sm font-semibold text-alloy-midnight/80 tracking-wide mb-3">
                       Cleaning Frequencies
                     </h3>
                     <div className="grid grid-cols-2 gap-3 mb-4">

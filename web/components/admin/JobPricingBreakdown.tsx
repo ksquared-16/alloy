@@ -35,7 +35,7 @@ function formatQty(q: unknown): string {
 
 function lineTypeBadgeClass(lineType: string): string {
   const t = String(lineType || "").toLowerCase();
-  const base = "inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide";
+  const base = "inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide";
   if (t === "discount") return `${base} bg-red-50 text-red-800 border border-red-200/80`;
   if (t === "tax") return `${base} bg-violet-50 text-violet-900 border border-violet-200/80`;
   if (t === "fee") return `${base} bg-slate-100 text-slate-800 border border-slate-200`;
@@ -95,7 +95,7 @@ export default function JobPricingBreakdown({ record }: { record: Record<string,
       )}
 
       <div className="rounded border border-admin-border bg-white/60 px-3 py-2.5 space-y-1.5">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-forge/80 mb-1">Summary (from job)</p>
+        <p className="text-[10px] font-semibold tracking-wider text-alloy-forge/80 mb-1">Summary (from job)</p>
         <div className={rowClass}>
           <span className={labelMuted}>Subtotal</span>
           <span className={valueStrong}>{subtotal != null ? formatMoneyFromCents(subtotal) : "—"}</span>
@@ -146,7 +146,7 @@ export default function JobPricingBreakdown({ record }: { record: Record<string,
       </div>
 
       <div>
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-forge/80 mb-2">Line items (active)</p>
+        <p className="text-[10px] font-semibold tracking-wider text-alloy-forge/80 mb-2">Line items (active)</p>
         {lines.length === 0 ? (
           <p className="text-sm text-alloy-midnight/60">No active line items on file.</p>
         ) : (
@@ -163,7 +163,7 @@ export default function JobPricingBreakdown({ record }: { record: Record<string,
                       <span className="font-medium text-alloy-forge truncate">{li.label || "—"}</span>
                       <span className={lineTypeBadgeClass(lt)}>{lt}</span>
                       {li.is_manual_override ? (
-                        <span className="text-[10px] font-semibold uppercase text-amber-800">Override</span>
+                        <span className="text-[10px] font-semibold text-amber-800">Override</span>
                       ) : null}
                     </div>
                     {li.description ? (

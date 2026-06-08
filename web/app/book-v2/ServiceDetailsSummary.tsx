@@ -1,18 +1,16 @@
 "use client";
 
+import {
+    accessMethodBookingDisplayLabel,
+    accessMethodIsFrontDeskFlow,
+    accessMethodIsHomeFlow,
+} from "@/lib/book-v2/bookingCanonicalMaps";
 import { ServiceDetails, SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS } from "./ServiceDetailsForm";
 
 interface ServiceDetailsSummaryProps {
     details: ServiceDetails;
     onEdit: () => void;
 }
-
-const accessMethodLabels: Record<ServiceDetails["access_method"], string> = {
-    home: "I will be home",
-    code: "Door/Garage Code",
-    key: "Hidden Key",
-    building: "Building / Front Desk",
-};
 
 function formatConfigurableLabel(fieldKey: string): string {
     return fieldKey
@@ -51,7 +49,7 @@ export default function ServiceDetailsSummary({
 
     const configurableEntries = Object.entries(details.configurable_values ?? {}).filter(([key, v]) => {
         if (SERVICE_DETAILS_PUBLIC_EXCLUDED_FIELD_KEYS.has(key)) return false;
-        if (key === "gate_code" && details.access_method !== "building") return false;
+        if (key === "gate_code" && !accessMethodIsFrontDeskFlow(details.access_method)) return false;
         return (
             v !== undefined &&
             v !== null &&
@@ -122,9 +120,9 @@ export default function ServiceDetailsSummary({
                     <div>
                         <p className="text-sm text-alloy-midnight/70">
                             <strong className="text-alloy-midnight">Access:</strong>{" "}
-                            {accessMethodLabels[details.access_method]}
+                            {accessMethodBookingDisplayLabel(details.access_method)}
                         </p>
-                        {details.access_method !== "home" && details.access_note && (
+                        {!accessMethodIsHomeFlow(details.access_method) && details.access_note && (
                             <p className="text-sm text-alloy-midnight/70 mt-1 pl-4 border-l-2 border-alloy-stone/30">
                                 {details.access_note}
                             </p>

@@ -10,7 +10,7 @@ export default function AICommandBar() {
       data-adminv2-ai-command-bar
       role="contentinfo"
       aria-label="AI command bar"
-      className="flex justify-center items-center flex-shrink-0 min-h-[56px] py-2.5 px-4 border-t-2"
+      className="flex justify-center items-center flex-shrink-0 min-h-[52px] py-2 px-4 border-t-2 rounded-t-xl"
       style={{
         background: `linear-gradient(180deg, ${derived.adminV2AiBarPineWash} 0%, ${neutral.surface} 38%, ${neutral.surface} 100%)`,
         borderColor: derived.adminV2AiBarPineBorder,
@@ -35,7 +35,7 @@ export default function AICommandBar() {
           </span>
         </div>
         <span
-          className="text-[11px] font-bold shrink-0 uppercase tracking-widest px-3 py-2 rounded-lg text-white"
+          className="text-[11px] font-bold shrink-0 tracking-widest px-3 py-2 rounded-lg text-white"
           style={{
             backgroundColor: brand.secondary,
             letterSpacing: "0.14em",

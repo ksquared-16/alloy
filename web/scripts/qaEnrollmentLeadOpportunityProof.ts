@@ -1,0 +1,277 @@
+#!/usr/bin/env npx tsx
+/**
+ * IC-5.6 — Enrollment lead opportunity proof gate.
+ * Verifies guardian-only enrollment lead form creates a real opportunity and operator-facing copy.
+ *
+ * Prerequisite:
+ *   cd web && npx tsx --tsconfig tsconfig.json scripts/prepareDemoChildcareEnrollmentLeadIntakeTest.ts
+ *
+ * Usage:
+ *   cd web && npx tsx --tsconfig tsconfig.json scripts/qaEnrollmentLeadOpportunityProof.ts
+ *
+ * Optional:
+ *   APP_BASE=http://localhost:3000 npx tsx ...
+ *   --keep-artifacts  Leave created submission/opportunity rows (default: cleanup after pass)
+ */
+import { config as loadEnv } from "dotenv";
+import { resolve } from "path";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { cleanupFormsQaRunArtifacts } from "@/lib/forms/cleanupFormsQaArtifacts";
+import { qaScriptKeepsArtifacts } from "./lib/formsQaScriptFlags";
+import {
+    DEMO_CHILDCARE_ENROLLMENT_WORK_UNIT_ID,
+    DEMO_CHILDCARE_ORG_ID,
+} from "@/lib/forms/intakeRuntimeTestFixtures";
+import { ensureDemoEnrollmentLeadPublicLinkMetadata } from "@/lib/forms/resolveDemoEnrollmentLeadTestContext";
+import { buildIntakeCasePresentationRows } from "@/lib/forms/intakeCasePresentation";
+import { buildIntakeQuickReviewViewModel } from "@/lib/forms/intakeQuickReviewPresentation";
+import { intakeCaseMatchesWorkspaceFilter } from "@/lib/forms/intakeWorkspaceFilters";
+import { opportunityMatchesEnrollmentNewLeadsQueue } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
+import type { SubmissionInboxRow } from "@/lib/forms/submissionInboxPresentation";
+
+loadEnv({ path: resolve(process.cwd(), ".env.local") });
+loadEnv({ path: resolve(process.cwd(), ".env") });
+
+const APP_BASE = (process.env.APP_BASE ?? "http://localhost:3000").replace(/\/$/, "");
+const ORIGIN = "http://localhost:3000";
+const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function assert(condition: boolean, message: string, errors: string[]) {
+    if (!condition) errors.push(message);
+}
+
+function buildLeadPayload(email: string, phone: string) {
+    return {
+        values: {
+            guardian_full_name: "Jordan Enrollment Lead",
+            guardian_email: email,
+            guardian_phone: phone,
+            child_first_name: "Riley",
+            notes: "IC-5.6 enrollment lead proof",
+        },
+        meta: {},
+    };
+}
+
+async function publicCreateDraft(token: string): Promise<string> {
+    const res = await fetch(`${APP_BASE}/api/public/forms/${encodeURIComponent(token)}/submissions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: ORIGIN },
+        body: JSON.stringify({ payload: { values: {}, meta: {} } }),
+    });
+    const json = (await res.json()) as { data?: { id?: string }; error?: string };
+    if (!res.ok) throw new Error(`create draft failed (${res.status}): ${json.error ?? JSON.stringify(json)}`);
+    const id = json.data?.id;
+    if (!id || !UUID_RE.test(id)) throw new Error(`invalid submission id: ${id}`);
+    return id;
+}
+
+async function publicSubmit(token: string, submissionId: string, email: string, phone: string) {
+    const res = await fetch(
+        `${APP_BASE}/api/public/forms/${encodeURIComponent(token)}/submissions/${encodeURIComponent(submissionId)}/submit`,
+        {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Origin: ORIGIN },
+            body: JSON.stringify({ payload: buildLeadPayload(email, phone) }),
+        }
+    );
+    const json = (await res.json()) as { data?: Record<string, unknown>; error?: string };
+    if (!res.ok) throw new Error(`submit failed (${res.status}): ${json.error ?? JSON.stringify(json)}`);
+    return json.data ?? {};
+}
+
+async function loadSubmission(supabase: ReturnType<typeof createAdminClient>, id: string) {
+    const { data, error } = await supabase
+        .from("form_submissions")
+        .select(
+            "id,status,form_definition_id,submitted_at,created_at,person_id,customer_id,customer_member_id,opportunity_id,payload"
+        )
+        .eq("id", id)
+        .maybeSingle();
+    if (error || !data) throw new Error(error?.message ?? "submission not found");
+    return data;
+}
+
+async function loadWorkflowEvents(supabase: ReturnType<typeof createAdminClient>, submissionId: string) {
+    const { data, error } = await supabase
+        .from("workflow_events")
+        .select("id,event_type,occurred_at,payload,entity_id")
+        .eq("org_id", DEMO_CHILDCARE_ORG_ID)
+        .order("occurred_at", { ascending: false })
+        .limit(50);
+    if (error) throw new Error(error.message);
+    return (data ?? []).filter((row) => {
+        const payload = row.payload as Record<string, unknown> | null;
+        return payload?.form_submission_id === submissionId || row.entity_id === submissionId;
+    });
+}
+
+function submissionToInboxRow(row: Awaited<ReturnType<typeof loadSubmission>>): SubmissionInboxRow {
+    return {
+        id: row.id,
+        status: row.status,
+        created_at: row.created_at,
+        submitted_at: row.submitted_at,
+        form_definition_id: row.form_definition_id,
+        person_id: row.person_id,
+        customer_id: row.customer_id,
+        customer_member_id: row.customer_member_id,
+        opportunity_id: row.opportunity_id,
+        payload: row.payload as SubmissionInboxRow["payload"],
+    };
+}
+
+function assertQuickReviewShowsOperationalizedLead(
+    quickReview: ReturnType<typeof buildIntakeQuickReviewViewModel>,
+    errors: string[]
+) {
+    if (quickReview.leadCreatedMode) {
+        assert(
+            quickReview.intakeSummary.statusLine === "New Lead",
+            `quick review status is New Lead (got ${quickReview.intakeSummary.statusLine})`,
+            errors
+        );
+        const leadCopy = (
+            quickReview.leadCreatedSummary ??
+            quickReview.intakeSummary.capturedLine ??
+            ""
+        ).toLowerCase();
+        assert(leadCopy.includes("lead"), "quick review lead-created copy mentions lead", errors);
+        assert(
+            quickReview.needsAction.clearMessage === "No manual review required.",
+            "quick review shows no manual review required",
+            errors
+        );
+        assert(
+            !quickReview.needsAction.items.some((item) => item.toLowerCase().includes("needs family match")),
+            "quick review has no stale needs-linking items",
+            errors
+        );
+        return;
+    }
+
+    assert(
+        (quickReview.intakeSummary.operationalLine ?? "").toLowerCase().includes("lead"),
+        "quick review operational line mentions lead",
+        errors
+    );
+}
+
+async function main() {
+    const notes: string[] = [];
+    const errors: string[] = [];
+    const supabase = createAdminClient();
+    const email = `ic56-lead-proof-${Date.now()}@example.com`;
+    const phone = `602557${String(Date.now()).slice(-4)}`;
+
+    const proofCtx = await ensureDemoEnrollmentLeadPublicLinkMetadata(supabase);
+    const token = proofCtx.token;
+    const form = { id: proofCtx.formId, name: proofCtx.formName };
+    notes.push(`formId: ${form.id}`);
+    notes.push(`formName: ${form.name}`);
+    notes.push(`publicLinkId: ${proofCtx.publicLinkId}`);
+    notes.push(`embed: ${APP_BASE}/forms/embed/${token}`);
+
+    const submissionId = await publicCreateDraft(token);
+    await publicSubmit(token, submissionId, email, phone);
+    const row = await loadSubmission(supabase, submissionId);
+    const meta = (row.payload as { meta?: Record<string, unknown> })?.meta ?? {};
+
+    notes.push(`submissionId: ${submissionId}`);
+    notes.push(`email: ${email}`);
+
+    assert(row.status === "submitted", "public submit succeeded", errors);
+    if (!row.opportunity_id && typeof meta.intake_error === "string") {
+        notes.push(`intake_error: ${meta.intake_error}`);
+    }
+    assert(!!row.opportunity_id, "opportunity created", errors);
+    assert(!row.customer_member_id, "no child/customer member auto-created", errors);
+    assert(meta.intake_needs_review === false, "intake_needs_review false", errors);
+    assert(meta.intake_auto_operationalized === true, "intake_auto_operationalized true", errors);
+
+    const { data: opportunity } = await supabase
+        .from("opportunities")
+        .select("id,status_key,work_unit_id,source,location_id")
+        .eq("id", row.opportunity_id!)
+        .maybeSingle();
+    assert(!!opportunity?.id, "opportunity row exists", errors);
+    assert(opportunity?.status_key === "new_inquiry", `status_key new_inquiry (got ${opportunity?.status_key})`, errors);
+    assert(
+        opportunityMatchesEnrollmentNewLeadsQueue(opportunity?.status_key),
+        `lead visible in enrollment New Leads queue (status ${opportunity?.status_key})`,
+        errors
+    );
+    assert(
+        opportunity?.work_unit_id === DEMO_CHILDCARE_ENROLLMENT_WORK_UNIT_ID,
+        "routed to enrollment work unit",
+        errors
+    );
+    notes.push(`opportunityId: ${row.opportunity_id}`);
+
+    const events = await loadWorkflowEvents(supabase, submissionId);
+    const eventTypes = events.map((e) => e.event_type);
+    for (const expected of ["form_submitted", "intake_case_created", "intake_case_operationalized"]) {
+        assert(eventTypes.includes(expected), `workflow event ${expected}`, errors);
+    }
+    notes.push(`workflowEvents: ${eventTypes.join(", ")}`);
+
+    const inboxRow = submissionToInboxRow(row);
+    const cases = buildIntakeCasePresentationRows({
+        submissions: [inboxRow],
+        formsById: { [form.id]: form.name ?? "Enrollment Lead — Demo" },
+    });
+    assert(cases.length === 1, "one intake case row", errors);
+    const intakeCase = cases[0]!;
+    assert(intakeCase.subtitle.toLowerCase().includes("lead"), `case subtitle mentions lead (${intakeCase.subtitle})`, errors);
+    assert(intakeCaseMatchesWorkspaceFilter(intakeCase, "recent"), "in recent workload filter", errors);
+    notes.push(`intakeCaseSubtitle: ${intakeCase.subtitle}`);
+    notes.push(`caseKey: ${intakeCase.case_key}`);
+
+    const quickReview = buildIntakeQuickReviewViewModel({
+        row: inboxRow,
+        formName: form.name ?? "Enrollment Lead — Demo",
+        submittedAtLabel: row.submitted_at ?? row.created_at,
+    });
+    assertQuickReviewShowsOperationalizedLead(quickReview, errors);
+    assert(!!intakeCase.opportunity_id, "intake case carries opportunity_id for open path", errors);
+    notes.push(`quickReviewLeadCreatedMode: ${quickReview.leadCreatedMode}`);
+    notes.push(`quickReviewStatusLine: ${quickReview.intakeSummary.statusLine}`);
+    notes.push(
+        `quickReviewOperationalLine: ${quickReview.intakeSummary.operationalLine ?? quickReview.leadCreatedSummary ?? quickReview.intakeSummary.capturedLine}`
+    );
+
+    const pass = errors.length === 0;
+
+    if (pass && !qaScriptKeepsArtifacts()) {
+        try {
+            const cleanup = await cleanupFormsQaRunArtifacts(supabase, DEMO_CHILDCARE_ORG_ID, submissionId);
+            notes.push(
+                `cleanup: removed ${cleanup.deleted.opportunities ?? 0} opportunities, ${cleanup.deleted.form_submissions ?? 0} submissions`
+            );
+        } catch (e) {
+            errors.push(`post-run cleanup failed: ${(e as Error).message}`);
+        }
+    }
+
+    const finalPass = errors.length === 0;
+    console.log(
+        JSON.stringify(
+            {
+                pass: finalPass,
+                opportunityId: row.opportunity_id,
+                submissionId,
+                notes,
+                errors,
+            },
+            null,
+            2
+        )
+    );
+    process.exit(finalPass ? 0 : 1);
+}
+
+main().catch((e) => {
+    console.error("[qa-enrollment-lead-proof] failed:", e);
+    process.exit(1);
+});

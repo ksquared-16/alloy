@@ -10,8 +10,12 @@ import {
   BOOKING_BEDROOM_OPTIONS,
 } from "@/lib/book-v2/bookingBedBathOptions";
 import {
+  bookingBathroomSelectOptionsFromFields,
+  bookingBedroomSelectOptionsFromFields,
   fetchPublicFieldDefinitions,
   fieldOptionsByKey,
+  homeTypeSelectOptionsFromBookingConfig,
+  squareFootageSelectOptionsFromBookingConfig,
   squareFootageSelectOptionsFromLocationFields,
 } from "@/lib/public/fetchPublicFieldDefinitions";
 import {
@@ -59,6 +63,24 @@ export default function CleaningQuickQuoteForm({
   const [locationFieldDefs, setLocationFieldDefs] = useState<PublicFieldDef[]>([]);
   const [opportunitySpecialtyFieldDefs, setOpportunitySpecialtyFieldDefs] = useState<PublicFieldDef[]>([]);
   const [pricingFreqRows, setPricingFreqRows] = useState<PricingFrequencyRow[]>([]);
+  const [bookingCfgSqft, setBookingCfgSqft] = useState<
+    { sqft_key: string; sqft_label: string }[] | null
+  >(null);
+  const [bookingCfgHomeTypes, setBookingCfgHomeTypes] = useState<
+    { key: string; label: string }[] | null
+  >(null);
+  const [bookingCfgBedroomOpts, setBookingCfgBedroomOpts] = useState<
+    { value: string; label: string }[] | null
+  >(null);
+  const [bookingCfgBathroomOpts, setBookingCfgBathroomOpts] = useState<
+    { value: string; label: string }[] | null
+  >(null);
+  const [bookingCfgCleaningTypeOpts, setBookingCfgCleaningTypeOpts] = useState<
+    { value: string; label: string; metadata?: Record<string, unknown> }[] | null
+  >(null);
+  const [bookingCfgSpecialtyOpts, setBookingCfgSpecialtyOpts] = useState<
+    { value: string; label: string; metadata?: Record<string, unknown> }[] | null
+  >(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -73,13 +95,43 @@ export default function CleaningQuickQuoteForm({
         else setLocationFieldDefs([]);
         if (opp?.ok && Array.isArray(opp.fields)) setOpportunitySpecialtyFieldDefs(opp.fields);
         else setOpportunitySpecialtyFieldDefs([]);
-        const data = cfg as { ok?: boolean; pricing_frequencies?: PricingFrequencyRow[] };
+        const data = cfg as {
+          ok?: boolean;
+          pricing_frequencies?: PricingFrequencyRow[];
+          square_footage_tiers?: { sqft_key: string; sqft_label: string }[];
+          home_types?: { key: string; label: string }[];
+          bedroom_options?: { value: string; label: string }[];
+          bathroom_options?: { value: string; label: string }[];
+          cleaning_type_options?: { value: string; label: string; metadata?: Record<string, unknown> }[];
+          specialty_cleaning_type_options?: { value: string; label: string; metadata?: Record<string, unknown> }[];
+        };
         if (data?.ok && data.pricing_frequencies?.length) setPricingFreqRows(data.pricing_frequencies);
+        if (data?.ok) {
+          setBookingCfgSqft(data.square_footage_tiers?.length ? data.square_footage_tiers : null);
+          setBookingCfgHomeTypes(data.home_types?.length ? data.home_types : null);
+          setBookingCfgBedroomOpts(data.bedroom_options?.length ? data.bedroom_options : null);
+          setBookingCfgBathroomOpts(data.bathroom_options?.length ? data.bathroom_options : null);
+          setBookingCfgCleaningTypeOpts(data.cleaning_type_options?.length ? data.cleaning_type_options : null);
+          setBookingCfgSpecialtyOpts(data.specialty_cleaning_type_options?.length ? data.specialty_cleaning_type_options : null);
+        } else {
+          setBookingCfgSqft(null);
+          setBookingCfgHomeTypes(null);
+          setBookingCfgBedroomOpts(null);
+          setBookingCfgBathroomOpts(null);
+          setBookingCfgCleaningTypeOpts(null);
+          setBookingCfgSpecialtyOpts(null);
+        }
       })
       .catch(() => {
         if (!cancelled) {
           setLocationFieldDefs([]);
           setOpportunitySpecialtyFieldDefs([]);
+          setBookingCfgSqft(null);
+          setBookingCfgHomeTypes(null);
+          setBookingCfgBedroomOpts(null);
+          setBookingCfgBathroomOpts(null);
+          setBookingCfgCleaningTypeOpts(null);
+          setBookingCfgSpecialtyOpts(null);
         }
       });
     return () => {
@@ -90,39 +142,60 @@ export default function CleaningQuickQuoteForm({
   const squareFootageOptions = useMemo(() => {
     const fromDefs = squareFootageSelectOptionsFromLocationFields(locationFieldDefs);
     if (fromDefs?.length) return fromDefs;
+    const fromCfg = squareFootageSelectOptionsFromBookingConfig(bookingCfgSqft ?? undefined);
+    if (fromCfg?.length) return fromCfg;
     return FALLBACK_SQFT_TIERS.map((t) => ({
       value: t.sqft_key,
       label: t.sqft_label ?? t.sqft_key,
     }));
-  }, [locationFieldDefs]);
+  }, [locationFieldDefs, bookingCfgSqft]);
 
   const homeTypeOptions = useMemo(() => {
     return (
-      fieldOptionsByKey(locationFieldDefs, "home_type") ?? [
+      fieldOptionsByKey(locationFieldDefs, "home_type") ??
+      homeTypeSelectOptionsFromBookingConfig(bookingCfgHomeTypes ?? undefined) ?? [
         { value: "house", label: "House" },
         { value: "condo", label: "Condo" },
         { value: "apartment", label: "Apartment" },
         { value: "townhome", label: "Townhome" },
       ]
     );
-  }, [locationFieldDefs]);
+  }, [locationFieldDefs, bookingCfgHomeTypes]);
 
   const bedOptions = useMemo(() => {
-    return fieldOptionsByKey(locationFieldDefs, "beds") ?? BOOKING_BEDROOM_OPTIONS;
-  }, [locationFieldDefs]);
+    return (
+      bookingBedroomSelectOptionsFromFields(locationFieldDefs) ??
+      (bookingCfgBedroomOpts?.length ? bookingCfgBedroomOpts : null) ??
+      BOOKING_BEDROOM_OPTIONS
+    );
+  }, [locationFieldDefs, bookingCfgBedroomOpts]);
 
   const bathOptions = useMemo(() => {
-    return fieldOptionsByKey(locationFieldDefs, "baths") ?? BOOKING_BATHROOM_OPTIONS;
-  }, [locationFieldDefs]);
+    return (
+      bookingBathroomSelectOptionsFromFields(locationFieldDefs) ??
+      (bookingCfgBathroomOpts?.length ? bookingCfgBathroomOpts : null) ??
+      BOOKING_BATHROOM_OPTIONS
+    );
+  }, [locationFieldDefs, bookingCfgBathroomOpts]);
 
   const cleaningTypeSelectOptions = useMemo(() => {
-    const api = fieldOptionsByKey(opportunitySpecialtyFieldDefs, "specialty_cleaning_type");
-    const specialty =
-      api && api.length > 0
-        ? api.map((o) => ({ value: o.value as CleaningTypeKey, label: o.label }))
-        : DOCUMENTED_FALLBACK_SPECIALTY_CLEANING_TYPES;
-    return [{ value: "standard" as const, label: "Standard cleaning" }, ...specialty];
-  }, [opportunitySpecialtyFieldDefs]);
+    // Canonical: unified cleaning_type (option set), else legacy specialty_cleaning_type (bridged)
+    const fromDefsUnified = fieldOptionsByKey(opportunitySpecialtyFieldDefs, "cleaning_type");
+    const fromDefsLegacy = fieldOptionsByKey(opportunitySpecialtyFieldDefs, "specialty_cleaning_type");
+    const fromCfgUnified = bookingCfgCleaningTypeOpts?.length ? bookingCfgCleaningTypeOpts : null;
+    const fromCfgLegacy = bookingCfgSpecialtyOpts?.length ? bookingCfgSpecialtyOpts : null;
+
+    const source = (fromDefsUnified?.length ? fromDefsUnified : null) ??
+      (fromCfgUnified?.length ? fromCfgUnified : null) ??
+      (fromDefsLegacy?.length ? fromDefsLegacy : null) ??
+      (fromCfgLegacy?.length ? fromCfgLegacy : null);
+
+    if (source?.length) {
+      return source.map((o) => ({ value: o.value as CleaningTypeKey, label: o.label }));
+    }
+    // Back-compat fallback: keep old documented list
+    return [{ value: "standard" as const, label: "Standard cleaning" }, ...DOCUMENTED_FALLBACK_SPECIALTY_CLEANING_TYPES];
+  }, [opportunitySpecialtyFieldDefs, bookingCfgCleaningTypeOpts, bookingCfgSpecialtyOpts]);
 
   const [cleaningType, setCleaningType] = useState<CleaningTypeKey>("standard");
   const [form, setForm] = useState({
@@ -453,7 +526,7 @@ export default function CleaningQuickQuoteForm({
   };
 
   const labelBase =
-    "block text-xs font-semibold text-alloy-midnight/80 uppercase tracking-wider mb-1.5";
+    "block text-xs font-semibold text-alloy-midnight/80 tracking-wider mb-1.5";
 
   if (specialtyDone) {
     return (

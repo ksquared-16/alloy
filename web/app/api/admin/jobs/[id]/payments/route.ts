@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import {
     batchAllocatedCentsForJob,
@@ -55,15 +57,28 @@ export async function GET(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { id: jobId } = await context.params;
     if (!jobId) return NextResponse.json({ error: "Missing job id" }, { status: 400 });
 
     const supabase = createAdminClient();
-    const { data: job } = await supabase.from("jobs").select("id").eq("id", jobId).eq("org_id", ctx.orgId).maybeSingle();
+    const { data: job } = await supabase
+        .from("jobs")
+        .select("id, work_unit_id, location_id")
+        .eq("id", jobId)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    const dim = scopeDimensionsFromAccess(access);
+    const jr = job as { work_unit_id?: string | null; location_id?: string | null };
+    if (!(await assertJobInAccessScope(supabase, ctx.orgId, dim, { work_unit_id: jr.work_unit_id ?? null, location_id: jr.location_id ?? null }))) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     const paymentIds = await getPaymentIdsForJob(supabase, ctx.orgId, jobId);
 

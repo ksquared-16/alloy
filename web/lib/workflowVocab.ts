@@ -3,7 +3,16 @@
  * Canonical entity types: customer, contact, job, schedule, opportunity, vendor, location.
  */
 
-export const WORKFLOW_ENTITY_TYPES = ["customer", "contact", "job", "schedule", "opportunity", "vendor", "location"] as const;
+export const WORKFLOW_ENTITY_TYPES = [
+    "customer",
+    "contact",
+    "job",
+    "schedule",
+    "opportunity",
+    "vendor",
+    "location",
+    "form_submissions",
+] as const;
 export type WorkflowEntityType = (typeof WORKFLOW_ENTITY_TYPES)[number];
 
 export const WORKFLOW_EVENT_TYPES = [
@@ -20,6 +29,13 @@ export const WORKFLOW_EVENT_TYPES = [
     "job_completed",
     "payment_succeeded",
     "payment_failed",
+    "form_submitted",
+    "form_signed",
+    "form_document_generated",
+    "intake_case_created",
+    "intake_case_operationalized",
+    "intake_case_review_required",
+    "intake_case_linked",
 ] as const;
 export type WorkflowEventType = (typeof WORKFLOW_EVENT_TYPES)[number];
 
@@ -123,6 +139,18 @@ export const WORKFLOW_FIELD_PATHS_BY_ENTITY_TYPE: Record<string, { value: string
         { value: "location.city", label: "location.city" },
         { value: "location.state", label: "location.state" },
     ],
+    form_submissions: [
+        { value: "form_submission_id", label: "form_submission_id" },
+        { value: "form_definition_id", label: "form_definition_id" },
+        { value: "form_definition_version_id", label: "form_definition_version_id" },
+        { value: "person_id", label: "person_id" },
+        { value: "customer_id", label: "customer_id" },
+        { value: "customer_member_id", label: "customer_member_id" },
+        { value: "opportunity_id", label: "opportunity_id" },
+        { value: "document_id", label: "document_id (when emitted)" },
+        { value: "public_link_id", label: "public_link_id" },
+        { value: "org_id", label: "org_id" },
+    ],
 };
 
 /** Condition operators (DB and UI). eq/equals and neq/not_equals both supported at runtime. */
@@ -137,4 +165,5 @@ export const WORKFLOW_ENTITY_ID_QUICK_FILL = [
     { value: "schedule.id", label: "schedule.id" },
     { value: "vendor.id", label: "vendor.id" },
     { value: "location.id", label: "location.id" },
+    { value: "form_submission_id", label: "form_submission_id" },
 ] as const;

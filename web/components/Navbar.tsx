@@ -153,7 +153,7 @@ export default function Navbar() {
           <div className="md:hidden py-6 border-t border-white/10">
             <div className="flex flex-col space-y-5">
               <div className="pb-2 border-b border-white/10">
-                <p className="text-xs font-semibold uppercase tracking-wide text-white/50 mb-2">Services</p>
+                <p className="text-xs font-semibold tracking-wide text-white/50 mb-2">Services</p>
                 {servicesLinks.map((link) => {
                   const isActive = pathname === link.href || pathname?.startsWith(link.href + "/");
                   return (

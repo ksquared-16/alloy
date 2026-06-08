@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { resolveOpportunityIdentityIds } from "@/lib/opportunityIdentity";
 import OpportunitiesClient from "./OpportunitiesClient";
 
 export const dynamic = 'force-dynamic';
@@ -66,12 +67,15 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
 
     const rows = (opportunities ?? []).map((o) => {
         const customer = o.customer_id ? customerMap.get(o.customer_id) : undefined;
-        const contact = o.primary_contact_id ? contactMap.get(o.primary_contact_id) : undefined;
+        // Person-first display: use resolveOpportunityIdentityIds (see lib/opportunityIdentity).
+        const { primary_person_id, fallback_contact_id } = resolveOpportunityIdentityIds(
+            o as { primary_person_id?: string | null; primary_contact_id?: string | null }
+        );
+        const contact = fallback_contact_id ? contactMap.get(fallback_contact_id) : undefined;
         const contactName = contact
             ? [(contact as { first_name?: string }).first_name, (contact as { last_name?: string }).last_name].filter(Boolean).join(" ") || null
             : null;
-        const primaryPersonId = (o as { primary_person_id?: string | null }).primary_person_id;
-        const person = primaryPersonId ? personMap.get(primaryPersonId) : undefined;
+        const person = primary_person_id ? personMap.get(primary_person_id) : undefined;
         const _primary_person_name = person
             ? [(person as { first_name?: string }).first_name, (person as { last_name?: string }).last_name].filter(Boolean).join(" ").trim() || null
             : null;

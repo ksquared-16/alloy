@@ -1,0 +1,228 @@
+/**
+ * Layout V2 proof — isolated, READ-ONLY opportunities query.
+ *
+ *   GET /api/admin/layout-proof/opportunities?stage=<status_key>
+ *
+ * Returns real opportunity records for the org, filtered to a single stage of
+ * the opportunity status lifecycle ("Lead Management" in product terms). The
+ * default stage is `qualified` (the Qualification stage). Also returns the full
+ * active lifecycle (status_definitions for opportunities) with per-stage counts
+ * so the proof UI can show the lifecycle and offer a stage selector.
+ *
+ * Isolation guarantees (per sprint constraints):
+ *  - This route is NOT used by any live drawer/queue/work-unit/bootstrap path.
+ *  - It only reads (no writes). It does not import production renderers.
+ *  - It is gated by the Layout V2 feature flag (404 when off).
+ *  - Records are enriched with a few cheap joins (customer name, vertical name,
+ *    status label) so config-driven fields resolve to real values; everything
+ *    else falls back to placeholders in the renderer.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { isLayoutV2PreviewEnabledServer } from "@/lib/layout/featureFlag";
+
+const ENTITY_TYPE = "opportunities";
+const DEFAULT_STAGE = "qualified";
+const MAX_RECORDS = 50;
+
+/** Minimal date label for the derived attention line (avoids client formatters). */
+function formatProofDate(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+type OppRow = Record<string, unknown> & {
+    id: string;
+    customer_id: string | null;
+    vertical_id: string | null;
+    status_key: string | null;
+    status: string | null;
+    updated_at: string | null;
+    created_at: string | null;
+};
+
+export async function GET(request: NextRequest) {
+    if (!isLayoutV2PreviewEnabledServer()) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const stage = (searchParams.get("stage")?.trim() || DEFAULT_STAGE).toLowerCase();
+
+    const supabase = createAdminClient();
+
+    try {
+        // --- Lifecycle: active opportunity statuses (org rows + industry defaults).
+        const { data: statusRows, error: statusErr } = await supabase
+            .from("status_definitions")
+            .select("status_key, status_label, sort_order, is_active, org_id")
+            .eq("entity_type", ENTITY_TYPE)
+            .or(`org_id.eq.${ctx.orgId},org_id.is.null`)
+            .order("sort_order", { ascending: true });
+        if (statusErr) throw new Error(statusErr.message);
+
+        const labelByKey = new Map<string, string>();
+        const lifecycleSeen = new Set<string>();
+        const lifecycle: { statusKey: string; label: string; sortOrder: number }[] = [];
+        for (const s of statusRows ?? []) {
+            const key = String((s as { status_key: string }).status_key);
+            if (!labelByKey.has(key)) labelByKey.set(key, String((s as { status_label?: string }).status_label ?? key));
+            if ((s as { is_active?: boolean }).is_active && !lifecycleSeen.has(key)) {
+                lifecycleSeen.add(key);
+                lifecycle.push({
+                    statusKey: key,
+                    label: labelByKey.get(key) as string,
+                    sortOrder: Number((s as { sort_order?: number }).sort_order ?? 0),
+                });
+            }
+        }
+
+        // --- Per-stage counts across the org (one cheap column read).
+        const { data: allKeys, error: keysErr } = await supabase
+            .from("opportunities")
+            .select("status_key")
+            .eq("org_id", ctx.orgId);
+        if (keysErr) throw new Error(keysErr.message);
+        const counts: Record<string, number> = {};
+        for (const r of allKeys ?? []) {
+            const k = (r as { status_key: string | null }).status_key ?? "(none)";
+            counts[k] = (counts[k] ?? 0) + 1;
+        }
+
+        // --- Records for the requested stage.
+        const { data: oppData, error: oppErr } = await supabase
+            .from("opportunities")
+            .select(
+                "id, name, title, source, job_date, job_time_window, appointment_id, customer_notes, status, status_key, pipeline_id, pipeline_stage_id, assigned_to, lost_reason, quote_subtotal, discount_amount, quote_total, recurring_price_cents, estimated_price_cents, monetary_value_cents, discount_code, discount_validated_at, external_source, external_id, customer_id, primary_person_id, primary_contact_id, location_id, vertical_id, org_id, created_at, updated_at",
+            )
+            .eq("org_id", ctx.orgId)
+            .eq("status_key", stage)
+            .order("updated_at", { ascending: false, nullsFirst: false })
+            .limit(MAX_RECORDS);
+        if (oppErr) throw new Error(oppErr.message);
+        const opps = (oppData ?? []) as OppRow[];
+
+        // --- Cheap enrichment joins (customer + vertical names).
+        const customerIds = [...new Set(opps.map((o) => o.customer_id).filter(Boolean))] as string[];
+        const verticalIds = [...new Set(opps.map((o) => o.vertical_id).filter(Boolean))] as string[];
+        const locationIds = [...new Set(opps.map((o) => o.location_id as string | null).filter(Boolean))] as string[];
+
+        const locationName = new Map<string, string>();
+        if (locationIds.length) {
+            const { data } = await supabase.from("locations").select("id, label, city").in("id", locationIds);
+            for (const l of data ?? []) {
+                const row = l as { id: string; label?: string | null; city?: string | null };
+                locationName.set(row.id, (row.label?.trim() || row.city?.trim() || "") as string);
+            }
+        }
+
+        const customerName = new Map<string, string>();
+        if (customerIds.length) {
+            const { data } = await supabase.from("customers").select("id, name").in("id", customerIds);
+            for (const c of data ?? []) customerName.set((c as { id: string }).id, String((c as { name?: string }).name ?? ""));
+        }
+        const verticalName = new Map<string, string>();
+        if (verticalIds.length) {
+            const { data } = await supabase.from("verticals").select("id, name").in("id", verticalIds);
+            for (const v of data ?? []) verticalName.set((v as { id: string }).id, String((v as { name?: string }).name ?? ""));
+        }
+
+        // --- Real contacts: primary (by id) + secondary (another contact for the customer).
+        type ContactRow = { id: string; customer_id: string | null; first_name: string | null; last_name: string | null; phone: string | null; email: string | null };
+        const contactById = new Map<string, ContactRow>();
+        const contactsByCustomer = new Map<string, ContactRow[]>();
+        if (customerIds.length) {
+            const { data } = await supabase
+                .from("contacts")
+                .select("id, customer_id, first_name, last_name, phone, email")
+                .in("customer_id", customerIds)
+                .limit(500);
+            for (const c of data ?? []) {
+                const row = c as ContactRow;
+                contactById.set(row.id, row);
+                if (row.customer_id) {
+                    const arr = contactsByCustomer.get(row.customer_id) ?? [];
+                    arr.push(row);
+                    contactsByCustomer.set(row.customer_id, arr);
+                }
+            }
+        }
+        const fullName = (c?: ContactRow): string => (c ? [c.first_name, c.last_name].filter(Boolean).join(" ").trim() : "");
+
+        const records = opps.map((o) => {
+            const custName = o.customer_id ? customerName.get(o.customer_id) ?? null : null;
+            const statusDisplay = o.status_key ? labelByKey.get(o.status_key) ?? o.status_key : (o.status as string | null) ?? null;
+            const primaryId = (o.primary_contact_id as string | null) ?? null;
+            const primary = primaryId ? contactById.get(primaryId) : undefined;
+            const custContacts = o.customer_id ? contactsByCustomer.get(o.customer_id) ?? [] : [];
+            const secondary = custContacts.find((c) => c.id !== primaryId);
+            const jobDate = (o.job_date as string | null) ?? null;
+            const locationLabel = o.location_id ? locationName.get(o.location_id as string) || null : null;
+            // Household last name derives from the primary contact (queue card title token).
+            const lastName = primary?.last_name?.trim() || (custName ? custName.split(" ").slice(-1)[0] : null) || null;
+            // Attention/urgent line for the queue card (simple derived hint; empty → hidden).
+            const attention = jobDate ? `Tour ${formatProofDate(jobDate)} — confirm details` : null;
+
+            return {
+                ...o,
+                // legacy/derived keys (queue registry + customer label)
+                _status_display: statusDisplay,
+                _customer_name: custName,
+                _vertical_name: o.vertical_id ? verticalName.get(o.vertical_id) ?? null : null,
+                _location_name: locationLabel,
+                _customer_email: primary?.email ?? null,
+                _customer_phone: primary?.phone ?? null,
+                _quote_total_display: o.quote_total ?? null,
+                _updated: o.updated_at ?? o.created_at ?? null,
+                // queue-card display tokens (computed display text + location label).
+                last_name: lastName,
+                _attention: attention,
+                "opportunity.location": locationLabel,
+
+                // namespaced REAL values for Layout V2 refs (person.* / opportunity.*)
+                "person.primary_contact_name": fullName(primary) || custName || null,
+                "person.primary_phone": primary?.phone ?? null,
+                "person.primary_email": primary?.email ?? null,
+                "person.secondary_contact_name": secondary ? fullName(secondary) : null,
+                "person.secondary_phone": secondary?.phone ?? null,
+                "opportunity.status_key": o.status_key ?? (o.status as string | null) ?? null,
+                "opportunity.source": (o.source as string | null) ?? (o.external_source as string | null) ?? null,
+                "opportunity.channel": (o.external_source as string | null) ?? null,
+                "opportunity.campaign": null,
+                "opportunity.tour_date": jobDate,
+                "opportunity.tour_status": null,
+                "opportunity.job_date": jobDate,
+                "opportunity.customer_notes": (o.customer_notes as string | null) ?? null,
+
+                // related collections — no source table for this org/vertical → empty.
+                // The related_list table + widgets render their styled empty state; rows
+                // appear automatically when a childcare/tasks/reminders source exists.
+                children: [] as Record<string, unknown>[],
+                tasks: [] as Record<string, unknown>[],
+                reminders: [] as Record<string, unknown>[],
+            };
+        });
+
+        return NextResponse.json({
+            lifecycle: {
+                key: "lead_management",
+                label: "Lead Management",
+                note: "Mapped to the opportunity status lifecycle (the only active lifecycle).",
+                stages: lifecycle,
+            },
+            stage,
+            counts,
+            entityType: ENTITY_TYPE,
+            records,
+        });
+    } catch (e) {
+        return NextResponse.json({ error: (e as Error).message }, { status: 500 });
+    }
+}

@@ -69,6 +69,7 @@ def build_opportunity_payload(ghl_opportunity: Dict) -> Dict:
             logger.debug(f"Could not convert monetaryValue to cents: {ghl_value}")
     
     # Resolve primary_contact_id from GHL contactId via external_mappings
+    # LEGACY: contact-based identity (do not extend). TODO: migrate to person_id when GHL sync links persons.
     ghl_contact_id = ghl_opportunity.get("contactId") or ghl_opportunity.get("contact_id")
     if ghl_contact_id:
         internal_contact_id = resolve_contact_id_from_ghl_contact_id(ghl_contact_id)

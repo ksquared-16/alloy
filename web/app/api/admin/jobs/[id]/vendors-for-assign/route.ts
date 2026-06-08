@@ -1,17 +1,19 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /** GET: vendors that can be assigned to this job (org + job vertical + status_key = active per assignment policy). */
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: jobId } = await context.params;
     if (!jobId) return NextResponse.json({ error: "Missing job id" }, { status: 400 });
@@ -19,11 +21,19 @@ export async function GET(_request: Request, context: { params: Promise<{ id: st
     const supabase = createAdminClient();
     const { data: job, error: jErr } = await supabase
         .from("jobs")
-        .select("id, vertical_id, org_id")
+        .select("id, vertical_id, org_id, work_unit_id, location_id")
         .eq("id", jobId)
         .eq("org_id", ctx.orgId)
         .single();
     if (jErr || !job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    const jb = job as { work_unit_id?: string | null; location_id?: string | null };
+    if (!(await assertJobInAccessScope(supabase, ctx.orgId, dim, { work_unit_id: jb.work_unit_id ?? null, location_id: jb.location_id ?? null }))) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     const orgId = (job as { org_id?: string | null }).org_id;
     const verticalId = (job as { vertical_id?: string } | null)?.vertical_id ?? null;

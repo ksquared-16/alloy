@@ -31,7 +31,7 @@ function sectionTitle(text: string, accent?: string) {
         fontSize: 10,
         fontWeight: 700,
         color: accent ?? derived.inspectorSectionMuted,
-        textTransform: "uppercase",
+        textTransform: "none",
         letterSpacing: "0.1em",
         marginBottom: 12,
         marginTop: 0,
@@ -110,7 +110,7 @@ function NextStepBlock({ departmentName, nextBestAction }: { departmentName: str
           fontSize: 10,
           fontWeight: 700,
           color: brand.primary,
-          textTransform: "uppercase",
+          textTransform: "none",
           letterSpacing: "0.08em",
           marginBottom: 6,
         }}
@@ -332,7 +332,7 @@ function DepartmentInspector({ departmentKey }: { departmentKey: DepartmentKey }
               style={{
                 fontSize: 9,
                 color: derived.inspectorSectionMuted,
-                textTransform: "uppercase",
+                textTransform: "none",
                 letterSpacing: "0.06em",
                 marginBottom: 6,
               }}

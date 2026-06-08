@@ -37,6 +37,12 @@ function contactLabel(c: { first_name?: string | null; last_name?: string | null
     return (c.email && String(c.email).trim()) || "—";
 }
 
+function trimOrNull(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s ? s : null;
+}
+
 type FkSpec = { column: string; kind: RelationshipEntityKind };
 
 const DRAWER_FK_SPECS: Record<string, FkSpec[]> = {
@@ -75,18 +81,26 @@ const STUB_KEY = (kind: RelationshipEntityKind, id: string) => `${kind}:${id}`;
 /**
  * Sets `out._relationship_displays` keyed by FK column name (e.g. customer_id → stub).
  * Direct FK fields only; collections stay separate.
+ *
+ * Returns attach strategy for hydrate perf telemetry (`full_queries` vs reusing drawer shell hints).
  */
+export type RelationshipDisplaysAttachStrategy = "full_queries" | "reuse_drawer_hints";
+
 export async function attachDirectFkRelationshipDisplays(
     supabase: AdminClient,
     orgId: string,
     drawerType: string,
     out: Record<string, unknown>
-): Promise<void> {
+): Promise<RelationshipDisplaysAttachStrategy> {
     const specs = DRAWER_FK_SPECS[drawerType];
     if (!specs?.length) {
         out._relationship_displays = {};
-        return;
+        return "full_queries";
     }
+
+    let hintBacked = false;
+
+    const stubByKey = new Map<string, RelationshipDisplayStub>();
 
     const byKind = new Map<RelationshipEntityKind, Set<string>>();
     for (const { column, kind } of specs) {
@@ -98,7 +112,79 @@ export async function attachDirectFkRelationshipDisplays(
         }
     }
 
-    const stubByKey = new Map<string, RelationshipDisplayStub>();
+    /** Full hydrate receives native row + FK columns but may already have drawer shell labels (`_customer_name`, etc.). */
+    if (drawerType === "opportunities") {
+        const customers = byKind.get("customer");
+        const cid = typeof out.customer_id === "string" ? out.customer_id.trim() : "";
+        const cnm = trimOrNull(out._customer_name);
+        if (customers?.has(cid) && cid && cnm) {
+            stubByKey.set(STUB_KEY("customer", cid), {
+                id: cid,
+                entity_type: "customer",
+                label: cnm,
+                record_number: numOrNull(out.customer_number),
+            });
+            customers.delete(cid);
+            hintBacked = true;
+        }
+
+        const persons = byKind.get("person");
+        const pid =
+            typeof out.primary_person_id === "string" && out.primary_person_id.trim()
+                ? out.primary_person_id.trim()
+                : "";
+        const pnm = trimOrNull(out._primary_person_name as string | undefined);
+        if (persons?.has(pid) && pid && pnm) {
+            stubByKey.set(STUB_KEY("person", pid), {
+                id: pid,
+                entity_type: "person",
+                label: pnm,
+                record_number: null,
+            });
+            persons.delete(pid);
+            hintBacked = true;
+        }
+
+        const contacts = byKind.get("contact");
+        const ctid =
+            typeof out.primary_contact_id === "string" && out.primary_contact_id.trim()
+                ? out.primary_contact_id.trim()
+                : "";
+        const ctm = trimOrNull(out._primary_contact_name as string | undefined);
+        if (contacts?.has(ctid) && ctid && ctm) {
+            stubByKey.set(STUB_KEY("contact", ctid), {
+                id: ctid,
+                entity_type: "contact",
+                label: ctm,
+            });
+            contacts.delete(ctid);
+            hintBacked = true;
+        }
+
+        const locations = byKind.get("location");
+        const lid =
+            typeof out.location_id === "string" && out.location_id.trim() ? out.location_id.trim() : "";
+        const locNm =
+            trimOrNull(out._location_label as string | undefined) ??
+            trimOrNull(out._location_name as string | undefined);
+        if (locations?.has(lid) && lid && locNm) {
+            stubByKey.set(STUB_KEY("location", lid), {
+                id: lid,
+                entity_type: "location",
+                label: locNm,
+                record_number: numOrNull(out.location_number),
+            });
+            locations.delete(lid);
+            hintBacked = true;
+        }
+
+        const pruneEmptyKinds = () => {
+            for (const [k, ids] of byKind) {
+                if (ids.size === 0) byKind.delete(k);
+            }
+        };
+        pruneEmptyKinds();
+    }
 
     const customerIds = byKind.get("customer");
     if (customerIds?.size) {
@@ -278,4 +364,5 @@ export async function attachDirectFkRelationshipDisplays(
         displays[column] = stubByKey.get(STUB_KEY(kind, raw.trim())) ?? null;
     }
     out._relationship_displays = displays;
+    return drawerType === "opportunities" && hintBacked ? "reuse_drawer_hints" : "full_queries";
 }

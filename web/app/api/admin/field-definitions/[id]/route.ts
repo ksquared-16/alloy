@@ -1,13 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
+import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
+import { resolveDrawerFieldPolicy } from "@/lib/fields/drawerFieldPolicyAdapter";
 
 const ALLOWED_PATCH_KEYS = [
     "label",
     "description",
     "is_required",
+    "requirement_policy",
+    "interaction_policy",
     "is_active",
     "is_visible_in_form",
     "is_visible_in_drawer",
@@ -24,12 +28,43 @@ const ALLOWED_PATCH_KEYS = [
 
 const FORBIDDEN_FOR_SYSTEM = ["org_id", "entity_type", "field_key", "field_type", "is_system"] as const;
 
+/** GET: single field_definition for current org (admin/ops). */
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const ctx = await getAdminContextCached();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const { data: row, error } = await supabase
+        .from("field_definitions")
+        .select("*")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!row) {
+        return NextResponse.json({ error: "Field definition not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(row);
+}
+
 /** PATCH: update field_definition. For is_system=true, org_id, entity_type, field_key, field_type, is_system are immutable. Admin only. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -53,7 +88,7 @@ export async function PATCH(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("field_definitions")
-        .select("id, org_id, is_system, field_type, config")
+        .select("id, org_id, entity_type, field_key, is_system, field_type, config, is_required, requirement_policy, interaction_policy")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -121,6 +156,51 @@ export async function PATCH(
         }
     }
 
+    const existingEntityType = String((existing as { entity_type?: string }).entity_type ?? "");
+    const existingFieldKey = String((existing as { field_key?: string }).field_key ?? "");
+    const existingIsSystem = Boolean((existing as { is_system?: boolean }).is_system);
+    const policyWriteRequested =
+        body.is_required !== undefined ||
+        body.requirement_policy !== undefined ||
+        body.interaction_policy !== undefined;
+
+    if (policyWriteRequested) {
+        const et = existingEntityType.trim().toLowerCase();
+        if (et === "opportunity" || et === "job") {
+            const resolved = resolveDrawerFieldPolicy(et, {
+                field_key: existingFieldKey,
+                is_system: existingIsSystem,
+            });
+            if (!resolved || resolved.policyMode !== "enforceable") {
+                return NextResponse.json(
+                    {
+                        error: `Field policy cannot be edited for this field: ${resolved?.reason ?? "not mapped for drawer enforcement"}`,
+                    },
+                    { status: 400 }
+                );
+            }
+        }
+    }
+
+    const policyMerge = mergeFieldDefinitionPoliciesFromBody(
+        {
+            is_required: body.is_required as boolean | undefined,
+            requirement_policy: body.requirement_policy,
+            interaction_policy: body.interaction_policy,
+        },
+        { existing_is_required: Boolean((existing as { is_required?: boolean }).is_required) }
+    );
+    if (!policyMerge.ok) {
+        return NextResponse.json({ error: policyMerge.error }, { status: 400 });
+    }
+    if (policyMerge.requirement_policy !== undefined) {
+        updates.requirement_policy = policyMerge.requirement_policy;
+        updates.is_required = policyMerge.is_required;
+    }
+    if (policyMerge.interaction_policy !== undefined) {
+        updates.interaction_policy = policyMerge.interaction_policy;
+    }
+
     if (Object.keys(updates).length === 0) {
         return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
     }
@@ -153,7 +233,7 @@ export async function PATCH(
 
 /** DELETE: remove a custom field definition (cascades field_values). System rows are protected. Admin only. */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

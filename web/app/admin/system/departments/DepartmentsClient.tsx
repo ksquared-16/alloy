@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import RuntimeMetadataReadOnlyPanel from "@/components/adminV2/settings/RuntimeMetadataReadOnlyPanel";
 
 export type DepartmentRow = {
     id: string;
@@ -13,13 +15,15 @@ export type DepartmentRow = {
     description: string | null;
     sort_order: number;
     is_active: boolean;
+    /** JSONB — attention rules, activity signals, tenant_slice, etc. (read-only in Settings UI). */
+    metadata?: unknown;
     created_at: string;
     updated_at: string | null;
 };
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
-export default function DepartmentsClient() {
+export default function DepartmentsClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<DepartmentRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -32,6 +36,8 @@ export default function DepartmentsClient() {
     const [modalDescription, setModalDescription] = useState("");
     const [modalSortOrder, setModalSortOrder] = useState(0);
     const [modalActive, setModalActive] = useState(true);
+    /** Effective metadata from list API — not edited in this modal */
+    const [modalMetadata, setModalMetadata] = useState<unknown>(null);
     const [modalSaving, setModalSaving] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
 
@@ -62,6 +68,7 @@ export default function DepartmentsClient() {
         setModalDescription("");
         setModalSortOrder(0);
         setModalActive(true);
+        setModalMetadata(null);
         setModalError(null);
         setModalOpen(true);
     };
@@ -73,6 +80,7 @@ export default function DepartmentsClient() {
         setModalDescription(row.description ?? "");
         setModalSortOrder(row.sort_order);
         setModalActive(row.is_active);
+        setModalMetadata(row.metadata ?? null);
         setModalError(null);
         setModalOpen(true);
     };
@@ -147,23 +155,31 @@ export default function DepartmentsClient() {
         await fetchItems();
     };
 
+    const addDeptAction = canMutate ? (
+        <button
+            type="button"
+            onClick={openCreate}
+            className="rounded-lg bg-alloy-pine px-4 py-2 text-sm font-medium text-white hover:bg-alloy-pine/90"
+        >
+            Add department
+        </button>
+    ) : null;
+
     return (
         <div>
-            <AdminPageHeader
-                title="Departments"
-                subtitle="Business functions within your organization (hierarchy). Work units belong to departments."
-                actions={
-                    canMutate ? (
-                        <button
-                            type="button"
-                            onClick={openCreate}
-                            className="px-4 py-2 rounded-lg bg-alloy-pine text-white text-sm font-medium hover:bg-alloy-pine/90"
-                        >
-                            Add department
-                        </button>
-                    ) : null
-                }
-            />
+            {adminV2Chrome ? (
+                <SettingsPageHeader
+                    title="Departments"
+                    subtitle="Business functions within your organization (hierarchy). Work units belong to departments."
+                    actions={addDeptAction}
+                />
+            ) : (
+                <AdminPageHeader
+                    title="Departments"
+                    subtitle="Business functions within your organization (hierarchy). Work units belong to departments."
+                    actions={addDeptAction}
+                />
+            )}
 
             <SectionCard title="All departments">
                 {loading ? (
@@ -214,8 +230,8 @@ export default function DepartmentsClient() {
             </SectionCard>
 
             {modalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-alloy-midnight/40">
-                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-md w-full p-6">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-alloy-midnight/40 overflow-y-auto">
+                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-2xl w-full p-6 my-8 max-h-[min(92vh,880px)] overflow-y-auto">
                         <h2 className="text-lg font-semibold text-alloy-forge">{modalId ? "Edit department" : "New department"}</h2>
                         <div className="mt-4 space-y-3">
                             <label className="block text-sm">
@@ -255,6 +271,7 @@ export default function DepartmentsClient() {
                                 <input type="checkbox" checked={modalActive} onChange={(e) => setModalActive(e.target.checked)} />
                                 <span>Active</span>
                             </label>
+                            <RuntimeMetadataReadOnlyPanel metadata={modalMetadata} entity="department" isNewRow={!modalId} />
                             {modalError ? <p className="text-sm text-red-600">{modalError}</p> : null}
                         </div>
                         <div className="mt-6 flex justify-end gap-2">

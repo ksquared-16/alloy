@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 const ALLOWED_PATCH = [
     "field_label",
@@ -16,7 +16,7 @@ const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "bo
 
 /** PATCH: update document_field_definition. Admin only. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
@@ -96,7 +96,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
 /** DELETE document_field_definition. Admin only. */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }

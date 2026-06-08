@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" fill="none" aria-hidden="true">
+  <!-- TODO: Replace with final deck vision artifact export -->
+  <rect width="800" height="500" fill="#F4F6F9"/>
+  <rect x="100" y="160" width="260" height="180" rx="12" fill="#00A283" fill-opacity="0.08" stroke="#00A283" stroke-width="1.5"/>
+  <text x="230" y="200" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#18273A" opacity="0.6">Today</text>
+  <rect x="440" y="160" width="260" height="180" rx="12" fill="#00458C" fill-opacity="0.06" stroke="#00458C" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="570" y="200" text-anchor="middle" font-family="system-ui,sans-serif" font-size="13" font-weight="600" fill="#18273A" opacity="0.6">Tomorrow</text>
+  <path d="M360 250 H440" stroke="#18273A" stroke-width="2" opacity="0.2" marker-end="url(#arrow2)"/>
+  <defs>
+    <marker id="arrow2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8" fill="#18273A" opacity="0.2"/>
+    </marker>
+  </defs>
+  <text x="400" y="420" text-anchor="middle" font-family="system-ui,sans-serif" font-size="14" fill="#18273A" opacity="0.35">Vision Artifact Placeholder</text>
+</svg>

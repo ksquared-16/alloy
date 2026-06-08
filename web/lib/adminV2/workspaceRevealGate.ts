@@ -1,0 +1,130 @@
+import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+
+export type WorkspaceRevealGatePhase =
+    | "gate_start"
+    | "shell_ready"
+    | "department_tiles_ready"
+    | "tile_counts_ready"
+    | "kpi_region_ready"
+    | "actions_ready"
+    | "above_fold_ready";
+
+export type WorkspaceRevealGateInput = {
+    shell_ready: boolean;
+    department_tiles_ready: boolean;
+    tile_counts_ready: boolean;
+    kpi_region_ready: boolean;
+    actions_ready: boolean;
+};
+
+export type WorkspaceRevealGate = WorkspaceRevealGateInput & {
+    above_fold_ready: boolean;
+    reason_if_blocked: string[];
+};
+
+let gateStartMs: number | null = null;
+const phaseAtMs: Partial<Record<WorkspaceRevealGatePhase, number>> = {};
+let aboveFoldReadyLogged = false;
+
+export function resetWorkspaceRevealGatePerf(): void {
+    gateStartMs = null;
+    aboveFoldReadyLogged = false;
+    for (const k of Object.keys(phaseAtMs) as WorkspaceRevealGatePhase[]) {
+        delete phaseAtMs[k];
+    }
+}
+
+export function markWorkspaceRevealGateStart(detail?: Record<string, unknown>): void {
+    if (typeof performance === "undefined") return;
+    resetWorkspaceRevealGatePerf();
+    gateStartMs = performance.now();
+    phaseAtMs.gate_start = gateStartMs;
+    alloyPerfSet("workspace_reveal_gate_start", gateStartMs);
+    if (typeof window !== "undefined") {
+        console.info("[workspace-reveal-gate]", { event: "gate_start", ...detail });
+    }
+}
+
+function logPhase(phase: WorkspaceRevealGatePhase, detail?: Record<string, unknown>): void {
+    if (typeof performance === "undefined" || typeof window === "undefined") return;
+    if (phaseAtMs[phase] != null) return;
+    const now = performance.now();
+    phaseAtMs[phase] = now;
+    alloyPerfSet(`workspace_reveal_${phase}`, now);
+    const payload: Record<string, unknown> = {
+        event: phase,
+        since_gate_ms: gateStartMs != null ? Math.round(now - gateStartMs) : null,
+        ...detail,
+    };
+    if (phase === "above_fold_ready" && gateStartMs != null) {
+        payload.reveal_wait_ms = Math.round(now - gateStartMs);
+    }
+    console.info("[workspace-reveal-gate]", payload);
+}
+
+export function markWorkspaceRevealGatePhases(
+    gate: WorkspaceRevealGate,
+    detail?: Record<string, unknown>
+): void {
+    if (gate.shell_ready) logPhase("shell_ready", detail);
+    if (gate.department_tiles_ready) logPhase("department_tiles_ready", detail);
+    if (gate.tile_counts_ready) logPhase("tile_counts_ready", detail);
+    if (gate.kpi_region_ready) logPhase("kpi_region_ready", detail);
+    if (gate.actions_ready) logPhase("actions_ready", detail);
+    if (gate.above_fold_ready && !aboveFoldReadyLogged) {
+        aboveFoldReadyLogged = true;
+        logPhase("above_fold_ready", {
+            ...detail,
+            reason_if_blocked: gate.reason_if_blocked,
+        });
+    }
+}
+
+export function computeWorkspaceRevealGate(input: WorkspaceRevealGateInput): WorkspaceRevealGate {
+    const reason_if_blocked: string[] = [];
+    if (!input.shell_ready) reason_if_blocked.push("shell");
+    if (!input.department_tiles_ready) reason_if_blocked.push("department_tiles");
+    if (!input.tile_counts_ready) reason_if_blocked.push("tile_counts");
+    if (!input.kpi_region_ready) reason_if_blocked.push("kpi_region");
+    if (!input.actions_ready) reason_if_blocked.push("actions");
+    return {
+        ...input,
+        above_fold_ready: reason_if_blocked.length === 0,
+        reason_if_blocked,
+    };
+}
+
+export function workspaceRevealShellReady(input: {
+    bootstrap_loading: boolean;
+    departments_resolved: boolean;
+}): boolean {
+    return input.departments_resolved && !input.bootstrap_loading;
+}
+
+export function workspaceRevealDepartmentTilesReady(input: {
+    bootstrap_loading: boolean;
+    has_departments: boolean;
+    fetch_settled_empty: boolean;
+}): boolean {
+    if (input.bootstrap_loading) return false;
+    return input.has_departments || input.fetch_settled_empty;
+}
+
+export function workspaceRevealTileCountsReady(input: {
+    has_departments: boolean;
+    quick_rollup_applied: boolean;
+    fetch_settled_empty: boolean;
+}): boolean {
+    if (input.fetch_settled_empty && !input.has_departments) return true;
+    return input.has_departments && input.quick_rollup_applied;
+}
+
+/** KPI may hydrate after reveal via quiet reserve — gate does not wait for placements. */
+export function workspaceRevealKpiRegionReady(): boolean {
+    return true;
+}
+
+/** Orientation rail is static chrome — always ready. */
+export function workspaceRevealActionsReady(): boolean {
+    return true;
+}

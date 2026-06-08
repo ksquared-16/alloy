@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAdminOrgOperationalTimezone } from "@/contexts/AdminOrgOperationalTimezoneContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import Drawer from "@/components/admin/Drawer";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { Filter } from "lucide-react";
 
@@ -25,16 +26,18 @@ type ScheduleRow = {
 
 type JobOption = { id: string; title: string | null };
 
-const EMPTY_FORM = {
-  job_id: "",
-  start_at: "",
-  end_at: "",
-  timezone: "America/Los_Angeles",
-  visit_type: "",
-  status: "",
-};
-
 export default function SchedulesClient() {
+  const orgOpTz = useAdminOrgOperationalTimezone();
+  const visitDisplayTz = (rowTz: string | null | undefined) => {
+    const s = rowTz != null ? String(rowTz).trim() : "";
+    return s || orgOpTz;
+  };
+  const formatScheduleBoundary = (iso: string, rowTz: string | null | undefined) =>
+    formatDateTimeForUserDisplay(iso, visitDisplayTz(rowTz));
+  const emptyForm = useMemo(
+    () => ({ job_id: "", start_at: "", end_at: "", timezone: orgOpTz, visit_type: "", status: "" }),
+    [orgOpTz]
+  );
   const { openDrawer, drawer } = useAdminDrawer();
   const { labels } = useEntityLabels();
   const plural = getEntityLabel(labels, "schedules", "plural");
@@ -51,7 +54,7 @@ export default function SchedulesClient() {
   const [statusKeyFilter, setStatusKeyFilter] = useState("");
   const [statusOptions, setStatusOptions] = useState<{ status_key: string; status_label: string | null }[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(emptyForm);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -130,7 +133,7 @@ export default function SchedulesClient() {
   }, [fetchJobs]);
 
   const openCreate = () => {
-    setForm(EMPTY_FORM);
+    setForm(emptyForm);
     setSaveError(null);
     setDrawerOpen(true);
   };
@@ -270,15 +273,15 @@ export default function SchedulesClient() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-alloy-stone/30 bg-alloy-stone/40">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Start</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">End</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Job</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Customer</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Location</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Assigned {vendorSingular}</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Status</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Canceled?</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Cancel visit</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Start</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">End</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Job</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Customer</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Location</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Assigned {vendorSingular}</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Status</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Canceled?</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Cancel visit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-alloy-stone/30">
@@ -298,8 +301,8 @@ export default function SchedulesClient() {
                         openDrawer({ type: "schedules", id: s.id });
                       }}
                     >
-                      <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(s.start_at)}</td>
-                      <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(s.end_at)}</td>
+                      <td className="px-5 py-3.5 text-alloy-midnight/90">{formatScheduleBoundary(s.start_at, s.timezone)}</td>
+                      <td className="px-5 py-3.5 text-alloy-midnight/90">{formatScheduleBoundary(s.end_at, s.timezone)}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._job_title ?? s.job_id?.slice(0, 8) ?? "—"}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._customer_name ?? "—"}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._location_label ?? "—"}</td>
@@ -374,7 +377,7 @@ export default function SchedulesClient() {
                 value={form.timezone}
                 onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
                 className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                placeholder="America/Los_Angeles"
+                placeholder="IANA, e.g. America/New_York"
               />
             </div>
             <div>
@@ -399,7 +402,7 @@ export default function SchedulesClient() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
           <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-alloy-midnight mb-2">Cancel {singular.toLowerCase()}</h3>
-            <p className="text-sm text-alloy-midnight/80 mb-2">Cancel this {singular.toLowerCase()}? Start: {formatDateTime(cancelTarget.start_at)}</p>
+            <p className="text-sm text-alloy-midnight/80 mb-2">Cancel this {singular.toLowerCase()}? Start: {formatScheduleBoundary(cancelTarget.start_at, cancelTarget.timezone)}</p>
             <p className="text-xs text-alloy-midnight/55 mb-3 leading-snug">
               This uses the server cancel action (records <code className="text-[11px] bg-alloy-stone/15 px-1 rounded">canceled_at</code>, applies cancellation-fee rules). It is not the same as setting workflow status to canceled.
             </p>

@@ -259,7 +259,7 @@ export default function AccountsClient() {
 
                         {drawerTab === "related" && (
                             <div className="space-y-3">
-                                <h4 className="text-xs font-semibold uppercase text-alloy-muted">Journal lines</h4>
+                                <h4 className="text-xs font-semibold text-alloy-muted">Journal lines</h4>
                                 <p className="text-sm text-alloy-muted">Recent journal lines for this account are not yet available in this view. Use the Ledger to inspect transactions and journal entries.</p>
                             </div>
                         )}

@@ -1,183 +1,547 @@
 "use client";
 
-import { useMemo, useState, useCallback, useEffect, type CSSProperties } from "react";
-import { neutral, derived, brand } from "@/styles/tokens/colors";
-import { CompanyWorkspace, DepartmentWorkspace, WorkUnitWorkspace, RecordWorkspace } from "../components/workspace/shells";
-import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
-import { toCompanyWorkspaceModel } from "@/lib/ui-v2/adapters/company-adapter";
-import { toDepartmentWorkspaceModel } from "@/lib/ui-v2/adapters/department-adapter";
-import { toWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/work-unit-adapter";
-import { toRecordWorkspaceModel } from "@/lib/ui-v2/adapters/record-adapter";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { WorkspaceRootShell, type WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
 import {
-  DEMO_DEFAULT_INDUSTRY,
-  DEMO_DEFAULT_LEVEL,
-  DEMO_FLOW_DEFAULT_CONTEXT,
-  DEMO_INDUSTRY_OPTIONS,
-  DEMO_LEVEL_OPTIONS,
-  resolveDemoWorkspaceSlices,
-  type DemoIndustryId,
-  type DemoSelectedContext,
-  type DemoWorkspaceLevelId,
-} from "@/lib/ui-v2/demo/industry-workspace-registry";
+    type WorkspaceRootDepartmentRow,
+    type WorkspaceRootDeptTileStats,
+} from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import { WorkspacePageLoadingGate } from "@/app/adminV2/components/workspace/WorkspacePageLoadingGate";
+import type { KPIVm } from "@/lib/ui-v2/workspace-types";
+import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
+import {
+    accumulateWorkspaceDeptWorkUnitTileStats,
+    buildWorkspaceRootDepartmentTileRollupLine,
+} from "@/lib/workspace/viewModels/workspaceRootRollup";
+import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    bustWorkspaceDepartmentsFetchDedupe,
+    dedupeAdminFetch,
+    dedupeAdminFetchWithTtl,
+} from "@/lib/workspace/workspaceAdminFetchDedupe";
+import {
+    invalidateAdminV2WorkspaceSessionCache,
+    readWorkspaceRootCache,
+    writeWorkspaceRootCache,
+} from "@/lib/workspace/adminV2WorkspaceSessionCache";
+import {
+    traceWorkspaceRootDepartmentTiles,
+    transformWorkspaceApiDepartmentsToTiles,
+    type WorkspaceTilePipelineTrace,
+} from "@/lib/workspace/workspaceRootTilePipeline";
+import { WorkspaceTileDebugPanel } from "@/components/admin/workspace/WorkspaceTileDebugPanel";
+import AdminAccessScopeDebugPanel from "@/components/adminV2/settings/lifecycle/AdminAccessScopeDebugPanel";
+import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
+import { readLifecycleDebugSelection } from "@/lib/lifecycle/lifecycleDebugSelection";
+import type { LifecycleDepartmentIdAudit } from "@/lib/lifecycle/lifecycleDepartmentIdAudit";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { loadWorkspaceGrowthRollup } from "@/lib/adminV2/runtime/loadWorkspaceGrowthRollup";
+import { perfWorkspaceLoad } from "@/lib/workspace/adminV2WorkspaceSessionCache";
+import {
+    markRouteBootstrapReturned,
+    markRouteFirstAboveFoldStable,
+    markRouteShellVisible,
+    registerRouteLoadingOwner,
+    resetRouteShellTrace,
+    unregisterRouteLoadingOwner,
+} from "@/lib/adminV2/routeShellPipeline";
+import {
+    computeWorkspaceRevealGate,
+    markWorkspaceRevealGatePhases,
+    markWorkspaceRevealGateStart,
+    resetWorkspaceRevealGatePerf,
+    workspaceRevealActionsReady,
+    workspaceRevealDepartmentTilesReady,
+    workspaceRevealKpiRegionReady,
+    workspaceRevealShellReady,
+    workspaceRevealTileCountsReady,
+} from "@/lib/adminV2/workspaceRevealGate";
+import { prefetchVisibleDepartmentAboveFoldBundles } from "@/lib/adminV2/prefetchAdminV2AboveFold";
+import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+
+/** First paint: work-unit counts + rollup lines without per-dept growth KPI / pipeline calls. */
+function buildWorkspaceQuickRollup(
+    departments: WorkspaceRootDepartmentRow[],
+    workUnitsRes: Response | null,
+    wuJson: { items?: { department_id?: string }[]; error?: string }
+): { metrics: WorkspaceRootMetrics; deptTileStats: WorkspaceRootDeptTileStats } {
+    const deptTileStats: WorkspaceRootDeptTileStats =
+        workUnitsRes?.ok && Array.isArray(wuJson.items)
+            ? accumulateWorkspaceDeptWorkUnitTileStats(wuJson.items)
+            : {};
+
+    for (const d of departments) {
+        const wu = deptTileStats[d.id]?.workUnitCount ?? 0;
+        if (!deptTileStats[d.id]) deptTileStats[d.id] = { workUnitCount: wu };
+        else deptTileStats[d.id] = { ...deptTileStats[d.id], workUnitCount: wu };
+    }
+
+    for (const d of departments) {
+        const wu = deptTileStats[d.id]?.workUnitCount ?? 0;
+        deptTileStats[d.id] = {
+            workUnitCount: wu,
+            opportunityRollupLine: buildWorkspaceRootDepartmentTileRollupLine({
+                departmentKey: d.key,
+                workUnitCount: wu,
+                pipelineExact: null,
+            }),
+        };
+    }
+
+    const metrics: WorkspaceRootMetrics = {
+        departments: null,
+        workUnits: workUnitsRes?.ok && Array.isArray(wuJson.items) ? wuJson.items.length : null,
+    };
+
+    return { metrics, deptTileStats };
+}
 
 /**
- * UI V2 workspace system demo — config-driven blocks, drill-down state matches industry flow.
+ * Organization workspace — top of hierarchy: workspace → department → work unit → record/drawer.
+ * Departments load from GET /api/admin/departments (real org rows; no redirect).
  */
-export default function AdminV2WorkspaceDemoPage() {
-  const [industry, setIndustry] = useState<DemoIndustryId>(DEMO_DEFAULT_INDUSTRY);
-  const [level, setLevel] = useState<DemoWorkspaceLevelId>(DEMO_DEFAULT_LEVEL);
-  const [selectedContext, setSelectedContext] = useState<DemoSelectedContext>({});
+export default function AdminV2WorkspaceIndexPage() {
+    const { orgName: orgNameFromContext, orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
+    const hydratedCacheRef = useRef(false);
+    const [workspaceCachePrimed, setWorkspaceCachePrimed] = useState(false);
+    const [departments, setDepartments] = useState<WorkspaceRootDepartmentRow[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [metrics, setMetrics] = useState<WorkspaceRootMetrics | null>(null);
+    const [deptTileStats, setDeptTileStats] = useState<WorkspaceRootDeptTileStats>({});
+    const [orgOpportunityKpis, setOrgOpportunityKpis] = useState<KPIVm[] | null>(null);
+    const [workspaceKpiStrip, setWorkspaceKpiStrip] = useState<KPIVm[] | undefined>(undefined);
+    const [workspaceKpiPlacementPending, setWorkspaceKpiPlacementPending] = useState(false);
+    const [workspaceRollupRefined, setWorkspaceRollupRefined] = useState(false);
+    const [fetchSettledEmpty, setFetchSettledEmpty] = useState(false);
+    const [deptRefreshNonce, setDeptRefreshNonce] = useState(0);
+    const [tilePipelineTrace, setTilePipelineTrace] = useState<WorkspaceTilePipelineTrace | null>(null);
+    const [workspaceIdAudit, setWorkspaceIdAudit] = useState<LifecycleDepartmentIdAudit | null>(null);
 
-  useEffect(() => {
-    setSelectedContext({});
-    setLevel("company");
-  }, [industry]);
+    useEffect(() => {
+        resetRouteShellTrace("workspace");
+        registerRouteLoadingOwner("workspace", "page");
+        markRouteShellVisible("workspace");
+        return () => unregisterRouteLoadingOwner("workspace", "page");
+    }, []);
 
-  const onAction = useCallback((action: WorkspaceAction) => {
-    console.info("[ui-v2 workspace action]", action);
+    useEffect(() => {
+        const onDepartmentsChanged = () => {
+            hydratedCacheRef.current = false;
+            setWorkspaceCachePrimed(false);
+            invalidateAdminV2WorkspaceSessionCache(orgId, principalUserId, accessScopeFingerprint);
+            bustWorkspaceDepartmentsFetchDedupe();
+            setDeptRefreshNonce((n) => n + 1);
+        };
+        window.addEventListener("alloy:workspace-departments-changed", onDepartmentsChanged);
+        return () => window.removeEventListener("alloy:workspace-departments-changed", onDepartmentsChanged);
+    }, [orgId, principalUserId, accessScopeFingerprint]);
 
-    if (action.type === "company.open_department") {
-      setSelectedContext((c) => ({ ...c, departmentKey: action.departmentKey }));
-      setLevel("department");
-      return;
+    useLayoutEffect(() => {
+        resetWorkspaceRevealGatePerf();
+        hydratedCacheRef.current = false;
+        setWorkspaceCachePrimed(false);
+        setFetchSettledEmpty(false);
+        const hit = readWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint);
+        if (!hit?.departments?.length) return;
+        hydratedCacheRef.current = true;
+        setWorkspaceCachePrimed(true);
+        setDepartments(hit.departments);
+        setFetchSettledEmpty(false);
+        setDeptTileStats(hit.deptTileStats);
+        setMetrics(hit.metrics);
+        setOrgOpportunityKpis(hit.orgOpportunityKpis ?? null);
+        setWorkspaceKpiStrip(hit.workspaceKpiStrip);
+        setWorkspaceKpiPlacementPending(hit.kpiPlacementPending);
+        setWorkspaceRollupRefined(hit.rollupRefined);
+        setLoading(false);
+        setError(null);
+        perfWorkspaceLoad({
+            phase: "shell_seed",
+            ms: 0,
+            source: "cache",
+            org_id: orgId,
+            client_cache_hit: true,
+        });
+    }, [orgId, principalUserId, accessScopeFingerprint]);
+
+    useEffect(() => {
+        const cachedShellPrimed = hydratedCacheRef.current;
+        if (!cachedShellPrimed) {
+            setLoading(true);
+            setWorkspaceRollupRefined(false);
+            setFetchSettledEmpty(false);
+        }
+        setError(null);
+
+        let applyResults = true;
+        let cancelGrowthRollupDefer: () => void = () => undefined;
+        markWorkspaceRevealGateStart({ org_id: orgId });
+
+        void (async () => {
+            const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
+            const tCritical0 =
+                typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
+            if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                alloyPerfSet("workspace_start", routeStart);
+            }
+            try {
+                const perfDebug =
+                    typeof window !== "undefined" &&
+                    (window as unknown as { __WS_PERF_DEBUG__?: boolean }).__WS_PERF_DEBUG__ === true;
+                const t0 = perfDebug ? performance.now() : 0;
+
+                const fetchInit = workspaceDataFetchInit() ?? {};
+                const deptFetchInit = { ...fetchInit, cache: "no-store" as RequestCache };
+                const placementUrl = "/api/admin/workspace-kpi-placements?surface=workspace";
+                const placementP = dedupeAdminFetchWithTtl(
+                    placementUrl,
+                    { ...(fetchInit ?? {}), cache: "no-store" },
+                    8000
+                ).catch(() => null as Response | null);
+                const [res, wuRes] = await Promise.all([
+                    dedupeAdminFetch("/api/admin/departments", deptFetchInit),
+                    dedupeAdminFetch("/api/admin/work-units", fetchInit).catch(() => null as Response | null),
+                ]);
+                const json = (await res.json().catch(() => ({}))) as {
+                    items?: WorkspaceRootDepartmentRow[];
+                    error?: string;
+                };
+                const wuJson = (await (wuRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as {
+                    items?: { department_id?: string }[];
+                    error?: string;
+                };
+                if (!res.ok) throw new Error(json.error ?? "Failed to load departments");
+                const items = json.items ?? [];
+                const trace = traceWorkspaceRootDepartmentTiles(items);
+                const active = transformWorkspaceApiDepartmentsToTiles(items);
+                if (!applyResults) return;
+
+                setTilePipelineTrace(trace);
+                const debugSel = readLifecycleDebugSelection();
+                if (debugSel) {
+                    const sel = debugSel.department_id;
+                    setWorkspaceIdAudit({
+                        selected_department_id: sel,
+                        selected_lifecycle_name: debugSel.lifecycle_name,
+                        selected_process_id: debugSel.process_id,
+                        expected_workspace_tile_name: debugSel.expected_tile_name,
+                        sources: {
+                            validate_route_department_id: sel,
+                            catalog_row_department_id: null,
+                            activation_metadata_department_id: sel,
+                            view_link_department_id: sel,
+                            backing_department_query_id: trace.apiDepartmentIds.includes(sel) ? sel : null,
+                        },
+                        presence: {
+                            in_builder_catalog: false,
+                            catalog_id_matches_selected: false,
+                            in_backing_department_row: trace.apiDepartmentIds.includes(sel),
+                            in_get_workspace_api: trace.apiDepartmentIds.includes(sel),
+                            in_workspace_rendered_tiles: trace.renderedTileIds.includes(sel),
+                        },
+                        workspace_api_department_ids: [...trace.apiDepartmentIds],
+                        workspace_rendered_tile_ids: [...trace.renderedTileIds],
+                        mismatch_hints: trace.apiDepartmentIds.includes(sel)
+                            ? []
+                            : [
+                                  "not_in_workspace_api: Selected lifecycle department ID is not in this page's GET /api/admin/departments response.",
+                              ],
+                    });
+                } else {
+                    setWorkspaceIdAudit(null);
+                }
+                if (process.env.NODE_ENV === "development") {
+                    console.debug("[ws.root] tile pipeline", trace, debugSel);
+                }
+
+                if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    perfWorkspaceLoad({
+                        phase: "critical_deps",
+                        ms: Math.round(performance.now() - tCritical0),
+                        source: "network",
+                        org_id: orgId,
+                    });
+                }
+
+                setDepartments(active);
+                setFetchSettledEmpty(active.length === 0);
+
+                if (active.length) {
+                    const quick = buildWorkspaceQuickRollup(active, wuRes, wuJson);
+                    const seedsFromSession = cachedShellPrimed;
+                    setMetrics(quick.metrics);
+                    setDeptTileStats(quick.deptTileStats);
+                    if (!seedsFromSession) {
+                        setOrgOpportunityKpis(null);
+                        setWorkspaceKpiStrip(undefined);
+                        setWorkspaceKpiPlacementPending(true);
+                        setWorkspaceRollupRefined(false);
+                        writeWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint, {
+                            departments: active,
+                            deptTileStats: quick.deptTileStats,
+                            metrics: quick.metrics,
+                            orgOpportunityKpis: null,
+                            workspaceKpiStrip: undefined,
+                            kpiPlacementPending: true,
+                            rollupRefined: false,
+                        });
+                    } else {
+                        const preserved = readWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint);
+                        writeWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint, {
+                            departments: active,
+                            deptTileStats: quick.deptTileStats,
+                            metrics: quick.metrics,
+                            orgOpportunityKpis: preserved?.orgOpportunityKpis ?? null,
+                            workspaceKpiStrip: preserved?.workspaceKpiStrip,
+                            kpiPlacementPending: preserved?.kpiPlacementPending ?? false,
+                            rollupRefined: preserved?.rollupRefined ?? true,
+                        });
+                    }
+                    cancelGrowthRollupDefer = scheduleAdminV2BackgroundWork(
+                        () => {
+                            void (async () => {
+                                try {
+                                    type PlacementBody = {
+                                        items?: WorkspaceKpiPlacementRow[];
+                                        scope_has_placements?: boolean;
+                                    };
+                                    const [rollupResult, placementRes] = await Promise.all([
+                                        loadWorkspaceGrowthRollup(active, wuRes, wuJson),
+                                        placementP,
+                                    ]);
+                                    const {
+                                        metrics: m,
+                                        deptTileStats: stats,
+                                        orgOpportunityKpis: roll,
+                                        growthSnapshots,
+                                    } = rollupResult;
+                                    if (!applyResults) return;
+                                    setMetrics(m);
+                                    setDeptTileStats(stats);
+                                    setOrgOpportunityKpis(roll.length ? roll : null);
+                                    setWorkspaceRollupRefined(true);
+
+                                    const growthSnapshotsRef = growthSnapshots;
+                                    const metricsForPlacement: WorkspaceRootMetrics = {
+                                        ...m,
+                                        departments: active.length,
+                                    };
+                                    writeWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint, {
+                                        departments: active,
+                                        deptTileStats: stats,
+                                        metrics: m,
+                                        orgOpportunityKpis: roll.length ? roll : null,
+                                        workspaceKpiStrip: undefined,
+                                        kpiPlacementPending: true,
+                                        rollupRefined: true,
+                                    });
+                                    if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                                        perfWorkspaceLoad({
+                                            phase: "rollup_refined",
+                                            ms: Math.round(performance.now() - tCritical0),
+                                            source: "background",
+                                            org_id: orgId,
+                                        });
+                                    }
+
+                                    let placementStrip: KPIVm[] | undefined = undefined;
+                                    try {
+                                        if (placementRes?.ok) {
+                                            const body = (await placementRes.json().catch(() => ({}))) as PlacementBody;
+                                            placementStrip = resolveKpisForWorkspace({
+                                                placementRows: body.items ?? [],
+                                                scopeHasPlacementRows: body.scope_has_placements === true,
+                                                metrics: metricsForPlacement,
+                                                growthSnapshots: growthSnapshotsRef,
+                                            }).items;
+                                        }
+                                    } catch {
+                                        placementStrip = undefined;
+                                    }
+                                    if (applyResults) {
+                                        setWorkspaceKpiStrip(placementStrip);
+                                        setWorkspaceKpiPlacementPending(false);
+                                        writeWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint, {
+                                            departments: active,
+                                            deptTileStats: stats,
+                                            metrics: metricsForPlacement,
+                                            orgOpportunityKpis: roll.length ? roll : null,
+                                            workspaceKpiStrip: placementStrip,
+                                            kpiPlacementPending: false,
+                                            rollupRefined: true,
+                                        });
+                                        if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                                            perfWorkspaceLoad({
+                                                phase: "kpi_placements_ready",
+                                                ms: Math.round(performance.now() - tCritical0),
+                                                source: "background",
+                                                org_id: orgId,
+                                            });
+                                        }
+                                    }
+                                } catch {
+                                    if (!applyResults) return;
+                                    setOrgOpportunityKpis(null);
+                                    setWorkspaceKpiStrip(undefined);
+                                    setWorkspaceKpiPlacementPending(false);
+                                    setWorkspaceRollupRefined(true);
+                                }
+                            })();
+                        },
+                        { idleTimeoutMs: 2500, fallbackMs: 400 }
+                    );
+                } else {
+                    setMetrics(null);
+                    setDeptTileStats({});
+                    setOrgOpportunityKpis(null);
+                    setWorkspaceKpiStrip(undefined);
+                    setWorkspaceKpiPlacementPending(false);
+                    setWorkspaceRollupRefined(true);
+                }
+
+                if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    alloyPerfSet("workspace_ready", performance.now());
+                    markRouteBootstrapReturned("workspace", { departments: active.length });
+                }
+
+                if (perfDebug) {
+                    const t1 = performance.now();
+                    console.debug(`[ws.root] departments+quick rollup ready in ${Math.round(t1 - t0)}ms`, {
+                        departments: active.length,
+                    });
+                }
+            } catch (e) {
+                if (applyResults) {
+                    setError((e as Error).message);
+                    setFetchSettledEmpty(true);
+                }
+            } finally {
+                if (applyResults) setLoading(false);
+            }
+        })();
+
+        return () => {
+            applyResults = false;
+            cancelGrowthRollupDefer();
+        };
+    }, [orgId, principalUserId, accessScopeFingerprint, deptRefreshNonce]);
+
+    const workspaceRevealGate = useMemo(() => {
+        const cachePrimed = workspaceCachePrimed;
+        const departments_resolved = !loading || cachePrimed;
+        const shell_ready = workspaceRevealShellReady({
+            bootstrap_loading: loading && !cachePrimed,
+            departments_resolved,
+        });
+        const department_tiles_ready = workspaceRevealDepartmentTilesReady({
+            bootstrap_loading: loading && !cachePrimed,
+            has_departments: departments.length > 0,
+            fetch_settled_empty: fetchSettledEmpty,
+        });
+        const tile_counts_ready = workspaceRevealTileCountsReady({
+            has_departments: departments.length > 0,
+            quick_rollup_applied: metrics !== null || cachePrimed,
+            fetch_settled_empty: fetchSettledEmpty,
+        });
+        return computeWorkspaceRevealGate({
+            shell_ready,
+            department_tiles_ready,
+            tile_counts_ready,
+            kpi_region_ready: workspaceRevealKpiRegionReady(),
+            actions_ready: workspaceRevealActionsReady(),
+        });
+    }, [loading, departments.length, fetchSettledEmpty, metrics, workspaceCachePrimed]);
+
+    const workspaceAboveFoldPageReady = workspaceRevealGate.above_fold_ready;
+
+    useEffect(() => {
+        markWorkspaceRevealGatePhases(workspaceRevealGate, { org_id: orgId });
+    }, [workspaceRevealGate, orgId]);
+
+    useEffect(() => {
+        if (!workspaceAboveFoldPageReady) return;
+        markRouteFirstAboveFoldStable("workspace", { org_id: orgId, source: "reveal_gate" });
+    }, [workspaceAboveFoldPageReady, orgId]);
+
+    useEffect(() => {
+        if (!workspaceAboveFoldPageReady || !orgId || departments.length === 0) return;
+        return scheduleAdminV2BackgroundWork(
+            () => {
+                prefetchVisibleDepartmentAboveFoldBundles(
+                    departments.map((d) => d.id),
+                    {
+                        orgId,
+                        principalUserId,
+                        accessScopeFingerprint,
+                        selectedSiteId: null,
+                    }
+                );
+            },
+            { idleTimeoutMs: 2000, fallbackMs: 400 }
+        );
+    }, [workspaceAboveFoldPageReady, orgId, departments, principalUserId, accessScopeFingerprint]);
+
+    const metricsResolved = useMemo(() => {
+        if (!metrics) return null;
+        return {
+            ...metrics,
+            departments: departments.length,
+        };
+    }, [metrics, departments.length]);
+
+    if (error && departments.length === 0 && !loading) {
+        return (
+            <div className="max-w-3xl">
+                <p className="text-sm text-alloy-ember">{error}</p>
+            </div>
+        );
     }
 
-    if (action.type === "queue.item.action") {
-      const wk = action.payload && typeof action.payload.workUnitKey === "string" ? action.payload.workUnitKey : undefined;
-      if (action.itemId === "__view_all__" && wk) {
-        setSelectedContext((c) => ({ ...c, workUnitKey: wk }));
-        setLevel("work_unit");
-        return;
-      }
-      if (action.actionId === "open_record") {
-        setSelectedContext((c) => ({ ...c, recordId: action.itemId }));
-        setLevel("record");
-      }
+    if (fetchSettledEmpty && !loading && departments.length === 0) {
+        return (
+            <div className="max-w-3xl space-y-2">
+                <p className="text-sm text-alloy-midnight/80">No active departments found for your organization.</p>
+                <p className="text-sm text-alloy-midnight/60">
+                    Add departments under Organization, then return here.
+                </p>
+            </div>
+        );
     }
-  }, []);
 
-  const bundle = useMemo(
-    () => resolveDemoWorkspaceSlices(industry, selectedContext),
-    [industry, selectedContext]
-  );
+    if (!workspaceAboveFoldPageReady) {
+        return <WorkspacePageLoadingGate orgName={orgNameFromContext} />;
+    }
 
-  const flowDefaults = DEMO_FLOW_DEFAULT_CONTEXT[industry];
-
-  const companyModel = useMemo(
-    () =>
-      toCompanyWorkspaceModel({
-        model: { ...bundle.company.modelBase },
-        contextConfig: bundle.company.contextConfig,
-        contextRaw: bundle.company.contextRaw,
-      }),
-    [bundle]
-  );
-
-  const departmentModel = useMemo(
-    () =>
-      toDepartmentWorkspaceModel({
-        model: { ...bundle.department.modelBase },
-        contextConfig: bundle.department.contextConfig,
-        contextRaw: bundle.department.contextRaw,
-        role: bundle.department.role,
-      }),
-    [bundle]
-  );
-
-  const workUnitModel = useMemo(
-    () =>
-      toWorkUnitWorkspaceModel({
-        model: { ...bundle.work_unit.modelBase },
-        contextConfig: bundle.work_unit.contextConfig,
-        contextRaw: bundle.work_unit.contextRaw,
-        role: bundle.work_unit.role,
-      }),
-    [bundle]
-  );
-
-  const recordModel = useMemo(
-    () =>
-      toRecordWorkspaceModel({
-        model: { ...bundle.record.modelBase, contextRail: { groups: [] } },
-        contextConfig: bundle.record.contextConfig,
-        contextRaw: bundle.record.contextRaw,
-        role: bundle.record.role,
-      }),
-    [bundle]
-  );
-
-  const selectStyle: CSSProperties = {
-    padding: "6px 10px",
-    borderRadius: 8,
-    border: `1px solid ${derived.border}`,
-    background: neutral.surface,
-    color: brand.primary,
-    fontWeight: 600,
-    fontSize: 12,
-    cursor: "pointer",
-    minWidth: 160,
-  };
-
-  const ctxLine = [
-    selectedContext.departmentKey ?? flowDefaults.departmentKey,
-    selectedContext.workUnitKey ?? flowDefaults.workUnitKey,
-    selectedContext.recordId ?? flowDefaults.recordId,
-  ].join(" → ");
-
-  return (
-    <div className="flex flex-col min-h-0 flex-1 overflow-hidden">
-      <div style={{ borderBottom: `1px solid ${derived.border}`, background: neutral.surface, padding: "8px 16px", flexShrink: 0 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: brand.secondary, marginBottom: 8 }}>UI V2 workspace demo</div>
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 600, color: brand.primary }}>
-            Industry
-            <select
-              aria-label="Industry"
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value as DemoIndustryId)}
-              style={selectStyle}
-            >
-              {DEMO_INDUSTRY_OPTIONS.map((opt) => (
-                <option key={opt.id} value={opt.id}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: brand.secondary }}>Level</span>
-            {DEMO_LEVEL_OPTIONS.map((lv) => (
-              <button
-                key={lv.id}
-                type="button"
-                onClick={() => setLevel(lv.id)}
-                style={{
-                  padding: "6px 12px",
-                  borderRadius: 8,
-                  border: `1px solid ${derived.border}`,
-                  background: level === lv.id ? brand.primary : "transparent",
-                  color: level === lv.id ? neutral.surface : brand.primary,
-                  fontWeight: 600,
-                  fontSize: 12,
-                  cursor: "pointer",
-                }}
-              >
-                {lv.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={{ fontSize: 10, color: derived.textSecondary, marginTop: 6 }} title="Resolved drill keys (defaults when unset)">
-          Drill context: {ctxLine}
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
-        {level === "company" && <CompanyWorkspace model={companyModel} onAction={onAction} />}
-        {level === "department" && <DepartmentWorkspace model={departmentModel} onAction={onAction} />}
-        {level === "work_unit" && <WorkUnitWorkspace model={workUnitModel} onAction={onAction} />}
-        {level === "record" && <RecordWorkspace model={recordModel} onAction={onAction} />}
-      </div>
-    </div>
-  );
+    return (
+        <>
+            <WorkspaceRootShell
+                orgName={orgNameFromContext}
+                departments={departments}
+                deptTileStats={deptTileStats}
+                metrics={metricsResolved}
+                metricsLoading={false}
+                orgOpportunityKpis={orgOpportunityKpis}
+                workspaceKpiStrip={workspaceKpiStrip}
+                kpiStripPlaceholder={workspaceKpiPlacementPending}
+                kpiQuietReserveOnly={workspaceKpiPlacementPending}
+                workspaceRollupRefined={workspaceRollupRefined}
+                departmentsPending={false}
+                deptTileStatsPending={false}
+            />
+            {isLifecycleDebugUiEnabled() ? (
+                <>
+                    <AdminAccessScopeDebugPanel surface="workspace" />
+                    <WorkspaceTileDebugPanel
+                        trace={tilePipelineTrace}
+                        renderedDepartmentsCount={departments.length}
+                        reactStateDepartmentIds={departments.map((d) => d.id)}
+                        idAudit={workspaceIdAudit}
+                    />
+                </>
+            ) : null}
+        </>
+    );
 }

@@ -3,6 +3,8 @@
  * Value saved to DB remains vendors.id; labels are presentation-only.
  */
 
+import { formatPhoneUS } from "@/lib/adminFormatters";
+
 export type VendorLabelInput = {
     id: string;
     name?: string | null;
@@ -38,7 +40,7 @@ export function formatVendorOptionLabel(v: VendorLabelInput): string {
     const email = v.email?.trim();
     if (email) return email;
     const phone = v.phone?.trim();
-    if (phone) return phone;
+    if (phone) return formatPhoneUS(phone);
     return `${v.id.slice(0, 8)}…`;
 }
 
