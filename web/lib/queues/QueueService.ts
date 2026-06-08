@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { isLayoutRuntimeOpportunityQueueBodyEnabledServer } from "@/lib/layout/featureFlag";
 import type { QueueConfig, QueueDefinitionV1, QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
     loadQueueDefinitionBundle,
@@ -381,7 +382,18 @@ function planContextOrUtcFallback(ctx: OperationalDayPlanContext | undefined, re
     return ctx ?? utcFallbackOperationalDayContext(refUtc);
 }
 
-function queueListRelationFetchPlan(ui: QueueUiConfig): {
+function queueListRelationFetchPlan(
+    ui: QueueUiConfig,
+    /**
+     * Force the contact/person/household joins regardless of the queue's
+     * row_preview "wants". The layout-runtime queue card binds person.* /
+     * household / children refKeys, so it needs these relations even when the
+     * legacy row_preview variant didn't request them (otherwise the card shows
+     * blank contact/children while the drawer — which composes the full VM —
+     * has the data).
+     */
+    forceRelations = false,
+): {
     persons: boolean;
     contacts: boolean;
     customers: boolean;
@@ -393,10 +405,10 @@ function queueListRelationFetchPlan(ui: QueueUiConfig): {
     const wantsContact = wants("primary_contact") || wants("phone") || wants("email");
     const wantsHousehold = wants("child_name") || wants("program");
     return {
-        persons: isCrm || wantsContact,
-        contacts: isCrm || wantsContact,
-        customers: isCrm || wantsContact || wantsHousehold,
-        customerMembers: isCrm && wantsHousehold,
+        persons: isCrm || wantsContact || forceRelations,
+        contacts: isCrm || wantsContact || forceRelations,
+        customers: isCrm || wantsContact || wantsHousehold || forceRelations,
+        customerMembers: (isCrm && wantsHousehold) || forceRelations,
     };
 }
 
@@ -3377,7 +3389,11 @@ export async function getWorkUnitQueueItems(params: {
     assertSupportedEntityType(def);
     const q = findQueueByKey(def, executableQueueKey);
     const rowListUi = resolveWorkUnitRowListUi(def, workUnitKey, workUnitMetadata);
-    const queueListRelationPlan = queueListRelationFetchPlan(rowListUi);
+    // Layout-runtime opportunity queue cards bind contact/household/children — force
+    // those relations so the card shows the same data the drawer does.
+    const layoutQueueForcesRelations =
+        def.entity_type === "opportunity" && isLayoutRuntimeOpportunityQueueBodyEnabledServer();
+    const queueListRelationPlan = queueListRelationFetchPlan(rowListUi, layoutQueueForcesRelations);
     const rowContextLane: OpportunityQueueRowContextLaneParams = {
         entityType: def.entity_type,
         requestedQueueKey: params.queueKey,
