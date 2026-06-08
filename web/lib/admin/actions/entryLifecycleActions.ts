@@ -7,6 +7,7 @@ import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLin
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
@@ -149,6 +150,18 @@ export async function executeCreateLeadAction(
     });
     if (opErr && opErr.code !== "23505") {
         return { ok: false, error: opErr.message ?? "Failed to link person to lead.", status: 400 };
+    }
+
+    try {
+        await applyCreateLeadChildParticipation(supabase, {
+            orgId: ctx.orgId,
+            opportunityId,
+            customerId,
+            merged: input.merged,
+        });
+    } catch (e) {
+        const message = e instanceof Error ? e.message : "Failed to persist child enrollment fields.";
+        return { ok: false, error: message, status: 400 };
     }
 
     try {

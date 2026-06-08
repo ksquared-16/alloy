@@ -7,6 +7,9 @@ export type ActionIntakeFieldTier = "required" | "recommended" | "optional";
 
 export type ActionIntakeValueKind = "text" | "email" | "phone" | "date" | "select";
 
+/** Record-backed cascade selects for inquiry_child placement fields. */
+export type ActionIntakePlacementSelect = "site" | "site_program" | "site_room";
+
 export type ActionIntakeValidationRule =
     | { kind: "non_empty" }
     | { kind: "email" }
@@ -23,6 +26,8 @@ export type ActionIntakeFieldSpec = {
     value_kind: ActionIntakeValueKind;
     /** When set, intake UI loads options from this org option set. */
     option_set_key?: string | null;
+    /** Site/program/room cascade — options resolved from location hierarchy, not org-wide sets. */
+    placement_select?: ActionIntakePlacementSelect | null;
     /** Key on create_lead execute payload (person + optional child_*). */
     payload_key: string;
     form_capture_keys: readonly string[];

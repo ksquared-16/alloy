@@ -1,7 +1,17 @@
 "use client";
 
+import { useCallback, useMemo } from "react";
 import type { ActionIntakeFieldSpec, ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { ActionIntakePasteFieldMeta } from "@/lib/lifecycle/actionIntakePasteParserTypes";
+import {
+    useInquiryChildPlacementCascade,
+    useInquiryChildPlacementDefaultSite,
+} from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
+import {
+    applyInquiryChildPlacementFieldChange,
+    inquiryChildPlacementRoleForFieldKey,
+    placementFieldKeysInValues,
+} from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
 import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
 
@@ -50,6 +60,38 @@ export function ActionIntakeFieldGroups({
     const setKeys = allFields.map((f) => f.option_set_key);
     const { optionsBySetKey } = useOptionSetSelectOptions(setKeys);
 
+    const { locationKey, programKey } = useMemo(() => placementFieldKeysInValues(values), [values]);
+    const cascade = useInquiryChildPlacementCascade({
+        locationValue: locationKey ? (values[locationKey] ?? "") : "",
+        programValue: programKey ? (values[programKey] ?? "") : "",
+    });
+
+    const handleDefaultSite = useCallback(
+        (siteId: string) => {
+            if (!locationKey) return;
+            onFieldChange(locationKey, siteId);
+        },
+        [locationKey, onFieldChange]
+    );
+
+    useInquiryChildPlacementDefaultSite({
+        locationFieldKey: locationKey,
+        locationValue: locationKey ? (values[locationKey] ?? "") : "",
+        defaultSiteId: cascade.defaultSiteId,
+        siteSelectionReady: cascade.siteSelectionReady,
+        onSelectSite: handleDefaultSite,
+    });
+
+    const handleFieldChange = useCallback(
+        (payloadKey: string, value: string) => {
+            const next = applyInquiryChildPlacementFieldChange(payloadKey, value, values);
+            for (const [k, v] of Object.entries(next)) {
+                if (values[k] !== v) onFieldChange(k, v);
+            }
+        },
+        [onFieldChange, values]
+    );
+
     const renderField = (field: ActionIntakeFieldSpec) => {
         const badge = assistBadge(fieldMeta[field.payload_key]);
         const inputType =
@@ -57,10 +99,32 @@ export function ActionIntakeFieldGroups({
             : field.value_kind === "phone" ? "tel"
             : field.value_kind === "date" ? "date"
             : "text";
+        const placementRole =
+            field.placement_select === "site" ? "location"
+            : field.placement_select === "site_program" ? "program"
+            : field.placement_select === "site_room" ? "room"
+            : inquiryChildPlacementRoleForFieldKey(field.payload_key);
         const selectOptions =
             field.value_kind === "select" && field.option_set_key ?
                 (optionsBySetKey[field.option_set_key] ?? [])
             :   [];
+
+        let placementOptions = selectOptions;
+        let fieldDisabled = disabled;
+        let placeholder = "Select…";
+
+        if (placementRole === "location") {
+            placementOptions = cascade.siteOptions;
+            placeholder = "Select a school";
+        } else if (placementRole === "program") {
+            placementOptions = cascade.programOptions;
+            fieldDisabled = disabled || cascade.programDisabled;
+            placeholder = cascade.programDisabled ? "Select a school first" : "Select a program";
+        } else if (placementRole === "room") {
+            placementOptions = cascade.roomOptions;
+            fieldDisabled = disabled || cascade.roomDisabled;
+            placeholder = cascade.roomDisabled ? "Select a school first" : "Select a room";
+        }
 
         return (
             <div key={field.rule_id} data-testid={`${dataTestIdPrefix}-field-${field.rule_id}`}>
@@ -90,9 +154,10 @@ export function ActionIntakeFieldGroups({
                 {field.value_kind === "select" ?
                     <SelectFieldControl
                         value={values[field.payload_key] ?? ""}
-                        disabled={disabled}
-                        onChange={(v) => onFieldChange(field.payload_key, v)}
-                        options={selectOptions}
+                        disabled={placementRole ? fieldDisabled : disabled}
+                        onChange={(v) => handleFieldChange(field.payload_key, v)}
+                        options={placementRole ? placementOptions : selectOptions}
+                        placeholder={placementRole ? placeholder : "Select…"}
                         className={`${INPUT} mt-0.5`}
                         data-testid={`${dataTestIdPrefix}-select-${field.payload_key}`}
                         aria-label={field.field_label}
@@ -100,7 +165,7 @@ export function ActionIntakeFieldGroups({
                 :   <input
                         value={values[field.payload_key] ?? ""}
                         disabled={disabled}
-                        onChange={(e) => onFieldChange(field.payload_key, e.target.value)}
+                        onChange={(e) => handleFieldChange(field.payload_key, e.target.value)}
                         className={`${INPUT} mt-0.5`}
                         type={inputType}
                         autoComplete={

@@ -1,3 +1,4 @@
+import { logAddChildDevTrace } from "@/lib/admin/actions/logAddChildDevTrace";
 import { ensureOpportunityCustomerMemberLink } from "@/lib/admin/drawer/inquiryChildFieldEdit";
 import type { InquiryChildOcmPatch } from "@/lib/admin/drawer/inquiryChildFieldEdit";
 import { patchOpportunityCustomerMemberFromInquiryChild } from "@/lib/admin/drawer/inquiryChildFieldEdit";
@@ -7,6 +8,8 @@ export type AddInquiryChildSubmitPayload = {
     last_name: string;
     date_of_birth?: string | null;
     program?: string | null;
+    location_id?: string | null;
+    program_room_cohort_key?: string | null;
     age_group?: string | null;
     desired_schedule_type?: string | null;
     desired_start_date?: string | null;
@@ -97,6 +100,7 @@ export async function submitAddInquiryChildFromDrawer(
 
     const cmRes = await fetchImpl("/api/admin/customer-members", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             customer_id: input.customerId,
@@ -109,19 +113,43 @@ export async function submitAddInquiryChildFromDrawer(
             metadata: ageGroup ? { age_group: ageGroup, source: "add_inquiry_child" } : { source: "add_inquiry_child" },
         }),
     });
-    const cmJson = (await cmRes.json().catch(() => ({}))) as { id?: string; error?: string };
+    const cmJson = (await cmRes.json().catch(() => ({}))) as {
+        id?: string;
+        customer_id?: string;
+        relationship?: string | null;
+        is_active?: boolean;
+        error?: string;
+    };
     if (!cmRes.ok || !cmJson.id) {
         throw new Error(cmJson.error ?? "Could not create child record.");
     }
     const customerMemberId = String(cmJson.id);
+    logAddChildDevTrace("[action.add_child:customer_member_created]", {
+        opportunityId: input.opportunityId,
+        customerMemberId,
+        customer_id: cmJson.customer_id ?? input.customerId,
+        relationship: cmJson.relationship ?? "child",
+        is_active: cmJson.is_active ?? true,
+        display_name,
+        householdMatch: String(cmJson.customer_id ?? input.customerId) === input.customerId,
+    });
 
     const { ocmId } = await ensureOpportunityCustomerMemberLink({
         opportunityId: input.opportunityId,
         customerMemberId,
     });
+    logAddChildDevTrace("[action.add_child:ocm_linked]", {
+        opportunityId: input.opportunityId,
+        customerMemberId,
+        ocmId,
+    });
 
     const ocmPatch: InquiryChildOcmPatch = {};
     if (program) ocmPatch.desired_program_type = program;
+    const locationId = input.payload.location_id?.trim();
+    if (locationId) ocmPatch.location_id = locationId;
+    const roomKey = input.payload.program_room_cohort_key?.trim();
+    if (roomKey) ocmPatch.program_room_cohort_key = roomKey;
     const schedule = input.payload.desired_schedule_type?.trim();
     if (schedule) ocmPatch.desired_schedule_type = schedule;
     const start = input.payload.desired_start_date?.trim();

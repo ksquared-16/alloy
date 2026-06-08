@@ -17,6 +17,7 @@ export type LifecycleFieldRuleBinding = {
     ocm_field?:
         | "first_name"
         | "last_name"
+        | "location_id"
         | "desired_program_type"
         | "program_room_cohort_key"
         | "desired_schedule_type"
@@ -113,6 +114,16 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         ocm_field: "desired_program_type",
         form_capture_keys: ["desired_program_type", "Desired program", "Program Interest", "Program"],
         runtime_enforced: true,
+        form_coverage_supported: true,
+    },
+    {
+        rule_id: "child:location",
+        entity: "child",
+        field_key: "location_id",
+        value_source: "inquiry_child",
+        ocm_field: "location_id",
+        form_capture_keys: ["location_id", "child_location_id", "Site", "Location", "School"],
+        runtime_enforced: false,
         form_coverage_supported: true,
     },
     {

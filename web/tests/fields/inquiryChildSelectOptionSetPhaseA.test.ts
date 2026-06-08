@@ -143,10 +143,11 @@ describe("create/intake select renderers", () => {
         expect(src).not.toMatch(/type=\{inputTypeForField\(field\)\}[\s\S]*desired_program_type/);
     });
 
-    it("resolveActionIntakeSpec wires child program interest as select option set", () => {
+    it("resolveActionIntakeSpec wires child program interest as site-scoped placement select", () => {
         const src = readFileSync(resolve(__dirname, "../../lib/lifecycle/resolveActionIntakeSpec.ts"), "utf8");
         expect(src).toContain("resolveSelectFieldBinding");
-        expect(src).toContain("option_set_key: selectBinding.option_set_key");
+        expect(src).toContain("placement_select: placementSelect");
+        expect(src).toContain('fieldKey === "desired_program_type"');
         expect(src).toContain("fallbackOptionSetKeyForInquiryChildField");
     });
 });

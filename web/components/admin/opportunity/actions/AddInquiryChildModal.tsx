@@ -25,6 +25,8 @@ function mapValuesToPayload(values: Record<string, string>): AddInquiryChildSubm
         last_name: (values.last_name ?? "").trim(),
         date_of_birth: (values.date_of_birth ?? "").trim() || null,
         program: (values.desired_program_type ?? values.program ?? "").trim() || null,
+        location_id: (values.location_id ?? "").trim() || null,
+        program_room_cohort_key: (values.program_room_cohort_key ?? "").trim() || null,
         age_group: (values.age_group ?? "").trim() || null,
         desired_schedule_type: (values.desired_schedule_type ?? "").trim() || null,
         desired_start_date: (values.desired_start_date ?? "").trim() || null,

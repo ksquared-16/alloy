@@ -9,6 +9,7 @@ import type {
     ActionIntakeEntityGroup,
     ActionIntakeFieldSpec,
     ActionIntakeFieldTier,
+    ActionIntakePlacementSelect,
     ActionIntakeSpec,
     ActionIntakeValidationIssue,
     ActionIntakeValidationRule,
@@ -76,6 +77,13 @@ function orgFieldDefForKey(
     return list?.find((d) => d.field_key === fieldKey) ?? null;
 }
 
+function placementSelectForInquiryChildField(fieldKey: string | null): ActionIntakePlacementSelect | null {
+    if (fieldKey === "location_id") return "site";
+    if (fieldKey === "desired_program_type") return "site_program";
+    if (fieldKey === "program_room_cohort_key") return "site_room";
+    return null;
+}
+
 function buildFieldSpec(
     ruleId: string,
     tier: ActionIntakeFieldTier,
@@ -100,7 +108,10 @@ function buildFieldSpec(
         config: orgDef?.config,
         fallbackOptionSetKey,
     });
-    const valueKind = inferActionIntakeValueKind(ruleId, fieldKey, selectBinding.option_set_key);
+    const placementSelect = entity === "child" ? placementSelectForInquiryChildField(fieldKey) : null;
+    const optionSetKey =
+        placementSelect ? null : selectBinding.option_set_key;
+    const valueKind = inferActionIntakeValueKind(ruleId, fieldKey, optionSetKey, placementSelect);
 
     return {
         rule_id: ruleId,
@@ -110,7 +121,8 @@ function buildFieldSpec(
         tier,
         field_key: fieldKey,
         value_kind: valueKind,
-        option_set_key: selectBinding.option_set_key,
+        option_set_key: optionSetKey,
+        placement_select: placementSelect,
         payload_key: payloadKey,
         form_capture_keys: binding?.form_capture_keys ?? [],
         validation: validationRulesForIntakeField(valueKind, tier),
@@ -339,6 +351,10 @@ export function mapActionIntakeValuesToCreateLeadPayload(
     for (const field of all) {
         const v = valueForRule(values, field);
         if (v) out[field.payload_key] = v;
+    }
+    if (out.child_location_id) {
+        out.location_id = out.child_location_id;
+        delete out.child_location_id;
     }
     return out;
 }

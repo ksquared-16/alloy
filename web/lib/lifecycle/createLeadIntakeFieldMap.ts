@@ -28,6 +28,7 @@ export const CREATE_LEAD_PAYLOAD_KEY_BY_RULE: Readonly<Record<string, string>> =
     "child:last_name": "child_last_name",
     "child:date_of_birth": "child_date_of_birth",
     "child:age_group": "child_age_group",
+    "child:location": "child_location_id",
     "child:program_interest": "child_program",
     "child:desired_schedule": "child_desired_schedule_type",
     "child:desired_start_date": "child_desired_start_date",
@@ -43,7 +44,9 @@ export function inferActionIntakeValueKind(
     ruleId: string,
     fieldKey: string | null,
     optionSetKey?: string | null,
+    placementSelect?: "site" | "site_program" | "site_room" | null,
 ): ActionIntakeValueKind {
+    if (placementSelect) return "select";
     if ((optionSetKey ?? "").trim()) return "select";
     if (ruleId.includes("email") || fieldKey === "email") return "email";
     if (ruleId.includes("phone") || fieldKey === "phone") return "phone";

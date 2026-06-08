@@ -70,6 +70,11 @@ export async function GET(request: NextRequest) {
             parent_location_id: hierarchy
                 ? ((r.parent_location_id as string | null | undefined) ?? null)
                 : undefined,
+            metadata: hierarchy
+                ? (r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
+                    ? r.metadata
+                    : {})
+                : undefined,
             updated_at: (r.updated_at as string | null | undefined) ?? null,
             status_key: sk,
             _customer_name: customer_id ? (customerMap.get(customer_id) ?? null) : null,

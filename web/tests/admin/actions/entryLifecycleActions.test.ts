@@ -31,6 +31,19 @@ vi.mock("@/lib/bookingCustomerPersonLink", () => ({
     ensureCustomerPersonsPrimaryLink: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/lifecycle/lifecycleRuntimeBinding", () => ({
+    resolveLifecycleCreateLeadBinding: vi.fn().mockResolvedValue({
+        work_unit_id: null,
+        status_key: "new_inquiry",
+    }),
+}));
+
+vi.mock("@/lib/admin/actions/createLeadChildOcmPersistence", () => ({
+    applyCreateLeadChildParticipation: vi.fn().mockResolvedValue(null),
+}));
+
+import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
+
 describe("isCreateLeadExecuteRequest", () => {
     it("accepts create_lead with sentinel or empty entity id", () => {
         expect(isCreateLeadExecuteRequest("create_lead", CREATE_LEAD_ACTION_ENTITY_ID)).toBe(true);
@@ -126,6 +139,16 @@ describe("executeCreateLeadAction validation", () => {
     });
 
     function supabaseForCreate(verticalId: string | null) {
+        const customerMembersInsert = vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: "cm-child" }, error: null }),
+            }),
+        });
+        const ocmInsert = vi.fn().mockReturnValue({
+            select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: "ocm-child" }, error: null }),
+            }),
+        });
         return {
             from: vi.fn((table: string) => {
                 if (table === "verticals") {
@@ -155,6 +178,23 @@ describe("executeCreateLeadAction validation", () => {
                     return {
                         insert: vi.fn().mockResolvedValue({ error: null }),
                     };
+                }
+                if (table === "departments") {
+                    return {
+                        select: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnValue({
+                                eq: vi.fn().mockReturnValue({
+                                    maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: {} }, error: null }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "customer_members") {
+                    return { insert: customerMembersInsert };
+                }
+                if (table === "opportunity_customer_members") {
+                    return { insert: ocmInsert };
                 }
                 return { select: vi.fn(), insert: vi.fn() };
             }),
@@ -197,6 +237,61 @@ describe("executeCreateLeadAction validation", () => {
         if (res.ok) {
             expect(res.opportunity_id).toBe("opp-new");
             expect(res.person_id).toBe("person-1");
+        }
+        expect(applyCreateLeadChildParticipation).toHaveBeenCalledWith(
+            sb,
+            expect.objectContaining({
+                orgId: "org-1",
+                opportunityId: "opp-new",
+                customerId: "cust-1",
+            })
+        );
+    });
+
+    it("persists child OCM fields when enrollment payload present", async () => {
+        vi.mocked(applyCreateLeadChildParticipation).mockResolvedValueOnce({
+            customer_member_id: "cm-child",
+            ocm_id: "ocm-child",
+        });
+        const sb = supabaseForCreate("vert-1");
+        const merged = {
+            first_name: "Ada",
+            last_name: "Lovelace",
+            email: "ada@example.com",
+            child_first_name: "Riley",
+            child_last_name: "Nguyen",
+            location_id: "11111111-1111-4111-8111-111111111111",
+            child_program: "infant",
+            child_desired_schedule_type: "full_day",
+            child_program_room_cohort_key: "22222222-2222-4222-8222-222222222222",
+            child_desired_start_date: "2026-09-01",
+        };
+        const res = await executeCreateLeadAction(sb as never, ctx as never, { merged });
+        expect(res.ok).toBe(true);
+        expect(applyCreateLeadChildParticipation).toHaveBeenCalledWith(
+            sb,
+            expect.objectContaining({ merged })
+        );
+    });
+
+    it("fails lead create when child OCM persistence fails", async () => {
+        vi.mocked(applyCreateLeadChildParticipation).mockRejectedValueOnce(
+            new Error("Could not link child participation to lead.")
+        );
+        const sb = supabaseForCreate("vert-1");
+        const res = await executeCreateLeadAction(sb as never, ctx as never, {
+            merged: {
+                first_name: "Ada",
+                last_name: "Lovelace",
+                email: "ada@example.com",
+                child_first_name: "Riley",
+                child_program: "infant",
+            },
+        });
+        expect(res.ok).toBe(false);
+        if (!res.ok) {
+            expect(res.status).toBe(400);
+            expect(res.error).toMatch(/child participation/i);
         }
     });
 });
