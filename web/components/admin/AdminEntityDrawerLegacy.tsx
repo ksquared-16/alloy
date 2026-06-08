@@ -273,6 +273,7 @@ import {
     isAddPersonActionKey,
     isAddPersonFormKey,
     parseOpenAddPersonModalDetail,
+    narrowedAddPersonOpportunityId,
     resolveAddPersonActionKey,
 } from "@/lib/admin/actions/addPersonActionClient";
 import { submitAddPersonFromDrawer } from "@/lib/admin/actions/submitAddPersonFromDrawer";
@@ -4736,7 +4737,7 @@ export function AdminEntityDrawerLegacy() {
         const onOpenAddPerson = (ev: Event) => {
             const detail = parseOpenAddPersonModalDetail(ev);
             if (!detail) return;
-            const oppId = detail.opportunity_id?.trim() ?? "";
+            const oppId = narrowedAddPersonOpportunityId(detail);
             if (oppId && drawer.type === "opportunities" && drawer.id === oppId) {
                 openAddPersonModal(
                     resolveAddPersonActionKey({

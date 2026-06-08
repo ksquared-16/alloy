@@ -20,6 +20,7 @@ import {
 import {
     isAddPersonActionKey,
     isAddPersonFormKey,
+    narrowedAddPersonOpportunityId,
     parseOpenAddPersonModalDetail,
     resolveAddPersonActionKey,
     ADMINV2_OPEN_ADD_PERSON_MODAL,
@@ -285,7 +286,7 @@ export function useOpportunityDrawerVmRegistryModals({
         const onOpenAddPerson = (ev: Event) => {
             const detail = parseOpenAddPersonModalDetail(ev);
             if (!detail) return;
-            const opportunityId = detail.opportunity_id?.trim() ?? "";
+            const opportunityId = narrowedAddPersonOpportunityId(detail);
             if (!opportunityId || !matchesDrawer(opportunityId)) return;
             openAddPerson(
                 resolveAddPersonActionKey({

@@ -68,3 +68,8 @@ export function parseOpenAddPersonModalDetail(ev: Event): OpenAddPersonModalDeta
             d.entity_type === "customer" ? "customer" : opportunityId ? "opportunity" : undefined,
     };
 }
+
+/** Narrow optional add-person event opportunity id for drawer matching. */
+export function narrowedAddPersonOpportunityId(detail: OpenAddPersonModalDetail): string {
+    return detail.opportunity_id?.trim() ?? "";
+}
