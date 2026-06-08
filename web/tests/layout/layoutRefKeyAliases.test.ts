@@ -18,8 +18,15 @@ import * as ops from "@/lib/layout/builderOps";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 
 describe("layoutRefKeyAliases — canonical namespaces", () => {
-    it("freezes the four canonical namespaces", () => {
-        expect(CANONICAL_LAYOUT_REFKEY_NAMESPACES).toEqual(["child", "inquiry_child", "person", "opportunity"]);
+    it("includes FC-2 reference namespaces (location, customer)", () => {
+        expect(CANONICAL_LAYOUT_REFKEY_NAMESPACES).toEqual([
+            "child",
+            "customer",
+            "inquiry_child",
+            "location",
+            "opportunity",
+            "person",
+        ]);
     });
 
     it("does not include child_inquiry as canonical", () => {

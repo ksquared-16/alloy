@@ -146,8 +146,8 @@ describe("queue card default", () => {
 });
 
 describe("field catalog", () => {
-    it("exposes a user-facing Location field (label, not id)", () => {
-        const loc = CURATED_FIELDS.opportunity.find((f) => f.fieldLabel === "Location");
-        expect(loc?.refKey).toBe("opportunity.location");
+    it("does not expose mis-grained opportunity.location in curated bootstrap (FC-2)", () => {
+        const loc = CURATED_FIELDS.opportunity.find((f) => f.refKey === "opportunity.location");
+        expect(loc).toBeUndefined();
     });
 });

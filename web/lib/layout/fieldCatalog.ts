@@ -17,6 +17,11 @@
 
 import { INQUIRY_CHILD_NATIVE_FIELD_MANIFEST } from "@/lib/fields/inquiryChildFieldRegistry";
 import { parseLayoutRefKey } from "./layoutRefKeyAliases";
+import {
+    buildOptionalReferencePickerGroups,
+    filterCatalogGroupsForLayoutPicker,
+    type LayoutPickerAnchorEntity,
+} from "./platformFieldResolutionManifest";
 
 /** Canonical layout catalog entity groups (FC-1). */
 export type LayoutEntityGroupKey = "opportunity" | "person" | "child" | "inquiry_child";
@@ -138,7 +143,6 @@ function field(
 export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> = {
     opportunity: [
         field("opportunity", "status_key", "Status", "status"),
-        field("opportunity", "location", "Location", "text"),
         field("opportunity", "source", "Source", "text"),
         field("opportunity", "channel", "Channel", "text"),
         field("opportunity", "campaign", "Campaign", "text"),
@@ -148,7 +152,6 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
         field("opportunity", "customer_notes", "Notes", "text"),
     ],
     person: [
-        field("person", "primary_contact_name", "Primary contact name", "text"),
         field("person", "phone", "Phone", "phone"),
         field("person", "email", "Email", "text"),
         field("person", "secondary_contact_name", "Secondary contact name", "text"),
@@ -290,43 +293,23 @@ export const CONTEXT_WIDGET_CATALOG: LayoutCatalogWidget[] = [
 /** Waitlist widget catalog — Context widgets the candidate card can place. */
 export const WAITLIST_WIDGET_CATALOG: LayoutCatalogWidget[] = CONTEXT_WIDGET_CATALOG;
 
-/** Person (Contact / Parent) drawer field catalog — user-facing groups. */
+/** Person (Contact / Parent) drawer field catalog — canonical refKeys only (FC-2). */
 export const PERSON_DRAWER_CATALOG_GROUPS: LayoutCatalogGroup[] = [
     {
         entityKey: "person",
         entityLabel: "Contact / Parent",
         fields: [
-            wlField("person", "Contact / Parent", "person.primary_contact_name", "Full name", "text"),
-            wlField("person", "Contact / Parent", "person.primary_phone", "Phone", "phone"),
-            wlField("person", "Contact / Parent", "person.primary_email", "Email", "text"),
-            wlField("person", "Contact / Parent", "person.relationship", "Relationship / type", "text"),
+            wlField("person", "Contact / Parent", "person.phone", "Phone", "phone"),
+            wlField("person", "Contact / Parent", "person.email", "Email", "text"),
+            wlField("person", "Contact / Parent", "person.first_name", "First name", "text"),
+            wlField("person", "Contact / Parent", "person.last_name", "Last name", "text"),
             wlField("person", "Contact / Parent", "person.secondary_contact_name", "Secondary contact", "text"),
+            wlField("person", "Contact / Parent", "person.secondary_phone", "Secondary phone", "phone"),
         ],
-    },
-    {
-        entityKey: "household",
-        entityLabel: "Household",
-        fields: [
-            wlField("household", "Household", "household.name", "Household", "text"),
-            wlField("household", "Household", "household.locationName", "Location", "text"),
-        ],
-    },
-    {
-        entityKey: "child",
-        entityLabel: "Child",
-        fields: [
-            wlField("child", "Child", "child.name", "Child name", "text"),
-            wlField("child", "Child", "child.status", "Status", "status"),
-        ],
-    },
-    {
-        entityKey: "system",
-        entityLabel: "System",
-        fields: [wlField("system", "System", "person.id", "Person ID", "text")],
     },
 ];
 
-/** Child drawer field catalog — durable child.* + enrollment inquiry_child.*. */
+/** Child drawer field catalog — durable child.* + inquiry_child manifest (FC-2). */
 export const CHILD_DRAWER_CATALOG_GROUPS: LayoutCatalogGroup[] = [
     {
         entityKey: "child",
@@ -335,41 +318,64 @@ export const CHILD_DRAWER_CATALOG_GROUPS: LayoutCatalogGroup[] = [
             wlField("child", "Child", "child.name", "Child name", "text"),
             wlField("child", "Child", "child.date_of_birth", "Date of birth", "date"),
             wlField("child", "Child", "child.age_band", "Age band", "text"),
-            wlField("child", "Child", "child.status", "Status", "status"),
         ],
     },
     {
         entityKey: "inquiry_child",
         entityLabel: "Child · Enrollment",
-        fields: [
-            wlField("inquiry_child", "Child · Enrollment", "inquiry_child.program", "Program", "text"),
-            wlField("inquiry_child", "Child · Enrollment", "inquiry_child.desired_start_date", "Desired start", "date"),
-            wlField("inquiry_child", "Child · Enrollment", "inquiry_child.schedule", "Schedule", "text"),
-            wlField("inquiry_child", "Child · Enrollment", "inquiry_child.outcome_status_key", "Enrollment status", "status"),
-        ],
+        fields: INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((row) =>
+            wlField(
+                "inquiry_child",
+                "Child · Enrollment",
+                `inquiry_child.${row.field_key}`,
+                row.label,
+                row.field_type,
+            ),
+        ),
     },
     {
         entityKey: "person",
         entityLabel: "Contact / Parent",
         fields: [
-            wlField("person", "Contact / Parent", "person.primary_contact_name", "Primary contact", "text"),
-            wlField("person", "Contact / Parent", "person.primary_phone", "Phone", "phone"),
-            wlField("person", "Contact / Parent", "person.primary_email", "Email", "text"),
+            wlField("person", "Contact / Parent", "person.phone", "Phone", "phone"),
+            wlField("person", "Contact / Parent", "person.email", "Email", "text"),
         ],
     },
-    {
-        entityKey: "location",
-        entityLabel: "Location",
-        fields: [wlField("location", "Location", "child.location", "Location", "text")],
-    },
 ];
+
+/** Map layout entity_type query param → picker anchor for manifest filtering. */
+export function layoutPickerAnchorForEntityType(entityType: string): LayoutPickerAnchorEntity {
+    if (entityType === "person") return "person";
+    if (entityType === "child") return "child";
+    if (entityType === "placement_candidate") return "placement_candidate";
+    return "opportunities";
+}
+
+/** Waitlist uses flat VM refKeys — skip canonical manifest filtering. */
+export function usesCanonicalPickerFilter(entityType: string): boolean {
+    return entityType !== "placement_candidate";
+}
 
 /** Catalog groups for a layout entity type (curated, user-facing groups). */
 export function catalogGroupsForEntityType(entityType: string): LayoutCatalogGroup[] | null {
     if (entityType === "placement_candidate") return WAITLIST_CANDIDATE_CATALOG_GROUPS;
-    if (entityType === "person") return PERSON_DRAWER_CATALOG_GROUPS;
-    if (entityType === "child") return CHILD_DRAWER_CATALOG_GROUPS;
+    const anchor = layoutPickerAnchorForEntityType(entityType);
+    if (entityType === "person") {
+        return filterCatalogGroupsForLayoutPicker(PERSON_DRAWER_CATALOG_GROUPS, anchor);
+    }
+    if (entityType === "child") {
+        return filterCatalogGroupsForLayoutPicker(CHILD_DRAWER_CATALOG_GROUPS, anchor);
+    }
     return null; // null → caller uses the default LAYOUT_ENTITY_GROUPS (field-def backed)
+}
+
+/** Apply FC-2 manifest filter + optional location/customer groups for Lead layouts. */
+export function buildLeadLayoutPickerGroups(
+    groups: LayoutCatalogGroup[],
+    anchor: LayoutPickerAnchorEntity = "opportunities",
+): LayoutCatalogGroup[] {
+    const filtered = filterCatalogGroupsForLayoutPicker(groups, anchor);
+    return [...filtered, ...(buildOptionalReferencePickerGroups(anchor) as LayoutCatalogGroup[])];
 }
 
 /**

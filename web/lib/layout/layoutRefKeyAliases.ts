@@ -1,15 +1,23 @@
 /**
  * Layout refKey namespace convergence (FC-1).
  *
- * Canonical namespaces: child.*, inquiry_child.*, person.*, opportunity.*
+ * Canonical namespaces: child.*, customer.*, inquiry_child.*, location.*,
+ * opportunity.*, person.*
  * Deprecated namespace: child_inquiry.* (alias-on-read only; reject on write).
  *
  * Durable child truth is customer_member (+ optional person). The child.* picker
  * group may temporarily bridge person registry rows — that is NOT person == child.
  */
 
-/** Canonical layout refKey entity prefixes (frozen FC-1). */
-export const CANONICAL_LAYOUT_REFKEY_NAMESPACES = ["child", "inquiry_child", "person", "opportunity"] as const;
+/** Canonical layout refKey entity prefixes (FC-1 + FC-2 reference groups). */
+export const CANONICAL_LAYOUT_REFKEY_NAMESPACES = [
+    "child",
+    "customer",
+    "inquiry_child",
+    "location",
+    "opportunity",
+    "person",
+] as const;
 
 export type CanonicalLayoutRefKeyNamespace = (typeof CANONICAL_LAYOUT_REFKEY_NAMESPACES)[number];
 
