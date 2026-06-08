@@ -35,6 +35,8 @@ import {
     type LayoutCatalogField,
     type LayoutCatalogWidget,
 } from "@/lib/layout/fieldCatalog";
+import { collectRefKeysFromLayoutDoc } from "@/lib/layout/layoutRefKeyAliases";
+import LayoutFieldPickerOverlay from "@/components/layout/LayoutFieldPickerOverlay";
 import * as ops from "@/lib/layout/builderOps";
 import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
 
@@ -224,6 +226,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
     const [picker, setPicker] = useState<PickerTarget>(null);
     const [pickerTab, setPickerTab] = useState<"field" | "widget">("field");
     const [pickerGroup, setPickerGroup] = useState<string>("opportunity");
+    const [lastAddedRefKey, setLastAddedRefKey] = useState<string | null>(null);
 
     const fetchList = useCallback(async () => {
         try {
@@ -468,7 +471,8 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
         } else {
             op(ops.addItem(workingDoc, target.sIdx, target.rIdx, target.cIdx, item));
         }
-        setPicker(null);
+        setPickerGroup(f.entityKey);
+        setLastAddedRefKey(f.refKey);
     };
     const addCatalogWidget = (target: NonNullable<PickerTarget>, w: LayoutCatalogWidget) => {
         if (!workingDoc) return;
@@ -483,6 +487,11 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
 
     // Flattened catalog fields for the inline "replace field" control.
     const catalogFields: LayoutCatalogField[] = (catalog?.groups ?? []).flatMap((g) => g.fields);
+    const catalogGroups = catalog?.groups ?? [];
+    const usedLayoutRefKeys = useMemo(
+        () => new Set(workingDoc ? collectRefKeysFromLayoutDoc(workingDoc) : []),
+        [workingDoc],
+    );
     const replaceField = (sIdx: number, rIdx: number, cIdx: number, itemId: string, f: LayoutCatalogField) => {
         if (!workingDoc) return;
         // Preserve placement, condition, adornment, editable — change the field only.
@@ -763,6 +772,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                                                                 loc={{ sIdx, rIdx, cIdx, itemId: it.id }}
                                                                                 editable={editable}
                                                                                 catalogFields={catalogFields}
+                                                                                catalogGroups={catalogGroups}
                                                                                 op={op}
                                                                                 onMoveBlock={(dir) => op(ops.moveItemVertical(workingDoc, sIdx, rIdx, cIdx, it.id, dir))}
                                                                                 onRemoveBlock={() => op(ops.removeItem(workingDoc, sIdx, rIdx, cIdx, it.id))}
@@ -775,6 +785,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                                                                 item={it}
                                                                                 editable={editable}
                                                                                 catalogFields={catalogFields}
+                                                                                catalogGroups={catalogGroups}
                                                                                 onMove={(dir) => op(ops.moveItemVertical(workingDoc, sIdx, rIdx, cIdx, it.id, dir))}
                                                                                 onRemove={() => op(ops.removeItem(workingDoc, sIdx, rIdx, cIdx, it.id))}
                                                                                 onPatchItem={(patch) => op(ops.patchItem(workingDoc, sIdx, rIdx, cIdx, it.id, patch))}
@@ -801,6 +812,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                                                                 onPatch={(patch) => op(ops.patchItem(workingDoc, sIdx, rIdx, cIdx, it.id, patch))}
                                                                                 showQueueZone={workingDoc.surface === "queue"}
                                                                                 catalogFields={catalogFields}
+                                                                                catalogGroups={catalogGroups}
                                                                                 onReplaceField={(f) => replaceField(sIdx, rIdx, cIdx, it.id, f)}
                                                                             />
                                                                         ),
@@ -854,16 +866,21 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
 
             {/* Field / widget picker */}
             {picker && catalog && (
-                <PickerOverlay
+                <LayoutFieldPickerOverlay
                     catalog={catalog}
                     surface={workingDoc?.surface ?? "drawer"}
                     tab={pickerTab}
                     setTab={setPickerTab}
                     group={pickerGroup}
                     setGroup={setPickerGroup}
+                    usedRefKeys={usedLayoutRefKeys}
+                    lastAddedRefKey={lastAddedRefKey}
                     onPickField={(f) => addCatalogField(picker, f)}
                     onPickWidget={(w) => addCatalogWidget(picker, w)}
-                    onClose={() => setPicker(null)}
+                    onClose={() => {
+                        setPicker(null);
+                        setLastAddedRefKey(null);
+                    }}
                 />
             )}
         </>
@@ -882,6 +899,51 @@ function Header() {
     );
 }
 
+type CatalogGroup = CatalogResponse["groups"][number];
+
+function GroupedCatalogFieldSelect({
+    catalogGroups,
+    catalogFields,
+    value,
+    disabled,
+    className,
+    title,
+    onChange,
+}: {
+    catalogGroups: CatalogGroup[];
+    catalogFields: LayoutCatalogField[];
+    value: string;
+    disabled?: boolean;
+    className?: string;
+    title?: string;
+    onChange: (field: LayoutCatalogField) => void;
+}) {
+    const hasValue = catalogFields.some((f) => f.refKey === value);
+    return (
+        <select
+            value={hasValue ? value : ""}
+            disabled={disabled}
+            title={title}
+            className={className}
+            onChange={(e) => {
+                const f = catalogFields.find((c) => c.refKey === e.target.value);
+                if (f) onChange(f);
+            }}
+        >
+            {!hasValue && value ? <option value="">{value} (custom)</option> : null}
+            {catalogGroups.map((g) => (
+                <optgroup key={g.entityKey} label={catalogGroupDisplayLabel(g)}>
+                    {g.fields.map((f) => (
+                        <option key={f.refKey} value={f.refKey}>
+                            {f.fieldLabel}
+                        </option>
+                    ))}
+                </optgroup>
+            ))}
+        </select>
+    );
+}
+
 function ItemRow({
     item,
     editable,
@@ -897,6 +959,7 @@ function ItemRow({
     onPatch,
     showQueueZone = false,
     catalogFields,
+    catalogGroups,
     onReplaceField,
 }: {
     item: LayoutItem;
@@ -913,6 +976,7 @@ function ItemRow({
     onPatch: (patch: Partial<LayoutItem>) => void;
     showQueueZone?: boolean;
     catalogFields: LayoutCatalogField[];
+    catalogGroups: CatalogGroup[];
     onReplaceField: (f: LayoutCatalogField) => void;
 }) {
     const ad = item.adornment;
@@ -978,21 +1042,15 @@ function ItemRow({
             {item.kind === "field" && !isTemplate && catalogFields.length > 0 && (
                 <div className="mt-0.5 flex items-center gap-1">
                     <span className="text-[9px] text-[#9aa4bf]">field:</span>
-                    <select
-                        value={catalogFields.some((f) => f.refKey === item.refKey) ? item.refKey : ""}
+                    <GroupedCatalogFieldSelect
+                        catalogGroups={catalogGroups}
+                        catalogFields={catalogFields}
+                        value={item.refKey}
                         disabled={!editable}
-                        onChange={(e) => {
-                            const f = catalogFields.find((c) => c.refKey === e.target.value);
-                            if (f) onReplaceField(f);
-                        }}
-                        title="Replace this field (keeps placement, condition, icon, editable)"
                         className="min-w-0 max-w-[180px] truncate rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40"
-                    >
-                        {!catalogFields.some((f) => f.refKey === item.refKey) && <option value="">{item.refKey} (custom)</option>}
-                        {catalogFields.map((f) => (
-                            <option key={f.refKey} value={f.refKey}>{f.entityLabel}: {f.fieldLabel}</option>
-                        ))}
-                    </select>
+                        title="Replace this field (keeps placement, condition, icon, editable)"
+                        onChange={onReplaceField}
+                    />
                 </div>
             )}
             {item.kind === "field" && (
@@ -1018,92 +1076,6 @@ function ItemRow({
     );
 }
 
-const WIDGET_CATEGORY_ORDER = ["Work", "Communication", "Enrollment", "Waitlist", "System"];
-
-function PickerOverlay({
-    catalog,
-    surface,
-    tab,
-    setTab,
-    group,
-    setGroup,
-    onPickField,
-    onPickWidget,
-    onClose,
-}: {
-    catalog: CatalogResponse;
-    surface: "drawer" | "queue";
-    tab: "field" | "widget";
-    setTab: (t: "field" | "widget") => void;
-    group: string;
-    setGroup: (g: string) => void;
-    onPickField: (f: LayoutCatalogField) => void;
-    onPickWidget: (w: LayoutCatalogWidget) => void;
-    onClose: () => void;
-}) {
-    const groupFields = catalog.groups.find((g) => g.entityKey === group)?.fields ?? [];
-    const activeGroup = catalog.groups.find((g) => g.entityKey === group);
-    const widgetIsRelevant = (w: LayoutCatalogWidget) => !w.relevantSurfaces || w.relevantSurfaces.includes(surface);
-    const byCategory = WIDGET_CATEGORY_ORDER
-        .map((cat) => ({ cat, widgets: catalog.widgets.filter((w) => (w.category ?? "Work") === cat) }))
-        .filter((x) => x.widgets.length > 0);
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-            <div className="max-h-[80vh] w-full max-w-md overflow-auto rounded-lg border border-[#e6e8ec] bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
-                <div className="mb-3 flex items-center justify-between">
-                    <div className="flex gap-2">
-                        <button type="button" onClick={() => setTab("field")} className={`rounded px-2 py-1 text-sm ${tab === "field" ? "bg-[#eef1f6] font-medium" : ""}`}>Fields</button>
-                        <button type="button" onClick={() => setTab("widget")} className={`rounded px-2 py-1 text-sm ${tab === "widget" ? "bg-[#eef1f6] font-medium" : ""}`}>Widgets</button>
-                    </div>
-                    <button type="button" onClick={onClose} className="text-sm text-[#59678b]">✕</button>
-                </div>
-                {tab === "field" ? (
-                    <>
-                        <select value={group} onChange={(e) => setGroup(e.target.value)} className="mb-2 w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm">
-                            {catalog.groups.map((g) => (
-                                <option key={g.entityKey} value={g.entityKey}>{catalogGroupDisplayLabel(g)}</option>
-                            ))}
-                        </select>
-                        {activeGroup?.groupDescription ? (
-                            <p className="mb-2 text-[11px] leading-snug text-[#59678b]">{activeGroup.groupDescription}</p>
-                        ) : null}
-                        <div className="flex flex-col gap-1">
-                            {groupFields.map((f) => (
-                                <button key={f.refKey} type="button" onClick={() => onPickField(f)} className="flex items-center justify-between rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm hover:bg-[#f5f8ff]">
-                                    <span>{f.fieldLabel}</span>
-                                    <span className="rounded bg-[#f4f6f9] px-1.5 py-0.5 text-[10px] text-[#59678b]">{f.entityLabel}</span>
-                                </button>
-                            ))}
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex flex-col gap-3">
-                        {byCategory.map(({ cat, widgets }) => (
-                            <div key={cat}>
-                                <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#9aa4bf]">{cat}</div>
-                                <div className="flex flex-col gap-1">
-                                    {widgets.map((w) => {
-                                        const relevant = widgetIsRelevant(w);
-                                        return (
-                                            <button key={w.widgetKey} type="button" disabled={!relevant} onClick={() => relevant && onPickWidget(w)} title={relevant ? w.description : `${w.description ?? ""} — available on ${(w.relevantSurfaces ?? []).join("/")} cards`} className={`flex items-start justify-between gap-2 rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm ${relevant ? "hover:bg-[#f5f8ff]" : "opacity-50"}`}>
-                                                <span className="min-w-0">
-                                                    <span className="font-medium text-[#31394d]">{w.label}</span>
-                                                    {w.description ? <span className="block text-[11px] text-[#59678b]">{w.description}</span> : null}
-                                                </span>
-                                                {!relevant ? <span className="shrink-0 rounded bg-[#f4f6f9] px-1.5 py-0.5 text-[10px] text-[#9aa4bf]">queue only</span> : null}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
-
 type GroupLoc = { sIdx: number; rIdx: number; cIdx: number; itemId: string };
 
 function GroupBlockEditor({
@@ -1111,6 +1083,7 @@ function GroupBlockEditor({
     loc,
     editable,
     catalogFields,
+    catalogGroups,
     op,
     onMoveBlock,
     onRemoveBlock,
@@ -1121,6 +1094,7 @@ function GroupBlockEditor({
     loc: GroupLoc;
     editable: boolean;
     catalogFields: LayoutCatalogField[];
+    catalogGroups: CatalogGroup[];
     op: (next: LayoutDoc | null | undefined) => void;
     onMoveBlock: (dir: -1 | 1) => void;
     onRemoveBlock: () => void;
@@ -1161,6 +1135,7 @@ function GroupBlockEditor({
                                         item={git}
                                         editable={editable}
                                         catalogFields={catalogFields}
+                                        catalogGroups={catalogGroups}
                                         onUp={() => op(ops.groupMoveItemVertical(doc, loc, gri, gci, git.id, -1))}
                                         onDown={() => op(ops.groupMoveItemVertical(doc, loc, gri, gci, git.id, 1))}
                                         onRemove={() => op(ops.groupRemoveItem(doc, loc, gri, gci, git.id))}
@@ -1185,6 +1160,7 @@ function MiniItemRow({
     item,
     editable,
     catalogFields,
+    catalogGroups,
     onUp,
     onDown,
     onRemove,
@@ -1196,6 +1172,7 @@ function MiniItemRow({
     item: LayoutItem;
     editable: boolean;
     catalogFields: LayoutCatalogField[];
+    catalogGroups: CatalogGroup[];
     onUp: () => void;
     onDown: () => void;
     onRemove: () => void;
@@ -1230,21 +1207,15 @@ function MiniItemRow({
                 <input value={item.template ?? ""} disabled={!editable} onChange={(e) => onPatch({ template: e.target.value })} placeholder="{token} display text" title="Static text with {token} replacement" className="mt-0.5 w-full rounded border border-[#e6e8ec] px-1 py-0.5 font-mono text-[10px] disabled:opacity-40" />
             )}
             {item.kind === "field" && !isTemplate && catalogFields.length > 0 && (
-                <select
-                    value={catalogFields.some((f) => f.refKey === item.refKey) ? item.refKey : ""}
+                <GroupedCatalogFieldSelect
+                    catalogGroups={catalogGroups}
+                    catalogFields={catalogFields}
+                    value={item.refKey}
                     disabled={!editable}
-                    onChange={(e) => {
-                        const f = catalogFields.find((c) => c.refKey === e.target.value);
-                        if (f) onReplaceField(f);
-                    }}
-                    title="Replace this field"
                     className="mt-0.5 w-full truncate rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40"
-                >
-                    {!catalogFields.some((f) => f.refKey === item.refKey) && <option value="">{item.refKey} (custom)</option>}
-                    {catalogFields.map((f) => (
-                        <option key={f.refKey} value={f.refKey}>{f.entityLabel}: {f.fieldLabel}</option>
-                    ))}
-                </select>
+                    title="Replace this field"
+                    onChange={onReplaceField}
+                />
             )}
             {item.kind === "field" && (
                 <div className="mt-0.5 flex flex-wrap items-center gap-1">
@@ -1281,6 +1252,7 @@ function RelatedListEditor({
     item,
     editable,
     catalogFields,
+    catalogGroups,
     onMove,
     onRemove,
     onPatchItem,
@@ -1293,6 +1265,7 @@ function RelatedListEditor({
     item: LayoutItem;
     editable: boolean;
     catalogFields: LayoutCatalogField[];
+    catalogGroups: CatalogGroup[];
     onMove: (dir: -1 | 1) => void;
     onRemove: () => void;
     onPatchItem: (patch: Partial<LayoutItem>) => void;
@@ -1339,10 +1312,15 @@ function RelatedListEditor({
                             <button type="button" onClick={() => onRemoveColumn(ci)} disabled={!editable} className="px-0.5 text-[10px] text-red-600 disabled:opacity-30" title="Remove column">✕</button>
                         </div>
                         <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                            <select value={catalogFields.some((f) => f.refKey === col.refKey) ? col.refKey : ""} disabled={!editable} onChange={(e) => { const f = catalogFields.find((c) => c.refKey === e.target.value); if (f) onPatchColumn(ci, { refKey: f.refKey, label: col.label || f.fieldLabel }); }} title="Field for this column" className="min-w-0 max-w-[150px] truncate rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
-                                {!catalogFields.some((f) => f.refKey === col.refKey) && <option value="">{col.refKey} (custom)</option>}
-                                {catalogFields.map((f) => <option key={f.refKey} value={f.refKey}>{f.entityLabel}: {f.fieldLabel}</option>)}
-                            </select>
+                            <GroupedCatalogFieldSelect
+                                catalogGroups={catalogGroups}
+                                catalogFields={catalogFields}
+                                value={col.refKey}
+                                disabled={!editable}
+                                className="min-w-0 max-w-[150px] truncate rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40"
+                                title="Field for this column"
+                                onChange={(f) => onPatchColumn(ci, { refKey: f.refKey, label: col.label || f.fieldLabel })}
+                            />
                             <select value={col.width ?? "medium"} disabled={!editable} onChange={(e) => onPatchColumn(ci, { width: e.target.value as LayoutColumnWidth })} title="Column width" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
                                 {WIDTH_OPTIONS.map((w) => <option key={w} value={w}>{w}</option>)}
                             </select>
