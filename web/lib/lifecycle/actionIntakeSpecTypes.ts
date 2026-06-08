@@ -1,7 +1,7 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 
-export type ActionIntakeMode = "structured";
+export type ActionIntakeMode = "structured" | "hybrid";
 
 export type ActionIntakeFieldTier = "required" | "recommended" | "optional";
 

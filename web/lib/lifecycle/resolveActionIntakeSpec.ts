@@ -211,7 +211,7 @@ export function resolveCreateLeadActionIntakeSpec(input: {
         department_id: input.department_id,
         process_id: input.process_id?.trim() || null,
         operator_stage: input.operator_stage,
-        mode: "structured",
+        mode: "hybrid",
         requirements_source: source as LifecycleRequirementsSource,
         groups: buildGroups(allFields),
         required: dedupeFieldSpecs(required),
@@ -220,7 +220,7 @@ export function resolveCreateLeadActionIntakeSpec(input: {
         constraints,
         copy: {
             title: `Create ${leadLabel}`,
-            help: "Collect required information from your lifecycle configuration. Review the summary before creating the record.",
+            help: "Paste inquiry details or enter manually. BOS drafts fields for your review — nothing is created until you confirm.",
         },
     };
 }

@@ -10,13 +10,16 @@ function read(rel: string): string {
 }
 
 describe("add person convergence contracts", () => {
-    it("drawer uses canonical AddPersonModal and submit helper", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("AddPersonModal");
-        expect(drawer).toContain("submitAddPersonFromDrawer");
-        expect(drawer).toContain("openAddPersonModal");
-        expect(drawer).toContain("ADMINV2_OPEN_ADD_PERSON_MODAL");
-        expect(drawer).not.toContain("AddFamilyMemberModal");
+    it("opportunity VM runtime and legacy drawer use canonical AddPersonModal", () => {
+        const vmModals = read("lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals.tsx");
+        const legacyDrawer = read("components/admin/AdminEntityDrawerLegacy.tsx");
+        expect(vmModals).toContain("AddPersonModal");
+        expect(vmModals).toContain("submitAddPersonFromDrawer");
+        expect(vmModals).toContain("openAddPerson");
+        expect(legacyDrawer).toContain("AddPersonModal");
+        expect(legacyDrawer).toContain("openAddPersonModal");
+        expect(legacyDrawer).toContain("ADMINV2_OPEN_ADD_PERSON_MODAL");
+        expect(legacyDrawer).not.toContain("AddFamilyMemberModal");
     });
 
     it("registry client routes person actions to openAddPerson", () => {
@@ -40,5 +43,11 @@ describe("add person convergence contracts", () => {
         const lead = read("lib/admin/actions/entryLifecycleActions.ts");
         expect(lead).toMatch(/Phone or email is required/);
         expect(lead).not.toMatch(/child.*required/i);
+    });
+
+    it("create_lead stores optional intake notes in opportunity metadata", () => {
+        const lead = read("lib/admin/actions/entryLifecycleActions.ts");
+        expect(lead).toContain("intake_notes");
+        expect(lead).toContain("{ intake_notes: intakeNotes }");
     });
 });

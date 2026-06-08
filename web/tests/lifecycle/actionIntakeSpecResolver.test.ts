@@ -155,13 +155,16 @@ describe("create lead modal and execute wiring", () => {
     it("modal fetches action intake spec and renders dynamic fields", () => {
         const modal = read("components/admin/opportunity/actions/CreateLeadModal.tsx");
         expect(modal).toContain("fetchActionIntakeSpec");
-        expect(modal).toContain("create-lead-group-");
-        expect(modal).toContain("create-lead-field-");
+        expect(modal).toContain("ActionIntakeFieldGroups");
+        expect(modal).toContain('dataTestIdPrefix="create-lead"');
         expect(modal).toContain("validateActionIntakePayload");
+        expect(modal).toContain("ActionIntakePastePanel");
+        expect(modal).toContain("createLeadIntakePasteParser");
     });
 
     it("preview step appears before confirm execute", () => {
         const modal = read("components/admin/opportunity/actions/CreateLeadModal.tsx");
+        expect(modal).toContain("create-lead-intake-step");
         expect(modal).toContain("create-lead-preview-step");
         expect(modal).toContain("create-lead-review-button");
         expect(modal).toContain("create-lead-confirm-button");

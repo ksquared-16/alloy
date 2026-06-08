@@ -113,6 +113,7 @@ export async function executeCreateLeadAction(
     await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: ctx.orgId });
 
     const displayName = [firstName, lastName].filter(Boolean).join(" ").trim() || email || phone || "New lead";
+    const intakeNotes = trim(input.merged.intake_notes) || null;
     const oppPayload: Record<string, unknown> = {
         org_id: ctx.orgId,
         vertical_id: verticalId,
@@ -127,6 +128,7 @@ export async function executeCreateLeadAction(
         metadata: {
             created_via: "create_lead",
             ...(departmentId ? { department_id: departmentId } : {}),
+            ...(intakeNotes ? { intake_notes: intakeNotes } : {}),
         },
     };
     if (locationId) oppPayload.location_id = locationId;

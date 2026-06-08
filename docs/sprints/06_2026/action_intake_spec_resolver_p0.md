@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/06_2026/action_intake_spec_resolver_p0.md`  
 **Date:** 2026-05-31  
-**Status:** Implemented (structured create_lead only; no BOS)
+**Status:** Implemented (hybrid create_lead + V1 deterministic paste parser — see `create_lead_action_ux_foundation.md`)
 
 ## Goal
 
@@ -36,9 +36,9 @@ When an operator clicks **Create Lead**, resolve required information from Lifec
 3. **Preview** step — summary of entered values.
 4. **Confirm & create lead** → `mapActionIntakeValuesToCreateLeadPayload` → `executeCreateLeadFromModal` → `POST /api/admin/actions/execute` (`create_lead`).
 
-## BOS (later)
+## BOS (V1 delivered)
 
-Same `ActionIntakeSpec` JSON from `GET …/action-intake-spec` — BOS will explain fields, accept paste, propose values, and return to preview/confirm without a parallel rule set.
+Same `ActionIntakeSpec` JSON from `GET …/action-intake-spec`. V1 uses deterministic paste parsing (`parseCreateLeadIntakeText`) behind `ActionIntakePasteParser` — AI swap-in later without changing modal contract.
 
 ## Follow-ups
 
