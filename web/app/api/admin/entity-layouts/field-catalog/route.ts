@@ -35,9 +35,9 @@ import {
 import { INQUIRY_CHILD_ENTITY_TYPE, INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS } from "@/lib/fields/inquiryChildFieldRegistry";
 import {
     collectRefKeysFromCatalogGroups,
-    filterCatalogFieldsForLayoutPicker,
     isBlockedLayoutPickerRefKey,
 } from "@/lib/layout/platformFieldResolutionManifest";
+import { isChildcareCatalogRefKey } from "@/lib/layout/childcareLayoutFieldCatalog";
 
 /**
  * Group → field_definitions entity_type (null = curated-only bootstrap).
@@ -48,6 +48,8 @@ const GROUP_FIELD_ENTITY: Record<LayoutEntityGroupKey, string | null> = {
     person: "person",
     child: "person",
     inquiry_child: INQUIRY_CHILD_ENTITY_TYPE,
+    customer: "customer",
+    location: "location",
 };
 
 function filterLoadedFields(
@@ -55,8 +57,9 @@ function filterLoadedFields(
     fields: LayoutCatalogField[],
     anchor: ReturnType<typeof layoutPickerAnchorForEntityType>,
 ): LayoutCatalogField[] {
-    const withoutBlocked = fields.filter((f) => !isBlockedLayoutPickerRefKey(f.refKey));
-    return filterCatalogFieldsForLayoutPicker(withoutBlocked, anchor);
+    return fields.filter(
+        (f) => !isBlockedLayoutPickerRefKey(f.refKey) && isChildcareCatalogRefKey(f.refKey, anchor),
+    );
 }
 
 async function loadGroupFields(

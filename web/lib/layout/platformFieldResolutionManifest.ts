@@ -7,6 +7,7 @@
  */
 
 import { INQUIRY_CHILD_NATIVE_FIELD_MANIFEST } from "@/lib/fields/inquiryChildFieldRegistry";
+import { isChildcareCatalogRefKey } from "./childcareLayoutFieldCatalog";
 import {
     CANONICAL_LAYOUT_REFKEY_NAMESPACES,
     normalizeRefKeyOnRead,
@@ -187,6 +188,9 @@ export function isRefKeyPickerEligible(
     anchorEntity: LayoutPickerAnchorEntity = "opportunities",
 ): boolean {
     if (isBlockedLayoutPickerRefKey(refKey)) return false;
+    if (anchorEntity === "opportunities" || anchorEntity === "person" || anchorEntity === "child") {
+        return isChildcareCatalogRefKey(refKey, anchorEntity);
+    }
     const entry = manifestEntryForRefKey(refKey);
     if (!entry?.pickerEligible) return false;
     return entry.pickerAnchors.includes(anchorEntity);

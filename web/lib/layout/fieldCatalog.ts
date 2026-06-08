@@ -18,13 +18,19 @@
 import { INQUIRY_CHILD_NATIVE_FIELD_MANIFEST } from "@/lib/fields/inquiryChildFieldRegistry";
 import { parseLayoutRefKey } from "./layoutRefKeyAliases";
 import {
-    buildOptionalReferencePickerGroups,
     filterCatalogGroupsForLayoutPicker,
     type LayoutPickerAnchorEntity,
 } from "./platformFieldResolutionManifest";
+import { organizeChildcarePickerGroups } from "./childcareLayoutFieldCatalog";
 
 /** Canonical layout catalog entity groups (FC-1). */
-export type LayoutEntityGroupKey = "opportunity" | "person" | "child" | "inquiry_child";
+export type LayoutEntityGroupKey =
+    | "opportunity"
+    | "person"
+    | "child"
+    | "inquiry_child"
+    | "customer"
+    | "location";
 
 export interface LayoutCatalogField {
     /** Opaque display-grouping id + sourceEntity hint (string so non-Lead
@@ -137,12 +143,14 @@ export function catalogCopyContainsBannedInquiryPhrase(text: string): boolean {
     return BANNED_INQUIRY_CATALOG_PHRASES.some((re) => re.test(text));
 }
 
-/** Field groups for the Lead/Opportunity drawer, in display order (user-facing). */
+/** Field groups loaded from field_definitions (internal keys → operator groups via childcare catalog). */
 export const LAYOUT_ENTITY_GROUPS: { entityKey: LayoutEntityGroupKey; entityLabel: string }[] = [
     { entityKey: "opportunity", entityLabel: "Lead" },
-    { entityKey: "person", entityLabel: "Contact / Parent" },
+    { entityKey: "person", entityLabel: "Parent / Contact" },
     { entityKey: "child", entityLabel: "Child" },
-    { entityKey: "inquiry_child", entityLabel: INQUIRY_CHILD_PICKER_PRESENTATION.groupLabel },
+    { entityKey: "inquiry_child", entityLabel: "Child" },
+    { entityKey: "customer", entityLabel: "Household" },
+    { entityKey: "location", entityLabel: "Location" },
 ];
 
 /**
@@ -187,9 +195,11 @@ export function parseRefKey(refKey: string): { entityKey: string; fieldKey: stri
 
 const ENTITY_LABEL: Record<LayoutEntityGroupKey, string> = {
     opportunity: "Lead",
-    person: "Contact / Parent",
+    person: "Parent / Contact",
     child: "Child",
-    inquiry_child: INQUIRY_CHILD_PICKER_PRESENTATION.fieldEntityLabel,
+    inquiry_child: "Child",
+    customer: "Household",
+    location: "Location",
 };
 
 function field(
@@ -215,19 +225,19 @@ function field(
  */
 export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> = {
     opportunity: [
-        field("opportunity", "status_key", "Status", "status"),
-        field("opportunity", "source", "Source", "text"),
+        field("opportunity", "status_key", "Lead status", "status"),
+        field("opportunity", "source", "Lead source", "text"),
         field("opportunity", "channel", "Channel", "text"),
         field("opportunity", "campaign", "Campaign", "text"),
         field("opportunity", "tour_status", "Tour status", "status"),
         field("opportunity", "tour_date", "Tour date", "date"),
-        field("opportunity", "job_date", "Requested date", "date"),
-        field("opportunity", "customer_notes", "Notes", "text"),
+        field("opportunity", "customer_notes", "Lead notes", "text"),
     ],
     person: [
+        field("person", "first_name", "First name", "text"),
+        field("person", "last_name", "Last name", "text"),
         field("person", "phone", "Phone", "phone"),
         field("person", "email", "Email", "text"),
-        field("person", "secondary_contact_name", "Secondary contact name", "text"),
         field("person", "secondary_phone", "Secondary phone", "phone"),
     ],
     /**
@@ -245,6 +255,8 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
     inquiry_child: INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((row) =>
         field("inquiry_child", row.field_key, inquiryChildPickerFieldLabel(row.field_key, row.label), row.field_type),
     ),
+    customer: [],
+    location: [],
 };
 
 /**
@@ -366,18 +378,18 @@ export const CONTEXT_WIDGET_CATALOG: LayoutCatalogWidget[] = [
 /** Waitlist widget catalog — Context widgets the candidate card can place. */
 export const WAITLIST_WIDGET_CATALOG: LayoutCatalogWidget[] = CONTEXT_WIDGET_CATALOG;
 
-/** Person (Contact / Parent) drawer field catalog — canonical refKeys only (FC-2). */
+/** Person (Parent / Contact) drawer field catalog — canonical refKeys only (FC-2). */
 export const PERSON_DRAWER_CATALOG_GROUPS: LayoutCatalogGroup[] = [
     {
         entityKey: "person",
-        entityLabel: "Contact / Parent",
+        entityLabel: "Parent / Contact",
         fields: [
-            wlField("person", "Contact / Parent", "person.phone", "Phone", "phone"),
-            wlField("person", "Contact / Parent", "person.email", "Email", "text"),
-            wlField("person", "Contact / Parent", "person.first_name", "First name", "text"),
-            wlField("person", "Contact / Parent", "person.last_name", "Last name", "text"),
-            wlField("person", "Contact / Parent", "person.secondary_contact_name", "Secondary contact", "text"),
-            wlField("person", "Contact / Parent", "person.secondary_phone", "Secondary phone", "phone"),
+            wlField("person", "Parent / Contact", "person.phone", "Phone", "phone"),
+            wlField("person", "Parent / Contact", "person.email", "Email", "text"),
+            wlField("person", "Parent / Contact", "person.first_name", "First name", "text"),
+            wlField("person", "Parent / Contact", "person.last_name", "Last name", "text"),
+            wlField("person", "Parent / Contact", "person.secondary_contact_name", "Secondary contact", "text"),
+            wlField("person", "Parent / Contact", "person.secondary_phone", "Secondary phone", "phone"),
         ],
     },
 ];
@@ -410,10 +422,10 @@ export const CHILD_DRAWER_CATALOG_GROUPS: LayoutCatalogGroup[] = [
     },
     {
         entityKey: "person",
-        entityLabel: "Contact / Parent",
+        entityLabel: "Parent / Contact",
         fields: [
-            wlField("person", "Contact / Parent", "person.phone", "Phone", "phone"),
-            wlField("person", "Contact / Parent", "person.email", "Email", "text"),
+            wlField("person", "Parent / Contact", "person.phone", "Phone", "phone"),
+            wlField("person", "Parent / Contact", "person.email", "Email", "text"),
         ],
     },
 ];
@@ -436,22 +448,23 @@ export function catalogGroupsForEntityType(entityType: string): LayoutCatalogGro
     if (entityType === "placement_candidate") return WAITLIST_CANDIDATE_CATALOG_GROUPS;
     const anchor = layoutPickerAnchorForEntityType(entityType);
     if (entityType === "person") {
-        return finalizeCatalogGroupsForPicker(filterCatalogGroupsForLayoutPicker(PERSON_DRAWER_CATALOG_GROUPS, anchor));
+        const filtered = filterCatalogGroupsForLayoutPicker(PERSON_DRAWER_CATALOG_GROUPS, anchor);
+        return organizeChildcarePickerGroups(filtered.flatMap((g) => g.fields), anchor) as LayoutCatalogGroup[];
     }
     if (entityType === "child") {
-        return finalizeCatalogGroupsForPicker(filterCatalogGroupsForLayoutPicker(CHILD_DRAWER_CATALOG_GROUPS, anchor));
+        const filtered = filterCatalogGroupsForLayoutPicker(CHILD_DRAWER_CATALOG_GROUPS, anchor);
+        return organizeChildcarePickerGroups(filtered.flatMap((g) => g.fields), anchor) as LayoutCatalogGroup[];
     }
     return null; // null → caller uses the default LAYOUT_ENTITY_GROUPS (field-def backed)
 }
 
-/** Apply FC-2 manifest filter + optional location/customer groups for Lead layouts. */
+/** Apply childcare catalog filter + operator entity grouping for Lead layouts. */
 export function buildLeadLayoutPickerGroups(
     groups: LayoutCatalogGroup[],
     anchor: LayoutPickerAnchorEntity = "opportunities",
 ): LayoutCatalogGroup[] {
-    const filtered = filterCatalogGroupsForLayoutPicker(groups, anchor);
-    const withOptional = [...filtered, ...(buildOptionalReferencePickerGroups(anchor) as LayoutCatalogGroup[])];
-    return finalizeCatalogGroupsForPicker(withOptional);
+    const flatFields = groups.flatMap((g) => g.fields);
+    return organizeChildcarePickerGroups(flatFields, anchor) as LayoutCatalogGroup[];
 }
 
 /**

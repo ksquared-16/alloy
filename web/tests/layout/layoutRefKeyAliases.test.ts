@@ -123,8 +123,15 @@ describe("layoutRefKeyAliases — deprecate-on-write", () => {
 });
 
 describe("field catalog — FC-1 canonical groups", () => {
-    it("exposes canonical entity groups including inquiry_child", () => {
-        expect(LAYOUT_ENTITY_GROUPS.map((g) => g.entityKey)).toEqual(["opportunity", "person", "child", "inquiry_child"]);
+    it("exposes load groups including inquiry_child, customer, location", () => {
+        expect(LAYOUT_ENTITY_GROUPS.map((g) => g.entityKey)).toEqual([
+            "opportunity",
+            "person",
+            "child",
+            "inquiry_child",
+            "customer",
+            "location",
+        ]);
     });
 
     it("does not expose child_inquiry as a catalog group", () => {
