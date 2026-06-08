@@ -10,13 +10,14 @@ import OpportunityDrawerLayoutRuntimeOverviewHold from "@/components/admin/vmDra
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import type { LayoutRuntimeDrawerSurface } from "@/lib/layout/runtime/logLayoutRuntimeBodyRenderFailure";
 import type { UseDrawerLayoutRuntimeBodyResult } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 
 type Props = {
     layoutBody: UseDrawerLayoutRuntimeBodyResult;
     vmFallback: ReactNode;
     entityId: string;
-    surface: string;
+    surface: LayoutRuntimeDrawerSurface;
     dataAttribute?: string;
 };
 
@@ -32,7 +33,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
             <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
                 fallback={vmFallback}
                 logContext={{
-                    opportunityId: entityId,
+                    entityId,
                     layoutSource: layoutBody.layoutSource,
                     surface,
                 }}

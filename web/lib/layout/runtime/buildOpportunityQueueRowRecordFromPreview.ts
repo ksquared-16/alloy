@@ -41,13 +41,14 @@ export function buildOpportunityQueueRowRecordFromPreview(item: QueuePreviewItem
         name: pickDisplay(crm?.primaryIdentity, item.title) ?? "—",
         "person.primary_contact_name": pickDisplay(crm?.contactDisplayName, crm?.contactSnippet) ?? "",
         "person.primary_phone": pickDisplay(crm?.contactSnippet) ?? "",
-        status_key: pickDisplay(crm?.statusLabel, item.status) ?? "",
-        _status_display: pickDisplay(crm?.statusLabel, item.status) ?? "",
+        status_key: pickDisplay(crm?.statusLabel, crm?.stageLabel, item.subtitle) ?? "",
+        _status_display: pickDisplay(crm?.statusLabel, crm?.stageLabel, item.subtitle) ?? "",
         "opportunity.location": pickDisplay(crm?.roomContext, crm?.programContext) ?? "",
         "opportunity.attention_reason": pickDisplay(crm?.attentionReason) ?? "",
         next_step: pickDisplay(crm?.nextStep) ?? "",
         last_activity: pickDisplay(crm?.lastActivity) ?? "",
-        tour_scheduled_at: pickDisplay(item.meta?.find((m) => /tour/i.test(m.label))?.value) ?? "",
+        tour_scheduled_at:
+            pickDisplay(item.metaLines?.find((m) => /tour/i.test(m.label))?.value) ?? "",
         enrollment_children: crm?.childName ?
             [{ id: "child-preview", "child.name": crm.childName }]
         :   [],
