@@ -29,7 +29,7 @@ export default function InboxNavLink({
     buttonClassName?: string;
     onOpenModal: () => void;
 }) {
-    const [unread, setUnread] = useState<number | null>(() => readInboxUnreadCountCache());
+    const [unread, setUnread] = useState<number | null>(null);
 
     const load = useCallback(async () => {
         if (isAdminV2SidecarNetworkBlocked()) return;
@@ -45,6 +45,8 @@ export default function InboxNavLink({
     }, []);
 
     useEffect(() => {
+        const cached = readInboxUnreadCountCache();
+        if (cached != null) setUnread(cached);
         const cancelDefer = runWhenAdminV2PrimarySurfaceReady(() => load(), "inbox_unread_nav");
         const intervalId = window.setInterval(() => {
             if (!isAdminV2SidecarNetworkBlocked()) void load();
