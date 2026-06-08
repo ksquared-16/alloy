@@ -16,6 +16,7 @@ import {
     buildOpportunityLayoutRuntimeRecordFromVm,
     type LayoutRuntimeRecordBindingEvidence,
 } from "./buildOpportunityLayoutRuntimeRecordFromVm";
+import { enrichLayoutDocPersonContactEditable } from "./enrichLayoutDocPersonContactEditable";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import {
     isLayoutItemSupportedForProduction,
@@ -129,11 +130,12 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         doc,
     });
 
-    const plan = buildLayoutRuntimePlan(doc);
+    const enrichedDoc = enrichLayoutDocPersonContactEditable(doc);
+    const plan = buildLayoutRuntimePlan(enrichedDoc);
 
     return {
         ok: true,
-        doc,
+        doc: enrichedDoc,
         record,
         plan,
         layoutSource: effective.usedFallback ? effective.source : layoutResolution.source,
@@ -157,18 +159,19 @@ export function evaluateOpportunityLayoutRuntimeBodyFromVm(input: {
         return { ok: false, reason: "layout_not_renderable", status: 422 };
     }
 
+    const enrichedDoc = enrichLayoutDocPersonContactEditable(input.doc);
     const record = buildOpportunityLayoutRuntimeRecordFromVm({
         vmRecord: input.vmRecord,
         opportunityId: input.opportunityId,
         statusDisplay: input.statusDisplay,
-        doc: input.doc,
+        doc: enrichedDoc,
     });
 
     return {
         ok: true,
-        doc: input.doc,
+        doc: enrichedDoc,
         record,
-        plan: buildLayoutRuntimePlan(input.doc),
+        plan: buildLayoutRuntimePlan(enrichedDoc),
         layoutSource: input.layoutSource ?? "test",
         layoutKey: input.doc.metadata?.layoutKey as string | undefined ?? null,
         layoutRecordId: null,

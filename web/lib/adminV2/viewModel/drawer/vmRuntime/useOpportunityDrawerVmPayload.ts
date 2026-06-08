@@ -15,6 +15,8 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
+import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
+import { putDrawerViewModelCacheEntry } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
 import { peekOpportunityDrawerDisplayVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerPayloadPeekSeed";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 import {
@@ -72,6 +74,20 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             setColdLoading(false);
             setError(null);
             completeDrawerRuntimeTransition();
+            putDrawerViewModelCacheEntry(
+                {
+                    entityType: "opportunities",
+                    entityId: vm.entity.id,
+                    surface: "opportunity",
+                    preload: buildOpportunityDrawerOpenPreloadFromViewModel(vm),
+                    generation: vm.generation,
+                    cachedAt: Date.now(),
+                },
+                {
+                    departmentId: drawer.opportunityWorkspaceContext?.department_id ?? null,
+                    workUnitId: drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
+                },
+            );
             scheduleWarmRelatedDrawerTargetsAfterVmApply({
                 drawer,
                 entityType: "opportunities",

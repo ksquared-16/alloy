@@ -46,8 +46,10 @@ function parseContactNameFromLine(contactLine: string | null | undefined): strin
 }
 
 function mapCrmChildLine(line: CrmCompactChildLineVm, index: number, crm: CrmCompactRowSemanticSlots): ProofRuntimeRecord {
+    const childId = line.personId ?? crm.childPersonId ?? null;
     return {
-        id: line.personId ?? `child-${index}`,
+        id: childId ?? line.personId ?? `child-${index}`,
+        "child.id": pickDisplay(childId, line.personId) ?? "",
         "child.name": pickDisplay(line.primary) ?? "—",
         "child.age_band": pickDisplay(line.secondary, crm.ageBandContext, crm.ageContext) ?? "",
         "child.program": pickDisplay(line.programInline, line.secondary, crm.programContext) ?? "",
@@ -75,6 +77,7 @@ function mapCrmChildren(crm: CrmCompactRowSemanticSlots, enrichment?: QueueRowLa
         return [
             {
                 id: crm.childPersonId ?? "child-preview",
+                "child.id": pickDisplay(crm.childPersonId) ?? "",
                 "child.name": crm.childName,
                 "child.age_band": pickDisplay(crm.ageBandContext, crm.ageContext) ?? "",
                 "child.program": pickDisplay(crm.programContext) ?? "",

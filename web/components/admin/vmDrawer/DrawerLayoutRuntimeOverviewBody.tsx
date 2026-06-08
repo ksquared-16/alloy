@@ -10,6 +10,7 @@ import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/
 import OpportunityDrawerLayoutRuntimeOverviewHold from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeOverviewHold";
 import DrawerLayoutRuntimeStagingDiagnostic from "@/components/admin/vmDrawer/DrawerLayoutRuntimeStagingDiagnostic";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import LayoutRuntimeDrawerEditProvider from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import LayoutRuntimeErrorPanel from "@/components/layout/LayoutRuntimeErrorPanel";
 import {
     isLayoutRuntimeHardCutoverActiveClient,
@@ -29,14 +30,11 @@ type Props = {
     entityId: string;
     surface: LayoutRuntimeDrawerSurface;
     dataAttribute?: string;
+    onAdornmentAction?: import("@/components/layout/LayoutRuntimePlanView").AdornmentActionHandler;
 };
 
 function shouldShowStagingDiagnostic(): boolean {
-    return (
-        isLayoutRuntimeHardCutoverActiveClient() ||
-        process.env.NEXT_PUBLIC_APP_ENV === "staging" ||
-        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG === "1"
-    );
+    return process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG === "1";
 }
 
 export default function DrawerLayoutRuntimeOverviewBody({
@@ -44,6 +42,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
     vmFallback,
     entityId,
     surface,
+    onAdornmentAction,
 }: Props) {
     const renderStats = useMemo(
         () => computeLayoutRuntimeBodyRenderStats(layoutBody.doc, layoutBody.record),
@@ -114,17 +113,8 @@ export default function DrawerLayoutRuntimeOverviewBody({
                     data-layout-runtime-key={layoutBody.layoutKey ?? ""}
                     data-layout-runtime-record-id={layoutBody.layoutRecordId ?? ""}
                     data-layout-runtime-version={layoutBody.layoutVersion ?? ""}
-                    data-layout-runtime-readonly="true"
                     data-drawer-layout-runtime-renderable-count={renderStats.renderableItemCount}
                 >
-                    {process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG === "1" ?
-                        <div
-                            className="rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-900"
-                            data-drawer-layout-runtime-mounted-marker="true"
-                        >
-                            Layout runtime body mounted · sections={renderStats.sectionCount} · fields={renderStats.productionSupportedCount} · with value={renderStats.itemsWithValueCount}
-                        </div>
-                    :   null}
                     {showStagingDiagnostic ?
                         <DrawerLayoutRuntimeStagingDiagnostic
                             layoutSource={layoutBody.layoutSource}
@@ -142,7 +132,13 @@ export default function DrawerLayoutRuntimeOverviewBody({
                             Layout configured but no items rendered. Enable staging diagnostic for item evidence.
                         </div>
                     :   null}
-                    <LayoutRuntimeDrawerBodyView doc={layoutBody.doc} record={layoutBody.record} />
+                    <LayoutRuntimeDrawerEditProvider record={layoutBody.record}>
+                        <LayoutRuntimeDrawerBodyView
+                            doc={layoutBody.doc}
+                            record={layoutBody.record}
+                            onAdornmentAction={onAdornmentAction}
+                        />
+                    </LayoutRuntimeDrawerEditProvider>
                 </div>
             </OpportunityDrawerLayoutRuntimeBodyErrorBoundary>
         );

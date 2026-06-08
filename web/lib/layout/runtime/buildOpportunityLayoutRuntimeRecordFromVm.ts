@@ -138,6 +138,18 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
     const primaryName = primaryContact.displayName;
     const primaryPhone = primaryContact.phone;
     const primaryEmail = primaryContact.email;
+    const primaryPersonId = primaryContact.personId;
+
+    const firstName = pickDisplay(
+        vmRecord["person.first_name"],
+        vmRecord._primary_person_first_name,
+        vmRecord.first_name,
+    );
+    const lastNameField = pickDisplay(
+        vmRecord["person.last_name"],
+        vmRecord._primary_person_last_name,
+        vmRecord.last_name,
+    );
 
     const secondaryName = pickDisplay(
         vmRecord["person.secondary_contact_name"],
@@ -190,6 +202,16 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
 
     const layoutChildren = mapVmInquiryChildrenToLayoutRuntimeRows(vmRecord._inquiry_children);
 
+    const taskPayload =
+        summaries?.tasks ??
+        (vmRecord._inquiry_summary_tasks && typeof vmRecord._inquiry_summary_tasks === "object"
+            ? vmRecord._inquiry_summary_tasks
+            : null);
+    const overviewData: Record<string, unknown> = {
+        ...vmRecord,
+        ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),
+    };
+
     const record: ProofRuntimeRecord = {
         ...vmRecord,
         id: opportunityId,
@@ -211,7 +233,12 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         "person.primary_email": primaryEmail ?? "",
         "person.phone": primaryPhone ?? "",
         "person.email": primaryEmail ?? "",
+        "person.first_name": firstName ?? "",
+        "person.last_name": lastNameField ?? "",
+        "opportunity.primary_person_id": primaryPersonId ?? "",
+        _overview_data: overviewData,
         _attention: attention ?? "",
+        ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),
         enrollment_children: layoutChildren,
         children: layoutChildren,
         tasks: Array.isArray(vmRecord._tasks_preview) ? vmRecord._tasks_preview : [],

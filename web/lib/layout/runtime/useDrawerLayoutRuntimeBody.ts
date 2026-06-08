@@ -6,6 +6,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
+import { enrichLayoutDocPersonContactEditable } from "@/lib/layout/runtime/enrichLayoutDocPersonContactEditable";
+import {
+    buildDrawerLayoutRuntimeBodyCacheKey,
+    peekDrawerLayoutRuntimeBodyCacheEntry,
+    putDrawerLayoutRuntimeBodyCacheEntry,
+} from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     resolveDrawerLayoutRuntimeBodyPresentation,
@@ -71,6 +77,28 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
 
         const id = entityId?.trim() ?? "";
         if (!id || !vmReady) return;
+
+        const cacheKey = buildDrawerLayoutRuntimeBodyCacheKey(apiPath, id, queryParamsKey);
+        const cached = peekDrawerLayoutRuntimeBodyCacheEntry(cacheKey);
+        if (cached && readyIdRef.current !== id) {
+            if (typeof console !== "undefined" && typeof console.info === "function") {
+                console.info("[drawer_layout_runtime:cache_hit]", {
+                    ts: new Date().toISOString(),
+                    entity_id: id,
+                    api_path: apiPath,
+                });
+            }
+            setDoc(cached.doc);
+            setRecord(cached.record);
+            setLayoutSource(cached.layoutSource);
+            setLayoutKey(cached.layoutKey);
+            setLayoutVersion(cached.layoutVersion);
+            setLayoutRecordId(cached.layoutRecordId);
+            setLastError(null);
+            setPhase("ready");
+            readyIdRef.current = id;
+        }
+
         if (readyIdRef.current === id) return;
 
         let cancelled = false;
@@ -111,12 +139,21 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
                     setPhase("fallback");
                     return;
                 }
-                setDoc(json.doc);
+                const enrichedDoc = enrichLayoutDocPersonContactEditable(json.doc);
+                setDoc(enrichedDoc);
                 setRecord(json.record);
                 setLayoutSource(json.layoutSource ?? null);
                 setLayoutKey(json.layoutKey ?? json.plan?.layoutKey ?? null);
                 setLayoutVersion(json.layoutVersion ?? null);
                 setLayoutRecordId(json.layoutRecordId ?? null);
+                putDrawerLayoutRuntimeBodyCacheEntry(cacheKey, {
+                    doc: enrichedDoc,
+                    record: json.record,
+                    layoutSource: json.layoutSource ?? null,
+                    layoutKey: json.layoutKey ?? json.plan?.layoutKey ?? null,
+                    layoutRecordId: json.layoutRecordId ?? null,
+                    layoutVersion: json.layoutVersion ?? null,
+                });
                 // A successful body response clears any stale error from a prior attempt.
                 setLastError(null);
                 setPhase("ready");

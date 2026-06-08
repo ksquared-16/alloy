@@ -8,16 +8,22 @@
 type ThreadsResult = { threads: unknown[]; error: string | null };
 type BindingsResult = { channels: string[]; error: string | null };
 type RecipientsResult = { recipients: unknown[]; error: string | null };
+type MessagesResult = { messages: unknown[]; error: string | null };
 
-type PrefetchConsumeRole = "threads" | "bindings" | "recipients";
+type PrefetchConsumeRole = "threads" | "bindings" | "recipients" | "messages";
+
+const MESSAGES_PER_THREAD_LIMIT = 36;
+const MAX_MERGE_THREADS = 10;
 
 export type CommunicationsDrawerPrefetchSlot = {
     threads: Promise<ThreadsResult>;
     bindings: Promise<BindingsResult>;
     recipients: Promise<RecipientsResult>;
+    messages?: Promise<MessagesResult>;
     threads_snapshot?: ThreadsResult | null;
     bindings_snapshot?: BindingsResult | null;
     recipients_snapshot?: RecipientsResult | null;
+    messages_snapshot?: MessagesResult | null;
     /** True when `arm` found an existing slot (no duplicate network fan-out). */
     prefetch_arm_cache_hit?: boolean;
     consumed: Partial<Record<PrefetchConsumeRole, boolean>>;
@@ -208,6 +214,14 @@ export function scheduleDeferredCommunicationsDrawerPrefetch(apiEntityType: stri
                 threadsDeferred.resolve(threadsRes);
                 bindingsDeferred.resolve(bindingsRes);
 
+                void prefetchConversationMessages({
+                    apiEntityType,
+                    entityId,
+                    signal,
+                    threadsRes,
+                    slotKey: key,
+                });
+
                 void recipients
                     .then((r) => {
                         tRecipientsEnd =
@@ -239,6 +253,7 @@ export function scheduleDeferredCommunicationsDrawerPrefetch(apiEntityType: stri
                             threads_taken_by_tab: Boolean(s2?.consumed.threads),
                             bindings_taken_by_tab: Boolean(s2?.consumed.bindings),
                             recipients_taken_by_tab: Boolean(s2?.consumed.recipients),
+                            messages_taken_by_tab: Boolean(s2?.consumed.messages),
                         });
                     });
                 }
@@ -303,4 +318,70 @@ export function invalidateCommunicationsDrawerPrefetch(apiEntityType: string, en
     controllers.get(key)?.abort();
     controllers.delete(key);
     slots.delete(key);
+}
+
+async function prefetchConversationMessages(params: {
+    apiEntityType: string;
+    entityId: string;
+    signal: AbortSignal;
+    threadsRes: ThreadsResult;
+    slotKey: string;
+}): Promise<void> {
+    if (params.threadsRes.error || !Array.isArray(params.threadsRes.threads)) {
+        return;
+    }
+    const threadRows = params.threadsRes.threads as Array<{ id?: string }>;
+    const scopeList = threadRows
+        .map((t) => (t?.id != null ? String(t.id).trim() : ""))
+        .filter(Boolean)
+        .slice(0, MAX_MERGE_THREADS);
+    if (!scopeList.length) return;
+
+    const slot = slots.get(params.slotKey);
+    if (!slot) return;
+
+    const messagesPromise = (async (): Promise<MessagesResult> => {
+        try {
+            const batches = await Promise.all(
+                scopeList.map(async (threadId) => {
+                    const r = await fetch(
+                        `/api/admin/communications/threads/${encodeURIComponent(threadId)}/messages?limit=${MESSAGES_PER_THREAD_LIMIT}&include_viewer_read=1`,
+                        { credentials: "include", signal: params.signal },
+                    );
+                    const j = (await readJsonSafely(r)) as { messages?: unknown[]; error?: string };
+                    if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+                    const raw = Array.isArray(j.messages) ? j.messages : [];
+                    return raw.map((m) =>
+                        m && typeof m === "object" ?
+                            { ...(m as Record<string, unknown>), _thread_id: threadId }
+                        :   m,
+                    );
+                }),
+            );
+            const merged = batches.flat();
+            return { messages: merged, error: null };
+        } catch (e) {
+            if (params.signal.aborted) return { messages: [], error: "Aborted" };
+            return {
+                messages: [],
+                error: e instanceof Error ? e.message : "Failed to load messages",
+            };
+        }
+    })();
+
+    slot.messages = messagesPromise;
+    void messagesPromise.then((result) => {
+        const s = slots.get(params.slotKey);
+        if (s) s.messages_snapshot = result;
+        if (shouldLogPrefetch()) {
+            console.warn("[perf.comms.prefetch]", {
+                entity_type: params.apiEntityType,
+                entity_id: params.entityId,
+                event: "messages_prefetch_settled",
+                message_count: result.messages.length,
+                thread_count: scopeList.length,
+                error: result.error,
+            });
+        }
+    });
 }

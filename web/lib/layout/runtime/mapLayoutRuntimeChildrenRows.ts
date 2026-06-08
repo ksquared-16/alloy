@@ -35,6 +35,7 @@ export function mapInquiryChildToLayoutRuntimeRow(row: ReturnType<typeof mapRawI
 
     return {
         id: pickDisplay(row.id) ?? "row",
+        "child.id": pickDisplay(row.person_id) ?? "",
         "child.name": name,
         "child.dob_age": dobAge,
         "child.desired_start_date": row.desired_start_date ?? "",

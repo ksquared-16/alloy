@@ -9,6 +9,7 @@ import {
     CHILDCARE_FC3_DEFERRED_REF_KEYS,
     CHILDCARE_HIDDEN_REF_KEYS,
     CHILDCARE_OPERATOR_ENTITY_LABELS,
+    CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS,
     CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS,
     CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS,
     CHILDCARE_STARTER_FIELD_CATALOG,
@@ -16,12 +17,14 @@ import {
     childcareCopyContainsBannedPhrase,
     collectChildcareUserFacingCopy,
     isChildcareCatalogRefKey,
+    isChildcareFieldDefBackedRefKey,
     isChildcareHiddenRefKey,
     isCustomerMemberConfigChildRefKey,
     isCustomerMemberSourcedChildRefKey,
+    isPrimaryContactProjectionRefKey,
     organizeChildcarePickerGroups,
 } from "@/lib/layout/childcareLayoutFieldCatalog";
-import { buildLeadLayoutPickerGroups, CURATED_FIELDS, LAYOUT_ENTITY_GROUPS } from "@/lib/layout/fieldCatalog";
+import { buildLeadLayoutPickerGroups, catalogGroupsForEntityType, CURATED_FIELDS, LAYOUT_ENTITY_GROUPS } from "@/lib/layout/fieldCatalog";
 
 const migrationPath = resolve(
     __dirname,
@@ -238,6 +241,52 @@ describe("FC-3 deferred relationship projections", () => {
         for (const key of CHILDCARE_FC3_DEFERRED_REF_KEYS) {
             expect(isChildcareHiddenRefKey(key)).toBe(true);
             expect(isChildcareCatalogRefKey(key)).toBe(false);
+        }
+    });
+});
+
+describe("lead primary contact projections", () => {
+    it("includes primary contact projections on opportunity anchor Parent / Contact group", () => {
+        const groups = leadPickerFromCuratedFallback();
+        const parentGroup = groups.find((g) => g.entityLabel === "Parent / Contact");
+        expect(parentGroup).toBeDefined();
+        const refKeys = parentGroup!.fields.map((f) => f.refKey);
+        for (const key of CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS) {
+            expect(refKeys).toContain(key);
+        }
+        expect(parentGroup!.fields.find((f) => f.refKey === "person.primary_contact_name")?.fieldLabel).toBe(
+            "Primary contact name",
+        );
+    });
+
+    it("primary contact projections are not field_definitions-backed catalog entries", () => {
+        for (const key of CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS) {
+            expect(isPrimaryContactProjectionRefKey(key)).toBe(true);
+            expect(isChildcareFieldDefBackedRefKey(key)).toBe(false);
+        }
+    });
+
+    it("excludes primary contact projections from person drawer picker (native person fields only)", () => {
+        const personGroups = catalogGroupsForEntityType("person") ?? [];
+        const refKeys = personGroups.flatMap((g) => g.fields.map((f) => f.refKey));
+        for (const key of CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS) {
+            expect(refKeys).not.toContain(key);
+        }
+        expect(refKeys).toContain("person.first_name");
+        expect(refKeys).toContain("person.email");
+    });
+
+    it("keeps fake customer primary contact text fields hidden", () => {
+        const refKeys = groupsFlatRefKeys(leadPickerFromCuratedFallback());
+        expect(refKeys).not.toContain("customer.primary_contact");
+        expect(refKeys).not.toContain("customer.primary_contact_name");
+        expect(isChildcareHiddenRefKey("customer.primary_contact")).toBe(true);
+    });
+
+    it("lead picker copy has no Inquiry Child jargon", () => {
+        const copy = collectChildcareUserFacingCopy(leadPickerFromCuratedFallback());
+        for (const line of copy) {
+            expect(childcareCopyContainsBannedPhrase(line)).toBe(false);
         }
     });
 });

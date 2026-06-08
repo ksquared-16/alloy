@@ -25,12 +25,19 @@ export type RecordDrawerHeaderActionButtonProps = Omit<
 > & {
     label: string;
     inquiryWorkflow?: boolean;
+    proofLayoutActions?: boolean;
+    /** White proof-layout surface for Actions trigger. */
+    proofLayoutActionsWhite?: boolean;
+    leadingIcon?: ReactNode;
     busy?: boolean;
 };
 
 export function RecordDrawerHeaderActionButton({
     label,
     inquiryWorkflow = false,
+    proofLayoutActions = false,
+    proofLayoutActionsWhite = false,
+    leadingIcon,
     busy = false,
     disabled,
     className,
@@ -40,10 +47,24 @@ export function RecordDrawerHeaderActionButton({
         <button
             type="button"
             disabled={disabled}
-            className={[recordDrawerHeaderActionClassName(inquiryWorkflow), className].filter(Boolean).join(" ")}
+            className={[
+                recordDrawerHeaderActionClassName(
+                    inquiryWorkflow,
+                    proofLayoutActions,
+                    proofLayoutActionsWhite ? "actions-white" : "default",
+                ),
+                className,
+            ]
+                .filter(Boolean)
+                .join(" ")}
             data-record-drawer-header-action="true"
             {...rest}
         >
+            {leadingIcon ?
+                <span className="inline-flex shrink-0 opacity-85" aria-hidden>
+                    {leadingIcon}
+                </span>
+            :   null}
             {busy ? "…" : label}
         </button>
     );

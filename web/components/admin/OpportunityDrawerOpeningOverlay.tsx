@@ -4,8 +4,10 @@
 export default function OpportunityDrawerOpeningOverlay(props: {
     onCancel: () => void;
     errorMessage?: string | null;
+    recordLabel?: string;
 }) {
-    const { onCancel, errorMessage } = props;
+    const { onCancel, errorMessage, recordLabel = "record" } = props;
+    const openingCopy = `Opening ${recordLabel}…`;
 
     return (
         <div
@@ -33,7 +35,7 @@ export default function OpportunityDrawerOpeningOverlay(props: {
                             className="h-5 w-5 animate-spin rounded-full border-2 border-alloy-stone/25 border-t-alloy-pine"
                             aria-hidden
                         />
-                        <p className="text-center text-sm font-medium text-alloy-midnight/85">Opening record…</p>
+                        <p className="text-center text-sm font-medium text-alloy-midnight/85">{openingCopy}</p>
                     </>
                 )}
             </div>

@@ -1039,13 +1039,14 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 swapFallbackFetchInFlightKeyRef.current = null;
                 pendingModelSwapParamsRef.current = null;
                 setDrawerLinkPendingKey(null);
+                const workspaceCtx =
+                    item.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null;
                 const backParams = buildPrepareParamsFromOpenDrawer({
                     type: item.type,
                     id: item.id,
                     source: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
                     personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
-                    opportunityWorkspaceContext:
-                        item.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
+                    opportunityWorkspaceContext: workspaceCtx,
                 });
                 const syncBack = peekDrawerViewModelPreloadSync(backParams);
                 logDrawerVmRuntimeDiagnostic(
@@ -1056,38 +1057,56 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                         open_source: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
                     }
                 );
-                if (syncBack) {
-                    logDrawerVmRuntimeDiagnostic("model_swap_cache_hit", {
-                        entity_type: item.type,
-                        entity_id: item.id,
-                        open_source: DRAWER_BACK_TO_LEAD_OPEN_SOURCE,
+                if (syncBack?.entityType === "opportunities") {
+                    opportunityDrawerPreloadRef.current = syncBack.preload;
+                    markOpportunityPreloadReady();
+                } else if (syncBack?.entityType === "persons") {
+                    personDrawerPreloadRef.current = syncBack.preload;
+                } else {
+                    restoreVmPreloadFromStackItem(item);
+                }
+                setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
+                const restoredDrawer =
+                    item.type === "opportunities" ?
+                        buildRestoredOpportunityDrawerState(item, drawer.opportunityWorkspaceContext ?? null)
+                    :   {
+                            type: item.type,
+                            id: item.id,
+                            defaultWorkflowEntityType: item.defaultWorkflowEntityType,
+                            defaultCustomerId: item.defaultCustomerId,
+                            defaultVendorId: item.defaultVendorId,
+                            defaultSchedulePrefill: item.defaultSchedulePrefill,
+                            defaultJobPrefill: item.defaultJobPrefill,
+                            jobRecordSurface: item.jobRecordSurface,
+                            operationalVisualContext: item.operationalVisualContext,
+                            defaultOpportunitySurface: item.defaultOpportunitySurface,
+                            opportunityWorkspaceContext: item.opportunityWorkspaceContext,
+                            opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
+                            opportunityQueueNavigator: item.opportunityQueueNavigator,
+                            personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
+                            openSource: item.openSource ?? null,
+                        };
+                setDrawer(restoredDrawer);
+                if (item.type === "opportunities") {
+                    scheduleOpportunityDrawerGraphRewarmAfterRestore({
+                        drawer: restoredDrawer,
+                        preload:
+                            syncBack?.entityType === "opportunities" ?
+                                syncBack.preload
+                            :   opportunityDrawerPreloadRef.current,
+                        stack: next,
                     });
                 }
-                restoreVmPreloadFromStackItem(item);
-                setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
-                setDrawer({
-                    type: item.type,
-                    id: item.id,
-                    defaultWorkflowEntityType: item.defaultWorkflowEntityType,
-                    defaultCustomerId: item.defaultCustomerId,
-                    defaultVendorId: item.defaultVendorId,
-                    defaultSchedulePrefill: item.defaultSchedulePrefill,
-                    defaultJobPrefill: item.defaultJobPrefill,
-                    jobRecordSurface: item.jobRecordSurface,
-                    operationalVisualContext: item.operationalVisualContext,
-                    defaultOpportunitySurface: item.defaultOpportunitySurface,
-                    opportunityWorkspaceContext: item.opportunityWorkspaceContext,
-                    opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
-                    opportunityQueueNavigator: item.opportunityQueueNavigator,
-                    personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
-                    openSource: item.openSource ?? null,
-                });
             }
             return next;
         });
         };
         confirmDiscardPersonDrawerUnsaved(proceedBack);
-    }, [drawer.opportunityWorkspaceContext, restoreVmPreloadFromStackItem]);
+    }, [
+        drawer.opportunityWorkspaceContext,
+        markOpportunityPreloadReady,
+        restoreVmPreloadFromStackItem,
+    ]);
 
     const goBackToLead = useCallback(() => {
         const proceedBackFromStackPop = () => {

@@ -63,11 +63,41 @@ export const BLOCKED_LAYOUT_PICKER_REF_KEYS = new Set<string>([
     "inquiry_child.program",
     "inquiry_child.schedule",
     "opportunity.location",
-    "person.primary_phone",
-    "person.primary_email",
-    "person.primary_contact_name",
     "child.location",
 ]);
+
+const LEAD_PRIMARY_CONTACT_PROJECTION_MANIFEST: PlatformFieldManifestEntry[] = [
+    entry(
+        "person.primary_contact_name",
+        "Primary contact name",
+        "text",
+        "relationship",
+        "opportunities.primary_person_id → persons.display_name",
+        "now",
+        ["case", "relationship"],
+        ["opportunities"],
+    ),
+    entry(
+        "person.primary_email",
+        "Primary contact email",
+        "text",
+        "relationship",
+        "opportunities.primary_person_id → persons.email",
+        "now",
+        ["case", "relationship"],
+        ["opportunities"],
+    ),
+    entry(
+        "person.primary_phone",
+        "Primary contact phone",
+        "phone",
+        "relationship",
+        "opportunities.primary_person_id → persons.phone",
+        "now",
+        ["case", "relationship"],
+        ["opportunities"],
+    ),
+];
 
 const OPPORTUNITY_MANIFEST: PlatformFieldManifestEntry[] = [
     entry("opportunity.status_key", "Status", "status", "native_entity", "opportunities.status_key", "now", ["case"], ["opportunities"]),
@@ -150,6 +180,7 @@ function entry(
 export const PLATFORM_FIELD_MANIFEST: PlatformFieldManifestEntry[] = [
     ...OPPORTUNITY_MANIFEST,
     ...PERSON_MANIFEST,
+    ...LEAD_PRIMARY_CONTACT_PROJECTION_MANIFEST,
     ...CHILD_MANIFEST,
     ...INQUIRY_CHILD_MANIFEST,
     ...LOCATION_MANIFEST,

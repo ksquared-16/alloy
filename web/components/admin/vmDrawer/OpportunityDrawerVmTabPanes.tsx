@@ -8,6 +8,8 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { normalizeDocumentRows } from "@/lib/admin/normalizeDocumentRow";
+import { opportunityRelatedListPath } from "@/lib/admin/opportunityRelatedApiPaths";
+import { takeOpportunityDrawerDocumentsPrefetch, takeOpportunityDrawerActivityPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 
 function isOpportunityFollowUpOverdue(nextFollowUpAt: unknown): boolean {
@@ -60,8 +62,37 @@ export default function OpportunityDrawerVmTabPanes({
     const loadDocuments = useCallback(async () => {
         setDocumentsLoading(true);
         setDocumentsError(null);
+        const prefetch = takeOpportunityDrawerDocumentsPrefetch(drawerId);
+        const snap = prefetch?.documents_snapshot;
+        if (snap && !snap.error) {
+            setDocuments(snap.documents);
+            setDocumentsLoading(false);
+            return;
+        }
+        if (snap?.error) {
+            setDocumentsError(snap.error);
+            setDocuments([]);
+            setDocumentsLoading(false);
+            return;
+        }
+        if (prefetch?.documents) {
+            try {
+                const result = await prefetch.documents;
+                if (!result.error) {
+                    setDocuments(result.documents);
+                    setDocumentsLoading(false);
+                    return;
+                }
+                setDocumentsError(result.error);
+                setDocuments([]);
+                setDocumentsLoading(false);
+                return;
+            } catch {
+                /* fall through to network */
+            }
+        }
         try {
-            const res = await fetch(`/api/admin/related/opportunities/${encodeURIComponent(drawerId)}`, {
+            const res = await fetch(opportunityRelatedListPath(drawerId), {
                 credentials: "include",
             });
             const json = (await res.json().catch(() => ({}))) as { documents?: unknown[]; error?: string };
@@ -82,6 +113,35 @@ export default function OpportunityDrawerVmTabPanes({
     const loadActivity = useCallback(async () => {
         setActivityLoading(true);
         setActivityError(null);
+        const prefetch = takeOpportunityDrawerActivityPrefetch(drawerId);
+        const snap = prefetch?.activity_snapshot;
+        if (snap && !snap.error) {
+            setActivityEvents(snap.events);
+            setActivityLoading(false);
+            return;
+        }
+        if (snap?.error) {
+            setActivityError(snap.error);
+            setActivityEvents(null);
+            setActivityLoading(false);
+            return;
+        }
+        if (prefetch?.activity) {
+            try {
+                const result = await prefetch.activity;
+                if (!result.error) {
+                    setActivityEvents(result.events);
+                    setActivityLoading(false);
+                    return;
+                }
+                setActivityError(result.error);
+                setActivityEvents(null);
+                setActivityLoading(false);
+                return;
+            } catch {
+                /* fall through to network */
+            }
+        }
         try {
             const qs = new URLSearchParams({
                 entity_type: "opportunities",

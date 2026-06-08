@@ -27,18 +27,27 @@ import {
     type ProofBindingResolution,
 } from "@/lib/layout/runtime/resolveProofBindingValue";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { FUTURE_MODULE_METADATA_KEY } from "@/lib/layout/runtime/proofLayoutHelpers";
 import { isLayoutItemSupportedForProduction } from "@/lib/layout/runtime/isLayoutItemSupportedForProduction";
 import { evaluateLayoutCondition } from "@/lib/layout/runtime/evaluateLayoutCondition";
-import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
+import { resolveLayoutRuntimeWidgetKey } from "@/lib/layout/runtime/resolveLayoutRuntimeWidgetKey";
 import AdornmentIcon from "@/components/layout/AdornmentIcon";
+import { DrawerHeaderAttentionBlock } from "@/components/admin/drawer/DrawerHeaderAttentionBlock";
+import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
+import LayoutRuntimeTasksWidget from "@/components/layout/LayoutRuntimeTasksWidget";
+import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 
 const TEXT = "#31394d";
 const MUTED = "#59678b";
 const BORDER = "#e6e8ec";
 
-export type AdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
+export type AdornmentActionHandler = (
+    item: LayoutItem,
+    adornment: LayoutFieldAdornment,
+    rowRecord?: ProofRuntimeRecord,
+) => void;
 const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
 const LayoutRuntimeVariantContext = createContext<"proof" | "production" | "preview">("proof");
 
@@ -58,7 +67,7 @@ function operatorLabel(item: LayoutItem, variant: "proof" | "production" | "prev
     return item.label || item.refKey;
 }
 
-function Adorn({ item }: { item: LayoutItem }) {
+function Adorn({ item, rowRecord }: { item: LayoutItem; rowRecord?: ProofRuntimeRecord }) {
     const onAction = useContext(AdornmentActionContext);
     const ad = item.adornment;
     if (!ad) return null;
@@ -69,7 +78,7 @@ function Adorn({ item }: { item: LayoutItem }) {
                 type="button"
                 onClick={(e) => {
                     e.stopPropagation();
-                    onAction(item, ad);
+                    onAction(item, ad, rowRecord);
                 }}
                 title={title}
                 aria-label={title}
@@ -114,6 +123,7 @@ function ValueCell({
     anchorEntity: string;
 }) {
     const variant = useContext(LayoutRuntimeVariantContext);
+    const edit = useLayoutRuntimeDrawerEdit();
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
     const label = operatorLabel(item, variant);
@@ -121,9 +131,15 @@ function ValueCell({
         variant === "production" || variant === "preview" ?
             sanitizeOperatorDisplay(r.isPlaceholder ? null : r.display)
         :   r.display;
+    const refKey = item.refKey ?? "";
+    const canEdit =
+        item.editable === true &&
+        variant === "production" &&
+        edit?.isEditableRefKey(refKey);
+    const editValue = canEdit && edit ? edit.getFieldValue(refKey, display ?? "") : display ?? "";
 
     return (
-        <div className="rounded border border-[#eef0f4] bg-white px-2.5 py-1.5">
+        <div className="rounded border border-[#e8eaed] bg-gradient-to-br from-white to-[#f9fafb] px-2.5 py-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-shadow hover:shadow-[0_2px_5px_rgba(15,23,42,0.06)] focus-within:border-[rgba(0,162,131,0.28)] focus-within:ring-1 focus-within:ring-[rgba(0,162,131,0.12)]">
             {label ?
                 <div className="flex flex-wrap items-center gap-1 text-[11px] font-medium" style={{ color: MUTED }}>
                     {label}
@@ -135,15 +151,25 @@ function ValueCell({
                     :   null}
                 </div>
             :   null}
-            <div className="mt-0.5 flex items-center gap-1 text-sm" style={{ color: display ? TEXT : "#9aa4bf" }}>
+            <div className="mt-0.5 flex items-center gap-1 text-sm" style={{ color: display || canEdit ? TEXT : "#9aa4bf" }}>
                 {item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
-                <span>
-                    {!display ?
-                        <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>—</span>
-                    : r.renderHint === "status" ?
-                        <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{display}</span>
-                    :   display}
-                </span>
+                {canEdit && edit ?
+                    <input
+                        type="text"
+                        className="w-full rounded border border-[#dfe3ea] bg-white px-2 py-1 text-sm text-[#31394d] outline-none focus:border-[rgba(0,162,131,0.45)] focus:ring-1 focus:ring-[rgba(0,162,131,0.12)]"
+                        value={editValue}
+                        onChange={(e) => edit.setFieldValue(refKey, e.target.value)}
+                        data-layout-runtime-editable="true"
+                        data-layout-runtime-ref-key={refKey}
+                    />
+                :   <span>
+                        {!display ?
+                            <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>—</span>
+                        : r.renderHint === "status" ?
+                            <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{display}</span>
+                        :   display}
+                    </span>
+                }
                 {item.adornment && item.adornment.position === "right" ? <Adorn item={item} /> : null}
             </div>
         </div>
@@ -190,7 +216,7 @@ function RepeaterCellContent({ row, col }: { row: ProofRuntimeRecord; col: Layou
     const r = resolveItemValue(row, synthetic);
     return (
         <span className="inline-flex items-center gap-1">
-            {col.adornment && col.adornment.position !== "right" ? <Adorn item={synthetic} /> : null}
+            {col.adornment && col.adornment.position !== "right" ? <Adorn item={synthetic} rowRecord={row} /> : null}
             <span style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
                 {r.isPlaceholder ? "—" : col.renderHint === "status" ? (
                     <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-[11px]">{r.display}</span>
@@ -198,7 +224,7 @@ function RepeaterCellContent({ row, col }: { row: ProofRuntimeRecord; col: Layou
                     r.display
                 )}
             </span>
-            {col.adornment && col.adornment.position === "right" ? <Adorn item={synthetic} /> : null}
+            {col.adornment && col.adornment.position === "right" ? <Adorn item={synthetic} rowRecord={row} /> : null}
         </span>
     );
 }
@@ -215,7 +241,7 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
     if (!hasColumns) {
         if (variant === "production") return null;
         return (
-            <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] px-2.5 py-2 text-xs text-[#9aa4bf]">
+            <div className="rounded-md border border-dashed border-[#d5dae3] bg-[#fafbfc] px-2.5 py-2 text-xs text-[#9aa4bf]">
                 Repeater preview unavailable
             </div>
         );
@@ -312,7 +338,7 @@ function FutureModulePlaceholder({ title }: { title: string }) {
 
 function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: LayoutItem }) {
     const variant = useContext(LayoutRuntimeVariantContext);
-    const key = item.refKey;
+    const widgetKey = resolveLayoutRuntimeWidgetKey(item);
     const title = operatorLabel(item, variant) || "Details";
     const isFutureModule = item.metadata?.[FUTURE_MODULE_METADATA_KEY] === true;
 
@@ -322,8 +348,43 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
 
     const empty = <span className="text-xs text-[#9aa4bf]">No {title.toLowerCase()} yet</span>;
 
-    if (key === "tasks" || key === "reminders") {
-        const rows = widgetRows(record, key);
+    if (widgetKey === "tasks") {
+        return (
+            <div className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white">
+                <LayoutRuntimeTasksWidget record={record} title={title} />
+            </div>
+        );
+    }
+
+    if (widgetKey === "attention") {
+        const overview =
+            record._overview_data && typeof record._overview_data === "object"
+                ? (record._overview_data as Record<string, unknown>)
+                : record;
+        if (!isDrawerHeaderAttentionVisible(overview)) {
+            return (
+                <WidgetChrome title={title}>
+                    <span className="text-xs text-[#9aa4bf]">No attention flagged</span>
+                </WidgetChrome>
+            );
+        }
+        return (
+            <div
+                className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white"
+                data-layout-runtime-attention-widget="true"
+            >
+                <div className="border-b border-[#eef0f4] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                    {title}
+                </div>
+                <div className="px-2.5 py-2">
+                    <DrawerHeaderAttentionBlock overviewData={overview} />
+                </div>
+            </div>
+        );
+    }
+
+    if (widgetKey === "reminders") {
+        const rows = widgetRows(record, widgetKey);
         return (
             <WidgetChrome title={title}>
                 {rows.length === 0 ? empty : (
@@ -339,7 +400,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             </WidgetChrome>
         );
     }
-    if (key === "actions" && variant === "proof") {
+    if (widgetKey === "actions" && variant === "proof") {
         return (
             <WidgetChrome title={title}>
                 <div className="flex flex-wrap gap-1.5">
@@ -402,8 +463,8 @@ function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; ro
 function SectionView({ record, section, anchorEntity }: { record: ProofRuntimeRecord; section: LayoutSection; anchorEntity: string }) {
     if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
     return (
-        <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.08)] border-l-[3px] border-l-[#00A283] bg-white shadow-sm ring-1 ring-[rgba(0,0,0,0.06)]">
-            <div className="border-b border-[rgba(0,0,0,0.08)] bg-[rgba(0,0,0,0.025)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "rgba(39,63,82,0.8)" }}>
+        <div className="overflow-hidden rounded-lg border border-[rgba(39,63,82,0.1)] border-l-[3px] border-l-[rgba(0,162,131,0.55)] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] ring-1 ring-[rgba(39,63,82,0.05)]">
+            <div className="border-b border-[rgba(0,162,131,0.10)] bg-gradient-to-r from-[rgba(0,162,131,0.045)] via-white to-[rgba(39,63,82,0.018)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "rgba(39,63,82,0.82)" }}>
                 {section.title}
             </div>
             <div className="flex flex-col gap-3 p-3">

@@ -90,8 +90,8 @@ export default function ProofRecordModalHeaderShell({
                     className="flex shrink-0 items-center gap-2"
                     data-proof-layout-header-controls="true"
                 >
-                    {statusControl}
                     {actionsControl}
+                    {statusControl}
                     {closeButton}
                 </div>
             </div>

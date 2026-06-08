@@ -13,8 +13,10 @@ import {
 } from "@/lib/layout/fieldCatalog";
 import {
     childcareCatalogRefKeysForOperatorEntity,
-    collectChildcareUserFacingCopy,
+    CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS,
     childcareCopyContainsBannedPhrase,
+    collectChildcareUserFacingCopy,
+    isPrimaryContactProjectionRefKey,
 } from "@/lib/layout/childcareLayoutFieldCatalog";
 import { INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS } from "@/lib/fields/inquiryChildFieldRegistry";
 
@@ -35,8 +37,17 @@ describe("field catalog picker — childcare starter catalog", () => {
 
     it("never emits mis-grained child participation refKeys", () => {
         const refKeys = leadPickerFromCuratedFallback().flatMap((g) => g.fields.map((f) => f.refKey));
-        for (const blocked of ["child.program", "child.desired_start_date", "opportunity.location", "person.primary_phone"]) {
+        for (const blocked of ["child.program", "child.desired_start_date", "opportunity.location"]) {
             expect(refKeys).not.toContain(blocked);
+        }
+    });
+
+    it("includes lead primary contact projections under Parent / Contact", () => {
+        const parentGroup = leadPickerFromCuratedFallback().find((g) => g.entityLabel === "Parent / Contact");
+        const refKeys = parentGroup?.fields.map((f) => f.refKey) ?? [];
+        for (const key of CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS) {
+            expect(refKeys).toContain(key);
+            expect(isPrimaryContactProjectionRefKey(key)).toBe(true);
         }
     });
 

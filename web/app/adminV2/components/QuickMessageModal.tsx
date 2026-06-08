@@ -492,7 +492,10 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     const threadStripFallback = threadsPreview.slice(0, 5);
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-alloy-midnight/45 px-2 py-6 backdrop-blur-[2px] sm:px-4 sm:py-10">
+        <div
+            className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-alloy-midnight/45 px-2 py-6 backdrop-blur-[2px] sm:px-4 sm:py-10"
+            data-adminv2-quick-message-modal="true"
+        >
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close modal" onClick={onClose} />
             <div
                 role="dialog"

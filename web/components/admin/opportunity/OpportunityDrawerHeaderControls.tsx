@@ -32,6 +32,7 @@ type Props = {
      * `modal-attention` / `modal-actions` — AdminV2 center modal three-column header.
      */
     layout?: "composed" | "modal-attention" | "modal-actions";
+    proofLayoutActions?: boolean;
 };
 
 function OpportunityDrawerHeaderActionsRow({
@@ -46,6 +47,7 @@ function OpportunityDrawerHeaderActionsRow({
     actionLoadingKey = null,
     onActionSelect,
     disabledReason = null,
+    proofLayoutActions = false,
 }: Pick<
     Props,
     | "opportunityId"
@@ -58,6 +60,7 @@ function OpportunityDrawerHeaderActionsRow({
     | "canMutate"
     | "actionLoadingKey"
     | "onActionSelect"
+    | "proofLayoutActions"
 > & { disabledReason?: string | null }) {
     return (
         <div
@@ -71,11 +74,13 @@ function OpportunityDrawerHeaderActionsRow({
                 opportunitySingular={opportunitySingular}
                 queuePreviewSeed={queuePreviewSeed}
                 inquiryWorkflow={inquiryWorkflow}
+                proofLayoutActions={proofLayoutActions}
             />
             {showRegistryActions ?
                 <OpportunityDrawerHeaderActionsMenu
                     actions={menuActions}
                     inquiryWorkflow={inquiryWorkflow}
+                    proofLayoutActions={proofLayoutActions}
                     disabled={!canMutate || !!actionLoadingKey}
                     disabledReason={
                         disabledReason ??
@@ -106,6 +111,7 @@ export function OpportunityDrawerHeaderControls({
     registryActionFeedback = null,
     actionsDisabledReason = null,
     layout = "composed",
+    proofLayoutActions = false,
 }: Props) {
     if (layout === "modal-attention") {
         return (
@@ -138,6 +144,7 @@ export function OpportunityDrawerHeaderControls({
                     actionLoadingKey={actionLoadingKey}
                     onActionSelect={onActionSelect}
                     disabledReason={actionsDisabledReason}
+                    proofLayoutActions={proofLayoutActions}
                 />
                 {actionPreflightBlocked ?
                     <ActionPreflightBlockedPanel
@@ -178,6 +185,7 @@ export function OpportunityDrawerHeaderControls({
                     actionLoadingKey={actionLoadingKey}
                     onActionSelect={onActionSelect}
                     disabledReason={actionsDisabledReason}
+                    proofLayoutActions={proofLayoutActions}
                 />
             </div>
             {actionPreflightBlocked ?

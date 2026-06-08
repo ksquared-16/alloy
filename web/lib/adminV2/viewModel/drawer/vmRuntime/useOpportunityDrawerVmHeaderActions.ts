@@ -122,6 +122,8 @@ export function useOpportunityDrawerVmHeaderActions(params: {
                         resolvedIntent === "send_form" ||
                         resolvedIntent === "send_enrollment_packet" ||
                         resolvedIntent === "create_task" ||
+                        resolvedIntent === "quick_message" ||
+                        actionKey === "quick_message" ||
                         actionKey === "review_enrollment_packet"
                     ) {
                         return;

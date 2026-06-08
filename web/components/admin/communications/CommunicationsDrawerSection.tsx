@@ -566,6 +566,44 @@ export default function CommunicationsDrawerSection({
     const loadConversationMessages = useCallback(
         async (signal: AbortSignal, isCurrent: () => boolean) => {
             if (!dataLayerActive) return;
+
+            const applyMessagesFromPrefetch = async (): Promise<boolean> => {
+                const peek = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+                const snap = peek?.messages_snapshot;
+                if (snap && !snap.error) {
+                    if (!isCurrent()) return true;
+                    setMsgs(sortMessagesByInstantAscending(snap.messages as MsgRowWithThread[]));
+                    setMsgErr(null);
+                    setShowOlderMessages(false);
+                    setExpandedBodies({});
+                    markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "messages");
+                    setLoadingMsgs(false);
+                    return true;
+                }
+                if (peek?.messages) {
+                    try {
+                        const pr = await peek.messages;
+                        if (!pr.error) {
+                            if (!isCurrent()) return true;
+                            setMsgs(sortMessagesByInstantAscending(pr.messages as MsgRowWithThread[]));
+                            setMsgErr(null);
+                            setShowOlderMessages(false);
+                            setExpandedBodies({});
+                            markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "messages");
+                            setLoadingMsgs(false);
+                            return true;
+                        }
+                    } catch (e) {
+                        if (signal.aborted || (e instanceof Error && e.name === "AbortError")) return true;
+                    }
+                }
+                return false;
+            };
+
+            setLoadingMsgs(true);
+            setMsgErr(null);
+            if (await applyMessagesFromPrefetch()) return;
+
             // Load across all in-scope threads regardless of the active filter; the channel
             // filter is applied client-side (filteredMsgs) so tab switches never refetch.
             const scopeList = threads.slice(0, MAX_MERGE_THREADS);
@@ -578,8 +616,6 @@ export default function CommunicationsDrawerSection({
                 setLoadingMsgs(false);
                 return;
             }
-            setLoadingMsgs(true);
-            setMsgErr(null);
             try {
                 const batches = await Promise.all(
                     scopeList.map(async (th) => {

@@ -6,6 +6,7 @@ import {
 } from "@/lib/adminV2/bos/bosDrawerAssistHandoff";
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
 import { operatorDisplayNameFromEmail } from "@/lib/adminV2/bos/communication/operatorDisplayNameFromEmail";
+import { Sparkles } from "lucide-react";
 import OpportunityDrawerHeaderActionButton from "@/components/admin/opportunity/OpportunityDrawerHeaderActionButton";
 import OpportunityDrawerHeaderActionsPanel from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsPanel";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
@@ -20,6 +21,7 @@ type Props = {
     /** Title-rail header — no card chrome wrapper. */
     bare?: boolean;
     inquiryWorkflow?: boolean;
+    proofLayoutActions?: boolean;
 };
 
 /**
@@ -32,6 +34,7 @@ export default function BosDrawerAssistCta({
     queuePreviewSeed = null,
     bare = false,
     inquiryWorkflow = true,
+    proofLayoutActions = false,
 }: Props) {
     const globalAssistant = useGlobalAssistantOptional();
     const { userEmail } = useAdminAuth();
@@ -44,6 +47,8 @@ export default function BosDrawerAssistCta({
         <OpportunityDrawerHeaderActionButton
             label={BOS_ASSIST_CTA_DRAWER}
             inquiryWorkflow={inquiryWorkflow}
+            proofLayoutActions={proofLayoutActions}
+            leadingIcon={<Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />}
             data-drawer-action="bos_assist"
             data-bos-assist-button="true"
             onClick={() =>

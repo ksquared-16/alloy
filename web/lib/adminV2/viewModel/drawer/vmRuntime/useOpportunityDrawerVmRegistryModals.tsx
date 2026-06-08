@@ -8,6 +8,25 @@ import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/Opp
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
 import { RecordTourOutcomeModal } from "@/components/admin/opportunity/actions/RecordTourOutcomeModal";
 import { AddNoteModal } from "@/components/admin/opportunity/actions/AddNoteModal";
+import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
+import { AddPersonModal } from "@/components/admin/opportunity/actions/AddPersonModal";
+import {
+    isAddInquiryChildActionKey,
+    isAddInquiryChildFormKey,
+    parseOpenAddInquiryChildModalDetail,
+    resolveAddInquiryChildMode,
+    ADMINV2_OPEN_ADD_INQUIRY_CHILD_MODAL,
+} from "@/lib/admin/actions/addInquiryChildActionClient";
+import {
+    isAddPersonActionKey,
+    isAddPersonFormKey,
+    parseOpenAddPersonModalDetail,
+    resolveAddPersonActionKey,
+    ADMINV2_OPEN_ADD_PERSON_MODAL,
+} from "@/lib/admin/actions/addPersonActionClient";
+import { submitAddInquiryChildFromDrawer } from "@/lib/admin/actions/submitAddInquiryChildFromDrawer";
+import { submitAddPersonFromDrawer } from "@/lib/admin/actions/submitAddPersonFromDrawer";
+import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
 import type { ApplyRegistryResolvedActionHost } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
@@ -43,6 +62,8 @@ type Params = {
     record: Record<string, unknown> | null | undefined;
     canMutate: boolean;
     actionHost: OpportunityDrawerVmRegistryModalHost;
+    workspaceWorkUnitId?: string | null;
+    workspaceDepartmentId?: string | null;
 };
 
 function readStringField(record: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -105,9 +126,14 @@ export function useOpportunityDrawerVmRegistryModals({
     record,
     canMutate,
     actionHost,
+    workspaceWorkUnitId = null,
+    workspaceDepartmentId = null,
 }: Params): {
     modals: ReactNode;
-    registryHostExtensions: Pick<ApplyRegistryResolvedActionHost, "openForm" | "openCreateWork">;
+    registryHostExtensions: Pick<
+        ApplyRegistryResolvedActionHost,
+        "openForm" | "openCreateWork" | "openAddInquiryChild" | "openAddPerson"
+    >;
 } {
     const oid = opportunityId?.trim() ?? "";
     const { patchRecord } = actionHost;
@@ -118,6 +144,8 @@ export function useOpportunityDrawerVmRegistryModals({
     const [sendFormOpen, setSendFormOpen] = useState(false);
     const [launchPacketOpen, setLaunchPacketOpen] = useState(false);
     const [actionFormState, setActionFormState] = useState<ActionFormState | null>(null);
+    const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
+    const [addPersonState, setAddPersonState] = useState<{ actionKey: string } | null>(null);
     const pendingTourScheduleRef = useRef<{ id: string; action_key?: string } | null>(null);
     const prevOidRef = useRef<string | null>(null);
 
@@ -136,12 +164,43 @@ export function useOpportunityDrawerVmRegistryModals({
         [oid, openCreateWorkDirect]
     );
 
+    const openAddInquiryChild = useCallback((mode: "child" | "sibling") => {
+        setAddInquiryChildState({ mode });
+    }, []);
+
+    const openAddPerson = useCallback((actionKey: string) => {
+        setAddPersonState({ actionKey: actionKey.trim() || "add_family_member" });
+    }, []);
+
     const openForm = useCallback(
         (opts: { form_key: string; action: ResolvedActionForClient }) => {
             if (!oid) return;
-            setActionFormState({ form_key: opts.form_key, action: opts.action });
+            const formKey = opts.form_key.trim();
+            const actionKey = opts.action.key.trim();
+            if (actionKey === "create_task" || formKey === "create_task") {
+                openCreateWorkDirect({ opportunity_id: oid });
+                return;
+            }
+            if (isAddPersonFormKey(formKey) || isAddPersonActionKey(actionKey)) {
+                openAddPerson(resolveAddPersonActionKey({ actionKey, formKey }));
+                return;
+            }
+            if (isAddInquiryChildFormKey(formKey) || isAddInquiryChildActionKey(actionKey)) {
+                const p =
+                    opts.action.payload && typeof opts.action.payload === "object"
+                        ? (opts.action.payload as Record<string, unknown>)
+                        : {};
+                openAddInquiryChild(
+                    resolveAddInquiryChildMode({
+                        actionKey,
+                        payloadMode: p.mode != null ? String(p.mode) : null,
+                    }),
+                );
+                return;
+            }
+            setActionFormState({ form_key: formKey, action: opts.action });
         },
-        [oid]
+        [oid, openAddInquiryChild, openAddPerson, openCreateWorkDirect],
     );
 
     useEffect(() => {
@@ -217,11 +276,30 @@ export function useOpportunityDrawerVmRegistryModals({
             });
         };
 
+        const onOpenAddInquiryChild = (ev: Event) => {
+            const detail = parseOpenAddInquiryChildModalDetail(ev);
+            if (!detail || !matchesDrawer(detail.opportunity_id)) return;
+            openAddInquiryChild(detail.mode);
+        };
+
+        const onOpenAddPerson = (ev: Event) => {
+            const detail = parseOpenAddPersonModalDetail(ev);
+            if (!detail || !matchesDrawer(detail.opportunity_id)) return;
+            openAddPerson(
+                resolveAddPersonActionKey({
+                    actionKey: detail.action_key,
+                    formKey: detail.action_key,
+                }),
+            );
+        };
+
         window.addEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
         window.addEventListener("adminv2:open-send-form", onOpenSendForm as EventListener);
         window.addEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
         window.addEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
         window.addEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
+        window.addEventListener(ADMINV2_OPEN_ADD_INQUIRY_CHILD_MODAL, onOpenAddInquiryChild as EventListener);
+        window.addEventListener(ADMINV2_OPEN_ADD_PERSON_MODAL, onOpenAddPerson as EventListener);
 
         return () => {
             window.removeEventListener(ADMIN_V2_OPEN_CREATE_WORK_MODAL, onOpenCreateWork as EventListener);
@@ -229,8 +307,10 @@ export function useOpportunityDrawerVmRegistryModals({
             window.removeEventListener("adminv2:open-enrollment-packet", onOpenEnrollmentPacket as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_SCHEDULE_MODAL, onOpenTourSchedule as EventListener);
             window.removeEventListener(ADMINV2_OPEN_TOUR_OUTCOME_MODAL, onOpenTourOutcome as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_ADD_INQUIRY_CHILD_MODAL, onOpenAddInquiryChild as EventListener);
+            window.removeEventListener(ADMINV2_OPEN_ADD_PERSON_MODAL, onOpenAddPerson as EventListener);
         };
-    }, [oid, openCreateWorkFromEvent]);
+    }, [oid, openAddInquiryChild, openAddPerson, openCreateWorkFromEvent]);
 
     useEffect(() => {
         const pending = pendingTourScheduleRef.current;
@@ -261,14 +341,19 @@ export function useOpportunityDrawerVmRegistryModals({
             setSendFormOpen(false);
             setLaunchPacketOpen(false);
             setActionFormState(null);
+            setAddInquiryChildState(null);
+            setAddPersonState(null);
         }
     }, [oid]);
 
     const entityLabel = readStringField(record, "name");
+    const departmentId =
+        readStringField(record, "_work_unit_department_id") ?? workspaceDepartmentId?.trim() ?? null;
     const lifecycleStageKey = readStringField(record, "_effective_lifecycle_stage");
     const recordOwnerUserId = readStringField(record, "assigned_to");
     const locationId = readStringField(record, "location_id") ?? readStringField(record, "_location_id");
-    const workUnitId = readStringField(record, "work_unit_id");
+    const workUnitId =
+        readStringField(record, "work_unit_id") ?? workspaceWorkUnitId?.trim() ?? null;
     const metadata =
         record && typeof record.metadata === "object" && record.metadata != null ?
             (record.metadata as Record<string, unknown>)
@@ -463,14 +548,79 @@ export function useOpportunityDrawerVmRegistryModals({
                         dispatchOpportunityDrawerScopedUpdate(oid, resolvedActionKey, ["activity"]);
                     }}
                 />
+                <AddPersonModal
+                    open={!!addPersonState}
+                    title="Add person"
+                    defaultRoleType={
+                        addPersonState?.actionKey === "add_related_person" ? "primary_contact" : "parent"
+                    }
+                    onClose={() => setAddPersonState(null)}
+                    onSubmit={async (payload) => {
+                        if (!oid) throw new Error("Open an opportunity record before adding a person.");
+                        const actionKey = addPersonState?.actionKey ?? "add_family_member";
+                        await submitAddPersonFromDrawer({
+                            entityType: "opportunity",
+                            entityId: oid,
+                            actionKey,
+                            payload,
+                            context: {
+                                surface: "record_header",
+                                section_key: "family_contacts",
+                                department_id: departmentId,
+                                work_unit_id: workUnitId,
+                            },
+                        });
+                        setAddPersonState(null);
+                        dispatchOpportunityDrawerScopedUpdate(oid, actionKey, [
+                            "header_actions",
+                            "activity",
+                        ]);
+                    }}
+                />
+                <AddInquiryChildModal
+                    open={!!addInquiryChildState}
+                    mode={addInquiryChildState?.mode ?? "child"}
+                    onClose={() => setAddInquiryChildState(null)}
+                    onSubmit={async (payload) => {
+                        if (!oid) throw new Error("Open an opportunity record before adding a child.");
+                        const customerId = readStringField(record, "customer_id");
+                        if (!customerId) {
+                            throw new Error(
+                                "This inquiry is not linked to a household yet. Add a primary contact first.",
+                            );
+                        }
+                        const existingRaw = (record?._inquiry_children as unknown[]) ?? [];
+                        const existingChildren = mapRawInquiryChildrenToDrawerRows(existingRaw).map((row) => ({
+                            first_name: row.first_name,
+                            last_name: row.last_name,
+                            dob: row.dob,
+                        }));
+                        const mode = addInquiryChildState?.mode ?? "child";
+                        await submitAddInquiryChildFromDrawer({
+                            opportunityId: oid,
+                            customerId,
+                            payload,
+                            existingChildren,
+                        });
+                        setAddInquiryChildState(null);
+                        dispatchOpportunityDrawerScopedUpdate(
+                            oid,
+                            mode === "sibling" ? "add_sibling" : "add_child",
+                            ["header_actions", "activity"],
+                        );
+                    }}
+                />
             </>
         );
     }, [
         actionFormState,
+        addInquiryChildState,
+        addPersonState,
         applyTourBookingPatch,
         canMutate,
         createWorkOpen,
         createWorkPrefill,
+        departmentId,
         entityLabel,
         initialTourDate,
         initialTourTime,
@@ -488,8 +638,10 @@ export function useOpportunityDrawerVmRegistryModals({
         () => ({
             openForm,
             openCreateWork: openCreateWorkDirect,
+            openAddInquiryChild,
+            openAddPerson,
         }),
-        [openCreateWorkDirect, openForm]
+        [openAddInquiryChild, openAddPerson, openCreateWorkDirect, openForm],
     );
 
     return { modals, registryHostExtensions };

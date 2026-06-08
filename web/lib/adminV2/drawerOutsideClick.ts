@@ -4,6 +4,11 @@ export const ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS = [
     "[data-adminv2-ai-command-bar]",
     "[data-adminv2-ai-command-surface]",
     '[data-adminv2-global-search-box="true"]',
+    '[data-vm-drawer-action-modals-host="true"]',
+    '[data-opportunity-header-actions-menu="true"]',
+    '[data-opportunity-header-actions-menu-portal="true"]',
+    '[data-adminv2-quick-message-modal="true"]',
+    '[data-opportunity-drawer-action-overlay="true"]',
 ] as const;
 
 /**

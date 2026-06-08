@@ -4,10 +4,13 @@ import {
     useCallback,
     useEffect,
     useId,
+    useLayoutEffect,
     useRef,
     useState,
     type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { createPortal } from "react-dom";
+import { Zap } from "lucide-react";
 
 import { recordDrawerHeaderActionClassName } from "@/components/admin/drawer/record/recordDrawerHeaderActionClasses";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -20,6 +23,7 @@ type Props = {
     disabledReason?: string | null;
     busyKey?: string | null;
     onSelect: (action: ResolvedActionForClient) => void;
+    proofLayoutActions?: boolean;
 };
 
 /** Single Actions dropdown — all configured record_header actions; no visible pills. */
@@ -30,12 +34,43 @@ export function OpportunityDrawerHeaderActionsMenu({
     disabledReason = null,
     busyKey = null,
     onSelect,
+    proofLayoutActions = false,
 }: Props) {
     const [open, setOpen] = useState(false);
     const [activeIndex, setActiveIndex] = useState(0);
     const rootRef = useRef<HTMLDivElement>(null);
+    const menuPortalRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
     const menuId = useId();
-    const btnClass = recordDrawerHeaderActionClassName(inquiryWorkflow);
+    const btnClass = recordDrawerHeaderActionClassName(
+        inquiryWorkflow,
+        proofLayoutActions,
+        proofLayoutActions ? "actions-white" : "default",
+    );
+
+    const updateMenuPos = useCallback(() => {
+        const el = triggerRef.current;
+        if (!el) return;
+        const rect = el.getBoundingClientRect();
+        setMenuPos({
+            top: rect.bottom + 6,
+            left: rect.right,
+            width: Math.max(rect.width, 176),
+        });
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!open || !proofLayoutActions) return;
+        updateMenuPos();
+        const onReflow = () => updateMenuPos();
+        window.addEventListener("resize", onReflow);
+        window.addEventListener("scroll", onReflow, true);
+        return () => {
+            window.removeEventListener("resize", onReflow);
+            window.removeEventListener("scroll", onReflow, true);
+        };
+    }, [open, proofLayoutActions, updateMenuPos]);
 
     const close = useCallback(() => {
         setOpen(false);
@@ -45,7 +80,10 @@ export function OpportunityDrawerHeaderActionsMenu({
     useEffect(() => {
         if (!open) return;
         const onDoc = (ev: MouseEvent) => {
-            if (!rootRef.current?.contains(ev.target as Node)) close();
+            const target = ev.target as Node;
+            if (rootRef.current?.contains(target)) return;
+            if (menuPortalRef.current?.contains(target)) return;
+            close();
         };
         const onKey = (ev: KeyboardEvent) => {
             if (ev.key === "Escape") close();
@@ -107,6 +145,7 @@ export function OpportunityDrawerHeaderActionsMenu({
     return (
         <div ref={rootRef} className="relative shrink-0" data-opportunity-header-actions-menu="true">
             <button
+                ref={triggerRef}
                 type="button"
                 disabled={disabled}
                 title={menuDisabledReason ?? undefined}
@@ -122,45 +161,90 @@ export function OpportunityDrawerHeaderActionsMenu({
                 }}
                 onKeyDown={onTriggerKeyDown}
             >
+                <Zap className="h-3.5 w-3.5 shrink-0 opacity-85" aria-hidden strokeWidth={2.2} />
                 <span>Actions</span>
                 <span className="text-[10px] opacity-60" aria-hidden>
                     ▾
                 </span>
             </button>
-            {open ?
-                <div
-                    id={menuId}
-                    role="menu"
-                    tabIndex={-1}
-                    aria-label="Record actions"
-                    onKeyDown={onMenuKeyDown}
-                    className="absolute right-0 top-[calc(100%+6px)] z-[120] max-h-[min(22rem,70vh)] min-w-[11rem] max-w-[16rem] overflow-y-auto overflow-x-hidden rounded-xl border border-alloy-stone/15 bg-gradient-to-b from-white via-white to-alloy-stone/[0.035] py-1.5 shadow-[0_10px_28px_-10px_rgba(15,23,42,0.18)] ring-1 ring-alloy-stone/10 backdrop-blur-[2px]"
-                >
-                    {actions.map((a, index) => (
-                        <button
-                            key={a.key}
-                            type="button"
-                            role="menuitem"
-                            disabled={disabled || busyKey === a.key}
-                            title={
-                                busyKey === a.key ? "Action in progress…"
-                                : menuDisabledReason ?
-                                    menuDisabledReason
-                                :   a.label
-                            }
-                            aria-current={index === activeIndex ? "true" : undefined}
-                            className={itemClassName(index)}
-                            onMouseEnter={() => setActiveIndex(index)}
-                            onClick={() => {
-                                if (disabled || busyKey === a.key) return;
-                                close();
-                                onSelect(a);
+            {open && (!proofLayoutActions || menuPos) ?
+                proofLayoutActions && menuPos ?
+                    createPortal(
+                        <div
+                            ref={menuPortalRef}
+                            id={menuId}
+                            role="menu"
+                            tabIndex={-1}
+                            aria-label="Record actions"
+                            onKeyDown={onMenuKeyDown}
+                            className="fixed z-[200] max-h-[min(22rem,70vh)] min-w-[11rem] max-w-[16rem] overflow-y-auto overflow-x-hidden rounded-none border border-alloy-stone/15 bg-gradient-to-b from-white via-white to-alloy-stone/[0.035] py-1.5 shadow-[0_10px_28px_-10px_rgba(15,23,42,0.18)] ring-1 ring-alloy-stone/10 backdrop-blur-[2px]"
+                            style={{
+                                top: menuPos.top,
+                                left: menuPos.left,
+                                transform: "translateX(-100%)",
                             }}
+                            data-opportunity-header-actions-menu-portal="true"
                         >
-                            {busyKey === a.key ? "…" : a.label}
-                        </button>
-                    ))}
-                </div>
+                            {actions.map((a, index) => (
+                                <button
+                                    key={a.key}
+                                    type="button"
+                                    role="menuitem"
+                                    disabled={disabled || busyKey === a.key}
+                                    title={
+                                        busyKey === a.key ? "Action in progress…"
+                                        : menuDisabledReason ?
+                                            menuDisabledReason
+                                        :   a.label
+                                    }
+                                    aria-current={index === activeIndex ? "true" : undefined}
+                                    className={itemClassName(index)}
+                                    onMouseEnter={() => setActiveIndex(index)}
+                                    onClick={() => {
+                                        if (disabled || busyKey === a.key) return;
+                                        close();
+                                        onSelect(a);
+                                    }}
+                                >
+                                    {busyKey === a.key ? "…" : a.label}
+                                </button>
+                            ))}
+                        </div>,
+                        document.body,
+                    )
+                :   <div
+                        id={menuId}
+                        role="menu"
+                        tabIndex={-1}
+                        aria-label="Record actions"
+                        onKeyDown={onMenuKeyDown}
+                        className="absolute right-0 top-[calc(100%+6px)] z-[120] max-h-[min(22rem,70vh)] min-w-[11rem] max-w-[16rem] overflow-y-auto overflow-x-hidden rounded-xl border border-alloy-stone/15 bg-gradient-to-b from-white via-white to-alloy-stone/[0.035] py-1.5 shadow-[0_10px_28px_-10px_rgba(15,23,42,0.18)] ring-1 ring-alloy-stone/10 backdrop-blur-[2px]"
+                    >
+                        {actions.map((a, index) => (
+                            <button
+                                key={a.key}
+                                type="button"
+                                role="menuitem"
+                                disabled={disabled || busyKey === a.key}
+                                title={
+                                    busyKey === a.key ? "Action in progress…"
+                                    : menuDisabledReason ?
+                                        menuDisabledReason
+                                    :   a.label
+                                }
+                                aria-current={index === activeIndex ? "true" : undefined}
+                                className={itemClassName(index)}
+                                onMouseEnter={() => setActiveIndex(index)}
+                                onClick={() => {
+                                    if (disabled || busyKey === a.key) return;
+                                    close();
+                                    onSelect(a);
+                                }}
+                            >
+                                {busyKey === a.key ? "…" : a.label}
+                            </button>
+                        ))}
+                    </div>
             :   null}
         </div>
     );

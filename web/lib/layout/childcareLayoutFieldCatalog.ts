@@ -23,7 +23,13 @@ export type ChildcareCatalogFieldEntry = {
     /** Authoritative storage table (audit / FC-3 mapper). */
     storageTable?: string;
     storageColumn?: string;
+    /** Human-readable resolution path for relationship projections. */
+    storagePath?: string;
     computed?: boolean;
+    /** Lead-only projection via opportunities.primary_person_id → persons (not field_definitions). */
+    relationshipProjection?: boolean;
+    /** Operator helper copy in layout picker. */
+    pickerDescription?: string;
     layoutAnchors: LayoutPickerAnchorEntity[];
     /** inquiry_child.* enrollment fields — operator copy only. */
     enrollmentDetail?: boolean;
@@ -101,6 +107,32 @@ function childField(
         computed: "computed" in def ? true : undefined,
         enrollmentDetail: "computed" in def ? undefined : def.enrollmentDetail,
         layoutAnchors: anchors,
+    };
+}
+
+const PRIMARY_CONTACT_PICKER_DESCRIPTION = "Uses the linked primary contact on this lead";
+
+/** Lead layout: primary contact projections (opportunities.primary_person_id → persons). */
+function parentPrimaryContactProjection(
+    refKey: string,
+    pickerLabel: string,
+    fieldType: string,
+    sortOrder: number,
+    personsColumn: string,
+): ChildcareCatalogFieldEntry {
+    return {
+        refKey,
+        operatorEntity: "parent",
+        pickerLabel,
+        fieldType,
+        sortOrder,
+        storageTable: "opportunities",
+        storageColumn: "primary_person_id",
+        storagePath: `opportunities.primary_person_id → persons.${personsColumn}`,
+        computed: true,
+        relationshipProjection: true,
+        pickerDescription: PRIMARY_CONTACT_PICKER_DESCRIPTION,
+        layoutAnchors: ["opportunities"],
     };
 }
 
@@ -281,6 +313,11 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         enrollmentDetail: true,
     }),
 
+    // Parent / Contact — lead primary contact projections (opportunity anchor only)
+    parentPrimaryContactProjection("person.primary_contact_name", "Primary contact name", "text", 5, "display_name"),
+    parentPrimaryContactProjection("person.primary_email", "Primary contact email", "text", 6, "email"),
+    parentPrimaryContactProjection("person.primary_phone", "Primary contact phone", "phone", 7, "phone"),
+
     // Parent / Contact — persons native + config
     parent("person.first_name", "First name", "text", 10, "first_name"),
     parent("person.last_name", "Last name", "text", 20, "last_name"),
@@ -350,6 +387,13 @@ export const CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS = [
     "child.special_instructions",
 ] as const;
 
+/** Lead-only primary contact projections (not field_definitions; opportunity anchor). */
+export const CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS = [
+    "person.primary_contact_name",
+    "person.primary_email",
+    "person.primary_phone",
+] as const;
+
 /** FC-3 relationship projections — documented but not picker-eligible yet. */
 export const CHILDCARE_FC3_DEFERRED_REF_KEYS = [
     "customer.household_address",
@@ -369,9 +413,6 @@ export const CHILDCARE_HIDDEN_REF_KEYS = new Set<string>([
     "opportunity.location",
     "opportunity.location_id",
     "person.person_number",
-    "person.primary_contact_name",
-    "person.primary_phone",
-    "person.primary_email",
     "person.secondary_contact_name",
     "location.location_number",
     "child.program",
@@ -427,6 +468,15 @@ export function isCustomerMemberSourcedChildRefKey(refKey: string): boolean {
 /** True when field uses customer_member field_values (not legacy person bridge). */
 export function isCustomerMemberConfigChildRefKey(refKey: string): boolean {
     return (CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS as readonly string[]).includes(refKey);
+}
+
+export function isPrimaryContactProjectionRefKey(refKey: string): boolean {
+    return (CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS as readonly string[]).includes(refKey);
+}
+
+export function isChildcareFieldDefBackedRefKey(refKey: string): boolean {
+    const entry = CHILDCARE_CATALOG_BY_REFKEY.get(refKey);
+    return Boolean(entry?.defEntityType && entry.defFieldKey);
 }
 
 export type CatalogFieldLike = {
@@ -509,7 +559,9 @@ export function organizeChildcarePickerGroups(
             groupDescription:
                 operatorEntity === "child"
                     ? "Child profile and enrollment fields used on leads and child records"
-                    : undefined,
+                    : operatorEntity === "parent" && anchor === "opportunities"
+                      ? PRIMARY_CONTACT_PICKER_DESCRIPTION
+                      : undefined,
             fields: entityFields.map((f) => ({
                 ...f,
                 entityLabel: CHILDCARE_OPERATOR_ENTITY_LABELS[operatorEntity],

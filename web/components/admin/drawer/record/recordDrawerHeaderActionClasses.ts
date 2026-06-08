@@ -3,10 +3,18 @@
 const BLUE_OUTLINE =
     "border border-alloy-blue/30 bg-alloy-blue/5 text-alloy-blue hover:bg-alloy-blue/10 hover:border-alloy-blue/45";
 
-export function recordDrawerHeaderActionClassName(inquiryWorkflow: boolean): string {
+export function recordDrawerHeaderActionClassName(
+    inquiryWorkflow: boolean,
+    squareCorners = false,
+    variant: "default" | "actions-white" = "default",
+): string {
+    const radius = squareCorners ? "rounded-none" : inquiryWorkflow ? "rounded-full" : "rounded-md";
+    if (variant === "actions-white") {
+        return `inline-flex items-center gap-1.5 px-4 py-2 text-[12px] font-semibold ${radius} border border-alloy-stone/20 bg-white text-alloy-midnight shadow-sm hover:bg-alloy-stone/[0.04] disabled:opacity-50`;
+    }
     return inquiryWorkflow
-        ? `px-4 py-2 text-[12px] font-semibold rounded-full ${BLUE_OUTLINE} disabled:opacity-50`
-        : `px-3 py-1.5 text-sm font-semibold rounded-md ${BLUE_OUTLINE} disabled:opacity-50`;
+        ? `inline-flex items-center gap-1.5 px-4 py-2 text-[12px] font-semibold ${radius} ${BLUE_OUTLINE} disabled:opacity-50`
+        : `inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold ${radius} ${BLUE_OUTLINE} disabled:opacity-50`;
 }
 
 /** @deprecated Use recordDrawerHeaderActionClassName — kept for Opportunity parity. */

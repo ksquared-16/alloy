@@ -1,36 +1,26 @@
 "use client";
 
 /**
- * C1b — opportunity drawer overview tab body with layout runtime cutover + VM fallback.
- *
- * ## Read-only display parity (pilot scope)
- *
- * - Overview **display** may render from resolved layout docs when flags are on.
- * - Layout runtime body is **read-only** — no inline field editing or save paths.
- * - VM / legacy overview retains any editable sections until a later cutover sprint.
- * - Drawer shell save orchestration (header actions, status mutation, registry modals)
- *   remains VM-owned and is intentionally outside this component.
- *
- * ## Fallback chain
- *
- * 1. Flags off → VM overview only.
- * 2. Flags on + loading → coordinated hold (no VM flash).
- * 3. Fetch/resolve/evaluate failure → VM overview.
- * 4. Render-phase error (Error Boundary) → VM overview.
+ * C1b — opportunity drawer overview tab body with layout runtime hard cutover.
  */
 
-import { useMemo } from "react";
+import { useMemo, useCallback } from "react";
 import DrawerLayoutRuntimeOverviewBody from "@/components/admin/vmDrawer/DrawerLayoutRuntimeOverviewBody";
 import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview";
 import OpportunityDrawerLayoutRuntimeBodyStatus from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyStatus";
 import OpportunityDrawerLayoutRuntimeShadowDiagnostics from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeShadowDiagnostics";
+import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import {
     isLayoutRuntimeHardCutoverActiveClient,
     isLayoutRuntimeOpportunityDrawerBodyEnabledClient,
 } from "@/lib/layout/featureFlag";
+import { mergeOpportunityLayoutRuntimeWidgetRecord } from "@/lib/layout/runtime/mergeOpportunityLayoutRuntimeWidgetRecord";
+import { handleLayoutRuntimeAdornmentOpenDrawer } from "@/lib/layout/runtime/resolveLayoutAdornmentOpenDrawer";
 import type { UseOpportunityDrawerLayoutRuntimeShadowResult } from "@/lib/layout/runtime/shadow/useOpportunityDrawerLayoutRuntimeShadow";
+import type { UseDrawerLayoutRuntimeBodyResult } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 
 type Props = {
@@ -42,6 +32,7 @@ type Props = {
     departmentId?: string | null;
     workUnitId?: string | null;
     layoutRuntimeShadow: UseOpportunityDrawerLayoutRuntimeShadowResult;
+    layoutBody?: UseDrawerLayoutRuntimeBodyResult;
 };
 
 function VmOverviewBody({
@@ -72,22 +63,64 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         departmentId,
         workUnitId,
         layoutRuntimeShadow,
+        layoutBody: layoutBodyProp,
     } = props;
 
-    // Memoized so the hook's fetch effect doesn't re-run (and cancel the in-flight
-    // request) on every parent re-render — prevents the repeated-fetch loop.
+    const { openDrawer } = useAdminDrawer();
+    const vmRecord = displayVm.above_fold.record ?? null;
+
+    const vmWidgetRecord = useMemo(() => {
+        if (!vmRecord) return null;
+        const merged: Record<string, unknown> = { ...vmRecord };
+        if (displayVm.summaries?.tasks && merged._inquiry_summary_tasks == null) {
+            merged._inquiry_summary_tasks = displayVm.summaries.tasks;
+        }
+        return merged;
+    }, [vmRecord, displayVm.summaries?.tasks]);
+
     const layoutQueryParams = useMemo(
         () => ({ departmentId, workUnitId }),
         [departmentId, workUnitId],
     );
-    const layoutBody = useDrawerLayoutRuntimeBody({
+    const layoutBodyInternal = useDrawerLayoutRuntimeBody({
         cutoverEnabled: isLayoutRuntimeOpportunityDrawerBodyEnabledClient(),
-        entityId: drawerId,
-        vmReady,
+        entityId: layoutBodyProp ? null : drawerId,
+        vmReady: layoutBodyProp ? false : vmReady,
         apiPath: "/api/admin/layout-runtime/opportunity-drawer-body",
         queryParams: layoutQueryParams,
         logTag: "opportunity_drawer",
     });
+    const layoutBody = layoutBodyProp ?? layoutBodyInternal;
+
+    const mergedLayoutBody = useMemo(() => {
+        if (!layoutBody.record) return layoutBody;
+        const mergedRecord = mergeOpportunityLayoutRuntimeWidgetRecord(layoutBody.record, vmWidgetRecord);
+        if (mergedRecord === layoutBody.record) return layoutBody;
+        return { ...layoutBody, record: mergedRecord };
+    }, [layoutBody, vmWidgetRecord]);
+
+    const onAdornmentAction = useCallback<AdornmentActionHandler>(
+        (item, adornment, rowRecord) => {
+            if (!mergedLayoutBody.record) return;
+            handleLayoutRuntimeAdornmentOpenDrawer({
+                item,
+                adornment,
+                record: mergedLayoutBody.record,
+                rowRecord,
+                opportunityId: drawerId,
+                opportunityRecord: vmRecord,
+                openDrawer,
+                opportunityWorkspaceContext:
+                    displayVm.workspace.department_id && displayVm.workspace.work_unit_id ?
+                        {
+                            department_id: displayVm.workspace.department_id,
+                            work_unit_id: displayVm.workspace.work_unit_id,
+                        }
+                    :   null,
+            });
+        },
+        [mergedLayoutBody.record, drawerId, vmRecord, openDrawer, displayVm.workspace.department_id, displayVm.workspace.work_unit_id],
+    );
 
     const vmFallback = (
         <VmOverviewBody
@@ -106,17 +139,18 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
     return (
         <div className="space-y-4" data-adminv2-opportunity-drawer-body="true">
             <DrawerLayoutRuntimeOverviewBody
-                layoutBody={layoutBody}
+                layoutBody={mergedLayoutBody}
                 vmFallback={vmFallback}
                 entityId={drawerId}
                 surface="opportunity_drawer_overview"
+                onAdornmentAction={onAdornmentAction}
             />
             {showDebugPanel ?
                 <OpportunityDrawerLayoutRuntimeBodyStatus
-                    phase={layoutBody.phase}
-                    layoutSource={layoutBody.layoutSource}
-                    layoutKey={layoutBody.layoutKey}
-                    lastError={layoutBody.lastError}
+                    phase={mergedLayoutBody.phase}
+                    layoutSource={mergedLayoutBody.layoutSource}
+                    layoutKey={mergedLayoutBody.layoutKey}
+                    lastError={mergedLayoutBody.lastError}
                     opportunityId={drawerId}
                 />
             :   null}

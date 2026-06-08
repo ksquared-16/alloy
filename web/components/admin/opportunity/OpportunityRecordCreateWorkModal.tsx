@@ -30,6 +30,7 @@ import {
     createOperationalTask,
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import { ActionModalOverlayShell } from "@/components/admin/opportunity/actions/ActionModalOverlayShell";
 import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
 
 const CREATE_WORK_SUCCESS_DISMISS_MS = 2000;
@@ -202,21 +203,18 @@ export default function OpportunityRecordCreateWorkModal({
     const canSubmit = Boolean(title.trim() && dueLocal.trim()) && !successMessage;
 
     return (
-        <div
-            className="fixed inset-0 z-[85] flex items-center justify-center bg-black/45 p-4"
-            role="presentation"
-            data-operational-work-create-modal-backdrop="true"
-            onClick={() => {
-                if (!busy) onClose();
-            }}
+        <ActionModalOverlayShell
+            open={open}
+            onClose={onClose}
+            busy={busy}
+            panelClassName={`${MESSAGING_MODAL_PANEL_CLASS} w-full max-w-md`}
+            data-testid="operational-work-create-modal"
         >
             <div
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="operational-work-create-title"
-                className={`${MESSAGING_MODAL_PANEL_CLASS} w-full max-w-md`}
                 data-operational-work-create-modal="true"
-                onClick={(e) => e.stopPropagation()}
             >
                 <div className={MESSAGING_MODAL_HEADER_CLASS}>
                     <div>
@@ -359,6 +357,6 @@ export default function OpportunityRecordCreateWorkModal({
                     }
                 </div>
             </div>
-        </div>
+        </ActionModalOverlayShell>
     );
 }

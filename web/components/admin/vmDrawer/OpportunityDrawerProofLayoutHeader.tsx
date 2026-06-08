@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Live opportunity drawer header — composes VM controls into the official proof-layout shell.
+ * Live opportunity drawer header — composes VM controls into the layout runtime shell.
  */
 
 import { X } from "lucide-react";
@@ -41,7 +41,6 @@ export type OpportunityDrawerProofLayoutHeaderProps = {
     onDismissActionPreflightBlocked: () => void;
     registryActionFeedback: OpportunityDrawerRegistryActionFeedback | null;
     tabLabels: Partial<Record<DrawerTabKey, string>>;
-    attentionVisible: boolean;
 };
 
 export default function OpportunityDrawerProofLayoutHeader({
@@ -51,7 +50,6 @@ export default function OpportunityDrawerProofLayoutHeader({
     record,
     displayVm,
     queuePreviewSeed,
-    opportunitySingular,
     statusLabel,
     currentStatusKey,
     statusControl,
@@ -67,46 +65,48 @@ export default function OpportunityDrawerProofLayoutHeader({
     onDismissActionPreflightBlocked,
     registryActionFeedback,
     tabLabels,
-    attentionVisible,
 }: OpportunityDrawerProofLayoutHeaderProps) {
     const proofTabs: ProofHeaderTab[] = tabs.map((key) => ({
         key,
         label: tabLabels[key] ?? key,
     }));
 
-    const statusControlNode = (
-        <div className="shrink-0" data-drawer-vm-status-rail="true">
-            <VmProgressiveStatusDropdown
+    const headerControlsRow = (
+        <div
+            className="flex shrink-0 flex-nowrap items-center justify-end gap-2 overflow-visible"
+            data-proof-layout-header-controls-row="true"
+        >
+            <OpportunityDrawerHeaderControls
                 opportunityId={opportunityId}
-                firstPaintLabel={statusLabel ?? "—"}
-                currentStatusKey={currentStatusKey}
-                statusControl={statusControl}
+                overviewData={record}
+                queuePreviewSeed={queuePreviewSeed}
+                inquiryWorkflow
+                menuActions={displayVm.actions.header_menu}
+                showRegistryActions
                 canMutate={statusCanMutate}
+                actionLoadingKey={actionLoadingKey}
+                onActionSelect={onActionSelect}
+                layout="modal-actions"
+                proofLayoutActions
+                actionPreflightBlocked={actionPreflightBlocked}
+                onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
+                registryActionFeedback={registryActionFeedback}
+                actionsDisabledReason={
+                    actionLoadingKey ? "An action is running — wait for it to finish."
+                    : !statusCanMutate ? "You don't have permission to run actions on this record."
+                    :   null
+                }
             />
+            <div className="shrink-0" data-drawer-vm-status-rail="true">
+                <VmProgressiveStatusDropdown
+                    opportunityId={opportunityId}
+                    firstPaintLabel={statusLabel ?? "—"}
+                    currentStatusKey={currentStatusKey}
+                    statusControl={statusControl}
+                    canMutate={statusCanMutate}
+                />
+            </div>
         </div>
-    );
-
-    const actionsControlNode = (
-        <OpportunityDrawerHeaderControls
-            opportunityId={opportunityId}
-            overviewData={record}
-            queuePreviewSeed={queuePreviewSeed}
-            inquiryWorkflow
-            menuActions={displayVm.actions.header_menu}
-            showRegistryActions
-            canMutate={statusCanMutate}
-            actionLoadingKey={actionLoadingKey}
-            onActionSelect={onActionSelect}
-            layout="modal-actions"
-            actionPreflightBlocked={actionPreflightBlocked}
-            onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
-            registryActionFeedback={registryActionFeedback}
-            actionsDisabledReason={
-                actionLoadingKey ? "An action is running — wait for it to finish."
-                : !statusCanMutate ? "You don't have permission to run actions on this record."
-                :   null
-            }
-        />
     );
 
     const closeButton = (
@@ -114,40 +114,21 @@ export default function OpportunityDrawerProofLayoutHeader({
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1.5 text-[rgba(39,63,82,0.7)] hover:bg-[rgba(0,0,0,0.05)]"
+            className="rounded-none p-1.5 text-[rgba(39,63,82,0.7)] hover:bg-[rgba(0,0,0,0.05)]"
             data-proof-layout-header-close="true"
         >
             <X className="h-4 w-4" aria-hidden />
         </button>
     );
 
-    const attentionNode =
-        attentionVisible ?
-            <OpportunityDrawerHeaderControls
-                layout="modal-attention"
-                opportunityId={opportunityId}
-                overviewData={record}
-                opportunitySingular={opportunitySingular}
-                queuePreviewSeed={queuePreviewSeed}
-                inquiryWorkflow
-                menuActions={displayVm.actions.header ?? []}
-                showRegistryActions={false}
-                canMutate={statusCanMutate}
-                onActionSelect={onActionSelect}
-                actionPreflightBlocked={actionPreflightBlocked}
-                onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
-                registryActionFeedback={registryActionFeedback}
-            />
-        :   null;
-
     return (
         <ProofRecordModalHeaderShell
             title={title}
             locationLabel={locationLabel}
-            statusControl={statusControlNode}
-            actionsControl={actionsControlNode}
+            statusControl={null}
+            actionsControl={headerControlsRow}
             closeButton={closeButton}
-            attention={attentionNode}
+            attention={null}
             tabs={proofTabs}
             activeTab={activeTab}
             onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
