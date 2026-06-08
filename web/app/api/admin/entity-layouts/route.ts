@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
-import { isLayoutV2PreviewEnabledServer } from "@/lib/layout/featureFlag";
+import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { isLayoutSurface, type LayoutSurface } from "@/lib/layout/layoutV2";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { resolveLayout } from "@/lib/layout/layoutResolver";
@@ -43,7 +43,7 @@ function notFound() {
 }
 
 export async function GET(request: NextRequest) {
-    if (!isLayoutV2PreviewEnabledServer()) return notFound();
+    if (!isLayoutV2ConfigEnabledServer()) return notFound();
 
     const ctx = await getAdminContext();
     if (!ctx.ok) {
@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-    if (!isLayoutV2PreviewEnabledServer()) return notFound();
+    if (!isLayoutV2ConfigEnabledServer()) return notFound();
 
     const ctx = await getAdminContext();
     if (!ctx.ok) {

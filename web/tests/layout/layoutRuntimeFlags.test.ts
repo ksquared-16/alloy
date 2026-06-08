@@ -11,6 +11,7 @@ import {
     isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled,
     isLayoutRuntimeOpportunityQueueEnabledServer,
     isLayoutRuntimeOpportunityQueueShadowReadPathEnabled,
+    isLayoutRuntimeOpportunityQueueBodyEnabledServer,
     isLayoutRuntimeReadPathEnabled,
     isLayoutRuntimeShadowEnabledServer,
     isLayoutV2PreviewEnabledServer,
@@ -57,7 +58,7 @@ describe("layout runtime feature flags", () => {
         expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
     });
 
-    it("LAYOUT_RUNTIME_OPPORTUNITY_QUEUE defaults off and requires master runtime for shadow", () => {
+    it("LAYOUT_RUNTIME_OPPORTUNITY_QUEUE defaults off and shadow excludes visible body cutover", () => {
         expect(isLayoutRuntimeOpportunityQueueEnabledServer()).toBe(false);
         expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
 
@@ -65,6 +66,7 @@ describe("layout runtime feature flags", () => {
         expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
 
         process.env.LAYOUT_RUNTIME_ENABLED = "1";
-        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(true);
+        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
+        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
     });
 });

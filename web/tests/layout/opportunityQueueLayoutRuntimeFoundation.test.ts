@@ -6,6 +6,7 @@ import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import {
     isLayoutRuntimeOpportunityQueueEnabledServer,
     isLayoutRuntimeOpportunityQueueShadowReadPathEnabled,
+    isLayoutRuntimeOpportunityQueueBodyEnabledServer,
 } from "@/lib/layout/featureFlag";
 import {
     buildOpportunityQueueLayoutContext,
@@ -62,7 +63,7 @@ describe("opportunity queue layout runtime flags", () => {
         process.env = { ...env };
     });
 
-    it("queue shadow requires master runtime + opportunity queue flag", () => {
+    it("queue shadow requires master runtime + opportunity queue flag when body cutover off", () => {
         expect(isLayoutRuntimeOpportunityQueueEnabledServer()).toBe(false);
         expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
 
@@ -70,6 +71,7 @@ describe("opportunity queue layout runtime flags", () => {
         expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
 
         process.env.LAYOUT_RUNTIME_ENABLED = "1";
-        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(true);
+        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
+        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
     });
 });

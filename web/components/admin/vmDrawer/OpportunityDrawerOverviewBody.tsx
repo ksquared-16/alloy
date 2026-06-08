@@ -20,16 +20,18 @@
  */
 
 import type { ReactNode } from "react";
+import DrawerLayoutRuntimeOverviewBody from "@/components/admin/vmDrawer/DrawerLayoutRuntimeOverviewBody";
 import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview";
-import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyErrorBoundary";
 import OpportunityDrawerLayoutRuntimeBodyStatus from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyStatus";
-import OpportunityDrawerLayoutRuntimeOverviewHold from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeOverviewHold";
 import OpportunityDrawerLayoutRuntimeShadowDiagnostics from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeShadowDiagnostics";
-import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+import {
+    isLayoutRuntimeHardCutoverActiveClient,
+    isLayoutRuntimeOpportunityDrawerBodyEnabledClient,
+} from "@/lib/layout/featureFlag";
 import type { UseOpportunityDrawerLayoutRuntimeShadowResult } from "@/lib/layout/runtime/shadow/useOpportunityDrawerLayoutRuntimeShadow";
-import { useOpportunityDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useOpportunityDrawerLayoutRuntimeBody";
+import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 
 type Props = {
     displayVm: OpportunityDrawerViewModel;
@@ -72,11 +74,13 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         layoutRuntimeShadow,
     } = props;
 
-    const layoutBody = useOpportunityDrawerLayoutRuntimeBody({
-        opportunityId: drawerId,
+    const layoutBody = useDrawerLayoutRuntimeBody({
+        cutoverEnabled: isLayoutRuntimeOpportunityDrawerBodyEnabledClient(),
+        entityId: drawerId,
         vmReady,
-        departmentId,
-        workUnitId,
+        apiPath: "/api/admin/layout-runtime/opportunity-drawer-body",
+        queryParams: { departmentId, workUnitId },
+        logTag: "opportunity_drawer",
     });
 
     const vmFallback = (
@@ -88,52 +92,26 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         />
     );
 
-    let overviewBody: ReactNode;
-    if (layoutBody.bodyReady && layoutBody.doc && layoutBody.record) {
-        overviewBody = (
-            <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
-                fallback={vmFallback}
-                logContext={{
-                    opportunityId: drawerId,
-                    layoutSource: layoutBody.layoutSource,
-                    surface: "opportunity_drawer_overview",
-                }}
-            >
-                <div
-                    className="space-y-4"
-                    data-drawer-layout-runtime-overview="true"
-                    data-layout-runtime-source={layoutBody.layoutSource ?? ""}
-                    data-layout-runtime-readonly="true"
-                >
-                    <LayoutRuntimeDrawerBodyView doc={layoutBody.doc} record={layoutBody.record} />
-                </div>
-            </OpportunityDrawerLayoutRuntimeBodyErrorBoundary>
-        );
-    } else if (layoutBody.showHold) {
-        overviewBody = <OpportunityDrawerLayoutRuntimeOverviewHold />;
-    } else {
-        overviewBody = vmFallback;
-    }
+    const showDebugPanel =
+        layoutBody.cutoverEnabled &&
+        !isLayoutRuntimeHardCutoverActiveClient() &&
+        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG === "1";
 
     return (
         <div className="space-y-4" data-adminv2-opportunity-drawer-body="true">
-            {overviewBody}
-            {layoutBody.cutoverEnabled ?
+            <DrawerLayoutRuntimeOverviewBody
+                layoutBody={layoutBody}
+                vmFallback={vmFallback}
+                entityId={drawerId}
+                surface="opportunity_drawer_overview"
+            />
+            {showDebugPanel ?
                 <OpportunityDrawerLayoutRuntimeBodyStatus
                     phase={layoutBody.phase}
                     layoutSource={layoutBody.layoutSource}
                     layoutKey={layoutBody.layoutKey}
                     lastError={layoutBody.lastError}
                     opportunityId={drawerId}
-                />
-            :   null}
-            {layoutRuntimeShadow.shadowEnabled && layoutBody.useVmFallback ?
-                <div
-                    aria-hidden="true"
-                    hidden
-                    data-layout-runtime-shadow-mount="opportunity"
-                    data-shadow-parity-score={layoutRuntimeShadow.telemetry?.parityScore ?? ""}
-                    data-shadow-readiness={layoutRuntimeShadow.telemetry?.readinessLevel ?? ""}
                 />
             :   null}
             {layoutRuntimeShadow.diagnosticsEnabled ?

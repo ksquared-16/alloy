@@ -22,10 +22,15 @@ import { resolvePersonDrawerProfileFromRecordWithHint } from "@/lib/admin/person
 import { resolvePersonDrawerProfileFromRecordWithParentHint } from "@/lib/admin/person/personDrawerParentChrome";
 import { personDrawerShouldShowEmployeePlacement } from "@/lib/admin/person/personDrawerPresentationProfile";
 import { personDrawerOperatingSummaryVisible } from "@/lib/admin/person/personDrawerShellPolicy";
-import {
-    resolvePersonDrawerVmOverviewSections,
+import { resolvePersonDrawerVmOverviewSections,
     type PersonDrawerVmChrome,
 } from "@/lib/admin/person/resolvePersonDrawerVmOverviewSections";
+import DrawerLayoutRuntimeOverviewBody from "@/components/admin/vmDrawer/DrawerLayoutRuntimeOverviewBody";
+import {
+    isLayoutRuntimeChildDrawerBodyEnabledClient,
+    isLayoutRuntimePersonDrawerBodyEnabledClient,
+} from "@/lib/layout/featureFlag";
+import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import { personDisplayName } from "@/lib/adminFormatters";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
@@ -205,6 +210,46 @@ export default function PersonsDrawerVmBody({
         record,
     });
 
+    const personLayoutBody = useDrawerLayoutRuntimeBody({
+        cutoverEnabled: isLayoutRuntimePersonDrawerBodyEnabledClient() && !isChildSurface,
+        entityId: personId,
+        vmReady: Boolean(record?.id),
+        apiPath: "/api/admin/layout-runtime/person-drawer-body",
+        logTag: "person_drawer",
+    });
+
+    const childLayoutBody = useDrawerLayoutRuntimeBody({
+        cutoverEnabled: isLayoutRuntimeChildDrawerBodyEnabledClient() && isChildSurface,
+        entityId: personId,
+        vmReady: Boolean(record?.id),
+        apiPath: "/api/admin/layout-runtime/child-drawer-body",
+        logTag: "child_drawer",
+    });
+
+    const activeLayoutBody = isChildSurface ? childLayoutBody : personLayoutBody;
+
+    const vmOverviewBody = (
+        <EntityDrawerOverview
+            entityType="persons"
+            data={record}
+            customSectionContent={customSectionContent}
+            overviewSectionsOverride={overviewSections}
+            canEdit={canMutate}
+            sectionSurface="premium"
+            personChildLifecycleOverview={chrome === "child"}
+            onOpenDrawer={(type, id) => onOpenDrawer(type as AdminDrawerEntityType, id)}
+        />
+    );
+
+    const layoutOverviewBody = (
+        <DrawerLayoutRuntimeOverviewBody
+            layoutBody={activeLayoutBody}
+            vmFallback={vmOverviewBody}
+            entityId={personId}
+            surface={isChildSurface ? "child_drawer_overview" : "person_drawer_overview"}
+        />
+    );
+
     const overviewPanel =
         chrome === "generic" || drawerTab === "overview" ?
             <div className="space-y-4" data-adminv2-person-drawer-overview-tab="true">
@@ -237,16 +282,7 @@ export default function PersonsDrawerVmBody({
                         onRecordUpdated={() => {}}
                     />
                 :   null}
-                <EntityDrawerOverview
-                    entityType="persons"
-                    data={record}
-                    customSectionContent={customSectionContent}
-                    overviewSectionsOverride={overviewSections}
-                    canEdit={canMutate}
-                    sectionSurface="premium"
-                    personChildLifecycleOverview={chrome === "child"}
-                    onOpenDrawer={(type, id) => onOpenDrawer(type as AdminDrawerEntityType, id)}
-                />
+                {activeLayoutBody.cutoverEnabled ? layoutOverviewBody : vmOverviewBody}
             </div>
         :   null;
 

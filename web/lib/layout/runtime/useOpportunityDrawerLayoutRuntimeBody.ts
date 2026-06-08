@@ -1,18 +1,18 @@
 "use client";
 
 /**
- * C1b — load layout runtime overview body for opportunity drawer (flag-gated).
- *
- * Coordinated hold while layout body loads — no VM flash when cutover flags are on.
- * Failures fall back to VM body without operator-visible errors.
+ * C1b — opportunity drawer layout runtime body hook (re-exports shared presentation helpers).
  */
 
-import { useEffect, useRef, useState } from "react";
 import { isLayoutRuntimeOpportunityDrawerBodyEnabledClient } from "@/lib/layout/featureFlag";
-import type { LayoutDoc } from "@/lib/layout/layoutV2";
-import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
-
-export type OpportunityLayoutRuntimeBodyPhase = "idle" | "loading" | "ready" | "fallback";
+import {
+    DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS as OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS,
+    resolveDrawerLayoutRuntimeBodyPresentation as resolveOpportunityOverviewBodyPresentation,
+    shouldFallbackDrawerLayoutFetchOnTimeout as shouldFallbackLayoutFetchOnTimeout,
+    type DrawerLayoutRuntimeBodyPhase as OpportunityLayoutRuntimeBodyPhase,
+    type DrawerLayoutRuntimeBodyPresentation as OpportunityLayoutRuntimeBodyPresentation,
+} from "@/lib/layout/runtime/drawerLayoutRuntimePresentation";
+import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 
 export type UseOpportunityDrawerLayoutRuntimeBodyArgs = {
     opportunityId: string | null | undefined;
@@ -21,199 +21,23 @@ export type UseOpportunityDrawerLayoutRuntimeBodyArgs = {
     workUnitId?: string | null;
 };
 
-export type UseOpportunityDrawerLayoutRuntimeBodyResult = {
-    cutoverEnabled: boolean;
-    phase: OpportunityLayoutRuntimeBodyPhase;
-    presentation: OpportunityLayoutRuntimeBodyPresentation;
-    /** True when operator should see VM overview body (fallback or flags off). */
-    useVmFallback: boolean;
-    /** True when coordinated hold placeholder should show. */
-    showHold: boolean;
-    /** True when layout runtime body should render. */
-    bodyReady: boolean;
-    doc: LayoutDoc | null;
-    record: ProofRuntimeRecord | null;
-    layoutSource: string | null;
-    layoutKey: string | null;
-    lastError: string | null;
+export {
+    OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS,
+    resolveOpportunityOverviewBodyPresentation,
+    shouldFallbackLayoutFetchOnTimeout,
 };
+export type { OpportunityLayoutRuntimeBodyPhase, OpportunityLayoutRuntimeBodyPresentation };
 
-export type OpportunityLayoutRuntimeBodyPresentation = "vm" | "hold" | "layout";
-
-/** Max coordinated hold before falling back to VM body when layout fetch hangs. */
-export const OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS = 1750;
-
-export function shouldFallbackLayoutFetchOnTimeout(input: {
-    cutoverEnabled: boolean;
-    phase: OpportunityLayoutRuntimeBodyPhase;
-    fetchStartedAtMs: number | null;
-    nowMs?: number;
-}): boolean {
-    if (!input.cutoverEnabled) return false;
-    if (input.phase !== "loading" && input.phase !== "idle") return false;
-    if (input.fetchStartedAtMs == null) return false;
-    const now = input.nowMs ?? Date.now();
-    return now - input.fetchStartedAtMs >= OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS;
-}
-
-export function resolveOpportunityOverviewBodyPresentation(input: {
-    cutoverEnabled: boolean;
-    phase: OpportunityLayoutRuntimeBodyPhase;
-}): OpportunityLayoutRuntimeBodyPresentation {
-    if (!input.cutoverEnabled) return "vm";
-    if (input.phase === "ready") return "layout";
-    if (input.phase === "fallback") return "vm";
-    // idle + loading: hold coordinated placeholder — never flash VM before layout
-    return "hold";
-}
-
-export function useOpportunityDrawerLayoutRuntimeBody(
-    args: UseOpportunityDrawerLayoutRuntimeBodyArgs,
-): UseOpportunityDrawerLayoutRuntimeBodyResult {
-    const cutoverEnabled = isLayoutRuntimeOpportunityDrawerBodyEnabledClient();
-
-    const [phase, setPhase] = useState<OpportunityLayoutRuntimeBodyPhase>("idle");
-    const [doc, setDoc] = useState<LayoutDoc | null>(null);
-    const [record, setRecord] = useState<ProofRuntimeRecord | null>(null);
-    const [layoutSource, setLayoutSource] = useState<string | null>(null);
-    const [layoutKey, setLayoutKey] = useState<string | null>(null);
-    const [lastError, setLastError] = useState<string | null>(null);
-    const lastLoadedIdRef = useRef<string | null>(null);
-    const readyIdRef = useRef<string | null>(null);
-
-    useEffect(() => {
-        if (!cutoverEnabled) {
-            setPhase("idle");
-            setDoc(null);
-            setRecord(null);
-            setLayoutSource(null);
-            setLayoutKey(null);
-            setLastError(null);
-            lastLoadedIdRef.current = null;
-            readyIdRef.current = null;
-            return;
-        }
-
-        const oid = args.opportunityId?.trim() ?? "";
-        if (!oid || !args.vmReady) return;
-        if (readyIdRef.current === oid) return;
-
-        let cancelled = false;
-        lastLoadedIdRef.current = oid;
-        setPhase("loading");
-        setLastError(null);
-
-        const timeoutId = window.setTimeout(() => {
-            if (cancelled) return;
-            setPhase((current) => {
-                if (current !== "loading" && current !== "idle") return current;
-                setLastError("layout_fetch_timeout");
-                if (typeof console !== "undefined") {
-                    console.info("[layout_runtime_body:opportunity_drawer_fallback]", {
-                        opportunityId: oid,
-                        reason: "layout_fetch_timeout",
-                        maxHoldMs: OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS,
-                    });
-                }
-                return "fallback";
-            });
-        }, OPPORTUNITY_DRAWER_LAYOUT_RUNTIME_BODY_MAX_HOLD_MS);
-
-        const clearHoldTimeout = () => window.clearTimeout(timeoutId);
-
-        const run = () => {
-            const qs = new URLSearchParams({ opportunityId: oid });
-            if (args.departmentId) qs.set("departmentId", String(args.departmentId));
-            if (args.workUnitId) qs.set("workUnitId", String(args.workUnitId));
-
-            fetch(`/api/admin/layout-runtime/opportunity-drawer-body?${qs.toString()}`)
-                .then(async (res) => {
-                    if (cancelled) return;
-                    clearHoldTimeout();
-                    if (!res.ok) {
-                        const json = await res.json().catch(() => ({}));
-                        const reason = (json as { error?: string }).error ?? `http_${res.status}`;
-                        setLastError(reason);
-                        setPhase("fallback");
-                        if (typeof console !== "undefined") {
-                            console.info("[layout_runtime_body:opportunity_drawer_fallback]", {
-                                opportunityId: oid,
-                                reason,
-                            });
-                        }
-                        return;
-                    }
-
-                    const json = (await res.json()) as {
-                        doc?: LayoutDoc;
-                        record?: ProofRuntimeRecord;
-                        layoutSource?: string;
-                        plan?: { layoutKey?: string };
-                    };
-
-                    if (!json.doc?.sections?.length || !json.record) {
-                        setLastError("layout_body_incomplete");
-                        setPhase("fallback");
-                        return;
-                    }
-
-                    setDoc(json.doc);
-                    setRecord(json.record);
-                    setLayoutSource(json.layoutSource ?? null);
-                    setLayoutKey(json.plan?.layoutKey ?? null);
-                    setPhase("ready");
-                    readyIdRef.current = oid;
-                })
-                .catch((err) => {
-                    if (cancelled) return;
-                    clearHoldTimeout();
-                    const message = err instanceof Error ? err.message : String(err);
-                    setLastError(message);
-                    setPhase("fallback");
-                    if (typeof console !== "undefined") {
-                        console.info("[layout_runtime_body:opportunity_drawer_fallback]", {
-                            opportunityId: oid,
-                            message,
-                        });
-                    }
-                });
-        };
-
-        run();
-        return () => {
-            cancelled = true;
-            clearHoldTimeout();
-        };
-    }, [cutoverEnabled, args.opportunityId, args.vmReady, args.departmentId, args.workUnitId]);
-
-    useEffect(() => {
-        if (!args.opportunityId?.trim()) {
-            lastLoadedIdRef.current = null;
-            readyIdRef.current = null;
-            setPhase("idle");
-            setDoc(null);
-            setRecord(null);
-            setLayoutSource(null);
-            setLayoutKey(null);
-            setLastError(null);
-        }
-    }, [args.opportunityId]);
-
-    const presentation = resolveOpportunityOverviewBodyPresentation({ cutoverEnabled, phase });
-    const useVmFallback = presentation === "vm";
-    const showHold = presentation === "hold";
-
-    return {
-        cutoverEnabled,
-        phase,
-        presentation,
-        useVmFallback,
-        showHold,
-        bodyReady: phase === "ready" && doc != null && record != null,
-        doc,
-        record,
-        layoutSource,
-        layoutKey,
-        lastError,
-    };
+export function useOpportunityDrawerLayoutRuntimeBody(args: UseOpportunityDrawerLayoutRuntimeBodyArgs) {
+    return useDrawerLayoutRuntimeBody({
+        cutoverEnabled: isLayoutRuntimeOpportunityDrawerBodyEnabledClient(),
+        entityId: args.opportunityId,
+        vmReady: args.vmReady,
+        apiPath: "/api/admin/layout-runtime/opportunity-drawer-body",
+        queryParams: {
+            departmentId: args.departmentId,
+            workUnitId: args.workUnitId,
+        },
+        logTag: "opportunity_drawer",
+    });
 }

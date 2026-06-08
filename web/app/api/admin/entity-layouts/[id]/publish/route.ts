@@ -12,13 +12,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
-import { isLayoutV2PreviewEnabledServer } from "@/lib/layout/featureFlag";
+import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getLayoutById, publishLayout } from "@/lib/layout/entityLayoutsRepo";
 
 export async function POST(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    if (!isLayoutV2PreviewEnabledServer()) {
+    if (!isLayoutV2ConfigEnabledServer()) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const ctx = await getAdminContext();

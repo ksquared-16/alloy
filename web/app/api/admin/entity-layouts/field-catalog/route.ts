@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { isLayoutV2PreviewEnabledServer } from "@/lib/layout/featureFlag";
+import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import {
     CURATED_FIELDS,
     LAYOUT_ENTITY_GROUPS,
@@ -87,7 +87,7 @@ async function loadGroupFields(
 }
 
 export async function GET(request: NextRequest) {
-    if (!isLayoutV2PreviewEnabledServer()) {
+    if (!isLayoutV2ConfigEnabledServer()) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const ctx = await getAdminContext();

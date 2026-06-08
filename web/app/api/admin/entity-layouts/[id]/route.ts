@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
-import { isLayoutV2PreviewEnabledServer } from "@/lib/layout/featureFlag";
+import { isLayoutV2ConfigEnabledServer } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { deleteLayout, getLayoutById, updateDraft } from "@/lib/layout/entityLayoutsRepo";
@@ -37,7 +37,7 @@ async function loadOwned(
 }
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    if (!isLayoutV2PreviewEnabledServer()) return notFound();
+    if (!isLayoutV2ConfigEnabledServer()) return notFound();
     const ctx = await getAdminContext();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
@@ -53,7 +53,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    if (!isLayoutV2PreviewEnabledServer()) return notFound();
+    if (!isLayoutV2ConfigEnabledServer()) return notFound();
     const ctx = await getAdminContext();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
@@ -106,7 +106,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 }
 
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-    if (!isLayoutV2PreviewEnabledServer()) return notFound();
+    if (!isLayoutV2ConfigEnabledServer()) return notFound();
     const ctx = await getAdminContext();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });

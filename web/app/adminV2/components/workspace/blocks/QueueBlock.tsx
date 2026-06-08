@@ -28,7 +28,10 @@ import { prepareDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/drawerMod
 import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
+import LayoutRuntimeQueueRowView from "@/components/layout/LayoutRuntimeQueueRowView";
 import OpportunityQueueRowLayoutRuntimeShadowMount from "@/components/admin/workspace/OpportunityQueueRowLayoutRuntimeShadowMount";
+import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/buildOpportunityQueueRowRecordFromPreview";
+import { useOpportunityQueueLayoutRuntime } from "@/lib/layout/runtime/useOpportunityQueueLayoutRuntime";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import {
   resolveWorkUnitQueueRowPresentationPlan,
@@ -1593,6 +1596,19 @@ function WorkUnitQueueLane({
     [queue.items]
   );
 
+  const queueLayoutRuntime = useOpportunityQueueLayoutRuntime(
+    `${queue.id}:${queue.drillWorkUnitKey ?? "lane"}:${hasCandidatePlacementRows ? "waitlist" : "pipeline"}`,
+    {
+      drillWorkUnitKey: queue.drillWorkUnitKey,
+      isWaitlistCandidate: hasCandidatePlacementRows,
+      grain: hasCandidatePlacementRows ? "candidate" : "case",
+    },
+  );
+  const useLayoutQueueRows =
+    queue.queueEntityType === "opportunity" &&
+    queueLayoutRuntime.enabled &&
+    queueLayoutRuntime.doc != null;
+
   const waitlistPlacementSections = useMemo(
     () =>
       queue.items.some(
@@ -1888,7 +1904,16 @@ function WorkUnitQueueLane({
                     Opening…
                   </span>
                 ) : null}
-                {crm ? (
+                {useLayoutQueueRows && queueLayoutRuntime.doc ?
+                  <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split">
+                    <div className="adminv2-ws-enrollment-crm-row__content">
+                      <LayoutRuntimeQueueRowView
+                        doc={queueLayoutRuntime.doc}
+                        record={buildOpportunityQueueRowRecordFromPreview(item)}
+                      />
+                    </div>
+                  </div>
+                : crm ? (
                   <div
                     className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split"
                     data-enrollment-row-layout="split_actions"
