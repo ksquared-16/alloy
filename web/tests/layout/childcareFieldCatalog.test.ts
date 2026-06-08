@@ -149,7 +149,7 @@ describe("childcare layout field catalog seed migration", () => {
         }
         expect(insertSection).not.toContain("'location', 'name'");
         expect(insertSection).not.toContain("'location', 'address_line1'");
-        expect(sql).toContain("entity_type = customer_member");
+        expect(sql).toContain("20260609120000_customer_member_field_definitions_fc_cm1.sql");
     });
 
     it("deactivates prior wrong seeds via cleanup block", () => {

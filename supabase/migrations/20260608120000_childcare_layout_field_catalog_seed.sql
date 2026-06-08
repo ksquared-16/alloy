@@ -83,9 +83,8 @@ ON CONFLICT (org_id, entity_type, field_key) DO UPDATE SET
     is_active = true,
     updated_at = now();
 
--- Child profile config (gender, allergies, medical, preferred_name, special_instructions)
--- belongs on entity_type = customer_member — NOT seeded here.
--- See matrix § Final source corrections → future migration FC-CM-1.
+-- Child profile config belongs in FC-CM-1 migration:
+--   supabase/migrations/20260609120000_customer_member_field_definitions_fc_cm1.sql
 
 -- Deactivate wrong seeds from prior layout-catalog migration drafts (safe if never applied)
 UPDATE public.field_definitions

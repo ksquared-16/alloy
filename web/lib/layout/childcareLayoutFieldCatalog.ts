@@ -49,7 +49,7 @@ export const CHILDCARE_OPERATOR_ENTITY_ORDER: ChildcareOperatorEntity[] = [
 export const CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP: Record<string, string | null> = {
     opportunity: "opportunity",
     person: "person",
-    child: null,
+    child: "customer_member",
     inquiry_child: "inquiry_child",
     customer: "customer",
     location: "location",
@@ -339,8 +339,8 @@ export const CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS = [
 ] as const;
 
 /**
- * Child profile config fields on customer_member — correct refKeys in catalog;
- * require future field_definitions migration (entity_type customer_member) before seed/PATCH.
+ * Child profile config fields on customer_member — seeded by FC-CM-1 migration.
+ * Layout picker refKeys remain child.*; field_definitions entity_type = customer_member.
  */
 export const CHILDCARE_REQUIRES_CUSTOMER_MEMBER_FIELD_DEF_REF_KEYS = [
     "child.preferred_name",

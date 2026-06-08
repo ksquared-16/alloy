@@ -5,7 +5,7 @@
  *
  * Returns canonical, manifest-filtered refKeys safe for /adminV2/settings/layouts.
  * Opportunity, person, inquiry_child, customer, and location load from
- * field_definitions where seeded; durable child profile bootstraps from manifest.
+ * field_definitions where seeded; durable child native columns bootstrap from manifest.
  *
  * Read-only, org-scoped, flag-gated. Does not touch live runtime.
  */
@@ -32,7 +32,12 @@ import {
     computeInquiryChildNativeParityGaps,
     type InquiryChildFieldDefRow,
 } from "@/lib/fields/inquiryChildFieldParity";
+import {
+    computeCustomerMemberConfigParityGaps,
+    type CustomerMemberFieldDefRow,
+} from "@/lib/fields/customerMemberFieldParity";
 import { INQUIRY_CHILD_ENTITY_TYPE, INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS } from "@/lib/fields/inquiryChildFieldRegistry";
+import { CUSTOMER_MEMBER_CONFIG_FIELD_KEYS } from "@/lib/fields/customerMemberFieldRegistry";
 import {
     collectRefKeysFromCatalogGroups,
     isBlockedLayoutPickerRefKey,
@@ -93,7 +98,11 @@ async function loadGroupFields(
             fields: filterLoadedFields(group, CURATED_FIELDS[group], anchor),
             curatedFallback: true,
             inquiryChildParityGaps:
-                group === "inquiry_child" ? [...INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS] : inquiryChildParityGaps,
+                group === "inquiry_child"
+                    ? [...INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS]
+                    : group === "child"
+                      ? [...CUSTOMER_MEMBER_CONFIG_FIELD_KEYS]
+                      : inquiryChildParityGaps,
         };
     }
 
@@ -117,10 +126,12 @@ async function loadGroupFields(
     }
 
     if (group === "child") {
-        const merged = mergeCatalogWithCuratedFallback(group, registryFields);
+        const configParityGaps = computeCustomerMemberConfigParityGaps(data as CustomerMemberFieldDefRow[]);
+        const merged =
+            configParityGaps.length > 0 ? mergeCatalogWithCuratedFallback(group, registryFields) : registryFields;
         return {
             fields: filterLoadedFields(group, merged, anchor),
-            curatedFallback: false,
+            curatedFallback: configParityGaps.length > 0,
             inquiryChildParityGaps,
         };
     }

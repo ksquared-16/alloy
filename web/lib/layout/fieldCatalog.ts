@@ -16,6 +16,7 @@
  */
 
 import { INQUIRY_CHILD_NATIVE_FIELD_MANIFEST } from "@/lib/fields/inquiryChildFieldRegistry";
+import { CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST } from "@/lib/fields/customerMemberFieldRegistry";
 import { parseLayoutRefKey } from "./layoutRefKeyAliases";
 import {
     filterCatalogGroupsForLayoutPicker,
@@ -240,11 +241,14 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
         field("person", "is_employee", "Employee", "boolean"),
         field("person", "employee_id", "Employee ID", "text"),
     ],
-    /** Durable child profile — customer_members (manifest bootstrap when no field_definitions). */
+    /** Durable child profile — native columns + customer_member config (FC-CM-1). */
     child: [
         field("child", "first_name", "First name", "text"),
         field("child", "last_name", "Last name", "text"),
         field("child", "date_of_birth", "Date of birth", "date"),
+        ...CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST.map((row) =>
+            field("child", row.field_key, row.label, row.field_type),
+        ),
     ],
     inquiry_child: INQUIRY_CHILD_NATIVE_FIELD_MANIFEST.map((row) =>
         field("inquiry_child", row.field_key, inquiryChildPickerFieldLabel(row.field_key, row.label), row.field_type),
