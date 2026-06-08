@@ -3,11 +3,13 @@
  * Operator-facing entity_type: `inquiry_child` (never expose raw table names in UX).
  */
 
+import { CUSTOMER_MEMBER_ENTITY_TYPE } from "./customerMemberFieldRegistry";
+
 export const INQUIRY_CHILD_ENTITY_TYPE = "inquiry_child" as const;
 
 export type InquiryChildEntityType = typeof INQUIRY_CHILD_ENTITY_TYPE;
 
-/** Settings → Fields / field-definitions API allowlist (includes inquiry_child). */
+/** Settings → Fields / field-definitions API allowlist. */
 export const FIELD_DEFINITION_ENTITY_TYPES = [
     "person",
     "customer",
@@ -16,6 +18,7 @@ export const FIELD_DEFINITION_ENTITY_TYPES = [
     "vendor",
     "schedule",
     "location",
+    CUSTOMER_MEMBER_ENTITY_TYPE,
     INQUIRY_CHILD_ENTITY_TYPE,
 ] as const;
 

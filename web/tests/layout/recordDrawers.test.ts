@@ -83,9 +83,10 @@ describe("field catalog cleanup (user-facing labels)", () => {
     it("Lead-drawer groups use plain labels (no raw entity names)", () => {
         const labels = LAYOUT_ENTITY_GROUPS.map((g) => g.entityLabel);
         expect(labels).toContain("Lead");
-        expect(labels).toContain("Contact / Parent");
+        expect(labels).toContain("Parent / Contact");
         expect(labels).not.toContain("Lead / Opportunity");
         expect(labels).not.toContain("Children Inquiry");
+        expect(labels.filter((l) => l === "Child").length).toBeGreaterThan(0);
     });
     it("waitlist groups are friendly (Candidate, Waitlist — not technical)", () => {
         const labels = (catalogGroupsForEntityType("placement_candidate") ?? []).map((g) => g.entityLabel);
@@ -94,9 +95,10 @@ describe("field catalog cleanup (user-facing labels)", () => {
         expect(labels).not.toContain("Placement Candidate");
         expect(labels).not.toContain("Waitlist (runtime-computed)");
     });
-    it("person/child surfaces get their own curated catalogs", () => {
-        expect((catalogGroupsForEntityType("person") ?? []).map((g) => g.entityLabel)).toContain("Contact / Parent");
-        expect((catalogGroupsForEntityType("child") ?? []).map((g) => g.entityLabel)).toContain("Child · Enrollment");
+    it("person/child surfaces get childcare-organized catalogs", () => {
+        expect((catalogGroupsForEntityType("person") ?? []).map((g) => g.entityLabel)).toContain("Parent / Contact");
+        const childGroups = catalogGroupsForEntityType("child") ?? [];
+        expect(childGroups.find((g) => g.entityLabel === "Child")?.fields.length).toBeGreaterThan(0);
     });
 });
 

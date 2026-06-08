@@ -9,10 +9,12 @@ import {
     partitionInquiryChildPatchBody,
     resolveInquiryChildDesiredStartDisplay,
 } from "@/lib/fields/inquiryChildFieldRegistry";
+import { CUSTOMER_MEMBER_ENTITY_TYPE } from "@/lib/fields/customerMemberFieldRegistry";
 
 describe("inquiryChildFieldRegistry", () => {
     it("includes inquiry_child in field definition entity types", () => {
         expect(FIELD_DEFINITION_ENTITY_TYPES).toContain(INQUIRY_CHILD_ENTITY_TYPE);
+        expect(FIELD_DEFINITION_ENTITY_TYPES).toContain(CUSTOMER_MEMBER_ENTITY_TYPE);
     });
 
     it("reserves native OCM field keys for custom field creation", () => {

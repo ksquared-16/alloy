@@ -18,8 +18,15 @@ import * as ops from "@/lib/layout/builderOps";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 
 describe("layoutRefKeyAliases — canonical namespaces", () => {
-    it("freezes the four canonical namespaces", () => {
-        expect(CANONICAL_LAYOUT_REFKEY_NAMESPACES).toEqual(["child", "inquiry_child", "person", "opportunity"]);
+    it("includes FC-2 reference namespaces (location, customer)", () => {
+        expect(CANONICAL_LAYOUT_REFKEY_NAMESPACES).toEqual([
+            "child",
+            "customer",
+            "inquiry_child",
+            "location",
+            "opportunity",
+            "person",
+        ]);
     });
 
     it("does not include child_inquiry as canonical", () => {
@@ -116,8 +123,15 @@ describe("layoutRefKeyAliases — deprecate-on-write", () => {
 });
 
 describe("field catalog — FC-1 canonical groups", () => {
-    it("exposes canonical entity groups including inquiry_child", () => {
-        expect(LAYOUT_ENTITY_GROUPS.map((g) => g.entityKey)).toEqual(["opportunity", "person", "child", "inquiry_child"]);
+    it("exposes load groups including inquiry_child, customer, location", () => {
+        expect(LAYOUT_ENTITY_GROUPS.map((g) => g.entityKey)).toEqual([
+            "opportunity",
+            "person",
+            "child",
+            "inquiry_child",
+            "customer",
+            "location",
+        ]);
     });
 
     it("does not expose child_inquiry as a catalog group", () => {
