@@ -284,7 +284,9 @@ export function useOpportunityDrawerVmRegistryModals({
 
         const onOpenAddPerson = (ev: Event) => {
             const detail = parseOpenAddPersonModalDetail(ev);
-            if (!detail || !matchesDrawer(detail.opportunity_id)) return;
+            if (!detail) return;
+            const opportunityId = detail.opportunity_id?.trim() ?? "";
+            if (!opportunityId || !matchesDrawer(opportunityId)) return;
             openAddPerson(
                 resolveAddPersonActionKey({
                     actionKey: detail.action_key,
