@@ -1,9 +1,9 @@
 /**
- * Layout runtime environment — staging defaults on, production defaults off.
+ * Layout runtime environment helpers.
  *
- * Staging detection uses `NEXT_PUBLIC_APP_ENV=staging` (set on Vercel staging deploys)
- * and server-side `VERCEL_ENV=preview` for non-production branch previews.
- * Explicit env vars always override defaults via readFlag.
+ * Layout runtime defaults ON in all deploy environments (see featureFlag.ts).
+ * These helpers remain for callers that branch on deploy target; they no longer
+ * gate layout runtime adoption.
  */
 
 function isProductionDeployServer(): boolean {
@@ -15,17 +15,12 @@ function isProductionDeployServer(): boolean {
     return false;
 }
 
-/** Server: layout runtime flags default ON on staging, OFF on production. */
+/** @deprecated Layout runtime defaults on — use isLayoutRuntimeEnabled* from featureFlag.ts. */
 export function isLayoutRuntimeStagingDefaultOnServer(): boolean {
-    if (isProductionDeployServer()) return false;
-    if (process.env.NEXT_PUBLIC_APP_ENV === "staging") return true;
-    if (process.env.APP_ENV === "staging") return true;
-    if (process.env.VERCEL_ENV === "preview") return true;
-    return false;
+    return true;
 }
 
-/** Client: relies on build-time NEXT_PUBLIC_APP_ENV (same as StagingBanner). */
+/** @deprecated Layout runtime defaults on — use isLayoutRuntimeEnabled* from featureFlag.ts. */
 export function isLayoutRuntimeStagingDefaultOnClient(): boolean {
-    if (process.env.NEXT_PUBLIC_APP_ENV === "production") return false;
-    return process.env.NEXT_PUBLIC_APP_ENV === "staging";
+    return true;
 }

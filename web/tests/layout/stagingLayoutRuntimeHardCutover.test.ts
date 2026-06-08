@@ -1,5 +1,5 @@
 /**
- * Staging hard cutover — feature flags and presentation helpers.
+ * Layout runtime hard cutover — default-on flags and presentation helpers.
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
@@ -20,7 +20,7 @@ import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/
 import { buildPersonLayoutRuntimeRecordFromVm } from "@/lib/layout/runtime/buildPersonLayoutRuntimeRecordFromVm";
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 
-describe("staging hard cutover flags", () => {
+describe("layout runtime hard cutover flags — default on", () => {
     const env = { ...process.env };
 
     beforeEach(() => {
@@ -31,45 +31,34 @@ describe("staging hard cutover flags", () => {
         delete process.env.LAYOUT_RUNTIME_PERSON_DRAWER;
         delete process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE;
         delete process.env.LAYOUT_V2_PREVIEW_ENABLED;
-        process.env.NEXT_PUBLIC_APP_ENV = "production";
-        process.env.VERCEL_ENV = "production";
+        delete process.env.NEXT_PUBLIC_APP_ENV;
+        delete process.env.VERCEL_ENV;
     });
 
     afterEach(() => {
         process.env = { ...env };
     });
 
-    it("hard cutover requires runtime on and emergency fallback off", () => {
-        expect(isLayoutRuntimeHardCutoverActiveServer()).toBe(false);
-        process.env.LAYOUT_RUNTIME_ENABLED = "1";
+    it("hard cutover active by default without env vars", () => {
         expect(isLayoutRuntimeHardCutoverActiveServer()).toBe(true);
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(true);
+        expect(isLayoutRuntimePersonDrawerBodyEnabledServer()).toBe(true);
+        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
+        expect(isLayoutV2ConfigEnabledServer()).toBe(true);
+        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
+    });
+
+    it("hard cutover requires emergency fallback off", () => {
+        expect(isLayoutRuntimeLegacyEmergencyFallbackEnabledServer()).toBe(false);
         process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK = "1";
         expect(isLayoutRuntimeHardCutoverActiveServer()).toBe(false);
         expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
     });
 
-    it("layout config APIs enabled when runtime hard cutover is active", () => {
-        process.env.LAYOUT_RUNTIME_ENABLED = "1";
-        expect(isLayoutV2ConfigEnabledServer()).toBe(true);
-    });
-
-    it("person and queue body require hard cutover plus per-entity flag", () => {
-        process.env.LAYOUT_RUNTIME_ENABLED = "1";
-        process.env.LAYOUT_RUNTIME_PERSON_DRAWER = "1";
-        process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE = "1";
-        expect(isLayoutRuntimePersonDrawerBodyEnabledServer()).toBe(true);
-        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
-        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
-    });
-
-    it("staging env enables full cutover without manual layout flags", () => {
-        process.env.NEXT_PUBLIC_APP_ENV = "staging";
-        process.env.VERCEL_ENV = "preview";
-        delete process.env.LAYOUT_RUNTIME_ENABLED;
-        delete process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER;
-        expect(isLayoutRuntimeHardCutoverActiveServer()).toBe(true);
-        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(true);
-        expect(isLayoutV2ConfigEnabledServer()).toBe(true);
+    it("explicit master kill switch disables cutover", () => {
+        process.env.LAYOUT_RUNTIME_ENABLED = "0";
+        expect(isLayoutRuntimeHardCutoverActiveServer()).toBe(false);
+        expect(isLayoutV2ConfigEnabledServer()).toBe(false);
     });
 
     it("hold presentation during loading — no VM flash", () => {

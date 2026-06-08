@@ -201,8 +201,8 @@ describe("futureDrawerModulePlaceholders", () => {
 });
 
 describe("personChildDrawerRuntimeProof — flags", () => {
-    it("layout runtime flag defaults off (no live cutover)", () => {
-        expect(isLayoutRuntimeEnabledServer()).toBe(false);
+    it("layout runtime flag defaults on (live cutover)", () => {
+        expect(isLayoutRuntimeEnabledServer()).toBe(true);
     });
 });
 

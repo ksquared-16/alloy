@@ -57,23 +57,22 @@ describe("opportunity queue layout runtime flags", () => {
     beforeEach(() => {
         delete process.env.LAYOUT_RUNTIME_ENABLED;
         delete process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE;
-        process.env.NEXT_PUBLIC_APP_ENV = "production";
-        process.env.VERCEL_ENV = "production";
+        delete process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK;
     });
 
     afterEach(() => {
         process.env = { ...env };
     });
 
-    it("queue shadow requires master runtime + opportunity queue flag when body cutover off", () => {
-        expect(isLayoutRuntimeOpportunityQueueEnabledServer()).toBe(false);
-        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
-
-        process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE = "1";
-        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
-
-        process.env.LAYOUT_RUNTIME_ENABLED = "1";
+    it("queue body enabled by default; shadow off when body cutover active", () => {
+        expect(isLayoutRuntimeOpportunityQueueEnabledServer()).toBe(true);
         expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
         expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
+    });
+
+    it("queue shadow on when emergency fallback disables body cutover", () => {
+        process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK = "1";
+        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(false);
+        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(true);
     });
 });

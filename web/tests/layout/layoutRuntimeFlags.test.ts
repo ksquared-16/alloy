@@ -1,33 +1,28 @@
 /**
- * Layout runtime feature flags — staging defaults on, production defaults off.
+ * Layout runtime feature flags — default-on; emergency fallback opt-out only.
  */
 
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 import {
     isLayoutRuntimeEnabledClient,
     isLayoutRuntimeEnabledServer,
-    isLayoutRuntimeOpportunityDrawerEnabledServer,
+    isLayoutRuntimeHardCutoverActiveClient,
+    isLayoutRuntimeHardCutoverActiveServer,
+    isLayoutRuntimeLegacyEmergencyFallbackEnabledServer,
+    isLayoutRuntimeOpportunityDrawerBodyEnabledClient,
     isLayoutRuntimeOpportunityDrawerBodyEnabledServer,
+    isLayoutRuntimeOpportunityDrawerEnabledServer,
     isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled,
+    isLayoutRuntimeOpportunityQueueBodyEnabledServer,
     isLayoutRuntimeOpportunityQueueEnabledServer,
     isLayoutRuntimeOpportunityQueueShadowReadPathEnabled,
-    isLayoutRuntimeOpportunityQueueBodyEnabledServer,
     isLayoutRuntimePersonDrawerBodyEnabledServer,
     isLayoutRuntimeReadPathEnabled,
     isLayoutRuntimeShadowEnabledServer,
+    isLayoutV2ConfigEnabledClient,
     isLayoutV2ConfigEnabledServer,
     isLayoutV2PreviewEnabledServer,
 } from "@/lib/layout/featureFlag";
-
-function setProductionEnv() {
-    process.env.NEXT_PUBLIC_APP_ENV = "production";
-    process.env.VERCEL_ENV = "production";
-}
-
-function setStagingEnv() {
-    process.env.NEXT_PUBLIC_APP_ENV = "staging";
-    process.env.VERCEL_ENV = "preview";
-}
 
 function clearLayoutRuntimeFlags() {
     delete process.env.LAYOUT_RUNTIME_ENABLED;
@@ -43,85 +38,81 @@ function clearLayoutRuntimeFlags() {
     delete process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK;
     delete process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK;
     delete process.env.LAYOUT_V2_PREVIEW_ENABLED;
+    delete process.env.NEXT_PUBLIC_APP_ENV;
+    delete process.env.VERCEL_ENV;
 }
 
-describe("layout runtime feature flags — production defaults off", () => {
+describe("layout runtime feature flags — default on without env vars", () => {
     const env = { ...process.env };
 
     beforeEach(() => {
         clearLayoutRuntimeFlags();
-        setProductionEnv();
     });
 
     afterEach(() => {
         process.env = { ...env };
     });
 
-    it("LAYOUT_RUNTIME_ENABLED defaults off on production", () => {
-        expect(isLayoutRuntimeEnabledServer()).toBe(false);
-        expect(isLayoutRuntimeEnabledClient()).toBe(false);
+    it("enables layout runtime, config, and all entity cutovers with no env vars", () => {
+        expect(isLayoutRuntimeEnabledServer()).toBe(true);
+        expect(isLayoutRuntimeEnabledClient()).toBe(true);
+        expect(isLayoutRuntimeHardCutoverActiveServer()).toBe(true);
+        expect(isLayoutRuntimeHardCutoverActiveClient()).toBe(true);
+        expect(isLayoutV2ConfigEnabledServer()).toBe(true);
+        expect(isLayoutV2ConfigEnabledClient()).toBe(true);
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(true);
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledClient()).toBe(true);
+        expect(isLayoutRuntimePersonDrawerBodyEnabledServer()).toBe(true);
+        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
+        expect(isLayoutRuntimeReadPathEnabled()).toBe(true);
     });
 
-    it("LAYOUT_V2_PREVIEW_ENABLED defaults off", () => {
+    it("LAYOUT_V2_PREVIEW_ENABLED defaults off but config still enabled via runtime cutover", () => {
         expect(isLayoutV2PreviewEnabledServer()).toBe(false);
-    });
-
-    it("read path enabled when preview OR runtime flag on", () => {
-        expect(isLayoutRuntimeReadPathEnabled()).toBe(false);
-        process.env.LAYOUT_RUNTIME_ENABLED = "1";
-        expect(isLayoutRuntimeReadPathEnabled()).toBe(true);
-        delete process.env.LAYOUT_RUNTIME_ENABLED;
-        process.env.LAYOUT_V2_PREVIEW_ENABLED = "true";
-        expect(isLayoutRuntimeReadPathEnabled()).toBe(true);
+        expect(isLayoutV2ConfigEnabledServer()).toBe(true);
     });
 
     it("LAYOUT_RUNTIME_SHADOW_ENABLED defaults off", () => {
         expect(isLayoutRuntimeShadowEnabledServer()).toBe(false);
     });
 
-    it("LAYOUT_RUNTIME_OPPORTUNITY_DRAWER defaults off on production", () => {
-        expect(isLayoutRuntimeOpportunityDrawerEnabledServer()).toBe(false);
+    it("shadow read path off when visible body cutover is active", () => {
         expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled()).toBe(false);
-        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
-    });
-
-    it("LAYOUT_RUNTIME_OPPORTUNITY_QUEUE defaults off and shadow excludes visible body cutover", () => {
-        expect(isLayoutRuntimeOpportunityQueueEnabledServer()).toBe(false);
         expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
-
-        process.env.LAYOUT_RUNTIME_OPPORTUNITY_QUEUE = "1";
-        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
-
-        process.env.LAYOUT_RUNTIME_ENABLED = "1";
-        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
-        expect(isLayoutRuntimeOpportunityQueueShadowReadPathEnabled()).toBe(false);
-    });
-});
-
-describe("layout runtime feature flags — staging defaults on", () => {
-    const env = { ...process.env };
-
-    beforeEach(() => {
-        clearLayoutRuntimeFlags();
-        setStagingEnv();
-    });
-
-    afterEach(() => {
-        process.env = { ...env };
-    });
-
-    it("enables layout runtime and all entity cutovers without manual env vars", () => {
-        expect(isLayoutRuntimeEnabledServer()).toBe(true);
-        expect(isLayoutRuntimeEnabledClient()).toBe(true);
-        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(true);
-        expect(isLayoutRuntimePersonDrawerBodyEnabledServer()).toBe(true);
-        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(true);
-        expect(isLayoutV2ConfigEnabledServer()).toBe(true);
     });
 
     it("explicit LAYOUT_RUNTIME_ENABLED=0 disables staging default", () => {
         process.env.LAYOUT_RUNTIME_ENABLED = "0";
+        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED = "0";
         expect(isLayoutRuntimeEnabledServer()).toBe(false);
+        expect(isLayoutRuntimeEnabledClient()).toBe(false);
         expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
+        expect(isLayoutV2ConfigEnabledServer()).toBe(false);
+    });
+
+    it("per-entity explicit opt-out disables only that surface", () => {
+        process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER = "0";
+        expect(isLayoutRuntimeOpportunityDrawerEnabledServer()).toBe(false);
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
+        expect(isLayoutRuntimePersonDrawerBodyEnabledServer()).toBe(true);
+    });
+
+    it("LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK=1 disables hard cutover and layout bodies", () => {
+        expect(isLayoutRuntimeLegacyEmergencyFallbackEnabledServer()).toBe(false);
+        process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK = "1";
+        expect(isLayoutRuntimeHardCutoverActiveServer()).toBe(false);
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
+        expect(isLayoutRuntimeOpportunityQueueBodyEnabledServer()).toBe(false);
+        expect(isLayoutV2ConfigEnabledServer()).toBe(false);
+        expect(isLayoutRuntimeOpportunityQueueEnabledServer()).toBe(true);
+    });
+
+    it("read path enabled when preview OR runtime flag on", () => {
+        expect(isLayoutRuntimeReadPathEnabled()).toBe(true);
+        process.env.LAYOUT_RUNTIME_ENABLED = "0";
+        expect(isLayoutRuntimeReadPathEnabled()).toBe(false);
+        delete process.env.LAYOUT_RUNTIME_ENABLED;
+        process.env.LAYOUT_V2_PREVIEW_ENABLED = "true";
+        expect(isLayoutRuntimeReadPathEnabled()).toBe(true);
     });
 });

@@ -4,26 +4,17 @@
 
 import { describe, expect, it } from "vitest";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
-import { futureModuleWidget } from "@/lib/layout/runtime/proofLayoutHelpers";
 import { resolveEffectiveProductionLayoutDoc } from "@/lib/layout/runtime/resolveEffectiveProductionLayoutDoc";
 
 describe("resolveEffectiveProductionLayoutDoc", () => {
     it("falls back to builtin lead drawer when org doc has no production items", () => {
-        const malformed = buildLeadDrawerDefaultDoc();
-        malformed.sections = [
-            {
-                ...malformed.sections[0]!,
-                rows: malformed.sections[0]!.rows.map((row) => ({
-                    ...row,
-                    columns: row.columns.map((col) => ({
-                        ...col,
-                        items: [futureModuleWidget("opportunities", "x", "communications", "Communications")],
-                    })),
-                })),
-            },
-        ];
         const result = resolveEffectiveProductionLayoutDoc({
-            doc: malformed,
+            doc: {
+                formatVersion: 1,
+                surface: "drawer",
+                entityType: "opportunities",
+                sections: [],
+            },
             source: "org",
             entityType: "opportunities",
             surface: "drawer",

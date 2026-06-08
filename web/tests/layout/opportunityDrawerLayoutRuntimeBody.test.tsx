@@ -45,17 +45,19 @@ describe("C1b opportunity drawer body gates", () => {
         process.env = { ...env };
     });
 
-    it("body cutover requires runtime + opportunity drawer flags", () => {
-        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
-        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledClient()).toBe(false);
-
-        process.env.LAYOUT_RUNTIME_ENABLED = "1";
-        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED = "1";
-        process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER = "1";
-        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER = "1";
-
+    it("body cutover enabled by default without env vars", () => {
         expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(true);
         expect(isLayoutRuntimeOpportunityDrawerBodyEnabledClient()).toBe(true);
+    });
+
+    it("body cutover disabled by emergency fallback or explicit kill switch", () => {
+        process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK = "1";
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
+
+        delete process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK;
+        process.env.LAYOUT_RUNTIME_ENABLED = "0";
+        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED = "0";
+        expect(isLayoutRuntimeOpportunityDrawerBodyEnabledServer()).toBe(false);
     });
 });
 
@@ -155,14 +157,10 @@ describe("evaluateOpportunityLayoutRuntimeBodyFromVm", () => {
         const doc = buildLeadDrawerDefaultDoc();
         doc.sections = [
             {
-                ...doc.sections[0]!,
-                rows: doc.sections[0]!.rows.map((row) => ({
-                    ...row,
-                    columns: row.columns.map((col) => ({
-                        ...col,
-                        items: [futureModuleWidget("opportunities", "x", "communications", "Communications")],
-                    })),
-                })),
+                id: "empty-section",
+                key: "empty",
+                title: "Empty",
+                rows: [],
             },
         ];
         expect(isOpportunityLayoutDocRenderable(doc)).toBe(false);
@@ -177,9 +175,9 @@ describe("evaluateOpportunityLayoutRuntimeBodyFromVm", () => {
 });
 
 describe("isLayoutItemSupportedForProduction", () => {
-    it("omits future modules and simulated action widgets", () => {
+    it("supports configured widgets including future modules and actions", () => {
         const future = futureModuleWidget("opportunities", "x", "parents", "Parents");
-        expect(isLayoutItemSupportedForProduction(future)).toBe(false);
+        expect(isLayoutItemSupportedForProduction(future)).toBe(true);
         expect(
             isLayoutItemSupportedForProduction({
                 id: "w-actions",
@@ -187,7 +185,7 @@ describe("isLayoutItemSupportedForProduction", () => {
                 refKey: "actions",
                 label: "Actions",
             }),
-        ).toBe(false);
+        ).toBe(true);
     });
 });
 

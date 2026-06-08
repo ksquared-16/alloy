@@ -14,7 +14,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import SectionCard from "@/components/admin/SectionCard";
 import LayoutPreviewRenderer from "@/components/layout/LayoutPreviewRenderer";
-import { isLayoutV2ConfigEnabledClient } from "@/lib/layout/featureFlag";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { entityTypeLabel, fetchEntityLabelMap, type EntityLabelMap } from "@/lib/layout/entityLabels";
 import { LAYOUT_ADORNMENT_ICONS, LAYOUT_COLUMN_WIDTHS, LAYOUT_QUEUE_ZONES } from "@/lib/layout/layoutV2";
@@ -192,7 +191,6 @@ function statusPill(status: string) {
 }
 
 export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
-    const enabled = isLayoutV2ConfigEnabledClient();
     const [forbidden, setForbidden] = useState(false);
     const canMutate = !forbidden;
 
@@ -518,15 +516,6 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
         () => groups.find((g) => g.versions.some((v) => v.id === selectedId)) ?? null,
         [groups, selectedId],
     );
-
-    if (!enabled) {
-        return (
-            <>
-                {adminV2Chrome ? null : <Header />}
-                <p className="text-sm text-[#59678b]">Layout configuration is disabled for this environment.</p>
-            </>
-        );
-    }
 
     return (
         <>

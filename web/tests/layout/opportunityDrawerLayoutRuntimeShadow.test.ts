@@ -104,21 +104,19 @@ describe("C1a opportunity drawer shadow gates", () => {
         process.env = { ...env };
     });
 
-    it("requires both runtime and opportunity drawer flags for C1a read path", () => {
+    it("shadow read path off when visible body cutover is active (default)", () => {
         expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled()).toBe(false);
         expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabledClient()).toBe(false);
+    });
 
-        process.env.LAYOUT_RUNTIME_ENABLED = "1";
-        expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled()).toBe(false);
-
-        process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER = "1";
+    it("shadow read path on when emergency fallback disables body cutover", () => {
+        process.env.LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK = "1";
         expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabled()).toBe(true);
         expect(isLayoutRuntimeOpportunityDrawerEnabledServer()).toBe(true);
     });
 
     it("diagnostics panel flag defaults off even when C1a enabled", () => {
-        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_ENABLED = "1";
-        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER = "1";
+        process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK = "1";
         expect(isLayoutRuntimeOpportunityDrawerShadowReadPathEnabledClient()).toBe(true);
         expect(isLayoutRuntimeOpportunityDrawerShadowDiagnosticsEnabledClient()).toBe(false);
 

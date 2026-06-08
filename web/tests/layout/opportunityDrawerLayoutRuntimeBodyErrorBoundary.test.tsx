@@ -61,7 +61,7 @@ describe("OpportunityDrawerLayoutRuntimeBodyErrorBoundary", () => {
         expect(consoleSpy).toHaveBeenCalledWith(
             "[layout_runtime_body:render_error]",
             expect.objectContaining({
-                opportunityId: "opp-1",
+                entityId: "opp-1",
                 layoutSource: "default",
                 message: "layout render boom",
             }),
@@ -96,7 +96,7 @@ describe("logLayoutRuntimeBodyRenderFailure", () => {
         expect(consoleSpy).toHaveBeenCalledWith(
             "[layout_runtime_body:render_error]",
             expect.objectContaining({
-                opportunityId: "opp-2",
+                entityId: "opp-2",
                 layoutSource: "org",
                 message: "test failure",
             }),
