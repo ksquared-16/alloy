@@ -80,26 +80,17 @@ export function computeLayoutRuntimeBodyRenderStats(
         (item) => shouldRenderProofItem(item) && isLayoutItemSupportedForProduction(item),
     );
 
-    let renderableItemCount = 0;
     let itemsWithValueCount = 0;
 
     for (const item of supported) {
-        const hasValue = itemHasOperatorValue(record, item, anchorEntity);
-        const rendersStructure =
-            item.kind === "field" ||
-            item.kind === "field_group" ||
-            (item.kind === "related_list" && item.displayMode === "table") ||
-            (item.kind === "widget_placeholder" &&
-                (item.refKey === "tasks" || item.refKey === "reminders") &&
-                widgetWouldRender(record, item.refKey));
-
-        if (rendersStructure || hasValue) renderableItemCount += 1;
-        if (hasValue) itemsWithValueCount += 1;
+        if (itemHasOperatorValue(record, item, anchorEntity)) itemsWithValueCount += 1;
     }
+
+    // Configured production-safe items always render structure (labels + placeholders).
+    const renderableItemCount = supported.length;
 
     let fallbackReason: string | null = null;
     if (supported.length === 0) fallbackReason = "no_production_supported_items";
-    else if (renderableItemCount === 0) fallbackReason = "zero_renderable_items";
 
     return {
         sectionCount: doc.sections.length,

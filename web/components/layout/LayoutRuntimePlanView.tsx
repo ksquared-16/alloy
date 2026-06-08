@@ -30,6 +30,7 @@ import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { FUTURE_MODULE_METADATA_KEY } from "@/lib/layout/runtime/proofLayoutHelpers";
 import { isLayoutItemSupportedForProduction } from "@/lib/layout/runtime/isLayoutItemSupportedForProduction";
+import { evaluateLayoutCondition } from "@/lib/layout/runtime/evaluateLayoutCondition";
 import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
 import AdornmentIcon from "@/components/layout/AdornmentIcon";
 
@@ -39,7 +40,7 @@ const BORDER = "#e6e8ec";
 
 export type AdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
 const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
-const LayoutRuntimeVariantContext = createContext<"proof" | "production">("proof");
+const LayoutRuntimeVariantContext = createContext<"proof" | "production" | "preview">("proof");
 
 const INTERNAL_OPERATOR_TOKENS =
     /\b(inquiry_child|customer_member|ocm_id|child_inquiry)\b|^[0-9a-f-]{36}$/i;
@@ -51,8 +52,9 @@ function sanitizeOperatorDisplay(display: string | null | undefined): string | n
     return text;
 }
 
-function operatorLabel(item: LayoutItem, variant: "proof" | "production"): string {
-    if (variant === "production") return item.label?.trim() || "";
+function operatorLabel(item: LayoutItem, variant: "proof" | "production" | "preview"): string {
+    const label = item.label?.trim() || item.refKey || "";
+    if (variant === "production" || variant === "preview") return label;
     return item.label || item.refKey;
 }
 
@@ -116,7 +118,7 @@ function ValueCell({
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
     const label = operatorLabel(item, variant);
     const display =
-        variant === "production" ?
+        variant === "production" || variant === "preview" ?
             sanitizeOperatorDisplay(r.isPlaceholder ? null : r.display)
         :   r.display;
 
@@ -310,15 +312,14 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     const title = operatorLabel(item, variant) || "Details";
     const isFutureModule = item.metadata?.[FUTURE_MODULE_METADATA_KEY] === true;
 
-    if (isFutureModule || (variant === "production" && key === "actions")) {
-        return null;
+    if (isFutureModule) {
+        return <FutureModulePlaceholder title={title} />;
     }
 
     const empty = <span className="text-xs text-[#9aa4bf]">No {title.toLowerCase()} yet</span>;
 
     if (key === "tasks" || key === "reminders") {
         const rows = widgetRows(record, key);
-        if (variant === "production" && rows.length === 0) return null;
         return (
             <WidgetChrome title={title}>
                 {rows.length === 0 ? empty : (
@@ -334,7 +335,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             </WidgetChrome>
         );
     }
-    if (key === "actions") {
+    if (key === "actions" && variant === "proof") {
         return (
             <WidgetChrome title={title}>
                 <div className="flex flex-wrap gap-1.5">
@@ -348,12 +349,14 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             </WidgetChrome>
         );
     }
-    return variant === "production" ? null : <WidgetChrome title={title}>{empty}</WidgetChrome>;
+    return <WidgetChrome title={title}>{empty}</WidgetChrome>;
 }
 
 function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const variant = useContext(LayoutRuntimeVariantContext);
+    if (!evaluateLayoutCondition(record, item.visibleWhen)) return null;
     if (variant === "production" && !isLayoutItemSupportedForProduction(item)) return null;
+    if (variant === "preview" && !isLayoutItemSupportedForProduction(item)) return null;
     if (!shouldRenderProofItem(item)) return null;
 
     switch (item.kind) {
@@ -382,6 +385,7 @@ function ColumnView({ record, column, anchorEntity }: { record: ProofRuntimeReco
 }
 
 function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; row: LayoutRow; anchorEntity: string }) {
+    if (!evaluateLayoutCondition(record, row.visibleWhen)) return null;
     return (
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${LAYOUT_GRID_COLUMNS}, minmax(0, 1fr))` }}>
             {row.columns.map((col) => (
@@ -392,6 +396,7 @@ function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; ro
 }
 
 function SectionView({ record, section, anchorEntity }: { record: ProofRuntimeRecord; section: LayoutSection; anchorEntity: string }) {
+    if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
     return (
         <div className="overflow-hidden rounded-lg border border-[rgba(0,0,0,0.08)] border-l-[3px] border-l-[#00A283] bg-white shadow-sm ring-1 ring-[rgba(0,0,0,0.06)]">
             <div className="border-b border-[rgba(0,0,0,0.08)] bg-[rgba(0,0,0,0.025)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "rgba(39,63,82,0.8)" }}>
@@ -411,8 +416,8 @@ export type LayoutRuntimePlanViewProps = {
     record: ProofRuntimeRecord;
     plan?: LayoutRuntimePlan;
     onAdornmentAction?: AdornmentActionHandler;
-    /** `proof` shows binding diagnostics; `production` is operator-safe (C1b). */
-    variant?: "proof" | "production";
+    /** `proof` shows binding diagnostics; `production`/`preview` are operator-safe. */
+    variant?: "proof" | "production" | "preview";
 };
 
 export default function LayoutRuntimePlanView({
@@ -442,9 +447,12 @@ export default function LayoutRuntimePlanView({
                                 .join(", ")}
                         </div>
                     :   null}
-                    {doc.sections.map((section) => (
-                        <SectionView key={section.id} record={record} section={section} anchorEntity={anchorEntity} />
-                    ))}
+                    {doc.sections.map((section) => {
+                if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
+                return (
+                    <SectionView key={section.id} record={record} section={section} anchorEntity={anchorEntity} />
+                );
+            })}
                 </div>
             </AdornmentActionContext.Provider>
         </LayoutRuntimeVariantContext.Provider>

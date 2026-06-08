@@ -5,6 +5,8 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import DrawerLayoutRuntimeOverviewBody from "@/components/admin/vmDrawer/DrawerLayoutRuntimeOverviewBody";
+import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import LayoutRuntimeQueueRowHold from "@/components/layout/LayoutRuntimeQueueRowHold";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildLeadQueueDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildOpportunityLayoutRuntimeRecordFromVm } from "@/lib/layout/runtime/buildOpportunityLayoutRuntimeRecordFromVm";
@@ -51,7 +53,7 @@ describe("computeLayoutRuntimeBodyRenderStats", () => {
         expect(stats.fallbackReason).toBeNull();
     });
 
-    it("flags zero renderable items when doc only has unsupported widgets", () => {
+    it("counts future-module widgets as production-supported (placeholder chrome)", () => {
         const doc = buildLeadDrawerDefaultDoc();
         doc.sections = [
             {
@@ -70,13 +72,13 @@ describe("computeLayoutRuntimeBodyRenderStats", () => {
             vmRecord: { name: "Test" },
         });
         const stats = computeLayoutRuntimeBodyRenderStats(doc, record);
-        expect(stats.productionSupportedCount).toBe(0);
-        expect(stats.fallbackReason).toBe("no_production_supported_items");
+        expect(stats.productionSupportedCount).toBeGreaterThan(0);
+        expect(stats.fallbackReason).toBeNull();
     });
 });
 
 describe("DrawerLayoutRuntimeOverviewBody empty fallback", () => {
-    it("falls back to VM body when layout has zero renderable items", () => {
+    it("renders future-module placeholder instead of VM fallback", () => {
         const doc = buildLeadDrawerDefaultDoc();
         doc.sections = [
             {
@@ -102,8 +104,72 @@ describe("DrawerLayoutRuntimeOverviewBody empty fallback", () => {
                 surface="opportunity_drawer_overview"
             />,
         );
-        expect(html).toContain('data-vm-fallback-marker="true"');
-        expect(html).toContain("VM overview");
+        expect(html).toContain("Future module");
+        expect(html).toContain("Communications");
+        expect(html).not.toContain('data-vm-fallback-marker="true"');
+    });
+
+    it("renders configured layout fields with placeholders when record values are blank", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-blank",
+            vmRecord: { name: "Test Household" },
+        });
+        const html = renderToStaticMarkup(
+            <DrawerLayoutRuntimeOverviewBody
+                layoutBody={layoutBodyResult({ doc, record, layoutSource: "default" })}
+                vmFallback={<div data-vm-fallback-marker="true">VM overview</div>}
+                entityId="opp-blank"
+                surface="opportunity_drawer_overview"
+            />,
+        );
+        expect(html).toContain('data-drawer-layout-runtime-overview="true"');
+        expect(html).not.toContain('data-vm-fallback-marker="true"');
+        expect(html).toContain("—");
+    });
+});
+
+describe("LayoutRuntimeDrawerBodyView blank configured fields", () => {
+    it("renders field labels and em dash placeholders for empty values", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-empty-fields",
+            vmRecord: {},
+        });
+        const html = renderToStaticMarkup(<LayoutRuntimeDrawerBodyView doc={doc} record={record} />);
+        expect(html).toContain("—");
+        expect(html).not.toContain('data-drawer-layout-runtime-empty-fallback="true"');
+    });
+
+    it("renders empty tasks widget chrome in production", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-tasks",
+            vmRecord: { name: "Test" },
+        });
+        const html = renderToStaticMarkup(<LayoutRuntimeDrawerBodyView doc={doc} record={record} />);
+        expect(html.toLowerCase()).toMatch(/no tasks yet|tasks/);
+    });
+
+    it("renders actions, notes, and recent communication widget chrome when empty", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-widgets",
+            vmRecord: { name: "Test" },
+        });
+        const html = renderToStaticMarkup(<LayoutRuntimeDrawerBodyView doc={doc} record={record} />);
+        expect(html).toContain("Actions");
+        expect(html).toContain("Notes");
+        expect(html).toContain("Recent communication");
+        expect(html.toLowerCase()).toMatch(/no actions yet/);
+    });
+});
+
+describe("LayoutRuntimeQueueRowHold", () => {
+    it("renders hold skeleton without VM preview markers", () => {
+        const html = renderToStaticMarkup(<LayoutRuntimeQueueRowHold />);
+        expect(html).toContain('data-layout-runtime-queue-row-hold="true"');
+        expect(html).not.toContain("adminv2-ws-enrollment-crm-compact");
     });
 });
 
@@ -142,5 +208,40 @@ describe("queue row layout binding", () => {
         expect(html).toContain("Jamie Johnson");
         expect(html).toContain("Alex Johnson");
         expect(html).not.toContain(">Record<");
+    });
+
+    it("renders configured contact and tour placeholders when values are blank", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        const item: QueuePreviewItemVm = {
+            id: "opp-blank",
+            title: "Morgan Family",
+            quickActions: [],
+            semanticCrmCompact: {
+                primaryIdentity: "Morgan Family",
+                childName: null,
+                contactDisplayName: null,
+                contactPhoneDisplay: null,
+                programContext: null,
+                statusLabel: null,
+                stageLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                tourContext: null,
+                locationContext: null,
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item);
+        const html = renderToStaticMarkup(
+            <QueueCardProofRenderer doc={doc} record={record} onOpen={() => {}} />,
+        );
+        expect(html).toContain("Morgan Household");
+        expect(html).toContain("—");
+        expect(html).toContain("Tour");
     });
 });

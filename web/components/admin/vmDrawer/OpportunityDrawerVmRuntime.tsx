@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { MapPin } from "lucide-react";
-import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
+import OpportunityDrawerProofLayoutHeader from "@/components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader";
+import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
 import OpportunityDrawerOverviewBody from "@/components/admin/vmDrawer/OpportunityDrawerOverviewBody";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
@@ -317,7 +317,7 @@ export default function OpportunityDrawerVmRuntime() {
         });
         if (model && model.steps.length > 0) {
             return (
-                <RecordLifecycleRail
+                <ProofDoctrineLifecycleRail
                     model={model}
                     data-testid="opportunity-lifecycle-rail"
                     aria-label="Opportunity lifecycle"
@@ -339,77 +339,74 @@ export default function OpportunityDrawerVmRuntime() {
 
     const layoutCutoverHeader = isLayoutRuntimeHardCutoverActiveClient();
 
-    const drawerTitleNode = useMemo(() => {
-        if (!layoutCutoverHeader || !record) return drawerTitle;
+    const locationLabel = useMemo(() => {
+        if (!record) return null;
         const location = opportunityDisplayLocationFromRecord(record);
-        const locationLabel =
-            location.kind === "single" ? location.label
-            : location.kind === "multiple" ? location.label
-            : null;
-        return (
-            <div className="flex flex-wrap items-center gap-2" data-opportunity-drawer-header-title="true">
-                <span>{drawerTitle}</span>
-                {locationLabel ?
-                    <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70">
-                        <MapPin className="h-3 w-3" aria-hidden />
-                        {locationLabel}
-                    </span>
-                :   null}
-            </div>
-        );
-    }, [drawerTitle, layoutCutoverHeader, record]);
+        if (location.kind === "single" || location.kind === "multiple") return location.label;
+        return null;
+    }, [record]);
 
-    const drawerHeaderTabStrip = useMemo(() => {
-        if (!layoutCutoverHeader || !committedVisible) return undefined;
-        return (
-            <div
-                className="flex min-h-0 flex-wrap gap-0.5 rounded-lg border border-[rgba(0,0,0,0.14)] bg-white px-1.5 py-1.5"
-                data-opportunity-drawer-tab-strip="true"
-            >
-                {tabs.map((tab) => (
-                    <button
-                        key={tab}
-                        type="button"
-                        onClick={() => onTabSelect(tab)}
-                        className={clsx(
-                            "rounded-md px-3 py-1.5 text-xs font-medium leading-snug transition-colors",
-                            drawerTab === tab ?
-                                "bg-[#273F52] text-white shadow-sm"
-                            :   "text-[#273F52]/80 hover:bg-[rgba(0,0,0,0.05)]",
-                        )}
-                        style={
-                            drawerTab === tab ?
-                                { borderBottom: "2px solid rgba(0,162,131,0.45)" }
-                            :   undefined
-                        }
-                        data-opportunity-drawer-tab={tab}
-                    >
-                        {OPPORTUNITY_TAB_LABELS[tab] ?? tab}
-                    </button>
-                ))}
-            </div>
-        );
-    }, [committedVisible, drawerTab, layoutCutoverHeader, onTabSelect, tabs]);
+    const attentionVisible = useMemo(
+        () => Boolean(committedVisible && drawer.id && record && isDrawerHeaderAttentionVisible(record)),
+        [committedVisible, drawer.id, record],
+    );
 
-    const headerTitleRightResolved = useMemo(() => {
-        if (!headerTitleRight) return undefined;
-        if (!layoutCutoverHeader || !headerSubtitleBelowTitle) return headerTitleRight;
+    const composedProofHeader = useMemo(() => {
+        if (!layoutCutoverHeader || !committedVisible || !drawer.id || !displayVm || !record) return undefined;
         return (
-            <div className="flex shrink-0 items-start gap-2" data-opportunity-drawer-header-title-right="true">
-                <div className="pt-0.5">{headerSubtitleBelowTitle}</div>
-                {headerTitleRight}
-            </div>
+            <OpportunityDrawerProofLayoutHeader
+                title={drawerTitle}
+                locationLabel={locationLabel}
+                opportunityId={drawer.id}
+                record={record}
+                displayVm={displayVm}
+                queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
+                opportunitySingular={opportunitySingular}
+                statusLabel={statusLabel}
+                currentStatusKey={currentStatusKey}
+                statusControl={displayVm.header.status}
+                statusCanMutate={statusCanMutate}
+                tabs={tabs}
+                activeTab={drawerTab}
+                onTabSelect={onTabSelect}
+                lifecycleRail={lifecycleRail}
+                onClose={closeDrawer}
+                onActionSelect={onActionSelect}
+                actionLoadingKey={actionLoadingKey}
+                actionPreflightBlocked={actionPreflightBlocked}
+                onDismissActionPreflightBlocked={clearActionPreflightBlocked}
+                registryActionFeedback={registryActionFeedback}
+                tabLabels={OPPORTUNITY_TAB_LABELS}
+                attentionVisible={attentionVisible}
+            />
         );
-    }, [headerSubtitleBelowTitle, headerTitleRight, layoutCutoverHeader]);
+    }, [
+        layoutCutoverHeader,
+        committedVisible,
+        drawer.id,
+        drawer.opportunityQueuePreviewSeed,
+        displayVm,
+        record,
+        drawerTitle,
+        locationLabel,
+        opportunitySingular,
+        statusLabel,
+        currentStatusKey,
+        statusCanMutate,
+        tabs,
+        drawerTab,
+        onTabSelect,
+        lifecycleRail,
+        closeDrawer,
+        onActionSelect,
+        actionLoadingKey,
+        actionPreflightBlocked,
+        clearActionPreflightBlocked,
+        registryActionFeedback,
+        attentionVisible,
+    ]);
 
-    const drawerHeaderSignals = useMemo(() => {
-        if (!layoutCutoverHeader || !headerAttentionCenter) return undefined;
-        return (
-            <div className="px-0" data-opportunity-drawer-header-attention-signals="true">
-                {headerAttentionCenter}
-            </div>
-        );
-    }, [headerAttentionCenter, layoutCutoverHeader]);
+    const drawerTitleNode = drawerTitle;
 
     return (
         <>
@@ -419,10 +416,11 @@ export default function OpportunityDrawerVmRuntime() {
             title={drawerTitleNode}
             headerSubtitle={layoutCutoverHeader ? undefined : headerSubtitleBelowTitle}
             headerTitleCenter={layoutCutoverHeader ? undefined : headerAttentionCenter}
-            headerTitleRight={headerTitleRightResolved}
-            headerSignals={drawerHeaderSignals}
-            headerExtra={drawerHeaderTabStrip}
-            postTabStrip={layoutCutoverHeader ? lifecycleRail : undefined}
+            headerTitleRight={layoutCutoverHeader ? undefined : headerTitleRight}
+            headerSignals={layoutCutoverHeader ? undefined : undefined}
+            headerExtra={layoutCutoverHeader ? undefined : undefined}
+            postTabStrip={layoutCutoverHeader ? undefined : undefined}
+            composedStickyHeader={composedProofHeader}
             variant="adminV2"
             presentation="modal"
             panelClassName="max-w-7xl"

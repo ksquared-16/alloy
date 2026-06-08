@@ -34,6 +34,8 @@ export type UseDrawerLayoutRuntimeBodyResult = {
     record: ProofRuntimeRecord | null;
     layoutSource: string | null;
     layoutKey: string | null;
+    layoutRecordId: string | null;
+    layoutVersion: number | null;
     lastError: string | null;
 };
 
@@ -45,6 +47,8 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
     const [record, setRecord] = useState<ProofRuntimeRecord | null>(null);
     const [layoutSource, setLayoutSource] = useState<string | null>(null);
     const [layoutKey, setLayoutKey] = useState<string | null>(null);
+    const [layoutRecordId, setLayoutRecordId] = useState<string | null>(null);
+    const [layoutVersion, setLayoutVersion] = useState<number | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
     const readyIdRef = useRef<string | null>(null);
 
@@ -55,6 +59,8 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
             setRecord(null);
             setLayoutSource(null);
             setLayoutKey(null);
+            setLayoutRecordId(null);
+            setLayoutVersion(null);
             setLastError(null);
             readyIdRef.current = null;
             return;
@@ -106,6 +112,9 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
                     doc?: LayoutDoc;
                     record?: ProofRuntimeRecord;
                     layoutSource?: string;
+                    layoutKey?: string;
+                    layoutRecordId?: string | null;
+                    layoutVersion?: number | null;
                     plan?: { layoutKey?: string };
                 };
                 if (!json.doc?.sections?.length || !json.record) {
@@ -116,7 +125,9 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
                 setDoc(json.doc);
                 setRecord(json.record);
                 setLayoutSource(json.layoutSource ?? null);
-                setLayoutKey(json.plan?.layoutKey ?? null);
+                setLayoutKey(json.layoutKey ?? json.plan?.layoutKey ?? null);
+                setLayoutRecordId(json.layoutRecordId ?? null);
+                setLayoutVersion(json.layoutVersion ?? null);
                 setPhase("ready");
                 readyIdRef.current = id;
             })
@@ -141,6 +152,8 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
             setRecord(null);
             setLayoutSource(null);
             setLayoutKey(null);
+            setLayoutRecordId(null);
+            setLayoutVersion(null);
             setLastError(null);
         }
     }, [entityId]);
@@ -158,6 +171,8 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         record,
         layoutSource,
         layoutKey,
+        layoutRecordId,
+        layoutVersion,
         lastError,
     };
 }

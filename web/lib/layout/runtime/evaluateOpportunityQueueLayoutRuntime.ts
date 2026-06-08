@@ -21,6 +21,8 @@ export type OpportunityQueueLayoutRuntimeResult =
           entityType: string;
           layoutSource: string;
           layoutKey?: string;
+          layoutRecordId?: string | null;
+          layoutVersion?: number | null;
           matchTier?: string;
           layoutFallbackReason?: string;
       }
@@ -63,6 +65,8 @@ export async function evaluateOpportunityQueueLayoutRuntime(input: {
             entityType,
             layoutSource: effective.source,
             layoutKey: effective.layoutKey ?? plan.layoutKey,
+            layoutRecordId: effective.usedFallback ? null : (resolution.record?.id ?? null),
+            layoutVersion: effective.usedFallback ? null : (resolution.record?.version ?? null),
             matchTier: resolution.matchTier,
             layoutFallbackReason: effective.fallbackReason,
         };
@@ -85,6 +89,8 @@ export async function evaluateOpportunityQueueLayoutRuntime(input: {
         entityType,
         layoutSource: effective.usedFallback ? effective.source : resolution.source,
         layoutKey: effective.layoutKey ?? resolution.layoutKey ?? plan.layoutKey,
+        layoutRecordId: effective.usedFallback ? null : (resolution.record?.id ?? null),
+        layoutVersion: effective.usedFallback ? null : (resolution.record?.version ?? null),
         matchTier: resolution.matchTier,
         layoutFallbackReason: effective.usedFallback ? effective.fallbackReason : undefined,
     };

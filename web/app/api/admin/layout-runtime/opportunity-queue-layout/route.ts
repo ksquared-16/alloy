@@ -40,6 +40,9 @@ export async function GET(req: NextRequest) {
         entityType: result.entityType,
         layoutSource: result.layoutSource,
         layoutKey: result.layoutKey,
+        layoutRecordId: result.layoutRecordId ?? null,
+        layoutVersion: result.layoutVersion ?? null,
+        layoutFallbackReason: result.layoutFallbackReason ?? null,
         matchTier: result.matchTier,
     });
 }

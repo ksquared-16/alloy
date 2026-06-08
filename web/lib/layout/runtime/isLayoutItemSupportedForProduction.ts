@@ -1,24 +1,20 @@
 /**
- * C1b — production layout runtime item support (fail-closed).
+ * C1b — production layout runtime item support.
  *
- * Unsupported items are omitted from operator UI; they do not crash the body.
+ * Configured drawer items render structure (labels + placeholders). Future-module
+ * widgets render a visible placeholder; they are not silently omitted.
  */
 
 import type { LayoutItem } from "../layoutV2";
-import { FUTURE_MODULE_METADATA_KEY } from "./proofLayoutHelpers";
 import { shouldRenderProofItem } from "./resolveProofBindingValue";
 
-const PRODUCTION_WIDGET_KEYS = new Set(["tasks", "reminders"]);
-
-/** True when a layout item may render in production drawer body. */
+/** True when a layout item may render in production/preview drawer body. */
 export function isLayoutItemSupportedForProduction(item: LayoutItem): boolean {
     if (!shouldRenderProofItem(item)) return false;
-    if (item.metadata?.[FUTURE_MODULE_METADATA_KEY] === true) return false;
-
-    if (item.kind === "widget_placeholder") {
-        return PRODUCTION_WIDGET_KEYS.has(item.refKey);
+    if (item.kind === "widget_placeholder") return true;
+    if (item.kind === "related_list" && item.displayMode !== "table" && item.displayMode !== "rows") {
+        return false;
     }
-
     return true;
 }
 

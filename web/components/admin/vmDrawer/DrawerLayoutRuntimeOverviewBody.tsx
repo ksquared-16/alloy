@@ -58,6 +58,8 @@ export default function DrawerLayoutRuntimeOverviewBody({
                 record: layoutBody.record,
                 layoutSource: layoutBody.layoutSource,
                 layoutKey: layoutBody.layoutKey,
+                layoutRecordId: layoutBody.layoutRecordId,
+                layoutVersion: layoutBody.layoutVersion,
                 phase: layoutBody.phase,
                 bodyReady: layoutBody.bodyReady,
                 showHold: layoutBody.showHold,
@@ -73,12 +75,12 @@ export default function DrawerLayoutRuntimeOverviewBody({
     }, [evidence]);
 
     const showStagingDiagnostic = shouldShowStagingDiagnostic();
+    /** VM fallback only when the layout doc has zero production-safe items — not when values are blank. */
     const useEmptyBodyFallback =
-        layoutBody.bodyReady &&
-        renderStats.renderableItemCount === 0 &&
-        renderStats.fallbackReason != null;
+        layoutBody.bodyReady && renderStats.fallbackReason === "no_production_supported_items";
 
     if (layoutBody.bodyReady && layoutBody.doc && layoutBody.record && !useEmptyBodyFallback) {
+        const noRenderedItems = evidence.renderedItemCount === 0 && evidence.itemEvidence.length > 0;
         return (
             <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
                 fallback={vmFallback}
@@ -93,6 +95,9 @@ export default function DrawerLayoutRuntimeOverviewBody({
                     data-drawer-layout-runtime-overview="true"
                     data-layout-runtime-surface={surface}
                     data-layout-runtime-source={layoutBody.layoutSource ?? ""}
+                    data-layout-runtime-key={layoutBody.layoutKey ?? ""}
+                    data-layout-runtime-record-id={layoutBody.layoutRecordId ?? ""}
+                    data-layout-runtime-version={layoutBody.layoutVersion ?? ""}
                     data-layout-runtime-readonly="true"
                     data-drawer-layout-runtime-renderable-count={renderStats.renderableItemCount}
                 >
@@ -101,9 +106,17 @@ export default function DrawerLayoutRuntimeOverviewBody({
                             layoutSource={layoutBody.layoutSource}
                             stats={renderStats}
                             surface={surface}
-                            lastError={layoutBody.lastError}
+                            lastError={layoutBody.lastError ?? (noRenderedItems ? "zero_rendered_items" : null)}
                             evidence={evidence}
                         />
+                    :   null}
+                    {noRenderedItems && !showStagingDiagnostic ?
+                        <div
+                            className="rounded-md border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950"
+                            data-drawer-layout-runtime-empty-body="true"
+                        >
+                            Layout configured but no items rendered. Enable staging diagnostic for item evidence.
+                        </div>
                     :   null}
                     <LayoutRuntimeDrawerBodyView doc={layoutBody.doc} record={layoutBody.record} />
                 </div>
@@ -132,5 +145,18 @@ export default function DrawerLayoutRuntimeOverviewBody({
         );
     }
 
-    return <>{vmFallback}</>;
+    return (
+        <>
+            {showStagingDiagnostic ?
+                <DrawerLayoutRuntimeStagingDiagnostic
+                    layoutSource={layoutBody.layoutSource}
+                    stats={renderStats}
+                    surface={surface}
+                    lastError={layoutBody.lastError ?? layoutBody.phase}
+                    evidence={evidence}
+                />
+            :   null}
+            {vmFallback}
+        </>
+    );
 }

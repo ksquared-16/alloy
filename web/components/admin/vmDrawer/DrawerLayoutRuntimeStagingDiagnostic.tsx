@@ -48,6 +48,19 @@ export default function DrawerLayoutRuntimeStagingDiagnostic({
                     <dd className="inline font-medium">{layoutSource ?? "—"}</dd>
                 </div>
                 <div>
+                    <dt className="inline text-amber-900/70">Layout key: </dt>
+                    <dd className="inline font-medium">{evidence?.layoutKey ?? "—"}</dd>
+                </div>
+                {evidence?.layoutRecordId ?
+                    <div className="sm:col-span-2">
+                        <dt className="inline text-amber-900/70">entity_layouts.id: </dt>
+                        <dd className="inline font-mono font-medium">{evidence.layoutRecordId}</dd>
+                        {evidence.layoutVersion != null ?
+                            <span className="ml-2 text-amber-900/70">v{evidence.layoutVersion}</span>
+                        :   null}
+                    </div>
+                :   null}
+                <div>
                     <dt className="inline text-amber-900/70">Sections: </dt>
                     <dd className="inline font-medium">{stats.sectionCount}</dd>
                 </div>

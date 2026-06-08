@@ -9,6 +9,10 @@ import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/
 import { OPPORTUNITY_COMPUTE_KEYS } from "./opportunityRelationRegistry";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
 import { mapVmInquiryChildrenToLayoutRuntimeRows } from "./mapLayoutRuntimeChildrenRows";
+import {
+    buildPrimaryContactPersonRelation,
+    resolveOpportunityPrimaryContactPerson,
+} from "./resolveOpportunityPrimaryContactPerson";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -47,27 +51,14 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
     const householdName = pickDisplay(vmRecord.name, vmRecord.title, vmRecord._customer_name);
     const lastName = parseHouseholdLastName(householdName);
 
-    const primaryName = pickDisplay(
-        vmRecord["person.primary_contact_name"],
-        vmRecord._primary_contact_name,
-        vmRecord._primary_person_name,
-        vmRecord._customer_name,
-    );
+    const primaryContact = resolveOpportunityPrimaryContactPerson(vmRecord);
+    const primaryName = primaryContact.displayName;
+    const primaryPhone = primaryContact.phone;
+    const primaryEmail = primaryContact.email;
+
     const secondaryName = pickDisplay(
         vmRecord["person.secondary_contact_name"],
         vmRecord._secondary_contact_name,
-    );
-    const primaryPhone = pickDisplay(
-        vmRecord["person.primary_phone"],
-        vmRecord["person.phone"],
-        vmRecord._primary_contact_phone,
-        vmRecord._primary_person_phone,
-    );
-    const primaryEmail = pickDisplay(
-        vmRecord["person.primary_email"],
-        vmRecord["person.email"],
-        vmRecord._primary_contact_email,
-        vmRecord._primary_person_email,
     );
 
     const location = opportunityDisplayLocationFromRecord(vmRecord);
@@ -143,15 +134,9 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         tasks: Array.isArray(vmRecord._tasks_preview) ? vmRecord._tasks_preview : [],
         reminders: summaries?.reminders?.scheduled_sends ?? [],
         _relations: {
-            primary_contact: {
-                handle: primaryName ?? "—",
-                entityType: "person",
-                fields: {
-                    primary_contact_name: primaryName ?? "",
-                    primary_phone: primaryPhone ?? "",
-                    primary_email: primaryEmail ?? "",
-                },
-            },
+            ...(buildPrimaryContactPersonRelation(primaryContact) ?
+                { primary_contact: buildPrimaryContactPersonRelation(primaryContact)! }
+            :   {}),
             ...(secondaryName ?
                 {
                     secondary_contact: {

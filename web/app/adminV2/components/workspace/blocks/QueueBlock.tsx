@@ -29,6 +29,7 @@ import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawer
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import LayoutRuntimeQueueRowView from "@/components/layout/LayoutRuntimeQueueRowView";
+import LayoutRuntimeQueueRowHold from "@/components/layout/LayoutRuntimeQueueRowHold";
 import OpportunityQueueRowLayoutRuntimeShadowMount from "@/components/admin/workspace/OpportunityQueueRowLayoutRuntimeShadowMount";
 import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/buildOpportunityQueueRowRecordFromPreview";
 import { useOpportunityQueueLayoutRuntime } from "@/lib/layout/runtime/useOpportunityQueueLayoutRuntime";
@@ -1604,10 +1605,11 @@ function WorkUnitQueueLane({
       grain: hasCandidatePlacementRows ? "candidate" : "case",
     },
   );
-  const useLayoutQueueRows =
-    queue.queueEntityType === "opportunity" &&
-    queueLayoutRuntime.enabled &&
-    queueLayoutRuntime.doc != null;
+  const layoutQueueEnabled =
+    queue.queueEntityType === "opportunity" && queueLayoutRuntime.enabled;
+  const useLayoutQueueRows = layoutQueueEnabled && queueLayoutRuntime.doc != null;
+  const showLayoutQueueHold =
+    layoutQueueEnabled && (queueLayoutRuntime.loading || queueLayoutRuntime.doc == null);
 
   const waitlistPlacementSections = useMemo(
     () =>
@@ -1904,7 +1906,9 @@ function WorkUnitQueueLane({
                     Opening…
                   </span>
                 ) : null}
-                {useLayoutQueueRows && queueLayoutRuntime.doc && crm ?
+                {showLayoutQueueHold && crm ?
+                  <LayoutRuntimeQueueRowHold />
+                : useLayoutQueueRows && queueLayoutRuntime.doc && crm ?
                   <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split">
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <LayoutRuntimeQueueRowView

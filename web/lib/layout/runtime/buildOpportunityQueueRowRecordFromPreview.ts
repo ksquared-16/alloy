@@ -5,6 +5,10 @@
 import { parseQueueRowCrmChildrenStructured } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { CrmCompactChildLineVm, CrmCompactRowSemanticSlots, QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
+import {
+    buildPrimaryContactPersonRelation,
+    resolveOpportunityPrimaryContactPerson,
+} from "./resolveOpportunityPrimaryContactPerson";
 import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnrichment";
 
 function pickDisplay(...values: unknown[]): string | null {
@@ -155,17 +159,23 @@ export function buildOpportunityQueueRowRecordFromPreview(item: QueuePreviewItem
         crm?.contactDisplayName,
         parseContactNameFromLine(enrichment?.contactLine),
         enrichment?.contactLine,
-        crm?.contactSnippet,
     );
+    const contactPhone = pickDisplay(crm?.contactPhoneDisplay, enrichment?.primaryPhone);
+    const contactEmail = pickDisplay(crm?.contactEmail, enrichment?.primaryEmail);
+    const primaryContact = resolveOpportunityPrimaryContactPerson({
+        "person.primary_contact_name": contactName ?? "",
+        "person.primary_phone": contactPhone ?? "",
+        "person.primary_email": contactEmail ?? "",
+    });
     const tourDate = resolveTourDate(crm, enrichment, item.metaLines);
 
-    return {
+    const baseRecord: ProofRuntimeRecord = {
         id: item.id,
         name: householdName,
         last_name: lastName,
-        "person.primary_contact_name": contactName ?? "",
-        "person.primary_phone": pickDisplay(crm?.contactPhoneDisplay, enrichment?.primaryPhone, crm?.contactSnippet) ?? "",
-        "person.primary_email": pickDisplay(crm?.contactEmail, enrichment?.primaryEmail) ?? "",
+        "person.primary_contact_name": primaryContact.displayName ?? "",
+        "person.primary_phone": primaryContact.phone ?? "",
+        "person.primary_email": primaryContact.email ?? "",
         status_key: statusLabel ?? "",
         _status_display: statusLabel ?? "",
         "opportunity.status_key": statusLabel ?? "",
@@ -178,5 +188,12 @@ export function buildOpportunityQueueRowRecordFromPreview(item: QueuePreviewItem
         tour_scheduled_at: tourDate,
         children: layoutChildren,
         enrollment_children: layoutChildren,
+        _relations: {
+            ...(buildPrimaryContactPersonRelation(primaryContact) ?
+                { primary_contact: buildPrimaryContactPersonRelation(primaryContact)! }
+            :   {}),
+        },
     };
+
+    return baseRecord;
 }

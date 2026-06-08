@@ -66,6 +66,10 @@ export async function GET(req: NextRequest) {
             doc: result.doc,
             record: result.record,
             layoutSource: result.layoutSource,
+            layoutKey: result.layoutKey,
+            layoutRecordId: result.layoutRecordId,
+            layoutVersion: result.layoutVersion,
+            layoutFallbackReason: result.layoutFallbackReason ?? null,
             plan: {
                 layoutKey: result.plan.layoutKey,
                 entityType: result.plan.entityType,

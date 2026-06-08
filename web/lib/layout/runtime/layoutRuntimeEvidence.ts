@@ -6,6 +6,7 @@ import type { LayoutDoc } from "../layoutV2";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import { computeLayoutRuntimeBodyRenderStats, type LayoutRuntimeBodyRenderStats } from "./layoutRuntimeBodyRenderStats";
 import type { ProofRuntimeRecord } from "./proofRecordContext";
+import { buildLayoutRuntimeDrawerBodyItemEvidence, type LayoutRuntimeBodyItemEvidence } from "./buildLayoutRuntimeDrawerBodyItemEvidence";
 import { resolveItemValue } from "../resolveItemValue";
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnrichment";
@@ -14,6 +15,8 @@ export type LayoutRuntimeDrawerEvidence = {
     opportunityId: string;
     layoutSource: string | null;
     layoutKey: string | null;
+    layoutRecordId: string | null;
+    layoutVersion: number | null;
     sectionCount: number;
     itemRefKeys: string[];
     itemTemplates: string[];
@@ -27,6 +30,10 @@ export type LayoutRuntimeDrawerEvidence = {
     lastError: string | null;
     missingLayoutKeys: string[];
     titleResolution?: { display: string | null; isPlaceholder: boolean; refKey: string; template?: string };
+    sectionTitles: string[];
+    itemEvidence: LayoutRuntimeBodyItemEvidence[];
+    renderedItemCount: number;
+    fallbackReason: string | null;
 };
 
 export type LayoutRuntimeQueueRowEvidence = {
@@ -112,6 +119,8 @@ export function buildLayoutRuntimeDrawerEvidence(input: {
     record: ProofRuntimeRecord | null;
     layoutSource: string | null;
     layoutKey: string | null;
+    layoutRecordId?: string | null;
+    layoutVersion?: number | null;
     phase: string;
     bodyReady: boolean;
     showHold: boolean;
@@ -120,6 +129,9 @@ export function buildLayoutRuntimeDrawerEvidence(input: {
 }): LayoutRuntimeDrawerEvidence {
     const { refKeys, templates } = collectDocRefKeys(input.doc);
     const renderStats = computeLayoutRuntimeBodyRenderStats(input.doc, input.record);
+    const itemEvidence = buildLayoutRuntimeDrawerBodyItemEvidence(input.doc, input.record);
+    const sectionTitles = (input.doc?.sections ?? []).map((s) => s.title).filter(Boolean);
+    const renderedItemCount = itemEvidence.filter((i) => i.rendered).length;
     const titleItem = collectLayoutItems(input.doc ?? { sections: [] }).find(
         (i) => i.template?.includes("Household") || i.refKey === "name" || i.refKey === "_template",
     );
@@ -135,6 +147,8 @@ export function buildLayoutRuntimeDrawerEvidence(input: {
         opportunityId: input.opportunityId,
         layoutSource: input.layoutSource,
         layoutKey: input.layoutKey,
+        layoutRecordId: input.layoutRecordId ?? null,
+        layoutVersion: input.layoutVersion ?? null,
         sectionCount: input.doc?.sections?.length ?? 0,
         itemRefKeys: refKeys,
         itemTemplates: templates,
@@ -148,6 +162,10 @@ export function buildLayoutRuntimeDrawerEvidence(input: {
         lastError: input.lastError,
         missingLayoutKeys: findMissingLayoutKeys(input.doc, input.record),
         titleResolution,
+        sectionTitles,
+        itemEvidence,
+        renderedItemCount,
+        fallbackReason: renderStats.fallbackReason,
     };
 }
 
@@ -238,6 +256,8 @@ export function logLayoutRuntimeDrawerEvidence(evidence: LayoutRuntimeDrawerEvid
     console.table({
         layoutSource: evidence.layoutSource,
         layoutKey: evidence.layoutKey,
+        layoutRecordId: evidence.layoutRecordId,
+        layoutVersion: evidence.layoutVersion,
         sections: evidence.sectionCount,
         renderableItems: evidence.renderStats.renderableItemCount,
         itemsWithData: evidence.renderStats.itemsWithValueCount,
@@ -248,6 +268,19 @@ export function logLayoutRuntimeDrawerEvidence(evidence: LayoutRuntimeDrawerEvid
         lastError: evidence.lastError,
     });
     console.log("layout refKeys", evidence.itemRefKeys);
+    console.log("section titles", evidence.sectionTitles);
+    if (evidence.itemEvidence.length > 0) {
+        console.table(
+            evidence.itemEvidence.map((i) => ({
+                section: i.sectionTitle,
+                refKey: i.refKey,
+                supported: i.supported,
+                valueFound: i.valueFound,
+                rendered: i.rendered,
+                omitReason: i.omitReason,
+            })),
+        );
+    }
     console.log("record sample", evidence.recordSample);
     console.log("missing layout keys", evidence.missingLayoutKeys);
     if (evidence.titleResolution) console.log("title resolution", evidence.titleResolution);

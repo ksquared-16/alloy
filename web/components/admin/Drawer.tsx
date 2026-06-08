@@ -84,6 +84,11 @@ interface DrawerProps {
      * drawer). Type-only: not rendered here, so behavior is unchanged.
      */
     runtimeDebug?: React.ReactNode;
+    /**
+     * When set (AdminV2 modal + layout cutover), replaces the default multi-slot
+     * header with a single proof-layout header composition.
+     */
+    composedStickyHeader?: React.ReactNode;
 }
 
 export default function Drawer({
@@ -109,6 +114,7 @@ export default function Drawer({
     panelClassName,
     recordModalTone,
     recordModalContextStyle,
+    composedStickyHeader,
 }: DrawerProps) {
     const [portalReady, setPortalReady] = useState(false);
     useEffect(() => {
@@ -276,7 +282,46 @@ export default function Drawer({
         </button>
     );
 
-    const headerBlock = (
+    const headerBlock = composedStickyHeader ? (
+        <>
+            <div
+                className={`sticky top-0 ${isV2 ? "z-20" : "z-10"} shrink-0 ${cleaningRecordModalTone ? "border-b border-solid" : `border-b ${isV2 ? "" : "border-admin-border bg-admin-surface-card"}`}`}
+                style={
+                    isV2
+                        ? {
+                              ...(cleaningRecordModalTone
+                                  ? {
+                                        backgroundColor: "var(--vc-drawer-header-bg, #ffffff)",
+                                        borderBottomColor: derived.border,
+                                        borderRightWidth: 3,
+                                        borderRightStyle: "solid",
+                                        borderRightColor: "var(--vc-header-rail-accent)",
+                                    }
+                                  : {
+                                        backgroundColor: neutral.surface,
+                                        borderBottomColor: derived.border,
+                                    }),
+                          }
+                        : undefined
+                }
+                data-drawer-composed-sticky-header="true"
+            >
+                {composedStickyHeader}
+            </div>
+            {overlayChildren != null && overlayChildren !== false ?
+                <div className="relative shrink-0" data-adminv2-drawer-overlay-host="true">
+                    {overlayChildren}
+                </div>
+            :   null}
+            <div
+                data-adminv2-record-modal-scroll
+                className={`flex-1 overflow-y-auto min-h-0 ${isModal ? (cleaningRecordModalTone ? "px-4 py-2.5 sm:px-5 sm:py-3.5" : "px-4 py-3 sm:px-5 sm:py-4") : "p-6"} ${isV2 ? "[scrollbar-gutter:stable]" : "bg-admin-surface-card"}`}
+                style={modalBodyBg}
+            >
+                {children}
+            </div>
+        </>
+    ) : (
         <>
             <div
                 className={`sticky top-0 ${isV2 ? "z-20" : "z-10"} shrink-0 ${cleaningRecordModalTone ? "border-b border-solid" : `border-b ${isV2 ? "" : "border-admin-border bg-admin-surface-card"}`}`}

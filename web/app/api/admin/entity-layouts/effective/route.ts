@@ -69,6 +69,8 @@ export async function GET(request: NextRequest) {
             resolved: result.doc,
             source: result.source,
             layoutKey: result.layoutKey ?? null,
+            layoutRecordId: result.record?.id ?? null,
+            layoutVersion: result.record?.version ?? null,
             matchTier: result.matchTier ?? null,
             matchedQueueContext: result.matchedQueueContext ?? null,
             runtimeReadPathEnabled: result.runtimeReadPathEnabled,

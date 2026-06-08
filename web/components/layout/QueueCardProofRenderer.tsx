@@ -169,20 +169,27 @@ function CardWidget({ item, record }: { item: LayoutItem; record: Rec }) {
     return <span className="rounded-[5px] border border-dashed px-2 py-0.5 text-[10px]" style={{ borderColor: "rgba(39,63,82,0.2)", color: MUTED }}>{item.label || key}</span>;
 }
 
-/** Inline row of field items + widgets for a zone (skips blanks). */
+/** Inline row of configured field items + widgets for a zone (shows labels + placeholders). */
 function FieldRow({ fields, widgets, record, asPills = false }: { fields: LayoutItem[]; widgets: LayoutItem[]; record: Rec; asPills?: boolean }) {
-    const rendered = fields.map((it) => ({ it, v: txt(record, it) })).filter((x) => !x.v.placeholder);
-    if (rendered.length === 0 && widgets.length === 0) return null;
+    if (fields.length === 0 && widgets.length === 0) return null;
     return (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]" style={{ color: MIDNIGHT }}>
-            {rendered.map(({ it, v }) =>
-                asPills ? <Pill key={it.id} tone="ember">{v.text}</Pill> : (
+            {fields.map((it) => {
+                const v = txt(record, it);
+                const label = it.label?.trim();
+                if (asPills) {
+                    return v.placeholder ?
+                            <span key={it.id} className="inline-flex items-center gap-1" style={{ color: MUTED }}>{label ? `${label}: ` : ""}—</span>
+                        :   <Pill key={it.id} tone="ember">{v.text}</Pill>;
+                }
+                return (
                     <span key={it.id} className="inline-flex items-center gap-1">
                         {it.adornment ? <Adorn item={it} /> : null}
-                        <span style={{ color: MUTED }}>{v.text}</span>
+                        {label ? <span style={{ color: MUTED }}>{label}:</span> : null}
+                        <span style={{ color: v.placeholder ? MUTED : MIDNIGHT }}>{v.placeholder ? "—" : v.text}</span>
                     </span>
-                ),
-            )}
+                );
+            })}
             {widgets.map((it) => <CardWidget key={it.id} item={it} record={record} />)}
         </div>
     );
@@ -232,7 +239,15 @@ function ContactRow({ items, record }: { items: LayoutItem[]; record: Rec }) {
                 {nameItem.adornment ? <Adorn item={nameItem} /> : <AdornmentIcon icon="person" className="h-3 w-3 text-[rgba(39,63,82,0.5)]" />}
                 <span className="font-medium">{name.isPlaceholder ? "—" : name.display}</span>
             </span>
-            {rest.map((it) => { const r = resolveItemValue(record, it); return r.isPlaceholder ? null : <span key={it.id} className="inline-flex items-center gap-1" style={{ color: MUTED }}>{it.adornment ? <Adorn item={it} /> : null}{r.display}</span>; })}
+            {rest.map((it) => {
+                const r = resolveItemValue(record, it);
+                return (
+                    <span key={it.id} className="inline-flex items-center gap-1" style={{ color: MUTED }}>
+                        {it.adornment ? <Adorn item={it} /> : null}
+                        {r.isPlaceholder ? "—" : r.display}
+                    </span>
+                );
+            })}
         </div>
     );
 }
@@ -275,7 +290,7 @@ export default function QueueCardProofRenderer({
 
     const contextFields = all(b, "context.primary", "context.secondary");
     const contextWidgets = widgetsIn(b, "context.primary", "context.secondary");
-    const hasContext = contextFields.some((it) => !txt(record, it).placeholder) || contextWidgets.length > 0;
+    const hasContext = contextFields.length > 0 || contextWidgets.length > 0;
 
     const tourItem = first(b, "body.tour");
     const tourText = tourItem ? resolveItemValue(record, tourItem) : null;
@@ -310,7 +325,10 @@ export default function QueueCardProofRenderer({
                                     return fallbackName || "Record";
                                 })()}
                         </span>
-                        {statusItem ? (() => { const v = txt(record, statusItem); return v.placeholder ? null : <Pill>{v.text}</Pill>; })() : null}
+                        {statusItem ? (() => {
+                            const v = txt(record, statusItem);
+                            return <Pill key={statusItem.id}>{v.placeholder ? "—" : v.text}</Pill>;
+                        })() : null}
                         {priorityItems.map((it) => { const v = txt(record, it); return v.placeholder ? null : <Pill key={it.id}>{v.text}</Pill>; })}
                         {locationText && !locationText.isPlaceholder ? (
                             <span className="ml-auto inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[10px]" style={{ borderColor: "rgba(39,63,82,0.18)", color: MUTED }}>
@@ -336,8 +354,7 @@ export default function QueueCardProofRenderer({
                     {GENERIC_BODY_ZONES.map((zone) => {
                         const f = b.fields[zone] ?? [];
                         const w = b.widgets[zone] ?? [];
-                        const has = f.some((it) => !txt(record, it).placeholder) || w.length > 0;
-                        if (!has) return null;
+                        if (f.length === 0 && w.length === 0) return null;
                         return <Divider key={zone}><FieldRow fields={f} widgets={w} record={record} asPills={zone === "body.override_flags"} /></Divider>;
                     })}
                     {tourItem ? (

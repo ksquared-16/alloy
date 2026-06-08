@@ -34,6 +34,10 @@ export type EvaluateOpportunityLayoutRuntimeBodySuccess = {
     record: ProofRuntimeRecord;
     plan: LayoutRuntimePlan;
     layoutSource: string;
+    layoutKey: string | null;
+    /** entity_layouts.id when resolved from DB; null on registry/builtin fallback. */
+    layoutRecordId: string | null;
+    layoutVersion: number | null;
     layoutFallbackReason?: string;
 };
 
@@ -126,6 +130,9 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         record,
         plan,
         layoutSource: effective.usedFallback ? effective.source : layoutResolution.source,
+        layoutKey: effective.layoutKey ?? layoutResolution.layoutKey ?? plan.layoutKey ?? null,
+        layoutRecordId: effective.usedFallback ? null : (layoutResolution.record?.id ?? null),
+        layoutVersion: effective.usedFallback ? null : (layoutResolution.record?.version ?? null),
         layoutFallbackReason: effective.usedFallback ? effective.fallbackReason : undefined,
     };
 }
@@ -154,6 +161,9 @@ export function evaluateOpportunityLayoutRuntimeBodyFromVm(input: {
         record,
         plan: buildLayoutRuntimePlan(input.doc),
         layoutSource: input.layoutSource ?? "test",
+        layoutKey: input.doc.metadata?.layoutKey as string | undefined ?? null,
+        layoutRecordId: null,
+        layoutVersion: null,
     };
 }
 
