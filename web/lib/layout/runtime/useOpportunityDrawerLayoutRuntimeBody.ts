@@ -1,15 +1,27 @@
 "use client";
 
 /**
- * C1b — load layout runtime overview body for opportunity drawer (flag-gated).
+ * Load the layout-runtime overview body for the opportunity drawer.
  *
- * Non-blocking: VM overview remains visible until layout body resolves successfully.
- * Failures fall back to VM body without operator-visible errors.
+ * Capability-gated (NOT feature-flagged): for any workflow_v1-ready opportunity the
+ * runtime body is the normal path. The record is built CLIENT-SIDE from the VM the
+ * drawer already holds (via {@link OpportunityLayoutRuntimeAdapter}) — no second
+ * server compose — and only the resolved LayoutDoc is fetched (compose-free, cached
+ * per org/entity/surface/version). The org-level doc is cached on the client too, so
+ * drawer-to-drawer navigation reuses it instantly.
+ *
+ * Capability fallback (classic records, or a doc that cannot drive the production
+ * body) renders the VM overview. This is a capability gate, not a silent old-UI
+ * fallback for in-scope records.
  */
 
-import { useEffect, useRef, useState } from "react";
-import { isLayoutRuntimeOpportunityDrawerBodyEnabledClient } from "@/lib/layout/featureFlag";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
+import {
+    createOpportunityLayoutRuntimeAdapter,
+    type OpportunityLayoutRuntimeAdapter,
+} from "@/lib/layout/runtime/OpportunityLayoutRuntimeAdapter";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 export type OpportunityLayoutRuntimeBodyPhase = "idle" | "loading" | "ready" | "fallback";
@@ -17,16 +29,17 @@ export type OpportunityLayoutRuntimeBodyPhase = "idle" | "loading" | "ready" | "
 export type UseOpportunityDrawerLayoutRuntimeBodyArgs = {
     opportunityId: string | null | undefined;
     vmReady: boolean;
-    departmentId?: string | null;
-    workUnitId?: string | null;
+    /** VM paint record the drawer already loaded (displayVm.above_fold.record). */
+    vmRecord: Record<string, unknown> | null | undefined;
+    statusDisplay?: string | null;
+    summaries?: OpportunityDrawerViewModel["summaries"];
 };
 
 export type UseOpportunityDrawerLayoutRuntimeBodyResult = {
-    cutoverEnabled: boolean;
     phase: OpportunityLayoutRuntimeBodyPhase;
-    /** True when operator should see VM overview body. */
+    /** True when the operator should see the VM overview body. */
     useVmFallback: boolean;
-    /** True when layout runtime body should render. */
+    /** True when the layout runtime body should render. */
     bodyReady: boolean;
     doc: LayoutDoc | null;
     record: ProofRuntimeRecord | null;
@@ -34,100 +47,104 @@ export type UseOpportunityDrawerLayoutRuntimeBodyResult = {
     lastError: string | null;
 };
 
+/** Render decision: layout body once resolved + record built; VM otherwise. */
 export function resolveOpportunityOverviewBodyPresentation(input: {
-    cutoverEnabled: boolean;
     phase: OpportunityLayoutRuntimeBodyPhase;
 }): "vm" | "layout" {
-    if (!input.cutoverEnabled) return "vm";
-    if (input.phase === "ready") return "layout";
-    return "vm";
+    return input.phase === "ready" ? "layout" : "vm";
+}
+
+type ResolvedDocState = { doc: LayoutDoc; layoutSource: string | null; version: number | null };
+
+const DOC_CACHE_TTL_MS = 30_000;
+
+/** Client-side org-level doc cache (one org per session) for fast drawer-to-drawer reuse. */
+let clientDocCache: { value: ResolvedDocState | null; renderable: boolean; expiresAt: number } | null = null;
+
+async function fetchOpportunityDrawerDoc(): Promise<{ renderable: boolean; doc: ResolvedDocState | null }> {
+    const now = Date.now();
+    if (clientDocCache && clientDocCache.expiresAt > now) {
+        return { renderable: clientDocCache.renderable, doc: clientDocCache.value };
+    }
+    const res = await fetch("/api/admin/layout-runtime/opportunity-drawer-doc");
+    if (!res.ok) {
+        throw new Error(`doc_http_${res.status}`);
+    }
+    const json = (await res.json()) as {
+        renderable?: boolean;
+        doc?: LayoutDoc | null;
+        layoutSource?: string | null;
+        version?: number | null;
+    };
+    const renderable = Boolean(json.renderable && json.doc?.sections?.length);
+    const value: ResolvedDocState | null = renderable
+        ? { doc: json.doc as LayoutDoc, layoutSource: json.layoutSource ?? null, version: json.version ?? null }
+        : null;
+    clientDocCache = { value, renderable, expiresAt: now + DOC_CACHE_TTL_MS };
+    return { renderable, doc: value };
+}
+
+/** Test/runtime hook to drop the client doc cache (e.g. after an authored publish). */
+export function clearOpportunityDrawerDocClientCache(): void {
+    clientDocCache = null;
 }
 
 export function useOpportunityDrawerLayoutRuntimeBody(
     args: UseOpportunityDrawerLayoutRuntimeBodyArgs,
 ): UseOpportunityDrawerLayoutRuntimeBodyResult {
-    const cutoverEnabled = isLayoutRuntimeOpportunityDrawerBodyEnabledClient();
-
     const [phase, setPhase] = useState<OpportunityLayoutRuntimeBodyPhase>("idle");
-    const [doc, setDoc] = useState<LayoutDoc | null>(null);
-    const [record, setRecord] = useState<ProofRuntimeRecord | null>(null);
-    const [layoutSource, setLayoutSource] = useState<string | null>(null);
+    const [resolvedDoc, setResolvedDoc] = useState<ResolvedDocState | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
-    const lastLoadedIdRef = useRef<string | null>(null);
-    const readyIdRef = useRef<string | null>(null);
 
+    const oid = args.opportunityId?.trim() ?? "";
+
+    // One adapter instance per opportunity open — memoizes the projected record.
+    const adapterRef = useRef<{ id: string; adapter: OpportunityLayoutRuntimeAdapter } | null>(null);
+    if (!adapterRef.current || adapterRef.current.id !== oid) {
+        adapterRef.current = { id: oid, adapter: createOpportunityLayoutRuntimeAdapter() };
+    }
+
+    // Build the operator-safe record from the VM the drawer already holds.
+    const record = useMemo<ProofRuntimeRecord | null>(() => {
+        if (!oid || !args.vmRecord) return null;
+        return adapterRef.current!.adapter.adapt({
+            vmRecord: args.vmRecord,
+            opportunityId: oid,
+            statusDisplay: args.statusDisplay,
+            summaries: args.summaries,
+        });
+    }, [oid, args.vmRecord, args.statusDisplay, args.summaries]);
+
+    // Resolve the org-level LayoutDoc (compose-free, cached).
     useEffect(() => {
-        if (!cutoverEnabled) {
+        if (!oid || !args.vmReady) {
             setPhase("idle");
-            setDoc(null);
-            setRecord(null);
-            setLayoutSource(null);
+            setResolvedDoc(null);
             setLastError(null);
-            lastLoadedIdRef.current = null;
-            readyIdRef.current = null;
             return;
         }
 
-        const oid = args.opportunityId?.trim() ?? "";
-        if (!oid || !args.vmReady) return;
-        if (readyIdRef.current === oid) return;
-
         let cancelled = false;
-        lastLoadedIdRef.current = oid;
         setPhase("loading");
         setLastError(null);
 
         const run = () => {
-            const qs = new URLSearchParams({ opportunityId: oid });
-            if (args.departmentId) qs.set("departmentId", String(args.departmentId));
-            if (args.workUnitId) qs.set("workUnitId", String(args.workUnitId));
-
-            fetch(`/api/admin/layout-runtime/opportunity-drawer-body?${qs.toString()}`)
-                .then(async (res) => {
+            fetchOpportunityDrawerDoc()
+                .then((result) => {
                     if (cancelled) return;
-                    if (!res.ok) {
-                        const json = await res.json().catch(() => ({}));
-                        const reason = (json as { error?: string }).error ?? `http_${res.status}`;
-                        setLastError(reason);
-                        setPhase("fallback");
-                        if (typeof console !== "undefined") {
-                            console.info("[layout_runtime_body:opportunity_drawer_fallback]", {
-                                opportunityId: oid,
-                                reason,
-                            });
-                        }
-                        return;
-                    }
-
-                    const json = (await res.json()) as {
-                        doc?: LayoutDoc;
-                        record?: ProofRuntimeRecord;
-                        layoutSource?: string;
-                    };
-
-                    if (!json.doc?.sections?.length || !json.record) {
-                        setLastError("layout_body_incomplete");
+                    if (!result.renderable || !result.doc) {
+                        setResolvedDoc(null);
                         setPhase("fallback");
                         return;
                     }
-
-                    setDoc(json.doc);
-                    setRecord(json.record);
-                    setLayoutSource(json.layoutSource ?? null);
+                    setResolvedDoc(result.doc);
                     setPhase("ready");
-                    readyIdRef.current = oid;
                 })
                 .catch((err) => {
                     if (cancelled) return;
-                    const message = err instanceof Error ? err.message : String(err);
-                    setLastError(message);
+                    setLastError(err instanceof Error ? err.message : String(err));
+                    setResolvedDoc(null);
                     setPhase("fallback");
-                    if (typeof console !== "undefined") {
-                        console.info("[layout_runtime_body:opportunity_drawer_fallback]", {
-                            opportunityId: oid,
-                            message,
-                        });
-                    }
                 });
         };
 
@@ -138,36 +155,27 @@ export function useOpportunityDrawerLayoutRuntimeBody(
                 cancelIdleCallback(idleId);
             };
         }
-
         const timerId = setTimeout(run, 0);
         return () => {
             cancelled = true;
             clearTimeout(timerId);
         };
-    }, [cutoverEnabled, args.opportunityId, args.vmReady, args.departmentId, args.workUnitId]);
+    }, [oid, args.vmReady]);
 
-    useEffect(() => {
-        if (!args.opportunityId?.trim()) {
-            lastLoadedIdRef.current = null;
-            readyIdRef.current = null;
-            setPhase("idle");
-            setDoc(null);
-            setRecord(null);
-            setLayoutSource(null);
-            setLastError(null);
-        }
-    }, [args.opportunityId]);
+    // Ready requires both a renderable doc AND a built record.
+    const effectivePhase: OpportunityLayoutRuntimeBodyPhase =
+        phase === "ready" && (!resolvedDoc || !record) ? "fallback" : phase;
 
-    const useVmFallback = resolveOpportunityOverviewBodyPresentation({ cutoverEnabled, phase }) === "vm";
+    const useVmFallback =
+        resolveOpportunityOverviewBodyPresentation({ phase: effectivePhase }) === "vm";
 
     return {
-        cutoverEnabled,
-        phase,
+        phase: effectivePhase,
         useVmFallback,
-        bodyReady: phase === "ready" && doc != null && record != null,
-        doc,
+        bodyReady: effectivePhase === "ready" && resolvedDoc != null && record != null,
+        doc: resolvedDoc?.doc ?? null,
         record,
-        layoutSource,
+        layoutSource: resolvedDoc?.layoutSource ?? null,
         lastError,
     };
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import clsx from "clsx";
 import RecordLifecycleRail from "@/components/admin/drawer/RecordLifecycleRail";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
 import OpportunityDrawerOverviewBody from "@/components/admin/vmDrawer/OpportunityDrawerOverviewBody";
@@ -31,6 +30,9 @@ import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/dra
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
 import { useOpportunityDrawerLayoutRuntimeShadow } from "@/lib/layout/runtime/shadow/useOpportunityDrawerLayoutRuntimeShadow";
+import LayoutRuntimeDrawerShell from "@/components/layout/LayoutRuntimeDrawerShell";
+import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import { parseLayoutRefKey } from "@/lib/layout/layoutRefKeyAliases";
 
 const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
 
@@ -328,21 +330,86 @@ export default function OpportunityDrawerVmRuntime() {
 
     const onTabSelect = useCallback((tab: DrawerTabKey) => setDrawerTab(tab), []);
 
+    /**
+     * Persist an inline field edit from the Layout Runtime body. VM owns the action:
+     * PATCH the opportunity, then optimistically patch the displayed record. Only
+     * opportunity-anchored fields are writable here (single-entity PATCH).
+     */
+    const commitOpportunityField = useCallback(
+        async (refKey: string, value: string) => {
+            const id = drawer.id?.trim();
+            if (!id) return;
+            const { entityKey, fieldKey } = parseLayoutRefKey(refKey);
+            if (entityKey !== "opportunity" || !fieldKey) return;
+            try {
+                const res = await fetch(`/api/admin/opportunities/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ [fieldKey]: value }),
+                });
+                const json = (await res.json().catch(() => ({}))) as Record<string, unknown> & { error?: string };
+                if (!res.ok) {
+                    showError(json.error ?? "Could not save field");
+                    return;
+                }
+                patchDisplayRecord((prev) => ({ ...prev, [fieldKey]: value, ...json }));
+            } catch (err) {
+                showError(err instanceof Error ? err.message : "Could not save field");
+            }
+        },
+        [drawer.id, patchDisplayRecord, showError]
+    );
+
+    /** Tabs for the Layout Runtime shell — VM supplies the tab list/labels. */
+    const shellTabs = useMemo(
+        () => tabs.map((tab) => ({ key: tab, label: OPPORTUNITY_TAB_LABELS[tab] ?? tab })),
+        [tabs]
+    );
+
+    /** Header location pill value (VM data) for the proof/config doctrine header. */
+    const headerLocation = useMemo(() => {
+        if (!committedVisible || !record) return null;
+        const loc = opportunityDisplayLocationFromRecord(record as Record<string, unknown>);
+        return loc.kind === "single" || loc.kind === "multiple" ? loc.label : null;
+    }, [committedVisible, record]);
+
     const drawerOpen =
         Boolean(drawer.type && drawer.id) &&
         !isOpportunityDrawerOpening &&
         drawerVmRender.type === "opportunities" &&
         Boolean(drawerVmRender.id);
 
+    /** Body for the active tab — Layout Runtime body (overview) or VM/legacy panes. */
+    const tabBody =
+        showColdShell ?
+            <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
+                <p className="text-sm font-medium text-alloy-midnight/75">Loading opportunity…</p>
+            </div>
+        : committedVisible && displayVm && record ?
+            drawerTab === "overview" ?
+                <OpportunityDrawerOverviewBody
+                    displayVm={displayVm}
+                    drawerId={String(displayVm.entity.id)}
+                    opportunitySingular={opportunitySingular}
+                    onSelectTab={onTabSelect}
+                    vmReady={Boolean(displayVm.structureSettled && committedVisible)}
+                    layoutRuntimeShadow={layoutRuntimeShadow}
+                    onFieldCommit={statusCanMutate ? commitOpportunityField : undefined}
+                />
+            :   <OpportunityDrawerVmTabPanes
+                    drawerId={String(displayVm.entity.id)}
+                    drawerTab={drawerTab}
+                    record={record}
+                    onSelectTab={onTabSelect}
+                />
+        :   null;
+
     return (
-        <>
         <Drawer
             isOpen={drawerOpen}
             onClose={closeDrawer}
             title={drawerTitle}
-            headerSubtitle={headerSubtitleBelowTitle}
-            headerTitleCenter={headerAttentionCenter}
-            headerTitleRight={headerTitleRight}
+            chromeless
             variant="adminV2"
             presentation="modal"
             panelClassName="max-w-7xl"
@@ -356,97 +423,58 @@ export default function OpportunityDrawerVmRuntime() {
                 :   null
             }
         >
-            <div
-                className="relative"
-                data-adminv2-drawer="true"
-                data-drawer-runtime="opportunity-vm"
-                {...(holdPriorPayload ? { "data-drawer-vm-transition-hold": "true" } : {})}
-            >
-                {isOpportunityQueueNavPending ?
-                    <div
-                        className="absolute inset-0 z-20 flex items-center justify-center bg-white/75"
-                        role="status"
-                        data-opportunity-drawer-queue-nav-pending="true"
-                    >
-                        <p className="text-sm font-medium text-alloy-midnight/85">Opening record…</p>
-                    </div>
-                :   null}
-                {queuePosition && queuePosition.total >= 2 ?
-                    <div className="mb-3 flex justify-end">
-                        <OpportunityDrawerQueueNavigatorControls
-                            position={queuePosition}
-                            pending={isOpportunityQueueNavPending}
-                            onPrev={() => navigateOpportunityInQueue("prev")}
-                            onNext={() => navigateOpportunityInQueue("next")}
+            <LayoutRuntimeDrawerShell
+                title={drawerTitle}
+                location={headerLocation}
+                onClose={closeDrawer}
+                statusSlot={headerSubtitleBelowTitle}
+                actionsSlot={headerTitleRight}
+                attentionSlot={headerAttentionCenter}
+                tabs={shellTabs}
+                activeTab={drawerTab}
+                onSelectTab={(key) => onTabSelect(key as DrawerTabKey)}
+                lifecycleSlot={lifecycleRail}
+                surface="opportunity_drawer"
+                backgroundSlot={
+                    committedVisible && drawer.id ?
+                        <CommunicationsDrawerBackgroundLoader
+                            apiEntityType="opportunities"
+                            entityId={drawer.id}
                         />
-                    </div>
-                :   null}
-                {error ?
-                    <p className="text-sm text-alloy-ember">{error}</p>
-                :   null}
-                {showColdShell ?
-                    <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
-                        <p className="text-sm font-medium text-alloy-midnight/75">Loading opportunity…</p>
-                    </div>
-                :   committedVisible && displayVm && record ?
-                    <>
+                    :   null
+                }
+            >
+                <div
+                    className="relative"
+                    data-adminv2-drawer="true"
+                    data-drawer-runtime="opportunity-vm"
+                    {...(holdPriorPayload ? { "data-drawer-vm-transition-hold": "true" } : {})}
+                >
+                    {isOpportunityQueueNavPending ?
                         <div
-                            className="mb-3 flex flex-wrap gap-0.5 border-b border-alloy-stone/15 pb-2"
-                            data-opportunity-drawer-tab-strip="true"
+                            className="absolute inset-0 z-20 flex items-center justify-center bg-white/75"
+                            role="status"
+                            data-opportunity-drawer-queue-nav-pending="true"
                         >
-                            {tabs.map((tab) => (
-                                <button
-                                    key={tab}
-                                    type="button"
-                                    onClick={() => onTabSelect(tab)}
-                                    className={clsx(
-                                        "rounded-md px-3 py-1.5 text-xs font-semibold capitalize",
-                                        drawerTab === tab ?
-                                            "bg-alloy-blue/10 text-alloy-blue"
-                                        :   "text-alloy-midnight/60 hover:bg-alloy-stone/10"
-                                    )}
-                                    data-opportunity-drawer-tab={tab}
-                                >
-                                    {OPPORTUNITY_TAB_LABELS[tab] ?? tab}
-                                </button>
-                            ))}
+                            <p className="text-sm font-medium text-alloy-midnight/85">Opening record…</p>
                         </div>
-                        {lifecycleRail ?
-                            <div
-                                className="mb-3"
-                                data-opportunity-drawer-lifecycle-rail-wrap="true"
-                            >
-                                {lifecycleRail}
-                            </div>
-                        :   null}
-                        {drawer.id ?
-                            <CommunicationsDrawerBackgroundLoader
-                                apiEntityType="opportunities"
-                                entityId={drawer.id}
+                    :   null}
+                    {queuePosition && queuePosition.total >= 2 ?
+                        <div className="mb-3 flex justify-end">
+                            <OpportunityDrawerQueueNavigatorControls
+                                position={queuePosition}
+                                pending={isOpportunityQueueNavPending}
+                                onPrev={() => navigateOpportunityInQueue("prev")}
+                                onNext={() => navigateOpportunityInQueue("next")}
                             />
-                        :   null}
-                        {drawerTab === "overview" ?
-                            <OpportunityDrawerOverviewBody
-                                displayVm={displayVm}
-                                drawerId={String(displayVm.entity.id)}
-                                opportunitySingular={opportunitySingular}
-                                onSelectTab={onTabSelect}
-                                vmReady={Boolean(displayVm.structureSettled && committedVisible)}
-                                departmentId={displayVm.workspace.department_id}
-                                workUnitId={displayVm.workspace.work_unit_id}
-                                layoutRuntimeShadow={layoutRuntimeShadow}
-                            />
-                        :   <OpportunityDrawerVmTabPanes
-                                drawerId={String(displayVm.entity.id)}
-                                drawerTab={drawerTab}
-                                record={record}
-                                onSelectTab={onTabSelect}
-                            />
-                        }
-                    </>
-                :   null}
-            </div>
+                        </div>
+                    :   null}
+                    {error ?
+                        <p className="text-sm text-alloy-ember">{error}</p>
+                    :   null}
+                    {tabBody}
+                </div>
+            </LayoutRuntimeDrawerShell>
         </Drawer>
-    </>
     );
 }

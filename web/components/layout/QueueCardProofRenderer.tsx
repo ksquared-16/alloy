@@ -47,7 +47,9 @@ const ACTION_QUIET_BG = "#f5f8fc";
 const ACTION_QUIET_BORDER = "rgba(39,63,82,0.16)";
 const ACTION_QUIET_TEXT = "#39485a";
 
-type AdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
+/** Adornment click handler (open related drawer). Re-exported for {@link LayoutRuntimeQueueCard}. */
+export type QueueCardAdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
+type AdornmentActionHandler = QueueCardAdornmentActionHandler;
 const QueueAdornCtx = createContext<{ onAdorn?: AdornmentActionHandler; onAction?: (label: string) => void }>({});
 
 const DEFAULT_ACTIONS = ["Open", "Message", "Update Status", "Ask BOS"];

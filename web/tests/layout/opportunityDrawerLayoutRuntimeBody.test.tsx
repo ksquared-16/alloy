@@ -58,14 +58,11 @@ describe("C1b opportunity drawer body gates", () => {
 });
 
 describe("resolveOpportunityOverviewBodyPresentation", () => {
-    it("flags off always renders VM body", () => {
-        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: false, phase: "ready" })).toBe("vm");
-    });
-
-    it("flags on renders layout body only when ready", () => {
-        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "loading" })).toBe("vm");
-        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "fallback" })).toBe("vm");
-        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "ready" })).toBe("layout");
+    it("renders the layout body only when the runtime is ready (capability gate)", () => {
+        expect(resolveOpportunityOverviewBodyPresentation({ phase: "idle" })).toBe("vm");
+        expect(resolveOpportunityOverviewBodyPresentation({ phase: "loading" })).toBe("vm");
+        expect(resolveOpportunityOverviewBodyPresentation({ phase: "fallback" })).toBe("vm");
+        expect(resolveOpportunityOverviewBodyPresentation({ phase: "ready" })).toBe("layout");
     });
 });
 
@@ -182,7 +179,7 @@ describe("LayoutRuntimeDrawerBodyView production renderer", () => {
     });
 
     it("layout failure path keeps VM presentation resolver on VM", () => {
-        expect(resolveOpportunityOverviewBodyPresentation({ cutoverEnabled: true, phase: "fallback" })).toBe("vm");
+        expect(resolveOpportunityOverviewBodyPresentation({ phase: "fallback" })).toBe("vm");
     });
 
     it("error boundary class is wired for layout overview render protection", () => {

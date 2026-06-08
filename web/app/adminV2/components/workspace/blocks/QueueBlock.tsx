@@ -16,6 +16,10 @@ import type {
   WorkUnitQueueCrmFactPartVm,
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
+import LayoutRuntimeQueueCard from "@/components/layout/LayoutRuntimeQueueCard";
+import { buildOpportunityQueueLayoutRuntimeRecordFromVm } from "@/lib/layout/runtime/buildOpportunityQueueLayoutRuntimeRecordFromVm";
+import { useQueueLayoutRuntimeDoc } from "@/lib/layout/runtime/useQueueLayoutRuntimeDoc";
+import type { QueueLayoutContextRequest } from "@/lib/layout/queueLayoutContext";
 import { logAdminV2QueueRowClick } from "@/lib/debug/adminV2QueueRowClickDebug";
 import {
   prefetchOpportunityDrawerOnRowIntent,
@@ -1617,6 +1621,26 @@ function WorkUnitQueueLane({
     [queue.items, waitlistPlacementSections]
   );
 
+  /**
+   * Configured queue LayoutDoc for this lane (from /settings/layouts, else builtin
+   * variant). When renderable, rows render LayoutRuntimeQueueCard as the normal path;
+   * the legacy CRM-compact preview is the capability fallback for unconfigured contexts.
+   */
+  const queueLayoutContext = useMemo<QueueLayoutContextRequest | undefined>(() => {
+    if (queue.queueEntityType !== "opportunity") return undefined;
+    return {
+      lifecycle_key: "enrollment",
+      queue_type: hasCandidatePlacementRows ? "waitlist" : "pipeline",
+      grain: hasCandidatePlacementRows ? "candidate" : "case",
+      ...(queue.drillWorkUnitKey ? { work_unit_key: queue.drillWorkUnitKey } : {}),
+    };
+  }, [queue.queueEntityType, queue.drillWorkUnitKey, hasCandidatePlacementRows]);
+
+  const queueLayoutDoc = useQueueLayoutRuntimeDoc(
+    queueLayoutContext,
+    queue.queueEntityType === "opportunity"
+  );
+
   useLayoutEffect(() => {
     if (!queue.rowsRefreshing) {
       const id = requestAnimationFrame(() => setRefreshMinHeightPx(undefined));
@@ -1892,34 +1916,45 @@ function WorkUnitQueueLane({
                     className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split"
                     data-enrollment-row-layout="split_actions"
                   >
-                    <div className="adminv2-ws-enrollment-crm-row__content">
-                      <CrmCompactQueuePreview
-                        slots={crm}
-                        urgencyTier={tier}
-                        operationalAttentionBadge={attentionAccent}
-                        scanMode
-                        drawerRecordIconHandlers={drawerRecordIconHandlers}
-                        waitlistCandidateRow={
-                          item.placementWaitlistCandidate && placementShowBucketChip
-                            ? item.placementWaitlistCandidate
-                            : undefined
-                        }
-                        waitlistPlacementV2={
-                          !item.placementWaitlistCandidate && item.placementPriorityV2 && placementShowBucketChip
-                            ? item.placementPriorityV2
-                            : undefined
-                        }
-                        waitlistPlacementPreview={
-                          !item.placementWaitlistCandidate &&
-                          !item.placementPriorityV2 &&
-                          item.placementPriority &&
-                          placementShowBucketChip
-                            ? item.placementPriority
-                            : undefined
-                        }
-                        waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
-                        workUnitKey={queue.drillWorkUnitKey ?? null}
-                      />
+                    <div
+                      className="adminv2-ws-enrollment-crm-row__content"
+                      data-queue-card-renderer={queueLayoutDoc.renderable ? "layout_runtime" : "legacy_crm"}
+                    >
+                      {queueLayoutDoc.renderable && queueLayoutDoc.doc ? (
+                        <LayoutRuntimeQueueCard
+                          doc={queueLayoutDoc.doc}
+                          record={buildOpportunityQueueLayoutRuntimeRecordFromVm(item)}
+                          showRuntimePosition={placementShowBucketChip}
+                        />
+                      ) : (
+                        <CrmCompactQueuePreview
+                          slots={crm}
+                          urgencyTier={tier}
+                          operationalAttentionBadge={attentionAccent}
+                          scanMode
+                          drawerRecordIconHandlers={drawerRecordIconHandlers}
+                          waitlistCandidateRow={
+                            item.placementWaitlistCandidate && placementShowBucketChip
+                              ? item.placementWaitlistCandidate
+                              : undefined
+                          }
+                          waitlistPlacementV2={
+                            !item.placementWaitlistCandidate && item.placementPriorityV2 && placementShowBucketChip
+                              ? item.placementPriorityV2
+                              : undefined
+                          }
+                          waitlistPlacementPreview={
+                            !item.placementWaitlistCandidate &&
+                            !item.placementPriorityV2 &&
+                            item.placementPriority &&
+                            placementShowBucketChip
+                              ? item.placementPriority
+                              : undefined
+                          }
+                          waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
+                          workUnitKey={queue.drillWorkUnitKey ?? null}
+                        />
+                      )}
                     </div>
                     {rowActionsPending ? (
                       <div

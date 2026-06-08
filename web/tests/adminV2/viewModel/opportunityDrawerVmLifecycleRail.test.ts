@@ -223,13 +223,13 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
 });
 
 describe("OpportunityDrawerVmRuntime lifecycle placement", () => {
-    it("renders lifecycle rail below tab strip in drawer body", () => {
+    it("supplies tabs then lifecycle rail to the Layout Runtime shell", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("data-opportunity-drawer-tab-strip");
-        expect(runtime).toContain("data-opportunity-drawer-lifecycle-rail-wrap");
-        expect(runtime).toMatch(
-            /data-opportunity-drawer-tab-strip[\s\S]{0,2400}data-opportunity-drawer-lifecycle-rail-wrap/
-        );
+        expect(runtime).toContain("LayoutRuntimeDrawerShell");
+        expect(runtime).toContain("tabs={shellTabs}");
+        expect(runtime).toContain("lifecycleSlot={lifecycleRail}");
+        // tabs slot precedes the lifecycle slot, matching the proof/config header order.
+        expect(runtime).toMatch(/tabs={shellTabs}[\s\S]{0,800}lifecycleSlot={lifecycleRail}/);
         expect(runtime).not.toContain("postTabStrip=");
     });
 

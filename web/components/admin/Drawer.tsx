@@ -84,6 +84,14 @@ interface DrawerProps {
      * drawer). Type-only: not rendered here, so behavior is unchanged.
      */
     runtimeDebug?: React.ReactNode;
+    /**
+     * Frame-only mode: render just the modal/sidebar frame (backdrop, panel,
+     * positioning, focus/escape/outside-close) and let `children` own the entire
+     * visible structure — header, tabs, scroll body, close. Used by the Layout
+     * Runtime-owned drawer shell so the proof/config header doctrine, not the VM
+     * chrome, owns the header. The header / status / tab props are ignored here.
+     */
+    chromeless?: boolean;
 }
 
 export default function Drawer({
@@ -109,6 +117,7 @@ export default function Drawer({
     panelClassName,
     recordModalTone,
     recordModalContextStyle,
+    chromeless = false,
 }: DrawerProps) {
     const [portalReady, setPortalReady] = useState(false);
     useEffect(() => {
@@ -456,6 +465,20 @@ export default function Drawer({
         </>
     );
 
+    /** Frame-only: the Layout Runtime shell (children) owns header + scroll body. */
+    const chromelessBlock = (
+        <div className="flex min-h-0 flex-1 flex-col" data-adminv2-drawer-chromeless="true">
+            {overlayChildren != null && overlayChildren !== false ? (
+                <div className="relative shrink-0" data-adminv2-drawer-overlay-host="true">
+                    {overlayChildren}
+                </div>
+            ) : null}
+            {children}
+        </div>
+    );
+
+    const panelContent = chromeless ? chromelessBlock : headerBlock;
+
     const drawerLayer =
         isModal ? (
             <>
@@ -479,7 +502,7 @@ export default function Drawer({
                             : { ...panelStyle, zIndex: zIndexPanel }
                     }
                 >
-                    {headerBlock}
+                    {panelContent}
                 </div>
             </>
         ) : (
@@ -500,7 +523,7 @@ export default function Drawer({
                     }`}
                     style={panelStyle}
                 >
-                    {headerBlock}
+                    {panelContent}
                 </div>
             </>
         );

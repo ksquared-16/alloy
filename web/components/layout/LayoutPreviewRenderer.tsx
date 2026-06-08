@@ -25,7 +25,7 @@ import {
     type LayoutSection,
 } from "@/lib/layout/layoutV2";
 import AdornmentIcon from "@/components/layout/AdornmentIcon";
-import QueueCardProofRenderer from "@/components/layout/QueueCardProofRenderer";
+import LayoutRuntimeQueueCard from "@/components/layout/LayoutRuntimeQueueCard";
 import WaitlistCandidateCardProofRenderer from "@/components/layout/WaitlistCandidateCardProofRenderer";
 import type { WaitlistCandidateCardVM } from "@/lib/layout/waitlist/waitlistCandidateCardVm";
 
@@ -291,7 +291,7 @@ function QueuePreview({ doc }: { doc: LayoutDoc }) {
         return (
             <div className="flex flex-col gap-2">
                 <div className="text-[11px] font-medium uppercase tracking-wide" style={{ color: MUTED }}>Queue card preview · sample data (child rows repeat per child)</div>
-                <QueueCardProofRenderer doc={doc} record={QUEUE_PREVIEW_RECORD} />
+                <LayoutRuntimeQueueCard doc={doc} record={QUEUE_PREVIEW_RECORD} />
             </div>
         );
     }

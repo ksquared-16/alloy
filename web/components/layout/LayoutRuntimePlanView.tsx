@@ -8,7 +8,7 @@
  * repeaters, widgets. NOT wired to AdminEntityDrawer or VM.
  */
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
     LAYOUT_GRID_COLUMNS,
     type LayoutCollectionColumn,
@@ -16,9 +16,11 @@ import {
     type LayoutDoc,
     type LayoutFieldAdornment,
     type LayoutItem,
+    type LayoutRenderHint,
     type LayoutRow,
     type LayoutSection,
 } from "@/lib/layout/layoutV2";
+import { parseLayoutRefKey } from "@/lib/layout/layoutRefKeyAliases";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "@/lib/layout/runtime/layoutRuntimePlan";
 import { classifyLayoutItemBinding } from "@/lib/layout/runtime/classifyLayoutItemBinding";
 import {
@@ -40,6 +42,116 @@ const BORDER = "#e6e8ec";
 export type AdornmentActionHandler = (item: LayoutItem, adornment: LayoutFieldAdornment) => void;
 const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
 const LayoutRuntimeVariantContext = createContext<"proof" | "production">("proof");
+
+/** Commit an edited field value. The host maps refKey → entity/field and persists. */
+export type LayoutFieldCommitHandler = (refKey: string, value: string) => void | Promise<void>;
+type FieldEditConfig = {
+    onCommit?: LayoutFieldCommitHandler;
+    /** Entity namespace whose fields are writable here (e.g. "opportunity"). */
+    editableEntity?: string;
+};
+const FieldEditContext = createContext<FieldEditConfig>({});
+
+/** Render hints that support a simple inline text/date input. */
+const INLINE_EDITABLE_HINTS = new Set<string>(["text", "date", "datetime", "money", "phone", "custom", ""]);
+
+function inputTypeForHint(hint: string | undefined): string {
+    switch (hint) {
+        case "date":
+            return "date";
+        case "datetime":
+            return "datetime-local";
+        case "money":
+            return "number";
+        case "phone":
+            return "tel";
+        default:
+            return "text";
+    }
+}
+
+/** Inline-editable field value: click to edit, commit on blur/Enter, cancel on Escape. */
+function EditableFieldValue({
+    initial,
+    renderHint,
+    onCommit,
+}: {
+    initial: string;
+    renderHint?: LayoutRenderHint | string;
+    onCommit: (value: string) => void | Promise<void>;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(initial);
+    const [saving, setSaving] = useState(false);
+    /** Locally retained committed value, shown until the record refreshes (initial changes). */
+    const [committed, setCommitted] = useState<string | null>(null);
+    useEffect(() => setCommitted(null), [initial]);
+
+    const shown = committed ?? initial;
+
+    if (!editing) {
+        return (
+            <button
+                type="button"
+                onClick={() => {
+                    setDraft(shown);
+                    setEditing(true);
+                }}
+                className="inline-flex max-w-full items-center gap-1 rounded px-1 -mx-1 text-left text-sm hover:bg-[#f1f5fb]"
+                style={{ color: shown ? TEXT : "#9aa4bf" }}
+                data-layout-runtime-field-editable="true"
+                title="Click to edit"
+            >
+                {shown || "—"}
+            </button>
+        );
+    }
+
+    const commit = async () => {
+        if (saving) return;
+        setSaving(true);
+        try {
+            if (draft !== shown) {
+                await onCommit(draft);
+                setCommitted(draft);
+            }
+            setEditing(false);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <input
+            autoFocus
+            type={inputTypeForHint(typeof renderHint === "string" ? renderHint : undefined)}
+            value={draft}
+            disabled={saving}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    void commit();
+                } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setDraft(initial);
+                    setEditing(false);
+                }
+            }}
+            className="w-full rounded border border-[#cdd9f5] bg-white px-1.5 py-0.5 text-sm outline-none focus:border-[#2f6df6]"
+            data-layout-runtime-field-input="true"
+        />
+    );
+}
+
+function isFieldEditableHere(item: LayoutItem, hint: string, cfg: FieldEditConfig): boolean {
+    if (!cfg.onCommit || item.editable !== true) return false;
+    if (!INLINE_EDITABLE_HINTS.has(hint)) return false;
+    const { entityKey } = parseLayoutRefKey(item.refKey);
+    // Only write fields belonging to the writable anchor entity (single-entity PATCH).
+    return cfg.editableEntity == null || entityKey === cfg.editableEntity;
+}
 
 const INTERNAL_OPERATOR_TOKENS =
     /\b(inquiry_child|customer_member|ocm_id|child_inquiry)\b|^[0-9a-f-]{36}$/i;
@@ -112,6 +224,7 @@ function ValueCell({
     anchorEntity: string;
 }) {
     const variant = useContext(LayoutRuntimeVariantContext);
+    const editConfig = useContext(FieldEditContext);
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
     const label = operatorLabel(item, variant);
@@ -120,11 +233,20 @@ function ValueCell({
             sanitizeOperatorDisplay(r.isPlaceholder ? null : r.display)
         :   r.display;
 
+    const editable = variant === "production" && isFieldEditableHere(item, r.renderHint, editConfig);
+    const rawForEdit =
+        r.raw == null ? "" : typeof r.raw === "string" ? r.raw : String(r.raw);
+
     return (
         <div className="rounded border border-[#eef0f4] bg-white px-2.5 py-1.5">
             {label ?
                 <div className="flex flex-wrap items-center gap-1 text-[11px] font-medium" style={{ color: MUTED }}>
                     {label}
+                    {editable ? (
+                        <span className="rounded bg-[#eff8ff] px-1 text-[9px] text-[#175cd3]" title="Editable field">
+                            editable
+                        </span>
+                    ) : null}
                     {variant === "proof" ? <BindingBadge resolution={r} /> : null}
                     {variant === "proof" && r.relationHandle ?
                         <span className="truncate text-[10px] font-normal text-[#4063b0]" title="Related entity handle">
@@ -135,13 +257,21 @@ function ValueCell({
             :   null}
             <div className="mt-0.5 flex items-center gap-1 text-sm" style={{ color: display ? TEXT : "#9aa4bf" }}>
                 {item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
-                <span>
-                    {!display ?
-                        <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>—</span>
-                    : r.renderHint === "status" ?
-                        <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{display}</span>
-                    :   display}
-                </span>
+                {editable && editConfig.onCommit ? (
+                    <EditableFieldValue
+                        initial={display ?? rawForEdit}
+                        renderHint={r.renderHint}
+                        onCommit={(value) => editConfig.onCommit!(item.refKey, value)}
+                    />
+                ) : (
+                    <span>
+                        {!display ?
+                            <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>—</span>
+                        : r.renderHint === "status" ?
+                            <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{display}</span>
+                        :   display}
+                    </span>
+                )}
                 {item.adornment && item.adornment.position === "right" ? <Adorn item={item} /> : null}
             </div>
         </div>
@@ -413,6 +543,10 @@ export type LayoutRuntimePlanViewProps = {
     onAdornmentAction?: AdornmentActionHandler;
     /** `proof` shows binding diagnostics; `production` is operator-safe (C1b). */
     variant?: "proof" | "production";
+    /** When set, editable fields (item.editable) become inline-editable and commit here. */
+    onFieldCommit?: LayoutFieldCommitHandler;
+    /** Entity namespace whose fields are writable (defaults to the doc anchor entity). */
+    editableEntity?: string;
 };
 
 export default function LayoutRuntimePlanView({
@@ -421,9 +555,15 @@ export default function LayoutRuntimePlanView({
     plan: planProp,
     onAdornmentAction,
     variant = "proof",
+    onFieldCommit,
+    editableEntity,
 }: LayoutRuntimePlanViewProps) {
     const plan = useMemo(() => planProp ?? buildLayoutRuntimePlan(doc), [planProp, doc]);
     const anchorEntity = plan.entityType;
+    const editConfig = useMemo<FieldEditConfig>(
+        () => ({ onCommit: onFieldCommit, editableEntity: editableEntity ?? anchorEntity }),
+        [onFieldCommit, editableEntity, anchorEntity]
+    );
 
     if (!doc?.sections?.length) {
         return <div className="text-sm" style={{ color: MUTED }}>No drawer layout.</div>;
@@ -431,6 +571,7 @@ export default function LayoutRuntimePlanView({
 
     return (
         <LayoutRuntimeVariantContext.Provider value={variant}>
+        <FieldEditContext.Provider value={editConfig}>
             <AdornmentActionContext.Provider value={onAdornmentAction}>
                 <div className="flex flex-col gap-3" style={{ border: `0 solid ${BORDER}` }}>
                     {variant === "proof" ?
@@ -447,6 +588,7 @@ export default function LayoutRuntimePlanView({
                     ))}
                 </div>
             </AdornmentActionContext.Provider>
+        </FieldEditContext.Provider>
         </LayoutRuntimeVariantContext.Provider>
     );
 }

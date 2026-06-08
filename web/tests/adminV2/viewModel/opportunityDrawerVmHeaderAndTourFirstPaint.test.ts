@@ -73,11 +73,14 @@ describe("buildOpportunityDrawerHeaderMenuActions", () => {
 });
 
 describe("Opportunity VM header layout A.4", () => {
-    it("places status below title via headerSubtitle, not headerTitleRight", () => {
+    it("places status below title via the shell status slot, not the actions slot", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("headerSubtitle={headerSubtitleBelowTitle}");
+        // Status control is fed to the Layout Runtime shell's status slot (below title).
+        expect(runtime).toContain("statusSlot={headerSubtitleBelowTitle}");
         expect(runtime).toContain("data-opportunity-drawer-header-status-below-title");
         expect(runtime).not.toContain("displayVm?.header.subtitle");
+        // Actions slot carries the flattened header_menu actions row.
+        expect(runtime).toContain("actionsSlot={headerTitleRight}");
         expect(runtime).toMatch(
             /headerTitleRight[\s\S]*OpportunityDrawerHeaderControls[\s\S]*header_menu/
         );

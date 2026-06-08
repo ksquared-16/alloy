@@ -69,7 +69,8 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("buildOpportunityVmLifecycleRailModel");
         expect(runtime).toContain("RecordLifecycleRail");
-        expect(runtime).toContain("data-opportunity-drawer-lifecycle-rail-wrap");
+        // Lifecycle rail is supplied to the Layout Runtime shell as a slot (VM data).
+        expect(runtime).toContain("lifecycleSlot={lifecycleRail}");
         expect(runtime).toContain('data-testid="opportunity-lifecycle-rail"');
         expect(runtime).not.toContain("postTabStrip=");
         expect(runtime).not.toContain("allowEnrollmentFallback");
@@ -83,10 +84,12 @@ describe("Opportunity VM drawer body — production parity sections", () => {
         expect(panes).toContain('drawerTab === "communications"');
     });
 
-    it("OpportunityDrawerVmRuntime uses workflow tab strip fallback", () => {
+    it("OpportunityDrawerVmRuntime uses workflow tab strip fallback via Layout Runtime shell", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP");
-        expect(runtime).toContain("data-opportunity-drawer-tab={tab}");
+        // Tabs are rendered by the Layout Runtime-owned shell, not VM chrome.
+        expect(runtime).toContain("LayoutRuntimeDrawerShell");
+        expect(runtime).toContain("tabs={shellTabs}");
     });
 
     it("Phase A.2 status is progressive dropdown in title rail — no prefetch status-options in runtime", () => {
@@ -108,7 +111,7 @@ describe("Opportunity VM drawer body — production parity sections", () => {
 
     it("OpportunityDrawerVmRuntime restores modal-attention header center column", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("headerTitleCenter={headerAttentionCenter}");
+        expect(runtime).toContain("attentionSlot={headerAttentionCenter}");
         expect(runtime).toContain('layout="modal-attention"');
         expect(runtime).toContain("isDrawerHeaderAttentionVisible");
     });

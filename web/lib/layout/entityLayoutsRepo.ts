@@ -7,6 +7,10 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+    invalidateLayoutResolution,
+    invalidateLayoutResolutionForEntity,
+} from "./layoutResolutionCache";
 import type { EntityLayoutRecord, LayoutDoc, LayoutStatus, LayoutSurface } from "./layoutV2";
 
 const TABLE = "entity_layouts";
@@ -179,10 +183,20 @@ export async function publishLayout(
         .select(SELECT_COLS)
         .single();
     if (error) throw new Error(error.message);
-    return rowToRecord(data as Row);
+    const record = rowToRecord(data as Row);
+    // Authored layout changes must reflect in runtime immediately (acceptance #5).
+    if (record.orgId) {
+        invalidateLayoutResolutionForEntity(record.orgId, record.entityType);
+    } else {
+        // A default (org_id NULL) publish can affect any org's resolution.
+        invalidateLayoutResolution();
+    }
+    return record;
 }
 
 export async function deleteLayout(supabase: SupabaseClient, id: string): Promise<void> {
     const { error } = await supabase.from(TABLE).delete().eq("id", id);
     if (error) throw new Error(error.message);
+    // Conservatively drop all cached resolutions; deletes are rare admin operations.
+    invalidateLayoutResolution();
 }

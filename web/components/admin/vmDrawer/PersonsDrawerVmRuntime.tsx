@@ -7,7 +7,7 @@ import PersonDrawerHeaderMetadata, {
     formatPersonDrawerRecordNumber,
 } from "@/components/admin/entity/PersonDrawerHeaderMetadata";
 import PersonDrawerParentTitleRow from "@/components/admin/entity/PersonDrawerParentTitleRow";
-import PersonsDrawerVmBody, { PersonsDrawerVmTabStrip } from "@/components/admin/vmDrawer/PersonsDrawerVmBody";
+import PersonsDrawerVmBody from "@/components/admin/vmDrawer/PersonsDrawerVmBody";
 import VmPersonStatusControl from "@/components/admin/vmDrawer/VmPersonStatusControl";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -25,9 +25,27 @@ import {
 import { usePersonsDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/usePersonsDrawerVmPayload";
 import { peekPersonsDrawerDisplayVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerPayloadPeekSeed";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
+import LayoutRuntimeDrawerShell, { type LayoutRuntimeDrawerTab } from "@/components/layout/LayoutRuntimeDrawerShell";
+import LayoutRuntimeDrawerBody from "@/components/layout/LayoutRuntimeDrawerBody";
+import { useRecordDrawerLayoutDoc } from "@/lib/layout/runtime/useRecordDrawerLayoutDoc";
+import {
+    buildChildLayoutRuntimeRecordFromVm,
+    buildPersonLayoutRuntimeRecordFromVm,
+} from "@/lib/layout/runtime/buildPersonChildLayoutRuntimeRecordFromVm";
+import { parseLayoutRefKey } from "@/lib/layout/layoutRefKeyAliases";
 
 const DRAWER_ACCENT_PERSON = "#0d9488";
 const DRAWER_ACCENT_CHILD = "#2563eb";
+
+const PERSON_DRAWER_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
+    overview: "Overview",
+    related: "Related",
+    documents: "Documents",
+    communications: "Communications",
+    notes: "Notes",
+    activity: "Activity",
+};
+const PERSON_OPERATING_TABS: DrawerTabKey[] = ["overview", "related", "documents", "communications"];
 
 function resolvePersonDrawerVmChrome(
     displayVm: { surface: string } | null,
@@ -234,17 +252,87 @@ export default function PersonsDrawerVmRuntime() {
         );
     }, [record, chrome, statusControl, backLink, handleBackLink]);
 
-    const headerExtra =
-        committedVisible && (chrome === "parent" || chrome === "child") ?
-            <PersonsDrawerVmTabStrip active={drawerTab} onSelect={setDrawerTab} />
-        :   undefined;
+    // ── Layout Runtime: configured drawer doc + adapter record ──────────────────
+    const recordEntityType: "person" | "child" = isChildSurface ? "child" : "person";
+    const layoutDoc = useRecordDrawerLayoutDoc(recordEntityType, committedVisible);
+
+    const runtimeRecord = useMemo(() => {
+        if (!record || !displayVm) return null;
+        const personId = String(displayVm.entity.id);
+        return recordEntityType === "child"
+            ? buildChildLayoutRuntimeRecordFromVm(record, personId)
+            : buildPersonLayoutRuntimeRecordFromVm(record, personId);
+    }, [record, displayVm, recordEntityType]);
+
+    /** Persist an inline field edit. VM owns the action: PATCH the person record. */
+    const commitPersonField = useCallback(
+        async (refKey: string, value: string) => {
+            const id = drawer.id?.trim();
+            if (!id) return;
+            const { fieldKey } = parseLayoutRefKey(refKey);
+            if (!fieldKey) return;
+            try {
+                await fetch(`/api/admin/persons/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ [fieldKey]: value }),
+                });
+            } catch {
+                /* surfaced on next refresh; non-blocking */
+            }
+        },
+        [drawer.id]
+    );
+
+    const shellTabs = useMemo<LayoutRuntimeDrawerTab[]>(() => {
+        if (chrome === "generic") return [{ key: "overview", label: "Overview" }];
+        return PERSON_OPERATING_TABS.map((tab) => ({ key: tab, label: PERSON_DRAWER_TAB_LABELS[tab] ?? tab }));
+    }, [chrome]);
+
+    /** Body for the active tab — Layout Runtime body (overview) or VM panes (others). */
+    const vmBodyFallback =
+        committedVisible && displayVm && record && layoutVariant ? (
+            <PersonsDrawerVmBody
+                displayVm={displayVm}
+                chrome={chrome}
+                layoutVariant={layoutVariant}
+                isChildSurface={isChildSurface}
+                personId={displayVm.entity.id}
+                canMutate={!!canMutate}
+                drawerTab={drawerTab}
+                onSelectTab={setDrawerTab}
+                onOpenDrawer={onOpenDrawer}
+                onOpenLinkedPerson={onOpenLinkedPerson}
+            />
+        ) : null;
+
+    const tabBody =
+        showColdShell ? (
+            <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
+                <p className="text-sm font-medium text-alloy-midnight/75">
+                    Loading {isChildSurface ? "child" : "person"}…
+                </p>
+            </div>
+        ) : drawerTab === "overview" && layoutDoc.renderable && layoutDoc.doc && runtimeRecord ? (
+            <LayoutRuntimeDrawerBody
+                doc={layoutDoc.doc}
+                record={runtimeRecord}
+                layoutSource={layoutDoc.layoutSource}
+                surface={`${recordEntityType}_drawer_overview`}
+                fallback={vmBodyFallback}
+                onFieldCommit={canMutate ? commitPersonField : undefined}
+                editableEntity={recordEntityType}
+            />
+        ) : (
+            vmBodyFallback
+        );
 
     return (
         <Drawer
             isOpen={drawerOpen}
             onClose={closeDrawer}
             title={drawerTitle}
-            headerSubtitle={headerSubtitle}
+            chromeless
             variant="adminV2"
             presentation="modal"
             panelClassName="max-w-5xl"
@@ -252,42 +340,27 @@ export default function PersonsDrawerVmRuntime() {
             zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={accentColor}
             recordModalTone="cleaning-v2"
-            statusBadge={
-                committedVisible && chrome === "generic" ? statusControl ?? undefined : undefined
-            }
-            headerExtra={headerExtra}
         >
-            <div
-                className="relative"
-                data-adminv2-drawer="true"
-                data-drawer-runtime={isChildSurface ? "child-vm" : "person-vm"}
-                data-person-drawer-vm-chrome={chrome}
-                {...(holdPriorPayload ? { "data-drawer-vm-transition-hold": "true" } : {})}
+            <LayoutRuntimeDrawerShell
+                title={drawerTitle}
+                onClose={closeDrawer}
+                statusSlot={statusControl ?? headerSubtitle}
+                tabs={shellTabs}
+                activeTab={drawerTab}
+                onSelectTab={(key) => setDrawerTab(key as DrawerTabKey)}
+                surface={`${recordEntityType}_drawer`}
             >
-                {error ?
-                    <p className="text-sm text-alloy-ember">{error}</p>
-                :   null}
-                {showColdShell ?
-                    <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
-                        <p className="text-sm font-medium text-alloy-midnight/75">
-                            Loading {isChildSurface ? "child" : "person"}…
-                        </p>
-                    </div>
-                :   committedVisible && displayVm && record && layoutVariant ?
-                    <PersonsDrawerVmBody
-                        displayVm={displayVm}
-                        chrome={chrome}
-                        layoutVariant={layoutVariant}
-                        isChildSurface={isChildSurface}
-                        personId={displayVm.entity.id}
-                        canMutate={!!canMutate}
-                        drawerTab={drawerTab}
-                        onSelectTab={setDrawerTab}
-                        onOpenDrawer={onOpenDrawer}
-                        onOpenLinkedPerson={onOpenLinkedPerson}
-                    />
-                :   null}
-            </div>
+                <div
+                    className="relative"
+                    data-adminv2-drawer="true"
+                    data-drawer-runtime={isChildSurface ? "child-vm" : "person-vm"}
+                    data-person-drawer-vm-chrome={chrome}
+                    {...(holdPriorPayload ? { "data-drawer-vm-transition-hold": "true" } : {})}
+                >
+                    {error ? <p className="text-sm text-alloy-ember">{error}</p> : null}
+                    {tabBody}
+                </div>
+            </LayoutRuntimeDrawerShell>
         </Drawer>
     );
 }
