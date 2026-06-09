@@ -1,9 +1,12 @@
 import { getOptionSetKeyFromConfig } from "@/lib/admin/fieldDefinitionOptionSetConfig";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import {
     LOCATION_METADATA_OPTION_SET_KEYS,
     LOCATION_METADATA_SELECT_FIELD_KEYS,
     type LocationFieldDefLike,
 } from "@/lib/admin/location/locationMetadataFieldKeys";
+
+const OPTION_SET_SESSION_TTL_MS = 5 * 60 * 1000;
 
 export type { LocationFieldDefLike };
 
@@ -69,10 +72,12 @@ export async function fetchOptionSetItemsBySetKey(
 ): Promise<Array<{ item_key?: string; label?: string | null }>> {
     const sk = setKey.trim();
     if (!sk) return [];
-    const res = await fetch(`/api/admin/option-sets/${encodeURIComponent(sk)}`, {
-        credentials: "include",
-        ...init,
-    });
+    const url = `/api/admin/option-sets/${encodeURIComponent(sk)}`;
+    const res = await dedupeAdminFetchWithTtl(
+        url,
+        { credentials: "include", ...init },
+        OPTION_SET_SESSION_TTL_MS,
+    );
     const json = (await res.json().catch(() => ({}))) as {
         items?: Array<{ item_key?: string; label?: string | null }>;
     };

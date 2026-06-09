@@ -466,10 +466,13 @@ describe("Drawer single-reveal bootstrap body", () => {
     });
 
     it("uses center modal presentation for locations on Admin V2 workspace", () => {
-        const src = read("components/admin/AdminEntityDrawer.tsx");
+        const src = read("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(src).toContain("isLocationRecordModalTarget");
         expect(src).toMatch(
             /useAdminV2RecordModalPresentation[\s\S]*isLocationRecordModalTarget/,
+        );
+        expect(src).toContain(
+            'drawerShellVariant === "adminV2" && drawer.type === "locations" && !!drawer.id'
         );
     });
 

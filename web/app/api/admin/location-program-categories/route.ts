@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { slugifyLocationProgramCategoryKey } from "@/lib/locations/locationProgramCategories";
+
+const PROGRAM_CATEGORY_KEY_RE = /^[a-z0-9_]{2,64}$/;
 
 type CategoryRow = {
     id: string;
@@ -139,4 +142,100 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ categories: results, updated: results.length });
+}
+
+/** POST: create a program category for one site location. */
+export async function POST(request: NextRequest) {
+    const ctx = await getAdminContextCached();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+
+    let body: Record<string, unknown> = {};
+    try {
+        body = (await request.json()) as Record<string, unknown>;
+    } catch {
+        return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+
+    const locationId = String(body.location_id ?? "").trim();
+    const label = String(body.label ?? "").trim();
+    const rawKey = String(body.key ?? "").trim();
+    const key = rawKey ? slugifyLocationProgramCategoryKey(rawKey) : slugifyLocationProgramCategoryKey(label);
+    const sortOrder =
+        body.sort_order != null && body.sort_order !== "" ? Number(body.sort_order) : null;
+    const isActive = body.is_active !== false;
+
+    if (!locationId) {
+        return NextResponse.json({ error: "location_id is required" }, { status: 400 });
+    }
+    if (!label) {
+        return NextResponse.json({ error: "label is required" }, { status: 400 });
+    }
+    if (!PROGRAM_CATEGORY_KEY_RE.test(key)) {
+        return NextResponse.json({ error: "Invalid program category key" }, { status: 400 });
+    }
+
+    const supabase = createAdminClient();
+    const { data: siteRow, error: siteErr } = await supabase
+        .from("locations")
+        .select("id, location_type")
+        .eq("org_id", ctx.orgId)
+        .eq("id", locationId)
+        .maybeSingle();
+
+    if (siteErr) {
+        return NextResponse.json({ error: siteErr.message }, { status: 500 });
+    }
+    if (!siteRow) {
+        return NextResponse.json({ error: "Location not found" }, { status: 404 });
+    }
+    if (String((siteRow as { location_type?: string }).location_type ?? "").trim() !== "site") {
+        return NextResponse.json(
+            { error: "Program categories can only be added to site locations" },
+            { status: 400 }
+        );
+    }
+
+    let resolvedSortOrder = sortOrder;
+    if (resolvedSortOrder == null || !Number.isFinite(resolvedSortOrder)) {
+        const { data: existing } = await supabase
+            .from("location_program_categories")
+            .select("sort_order")
+            .eq("org_id", ctx.orgId)
+            .eq("location_id", locationId)
+            .order("sort_order", { ascending: false })
+            .limit(1);
+        const top = existing?.[0] as { sort_order?: number | null } | undefined;
+        const max = top?.sort_order != null ? Number(top.sort_order) : 0;
+        resolvedSortOrder = max > 0 ? max + 10 : 10;
+    }
+
+    const { data, error } = await supabase
+        .from("location_program_categories")
+        .insert({
+            org_id: ctx.orgId,
+            location_id: locationId,
+            key,
+            label,
+            sort_order: resolvedSortOrder,
+            is_active: isActive,
+            updated_at: new Date().toISOString(),
+        })
+        .select(
+            "id, org_id, location_id, key, label, sort_order, is_active, metadata, created_at, updated_at"
+        )
+        .single();
+
+    if (error) {
+        const msg = error.message.includes("location_program_categories_org_location_key_unique")
+            ? "A program with this key already exists for this site"
+            : error.message;
+        return NextResponse.json({ error: msg }, { status: 400 });
+    }
+
+    return NextResponse.json({ category: mapCategoryRow(data as Record<string, unknown>) }, { status: 201 });
 }

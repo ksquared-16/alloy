@@ -8,6 +8,8 @@ import {
     resolveActiveProgramCategoriesForSite,
     resolveLocationProgramCategoryLabel,
     resolveProgramCategoryIdForSiteKey,
+    slugifyLocationProgramCategoryKey,
+    suggestNextLocationProgramCategorySortOrder,
     type LocationProgramCategoryRow,
 } from "@/lib/locations/locationProgramCategories";
 import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
@@ -119,6 +121,14 @@ describe("locationProgramCategories", () => {
             })?.label
         ).toBe("Preschool");
     });
+
+    it("slugifyLocationProgramCategoryKey normalizes display labels", () => {
+        expect(slugifyLocationProgramCategoryKey("Summer Camp")).toBe("summer_camp");
+    });
+
+    it("suggestNextLocationProgramCategorySortOrder increments by 10", () => {
+        expect(suggestNextLocationProgramCategorySortOrder(CATEGORIES, SITE_ID)).toBe(40);
+    });
 });
 
 describe("LocationsHierarchySettingsClient", () => {
@@ -130,6 +140,6 @@ describe("LocationsHierarchySettingsClient", () => {
         expect(src).not.toContain("listOrgProgramCategoriesForSettings");
         expect(src).not.toContain("orgProgramCategoryRegistry");
         expect(src).toContain("fetchLocationProgramCategories");
-        expect(src).not.toContain("Org program categories");
+        expect(src).toContain("LocationProgramCategoriesSettingsPanel");
     });
 });

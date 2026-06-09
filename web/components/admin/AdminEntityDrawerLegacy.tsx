@@ -3110,7 +3110,11 @@ export function AdminEntityDrawerLegacy() {
             );
         }
         if ((drawer.type === "locations" || drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors" || drawer.type === "jobs" || drawer.type === "persons") && drawer.id === "new") {
-            setData({ _create: true });
+            if (drawer.type === "locations" && drawerShellVariant === "adminV2") {
+                setData({ _create: true, location_type: "site", is_active: true });
+            } else {
+                setData({ _create: true });
+            }
             setLoading(false);
             setIsEditing(true);
             return;
@@ -5493,6 +5497,26 @@ export function AdminEntityDrawerLegacy() {
     }, [drawer.type, drawer.defaultCustomerId, data]);
 
     useEffect(() => {
+        if (drawer.type !== "locations" || !data || !(data as { _create?: boolean })._create) return;
+        if (drawerShellVariant !== "adminV2") return;
+        setFormData({
+            label: "",
+            location_type: "site",
+            is_active: true,
+            address1: "",
+            address2: "",
+            city: "",
+            state: "",
+            postal_code: "",
+            country: "",
+            director_name: "",
+            director_email: "",
+            site_phone: "",
+            status_key: "",
+        });
+    }, [drawer.type, drawerShellVariant, data]);
+
+    useEffect(() => {
         if (!drawer.type || !STATUS_ENTITY_TYPES.includes(drawer.type)) {
             setStatusDefsForDrawer([]);
             return;
@@ -6816,6 +6840,16 @@ export function AdminEntityDrawerLegacy() {
                     }
                 }
                 if (drawer.id === "new") {
+                    const metadataPatch: Partial<Record<(typeof LOCATION_DRAWER_METADATA_FORM_KEYS)[number], string | null>> =
+                        {};
+                    for (const k of LOCATION_DRAWER_METADATA_FORM_KEYS) {
+                        if (formData[k] === undefined) continue;
+                        const v = formData[k];
+                        metadataPatch[k] = typeof v === "string" ? v.trim() || null : v == null ? null : String(v).trim() || null;
+                    }
+                    if (Object.keys(metadataPatch).length > 0) {
+                        locPayload.metadata = mergeLocationMetadataPatch(null, metadataPatch);
+                    }
                     const res = await fetch("/api/admin/locations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(locPayload) });
                     const json = await res.json().catch(() => ({}));
                     if (!res.ok) throw new Error((json.error as string) || "Create failed");
@@ -7483,12 +7517,9 @@ export function AdminEntityDrawerLegacy() {
         drawer.type === "opportunities" &&
         !!drawer.id &&
         drawer.id !== "new";
-    /** Centered record modal for locations (parity with schedules/jobs/opportunities). */
+    /** Centered record modal for locations on Admin V2 routes (create + edit). */
     const isLocationRecordModalTarget =
-        drawerShellVariant === "adminV2" &&
-        drawer.type === "locations" &&
-        !!drawer.id &&
-        drawer.id !== "new";
+        drawerShellVariant === "adminV2" && drawer.type === "locations" && !!drawer.id;
     /** Centered record modal for persons — same frame as opportunity when drilling from inquiry. */
     const isPersonRecordModalTarget =
         drawerShellVariant === "adminV2" &&
@@ -9949,10 +9980,16 @@ export function AdminEntityDrawerLegacy() {
         const defs = (overviewData._field_definitions as { is_visible_in_drawer?: boolean }[] | undefined) ?? [];
         return defs.some((d) => d.is_visible_in_drawer !== false);
     }, [overviewData]);
+    const locationAdminV2ConfigDrivenCreate =
+        drawerShellVariant === "adminV2" &&
+        drawer.type === "locations" &&
+        drawer.id === "new" &&
+        !!(overviewData as { _create?: boolean })?._create;
     const useConfigDrivenOverview =
         !!presentationType &&
-        !(overviewData as { _create?: boolean })?._create &&
+        (!(overviewData as { _create?: boolean })?._create || locationAdminV2ConfigDrivenCreate) &&
         (hasFieldDefsForOverview ||
+            locationAdminV2ConfigDrivenCreate ||
             (!!presentationConfig?.drawer?.overviewSections?.length &&
                 presentationConfig.drawer.overviewSections.some((s) => s.fields && s.fields.length > 0)));
 
@@ -10307,8 +10344,20 @@ export function AdminEntityDrawerLegacy() {
 
     const entityDrawerOverviewData = useMemo((): Record<string, unknown> => {
         const base = (overviewData ?? {}) as Record<string, unknown>;
-        if (drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create) {
-            return { ...base, ...locationMetadataFormValues(base) };
+        if (drawer.type === "locations" && overviewData) {
+            if ((overviewData as { _create?: boolean })._create && locationAdminV2ConfigDrivenCreate) {
+                const merged: Record<string, unknown> = {
+                    ...base,
+                    location_type: formData.location_type ?? base.location_type ?? "site",
+                };
+                for (const k of LOCATION_DRAWER_METADATA_FORM_KEYS) {
+                    if (formData[k] !== undefined) merged[k] = formData[k];
+                }
+                return merged;
+            }
+            if (!(overviewData as { _create?: boolean })._create) {
+                return { ...base, ...locationMetadataFormValues(base) };
+            }
         }
         if (drawer.type !== "jobs" || !overviewData || (overviewData as { _create?: boolean })._create) {
             return base;
@@ -10322,7 +10371,7 @@ export function AdminEntityDrawerLegacy() {
             _job_payment_balance_cents: summ.balance_due_cents ?? undefined,
             _job_payment_status_label: jobPaymentStatusKeyLabel(summ.payment_status_key),
         };
-    }, [drawer.type, overviewData, jobPaymentSummaryFromApi]);
+    }, [drawer.type, overviewData, jobPaymentSummaryFromApi, locationAdminV2ConfigDrivenCreate, formData]);
 
     const opportunityCommunicationsComposeContext = useMemo(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return null;
@@ -12009,15 +12058,18 @@ export function AdminEntityDrawerLegacy() {
                 );
             }
         }
-        if (drawer.type === "locations" && overviewData && !(overviewData as { _create?: boolean })._create) {
+        if (drawer.type === "locations" && overviewData) {
             const locRec = overviewData as Record<string, unknown>;
-            const locDefs =
-                (locRec._field_definitions as Parameters<typeof applyLocationDrawerPresentation>[2]) ?? [];
-            overviewSections = applyLocationDrawerPresentation(
-                overviewSections,
-                locRec.location_type as string | null,
-                locDefs
-            );
+            const isLocationCreate = !!(locRec._create as boolean | undefined);
+            if (!isLocationCreate || locationAdminV2ConfigDrivenCreate) {
+                const locType = isLocationCreate
+                    ? (String(formData.location_type ?? locRec.location_type ?? "site").trim() || "site")
+                    : (locRec.location_type as string | null);
+                const locDefs = isLocationCreate
+                    ? []
+                    : ((locRec._field_definitions as Parameters<typeof applyLocationDrawerPresentation>[2]) ?? []);
+                overviewSections = applyLocationDrawerPresentation(overviewSections, locType, locDefs);
+            }
         }
         if (
             (drawer.type === "persons" || drawer.type === "locations") &&
@@ -12054,6 +12106,8 @@ export function AdminEntityDrawerLegacy() {
         personParentGuardianChrome,
         personDrawerChildChromeHint,
         personDrawerParentChromeHint,
+        locationAdminV2ConfigDrivenCreate,
+        formData.location_type,
     ]);
 
     /** Parent/child operating chrome must pass `[]` when empty — otherwise EntityDrawerOverview falls back to generic Profile/Contact sections. */
@@ -12101,7 +12155,12 @@ export function AdminEntityDrawerLegacy() {
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
-        if (drawer.type !== "locations" || !overviewData || (overviewData as { _create?: boolean })._create) {
+        if (drawer.type !== "locations" || !overviewData) {
+            setLocationMetadataSelectOptions({});
+            return undefined;
+        }
+        const isLocationCreate = !!(overviewData as { _create?: boolean })._create;
+        if (isLocationCreate && !locationAdminV2ConfigDrivenCreate) {
             setLocationMetadataSelectOptions({});
             return undefined;
         }
@@ -12118,7 +12177,7 @@ export function AdminEntityDrawerLegacy() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, overviewData]);
+    }, [drawer.type, drawer.id, overviewData, locationAdminV2ConfigDrivenCreate]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
         const out: Record<string, { value: string; label: string }[]> = {};
@@ -13171,6 +13230,21 @@ export function AdminEntityDrawerLegacy() {
                         </>
                     )}
                     {drawer.type === "schedules" && canMutate && !(data as { _create?: boolean })?._create && <button type="button" onClick={() => { setSetLocationEntity("schedule"); const sid = (data?.location_id as string) ?? (data?._location_id as string) ?? null; setSetLocationSelectedId(sid); setSetLocationError(null); fetch("/api/admin/locations").then((r) => r.ok ? r.json() : { locations: [] }).then((j: { locations?: { id: string; label: string | null; address1: string | null; city: string | null; state: string | null; postal_code: string | null }[] }) => setSetLocationList(j.locations ?? [])).catch(() => setSetLocationList([])); setSetLocationOpen(true); }} className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30">{((data?.location_id as string) ?? (data?._location_id as string)) ? "Change location" : "Set location"}</button>}
+                    {drawer.type === "locations" && canMutate && (data as { _create?: boolean })?._create && locationAdminV2ConfigDrivenCreate && (
+                        <>
+                            <OpportunityDrawerHeaderActionButton
+                                label={saving ? "Creating…" : "Create location"}
+                                inquiryWorkflow
+                                disabled={saving || !String(formData.label ?? "").trim()}
+                                onClick={() => void saveEdit()}
+                            />
+                            <OpportunityDrawerHeaderActionButton
+                                label="Cancel"
+                                inquiryWorkflow
+                                onClick={closeDrawer}
+                            />
+                        </>
+                    )}
                     {drawer.type === "locations" && canMutate && !(data as { _create?: boolean })?._create && (
                         <>
                             <OpportunityDrawerHeaderActionButton
@@ -16949,7 +17023,11 @@ export function AdminEntityDrawerLegacy() {
                                                         ? handleOverviewFieldChange
                                                         : (key, value) => setFormData((prev) => ({ ...prev, [key]: value }))
                                                 }
-                                                onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
+                                                onBlur={() => {
+                                                    if ((entityDrawerOverviewData as { _create?: boolean })?._create) return;
+                                                    if (drawer.type === "jobs" && jobFormDirty) saveEdit();
+                                                    else if (nonJobFormDirty) saveEdit();
+                                                }}
                                                 canEdit={!!canMutate}
                                                 statusDefs={statusDefsForDrawer}
                                                 getStatusLabel={getStatusLabel}
