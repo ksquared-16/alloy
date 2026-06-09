@@ -288,7 +288,7 @@ Aligned with child-grain Phase C–F but **builder-metadata-first** so lane flip
 
 | Phase | Scope | Production behavior |
 |-------|--------|---------------------|
-| **A — Metadata shape** | TS types, parser for `queue_membership_v1`, extend `parseLifecycleBuilderV1` (ignore unknown fields safely), API read path returns metadata when present | **No change** — parser accepts, runtime ignores |
+| **A — Metadata shape** | TS types, parser for `queue_membership_v1`, extend `parseLifecycleBuilderV1` (ignore unknown fields safely), API read path returns metadata when present | **No change** — parser accepts, runtime ignores (**types/parser/defaults shipped** — see §Phase A implementation note) |
 | **B — Seed defaults** | Backfill enrollment template stages on builder-owned departments; mirror to `lifecycle_wu_*` metadata; optional migration script | **No change** — metadata only |
 | **C — Runtime read behind flag** | `QueueService` reads `queue_membership_v1` when flag on; fallback to hardcoded predicates | **No change** when flag unset |
 | **D — Flip Enrolled** | Replace `enrollment_completed` hardcoded list with builder config (staging first) | Changes only when flag + lane enabled |
@@ -344,7 +344,32 @@ Aligned with child-grain Phase C–F but **builder-metadata-first** so lane flip
 - [x] UI + runtime resolver documented for future work
 - [x] Phases A–F defined with no-production-change gate
 - [x] Conflicts and sequence documented
-- [ ] Implementation (types, seed, flag) — **next sprint**
+- [x] Phase A: types, parser, enrollment defaults, tests
+- [ ] Phase B–F: seed, save path, runtime flag, lane flips
+
+---
+
+## Phase A implementation note (2026-06-09)
+
+**Status:** Phase A contract landed — **no runtime or save-path wiring**.
+
+| Deliverable | Location |
+|-------------|----------|
+| Shared types + parser | `web/lib/lifecycle/queueMembershipV1.ts` — `QueueMembershipV1`, `parseQueueMembershipV1()` |
+| Enrollment default factory | `defaultQueueMembershipForEnrollmentStage(stageKey)` — locked table in §3 (`enrollment` stage key, not `enrolling`) |
+| Stage resolver helper | `resolveQueueMembershipForStage(stageConfig, fallbackStageKey)` |
+| Tests | `web/tests/lifecycle/queueMembershipV1.test.ts` |
+
+**Intentionally not wired yet:**
+
+- `parseLifecycleBuilderV1` / `LifecycleBuilderStageRecord` extension
+- `saveLifecycleStageRuntimeConfig` persistence
+- Work unit metadata denormalization
+- `QueueService` / lane routing / hardcoded predicate replacement
+- Lifecycle Builder UI grain/disposition picker
+- Seed script (Phase B)
+
+**Next sprint:** Phase B can seed `queue_membership_v1` onto enrollment template stages and mirror to `lifecycle_wu_*` metadata using this contract — still without production queue behavior change until Phase C behind flag.
 
 ---
 
