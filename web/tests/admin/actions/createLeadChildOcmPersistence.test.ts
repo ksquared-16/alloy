@@ -10,6 +10,7 @@ import {
 
 const SITE_ID = "11111111-1111-4111-8111-111111111111";
 const ROOM_ID = "22222222-2222-4222-8222-222222222222";
+const CATEGORY_ID = "33333333-3333-4333-8333-333333333333";
 
 describe("parseCreateLeadChildParticipationPayload", () => {
     it("maps create lead payload keys to OCM columns", () => {
@@ -30,6 +31,7 @@ describe("parseCreateLeadChildParticipationPayload", () => {
         expect(parsed!.ocm).toEqual({
             location_id: SITE_ID,
             desired_program_type: "infant",
+            desired_program_category_id: null,
             desired_schedule_type: "full_day",
             desired_start_date: "2026-09-01",
             program_room_cohort_key: ROOM_ID,
@@ -84,6 +86,7 @@ describe("buildCreateLeadOcmInsertRow", () => {
             ocm: {
                 location_id: SITE_ID,
                 desired_program_type: "infant",
+                desired_program_category_id: null,
                 desired_schedule_type: "full_day",
                 desired_start_date: "2026-09-01",
                 program_room_cohort_key: ROOM_ID,
@@ -130,6 +133,17 @@ describe("applyCreateLeadChildParticipation", () => {
                         }),
                     };
                 }
+                if (table === "location_program_categories") {
+                    return {
+                        select: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnThis(),
+                            maybeSingle: vi.fn().mockResolvedValue({
+                                data: { id: CATEGORY_ID },
+                                error: null,
+                            }),
+                        }),
+                    };
+                }
                 return { insert: vi.fn() };
             }),
         };
@@ -158,6 +172,7 @@ describe("applyCreateLeadChildParticipation", () => {
             customer_member_id: "cm-1",
             location_id: SITE_ID,
             desired_program_type: "infant",
+            desired_program_category_id: CATEGORY_ID,
             desired_schedule_type: "full_day",
             program_room_cohort_key: ROOM_ID,
             desired_start_date: "2026-09-01",

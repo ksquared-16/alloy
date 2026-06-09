@@ -34,6 +34,7 @@ export const INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS = [
     "location_id",
     "program_room_cohort_key",
     "desired_program_type",
+    "desired_program_category_id",
     "desired_schedule_type",
     "outcome_status_key",
     "notes",

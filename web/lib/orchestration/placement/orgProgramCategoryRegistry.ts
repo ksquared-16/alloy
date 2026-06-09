@@ -1,6 +1,7 @@
 /**
- * Org-level program/category registry (read-only pilot).
- * Waitlist queue sections group by these categories — not by site or classroom.
+ * Org-level program/category registry (waitlist section classification only).
+ * Settings, pickers, and lead storage use `location_program_categories` per site.
+ * Do not use for operator-facing program vocabulary.
  */
 
 import {

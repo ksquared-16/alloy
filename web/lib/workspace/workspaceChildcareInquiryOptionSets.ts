@@ -1,3 +1,4 @@
+import { WORKSPACE_LOCATION_PROGRAM_CATEGORIES_URL } from "@/lib/admin/location/fetchLocationProgramCategories";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -5,6 +6,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 export const WORKSPACE_OPTION_SET_CHILDCARE_PROGRAM_URL = "/api/admin/option-sets/childcare_program_type";
 export const WORKSPACE_OPTION_SET_CHILDCARE_SCHEDULE_URL = "/api/admin/option-sets/childcare_schedule_type";
 export const WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL = "/api/admin/locations?hierarchy=1";
+export { WORKSPACE_LOCATION_PROGRAM_CATEGORIES_URL };
 
 const OPTION_SET_TTL_MS = 1500;
 
@@ -17,14 +19,20 @@ export async function loadWorkspaceChildcareInquiryOptionSets(init?: RequestInit
     programRes: Response;
     scheduleRes: Response;
     locationsRes: Response;
+    programCategoriesRes: Response;
 }> {
     const i = init ?? workspaceDataFetchInit();
-    const [programRes, scheduleRes, locationsRes] = await Promise.all([
+    const [programRes, scheduleRes, locationsRes, programCategoriesRes] = await Promise.all([
         dedupeAdminFetchWithTtl(WORKSPACE_OPTION_SET_CHILDCARE_PROGRAM_URL, i, OPTION_SET_TTL_MS),
         dedupeAdminFetchWithTtl(WORKSPACE_OPTION_SET_CHILDCARE_SCHEDULE_URL, i, OPTION_SET_TTL_MS),
         dedupeAdminFetchWithTtl(WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL, i, OPTION_SET_TTL_MS),
+        dedupeAdminFetchWithTtl(
+            `${WORKSPACE_LOCATION_PROGRAM_CATEGORIES_URL}?include_inactive=true`,
+            i,
+            OPTION_SET_TTL_MS
+        ),
     ]);
-    return { programRes, scheduleRes, locationsRes };
+    return { programRes, scheduleRes, locationsRes, programCategoriesRes };
 }
 
 /** Fire-and-forget prefetch (e.g. when opportunity drawer record is ready) to warm dedupe cache. */

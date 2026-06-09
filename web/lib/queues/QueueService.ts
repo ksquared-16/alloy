@@ -71,6 +71,8 @@ import {
     type QueueOcmPlacementRow,
 } from "@/lib/admin/drawer/queueOcmPlacementEnrichment";
 import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
+import { loadLocationProgramCategoriesForOrg } from "@/lib/locations/loadLocationProgramCategoriesForOrg";
+import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
@@ -732,6 +734,7 @@ function programSecondaryForCustomerMemberChild(
     ctx: {
         ocmRow: QueueOcmPlacementRow | null;
         optionLabelLookup: Map<string, string>;
+        locationProgramCategories: ReadonlyArray<LocationProgramCategoryRow>;
     }
 ): string | null {
     const meta = m.metadata && typeof m.metadata === "object" && !Array.isArray(m.metadata) ? m.metadata : null;
@@ -739,6 +742,7 @@ function programSecondaryForCustomerMemberChild(
     return resolveQueueChildProgramCategoryLabel({
         ocmRow: ctx.ocmRow,
         optionLabelLookup: ctx.optionLabelLookup,
+        locationProgramCategories: ctx.locationProgramCategories,
         metadataProgramLabel: ctx.ocmRow ? null : metadataProgramLabel,
     });
 }
@@ -754,15 +758,20 @@ function baseNameFromCrmChildPrimary(primary: string): string {
 
 function inquiryProgramSecondaryFromRow(
     raw: unknown,
-    optionLabelLookup: Map<string, string>
+    optionLabelLookup: Map<string, string>,
+    locationProgramCategories: ReadonlyArray<LocationProgramCategoryRow>
 ): string | null {
     const row = raw as Record<string, unknown>;
     const fromOcm = resolveInquiryChildProgramCategoryLabel({
+        desired_program_category_id:
+            typeof row.desired_program_category_id === "string" ? row.desired_program_category_id : null,
         desired_program_type:
             typeof row.desired_program_type === "string" ? row.desired_program_type : null,
+        location_id: typeof row.location_id === "string" ? row.location_id : null,
         desired_program_label:
             typeof row.desired_program_label === "string" ? row.desired_program_label : null,
         optionLabelLookup,
+        locationProgramCategories,
     });
     if (fromOcm) return fromOcm;
     const pl = typeof row.program_label === "string" ? row.program_label.trim() : "";
@@ -783,7 +792,8 @@ function mergeInquiryChildrenIntoMemberStructuredLines(
     lines: { primary: string; secondary: string | null }[],
     inquiryChildren: unknown[],
     optionLabelLookup: Map<string, string>,
-    ocmByMemberId: Map<string, QueueOcmPlacementRow>
+    ocmByMemberId: Map<string, QueueOcmPlacementRow>,
+    locationProgramCategories: ReadonlyArray<LocationProgramCategoryRow>
 ): { primary: string; secondary: string | null }[] {
     if (!lines.length || !inquiryChildren.length) return lines;
     const byDisplay = new Map<string, string>();
@@ -796,7 +806,7 @@ function mergeInquiryChildrenIntoMemberStructuredLines(
         }
         const disp =
             typeof row.display_name === "string" ? row.display_name.trim().replace(/\s+/g, " ").toLowerCase() : "";
-        const sec = inquiryProgramSecondaryFromRow(raw, optionLabelLookup);
+        const sec = inquiryProgramSecondaryFromRow(raw, optionLabelLookup, locationProgramCategories);
         if (disp && sec) byDisplay.set(disp, sec);
     }
     if (!byDisplay.size) return lines;
@@ -818,6 +828,7 @@ function buildCrmCompactStructuredLinesFromCustomerMembers(
         opportunityId: string;
         ocmByMemberId: Map<string, QueueOcmPlacementRow>;
         optionLabelLookup: Map<string, string>;
+        locationProgramCategories: ReadonlyArray<LocationProgramCategoryRow>;
     }
 ): { primary: string; secondary: string | null; personId?: string | null }[] {
     const withLabels: { primary: string; secondary: string | null; personId: string | null; sort: string }[] = [];
@@ -840,6 +851,7 @@ function buildCrmCompactStructuredLinesFromCustomerMembers(
         const secondary = programSecondaryForCustomerMemberChild(m, {
             ocmRow,
             optionLabelLookup: ctx.optionLabelLookup,
+            locationProgramCategories: ctx.locationProgramCategories,
         });
         withLabels.push({ primary, secondary, personId: pid || null, sort: primary.toLowerCase() });
     }
@@ -1263,7 +1275,7 @@ async function enrichOpportunityRows(params: {
                   supabase
                       .from("opportunity_customer_members")
                       .select(
-                          "opportunity_id, customer_member_id, desired_start_date, desired_program_type, customer_members(id, person_id, display_name, first_name, last_name, dob)",
+                          "opportunity_id, customer_member_id, location_id, desired_start_date, desired_program_type, desired_program_category_id, customer_members(id, person_id, display_name, first_name, last_name, dob)",
                       )
                       .eq("org_id", orgId)
                       .in("opportunity_id", opportunityIds as any)
@@ -1301,8 +1313,10 @@ async function enrichOpportunityRows(params: {
         const row = raw as {
             opportunity_id?: string;
             customer_member_id?: string;
+            location_id?: string | null;
             desired_start_date?: string | null;
             desired_program_type?: string | null;
+            desired_program_category_id?: string | null;
             customer_members?: unknown;
         };
         const oid = String(row.opportunity_id ?? "").trim();
@@ -1315,7 +1329,9 @@ async function enrichOpportunityRows(params: {
             ocmPlacementRows.push({
                 opportunity_id: oid,
                 customer_member_id: memberId,
+                location_id: String(row.location_id ?? "").trim() || null,
                 desired_program_type: String(row.desired_program_type ?? "").trim() || null,
+                desired_program_category_id: String(row.desired_program_category_id ?? "").trim() || null,
             });
         }
         const childLine = parseOcmChildPersonLinesFromBatchRow(row as Record<string, unknown>);
@@ -1326,6 +1342,7 @@ async function enrichOpportunityRows(params: {
         }
     }
     const ocmPlacementByOpportunityId = indexOcmPlacementByOpportunityAndMember(ocmPlacementRows);
+    const locationProgramCategories = await loadLocationProgramCategoriesForOrg(supabase, orgId);
     const placementOptionLabelLookup =
         ocmPlacementRows.length > 0
             ? await buildChildcarePlacementOptionLabelLookup(supabase, orgId, ocmPlacementRows)
@@ -1478,6 +1495,7 @@ async function enrichOpportunityRows(params: {
                     opportunityId: oppIdStr,
                     ocmByMemberId,
                     optionLabelLookup: placementOptionLabelLookup,
+                    locationProgramCategories,
                 }
             );
             childDisplay =
@@ -1502,7 +1520,11 @@ async function enrichOpportunityRows(params: {
                           : null;
                 const age = resolveChildAgeDisplayLabel({ inquiry_dob: inquiryDob });
                 if (disp) names.push(age ? `${disp} (${age})` : disp);
-                const pl = inquiryProgramSecondaryFromRow(raw, placementOptionLabelLookup);
+                const pl = inquiryProgramSecondaryFromRow(
+                    raw,
+                    placementOptionLabelLookup,
+                    locationProgramCategories
+                );
                 if (pl) programs.push(pl);
             }
             childDisplay = names.length ? names.join(" · ") : null;

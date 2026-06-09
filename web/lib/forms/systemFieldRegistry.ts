@@ -170,7 +170,7 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         default_required: false,
         suggested_kind: "select",
         public_intake_safe: true,
-        select_options_lines: "infant|Infant\ntoddler|Toddler\npreschool|Preschool\nschool_age|School age",
+        select_options_lines: "",
     },
     {
         id: "child_site",

@@ -12,7 +12,29 @@ import {
     type InquiryChildPlacementHierarchyRow,
     type InquiryChildProgramOptionSetItem,
 } from "@/lib/admin/location/inquiryChildPlacementOptions";
+import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { isInquiryChildPlacementProgramFieldDisabled } from "@/lib/admin/drawer/inquiryChildPlacementScope";
+
+const LOCATION_CATEGORIES: LocationProgramCategoryRow[] = [
+    {
+        id: "cat-infant",
+        org_id: "org-1",
+        location_id: "site-north",
+        key: "infant",
+        label: "Infant",
+        sort_order: 1,
+        is_active: true,
+    },
+    {
+        id: "cat-preschool",
+        org_id: "org-1",
+        location_id: "site-north",
+        key: "preschool",
+        label: "Preschool",
+        sort_order: 2,
+        is_active: true,
+    },
+];
 
 const PROGRAM_ITEMS: InquiryChildProgramOptionSetItem[] = [
     { item_key: "infant", label: "Infant", sort_order: 1, is_active: true },
@@ -91,6 +113,17 @@ describe("inquiryChildPlacementOptions", () => {
 
     it("program options derived from active units under selected site", () => {
         const options = resolveProgramsOfferedForSite(hierarchy(), "site-north", PROGRAM_ITEMS);
+        expect(options.map((o) => o.value)).toEqual(["infant", "preschool"]);
+        expect(options[0]?.label).toBe("Infant");
+    });
+
+    it("prefers location_program_categories when provided for site", () => {
+        const options = resolveProgramsOfferedForSite(
+            hierarchy(),
+            "site-north",
+            PROGRAM_ITEMS,
+            LOCATION_CATEGORIES
+        );
         expect(options.map((o) => o.value)).toEqual(["infant", "preschool"]);
         expect(options[0]?.label).toBe("Infant");
     });

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
-import { listOrgProgramCategoriesForSettings } from "@/lib/orchestration/placement/orgProgramCategoryRegistry";
+import { fetchLocationProgramCategories } from "@/lib/admin/location/fetchLocationProgramCategories";
 import {
     buildLocationHierarchyTree,
     buildLocationTableRows,
@@ -20,6 +20,11 @@ import {
     fetchOptionSetItemsBySetKey,
     mapOptionItemsToSelectOptions,
 } from "@/lib/admin/location/locationDrawerFieldOptions";
+import {
+    indexLocationProgramCategoriesBySite,
+    resolveActiveProgramCategoriesForSite,
+    type LocationProgramCategoryRow,
+} from "@/lib/locations/locationProgramCategories";
 
 type DeletionEligibility = { allowed: boolean; reason?: string | null };
 
@@ -47,27 +52,66 @@ export default function LocationsHierarchySettingsClient() {
     const [savingId, setSavingId] = useState<string | null>(null);
     const [removingId, setRemovingId] = useState<string | null>(null);
     const [deleteReasonById, setDeleteReasonById] = useState<Record<string, string>>({});
-    const [categorySelectOptions, setCategorySelectOptions] = useState<{ value: string; label: string }[]>([]);
+    const [programCategories, setProgramCategories] = useState<LocationProgramCategoryRow[]>([]);
+    const [categorySavingId, setCategorySavingId] = useState<string | null>(null);
     const [ageUnitSelectOptions, setAgeUnitSelectOptions] = useState<{ value: string; label: string }[]>([]);
 
-    const orgCategories = useMemo(() => listOrgProgramCategoriesForSettings(), []);
+    const categoriesBySite = useMemo(
+        () => indexLocationProgramCategoriesBySite(programCategories),
+        [programCategories]
+    );
+
+    const siteRows = useMemo(
+        () => rows.filter((r) => String(r.location_type ?? "").trim() === "site"),
+        [rows]
+    );
 
     useEffect(() => {
         let cancelled = false;
         void (async () => {
             const init = { credentials: "include" as const };
-            const [catItems, unitItems] = await Promise.all([
-                fetchOptionSetItemsBySetKey("childcare_program_type", init),
+            const [categories, unitItems] = await Promise.all([
+                fetchLocationProgramCategories(init, { includeInactive: true }),
                 fetchOptionSetItemsBySetKey("location_age_range_unit", init),
             ]);
             if (cancelled) return;
-            setCategorySelectOptions(mapOptionItemsToSelectOptions(catItems));
+            setProgramCategories(categories);
             setAgeUnitSelectOptions(mapOptionItemsToSelectOptions(unitItems));
         })();
         return () => {
             cancelled = true;
         };
     }, []);
+
+    const patchProgramCategory = useCallback(
+        async (categoryId: string, patch: { label?: string; is_active?: boolean; sort_order?: number }) => {
+            setCategorySavingId(categoryId);
+            try {
+                const res = await fetch("/api/admin/location-program-categories", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ updates: [{ id: categoryId, ...patch }] }),
+                });
+                const json = (await res.json().catch(() => ({}))) as {
+                    categories?: LocationProgramCategoryRow[];
+                    error?: string;
+                };
+                if (!res.ok) throw new Error(json.error ?? `Failed (${res.status})`);
+                const updated = json.categories?.[0];
+                if (updated) {
+                    setProgramCategories((prev) =>
+                        prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c))
+                    );
+                }
+            } catch (e) {
+                setError((e as Error).message);
+            } finally {
+                setCategorySavingId(null);
+            }
+        },
+        []
+    );
 
     const fetchRows = useCallback(async () => {
         setLoading(true);
@@ -218,19 +262,79 @@ export default function LocationsHierarchySettingsClient() {
             />
 
             <section className="mb-4 rounded-lg border border-alloy-forge/10 bg-white/70 px-3 py-2.5">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                    Org program categories
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                    Program categories (per location)
                 </h3>
-                <ul className="flex flex-wrap gap-2">
-                    {orgCategories.map((c) => (
-                        <li
-                            key={c.key}
-                            className="rounded-md border border-alloy-forge/10 bg-alloy-stone/20 px-2 py-1 text-xs text-alloy-midnight/75"
-                        >
-                            {c.label}
-                        </li>
-                    ))}
-                </ul>
+                <p className="mb-3 text-xs text-alloy-midnight/55">
+                    Each site owns its program category list. Leads, rooms, queues, and forms resolve labels from
+                    this configuration.
+                </p>
+                {siteRows.length === 0 ? (
+                    <p className="text-xs text-alloy-midnight/45">Add a site location to configure program categories.</p>
+                ) : (
+                    <div className="space-y-3">
+                        {siteRows.map((site) => {
+                            const siteCategories = categoriesBySite.get(site.id) ?? [];
+                            const activeCategories = resolveActiveProgramCategoriesForSite(siteCategories, site.id);
+                            return (
+                                <div
+                                    key={site.id}
+                                    className="rounded-md border border-alloy-forge/8 bg-alloy-stone/10 px-2.5 py-2"
+                                >
+                                    <div className="mb-2 text-xs font-medium text-alloy-midnight/75">
+                                        {(site.label ?? "Untitled site").trim() || "Untitled site"}
+                                    </div>
+                                    {siteCategories.length === 0 ? (
+                                        <p className="text-xs text-alloy-midnight/45">No categories seeded for this site yet.</p>
+                                    ) : (
+                                        <ul className="space-y-1.5">
+                                            {siteCategories.map((c) => {
+                                                const saving = categorySavingId === c.id;
+                                                return (
+                                                    <li
+                                                        key={c.id}
+                                                        className="flex flex-wrap items-center gap-2 text-xs"
+                                                    >
+                                                        <input
+                                                            type="text"
+                                                            defaultValue={c.label}
+                                                            disabled={saving}
+                                                            className={`${inputClass} max-w-[180px]`}
+                                                            onBlur={(e) => {
+                                                                const next = e.target.value.trim();
+                                                                if (!next || next === c.label) return;
+                                                                void patchProgramCategory(c.id, { label: next });
+                                                            }}
+                                                        />
+                                                        <label className="inline-flex items-center gap-1 text-alloy-midnight/60">
+                                                            <input
+                                                                type="checkbox"
+                                                                defaultChecked={c.is_active !== false}
+                                                                disabled={saving}
+                                                                onChange={(e) => {
+                                                                    void patchProgramCategory(c.id, {
+                                                                        is_active: e.target.checked,
+                                                                    });
+                                                                }}
+                                                            />
+                                                            Active
+                                                        </label>
+                                                        <span className="text-[10px] text-alloy-midnight/35">{c.key}</span>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    )}
+                                    {activeCategories.length > 0 ? (
+                                        <p className="mt-2 text-[10px] text-alloy-midnight/40">
+                                            {activeCategories.length} active for pickers
+                                        </p>
+                                    ) : null}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
             </section>
 
             <div className="mb-3">
@@ -338,9 +442,12 @@ export default function LocationsHierarchySettingsClient() {
                                                     }}
                                                 >
                                                     <option value="">—</option>
-                                                    {categorySelectOptions.map((o) => (
-                                                        <option key={o.value} value={o.value}>
-                                                            {o.label}
+                                                    {resolveActiveProgramCategoriesForSite(
+                                                        categoriesBySite.get(row.parentSiteId ?? "") ?? [],
+                                                        row.parentSiteId
+                                                    ).map((c) => (
+                                                        <option key={c.id} value={c.key}>
+                                                            {c.label}
                                                         </option>
                                                     ))}
                                                 </select>

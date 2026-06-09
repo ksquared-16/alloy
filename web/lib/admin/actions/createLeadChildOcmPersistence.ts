@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -29,6 +30,7 @@ function trimDateOnly(v: unknown): string | null {
 export type CreateLeadChildOcmFields = {
     location_id: string | null;
     desired_program_type: string | null;
+    desired_program_category_id: string | null;
     desired_schedule_type: string | null;
     desired_start_date: string | null;
     program_room_cohort_key: string | null;
@@ -59,6 +61,9 @@ export function parseCreateLeadChildParticipationPayload(
         location_id: trimUuid(merged.child_location_id) ?? trimUuid(merged.location_id),
         desired_program_type:
             trimStableKey(merged.child_program) ?? trimStableKey(merged.desired_program_type),
+        desired_program_category_id:
+            trimUuid(merged.child_program_category_id) ??
+            trimUuid(merged.desired_program_category_id),
         desired_schedule_type:
             trimStableKey(merged.child_desired_schedule_type) ?? trimStableKey(merged.desired_schedule_type),
         desired_start_date:
@@ -104,6 +109,9 @@ export function buildCreateLeadOcmInsertRow(args: {
         metadata: { source: "create_lead" },
         ...(ocm.location_id ? { location_id: ocm.location_id } : {}),
         ...(ocm.desired_program_type ? { desired_program_type: ocm.desired_program_type } : {}),
+        ...(ocm.desired_program_category_id
+            ? { desired_program_category_id: ocm.desired_program_category_id }
+            : {}),
         ...(ocm.desired_schedule_type ? { desired_schedule_type: ocm.desired_schedule_type } : {}),
         ...(ocm.desired_start_date ? { desired_start_date: ocm.desired_start_date } : {}),
         ...(ocm.program_room_cohort_key ? { program_room_cohort_key: ocm.program_room_cohort_key } : {}),
@@ -152,11 +160,21 @@ export async function applyCreateLeadChildParticipation(
     }
     const customerMemberId = String((cm as { id: string }).id);
 
+    const enrichedProgram = await enrichOcmProgramCategoryFields(supabase, {
+        orgId: params.orgId,
+        locationId: ocm.location_id,
+        desiredProgramType: ocm.desired_program_type,
+        desiredProgramCategoryId: ocm.desired_program_category_id,
+    });
     const ocmRow = buildCreateLeadOcmInsertRow({
         orgId: params.orgId,
         opportunityId: params.opportunityId,
         customerMemberId,
-        ocm,
+        ocm: {
+            ...ocm,
+            desired_program_type: enrichedProgram.desired_program_type,
+            desired_program_category_id: enrichedProgram.desired_program_category_id,
+        },
     });
 
     const { data: ocmData, error: ocmErr } = await supabase

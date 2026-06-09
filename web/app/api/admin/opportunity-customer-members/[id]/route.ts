@@ -13,6 +13,7 @@ import {
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { validateInquiryChildPlacementPatch } from "@/lib/admin/drawer/inquiryChildPlacementScope";
 import { syncPlacementCandidateFromOcm } from "@/lib/orchestration/placement/syncPlacementCandidateFromOcm";
+import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
 
 export async function PATCH(
     request: NextRequest,
@@ -54,6 +55,11 @@ export async function PATCH(
         }
         if (k === "program_room_cohort_key") {
             updates.program_room_cohort_key =
+                v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
+            continue;
+        }
+        if (k === "desired_program_category_id") {
+            updates.desired_program_category_id =
                 v === "" || v == null ? null : typeof v === "string" ? v.trim() || null : null;
             continue;
         }
@@ -125,6 +131,27 @@ export async function PATCH(
         );
     }
 
+    if (
+        Object.prototype.hasOwnProperty.call(updates, "desired_program_type") ||
+        Object.prototype.hasOwnProperty.call(updates, "location_id")
+    ) {
+        const enriched = await enrichOcmProgramCategoryFields(supabase, {
+            orgId: ctx.orgId,
+            locationId:
+                "location_id" in updates ? (updates.location_id as string | null) : existing.location_id,
+            desiredProgramType:
+                "desired_program_type" in updates
+                    ? (updates.desired_program_type as string | null)
+                    : existing.desired_program_type,
+            desiredProgramCategoryId:
+                "desired_program_category_id" in updates
+                    ? (updates.desired_program_category_id as string | null)
+                    : undefined,
+        });
+        updates.desired_program_type = enriched.desired_program_type;
+        updates.desired_program_category_id = enriched.desired_program_category_id;
+    }
+
     if (Object.prototype.hasOwnProperty.call(updates, "outcome_status_key")) {
         const lifecycleOnly = Object.keys(updates).every((k) => k === "outcome_status_key");
         const lifecycleResult = await updateOpportunityCustomerMemberLifecycleStatus({
@@ -157,7 +184,7 @@ export async function PATCH(
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .select(
-            "id, org_id, opportunity_id, customer_member_id, location_id, program_room_cohort_key, desired_program_type, desired_schedule_type, desired_start_date, outcome_status_key, notes, updated_at"
+            "id, org_id, opportunity_id, customer_member_id, location_id, program_room_cohort_key, desired_program_type, desired_program_category_id, desired_schedule_type, desired_start_date, outcome_status_key, notes, updated_at"
         )
         .single();
 

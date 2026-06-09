@@ -10,10 +10,12 @@ import {
 } from "react";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { filterInquiryChildSiteLocationOptions } from "@/lib/admin/drawer/inquiryChildPlacementScope";
+import { fetchLocationProgramCategories } from "@/lib/admin/location/fetchLocationProgramCategories";
 import {
     fetchOptionSetItemsBySetKey,
     mapOptionItemsToSelectOptions,
 } from "@/lib/admin/location/locationDrawerFieldOptions";
+import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import {
     resolveProgramsOfferedForSite,
     resolveRoomsForSiteAndProgram,
@@ -47,6 +49,7 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
     const siteFilter = useWorkspaceSiteFilter();
     const [hierarchy, setHierarchy] = useState<InquiryChildPlacementHierarchyRow[]>([]);
     const [programItems, setProgramItems] = useState<InquiryChildProgramOptionSetItem[]>([]);
+    const [locationCategories, setLocationCategories] = useState<LocationProgramCategoryRow[]>([]);
     const [scheduleOptions, setScheduleOptions] = useState<LayoutRuntimeSelectOption[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -56,16 +59,18 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
 
         void (async () => {
             const init = workspaceDataFetchInit();
-            const [locRes, programItemsRaw, scheduleItems] = await Promise.all([
+            const [locRes, programItemsRaw, scheduleItems, categories] = await Promise.all([
                 dedupeAdminFetchWithTtl(WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL, init, HIERARCHY_TTL_MS),
                 fetchOptionSetItemsBySetKey("childcare_program_type", init),
                 fetchOptionSetItemsBySetKey("childcare_schedule_type", init),
+                fetchLocationProgramCategories(init, { includeInactive: true }),
             ]);
             if (cancelled) return;
 
             const locJson = (await locRes.json().catch(() => ({}))) as { locations?: InquiryChildPlacementHierarchyRow[] };
             setHierarchy(Array.isArray(locJson.locations) ? locJson.locations : []);
             setProgramItems(programItemsRaw as InquiryChildProgramOptionSetItem[]);
+            setLocationCategories(categories);
             setScheduleOptions(mapOptionItemsToSelectOptions(scheduleItems));
             setLoading(false);
         })();
@@ -91,7 +96,7 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
             loading,
             siteOptions,
             programOptionsForSite: (siteId: string) =>
-                resolveProgramsOfferedForSite(hierarchy, siteId, programItems),
+                resolveProgramsOfferedForSite(hierarchy, siteId, programItems, locationCategories),
             roomOptionsForSiteAndProgram: (siteId: string, programKey: string) =>
                 resolveRoomsForSiteAndProgram(hierarchy, siteId, programKey || undefined),
             scheduleOptions,
@@ -102,7 +107,7 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
                 return [];
             },
         }),
-        [hierarchy, loading, programItems, scheduleOptions, siteOptions],
+        [hierarchy, loading, programItems, locationCategories, scheduleOptions, siteOptions],
     );
 
     return (

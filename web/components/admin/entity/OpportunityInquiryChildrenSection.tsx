@@ -33,6 +33,7 @@ import {
 } from "@/lib/admin/drawer/inquiryChildPlacementScope";
 import { applyInquiryChildPlacementFieldChange } from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
 import { resolveProgramsOfferedForSite } from "@/lib/admin/location/inquiryChildPlacementOptions";
+import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -324,6 +325,7 @@ export default function OpportunityInquiryChildrenSection({
         : "rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm text-alloy-midnight/60";
 
     const [programItems, setProgramItems] = useState<OptionItem[]>([]);
+    const [locationProgramCategories, setLocationProgramCategories] = useState<LocationProgramCategoryRow[]>([]);
     const [scheduleItems, setScheduleItems] = useState<OptionItem[]>([]);
     const [locationItems, setLocationItems] = useState<LocationItem[]>([]);
     const [statusItems, setStatusItems] = useState<StatusRow[]>([]);
@@ -427,7 +429,12 @@ export default function OpportunityInquiryChildrenSection({
                 const progRes = bundle.programRes;
                 const schedRes = bundle.scheduleRes;
                 const locRes = bundle.locationsRes;
+                const categoriesRes = bundle.programCategoriesRes;
                 const progJson = (await progRes.json().catch(() => ({}))) as { items?: OptionItem[]; error?: string };
+                const categoriesJson = (await categoriesRes.json().catch(() => ({}))) as {
+                    categories?: LocationProgramCategoryRow[];
+                    error?: string;
+                };
                 const schedJson = (await schedRes.json().catch(() => ({}))) as { items?: OptionItem[]; error?: string };
                 const locJson = (await locRes.json().catch(() => ({}))) as {
                     locations?: Array<{
@@ -446,6 +453,9 @@ export default function OpportunityInquiryChildrenSection({
                 if (loadPlacementLabels || loadEditorEnrichment) {
                     setProgramItems((progJson.items ?? []).slice());
                     setScheduleItems((schedJson.items ?? []).slice());
+                    if (categoriesRes.ok) {
+                        setLocationProgramCategories((categoriesJson.categories ?? []).slice());
+                    }
                 }
                 if (loadEditorEnrichment) {
                     if (!locRes.ok) throw new Error(locJson.error ?? "Failed to load locations");
@@ -529,7 +539,14 @@ export default function OpportunityInquiryChildrenSection({
         () => filterInquiryChildSiteLocationOptions(locationItems),
         [locationItems]
     );
-    const programLabelByKey = useMemo(() => new Map(programItems.map((i) => [i.item_key, i.label ?? i.item_key])), [programItems]);
+    const programLabelByKey = useMemo(() => {
+        const m = new Map(programItems.map((i) => [i.item_key, i.label ?? i.item_key]));
+        for (const c of locationProgramCategories) {
+            if (c.is_active === false) continue;
+            m.set(c.key, c.label);
+        }
+        return m;
+    }, [programItems, locationProgramCategories]);
     const siteLabelById = useMemo(
         () => new Map(siteOptions.map((i) => [i.id, i.label])),
         [siteOptions]
@@ -1028,7 +1045,12 @@ export default function OpportunityInquiryChildrenSection({
                             : "—");
                     const programFieldsDisabled = isInquiryChildPlacementProgramFieldDisabled(st.location_id);
                     const rowProgramOptions = placementSelectOptionsWithCurrent(
-                        resolveProgramsOfferedForSite(locationItems, st.location_id, programItems),
+                        resolveProgramsOfferedForSite(
+                            locationItems,
+                            st.location_id,
+                            programItems,
+                            locationProgramCategories
+                        ),
                         st.desired_program_type,
                         (k) => programLabelByKey.get(k) ?? k,
                     );

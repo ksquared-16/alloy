@@ -1,4 +1,9 @@
 import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
+import {
+    locationProgramCategoriesToSelectOptions,
+    resolveActiveProgramCategoriesForSite,
+    type LocationProgramCategoryRow,
+} from "@/lib/locations/locationProgramCategories";
 
 export type InquiryChildPlacementHierarchyRow = {
     id: string;
@@ -56,16 +61,26 @@ function programLabelAndOrder(items: InquiryChildProgramOptionSetItem[]): {
 }
 
 /**
- * Active program options offered at a site — derived from active unit rows'
- * `metadata.category` (childcare_program_type item_key). No programs table in V1.
+ * Active program options offered at a site.
+ * Prefers `location_program_categories` when provided; otherwise derives from unit
+ * `metadata.category` keyed against legacy program item labels.
  */
 export function resolveProgramsOfferedForSite(
     locations: InquiryChildPlacementHierarchyRow[],
     siteId: string | null | undefined,
-    programItems: InquiryChildProgramOptionSetItem[]
+    programItems: InquiryChildProgramOptionSetItem[],
+    locationCategories?: ReadonlyArray<LocationProgramCategoryRow>
 ): InquiryChildPlacementSelectOption[] {
     const site = (siteId ?? "").trim();
     if (!site) return [];
+
+    const configured = resolveActiveProgramCategoriesForSite(locationCategories ?? [], site);
+    if (configured.length > 0) {
+        return locationProgramCategoriesToSelectOptions(configured).map((o) => ({
+            value: o.value,
+            label: o.label,
+        }));
+    }
 
     const validKeys = activeProgramKeySet(programItems);
     const { labelByKey, orderByKey } = programLabelAndOrder(programItems);

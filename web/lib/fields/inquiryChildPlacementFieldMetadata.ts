@@ -40,6 +40,7 @@ export const INQUIRY_CHILD_PLACEMENT_FIELD_METADATA: Record<
         depends_on_field_key: "location_id",
         entity_scope: "inquiry_child",
     },
+    desired_program_category_id: undefined,
     program_room_cohort_key: {
         ocm_field_key: "program_room_cohort_key",
         control_type: "select",
