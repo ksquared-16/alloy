@@ -17,7 +17,13 @@ import {
     type DrawerViewModelCacheSurface,
 } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
+import {
+    logLinkedDrawerVmResolve,
+    logLinkedDrawerVmStart,
+    type LinkedDrawerVmPerfPhase,
+} from "@/lib/adminV2/viewModel/drawer/linkedDrawerVmPerf";
 import { resolveOpportunityDrawerVmCacheContext } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerVmCacheScope";
+import { resolvePersonDrawerVmCacheContext } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmCacheScope";
 import { resolveWarmDrawerTargetsFromOpportunityRecord } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveWarmDrawerTargetsFromOpportunityRecord";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -33,6 +39,8 @@ export type PrepareDrawerViewModelParams = {
     presentationEmphasis?: string | null;
     opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
     init?: RequestInit;
+    /** Prefetch hover warm vs linked drawer swap open — drives linked perf telemetry phases. */
+    linkedPerfPhase?: LinkedDrawerVmPerfPhase;
 };
 
 function personSurface(params: PrepareDrawerViewModelParams): DrawerViewModelCacheSurface {
@@ -106,13 +114,34 @@ export async function prepareDrawerViewModel(
 
     if (params.entityType === "persons") {
         const surface = personSurface(params);
+        const linkedPerfPhase = params.linkedPerfPhase ?? "swap";
+        const resolvedContext = resolvePersonDrawerVmCacheContext({
+            workspaceContext: params.opportunityWorkspaceContext ?? null,
+            context: params.context ?? null,
+        });
+
+        logLinkedDrawerVmStart({
+            kind: linkedPerfPhase,
+            entityType: "persons",
+            entityId,
+            surface,
+        });
+
         const cached = peekDrawerViewModelCacheEntry({
             entityType: "persons",
             entityId,
             surface,
-            context: params.context,
+            context: resolvedContext,
         });
         if (cached && cached.entityType === "persons") {
+            logLinkedDrawerVmResolve({
+                kind: linkedPerfPhase,
+                entityType: "persons",
+                entityId,
+                openPath: "cache_hit",
+                durationMs: 0,
+                surface,
+            });
             logDrawerVmRuntimeDiagnostic("drawer_vm_model_swap_cache_hit", {
                 entity_type: "persons",
                 entity_id: entityId,
@@ -126,26 +155,21 @@ export async function prepareDrawerViewModel(
                 await loadChildDrawerViaViewModel(entityId, {
                     composeDepth: "first_paint",
                     init: params.init ?? workspaceDataFetchInit(),
+                    cacheContext: resolvedContext,
+                    workspaceContext: params.opportunityWorkspaceContext ?? null,
+                    linkedPerfPhase,
                 })
             :   await loadPersonDrawerViaViewModel(entityId, {
                     openSource: params.openSource,
                     presentationEmphasis: params.presentationEmphasis,
                     composeDepth: "first_paint",
                     init: params.init ?? workspaceDataFetchInit(),
+                    cacheContext: resolvedContext,
+                    workspaceContext: params.opportunityWorkspaceContext ?? null,
+                    linkedPerfPhase,
                 });
         if (!result.ok) return null;
 
-        putDrawerViewModelCacheEntry(
-            {
-                entityType: "persons",
-                entityId,
-                surface: surface as "person:parent" | "person:generic" | "child",
-                preload: result.preload,
-                generation: result.preload.viewModel?.generation ?? null,
-                cachedAt: Date.now(),
-            },
-            params.context
-        );
         return { entityType: "persons", entityId, preload: result.preload };
     }
 
@@ -185,7 +209,8 @@ function warmPersonDrawerTarget(
     personId: string,
     ctx: DrawerViewModelCacheContext | null,
     openSource: string,
-    presentationEmphasis?: string | null
+    presentationEmphasis?: string | null,
+    ws?: { work_unit_id: string; department_id: string } | null
 ): void {
     void prepareDrawerViewModelDeduped({
         entityType: "persons",
@@ -193,6 +218,8 @@ function warmPersonDrawerTarget(
         context: ctx,
         openSource,
         presentationEmphasis: presentationEmphasis ?? null,
+        opportunityWorkspaceContext: ws ?? null,
+        linkedPerfPhase: "prefetch",
     })
         .then((preload) => {
             if (!preload) {
@@ -214,8 +241,13 @@ function warmPersonDrawerTarget(
         });
 }
 
-function warmChildDrawerTarget(personId: string, ctx: DrawerViewModelCacheContext | null, openSource: string): void {
-    warmPersonDrawerTarget(personId, ctx, openSource, "child_lifecycle");
+function warmChildDrawerTarget(
+    personId: string,
+    ctx: DrawerViewModelCacheContext | null,
+    openSource: string,
+    ws?: { work_unit_id: string; department_id: string } | null
+): void {
+    warmPersonDrawerTarget(personId, ctx, openSource, "child_lifecycle", ws);
 }
 
 function warmOpportunityDrawerTarget(
@@ -228,12 +260,14 @@ function warmOpportunityDrawerTarget(
         entityId: oppId,
         context: ctx,
         opportunityWorkspaceContext: ws,
+        linkedPerfPhase: "prefetch",
     });
 }
 
 function warmHouseholdLinksFromPersonRecord(
     record: Record<string, unknown>,
-    ctx: DrawerViewModelCacheContext | null
+    ctx: DrawerViewModelCacheContext | null,
+    ws?: { work_unit_id: string; department_id: string } | null
 ): void {
     const childLinks = record._household_child_links;
     if (Array.isArray(childLinks)) {
@@ -241,7 +275,7 @@ function warmHouseholdLinksFromPersonRecord(
             if (!raw || typeof raw !== "object") continue;
             const childPersonId = trimId((raw as { person_id?: unknown }).person_id);
             if (!childPersonId) continue;
-            warmChildDrawerTarget(childPersonId, ctx, "person_household_link");
+            warmChildDrawerTarget(childPersonId, ctx, "person_household_link", ws);
         }
     }
 
@@ -251,7 +285,7 @@ function warmHouseholdLinksFromPersonRecord(
             if (!raw || typeof raw !== "object") continue;
             const adultPersonId = trimId((raw as { person_id?: unknown }).person_id);
             if (!adultPersonId) continue;
-            warmPersonDrawerTarget(adultPersonId, ctx, "person_household_link");
+            warmPersonDrawerTarget(adultPersonId, ctx, "person_household_link", undefined, ws);
         }
     }
 
@@ -261,7 +295,7 @@ function warmHouseholdLinksFromPersonRecord(
             if (!raw || typeof raw !== "object") continue;
             const siblingPersonId = trimId((raw as { person_id?: unknown }).person_id);
             if (!siblingPersonId) continue;
-            warmChildDrawerTarget(siblingPersonId, ctx, "person_household_link");
+            warmChildDrawerTarget(siblingPersonId, ctx, "person_household_link", ws);
         }
     }
 
@@ -283,7 +317,8 @@ export function warmRelatedDrawerViewModels(params: {
                 target.personId,
                 ctx,
                 target.openSource,
-                target.presentationEmphasis
+                target.presentationEmphasis,
+                ws
             );
         }
         return;
@@ -302,7 +337,7 @@ export function warmRelatedDrawerViewModels(params: {
         if (enrollmentOppId && ws && enrollmentOppId !== oppId) {
             warmOpportunityDrawerTarget(enrollmentOppId, ctx, ws);
         }
-        warmHouseholdLinksFromPersonRecord(params.record, ctx);
+        warmHouseholdLinksFromPersonRecord(params.record, ctx, ws);
     }
 }
 
@@ -325,7 +360,10 @@ export function drawerViewModelSwapCacheKey(params: PrepareDrawerViewModelParams
             entityType: "persons",
             entityId,
             surface: personSurface(params),
-            context: params.context,
+            context: resolvePersonDrawerVmCacheContext({
+                workspaceContext: params.opportunityWorkspaceContext ?? null,
+                context: params.context ?? null,
+            }),
         });
     }
     return null;

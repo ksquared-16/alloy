@@ -93,21 +93,36 @@ export function peekDrawerViewModelCacheEntry(params: {
     return hit;
 }
 
+/** True when another scoped cache entry exists for the same entity id + surface. */
+export function drawerViewModelCacheEntryExistsForOtherScope(
+    entityType: AdminDrawerEntityType,
+    entityId: string,
+    surface: DrawerViewModelCacheSurface,
+    expectedKey: string
+): boolean {
+    const id = entityId.trim();
+    if (!id) return false;
+    for (const [key, entry] of cache.entries()) {
+        if (entry.entityType !== entityType) continue;
+        if (entry.entityId.trim() !== id) continue;
+        if (entry.surface !== surface) continue;
+        if (key === expectedKey) continue;
+        return true;
+    }
+    return false;
+}
+
 /** True when another scoped cache entry exists for the same opportunity entity id. */
 export function opportunityDrawerVmCacheEntryExistsForOtherScope(
     opportunityId: string,
     expectedKey: string
 ): boolean {
-    const id = opportunityId.trim();
-    if (!id) return false;
-    for (const [key, entry] of cache.entries()) {
-        if (entry.entityType !== "opportunities") continue;
-        if (entry.entityId.trim() !== id) continue;
-        if (entry.surface !== "opportunity") continue;
-        if (key === expectedKey) continue;
-        return true;
-    }
-    return false;
+    return drawerViewModelCacheEntryExistsForOtherScope(
+        "opportunities",
+        opportunityId,
+        "opportunity",
+        expectedKey
+    );
 }
 
 export function clearDrawerViewModelSessionCacheForTests(): void {
