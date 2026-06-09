@@ -12,6 +12,7 @@ import {
     lifecycleStageQueueRowPreviewFields,
 } from "@/lib/lifecycle/lifecycleStageQueuePresentation";
 import type { QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
+import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import type { QueueUiConfig, QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { getQueueUiConfig, mergeQueueRowPreviewFieldLabels } from "@/lib/ui-v2/queueUiConfig";
 import { ENROLLMENT_PIPELINE_WORK_UNIT_KEY } from "@/lib/lifecycle/enrollmentProcessStageQueueKeys";
@@ -31,6 +32,7 @@ export type LifecycleStageWorkUnitMetadata = {
     lifecycle_stage_label?: string;
     lifecycle_process_id?: string;
     status_keys?: string[];
+    queue_membership_v1?: QueueMembershipV1;
 };
 
 export function stageKeyFromLifecycleWorkUnitMetadata(metadata: unknown): string | null {

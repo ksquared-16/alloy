@@ -289,7 +289,7 @@ Aligned with child-grain Phase C–F but **builder-metadata-first** so lane flip
 | Phase | Scope | Production behavior |
 |-------|--------|---------------------|
 | **A — Metadata shape** | TS types, parser for `queue_membership_v1`, extend `parseLifecycleBuilderV1` (ignore unknown fields safely), API read path returns metadata when present | **No change** — parser accepts, runtime ignores (**types/parser/defaults shipped** — see §Phase A implementation note) |
-| **B — Seed defaults** | Backfill enrollment template stages on builder-owned departments; mirror to `lifecycle_wu_*` metadata; optional migration script | **No change** — metadata only |
+| **B — Seed defaults** | Backfill enrollment template stages on builder-owned departments; mirror to `lifecycle_wu_*` metadata; optional migration script | **No change** — metadata only (**shipped** — see §Phase B implementation note) |
 | **C — Runtime read behind flag** | `QueueService` reads `queue_membership_v1` when flag on; fallback to hardcoded predicates | **No change** when flag unset |
 | **D — Flip Enrolled** | Replace `enrollment_completed` hardcoded list with builder config (staging first) | Changes only when flag + lane enabled |
 | **E — Flip Enrolling / Tour** | Same for `enrollment_offers`, `tours` | Staged per lane |
@@ -345,7 +345,8 @@ Aligned with child-grain Phase C–F but **builder-metadata-first** so lane flip
 - [x] Phases A–F defined with no-production-change gate
 - [x] Conflicts and sequence documented
 - [x] Phase A: types, parser, enrollment defaults, tests
-- [ ] Phase B–F: seed, save path, runtime flag, lane flips
+- [x] Phase B: seed plan/apply + script (metadata only)
+- [ ] Phase C–F: runtime flag, save path, lane flips
 
 ---
 
@@ -370,6 +371,83 @@ Aligned with child-grain Phase C–F but **builder-metadata-first** so lane flip
 - Seed script (Phase B)
 
 **Next sprint:** Phase B can seed `queue_membership_v1` onto enrollment template stages and mirror to `lifecycle_wu_*` metadata using this contract — still without production queue behavior change until Phase C behind flag.
+
+---
+
+## Phase B implementation note (2026-06-09)
+
+**Status:** Metadata seed landed — **no `queue_definition` or QueueService changes**.
+
+| Deliverable | Location |
+|-------------|----------|
+| Seed plan + apply helpers | `web/lib/lifecycle/seedEnrollmentQueueMembershipV1.ts` |
+| CLI script (dry-run default) | `web/scripts/seedEnrollmentQueueMembershipV1.ts` |
+| Builder parse preserves membership | `lifecycleBuilderConfig.ts` — `queue_membership_v1` on stage record |
+| Work unit metadata type | `lifecycleStageWorkUnit.ts` — optional `queue_membership_v1` |
+| Tests | `web/tests/lifecycle/seedEnrollmentQueueMembershipV1.test.ts` |
+
+**Behavior:**
+
+- Finds departments with active `lifecycle_builder_v1` process `key = enrollment`.
+- Seeds each canonical stage (`lead`, `qualification`, `tour`, `waitlist`, `enrollment`, `enrolled`) when `queue_membership_v1` is **missing**.
+- Skips stages/work units with **valid** explicit `queue_membership_v1` (does not overwrite).
+- Skips invalid explicit blobs and unknown stage keys (`enrolling`, custom stages).
+- Denormalizes matching membership to `lifecycle_wu_{stage}` work unit **metadata only**.
+- Apply path verifies `queue_definition` JSON unchanged after work unit update.
+
+**Dry run:**
+
+```bash
+cd web
+ORG_ID=<org_uuid> npx tsx --tsconfig tsconfig.json scripts/seedEnrollmentQueueMembershipV1.ts
+```
+
+**Apply (metadata only):**
+
+```bash
+cd web
+CONFIRM_QUEUE_MEMBERSHIP_SEED=1 ORG_ID=<org_uuid> npx tsx --tsconfig tsconfig.json scripts/seedEnrollmentQueueMembershipV1.ts
+```
+
+Optional: `DEPARTMENT_ID=<dept_uuid>` scopes to one department.
+
+**Verify in Supabase (after apply):**
+
+```sql
+-- Builder stage blob (example department)
+select
+  d.id,
+  d.name,
+  jsonb_path_query_array(
+    d.metadata->'lifecycle_builder_v1'->'processes',
+    '$[*] ? (@.key == "enrollment").stages[*].{key: key, membership: queue_membership_v1}'
+  ) as enrollment_stage_membership
+from departments d
+where d.org_id = '<org_uuid>'
+  and d.metadata ? 'lifecycle_builder_v1';
+
+-- Per-stage work unit metadata
+select
+  wu.id,
+  wu.key,
+  wu.metadata->'lifecycle_stage_key' as stage_key,
+  wu.metadata->'queue_membership_v1' as queue_membership_v1
+from work_units wu
+where wu.org_id = '<org_uuid>'
+  and wu.key like 'lifecycle_wu_%'
+order by wu.key;
+```
+
+Expect `subject_type` / `count_unit` / `included_disposition_keys` per §3 defaults; Lead stage has `included_status_keys: ["new_inquiry"]` and empty disposition list.
+
+**Intentionally not wired yet:**
+
+- `saveLifecycleStageRuntimeConfig` persistence on operator save
+- `QueueService` / `ALLOY_QUEUE_CHILD_GRAIN_LANES` reading metadata
+- Lifecycle Builder UI grain/disposition picker
+- `queue_definition` filter materialization from membership
+
+**Next:** Phase C — runtime read behind flag; then lane flips from seeded metadata.
 
 ---
 

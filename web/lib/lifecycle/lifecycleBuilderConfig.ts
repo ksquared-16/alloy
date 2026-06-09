@@ -11,6 +11,8 @@ import {
 } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import type { LifecyclePrimaryEntityKey } from "@/lib/lifecycle/lifecycleConfiguration";
+import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 
 export const LIFECYCLE_BUILDER_METADATA_KEY = "lifecycle_builder_v1" as const;
 
@@ -22,6 +24,8 @@ export type LifecycleBuilderStageRecord = {
     description?: string;
     sort_order: number;
     is_active: boolean;
+    /** Phase B — subject-grain queue membership metadata (optional until seeded). */
+    queue_membership_v1?: QueueMembershipV1;
 };
 
 export type LifecycleBuilderProcessRecord = {
@@ -111,6 +115,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             const skey = typeof sr.key === "string" ? sr.key.trim() : "";
             const label = typeof sr.label === "string" ? sr.label.trim() : "";
             if (!sid || !skey || !label) continue;
+            const queueMembership = parseQueueMembershipV1(sr.queue_membership_v1);
             stages.push({
                 id: sid,
                 key: skey,
@@ -118,6 +123,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 description: typeof sr.description === "string" ? sr.description.trim() : undefined,
                 sort_order: typeof sr.sort_order === "number" ? sr.sort_order : stages.length,
                 is_active: sr.is_active !== false,
+                ...(queueMembership ? { queue_membership_v1: queueMembership } : {}),
             });
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
