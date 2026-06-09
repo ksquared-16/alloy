@@ -3,14 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { applyActionIntakePasteExtraction } from "@/lib/lifecycle/applyActionIntakePasteExtraction";
 import { parseCreateLeadIntakeText } from "@/lib/lifecycle/parseCreateLeadIntakeText";
-import { resolveCreateLeadActionIntakeSpec } from "@/lib/lifecycle/resolveActionIntakeSpec";
-import { validateActionIntakePayload } from "@/lib/lifecycle/resolveActionIntakeSpec";
+import {
+    bosSuggestionsFromExtraction,
+    createLeadParserSpec,
+    validateCreateLeadPlatformMinimum,
+} from "@/lib/admin/actions/createLeadPlatformGather";
 import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
 
-const spec = resolveCreateLeadActionIntakeSpec({
-    department_id: "dept-1",
-    operator_stage: "lead",
-});
+const spec = createLeadParserSpec("dept-1");
 
 describe("parseCreateLeadIntakeText", () => {
     it("extracts labeled parent, child, contact, source, and notes from paste", () => {
@@ -37,6 +37,15 @@ describe("parseCreateLeadIntakeText", () => {
         expect(byKey.intake_notes).toContain("toddler program");
     });
 
+    it("does not treat call-note phrasing as a high-confidence parent name", () => {
+        const result = parseCreateLeadIntakeText({
+            text: "Johnson called today about toddler care",
+            spec,
+        });
+        const nameFields = result.fields.filter((f) => f.payload_key === "first_name" || f.payload_key === "last_name");
+        expect(nameFields.every((f) => f.confidence !== "high")).toBe(true);
+    });
+
     it("applies extraction into draft values without overwriting manual edits", () => {
         const extraction = parseCreateLeadIntakeText({
             text: "Parent: Ada Lovelace\nEmail: ada@example.com",
@@ -51,36 +60,11 @@ describe("parseCreateLeadIntakeText", () => {
         expect(applied.values.email).toBe("ada@example.com");
         expect(applied.field_meta.email?.from_paste).toBe(true);
     });
-
-    it("overwrites prior paste-tagged fields on re-parse", () => {
-        const first = parseCreateLeadIntakeText({
-            text: "Parent: Ada Lovelace\nEmail: old@example.com",
-            spec,
-        });
-        const second = parseCreateLeadIntakeText({
-            text: "Parent: Grace Hopper\nEmail: grace@example.com",
-            spec,
-        });
-        let state = applyActionIntakePasteExtraction({
-            current_values: { first_name: "", last_name: "", email: "", phone: "" },
-            current_meta: {},
-            extraction: first,
-        });
-        state = applyActionIntakePasteExtraction({
-            current_values: state.values,
-            current_meta: state.field_meta,
-            extraction: second,
-            overwrite: true,
-        });
-        expect(state.values.first_name).toBe("Grace");
-        expect(state.values.last_name).toBe("Hopper");
-        expect(state.values.email).toBe("grace@example.com");
-    });
 });
 
-describe("create lead manual validation", () => {
-    it("blocks review when required person fields are missing", () => {
-        const invalid = validateActionIntakePayload(spec, {
+describe("create lead platform minimum validation", () => {
+    it("blocks review when platform minimum is missing", () => {
+        const invalid = validateCreateLeadPlatformMinimum({
             first_name: "Ada",
             last_name: "",
             email: "",
@@ -90,7 +74,7 @@ describe("create lead manual validation", () => {
     });
 
     it("allows review when platform minimum is satisfied", () => {
-        const valid = validateActionIntakePayload(spec, {
+        const valid = validateCreateLeadPlatformMinimum({
             first_name: "Ada",
             last_name: "Lovelace",
             email: "ada@example.com",
@@ -100,8 +84,20 @@ describe("create lead manual validation", () => {
     });
 });
 
-describe("CreateLeadModal premium intake", () => {
-    it("renders paste-assisted intake step and review flow markers", () => {
+describe("BOS suggestions from extraction", () => {
+    it("maps parser output to labeled suggestions", () => {
+        const extraction = parseCreateLeadIntakeText({
+            text: "Parent: Ada Lovelace\nEmail: ada@example.com",
+            spec,
+        });
+        const suggestions = bosSuggestionsFromExtraction(extraction);
+        expect(suggestions.some((s) => s.field_label === "First name")).toBe(true);
+        expect(suggestions.some((s) => s.suggested_value === "ada@example.com")).toBe(true);
+    });
+});
+
+describe("CreateLead Action Workspace", () => {
+    it("renders action workspace gather step", () => {
         const html = renderToStaticMarkup(
             createElement(CreateLeadModal, {
                 open: true,
@@ -111,12 +107,10 @@ describe("CreateLeadModal premium intake", () => {
             })
         );
 
-        expect(html).toContain('data-testid="create-lead-modal"');
-        expect(html).toContain('data-testid="create-lead-intake-step"');
-        expect(html).toContain('data-testid="action-intake-paste-panel"');
-        expect(html).toContain('data-testid="action-intake-parse-button"');
-        expect(html).toContain('data-testid="create-lead-enter-manually-button"');
-        expect(html).toContain("Parse with BOS");
-        expect(html).toContain("nothing is created until you confirm");
+        expect(html).toContain('data-testid="create-lead-action-workspace"');
+        expect(html).toContain('data-testid="create-lead-gather-step"');
+        expect(html).toContain('data-testid="action-workspace-analyze-button"');
+        expect(html).toContain("BOS Intake");
+        expect(html).not.toContain('data-testid="create-lead-gather-fields"');
     });
 });

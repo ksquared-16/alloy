@@ -60,12 +60,28 @@ function splitPersonName(raw: string): { first: string; last: string } | null {
     return { first: parts[0] ?? "", last: parts.slice(1).join(" ") };
 }
 
+const NAME_STOP_WORDS = new Set([
+    "called",
+    "emailed",
+    "texted",
+    "reached",
+    "contacted",
+    "inquiry",
+    "inquired",
+    "today",
+    "yesterday",
+    "about",
+    "regarding",
+]);
+
 function looksLikeNameLine(line: string): boolean {
     const t = trim(line);
     if (!t || t.includes("@")) return false;
     if (PHONE_RE.test(t)) return false;
     const parts = t.split(/\s+/).filter(Boolean);
-    return parts.length >= 2 && parts.length <= 4 && /^[A-Za-z]/.test(parts[0] ?? "");
+    if (parts.length < 2 || parts.length > 4 || !/^[A-Za-z]/.test(parts[0] ?? "")) return false;
+    if (parts.some((p) => NAME_STOP_WORDS.has(p.toLowerCase()))) return false;
+    return true;
 }
 
 function fieldByPayloadKey(

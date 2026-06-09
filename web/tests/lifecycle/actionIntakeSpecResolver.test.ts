@@ -151,40 +151,36 @@ describe("action intake spec resolver P0", () => {
     });
 });
 
-describe("create lead modal and execute wiring", () => {
-    it("modal fetches action intake spec and renders dynamic fields", () => {
+describe("create lead action workspace wiring", () => {
+    it("create lead uses action workspace with platform minimum only", () => {
         const modal = read("components/admin/opportunity/actions/CreateLeadModal.tsx");
-        expect(modal).toContain("fetchActionIntakeSpec");
-        expect(modal).toContain("ActionIntakeFieldGroups");
-        expect(modal).toContain('dataTestIdPrefix="create-lead"');
-        expect(modal).toContain("validateActionIntakePayload");
-        expect(modal).toContain("ActionIntakePastePanel");
-        expect(modal).toContain("createLeadIntakePasteParser");
+        expect(modal).toContain("ActionWorkspaceShell");
+        expect(modal).toContain("validateCreateLeadPlatformMinimum");
+        expect(modal).not.toContain("fetchActionIntakeSpec");
+        expect(modal).not.toContain("validateActionIntakePayload");
     });
 
-    it("preview step appears before confirm execute", () => {
+    it("follows gather review execute success steps", () => {
         const modal = read("components/admin/opportunity/actions/CreateLeadModal.tsx");
-        expect(modal).toContain("create-lead-intake-step");
-        expect(modal).toContain("create-lead-preview-step");
-        expect(modal).toContain("create-lead-review-button");
-        expect(modal).toContain("create-lead-confirm-button");
-        expect(modal).toContain('step === "preview"');
+        expect(modal).toContain("create-lead-gather-step");
+        expect(modal).toContain("create-lead-review-step");
+        expect(modal).toContain("ActionWorkspaceExecuteState");
+        expect(modal).toContain("ActionWorkspaceSuccessState");
+        expect(modal).toContain("onCreated");
     });
 
     it("confirm uses existing executeCreateLeadFromModal path", () => {
         const modal = read("components/admin/opportunity/actions/CreateLeadModal.tsx");
-        expect(modal).toContain("mapActionIntakeValuesToCreateLeadPayload");
+        expect(modal).toContain("mapCreateLeadGatherToExecutePayload");
         const client = read("lib/admin/actions/entryLifecycleActionClient.ts");
         expect(client).toContain('action_key: "create_lead"');
         expect(client).toContain("CREATE_LEAD_ACTION_ENTITY_ID");
-        expect(read("app/api/admin/lifecycle/action-intake-spec/route.ts")).toContain(
-            "resolveActionIntakeSpec"
-        );
     });
 
-    it("missing required fields surface before review", () => {
+    it("BOS suggestions require apply before field write", () => {
         const modal = read("components/admin/opportunity/actions/CreateLeadModal.tsx");
-        expect(modal).toContain("create-lead-missing-required");
-        expect(modal).toContain("!canReview");
+        expect(modal).toContain("ActionWorkspaceBosSuggestions");
+        expect(modal).toContain("applySuggestions");
+        expect(modal).not.toContain("applyActionIntakePasteExtraction");
     });
 });

@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/06_2026/create_lead_action_ux_foundation.md`  
 **Date:** 2026-06-08  
-**Status:** Implemented (V1 hybrid intake + deterministic BOS paste parser)
+**Status:** Closed — superseded by `docs/system/action-workspace-foundation.md` (Action Workspace V1)
 
 ## Goal
 
@@ -96,6 +96,7 @@ sequenceDiagram
 ## 4. Follow-ups
 
 - Persist child_* fields on execute (inquiry child insert pattern)
+- **Program / schedule / room selects (not textboxes)** — see [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md) + [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md): shared select convergence, location-first cascade, Settings → Locations tabs (Programs under Locations, not standalone)
 - AI-backed parser behind same `ActionIntakePasteParser` interface
 - Server-side execute validation against intake spec
 - Success toast inline before drawer open (optional polish)
