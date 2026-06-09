@@ -6545,6 +6545,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 surface: "right_rail",
                             });
                             invalidate({ entity_type: "opportunity", entity_id: opportunityId, action_key: "create_lead" });
+                            return { opportunity_id: opportunityId };
+                        }}
+                        onCreated={(opportunityId) => {
                             openDrawer(buildOpportunityDrawerOpenParams(opportunityId));
                         }}
                     />
