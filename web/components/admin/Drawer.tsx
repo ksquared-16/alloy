@@ -89,6 +89,10 @@ interface DrawerProps {
      * header with a single proof-layout header composition.
      */
     composedStickyHeader?: React.ReactNode;
+    /**
+     * Fixed footer chrome inside the drawer panel (below scroll body) — e.g. floating save bar.
+     */
+    panelFooterChrome?: React.ReactNode;
 }
 
 export default function Drawer({
@@ -115,6 +119,7 @@ export default function Drawer({
     recordModalTone,
     recordModalContextStyle,
     composedStickyHeader,
+    panelFooterChrome,
 }: DrawerProps) {
     const [portalReady, setPortalReady] = useState(false);
     useEffect(() => {
@@ -315,11 +320,16 @@ export default function Drawer({
             :   null}
             <div
                 data-adminv2-record-modal-scroll
-                className={`flex-1 overflow-y-auto min-h-0 ${isModal ? (cleaningRecordModalTone ? "px-4 py-2.5 sm:px-5 sm:py-3.5" : "px-4 py-3 sm:px-5 sm:py-4") : "p-6"} ${isV2 ? "[scrollbar-gutter:stable]" : "bg-admin-surface-card"}`}
+                className={`relative flex-1 overflow-y-auto min-h-0 ${isModal ? (cleaningRecordModalTone ? "px-4 py-2.5 sm:px-5 sm:py-3.5" : "px-4 py-3 sm:px-5 sm:py-4") : "p-6"} ${isV2 ? "[scrollbar-gutter:stable]" : "bg-admin-surface-card"}`}
                 style={modalBodyBg}
             >
                 {children}
             </div>
+            {panelFooterChrome != null && panelFooterChrome !== false ?
+                <div className="shrink-0 overflow-visible" data-adminv2-drawer-panel-footer="true">
+                    {panelFooterChrome}
+                </div>
+            :   null}
         </>
     ) : (
         <>

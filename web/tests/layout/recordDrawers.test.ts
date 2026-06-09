@@ -27,9 +27,12 @@ describe("Person drawer preset", () => {
         expect(doc.entityType).toBe("person");
         expect(titlesOf(doc)).toEqual([
             "Person Summary",
-            "Associated Children / Relationships",
-            "Communications / Recent Activity",
-            "Notes",
+            "Household",
+            "Connected Children",
+            "Contact Information",
+            "Notes / Recent Communication",
+            "Recent Activity",
+            "Documents",
         ]);
     });
     it("includes core summary fields + widget placeholders", () => {
@@ -37,8 +40,12 @@ describe("Person drawer preset", () => {
         expect(refs).toContain("person.primary_contact_name");
         expect(refs).toContain("person.primary_phone");
         expect(refs).toContain("person.primary_email");
+        expect(refs).toContain("household_children");
         expect(refs).toContain("recent_communication");
         expect(refs).toContain("notes");
+        expect(refs).toContain("household_summary");
+        expect(refs).toContain("connected_children");
+        expect(refs).toContain("last_touch");
     });
 });
 

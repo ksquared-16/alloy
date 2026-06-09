@@ -5,7 +5,7 @@
  * person relation handles; never substitute customer/household display names.
  */
 
-import { isOpaqueIdValue } from "./proofRecordContext";
+import { isOpaqueIdValue, pickEntityId } from "./proofRecordContext";
 
 export type OpportunityPrimaryContactPerson = {
     personId: string | null;
@@ -30,9 +30,10 @@ function pickDisplay(...values: unknown[]): string | null {
 export function resolveOpportunityPrimaryContactPerson(
     vmRecord: Record<string, unknown>,
 ): OpportunityPrimaryContactPerson {
-    const personId = pickDisplay(
+    const personId = pickEntityId(
         vmRecord._primary_person_id,
         vmRecord.primary_person_id,
+        vmRecord["opportunity.primary_person_id"],
         vmRecord["person.id"],
     );
 

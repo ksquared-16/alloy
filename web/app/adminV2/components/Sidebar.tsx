@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
     Building2,
@@ -13,7 +13,7 @@ import {
     PanelLeft,
     Settings,
 } from "lucide-react";
-import { neutral, brand } from "@/styles/tokens/colors";
+import { neutral, palette, derived } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
 import {
@@ -39,8 +39,7 @@ const WORKFLOWS_HREF = "/adminV2/workflows";
 const FORMS_HREF = "/adminV2/forms";
 const SETTINGS_HREF = "/adminV2/settings";
 
-const EXPANDED_PRIMARY_LINK =
-    "block w-full rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10";
+const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
 
 /** Nested queue rows under a department — indented, no icon, quieter than dept row. */
 const EXPANDED_QUEUE_LINK = "adminv2-sidebar-queue-link";
@@ -75,8 +74,6 @@ function filterDepts(depts: WorkspaceNavTreeDept[]): WorkspaceNavTreeDept[] {
         })
         .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
 }
-
-const primaryLinkStyle = { color: brand.primary } as CSSProperties;
 
 function SidebarNav({
     collapsed,
@@ -160,7 +157,6 @@ function SidebarNav({
             aria-label="Home"
             active={path === WORKSPACE}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
-            style={primaryLinkStyle}
         >
             {collapsed ? (
                 <Home size={20} strokeWidth={1.75} />
@@ -180,7 +176,6 @@ function SidebarNav({
             aria-label="Automations"
             active={onWorkflows}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
-            style={primaryLinkStyle}
         >
             {collapsed ? (
                 <GitBranch size={20} strokeWidth={1.75} />
@@ -200,7 +195,6 @@ function SidebarNav({
             aria-label="Forms"
             active={onForms}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
-            style={primaryLinkStyle}
         >
             {collapsed ? (
                 <FileText size={20} strokeWidth={1.75} />
@@ -220,7 +214,6 @@ function SidebarNav({
             aria-label="Settings"
             active={onSettings}
             className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
-            style={primaryLinkStyle}
         >
             {collapsed ? (
                 <Settings size={20} strokeWidth={1.75} />
@@ -236,14 +229,13 @@ function SidebarNav({
     const departmentTreeExpanded = (
         <div className="pt-2 min-h-0">
             <div
-                className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide"
-                style={{ color: neutral.textSecondary }}
+                className="adminv2-sidebar-section-label mb-1 flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide"
             >
                 <span>Departments</span>
                 {treeError ? <span className="normal-case font-medium text-red-700/70">Unavailable</span> : null}
             </div>
             {treeLoading && !deptsSorted.length ? (
-                <p className="px-2 py-2 text-xs text-alloy-midnight/50" aria-busy="true">
+                <p className="adminv2-sidebar-muted px-2 py-2 text-xs" aria-busy="true">
                     Loading departments…
                 </p>
             ) : null}
@@ -261,8 +253,7 @@ function SidebarNav({
                                 {hasChildren ? (
                                     <button
                                         type="button"
-                                        className="flex h-8 w-7 shrink-0 items-center justify-center rounded-md hover:bg-alloy-stone/10"
-                                        style={{ color: brand.primary }}
+                                        className="adminv2-sidebar-expand-btn flex h-8 w-7 shrink-0 items-center justify-center rounded-md"
                                         aria-expanded={isExpanded}
                                         aria-label={isExpanded ? `Collapse ${name}` : `Expand ${name}`}
                                         onClick={() => toggleDeptExpanded(d.id)}
@@ -280,7 +271,6 @@ function SidebarNav({
                                     href={deptHref}
                                     active={deptActive}
                                     className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK}`}
-                                    style={primaryLinkStyle}
                                     title={name}
                                 >
                                     <span className="inline-flex min-w-0 items-center gap-2">
@@ -292,7 +282,6 @@ function SidebarNav({
                             {hasChildren && isExpanded ? (
                                 <ul
                                     className="adminv2-sidebar-queue-list ml-8 list-none space-y-0.5 border-l pl-2.5"
-                                    style={{ borderColor: neutral.border }}
                                     role="group"
                                     aria-label={`${name} queues`}
                                 >
@@ -332,22 +321,55 @@ function SidebarNav({
 
     return (
         <aside
-            className="relative z-[100] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
+            className="adminv2-sidebar-shell relative z-[100] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
             style={{
                 width: railWidth,
-                backgroundColor: neutral.surface,
-                borderColor: neutral.border,
+                backgroundColor: palette.midnightForge,
+                borderColor: derived.topBarDivider,
+                color: neutral.surface,
             }}
         >
-            <button
-                type="button"
-                onClick={onToggle}
-                className="flex h-14 w-full flex-shrink-0 items-center justify-center hover:opacity-90 active:scale-[0.98] transition-transform"
-                style={{ color: brand.primary }}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-                {collapsed ? <PanelLeft size={20} /> : <PanelLeftClose size={20} />}
-            </button>
+            {collapsed ? (
+                <>
+                    <div className="adminv2-sidebar-brand flex shrink-0 items-center px-2 pt-3 pb-1" aria-label="Alloy">
+                        <img
+                            src="/brand/alloy-brandmark-gradient.svg"
+                            alt=""
+                            width={28}
+                            height={28}
+                            className="h-7 w-7 shrink-0"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onToggle}
+                        className="adminv2-sidebar-toggle flex h-10 w-full flex-shrink-0 items-center justify-center hover:opacity-90 active:scale-[0.98] transition-transform"
+                        aria-label="Expand sidebar"
+                    >
+                        <PanelLeft size={20} />
+                    </button>
+                </>
+            ) : (
+                <div className="adminv2-sidebar-brand-row flex h-14 w-full flex-shrink-0 items-center gap-2 px-2">
+                    <div className="adminv2-sidebar-brand flex min-w-0 flex-1 items-center" aria-label="Alloy">
+                        <img
+                            src="/brand/alloy-brandmark-gradient.svg"
+                            alt=""
+                            width={36}
+                            height={36}
+                            className="h-9 w-9 shrink-0"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onToggle}
+                        className="adminv2-sidebar-toggle flex h-9 w-9 shrink-0 items-center justify-center rounded-md hover:opacity-90 active:scale-[0.98] transition-transform"
+                        aria-label="Collapse sidebar"
+                    >
+                        <PanelLeftClose size={20} />
+                    </button>
+                </div>
+            )}
 
             {collapsed ? (
                 <nav className="flex min-h-0 flex-1 flex-col px-1.5 pb-2" aria-label="Workspace navigation">
@@ -357,25 +379,19 @@ function SidebarNav({
                         {formsLink}
                     </div>
                     <div className="min-h-0 flex-1" aria-hidden />
-                    <div
-                        className="flex shrink-0 flex-col items-stretch gap-1 border-t pt-1"
-                        style={{ borderColor: neutral.border }}
-                    >
+                    <div className="adminv2-sidebar-footer flex shrink-0 flex-col items-stretch gap-1 border-t pt-1">
                         {settingsLink}
                     </div>
                 </nav>
             ) : (
-                <div
-                    className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-3 text-[13px]"
-                    style={{ color: neutral.textSecondary }}
-                >
+                <div className="adminv2-sidebar-body flex min-h-0 flex-1 flex-col gap-2 overflow-hidden px-2 pb-3 text-[13px]">
                     <div className="shrink-0 space-y-1 pt-1">
                         {homeLink}
                         {automationsLink}
                         {formsLink}
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto">{departmentTreeExpanded}</div>
-                    <div className="shrink-0 border-t pt-2" style={{ borderColor: neutral.border }}>
+                    <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">
                         {settingsLink}
                     </div>
                 </div>
@@ -390,8 +406,8 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
         <Suspense
             fallback={
                 <aside
-                    className="relative z-[100] flex flex-shrink-0 flex-col border-r"
-                    style={{ width: railWidth, backgroundColor: neutral.surface, borderColor: neutral.border }}
+                    className="adminv2-sidebar-shell relative z-[100] flex flex-shrink-0 flex-col border-r"
+                    style={{ width: railWidth, backgroundColor: palette.midnightForge, borderColor: derived.topBarDivider }}
                     aria-hidden
                 />
             }

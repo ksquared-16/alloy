@@ -29,10 +29,10 @@ export function buildProofPersonRecord(overrides: Partial<ProofRuntimeRecord> = 
                 fields: { formatted_address: "142 Oak Street, Austin, TX 78701" },
             },
             primary_child: {
-                handle: "Alex Johnson",
+                handle: "Riley Brooks",
                 entityType: "child",
                 fields: {
-                    name: "Alex Johnson",
+                    name: "Riley Brooks",
                     date_of_birth: "2024-03-15",
                 },
             },
@@ -41,7 +41,7 @@ export function buildProofPersonRecord(overrides: Partial<ProofRuntimeRecord> = 
         household_children: [
             {
                 id: "child-1",
-                "child.name": "Alex Johnson",
+                "child.name": "Riley Brooks",
                 "child.date_of_birth": "2024-03-15",
                 "child.age_band": "Infant",
                 "child.status_key": "Active",

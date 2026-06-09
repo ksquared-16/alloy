@@ -16,7 +16,8 @@ import {
     buildOpportunityLayoutRuntimeRecordFromVm,
     type LayoutRuntimeRecordBindingEvidence,
 } from "./buildOpportunityLayoutRuntimeRecordFromVm";
-import { enrichLayoutDocPersonContactEditable } from "./enrichLayoutDocPersonContactEditable";
+import { enrichOpportunityVmRecordWithHouseholdChildren } from "./enrichOpportunityVmRecordWithHouseholdChildren";
+import { enrichLayoutDocDrawerFieldEditable } from "./enrichLayoutDocChildFieldsEditable";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import {
     isLayoutItemSupportedForProduction,
@@ -100,6 +101,12 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         return { ok: false, reason: "classic_drawer_not_in_scope", status: 422 };
     }
 
+    const enrichedVmRecord = await enrichOpportunityVmRecordWithHouseholdChildren({
+        supabase: input.supabase,
+        orgId: input.gate.orgId,
+        vmRecord: vm.above_fold.record,
+    });
+
     const layoutResolution = await resolveLayoutForOrg({
         orgId: input.gate.orgId,
         entityType: "opportunities",
@@ -122,7 +129,7 @@ export async function evaluateOpportunityLayoutRuntimeBody(
     }
 
     const record = buildOpportunityLayoutRuntimeRecordFromVm({
-        vmRecord: vm.above_fold.record,
+        vmRecord: enrichedVmRecord,
         opportunityId,
         statusDisplay:
             vm.header.status.renderAs !== "hidden" ? vm.header.status.label : null,
@@ -130,7 +137,7 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         doc,
     });
 
-    const enrichedDoc = enrichLayoutDocPersonContactEditable(doc);
+    const enrichedDoc = enrichLayoutDocDrawerFieldEditable(doc);
     const plan = buildLayoutRuntimePlan(enrichedDoc);
 
     return {
@@ -159,7 +166,7 @@ export function evaluateOpportunityLayoutRuntimeBodyFromVm(input: {
         return { ok: false, reason: "layout_not_renderable", status: 422 };
     }
 
-    const enrichedDoc = enrichLayoutDocPersonContactEditable(input.doc);
+    const enrichedDoc = enrichLayoutDocDrawerFieldEditable(input.doc);
     const record = buildOpportunityLayoutRuntimeRecordFromVm({
         vmRecord: input.vmRecord,
         opportunityId: input.opportunityId,

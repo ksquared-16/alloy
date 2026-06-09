@@ -22,6 +22,8 @@ type Props = {
     bare?: boolean;
     inquiryWorkflow?: boolean;
     proofLayoutActions?: boolean;
+    /** Bend Pine filled treatment for Lead command header. */
+    actionVariant?: "default" | "juniper";
 };
 
 /**
@@ -35,6 +37,7 @@ export default function BosDrawerAssistCta({
     bare = false,
     inquiryWorkflow = true,
     proofLayoutActions = false,
+    actionVariant = "default",
 }: Props) {
     const globalAssistant = useGlobalAssistantOptional();
     const { userEmail } = useAdminAuth();
@@ -48,6 +51,7 @@ export default function BosDrawerAssistCta({
             label={BOS_ASSIST_CTA_DRAWER}
             inquiryWorkflow={inquiryWorkflow}
             proofLayoutActions={proofLayoutActions}
+            actionVariant={actionVariant}
             leadingIcon={<Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />}
             data-drawer-action="bos_assist"
             data-bos-assist-button="true"

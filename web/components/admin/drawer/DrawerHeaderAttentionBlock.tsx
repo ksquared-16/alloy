@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { createPortal } from "react-dom";
 
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import type { FormsReviewBadgeTone } from "@/lib/forms/review/formsReviewPresentation";
@@ -27,6 +28,8 @@ import clsx from "clsx";
 type Props = {
     overviewData: Record<string, unknown>;
 };
+
+type GuidanceLine = { key: string; label: string; body: string };
 
 function urgencyChipTone(band: UrgencyBandV1 | null | undefined): FormsReviewBadgeTone {
     switch (band) {
@@ -64,35 +67,125 @@ function ReadinessSupportingDetail({ line }: { line: string }) {
     );
 }
 
+function MoreGuidancePopover({
+    anchorEl,
+    lines,
+    ariaLabel,
+    onClose,
+}: {
+    anchorEl: HTMLElement;
+    lines: GuidanceLine[];
+    ariaLabel: string;
+    onClose: () => void;
+}) {
+    const panelRef = useRef<HTMLDivElement>(null);
+    const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+    useEffect(() => {
+        const update = () => {
+            const rect = anchorEl.getBoundingClientRect();
+            const width = Math.min(Math.max(rect.width, 288), window.innerWidth - 24);
+            setPos({
+                top: rect.bottom + 6,
+                left: Math.min(Math.max(12, rect.left), window.innerWidth - width - 12),
+                width,
+            });
+        };
+        update();
+        window.addEventListener("resize", update);
+        window.addEventListener("scroll", update, true);
+        return () => {
+            window.removeEventListener("resize", update);
+            window.removeEventListener("scroll", update, true);
+        };
+    }, [anchorEl]);
+
+    useEffect(() => {
+        const onKey = (ev: KeyboardEvent) => {
+            if (ev.key === "Escape") onClose();
+        };
+        const onPointer = (ev: MouseEvent) => {
+            const t = ev.target as Node;
+            if (anchorEl.contains(t)) return;
+            if (panelRef.current?.contains(t)) return;
+            onClose();
+        };
+        window.addEventListener("keydown", onKey);
+        const tid = window.setTimeout(() => document.addEventListener("mousedown", onPointer), 0);
+        return () => {
+            window.clearTimeout(tid);
+            window.removeEventListener("keydown", onKey);
+            document.removeEventListener("mousedown", onPointer);
+        };
+    }, [anchorEl, onClose]);
+
+    if (!pos || typeof document === "undefined") return null;
+
+    return createPortal(
+        <div
+            ref={panelRef}
+            className="fixed z-[86] rounded-lg border border-[#e2e5e0] bg-[#fafaf9] px-2.5 py-2 text-[11px] leading-snug shadow-[0_12px_32px_-12px_rgba(15,23,42,0.28)] ring-1 ring-[#eef0ec]"
+            style={{ top: pos.top, left: pos.left, width: pos.width }}
+            data-testid="header-attention-expanded-panel"
+            role="region"
+            aria-label={ariaLabel}
+        >
+            <div className="space-y-1.5">
+                {lines.map((line) => (
+                    <p key={line.key} data-header-more-guidance-row={line.key}>
+                        <span className="font-medium text-[#5c6478]">{line.label} · </span>
+                        {line.body}
+                    </p>
+                ))}
+            </div>
+            <button
+                type="button"
+                className="mt-1.5 text-[10px] font-medium text-[#5c6478] hover:text-[#2a3140]"
+                onClick={onClose}
+            >
+                Close
+            </button>
+        </div>,
+        document.body,
+    );
+}
+
+function MoreGuidanceTrigger({
+    expanded,
+    onToggle,
+    buttonRef,
+}: {
+    expanded: boolean;
+    onToggle: () => void;
+    buttonRef: RefObject<HTMLButtonElement | null>;
+}) {
+    return (
+        <button
+            ref={buttonRef}
+            type="button"
+            className="text-left text-[10px] font-medium text-alloy-midnight/55 underline-offset-2 hover:text-alloy-midnight/75 hover:underline"
+            data-testid="header-attention-more-guidance"
+            aria-expanded={expanded}
+            onClick={onToggle}
+        >
+            More guidance
+        </button>
+    );
+}
+
 /**
  * Drawer header operational attention — context (not controls).
  * Collapsed: chips, summary (≤2 lines), More guidance.
- * Expanded: in-drawer overlay panel with explanation (no route/modal).
+ * Expanded: anchored overlay panel with explanation (no route/modal).
  */
 export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
     const readinessCtx = resolveDrawerHeaderReadinessAttention(overviewData);
     const reviewAssist = resolveDrawerReviewAssistViewModel(overviewData);
     const bosVisible = isDrawerHeaderReviewAssistVisible(overviewData);
     const [expanded, setExpanded] = useState(false);
-    const rootRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-        if (!expanded) return;
-        const onKey = (ev: KeyboardEvent) => {
-            if (ev.key === "Escape") setExpanded(false);
-        };
-        const onPointer = (ev: MouseEvent) => {
-            const el = rootRef.current;
-            if (!el || el.contains(ev.target as Node)) return;
-            setExpanded(false);
-        };
-        window.addEventListener("keydown", onKey);
-        document.addEventListener("mousedown", onPointer);
-        return () => {
-            window.removeEventListener("keydown", onKey);
-            document.removeEventListener("mousedown", onPointer);
-        };
-    }, [expanded]);
+    const guidanceButtonRef = useRef<HTMLButtonElement>(null);
+    const closeGuidance = useCallback(() => setExpanded(false), []);
+    const toggleGuidance = useCallback(() => setExpanded((v) => !v), []);
 
     if (!bosVisible && !readinessCtx.hasReadinessAttention) return null;
 
@@ -102,7 +195,6 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
 
         return (
             <div
-                ref={rootRef}
                 className={clsx("relative", DRAWER_HEADER_ATTENTION_MAX_WIDTH)}
                 data-drawer-slot="header_attention_strip"
             >
@@ -129,40 +221,20 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                         </p>
                     :   null}
                     {hasExpandable ?
-                        <button
-                            type="button"
-                            className="text-left text-[10px] font-medium text-alloy-midnight/55 hover:text-alloy-midnight/75"
-                            data-testid="header-attention-more-guidance"
-                            aria-expanded={expanded}
-                            onClick={() => setExpanded((v) => !v)}
-                        >
-                            More guidance
-                        </button>
+                        <MoreGuidanceTrigger
+                            expanded={expanded}
+                            onToggle={toggleGuidance}
+                            buttonRef={guidanceButtonRef}
+                        />
                     :   null}
                 </div>
-                {expanded && hasExpandable ?
-                    <div
-                        className="absolute left-0 top-full z-30 mt-0.5 w-full min-w-[18rem] rounded-xl border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
-                        data-testid="header-attention-expanded-panel"
-                        role="region"
-                        aria-label="Attention guidance detail"
-                    >
-                        <div className="space-y-1.5">
-                            {moreGuidance.map((line) => (
-                                <p key={line.key} data-header-more-guidance-row={line.key}>
-                                    <span className="font-medium text-alloy-midnight/60">{line.label} · </span>
-                                    {line.body}
-                                </p>
-                            ))}
-                        </div>
-                        <button
-                            type="button"
-                            className="mt-1.5 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
-                            onClick={() => setExpanded(false)}
-                        >
-                            Close
-                        </button>
-                    </div>
+                {expanded && hasExpandable && guidanceButtonRef.current ?
+                    <MoreGuidancePopover
+                        anchorEl={guidanceButtonRef.current}
+                        lines={moreGuidance}
+                        ariaLabel="Attention guidance detail"
+                        onClose={closeGuidance}
+                    />
                 :   null}
             </div>
         );
@@ -201,7 +273,6 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
 
     return (
         <div
-            ref={rootRef}
             className={clsx("relative", DRAWER_HEADER_ATTENTION_MAX_WIDTH)}
             data-drawer-slot="header_attention_strip"
         >
@@ -250,40 +321,20 @@ export function DrawerHeaderAttentionBlock({ overviewData }: Props) {
                     <ReadinessSupportingDetail line={readinessCtx.supportingLine} />
                 :   null}
                 {hasExpandable ?
-                    <button
-                        type="button"
-                        className="text-left text-[10px] font-medium text-alloy-midnight/55 hover:text-alloy-midnight/75"
-                        data-testid="header-attention-more-guidance"
-                        aria-expanded={expanded}
-                        onClick={() => setExpanded((v) => !v)}
-                    >
-                        More guidance
-                    </button>
+                    <MoreGuidanceTrigger
+                        expanded={expanded}
+                        onToggle={toggleGuidance}
+                        buttonRef={guidanceButtonRef}
+                    />
                 :   null}
             </div>
-            {expanded && hasExpandable ?
-                <div
-                    className="absolute left-0 top-full z-30 mt-0.5 w-full min-w-[18rem] max-w-full rounded-xl border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] leading-snug shadow-lg ring-1 ring-alloy-midnight/[0.06]"
-                    data-testid="header-attention-expanded-panel"
-                    role="region"
-                    aria-label="Operational guidance detail"
-                >
-                    <div className="space-y-1.5">
-                        {moreGuidance.map((line) => (
-                            <p key={line.key} data-header-more-guidance-row={line.key}>
-                                <span className="font-medium text-alloy-midnight/60">{line.label} · </span>
-                                {line.body}
-                            </p>
-                        ))}
-                    </div>
-                    <button
-                        type="button"
-                        className="mt-1.5 text-[10px] font-medium text-alloy-midnight/50 hover:text-alloy-midnight/70"
-                        onClick={() => setExpanded(false)}
-                    >
-                        Close
-                    </button>
-                </div>
+            {expanded && hasExpandable && guidanceButtonRef.current ?
+                <MoreGuidancePopover
+                    anchorEl={guidanceButtonRef.current}
+                    lines={moreGuidance}
+                    ariaLabel="Operational guidance detail"
+                    onClose={closeGuidance}
+                />
             :   null}
         </div>
     );

@@ -224,6 +224,11 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         storageTable: "customer_members",
         storageColumn: "last_name",
     }),
+    childField("child.full_name", "Full name", "text", 25, {
+        computed: true,
+        storageTable: "customer_members",
+        storageColumn: "first_name",
+    }),
     childField("child.preferred_name", "Preferred name", "text", 30, {
         entityType: "customer_member",
         fieldKey: "preferred_name",

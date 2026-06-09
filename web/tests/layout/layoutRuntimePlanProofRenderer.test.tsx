@@ -111,7 +111,7 @@ describe("LayoutRuntimePlanView — proof renderer", () => {
         expect(html).toContain("Infant Care");
         expect(html).toContain("computed");
         expect(html).toContain("Enrollment children");
-        expect(html).toContain("Alex Johnson");
+        expect(html).toContain("Riley Brooks");
         expect(html).toContain("enrollment context");
     });
 
@@ -122,7 +122,7 @@ describe("LayoutRuntimePlanView — proof renderer", () => {
 
         expect(html).toContain("Child");
         expect(html).toContain("Desired start");
-        expect(html).toContain("Alex Johnson");
+        expect(html).toContain("Riley Brooks");
         expect(html.toLowerCase()).not.toContain("ocm");
         expect(html.toLowerCase()).not.toContain("child_inquiry");
         expect(html.toLowerCase()).not.toContain("inquiry_child");

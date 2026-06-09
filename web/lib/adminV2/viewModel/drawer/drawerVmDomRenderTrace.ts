@@ -4,6 +4,7 @@
  */
 
 import type { DrawerRuntimePhase } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
+import { perfDebugTraceEnabled, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export type DrawerVmDomRenderSnapshot = {
     opportunity_id: string | null;
@@ -142,11 +143,13 @@ export function logDrawerVmDomRenderTrace(
     const sig = snapshotSignature(snapshot);
     if (sig === lastSignature && reason !== "force") return;
     lastSignature = sig;
+    if (!perfDebugTraceEnabled()) return;
     if (typeof console === "undefined" || typeof console.info !== "function") return;
-    console.info("[drawer_vm_dom_render_trace]", {
-        ts: new Date().toISOString(),
-        reason,
-        ...snapshot,
+    perfDrawer("dom_render_trace", {
+        entity_type: "opportunity",
+        entity_id: params.opportunityId ?? undefined,
+        detail: reason,
+        source: "ui",
     });
 }
 

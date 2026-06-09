@@ -18,7 +18,7 @@ export function buildPersonDrawerViewModelUrl(
     if (emphasis) qs.set("presentation_emphasis", emphasis);
     qs.set("compose_depth", depth);
     const q = qs.toString();
-    return `/api/admin/v2/view-models/drawer/person/${encodeURIComponent(personId)}${q ? `?${q}` : ""}`;
+    return `/api/admin/view-models/drawer/person/${encodeURIComponent(personId)}${q ? `?${q}` : ""}`;
 }
 
 export async function fetchPersonDrawerViewModelClient(

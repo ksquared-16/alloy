@@ -1,4 +1,6 @@
 /** Structured timing for dept operational-bootstrap (server logs). */
+import { perfWorkUnit } from "@/lib/perf/perfNamespaceLog";
+
 export type DeptBootstrapPerfPhases = {
     dept_fetch_ms?: number;
     work_units_fetch_ms?: number;
@@ -44,13 +46,11 @@ export function logDeptOperationalBootstrapPerf(params: {
         typeof params.payloadBytes === "number"
             ? Math.round((params.payloadBytes / 1024) * 10) / 10
             : undefined;
-    console.warn("[dept-bootstrap-perf]", {
+    perfWorkUnit("dept_bootstrap_server", {
         department_id: params.departmentId,
         total_ms: params.totalMs,
-        route_gate_ms: params.routeGateMs,
-        route_prep_ms: params.prepMs,
-        loader_ms: params.loaderMs,
+        duration_ms: params.totalMs,
         payload_kb: payloadKb,
-        ...params.phases,
+        source: "network",
     });
 }

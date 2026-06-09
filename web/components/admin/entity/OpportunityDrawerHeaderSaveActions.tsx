@@ -16,6 +16,7 @@ export default function OpportunityDrawerHeaderSaveActions({
     onCancelForm,
     formSaving,
     saveSuccess,
+    tone,
 }: {
     canMutate: boolean;
     formDirty: boolean;
@@ -23,6 +24,7 @@ export default function OpportunityDrawerHeaderSaveActions({
     onCancelForm: () => void;
     formSaving: boolean;
     saveSuccess?: boolean;
+    tone?: "default" | "footer";
 }) {
     const [coordDirty, setCoordDirty] = useState(false);
     const [coordSaving, setCoordSaving] = useState(false);
@@ -74,6 +76,7 @@ export default function OpportunityDrawerHeaderSaveActions({
             dirtyDataAttr="opportunity-drawer-dirty"
             saveDataAttr="opportunity-drawer-save-changes"
             revertDataAttr="opportunity-drawer-revert"
+            tone={tone}
         />
     );
 }

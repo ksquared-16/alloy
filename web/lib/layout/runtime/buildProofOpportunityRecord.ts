@@ -68,7 +68,7 @@ export function buildProofOpportunityRecord(overrides: Partial<ProofRuntimeRecor
         enrollment_children: [
             {
                 id: "enroll-child-1",
-                "child.name": "Alex Johnson",
+                "child.name": "Riley Brooks",
                 "inquiry_child.desired_start_date": "2026-09-01",
                 "inquiry_child.location_id": "Sunshine — Main Campus",
                 "inquiry_child.program_room_cohort_key": "Infant AM",

@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import OpportunityDrawerProofLayoutHeader from "@/components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader";
+import EntityDrawerOperatingShell from "@/components/admin/drawer/EntityDrawerOperatingShell";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
 import OpportunityDrawerOverviewBody from "@/components/admin/vmDrawer/OpportunityDrawerOverviewBody";
+import DrawerLayoutRuntimeShellZoneView from "@/components/admin/vmDrawer/DrawerLayoutRuntimeShellZoneView";
 import OpportunityDrawerBodySaveBar from "@/components/admin/vmDrawer/OpportunityDrawerBodySaveBar";
 import VmDrawerActionModalsPortal from "@/components/admin/vmDrawer/VmDrawerActionModalsPortal";
 import OpportunityDrawerVmTabPanes from "@/components/admin/vmDrawer/OpportunityDrawerVmTabPanes";
@@ -14,10 +16,6 @@ import OpportunityDrawerQueueNavigatorControls from "@/components/admin/Opportun
 import VmProgressiveStatusDropdown from "@/components/admin/vmDrawer/VmProgressiveStatusDropdown";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import Drawer, {
-    ADMINV2_DRAWER_BACKDROP_Z,
-    ADMINV2_DRAWER_PANEL_Z,
-} from "@/components/admin/Drawer";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
@@ -31,18 +29,26 @@ import { OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP } from "@/lib/adminV2/shellContr
 import { useOpportunityDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmPayload";
 import { resolveOpportunityVmStatusLabel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusLabel";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
+import { logDrawerTabSwitch } from "@/lib/admin/drawer/personDrawerPerfLogs";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { resolveOpportunityQueueNavigatorPosition } from "@/lib/admin/opportunityDrawerQueueNavigator";
+import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import { useOpportunityDrawerLayoutRuntimeShadow } from "@/lib/layout/runtime/shadow/useOpportunityDrawerLayoutRuntimeShadow";
-import { isLayoutRuntimeHardCutoverActiveClient, isLayoutRuntimeOpportunityDrawerBodyEnabledClient } from "@/lib/layout/featureFlag";
+import {
+    isDrawerSummaryStripBoundaryEnabledClient,
+    isLayoutRuntimeHardCutoverActiveClient,
+    isLayoutRuntimeOpportunityDrawerBodyEnabledClient,
+} from "@/lib/layout/featureFlag";
+import { mergeOpportunityLayoutRuntimeWidgetRecord } from "@/lib/layout/runtime/mergeOpportunityLayoutRuntimeWidgetRecord";
+import { handleLayoutRuntimeAdornmentOpenDrawer } from "@/lib/layout/runtime/resolveLayoutAdornmentOpenDrawer";
+import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawerLayoutDocShellZones";
+import { shouldUseLeadOverviewComposition } from "@/lib/layout/runtime/leadOverviewComposition";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawerOpeningOverlay";
 import OpportunityDrawerTabBackgroundLoader from "@/components/admin/vmDrawer/OpportunityDrawerTabBackgroundLoader";
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
-
-const DRAWER_ACCENT_OPPORTUNITY = "#2d6a9f";
 
 const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -60,11 +66,12 @@ export default function OpportunityDrawerVmRuntime() {
         drawer,
         drawerVmRender,
         closeDrawer,
+        openDrawer,
         isOpportunityDrawerOpening,
         isOpportunityQueueNavPending,
         navigateOpportunityInQueue,
     } = useAdminDrawer();
-    const { displayVm, coldLoading, error, suppressFullDrawerLoading, holdPriorPayload, patchDisplayRecord } =
+    const { displayVm, coldLoading, error, suppressFullDrawerLoading, holdPriorPayload, patchDisplayRecord, reloadOpportunityDisplayVm } =
         useOpportunityDrawerVmPayload();
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     const layoutCutoverHeader = isLayoutRuntimeHardCutoverActiveClient();
@@ -148,14 +155,19 @@ export default function OpportunityDrawerVmRuntime() {
             window.removeEventListener("adminv2:opportunity-focus-documents", onFocusDocuments as EventListener);
     }, [drawer.id]);
 
+    const drawerTabPrevRef = useRef(drawerTab);
     useEffect(() => {
-        if (!displayVm) return;
-        logDrawerVmRuntime("render", {
-            opportunity_id: displayVm.entity.id,
-            drawer_id: drawer.id,
-            tab: drawerTab,
-        });
-    }, [displayVm, drawer.id, drawerTab]);
+        const prev = drawerTabPrevRef.current;
+        if (prev !== drawerTab && displayVm?.entity.id) {
+            logDrawerTabSwitch({
+                entityType: "opportunity",
+                entityId: String(displayVm.entity.id),
+                fromTab: prev,
+                toTab: drawerTab,
+            });
+        }
+        drawerTabPrevRef.current = drawerTab;
+    }, [displayVm?.entity.id, drawerTab]);
 
     const vmMatchesRender = useMemo(
         () =>
@@ -207,6 +219,95 @@ export default function OpportunityDrawerVmRuntime() {
         scheduleDeferredCommunicationsDrawerPrefetch("opportunities", layoutPrefetchId);
         scheduleOpportunityDrawerTabPrefetch(layoutPrefetchId);
     }, [layoutPrefetchId]);
+
+    const summaryStripBoundaryEnabled = isDrawerSummaryStripBoundaryEnabledClient();
+
+    const overviewWidgetRecord = useMemo(() => {
+        if (!record) return null;
+        const merged: Record<string, unknown> = { ...record };
+        if (displayVm?.summaries?.tasks && merged._inquiry_summary_tasks == null) {
+            merged._inquiry_summary_tasks = displayVm.summaries.tasks;
+        }
+        return merged;
+    }, [record, displayVm?.summaries?.tasks]);
+
+    const mergedOverviewLayoutRecord = useMemo(() => {
+        if (!overviewLayoutBody.record) return null;
+        return mergeOpportunityLayoutRuntimeWidgetRecord(overviewLayoutBody.record, overviewWidgetRecord);
+    }, [overviewLayoutBody.record, overviewWidgetRecord]);
+
+    const layoutShellZones = useMemo(() => {
+        if (!summaryStripBoundaryEnabled || !overviewLayoutBody.doc || !overviewLayoutBody.bodyReady) {
+            return null;
+        }
+        return splitDrawerLayoutDocShellZones(overviewLayoutBody.doc, "opportunity");
+    }, [summaryStripBoundaryEnabled, overviewLayoutBody.doc, overviewLayoutBody.bodyReady]);
+
+    const leadCompositionActive = useMemo(
+        () => shouldUseLeadOverviewComposition(overviewLayoutBody.doc),
+        [overviewLayoutBody.doc],
+    );
+
+    const layoutAdornmentAction = useCallback<AdornmentActionHandler>(
+        (item, adornment, rowRecord) => {
+            if (!mergedOverviewLayoutRecord || !drawer.id) return;
+            handleLayoutRuntimeAdornmentOpenDrawer({
+                item,
+                adornment,
+                record: mergedOverviewLayoutRecord,
+                rowRecord,
+                opportunityId: drawer.id,
+                opportunityRecord: mergedOverviewLayoutRecord as Record<string, unknown>,
+                openDrawer,
+                opportunityWorkspaceContext:
+                    displayVm?.workspace.department_id && displayVm?.workspace.work_unit_id ?
+                        {
+                            department_id: displayVm.workspace.department_id,
+                            work_unit_id: displayVm.workspace.work_unit_id,
+                        }
+                    :   drawer.opportunityWorkspaceContext ?? null,
+            });
+        },
+        [
+            mergedOverviewLayoutRecord,
+            drawer.id,
+            drawer.opportunityWorkspaceContext,
+            displayVm?.workspace.department_id,
+            displayVm?.workspace.work_unit_id,
+            openDrawer,
+        ],
+    );
+
+    const overviewLayoutDocBodyOverride = useMemo(() => {
+        if (!layoutShellZones?.summarySectionKeys.length) return undefined;
+        return layoutShellZones.bodyDoc;
+    }, [layoutShellZones]);
+
+    const drawerSummaryStrip = useMemo(() => {
+        if (
+            !layoutShellZones?.summarySectionKeys.length ||
+            !mergedOverviewLayoutRecord ||
+            !drawer.id
+        ) {
+            return null;
+        }
+        return (
+            <DrawerLayoutRuntimeShellZoneView
+                zone="summary_strip"
+                doc={layoutShellZones.summaryDoc}
+                record={mergedOverviewLayoutRecord}
+                entityId={drawer.id}
+                canMutate={statusCanMutate}
+                onAdornmentAction={layoutAdornmentAction}
+            />
+        );
+    }, [
+        layoutShellZones,
+        mergedOverviewLayoutRecord,
+        drawer.id,
+        statusCanMutate,
+        layoutAdornmentAction,
+    ]);
 
     const overviewLayoutShellReady =
         !layoutCutoverHeader ||
@@ -427,6 +528,7 @@ export default function OpportunityDrawerVmRuntime() {
                 onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}
                 tabLabels={OPPORTUNITY_TAB_LABELS}
+                leadCompositionActive={leadCompositionActive}
             />
         );
     }, [
@@ -452,6 +554,7 @@ export default function OpportunityDrawerVmRuntime() {
         actionPreflightBlocked,
         clearActionPreflightBlocked,
         registryActionFeedback,
+        leadCompositionActive,
     ]);
 
     const drawerTitleNode = drawerTitle;
@@ -464,31 +567,26 @@ export default function OpportunityDrawerVmRuntime() {
                 recordLabel={opportunitySingular}
             />
         :   null}
-        <Drawer
+        <EntityDrawerOperatingShell
+            entity="opportunity"
             isOpen={drawerOpen}
             onClose={closeDrawer}
             title={drawerTitleNode}
             headerSubtitle={layoutCutoverHeader ? undefined : headerSubtitleBelowTitle}
             headerTitleCenter={layoutCutoverHeader ? undefined : headerAttentionCenter}
             headerTitleRight={layoutCutoverHeader ? undefined : headerTitleRight}
-            headerSignals={layoutCutoverHeader ? undefined : undefined}
-            headerExtra={layoutCutoverHeader ? undefined : undefined}
-            postTabStrip={layoutCutoverHeader ? undefined : undefined}
             composedStickyHeader={composedProofHeader}
-            variant="adminV2"
-            presentation="modal"
-            panelClassName="max-w-7xl"
-            zIndexBackdrop={ADMINV2_DRAWER_BACKDROP_Z}
-            zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
-            accentColor={DRAWER_ACCENT_OPPORTUNITY}
-            recordModalTone="cleaning-v2"
+            panelFooterChrome={
+                layoutCutoverHeader && committedVisible ?
+                    <OpportunityDrawerBodySaveBar canMutate={statusCanMutate} />
+                :   undefined
+            }
+            runtimeDataAttribute="opportunity-vm"
+            holdPriorPayload={holdPriorPayload}
+            summaryStrip={
+                drawerTab === "overview" && committedVisible ? drawerSummaryStrip : null
+            }
         >
-            <div
-                className="relative"
-                data-adminv2-drawer="true"
-                data-drawer-runtime="opportunity-vm"
-                {...(holdPriorPayload ? { "data-drawer-vm-transition-hold": "true" } : {})}
-            >
                 {isOpportunityQueueNavPending ?
                     <div
                         className="absolute inset-0 z-20 flex items-center justify-center bg-white/75"
@@ -566,10 +664,12 @@ export default function OpportunityDrawerVmRuntime() {
                                 opportunitySingular={opportunitySingular}
                                 onSelectTab={onTabSelect}
                                 vmReady={Boolean(displayVm.structureSettled && committedVisible)}
+                                canMutate={statusCanMutate}
                                 departmentId={displayVm.workspace.department_id}
                                 workUnitId={displayVm.workspace.work_unit_id}
                                 layoutRuntimeShadow={layoutRuntimeShadow}
                                 layoutBody={overviewLayoutBody}
+                                layoutDocBodyOverride={overviewLayoutDocBodyOverride}
                             />
                         :   <OpportunityDrawerVmTabPanes
                                 drawerId={String(displayVm.entity.id)}
@@ -578,11 +678,9 @@ export default function OpportunityDrawerVmRuntime() {
                                 onSelectTab={onTabSelect}
                             />
                         }
-                        <OpportunityDrawerBodySaveBar canMutate={statusCanMutate} />
                     </>
                 :   null}
-            </div>
-        </Drawer>
+        </EntityDrawerOperatingShell>
         {registryModals ?
             <VmDrawerActionModalsPortal>{registryModals}</VmDrawerActionModalsPortal>
         :   null}

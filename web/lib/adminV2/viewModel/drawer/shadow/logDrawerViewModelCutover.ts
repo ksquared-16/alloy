@@ -3,6 +3,7 @@ import {
     adminV2PersonDrawerVmCutoverEnabled,
     adminV2ChildDrawerVmCutoverEnabled,
 } from "@/lib/adminV2/viewModel/drawer/drawerViewModelFeatureGates";
+import { perfDebugTraceEnabled, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export type DrawerViewModelCutoverLogPayload = {
     entity_type?: string;
@@ -52,5 +53,10 @@ export function safeLogDrawerViewModelCutover(event: string, payload: DrawerView
 
 export function logDrawerViewModelCutover(event: string, payload: DrawerViewModelCutoverLogPayload): void {
     if (typeof window === "undefined") return;
-    console.info(`[drawer-vm-cutover:${event}]`, payload);
+    if (!perfDebugTraceEnabled()) return;
+    perfDrawer(`vm_cutover_${event}`, {
+        entity_type: payload.entity_type,
+        entity_id: payload.entity_id ?? payload.opportunity_id ?? payload.person_id,
+        source: payload.open_path ?? "cutover",
+    });
 }

@@ -57,7 +57,7 @@ describe("safeLogDrawerViewModelShadowServerSummary", () => {
     });
 
     beforeEach(() => {
-        vi.spyOn(console, "info").mockImplementation(() => {});
+        vi.spyOn(console, "warn").mockImplementation(() => {});
     });
 
     afterEach(() => {
@@ -68,19 +68,22 @@ describe("safeLogDrawerViewModelShadowServerSummary", () => {
     it("does not log when shadow flag is off", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW", "false");
         safeLogDrawerViewModelShadowServerSummary(summary);
-        expect(console.info).not.toHaveBeenCalled();
+        expect(console.warn).not.toHaveBeenCalled();
     });
 
     it("logs one summary line when shadow flag is on", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW", "true");
         safeLogDrawerViewModelShadowServerSummary(summary);
-        expect(console.info).toHaveBeenCalledTimes(1);
-        expect(console.info).toHaveBeenCalledWith("[drawer-vm-shadow:summary]", summary);
+        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[perf:drawer]",
+            expect.objectContaining({ entity_id: "opp-1", phase: "vm_shadow_compose" })
+        );
     });
 
-    it("never throws when console.info fails", () => {
+    it("never throws when console.warn fails", () => {
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW", "true");
-        vi.mocked(console.info).mockImplementation(() => {
+        vi.mocked(console.warn).mockImplementation(() => {
             throw new Error("console unavailable");
         });
         expect(() => safeLogDrawerViewModelShadowServerSummary(summary)).not.toThrow();
@@ -89,7 +92,7 @@ describe("safeLogDrawerViewModelShadowServerSummary", () => {
 
 describe("logOpportunityDrawerViewModelComposeShadowSummary", () => {
     beforeEach(() => {
-        vi.spyOn(console, "info").mockImplementation(() => {});
+        vi.spyOn(console, "warn").mockImplementation(() => {});
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW", "true");
     });
 
@@ -112,15 +115,13 @@ describe("logOpportunityDrawerViewModelComposeShadowSummary", () => {
             55
         );
 
-        expect(console.info).toHaveBeenCalledTimes(1);
-        expect(console.info).toHaveBeenCalledWith(
-            "[drawer-vm-shadow:summary]",
+        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[perf:drawer]",
             expect.objectContaining({
-                opportunity_id: "opp-1",
-                generation: "gen-1",
-                structureSettled: true,
+                entity_id: "opp-1",
+                phase: "vm_shadow_compose",
                 compose_ms: 55,
-                skip_reason: null,
             })
         );
     });
@@ -139,14 +140,13 @@ describe("logOpportunityDrawerViewModelComposeShadowSummary", () => {
             8
         );
 
-        expect(console.info).toHaveBeenCalledTimes(1);
-        expect(console.info).toHaveBeenCalledWith(
-            "[drawer-vm-shadow:summary]",
+        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[perf:drawer]",
             expect.objectContaining({
-                opportunity_id: "opp-2",
-                structureSettled: false,
+                entity_id: "opp-2",
+                phase: "vm_shadow_compose",
                 compose_ms: 8,
-                skip_reason: "classic_layout_deferred",
             })
         );
     });
@@ -154,7 +154,7 @@ describe("logOpportunityDrawerViewModelComposeShadowSummary", () => {
 
 describe("logOpportunityDrawerViewModelComposeFailureShadowSummary", () => {
     beforeEach(() => {
-        vi.spyOn(console, "info").mockImplementation(() => {});
+        vi.spyOn(console, "warn").mockImplementation(() => {});
         vi.stubEnv("NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW", "true");
     });
 
@@ -166,17 +166,16 @@ describe("logOpportunityDrawerViewModelComposeFailureShadowSummary", () => {
     it("logs compose_failed without error message payload", () => {
         logOpportunityDrawerViewModelComposeFailureShadowSummary("opp-3", 99);
 
-        expect(console.info).toHaveBeenCalledTimes(1);
-        expect(console.info).toHaveBeenCalledWith(
-            "[drawer-vm-shadow:summary]",
+        expect(console.warn).toHaveBeenCalledTimes(1);
+        expect(console.warn).toHaveBeenCalledWith(
+            "[perf:drawer]",
             expect.objectContaining({
-                opportunity_id: "opp-3",
-                structureSettled: false,
+                entity_id: "opp-3",
+                phase: "vm_shadow_compose",
                 compose_ms: 99,
-                skip_reason: "compose_failed",
             })
         );
-        const payload = vi.mocked(console.info).mock.calls[0]?.[1] as Record<string, unknown>;
+        const payload = vi.mocked(console.warn).mock.calls[0]?.[1] as Record<string, unknown>;
         expect(payload).not.toHaveProperty("error");
     });
 });

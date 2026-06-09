@@ -1,7 +1,8 @@
 /**
- * Structured runtime diagnostics for drawer VM cutover verification on staging.
- * Search browser/server logs for these event keys.
+ * Structured runtime diagnostics for drawer VM — routed through `[perf:drawer]`.
  */
+
+import { perfDebugTraceEnabled, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export type DrawerVmRuntimeDiagnosticEvent =
     | "drawer_vm_model_swap_prepare"
@@ -36,13 +37,30 @@ export type DrawerVmRuntimeDiagnosticEvent =
     | "drawer_vm_status_write"
     | "work_unit_row_related_targets_resolved";
 
+function mapEventToPhase(event: DrawerVmRuntimeDiagnosticEvent): string {
+    if (event.includes("cache_hit")) return "cache_hit";
+    if (event.includes("cache_miss")) return "cache_miss";
+    if (event.includes("model_swap_commit") || event.includes("model_swap_apply")) return "linked_swap_commit";
+    if (event.includes("model_swap")) return "linked_swap_start";
+    if (event.includes("prefetch")) return "related_prefetch";
+    if (event.includes("graph_warm")) return "related_graph_warm";
+    if (event.includes("status")) return "status_vm";
+    return event.replace(/^drawer_vm_/, "");
+}
+
 export function logDrawerVmRuntimeDiagnostic(
     event: DrawerVmRuntimeDiagnosticEvent,
     payload: Record<string, unknown>
 ): void {
-    if (typeof console === "undefined" || typeof console.info !== "function") return;
-    console.info(`[${event}]`, {
-        ts: new Date().toISOString(),
-        ...payload,
+    if (!perfDebugTraceEnabled() && !event.includes("cache_hit") && !event.includes("cache_miss")) return;
+    const entityId =
+        payload.opportunity_id ?? payload.person_id ?? payload.entity_id ?? payload.target_id ?? null;
+    perfDrawer(mapEventToPhase(event), {
+        entity_type: payload.entity_type ?? (payload.opportunity_id != null ? "opportunity" : undefined),
+        entity_id: entityId != null ? String(entityId) : undefined,
+        cache_hit: event.includes("cache_hit") ? true : event.includes("cache_miss") ? false : undefined,
+        duration_ms: payload.duration_ms ?? payload.prefetch_ms,
+        source: event.includes("cache_hit") ? "cache" : payload.source,
+        detail: event,
     });
 }

@@ -35,10 +35,10 @@ describe("inquiry_child select option_set_key migration", () => {
 });
 
 describe("INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS", () => {
-    it("maps program and schedule native keys to canonical option sets", () => {
-        expect(INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS.desired_program_type).toBe("childcare_program_type");
+    it("maps schedule to option set; program uses placement cascade not org-wide set", () => {
+        expect(INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS.desired_program_type).toBeUndefined();
         expect(INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS.desired_schedule_type).toBe("childcare_schedule_type");
-        expect(fallbackOptionSetKeyForInquiryChildField("desired_program_type")).toBe("childcare_program_type");
+        expect(fallbackOptionSetKeyForInquiryChildField("desired_program_type")).toBeNull();
         expect(fallbackOptionSetKeyForInquiryChildField("desired_schedule_type")).toBe("childcare_schedule_type");
         expect(fallbackOptionSetKeyForInquiryChildField("notes")).toBeNull();
     });
@@ -79,11 +79,9 @@ describe("resolveSelectFieldBinding", () => {
 });
 
 describe("mergeInquiryChildCreateFormFields fallback", () => {
-    it("includes option_set_key for program and schedule when API is sparse", () => {
+    it("includes option_set_key for schedule only when API is sparse; program uses placement cascade", () => {
         const fields = mergeInquiryChildCreateFormFields([]);
-        expect(fields.find((f) => f.field_key === "desired_program_type")?.option_set_key).toBe(
-            "childcare_program_type",
-        );
+        expect(fields.find((f) => f.field_key === "desired_program_type")?.option_set_key).toBeNull();
         expect(fields.find((f) => f.field_key === "desired_schedule_type")?.option_set_key).toBe(
             "childcare_schedule_type",
         );

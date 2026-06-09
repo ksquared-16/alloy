@@ -74,7 +74,7 @@ describe("personDrawerRuntimeProof — layout plan", () => {
         const html = renderToStaticMarkup(<LayoutRuntimePlanView doc={doc} record={record} />);
 
         expect(html).toContain("Johnson Household");
-        expect(html).toContain("Alex Johnson");
+        expect(html).toContain("Riley Brooks");
         expect(html).toContain("Children");
         expect(html).toContain("Future module");
         expect(html.toLowerCase()).not.toContain("customer_member");
@@ -140,7 +140,7 @@ describe("childDrawerRuntimeProof — layout plan", () => {
         const record = buildProofChildRecord();
         const html = renderToStaticMarkup(<LayoutRuntimePlanView doc={doc} record={record} />);
 
-        expect(html).toContain("Alex Johnson");
+        expect(html).toContain("Riley Brooks");
         expect(html).toContain("Jamie Johnson");
         expect(html).toContain("Infant Room A");
         expect(html).toContain("Sunshine Early Learning");

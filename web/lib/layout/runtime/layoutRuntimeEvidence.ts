@@ -7,6 +7,7 @@ import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import { computeLayoutRuntimeBodyRenderStats, type LayoutRuntimeBodyRenderStats } from "./layoutRuntimeBodyRenderStats";
 import type { ProofRuntimeRecord } from "./proofRecordContext";
 import { buildLayoutRuntimeDrawerBodyItemEvidence, type LayoutRuntimeBodyItemEvidence } from "./buildLayoutRuntimeDrawerBodyItemEvidence";
+import { readLayoutRuntimeRepeaterRows } from "./readLayoutRuntimeRepeaterRows";
 import { resolveItemValue } from "../resolveItemValue";
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnrichment";
@@ -101,9 +102,8 @@ function findMissingLayoutKeys(doc: LayoutDoc | null | undefined, record: ProofR
     const missing: string[] = [];
     for (const item of collectLayoutItems(doc)) {
         if (item.kind === "related_list") {
-            const source = item.source ?? item.refKey;
-            const raw = record[source];
-            if (!Array.isArray(raw) || raw.length === 0) missing.push(`repeater:${source}`);
+            const rows = readLayoutRuntimeRepeaterRows(record, item);
+            if (rows.length === 0) missing.push(`repeater:${item.source ?? item.refKey}`);
             continue;
         }
         if (item.kind === "widget_placeholder") continue;

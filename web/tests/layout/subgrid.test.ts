@@ -55,17 +55,16 @@ describe("field_group subgrid (column-in-column)", () => {
         expect(res.errors.join(" ")).toMatch(/nested field_group/);
     });
 
-    it("default Lead Summary has a contact block subgrid (full name; email|phone)", () => {
+    it("default Lead Summary has a contact block subgrid in Household & Primary Contact", () => {
         const doc = buildLeadDrawerDefaultDoc();
         expect(parseLayoutDoc(doc).ok).toBe(true);
-        const summary = doc.sections.find((s) => s.key === "lead_summary")!;
-        const block = summary.rows
+        const household = doc.sections.find((s) => s.key === "household_contact")!;
+        const block = household.rows
             .flatMap((r) => r.columns)
             .flatMap((c) => c.items)
             .find((i) => i.kind === "field_group" && Array.isArray(i.rows));
         expect(block).toBeTruthy();
         expect(block!.rows?.length).toBe(2);
-        // row 1 = full name (1 col), row 2 = email|phone (2 cols)
         expect(block!.rows?.[0].columns.length).toBe(1);
         expect(block!.rows?.[1].columns.length).toBe(2);
         const refKeys = block!.rows!.flatMap((r) => r.columns).flatMap((c) => c.items).map((i) => i.refKey);

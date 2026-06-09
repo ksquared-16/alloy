@@ -4,7 +4,9 @@
  * Live opportunity drawer header — composes VM controls into the layout runtime shell.
  */
 
+import { useMemo, type ReactNode } from "react";
 import { X } from "lucide-react";
+import LeadDrawerCommandHeader from "@/components/layout/lead/LeadDrawerCommandHeader";
 import ProofRecordModalHeaderShell, {
     type ProofHeaderTab,
 } from "@/components/layout/proofShell/ProofRecordModalHeaderShell";
@@ -17,6 +19,7 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
 import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
+import { resolveLeadDrawerHeaderContext } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
 
 export type OpportunityDrawerProofLayoutHeaderProps = {
     title: string;
@@ -41,6 +44,8 @@ export type OpportunityDrawerProofLayoutHeaderProps = {
     onDismissActionPreflightBlocked: () => void;
     registryActionFeedback: OpportunityDrawerRegistryActionFeedback | null;
     tabLabels: Partial<Record<DrawerTabKey, string>>;
+    /** When true, render Lead command-center header anatomy (Patch 8). */
+    leadCompositionActive?: boolean;
 };
 
 export default function OpportunityDrawerProofLayoutHeader({
@@ -65,11 +70,44 @@ export default function OpportunityDrawerProofLayoutHeader({
     onDismissActionPreflightBlocked,
     registryActionFeedback,
     tabLabels,
+    leadCompositionActive = false,
 }: OpportunityDrawerProofLayoutHeaderProps) {
     const proofTabs: ProofHeaderTab[] = tabs.map((key) => ({
         key,
         label: tabLabels[key] ?? key,
     }));
+
+    const titleContext = useMemo(() => {
+        const ctx = resolveLeadDrawerHeaderContext(record);
+        const parts: ReactNode[] = [];
+        if (ctx.primaryContactLabel) {
+            parts.push(
+                <span key="contact" className="font-medium text-alloy-midnight/75">
+                    {ctx.primaryContactLabel}
+                </span>,
+            );
+        }
+        if (ctx.contactLine) {
+            parts.push(
+                <span key="line" className="text-alloy-midnight/45">
+                    {ctx.contactLine}
+                </span>,
+            );
+        }
+        if (ctx.householdLabel && ctx.householdLabel !== ctx.primaryContactLabel) {
+            parts.push(
+                <span key="household" className="text-alloy-midnight/45">
+                    {ctx.householdLabel}
+                </span>,
+            );
+        }
+        if (parts.length === 0) return null;
+        return parts.reduce<ReactNode[]>((acc, node, index) => {
+            if (index > 0) acc.push(<span key={`sep-${index}`} className="text-alloy-midnight/25" aria-hidden>·</span>);
+            acc.push(node);
+            return acc;
+        }, []);
+    }, [record]);
 
     const headerControlsRow = (
         <div
@@ -88,6 +126,7 @@ export default function OpportunityDrawerProofLayoutHeader({
                 onActionSelect={onActionSelect}
                 layout="modal-actions"
                 proofLayoutActions
+                bosActionVariant={leadCompositionActive ? "juniper" : "default"}
                 actionPreflightBlocked={actionPreflightBlocked}
                 onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}
@@ -121,10 +160,23 @@ export default function OpportunityDrawerProofLayoutHeader({
         </button>
     );
 
-    return (
-        <ProofRecordModalHeaderShell
+    return leadCompositionActive ?
+            <LeadDrawerCommandHeader
+                title={title}
+                record={record}
+                locationLabel={locationLabel}
+                tabs={proofTabs}
+                activeTab={activeTab}
+                onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
+                lifecycleRail={lifecycleRail}
+                actionsControl={headerControlsRow}
+                closeButton={closeButton}
+            />
+        :   <ProofRecordModalHeaderShell
             title={title}
             locationLabel={locationLabel}
+            titleContext={titleContext}
+            showLocationChip
             statusControl={null}
             actionsControl={headerControlsRow}
             closeButton={closeButton}
@@ -134,6 +186,5 @@ export default function OpportunityDrawerProofLayoutHeader({
             onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
             lifecycleRail={lifecycleRail}
             dataAttribute="opportunity-drawer-runtime"
-        />
-    );
+        />;
 }

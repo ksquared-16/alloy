@@ -31,6 +31,8 @@ import {
     isInquiryChildPlacementProgramFieldDisabled,
     type InquiryChildLocationHierarchyRow,
 } from "@/lib/admin/drawer/inquiryChildPlacementScope";
+import { applyInquiryChildPlacementFieldChange } from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
+import { resolveProgramsOfferedForSite } from "@/lib/admin/location/inquiryChildPlacementOptions";
 import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -118,8 +120,51 @@ export type InquiryChildRow = {
 type OptionItem = { item_key: string; label: string | null };
 type StatusRow = { status_key: string; status_label: string | null; sort_order?: number | null };
 
+type OcmLocalState = {
+    location_id: string;
+    program_room_cohort_key: string;
+    desired_program_type: string;
+    desired_schedule_type: string;
+    outcome_status_key: string;
+    notes: string;
+    desired_start_edit: string;
+    custom: Record<string, string>;
+};
+
 function normalizeKey(v: string | null | undefined): string {
     return (v ?? "").trim();
+}
+
+function ocmPlacementFieldMap(st: OcmLocalState): Record<string, string> {
+    return {
+        location_id: st.location_id,
+        desired_program_type: st.desired_program_type,
+        program_room_cohort_key: st.program_room_cohort_key,
+    };
+}
+
+function applyOcmPlacementCascade(
+    fieldKey: "location_id" | "desired_program_type",
+    value: string,
+    st: OcmLocalState,
+): Pick<OcmLocalState, "location_id" | "desired_program_type" | "program_room_cohort_key"> {
+    const next = applyInquiryChildPlacementFieldChange(fieldKey, value, ocmPlacementFieldMap(st));
+    return {
+        location_id: next.location_id ?? "",
+        desired_program_type: next.desired_program_type ?? "",
+        program_room_cohort_key: next.program_room_cohort_key ?? "",
+    };
+}
+
+/** Keep stale stored values visible until operator changes placement fields. */
+function placementSelectOptionsWithCurrent(
+    options: { value: string; label: string }[],
+    currentValue: string,
+    labelForKey: (key: string) => string,
+): { value: string; label: string }[] {
+    const current = normalizeKey(currentValue);
+    if (!current || options.some((o) => o.value === current)) return options;
+    return [...options, { value: current, label: labelForKey(current) }];
 }
 
 /** Matches opportunity inquiry outcome keys/labels that imply waitlist (subtle attention styling). */
@@ -227,17 +272,6 @@ function InquiryChildDrawerIconButton({
 }
 
 type IdentityLocal = { first_name: string; last_name: string; dob: string };
-
-type OcmLocalState = {
-    location_id: string;
-    program_room_cohort_key: string;
-    desired_program_type: string;
-    desired_schedule_type: string;
-    outcome_status_key: string;
-    notes: string;
-    desired_start_edit: string;
-    custom: Record<string, string>;
-};
 
 type LocationItem = InquiryChildLocationHierarchyRow;
 
@@ -989,7 +1023,20 @@ export default function OpportunityInquiryChildrenSection({
                             ? (roomLabelByKey.get(st.program_room_cohort_key) ?? st.program_room_cohort_key)
                             : "—");
                     const programFieldsDisabled = isInquiryChildPlacementProgramFieldDisabled(st.location_id);
-                    const rowRoomOptions = buildInquiryChildRoomOptionsForSite(locationItems, st.location_id);
+                    const rowProgramOptions = placementSelectOptionsWithCurrent(
+                        resolveProgramsOfferedForSite(locationItems, st.location_id, programItems),
+                        st.desired_program_type,
+                        (k) => programLabelByKey.get(k) ?? k,
+                    );
+                    const rowRoomOptions = placementSelectOptionsWithCurrent(
+                        buildInquiryChildRoomOptionsForSite(
+                            locationItems,
+                            st.location_id,
+                            st.desired_program_type || undefined,
+                        ).map((opt) => ({ value: opt.cohort_key, label: opt.label })),
+                        st.program_room_cohort_key,
+                        (k) => roomLabelByKey.get(k) ?? k,
+                    );
                     const placementScopeHint = inquiryChildPlacementScopeDiagnosticHint({
                         locationId: st.location_id,
                         programRoomCohortKey: st.program_room_cohort_key,
@@ -1238,19 +1285,14 @@ export default function OpportunityInquiryChildrenSection({
                                             value={st.location_id}
                                             disabled={saving}
                                             onChange={(e) => {
-                                                const v = e.target.value;
-                                                const roomStillValid = rowRoomOptions.some(
-                                                    (opt) => opt.cohort_key === st.program_room_cohort_key
+                                                const placement = applyOcmPlacementCascade(
+                                                    "location_id",
+                                                    e.target.value,
+                                                    st,
                                                 );
-                                                const nextCohort =
-                                                    v && roomStillValid ? st.program_room_cohort_key : "";
                                                 setLocal((p) => ({
                                                     ...p,
-                                                    [r.id]: {
-                                                        ...st,
-                                                        location_id: v,
-                                                        program_room_cohort_key: nextCohort,
-                                                    },
+                                                    [r.id]: { ...st, ...placement },
                                                 }));
                                             }}
                                             className={fieldSelect}
@@ -1275,22 +1317,25 @@ export default function OpportunityInquiryChildrenSection({
                                             disabled={saving || programFieldsDisabled}
                                             title={programFieldsDisabled ? INQUIRY_CHILD_PLACEMENT_SCOPE_LIMITATION : undefined}
                                             onChange={(e) => {
-                                                const v = e.target.value;
+                                                const placement = applyOcmPlacementCascade(
+                                                    "desired_program_type",
+                                                    e.target.value,
+                                                    st,
+                                                );
                                                 setLocal((p) => ({
                                                     ...p,
-                                                    [r.id]: {
-                                                        ...st,
-                                                        desired_program_type: v,
-                                                    },
+                                                    [r.id]: { ...st, ...placement },
                                                 }));
                                             }}
                                             className={fieldSelect}
                                             aria-label={`${programLabel} for ${displayName}`}
                                         >
-                                            <option value="">(inherit)</option>
-                                            {programItems.map((i) => (
-                                                <option key={i.item_key} value={i.item_key}>
-                                                    {i.label ?? i.item_key}
+                                            <option value="">
+                                                {programFieldsDisabled ? "Select location first" : "—"}
+                                            </option>
+                                            {rowProgramOptions.map((i) => (
+                                                <option key={i.value} value={i.value}>
+                                                    {i.label}
                                                 </option>
                                             ))}
                                         </select>
@@ -1323,7 +1368,7 @@ export default function OpportunityInquiryChildrenSection({
                                                 {programFieldsDisabled ? "Select location first" : "—"}
                                             </option>
                                             {rowRoomOptions.map((i) => (
-                                                <option key={i.cohort_key} value={i.cohort_key}>
+                                                <option key={i.value} value={i.value}>
                                                     {i.label}
                                                 </option>
                                             ))}

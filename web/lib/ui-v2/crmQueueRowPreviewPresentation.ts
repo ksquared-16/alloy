@@ -106,10 +106,24 @@ export function parseQueueRowCrmChildrenStructured(raw: unknown): CrmCompactChil
                 : typeof o.personId === "string"
                   ? o.personId.trim()
                   : "";
+        const customerMemberIdRaw =
+            typeof o.customer_member_id === "string"
+                ? o.customer_member_id.trim()
+                : typeof o.customerMemberId === "string"
+                  ? o.customerMemberId.trim()
+                  : "";
+        const ocmIdRaw =
+            typeof o.ocm_id === "string"
+                ? o.ocm_id.trim()
+                : typeof o.ocmId === "string"
+                  ? o.ocmId.trim()
+                  : "";
         out.push({
             primary,
             secondary: secondary || null,
             personId: personIdRaw || null,
+            customerMemberId: customerMemberIdRaw || null,
+            ocmId: ocmIdRaw || null,
         });
     }
     return out;

@@ -22,6 +22,17 @@ export type ProofRuntimeRecord = Record<string, unknown> & {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** First non-empty trimmed entity id — UUIDs are valid drawer targets and must not be filtered. */
+export function pickEntityId(...values: unknown[]): string | null {
+    for (const value of values) {
+        if (value == null) continue;
+        const text = String(value).trim();
+        if (!text) continue;
+        return text;
+    }
+    return null;
+}
+
 /** True when a value looks like an opaque id that should not be shown to operators. */
 export function isOpaqueIdValue(value: unknown): boolean {
     if (typeof value !== "string") return false;

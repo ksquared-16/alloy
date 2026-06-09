@@ -5,6 +5,7 @@
 import type { LayoutDoc, LayoutSection } from "../layoutV2";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import { classifyLayoutItemBinding } from "./classifyLayoutItemBinding";
+import { readLayoutRuntimeRepeaterRows } from "./readLayoutRuntimeRepeaterRows";
 import { isLayoutItemSupportedForProduction } from "./isLayoutItemSupportedForProduction";
 import { resolveProofBindingValue, shouldRenderProofItem } from "./resolveProofBindingValue";
 import type { ProofRuntimeRecord } from "./proofRecordContext";
@@ -57,8 +58,7 @@ function itemHasValue(
         return Array.isArray(raw) && raw.length > 0;
     }
     if (item.kind === "related_list") {
-        const raw = record[item.source ?? item.refKey];
-        return Array.isArray(raw) && raw.length > 0;
+        return readLayoutRuntimeRepeaterRows(record, item).length > 0;
     }
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const resolved = resolveProofBindingValue(record, item, anchorEntity, binding);
@@ -83,7 +83,6 @@ export function buildLayoutRuntimeDrawerBodyItemEvidence(
 
         if (!shouldRenderProofItem(item)) omitReason = "hidden_by_layout_authoring";
         else if (!isLayoutItemSupportedForProduction(item)) omitReason = "unsupported_in_production";
-        else if (item.kind === "related_list" && item.displayMode !== "table") omitReason = "non_table_repeater";
 
         const rendered = supported && omitReason == null;
 

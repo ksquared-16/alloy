@@ -162,6 +162,7 @@ export const LAYOUT_ENTITY_GROUPS: { entityKey: LayoutEntityGroupKey; entityLabe
  */
 export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
     // Work
+    { widgetKey: "attention", label: "Attention", category: "Work", description: "Attention reason and review-assist guidance", defaultDisplayMode: "summary" },
     { widgetKey: "tasks", label: "Tasks", category: "Work", description: "Open tasks for this record", defaultDisplayMode: "list" },
     { widgetKey: "reminders", label: "Reminders", category: "Work", description: "Upcoming reminders", defaultDisplayMode: "list" },
     { widgetKey: "actions", label: "Actions", category: "Work", description: "Quick action buttons", defaultDisplayMode: "buttons" },
@@ -171,6 +172,7 @@ export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
     // Enrollment
     { widgetKey: "tour_summary", label: "Tour Summary", category: "Enrollment", description: "Tour date & follow-up", defaultDisplayMode: "summary" },
     { widgetKey: "children_list", label: "Children List", category: "Enrollment", description: "Children on this lead", defaultDisplayMode: "list" },
+    { widgetKey: "activity", label: "Activity", category: "Communication", description: "Recent record activity", defaultDisplayMode: "feed" },
     // Waitlist (queue-meaningful; shown disabled on drawer surfaces)
     { widgetKey: "waitlist_position", label: "Waitlist Position", category: "Waitlist", description: "Computed waitlist position", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },
     { widgetKey: "waitlist_tier", label: "Waitlist Tier", category: "Waitlist", description: "Priority tier / bucket", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },
@@ -245,6 +247,7 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
     child: [
         field("child", "first_name", "First name", "text"),
         field("child", "last_name", "Last name", "text"),
+        field("child", "full_name", "Full name", "text"),
         field("child", "date_of_birth", "Date of birth", "date"),
         ...CUSTOMER_MEMBER_CONFIG_FIELD_MANIFEST.map((row) =>
             field("child", row.field_key, row.label, row.field_type),

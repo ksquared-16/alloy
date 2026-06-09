@@ -1,6 +1,5 @@
 import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
-
-const PERF_PREFIX = "[perf.route.shell]";
+import { perfWorkUnit } from "@/lib/perf/perfNamespaceLog";
 const loadingOwnersByRoute = new Map<string, Set<string>>();
 
 export type RouteShellTraceRoute = "workspace" | "department" | "work_unit";
@@ -11,7 +10,7 @@ function nowMs(): number {
 
 function log(event: string, payload: Record<string, unknown>): void {
     if (typeof window === "undefined") return;
-    console.info(PERF_PREFIX, { event, ...payload });
+    perfWorkUnit(event, payload);
 }
 
 export function resetRouteShellTrace(route: RouteShellTraceRoute): void {

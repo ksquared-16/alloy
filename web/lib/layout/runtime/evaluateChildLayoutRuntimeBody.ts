@@ -1,5 +1,7 @@
 /**
  * Evaluate child drawer overview body from layout runtime.
+ *
+ * Child drawers open with a **person id** (see openInquiryChildPersonFromOpportunity).
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -18,20 +20,21 @@ export type EvaluateChildLayoutRuntimeBodyResult =
     | { ok: false; reason: string; status: number };
 
 export async function evaluateChildLayoutRuntimeBody(input: {
-    childId: string;
+    /** Person id — child drawer entity id (not customer_member id). */
+    personId: string;
     gate: AdminRouteGateSuccess;
     supabase: SupabaseClient;
 }): Promise<EvaluateChildLayoutRuntimeBodyResult> {
-    const childId = input.childId.trim();
-    if (!childId) return { ok: false, reason: "missing_child_id", status: 400 };
+    const personId = input.personId.trim();
+    if (!personId) return { ok: false, reason: "missing_person_id", status: 400 };
 
-    const orgCheck = await assertRowOrg(input.supabase, "customer_members", childId, input.gate.orgId);
-    if (!orgCheck.ok) return { ok: false, reason: "child_not_found", status: 404 };
+    const orgCheck = await assertRowOrg(input.supabase, "persons", personId, input.gate.orgId);
+    if (!orgCheck.ok) return { ok: false, reason: "person_not_found", status: 404 };
 
     const composeResult = await composeChildDrawerViewModel({
         supabase: input.supabase,
         gate: input.gate,
-        personId: childId,
+        personId,
     });
     if (!composeResult.ok) {
         return { ok: false, reason: composeResult.skipped?.reason ?? "vm_compose_skipped", status: 422 };
@@ -52,7 +55,7 @@ export async function evaluateChildLayoutRuntimeBody(input: {
 
     const record = buildChildLayoutRuntimeRecordFromVm({
         vmRecord: composeResult.viewModel.record,
-        childId,
+        personId,
     });
 
     return {

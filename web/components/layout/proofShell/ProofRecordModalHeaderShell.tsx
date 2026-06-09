@@ -23,9 +23,20 @@ export type ProofHeaderTab = {
 };
 
 export type ProofRecordModalHeaderShellProps = {
-    title: string;
-    /** Location label next to title; null/undefined → muted "No location" chip. */
+    title: ReactNode;
+    /** Location label next to title; omit chip entirely when `showLocationChip` is false. */
     locationLabel?: string | null;
+    showLocationChip?: boolean;
+    /** Secondary context under title (contact / household). */
+    titleContext?: ReactNode;
+    /** Lead command-center header — avatar + meta row. */
+    commandCenter?: {
+        avatar: ReactNode;
+        metaRow?: ReactNode;
+        contactRow?: ReactNode;
+    };
+    /** Tighter vertical rhythm for Lead drawer command center. */
+    compactDensity?: boolean;
     /** Status control (dropdown/pill) — proof-order, before BOS/actions. */
     statusControl?: ReactNode;
     /** Work with BOS + Actions cluster (close rendered separately when provided). */
@@ -44,6 +55,10 @@ export type ProofRecordModalHeaderShellProps = {
 export default function ProofRecordModalHeaderShell({
     title,
     locationLabel,
+    showLocationChip = true,
+    titleContext,
+    commandCenter,
+    compactDensity = false,
     statusControl,
     actionsControl,
     closeButton,
@@ -54,37 +69,113 @@ export default function ProofRecordModalHeaderShell({
     lifecycleRail,
     dataAttribute = "proof-record-modal-header",
 }: ProofRecordModalHeaderShellProps) {
+    const isOpportunityRuntime = dataAttribute === "opportunity-drawer-runtime";
+    const titleClassName = isOpportunityRuntime ?
+        "break-words text-[1.3rem] font-semibold leading-[1.08] tracking-tight sm:text-[1.4rem]"
+    :   "break-words text-xl font-bold leading-snug";
+    const titleRowPad = compactDensity ? "px-6 pb-1.5 pt-3.5" : "px-6 pb-2 pt-4";
+    const tabsRowPad = compactDensity ? "px-6 pb-0 pt-0" : "px-6 pb-1";
+    const lifecycleRowPad = compactDensity ? "px-6 pb-1.5 pt-0" : "px-6 pb-2";
+
     return (
         <div
             className="shrink-0 border-b border-solid"
             style={{ backgroundColor: "#FFFFFF", borderColor: PROOF_HEADER_BORDER }}
             data-proof-layout-header="true"
             data-proof-layout-header-variant={dataAttribute}
+            {...(compactDensity ? { "data-lead-drawer-header-density": "compact" } : {})}
         >
             {/* row 1: title + location | status + actions + close */}
             <div
-                className="flex items-start justify-between gap-4 px-6 pb-2 pt-4"
+                className={`flex items-start justify-between gap-3 ${titleRowPad}`}
                 data-proof-layout-header-row="title-actions"
             >
                 <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                        <h2
-                            id="admin-drawer-title"
-                            className="break-words text-xl font-bold leading-snug"
-                            style={{ color: PROOF_HEADER_TEXT }}
+                    {commandCenter ?
+                        <div
+                            className="flex min-w-0 items-start gap-3 rounded-xl border border-alloy-stone/10 bg-gradient-to-br from-white via-white to-alloy-stone/[0.03] px-3 py-2 shadow-[0_1px_3px_rgba(24,39,58,0.04)]"
+                            data-lead-drawer-command-header="true"
                         >
-                            {title}
-                        </h2>
-                        {locationLabel ?
-                            <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/70">
-                                <MapPin className="h-3 w-3" aria-hidden />
-                                {locationLabel}
-                            </span>
-                        :   <span className="inline-flex items-center rounded-full border border-alloy-stone/20 bg-white px-2 py-0.5 text-[11px] text-alloy-midnight/40">
-                                No location
-                            </span>
-                        }
-                    </div>
+                            <div
+                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-alloy-juniper/15 bg-gradient-to-br from-alloy-juniper/[0.1] to-white text-alloy-juniper shadow-sm ring-1 ring-alloy-stone/10"
+                                data-lead-drawer-command-avatar="true"
+                            >
+                                {commandCenter.avatar}
+                            </div>
+                            <div className="min-w-0 flex-1 border-l border-alloy-stone/10 pl-3">
+                                {typeof title === "string" ?
+                                    <h2
+                                        id="admin-drawer-title"
+                                        className={titleClassName}
+                                        style={{ color: PROOF_HEADER_TEXT }}
+                                    >
+                                        {title}
+                                    </h2>
+                                :   <div
+                                        id="admin-drawer-title"
+                                        className={titleClassName}
+                                        style={{ color: PROOF_HEADER_TEXT }}
+                                    >
+                                        {title}
+                                    </div>
+                                }
+                                {commandCenter.metaRow ?
+                                    <p
+                                        className="mt-0.5 truncate text-[11px] leading-snug text-alloy-midnight/55 sm:whitespace-normal sm:overflow-visible"
+                                        data-lead-drawer-header-meta-row="true"
+                                    >
+                                        {commandCenter.metaRow}
+                                    </p>
+                                :   null}
+                                {commandCenter.contactRow ?
+                                    <p
+                                        className="mt-0.5 hidden truncate text-[11px] leading-snug text-alloy-midnight/40 lg:block"
+                                        data-lead-drawer-header-contact-row="true"
+                                    >
+                                        {commandCenter.contactRow}
+                                    </p>
+                                :   null}
+                            </div>
+                        </div>
+                    :   <>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {typeof title === "string" ?
+                                <h2
+                                    id="admin-drawer-title"
+                                    className={titleClassName}
+                                    style={{ color: PROOF_HEADER_TEXT }}
+                                >
+                                    {title}
+                                </h2>
+                            :   <div
+                                    id="admin-drawer-title"
+                                    className={titleClassName}
+                                    style={{ color: PROOF_HEADER_TEXT }}
+                                >
+                                    {title}
+                                </div>
+                            }
+                            {showLocationChip ?
+                                locationLabel ?
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/25 bg-alloy-stone/[0.08] px-2.5 py-0.5 text-[11px] font-medium text-alloy-midnight/70">
+                                        <MapPin className="h-3 w-3 text-alloy-midnight/45" aria-hidden />
+                                        {locationLabel}
+                                    </span>
+                                :   <span className="inline-flex items-center rounded-full border border-alloy-stone/20 bg-white px-2.5 py-0.5 text-[11px] text-alloy-midnight/40">
+                                        No location
+                                    </span>
+                            :   null}
+                        </div>
+                        {titleContext ?
+                            <div
+                                className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12px] leading-snug text-alloy-midnight/60"
+                                data-proof-layout-header-context="true"
+                            >
+                                {titleContext}
+                            </div>
+                        :   null}
+                    </>
+                    }
                 </div>
                 <div
                     className="flex shrink-0 items-center gap-2"
@@ -106,8 +197,8 @@ export default function ProofRecordModalHeaderShell({
             :   null}
 
             {/* row 3: tabs */}
-            <div className="px-6 pb-1" data-proof-layout-header-row="tabs">
-                <div className="flex min-h-0 flex-wrap gap-0.5 rounded-lg border border-[rgba(0,0,0,0.14)] bg-white px-1.5 py-1.5">
+            <div className={tabsRowPad} data-proof-layout-header-row="tabs">
+                <div className={`flex min-h-0 flex-wrap gap-0.5 ${compactDensity ? "border-b border-alloy-stone/12 pb-0.5" : "rounded-lg border border-[rgba(0,0,0,0.14)] bg-white px-1.5 py-1.5"}`}>
                     {tabs.map((t) => {
                         const active = activeTab === t.key;
                         return (
@@ -115,7 +206,7 @@ export default function ProofRecordModalHeaderShell({
                                 key={t.key}
                                 type="button"
                                 onClick={() => onTabSelect(t.key)}
-                                className={`rounded-md px-3 py-1.5 text-xs font-medium leading-snug transition-colors ${active ? "text-white shadow-sm" : "text-[#273F52]/80 hover:bg-[rgba(0,0,0,0.05)]"}`}
+                                className={`rounded-md px-3 py-1 text-xs font-medium leading-snug transition-colors ${active ? "text-white shadow-sm" : "text-[#273F52]/80 hover:bg-[rgba(0,0,0,0.04)] hover:underline hover:decoration-[rgba(0,162,131,0.55)] hover:underline-offset-[3px]"}`}
                                 style={
                                     active ?
                                         { backgroundColor: PROOF_HEADER_MIDNIGHT, borderBottom: "2px solid rgba(0,162,131,0.45)" }
@@ -132,7 +223,7 @@ export default function ProofRecordModalHeaderShell({
 
             {/* row 4: lifecycle rail */}
             {lifecycleRail ?
-                <div className="px-6 pb-2" data-proof-layout-header-row="lifecycle">
+                <div className={lifecycleRowPad} data-proof-layout-header-row="lifecycle">
                     {lifecycleRail}
                 </div>
             :   null}

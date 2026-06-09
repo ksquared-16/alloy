@@ -75,7 +75,8 @@ describe("opportunityDrawerVmStatusReconciliation", () => {
     });
 
     it("logs double commit when mounted control returns to skeleton", () => {
-        const info = vi.spyOn(console, "info").mockImplementation(() => {});
+        vi.stubEnv("ADMIN_PERF_TRACE", "1");
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         detectOpportunityStatusDoubleCommit({
             opportunityId: "opp-1",
             vmContractComplete: true,
@@ -83,18 +84,24 @@ describe("opportunityDrawerVmStatusReconciliation", () => {
             showingSkeleton: true,
             statusKey: "new",
         });
-        expect(info).toHaveBeenCalledWith(
-            "[drawer_vm_status_double_commit_detected]",
-            expect.objectContaining({ opportunity_id: "opp-1" })
+        expect(warn).toHaveBeenCalledWith(
+            "[perf:drawer]",
+            expect.objectContaining({ entity_id: "opp-1", phase: "status_vm" })
         );
-        info.mockRestore();
+        warn.mockRestore();
+        vi.unstubAllEnvs();
     });
 
     it("emits vm_seed diagnostic tag", () => {
-        const info = vi.spyOn(console, "info").mockImplementation(() => {});
+        vi.stubEnv("ADMIN_PERF_TRACE", "1");
+        const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
         logDrawerVmStatusDiagnostic("vm_seed", { opportunity_id: "opp-1" });
-        expect(info).toHaveBeenCalledWith("[drawer_vm_status_vm_seed]", expect.objectContaining({ opportunity_id: "opp-1" }));
-        info.mockRestore();
+        expect(warn).toHaveBeenCalledWith(
+            "[perf:drawer]",
+            expect.objectContaining({ entity_id: "opp-1" })
+        );
+        warn.mockRestore();
+        vi.unstubAllEnvs();
     });
 
     it("treats VM status as authoritative when first paint settled or pin complete", () => {

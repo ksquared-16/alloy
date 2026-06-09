@@ -1,4 +1,5 @@
 import type { DrawerViewModelShadowDiffReport } from "@/lib/adminV2/viewModel/drawer/shadow/diffOpportunityDrawerViewModelShadow";
+import { perfDebugTraceEnabled, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export type DrawerViewModelShadowSummary = {
     opportunity_id: string;
@@ -59,26 +60,15 @@ export function safeLogDrawerViewModelShadow(payload: DrawerViewModelShadowLogPa
 
 export function logDrawerViewModelShadow(payload: DrawerViewModelShadowLogPayload): void {
     if (typeof window === "undefined") return;
+    if (!perfDebugTraceEnabled()) return;
 
     const summary = buildDrawerViewModelShadowSummary(payload);
-
-    console.info("[drawer-vm-shadow:summary]", summary);
-
-    console.info("[drawer-vm-shadow]", {
-        ...summary,
-        generation: payload.generation,
-        fetch_ms: payload.fetch_ms,
-        diff_ms: payload.diff_ms,
-        legacy_path: payload.legacy_path,
-        skip_reason: payload.skip_reason ?? null,
-        improvement_count: payload.diff.structural_improvements.length,
-        ...(payload.error ? { error: payload.error } : {}),
-        ...(summary.structural_mismatch_count > 0 ?
-            { structural_mismatches: payload.diff.structural_mismatches }
-        :   {}),
-        ...(summary.scalar_warning_count > 0 ? { scalar_warnings: payload.diff.scalar_warnings } : {}),
-        ...(payload.diff.structural_improvements.length > 0 ?
-            { structural_improvements: payload.diff.structural_improvements }
-        :   {}),
+    perfDrawer("vm_shadow_summary", {
+        entity_type: "opportunity",
+        entity_id: summary.opportunity_id,
+        compose_ms: summary.compose_ms ?? undefined,
+        count: summary.structural_mismatch_count,
+        duration_ms: payload.fetch_ms,
+        source: "shadow",
     });
 }

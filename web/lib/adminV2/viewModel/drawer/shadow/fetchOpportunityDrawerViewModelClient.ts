@@ -15,7 +15,7 @@ export function buildOpportunityDrawerViewModelUrl(
     if (dept) qs.set("department_id", dept);
     if (wu) qs.set("work_unit_id", wu);
     const q = qs.toString();
-    return `/api/admin/v2/view-models/drawer/opportunity/${encodeURIComponent(opportunityId)}${q ? `?${q}` : ""}`;
+    return `/api/admin/view-models/drawer/opportunity/${encodeURIComponent(opportunityId)}${q ? `?${q}` : ""}`;
 }
 
 export async function fetchOpportunityDrawerViewModelClient(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import PersonDrawerChildLifecycleRail from "@/components/admin/entity/PersonDrawerChildLifecycleRail";
 import PersonDrawerOperatingSections from "@/components/admin/entity/PersonDrawerOperatingSections";
 import VmPersonStatusControl from "@/components/admin/vmDrawer/VmPersonStatusControl";
@@ -14,7 +14,6 @@ import Drawer, {
 import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
 import { layoutVariantFromChildVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/personDrawerVmLayout";
 import { useChildDrawerVmPayload } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useChildDrawerVmPayload";
-import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
 
 const DRAWER_ACCENT_CHILD = "#2563eb";
 
@@ -22,15 +21,6 @@ export default function ChildDrawerVmRuntime() {
     const { canMutate } = useAdminAuth();
     const { drawer, closeDrawer, openDrawer } = useAdminDrawer();
     const { displayVm, coldLoading, error, suppressFullDrawerLoading } = useChildDrawerVmPayload();
-
-    useEffect(() => {
-        if (!displayVm) return;
-        logDrawerVmRuntime("render", {
-            child_person_id: displayVm.entity.id,
-            drawer_id: drawer.id,
-            runtime: "child",
-        });
-    }, [displayVm, drawer.id]);
 
     const record = displayVm?.record ?? null;
     const layoutVariant = useMemo(

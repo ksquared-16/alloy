@@ -53,7 +53,13 @@
     "demo:seed": "tsx scripts/seedRealisticChildcareDemoData.ts",
     "demo:seed:medication-form": "tsx --tsconfig tsconfig.json scripts/seedMedicationAuthorizationDemoForOrg.ts",
     "demo:seed:scopes": "tsx scripts/seedRealisticChildcareDemoData.ts --scopes-only",
-    "demo:seed:patch-metadata": "tsx scripts/seedRealisticChildcareDemoData.ts --patch-metadata"
+    "demo:seed:patch-metadata": "tsx scripts/seedRealisticChildcareDemoData.ts --patch-metadata",
+    "dev:layout:publish-lead-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishLeadDrawerV2ForOrg.ts",
+    "dev:layout:publish-lead-drawer-v2:execute": "tsx --tsconfig tsconfig.json scripts/publishLeadDrawerV2ForOrg.ts --execute",
+    "dev:layout:verify-lead-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishLeadDrawerV2ForOrg.ts --verify-only",
+    "dev:layout:publish-person-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishPersonDrawerV2ForOrg.ts",
+    "dev:layout:publish-person-drawer-v2:execute": "tsx --tsconfig tsconfig.json scripts/publishPersonDrawerV2ForOrg.ts --execute",
+    "dev:layout:verify-person-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishPersonDrawerV2ForOrg.ts --verify-only"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",

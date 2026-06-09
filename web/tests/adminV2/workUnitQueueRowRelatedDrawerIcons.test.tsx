@@ -117,16 +117,15 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
                 })}
             />
         );
-        expect(html).toContain('data-queue-preview="crm_compact_operational_record"');
-        expect(html).toContain('data-queue-preview="operational_record"');
-        expect(html).toContain('data-queue-people-role="parent"');
-        expect(html).toContain('data-queue-row-person-icon="true"');
+        expect(html).toContain('data-queue-preview="crm_compact_operational_row"');
+        expect(html).toContain("queue-record-field--link");
+        expect(html).toContain('data-layout-runtime-adornment-entity="person"');
         expect(html).toContain("Ada Lovelace");
         expect(html).toContain("555-0100");
-        expect(html).toMatch(/data-queue-row-person-icon="true"[\s\S]*Ada Lovelace/);
+        expect(html).toMatch(/queue-record-field--link[\s\S]*Ada Lovelace/);
     });
 
-    it("renders child rows as horizontal bands with icon left of name and program field", () => {
+    it("renders child rows as horizontal bands with icon left of name and age band field", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
@@ -149,19 +148,19 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
                         },
                     ],
                     childrenLines: [
-                        { primary: "Alex (5y)", personId: "child-alex", programInline: "Toddler" },
-                        { primary: "Jordan", personId: "child-jordan", programInline: "Preschool" },
+                        { primary: "Alex (5y)", personId: "child-alex", secondary: "5y" },
+                        { primary: "Jordan", personId: "child-jordan", secondary: "3y" },
                     ],
                 })}
             />
         );
-        expect(html).toContain('data-queue-related-record-layout="row_band"');
-        expect(html).toContain('data-queue-related-record-row="child"');
-        expect(html).toContain('data-queue-row-child-icon="true"');
-        expect(html).toContain("Toddler");
-        expect(html).toContain("Preschool");
-        expect(html).toMatch(/data-queue-row-child-icon="true"[\s\S]*<span class="adminv2-ws-queue-related-record-name">Alex \(5y\)<\/span>/);
-        expect(html).toContain('data-related-record-drawer-icon-kind="child"');
+        expect(html).toContain("queue-record-field--link");
+        expect(html).toContain('data-layout-runtime-adornment-entity="child"');
+        expect(html).toContain("Alex (5y)");
+        expect(html).toContain("Jordan");
+        expect(html).toContain("5y");
+        expect(html).toContain("3y");
+        expect(html).toMatch(/queue-record-field--link[\s\S]*Alex \(5y\)/);
     });
 
     it("renders distinct person icon kind on contact rows", () => {
@@ -188,8 +187,8 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
                 })}
             />
         );
-        expect(html).toContain('data-queue-row-person-icon="true"');
-        expect(html).toContain('data-related-record-drawer-icon-kind="person"');
+        expect(html).toContain("queue-record-field--link");
+        expect(html).toContain('data-layout-runtime-adornment-entity="person"');
     });
 
     it("renders distinct child icon kind on child rows", () => {
@@ -215,10 +214,10 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
                 })}
             />
         );
-        expect(html).toContain('data-related-record-drawer-icon-kind="child"');
+        expect(html).toContain('data-layout-runtime-adornment-entity="child"');
     });
 
-    it("renders waitlist child icon when child person id is present", () => {
+    it("renders waitlist child chip when child person id is present", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
@@ -242,9 +241,9 @@ describe("CrmCompactQueuePreview inline drawer icons", () => {
                 })}
             />
         );
-        expect(html).toContain('data-queue-row-child-icon="true"');
-        expect(html).toContain('data-related-record-drawer-icon-kind="child"');
-        expect(html).toMatch(/data-queue-row-child-icon="true"[\s\S]*Sam \(3y\)/);
+        expect(html).toContain("queue-record-field--link");
+        expect(html).toContain('data-layout-runtime-adornment-entity="child"');
+        expect(html).toMatch(/queue-record-field--link[\s\S]*Sam \(3y\)/);
     });
 
     it("does not render icons without person ids", () => {
@@ -291,6 +290,7 @@ describe("QueueBlock row/icon propagation wiring", () => {
         expect(queueBlock).toContain("RelatedRecordDrawerIconButton");
         expect(queueBlock).not.toContain("ViewPersonDrawerIconButton");
         expect(queueBlock).toContain("CrmCompactOperationalRecord");
+        expect(queueBlock).toContain("OperationalQueueRecordRow");
         expect(queueBlock).toContain("QueueRowCompactOperationalHeader");
         expect(queueBlock).toContain("QueueRowAttentionSupplementBand");
         expect(queueBlock).toContain("workUnitQueueRowPresentation");

@@ -297,7 +297,7 @@ export function hasDrawerHeaderMoreGuidanceContent(
 
 /** Shared surface for drawer header attention (matches body intelligence band accent). */
 export const DRAWER_HEADER_ATTENTION_SURFACE =
-    "w-full rounded-xl bg-gradient-to-br from-white via-white to-alloy-stone/25 ring-1 ring-alloy-midnight/[0.06] border-l-[3px] border-l-alloy-blue/40";
+    "w-full rounded-lg bg-white ring-1 ring-alloy-midnight/[0.06] border-l-[3px] border-l-alloy-ember/75";
 
 /** Card fills its allocated center column — width comes from the header grid, not a % of a narrow parent. */
 export const DRAWER_HEADER_ATTENTION_MAX_WIDTH = "w-full min-w-0";

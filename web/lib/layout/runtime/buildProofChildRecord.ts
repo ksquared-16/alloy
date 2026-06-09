@@ -11,8 +11,8 @@ import { CHILD_COMPUTE_KEYS } from "./childRelationRegistry";
 export function buildProofChildRecord(overrides: Partial<ProofRuntimeRecord> = {}): ProofRuntimeRecord {
     const base: ProofRuntimeRecord = {
         id: "proof-child-001",
-        display_name: "Alex Johnson",
-        "child.name": "Alex Johnson",
+        display_name: "Riley Brooks",
+        "child.name": "Riley Brooks",
         "child.date_of_birth": "2024-03-15",
         "child.age_band": "Infant",
 

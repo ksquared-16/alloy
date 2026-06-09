@@ -30,6 +30,7 @@ import type {
     LayoutRenderHint,
 } from "@/lib/layout/layoutV2";
 import { ADORNMENT_ICON_GLYPH } from "@/lib/layout/adornmentIcons";
+import { inferLayoutAdornmentIdPath } from "@/lib/layout/inferLayoutAdornmentIdPath";
 import {
     catalogGroupDisplayLabel,
     type LayoutCatalogField,
@@ -39,6 +40,8 @@ import { collectRefKeysFromLayoutDoc } from "@/lib/layout/layoutRefKeyAliases";
 import LayoutFieldPickerOverlay from "@/components/layout/LayoutFieldPickerOverlay";
 import * as ops from "@/lib/layout/builderOps";
 import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
+import QueueRecordLayoutSettingsPanel from "@/components/layout/QueueRecordLayoutSettingsPanel";
+import type { QueueRecordLayoutEditorConfig } from "@/lib/layout/queueRecordLayoutV3";
 
 /** Display/render modes a user can pick per field or related-list column. */
 const RENDER_MODES: { key: LayoutRenderHint; label: string }[] = [
@@ -76,13 +79,6 @@ const QUEUE_ZONE_LABEL: Record<string, string> = {
     "body.override_flags": "Body · Override flags",
     "actions.stack": "Actions",
 };
-
-const ACTION_ENTITY_OPTIONS: { value: "" | LayoutAdornmentActionEntity; label: string }[] = [
-    { value: "", label: "Icon only" },
-    { value: "person", label: "Open person drawer" },
-    { value: "child", label: "Open child drawer" },
-    { value: "opportunity", label: "Open opportunity drawer" },
-];
 
 /** One grouped layout = all versions of a (org, entity, surface, layoutKey). */
 type LayoutGroup = {
@@ -183,8 +179,8 @@ function layoutDisplayName(g: { entityType: string; surface: string; layoutKey: 
     const key = `${g.entityType}/${g.surface}/${g.layoutKey}`;
     const map: Record<string, string> = {
         "opportunities/drawer/default": "Lead Drawer",
-        "opportunities/queue/default": "Lead Queue Card",
-        "placement_candidate/queue/waitlist_candidate_card": "Waitlist Candidate Card",
+        "opportunities/queue/default": "Lead Queue",
+        "placement_candidate/queue/waitlist_candidate_card": "Waitlist Queue",
         "person/drawer/default": "Person Drawer",
         "child/drawer/default": "Child Drawer",
     };
@@ -267,12 +263,16 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load layout");
             const rec = json as EntityLayoutRecord;
+            const parsed = parseLayoutDoc(rec.doc);
+            if (!parsed.ok || !parsed.doc) {
+                throw new Error(parsed.errors.join("; ") || "Invalid layout document");
+            }
             setSelectedId(rec.id);
-            setWorkingDoc(rec.doc);
+            setWorkingDoc(parsed.doc);
             setWorkingName(rec.name);
             setSelectedStatus(rec.status);
-            setJsonText(JSON.stringify(rec.doc, null, 2));
-            setJsonError(null);
+            setJsonText(JSON.stringify(parsed.doc, null, 2));
+            setJsonError(parsed.warnings.length ? `OK (warnings: ${parsed.warnings.join("; ")})` : null);
             setDirty(false);
             setShowJson(false);
             fetch(`/api/admin/entity-layouts/field-catalog?entity_type=${encodeURIComponent(rec.entityType)}`)
@@ -408,12 +408,19 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Publish failed");
             setSelectedStatus("published");
             await fetchList();
+            if (typeof window !== "undefined" && workingDoc) {
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:entity-layout-published", {
+                        detail: { entityType: workingDoc.entityType, surface: workingDoc.surface },
+                    }),
+                );
+            }
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setBusy(null);
         }
-    }, [canMutate, selectedId, dirty, saveDraft, fetchList]);
+    }, [canMutate, selectedId, dirty, saveDraft, fetchList, workingDoc]);
 
     const removeLayout = useCallback(async () => {
         if (!canMutate || !selectedId) return;
@@ -668,64 +675,35 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                         </div>
                                     )}
 
-                                    {workingDoc.surface === "queue" && (() => {
-                                        const isWaitlist = (workingDoc.metadata as { renderAs?: string } | undefined)?.renderAs === "waitlist_candidate_card";
-                                        return (
-                                            <div className="rounded-md border border-[#dbe7ff] bg-[#f5f8ff] p-3 text-[11px] text-[#4063b0]">
-                                                <div className="mb-2">
-                                                    <strong>{isWaitlist ? "Waitlist candidate card" : "Lead queue card"}</strong> — same queue-card engine. Add fields/widgets above and choose the <span className="font-medium">area</span> each renders in. The card stacks areas top-to-bottom with an actions column on the right.
-                                                </div>
-                                                {/* Visual area map — Header / Context / Body / Actions */}
-                                                <div className="grid grid-cols-[1fr_auto] gap-2">
-                                                    <div className="flex flex-col gap-1">
-                                                        <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1"><span className="font-semibold">Header</span> · {isWaitlist ? "identity · status · priority · location" : "title · status · location"}</div>
-                                                        <div className="rounded border border-[#bfe9dd] bg-[#f0fbf8] px-2 py-1 text-[#0a8f78]"><span className="font-semibold">Context</span> · {isWaitlist ? "position · waitlisted since · sibling · adjust" : "next step · follow-up"}</div>
-                                                        <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1"><span className="font-semibold">Body</span> · {isWaitlist ? "contact · program fit · availability · overrides" : "contact · children · tour"}</div>
-                                                    </div>
-                                                    <div className="flex items-stretch">
-                                                        <div className="flex flex-col justify-center rounded border border-[#cdd9f5] bg-white px-2 py-1 text-center"><span className="font-semibold">Actions</span><span className="text-[#7a8bbf]">→</span></div>
-                                                    </div>
-                                                </div>
-                                                {isWaitlist ? (
-                                                    <div className="mt-2 rounded border border-[#bfe9dd] bg-[#f0fbf8] px-2 py-1 text-[#0a8f78]">
-                                                        <strong>This is a repeating candidate card.</strong> One card renders for each candidate in a cohort group — not just one. Ranking, ordering, and cohort membership stay in the placement runtime; you configure the card face + group header display only.
-                                                    </div>
-                                                ) : null}
-                                                {isWaitlist ? (() => {
-                                                    const cfg = readWaitlistGroupConfig(workingDoc);
-                                                    const setGroupCfg = (patch: Record<string, unknown>) =>
-                                                        applyDoc({ ...workingDoc, metadata: { ...(workingDoc.metadata ?? {}), group: { ...(workingDoc.metadata?.group as Record<string, unknown> ?? {}), ...patch } } });
-                                                    const toggles: { key: keyof typeof cfg; label: string }[] = [
-                                                        { key: "showGroupHeader", label: "Show group header" },
-                                                        { key: "showGroupCount", label: "Show group count" },
-                                                        { key: "showGroupBadge", label: "Show group badge" },
-                                                        { key: "showRuntimePosition", label: "Show runtime position" },
-                                                    ];
-                                                    return (
-                                                        <div className="mt-2 rounded border border-[#cdd9f5] bg-white px-2 py-1.5">
-                                                            <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#7a8bbf]">Group display (display only — runtime owns grouping)</div>
-                                                            <div className="flex flex-wrap gap-x-3 gap-y-1">
-                                                                {toggles.map((t) => (
-                                                                    <label key={t.key} className="flex items-center gap-1 text-[#31394d]">
-                                                                        <input type="checkbox" disabled={!editable} checked={Boolean(cfg[t.key])} onChange={(e) => setGroupCfg({ [t.key]: e.target.checked })} />
-                                                                        {t.label}
-                                                                    </label>
-                                                                ))}
-                                                            </div>
-                                                            <label className="mt-1 flex items-center gap-1 text-[#31394d]">
-                                                                <span className="text-[#7a8bbf]">Header:</span>
-                                                                <input value={cfg.headerTemplate} disabled={!editable} onChange={(e) => setGroupCfg({ headerTemplate: e.target.value })} placeholder="{label} waitlist" className="flex-1 rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px]" />
-                                                            </label>
-                                                            <div className="mt-0.5 text-[10px] text-[#9aa4bf]">{`Tokens: {label} = cohort label, {count} = group size. e.g. "Infant Waitlist (12)" or "Priority Infant Candidates".`}</div>
-                                                        </div>
-                                                    );
-                                                })() : null}
-                                            </div>
-                                        );
-                                    })()}
+                                    {workingDoc.surface === "queue" && workingDoc ? (
+                                        <>
+                                            <QueueRecordLayoutSettingsPanel
+                                                doc={workingDoc}
+                                                editable={editable}
+                                                catalog={catalog}
+                                                onChange={(config: QueueRecordLayoutEditorConfig) => {
+                                                    applyDoc({
+                                                        ...workingDoc,
+                                                        metadata: {
+                                                            ...(workingDoc.metadata ?? {}),
+                                                            queue_record_layout: config,
+                                                        },
+                                                    });
+                                                }}
+                                            />
+                                        </>
+                                    ) : null}
 
+                                    {workingDoc.surface === "queue" ? (
+                                        <div className="rounded-lg border border-dashed border-[#d5dbe8] bg-[#f8f9fb] px-3 py-2">
+                                            <p className="text-[11px] font-semibold text-[#7a8bbf]">Legacy queue card zones (optional)</p>
+                                            <p className="mt-0.5 text-[10px] text-[#9aa4bf]">
+                                                Field zone mapping for layout-runtime proofs — not the primary queue row editor.
+                                            </p>
+                                        </div>
+                                    ) : null}
                                     {/* Sections */}
-                                    {workingDoc.sections.map((s, sIdx) => (
+                                    {(workingDoc.sections ?? []).map((s, sIdx) => (
                                         <div key={s.id} className="rounded-lg border border-[#e6e8ec] bg-white">
                                             <div className="flex flex-wrap items-center gap-2 border-b border-[#eef0f4] px-2 py-1.5">
                                                 <input value={s.title} onChange={(e) => op(ops.patchSection(workingDoc, sIdx, { title: e.target.value }))} disabled={!editable} className="min-w-[150px] flex-1 rounded border border-[#e6e8ec] px-2 py-1 text-sm font-semibold disabled:bg-[#f4f6f9]" />
@@ -839,9 +817,36 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                     {editable && workingDoc.surface !== "queue" && (
                                         <button type="button" onClick={() => op(ops.addSection(workingDoc))} className="self-start rounded border border-[#e6e8ec] px-3 py-1.5 text-sm font-medium text-[#31394d] hover:bg-[#F4F6F9]">+ Add section</button>
                                     )}
-                                    {workingDoc.surface === "queue" && (
-                                        <p className="text-[11px] text-[#9aa4bf]">A queue card is a single card — add fields/widgets above and choose each one&apos;s <span className="font-medium">area</span> (Header · Context · Body · Actions). No extra sections needed.</p>
-                                    )}
+                                    {workingDoc.surface === "queue" ? (() => {
+                                        const isWaitlist = (workingDoc.metadata as { renderAs?: string } | undefined)?.renderAs === "waitlist_candidate_card";
+                                        if (!isWaitlist) return null;
+                                        const cfg = readWaitlistGroupConfig(workingDoc);
+                                        const setGroupCfg = (patch: Record<string, unknown>) =>
+                                            applyDoc({ ...workingDoc, metadata: { ...(workingDoc.metadata ?? {}), group: { ...(workingDoc.metadata?.group as Record<string, unknown> ?? {}), ...patch } } });
+                                        const toggles: { key: keyof typeof cfg; label: string }[] = [
+                                            { key: "showGroupHeader", label: "Show group header" },
+                                            { key: "showGroupCount", label: "Show group count" },
+                                            { key: "showGroupBadge", label: "Show group badge" },
+                                            { key: "showRuntimePosition", label: "Show runtime position" },
+                                        ];
+                                        return (
+                                            <div className="rounded border border-[#cdd9f5] bg-white px-2 py-1.5">
+                                                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#7a8bbf]">Waitlist group display</div>
+                                                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                                                    {toggles.map((t) => (
+                                                        <label key={t.key} className="flex items-center gap-1 text-[#31394d]">
+                                                            <input type="checkbox" disabled={!editable} checked={Boolean(cfg[t.key])} onChange={(e) => setGroupCfg({ [t.key]: e.target.checked })} />
+                                                            {t.label}
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                                <label className="mt-1 flex items-center gap-1 text-[#31394d]">
+                                                    <span className="text-[#7a8bbf]">Header:</span>
+                                                    <input value={cfg.headerTemplate} disabled={!editable} onChange={(e) => setGroupCfg({ headerTemplate: e.target.value })} placeholder="{label} waitlist" className="flex-1 rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px]" />
+                                                </label>
+                                            </div>
+                                        );
+                                    })() : null}
 
                                     {/* JSON escape hatch */}
                                     <div>
@@ -944,6 +949,84 @@ function GroupedCatalogFieldSelect({
     );
 }
 
+function ColumnAdornmentControls({
+    refKey,
+    adornment,
+    editable,
+    onAdornment,
+}: {
+    refKey: string;
+    adornment?: LayoutFieldAdornment;
+    editable: boolean;
+    onAdornment: (a: LayoutFieldAdornment | undefined) => void;
+}) {
+    const ad = adornment;
+    const iconValue =
+        ad?.icon && (LAYOUT_ADORNMENT_ICONS as readonly string[]).includes(ad.icon) ? ad.icon : "";
+    const setIcon = (icon: string) => {
+        if (!icon) return onAdornment(undefined);
+        onAdornment({
+            position: ad?.position ?? "left",
+            icon: icon as LayoutAdornmentIcon,
+            ...(ad?.action ? { action: ad.action } : {}),
+        });
+    };
+    const setAction = (entity: string) => {
+        if (!ad) return;
+        if (!entity) return onAdornment({ position: ad.position, icon: ad.icon });
+        onAdornment({
+            position: ad.position,
+            icon: ad.icon,
+            action: {
+                type: "open_drawer",
+                entity: entity as LayoutAdornmentActionEntity,
+                idPath: ad.action?.idPath ?? inferLayoutAdornmentIdPath(entity as LayoutAdornmentActionEntity, refKey),
+            },
+        });
+    };
+    const setIdPath = (idPath: string) => {
+        if (!ad?.action) return;
+        onAdornment({
+            ...ad,
+            action: {
+                ...ad.action,
+                idPath: idPath.trim() || inferLayoutAdornmentIdPath(ad.action.entity, refKey),
+            },
+        });
+    };
+    return (
+        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+            <span className="text-[9px] text-[#9aa4bf]">icon:</span>
+            <select value={iconValue} disabled={!editable} onChange={(e) => setIcon(e.target.value)} title="Leading icon for this field/column" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
+                <option value="">None</option>
+                {LAYOUT_ADORNMENT_ICONS.map((ic) => (
+                    <option key={ic} value={ic}>{ADORNMENT_ICON_GLYPH[ic]} {ic}</option>
+                ))}
+            </select>
+            {iconValue ? (
+                <>
+                    <select value={ad?.action?.entity ?? ""} disabled={!editable} onChange={(e) => setAction(e.target.value)} title="Click icon opens linked record drawer" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
+                        <option value="">Icon only</option>
+                        <option value="person">Open person drawer</option>
+                        <option value="child">Open child drawer</option>
+                        <option value="opportunity">Open opportunity drawer</option>
+                    </select>
+                    {ad?.action?.entity ? (
+                        <input
+                            value={ad.action.idPath ?? inferLayoutAdornmentIdPath(ad.action.entity, refKey)}
+                            disabled={!editable}
+                            onChange={(e) => setIdPath(e.target.value)}
+                            placeholder="id path"
+                            title="Record path to linked id (e.g. child.id, opportunity.primary_person_id)"
+                            className="min-w-0 max-w-[140px] rounded border border-[#e6e8ec] px-1 py-0.5 font-mono text-[10px] disabled:opacity-40"
+                        />
+                    ) : null}
+                </>
+            ) : null}
+        </div>
+    );
+}
+
 function ItemRow({
     item,
     editable,
@@ -982,15 +1065,6 @@ function ItemRow({
     const ad = item.adornment;
     const isTemplate = typeof item.template === "string";
     const currentZone = (item.metadata as { zone?: string } | undefined)?.zone ?? "";
-    const setIcon = (icon: string) => {
-        if (!icon) return onAdornment(undefined);
-        onAdornment({ position: ad?.position ?? "left", icon: icon as LayoutAdornmentIcon, ...(ad?.action ? { action: ad.action } : {}) });
-    };
-    const setAction = (entity: string) => {
-        if (!ad) return;
-        if (!entity) return onAdornment({ position: ad.position, icon: ad.icon });
-        onAdornment({ position: ad.position, icon: ad.icon, action: { type: "open_drawer", entity: entity as LayoutAdornmentActionEntity } });
-    };
     return (
         <div className="rounded border border-[#eef0f4] bg-white px-1.5 py-1 text-[12px]">
             <div className="flex items-center gap-1">
@@ -1054,23 +1128,12 @@ function ItemRow({
                 </div>
             )}
             {item.kind === "field" && (
-                <div className="mt-0.5 flex items-center gap-1">
-                    <span className="text-[9px] text-[#9aa4bf]">icon:</span>
-                    <select value={ad?.icon ?? ""} disabled={!editable} onChange={(e) => setIcon(e.target.value)} className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
-                        <option value="">None</option>
-                        {LAYOUT_ADORNMENT_ICONS.map((ic) => (
-                            <option key={ic} value={ic}>{ADORNMENT_ICON_GLYPH[ic]} {ic}</option>
-                        ))}
-                    </select>
-                    {ad?.icon ? (
-                        <select value={ad.action?.entity ?? ""} disabled={!editable} onChange={(e) => setAction(e.target.value)} className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40" title="Field action icon">
-                            <option value="">Icon only</option>
-                            <option value="person">Open person drawer</option>
-                            <option value="child">Open child drawer</option>
-                            <option value="opportunity">Open opportunity drawer</option>
-                        </select>
-                    ) : null}
-                </div>
+                <ColumnAdornmentControls
+                    refKey={item.refKey}
+                    adornment={ad}
+                    editable={editable}
+                    onAdornment={onAdornment}
+                />
             )}
         </div>
     );
@@ -1183,15 +1246,6 @@ function MiniItemRow({
 }) {
     const ad = item.adornment;
     const isTemplate = typeof item.template === "string";
-    const setIcon = (icon: string) => {
-        if (!icon) return onAdornment(undefined);
-        onAdornment({ position: ad?.position ?? "left", icon: icon as LayoutAdornmentIcon, ...(ad?.action ? { action: ad.action } : {}) });
-    };
-    const setAction = (entity: string) => {
-        if (!ad) return;
-        if (!entity) return onAdornment({ position: ad.position, icon: ad.icon });
-        onAdornment({ position: ad.position, icon: ad.icon, action: { type: "open_drawer", entity: entity as LayoutAdornmentActionEntity } });
-    };
     return (
         <div className="mb-0.5 rounded border border-[#eef0f4] bg-white px-1 py-0.5 text-[11px]">
             <div className="flex items-center gap-1">
@@ -1228,25 +1282,95 @@ function MiniItemRow({
                         {CONDITION_PRESETS.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                         {condKey(item.visibleWhen) === "custom" && <option value="custom">Custom (JSON)</option>}
                     </select>
-                    <select value={ad?.icon ?? ""} disabled={!editable} onChange={(e) => setIcon(e.target.value)} title="Icon / adornment" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
-                        <option value="">No icon</option>
-                        {LAYOUT_ADORNMENT_ICONS.map((ic) => <option key={ic} value={ic}>{ADORNMENT_ICON_GLYPH[ic]} {ic}</option>)}
-                    </select>
-                    {ad?.icon ? (
-                        <select value={ad.action?.entity ?? ""} disabled={!editable} onChange={(e) => setAction(e.target.value)} title="Drawer-link action" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
-                            {ACTION_ENTITY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </select>
-                    ) : null}
                 </div>
+            )}
+            {item.kind === "field" && (
+                <ColumnAdornmentControls
+                    refKey={item.refKey}
+                    adornment={ad}
+                    editable={editable}
+                    onAdornment={onAdornment}
+                />
             )}
         </div>
     );
 }
 
+function RelatedListColumnRow({
+    col,
+    ci,
+    colCount,
+    editable,
+    catalogFields,
+    catalogGroups,
+    onMoveColumn,
+    onRemoveColumn,
+    onPatchColumn,
+}: {
+    col: LayoutCollectionColumn;
+    ci: number;
+    colCount: number;
+    editable: boolean;
+    catalogFields: LayoutCatalogField[];
+    catalogGroups: CatalogGroup[];
+    onMoveColumn: (ci: number, dir: -1 | 1) => void;
+    onRemoveColumn: (ci: number) => void;
+    onPatchColumn: (ci: number, patch: Partial<LayoutCollectionColumn>) => void;
+}) {
+    const safeIcon =
+        col.adornment?.icon && (LAYOUT_ADORNMENT_ICONS as readonly string[]).includes(col.adornment.icon) ?
+            col.adornment
+        :   col.adornment?.action ?
+            { ...col.adornment, icon: (LAYOUT_ADORNMENT_ICONS[0] ?? "person") as LayoutAdornmentIcon }
+        :   col.adornment;
+
+    return (
+        <div className="rounded border border-[#eef0f4] bg-white px-1.5 py-1 text-[12px]">
+            <div className="flex items-center gap-1">
+                <span className="min-w-0 flex-1 truncate text-[#31394d]" title={col.refKey}>
+                    {col.label || col.refKey}
+                    <span className="ml-1 rounded bg-[#eef1f6] px-1 text-[9px] text-[#59678b]">column</span>
+                </span>
+                <button type="button" onClick={() => onMoveColumn(ci, -1)} disabled={!editable || ci === 0} className="px-0.5 disabled:opacity-30" title="Move left">←</button>
+                <button type="button" onClick={() => onMoveColumn(ci, 1)} disabled={!editable || ci === colCount - 1} className="px-0.5 disabled:opacity-30" title="Move right">→</button>
+                <button type="button" onClick={() => onRemoveColumn(ci)} disabled={!editable} className="px-0.5 text-red-600 disabled:opacity-30" title="Remove">✕</button>
+            </div>
+            {catalogFields.length > 0 && (
+                <div className="mt-0.5 flex items-center gap-1">
+                    <span className="text-[9px] text-[#9aa4bf]">field:</span>
+                    <GroupedCatalogFieldSelect
+                        catalogGroups={catalogGroups}
+                        catalogFields={catalogFields}
+                        value={col.refKey}
+                        disabled={!editable}
+                        className="min-w-0 max-w-[180px] truncate rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40"
+                        title="Field for this column"
+                        onChange={(f) => onPatchColumn(ci, { refKey: f.refKey, label: col.label || f.fieldLabel })}
+                    />
+                </div>
+            )}
+            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                <span className="text-[9px] text-[#9aa4bf]">display:</span>
+                <select value={col.renderHint ?? "text"} disabled={!editable} onChange={(e) => onPatchColumn(ci, { renderHint: e.target.value as LayoutRenderHint })} title="How this value renders" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
+                    {RENDER_MODES.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
+                </select>
+                <span className="text-[9px] text-[#9aa4bf]">width:</span>
+                <select value={col.width ?? "medium"} disabled={!editable} onChange={(e) => onPatchColumn(ci, { width: e.target.value as LayoutColumnWidth })} title="Column width" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
+                    {WIDTH_OPTIONS.map((w) => <option key={w} value={w}>{w}</option>)}
+                </select>
+            </div>
+            <ColumnAdornmentControls
+                refKey={col.refKey}
+                adornment={safeIcon}
+                editable={editable}
+                onAdornment={(a) => onPatchColumn(ci, { adornment: a })}
+            />
+        </div>
+    );
+}
+
 /**
- * Multi-field related list (collection table) editor — configure the columns
- * each child row renders: add/remove/reorder columns, pick the field, set width
- * and render/display mode. Each child renders as its OWN row in the renderer.
+ * Multi-field related list editor — column rows use the same controls as field items.
  */
 function RelatedListEditor({
     item,
@@ -1278,18 +1402,20 @@ function RelatedListEditor({
     const cols = item.columns ?? [];
     const currentZone = (item.metadata as { zone?: string } | undefined)?.zone ?? "";
     return (
-        <div className="rounded border border-[#dbe7ff] bg-[#f7faff] p-1.5">
+        <div className="rounded border border-[#eef0f4] bg-white px-1.5 py-1 text-[12px]">
             <div className="flex items-center gap-1">
-                <span className="rounded bg-[#e6efff] px-1 text-[9px] font-semibold uppercase text-[#4063b0]">list</span>
-                <input value={item.label ?? ""} disabled={!editable} onChange={(e) => onPatchItem({ label: e.target.value })} placeholder="List title" className="min-w-0 flex-1 rounded border border-[#e6e8ec] px-1 py-0.5 text-[11px] font-medium disabled:bg-[#f4f6f9]" />
+                <span className="min-w-0 flex-1 truncate text-[#31394d]" title={item.refKey}>
+                    {item.label || item.refKey || "Related list"}
+                    <span className="ml-1 rounded bg-[#eef1f6] px-1 text-[9px] text-[#59678b]">list</span>
+                </span>
                 <select value={item.displayMode ?? "table"} disabled={!editable} onChange={(e) => onPatchItem({ displayMode: e.target.value })} title="Layout: table or stacked rows" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
                     <option value="table">Table</option>
                     <option value="rows">Rows</option>
                     <option value="list">List</option>
                 </select>
-                <button type="button" onClick={() => onMove(-1)} disabled={!editable} className="px-0.5 text-[11px] disabled:opacity-30" title="Move up">↑</button>
-                <button type="button" onClick={() => onMove(1)} disabled={!editable} className="px-0.5 text-[11px] disabled:opacity-30" title="Move down">↓</button>
-                <button type="button" onClick={onRemove} disabled={!editable} className="px-0.5 text-[11px] text-red-600 disabled:opacity-30" title="Remove list">✕</button>
+                <button type="button" onClick={() => onMove(-1)} disabled={!editable} className="px-0.5 disabled:opacity-30" title="Up">↑</button>
+                <button type="button" onClick={() => onMove(1)} disabled={!editable} className="px-0.5 disabled:opacity-30" title="Down">↓</button>
+                <button type="button" onClick={onRemove} disabled={!editable} className="px-0.5 text-red-600 disabled:opacity-30" title="Remove">✕</button>
             </div>
             {showQueueZone && (
                 <div className="mt-0.5 flex items-center gap-1">
@@ -1300,39 +1426,22 @@ function RelatedListEditor({
                     </select>
                 </div>
             )}
-            <p className="mt-0.5 px-0.5 text-[9px] text-[#9aa4bf]">Each {item.related?.entityType ?? "child"} renders as its own row.</p>
+            <p className="mt-0.5 text-[9px] text-[#9aa4bf]">Each {item.related?.entityType ?? "child"} renders as its own row. Configure columns below like other fields.</p>
             <div className="mt-1 flex flex-col gap-1">
-                {cols.length === 0 && <p className="px-0.5 text-[9px] text-[#9aa4bf]">No columns yet.</p>}
+                {cols.length === 0 && <p className="px-0.5 text-[9px] text-[#9aa4bf]">No columns yet — add one to choose fields and link icons.</p>}
                 {cols.map((col, ci) => (
-                    <div key={`${col.refKey}-${ci}`} className="rounded border border-[#eef0f4] bg-white p-1">
-                        <div className="flex items-center gap-1">
-                            <input value={col.label} disabled={!editable} onChange={(e) => onPatchColumn(ci, { label: e.target.value })} placeholder="Column" className="min-w-0 flex-1 rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40" />
-                            <button type="button" onClick={() => onMoveColumn(ci, -1)} disabled={!editable || ci === 0} className="px-0.5 text-[10px] disabled:opacity-30" title="Move left">←</button>
-                            <button type="button" onClick={() => onMoveColumn(ci, 1)} disabled={!editable || ci === cols.length - 1} className="px-0.5 text-[10px] disabled:opacity-30" title="Move right">→</button>
-                            <button type="button" onClick={() => onRemoveColumn(ci)} disabled={!editable} className="px-0.5 text-[10px] text-red-600 disabled:opacity-30" title="Remove column">✕</button>
-                        </div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                            <GroupedCatalogFieldSelect
-                                catalogGroups={catalogGroups}
-                                catalogFields={catalogFields}
-                                value={col.refKey}
-                                disabled={!editable}
-                                className="min-w-0 max-w-[150px] truncate rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40"
-                                title="Field for this column"
-                                onChange={(f) => onPatchColumn(ci, { refKey: f.refKey, label: col.label || f.fieldLabel })}
-                            />
-                            <select value={col.width ?? "medium"} disabled={!editable} onChange={(e) => onPatchColumn(ci, { width: e.target.value as LayoutColumnWidth })} title="Column width" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
-                                {WIDTH_OPTIONS.map((w) => <option key={w} value={w}>{w}</option>)}
-                            </select>
-                            <select value={col.renderHint ?? "text"} disabled={!editable} onChange={(e) => onPatchColumn(ci, { renderHint: e.target.value as LayoutRenderHint })} title="Render mode" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
-                                {RENDER_MODES.map((m) => <option key={m.key} value={m.key}>{m.label}</option>)}
-                            </select>
-                            <select value={col.adornment?.icon ?? ""} disabled={!editable} onChange={(e) => onPatchColumn(ci, { adornment: e.target.value ? { position: "left", icon: e.target.value as LayoutAdornmentIcon } : undefined })} title="Icon" className="rounded border border-[#e6e8ec] px-1 py-0.5 text-[10px] disabled:opacity-40">
-                                <option value="">No icon</option>
-                                {LAYOUT_ADORNMENT_ICONS.map((ic) => <option key={ic} value={ic}>{ADORNMENT_ICON_GLYPH[ic]} {ic}</option>)}
-                            </select>
-                        </div>
-                    </div>
+                    <RelatedListColumnRow
+                        key={`${col.refKey}-${ci}`}
+                        col={col}
+                        ci={ci}
+                        colCount={cols.length}
+                        editable={editable}
+                        catalogFields={catalogFields}
+                        catalogGroups={catalogGroups}
+                        onMoveColumn={onMoveColumn}
+                        onRemoveColumn={onRemoveColumn}
+                        onPatchColumn={onPatchColumn}
+                    />
                 ))}
             </div>
             {editable && (

@@ -7,7 +7,7 @@ import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { emitAdminV2Perf } from "@/lib/perf/adminV2PerfLog";
 import { buildWorkUnitLaneTimingTable } from "@/lib/perf/workUnitCriticalPathTrace";
 
-const TAG = "[perf.speed.sprint]";
+const TAG = "[perf]";
 
 export type SpeedSprintSurface = "work_unit" | "drawer_opportunity" | "department" | "workspace";
 
@@ -147,7 +147,7 @@ export function reportAdminV2SpeedSprint(extra?: Partial<SpeedSprintTimingRow>):
     };
     if (typeof window !== "undefined") {
         console.info(TAG, report);
-        emitAdminV2Perf(TAG, { phase: "snapshot", rows, mark_count: Object.keys(marks).length, source: "network" });
+        emitAdminV2Perf(TAG, { phase: "snapshot", mark_count: Object.keys(marks).length, source: "network" });
     }
     return report;
 }

@@ -188,7 +188,7 @@ describe("AdminV2 performance pass 7 — presentation gate", () => {
             skeleton_sections: ["what_matters_tour"],
         });
         logDrawerRawValueGuard({ field: "status_key", raw_value: "tour_scheduled", suppressed: true });
-        expect(read("lib/perf/drawerPresentationGatePerf.ts")).toContain("[perf.drawer.presentation_gate]");
-        expect(read("lib/perf/drawerPresentationGatePerf.ts")).toContain("[perf.drawer.raw_value_guard]");
+        expect(read("lib/perf/drawerPresentationGatePerf.ts")).toContain("perfDrawer");
+        expect(read("lib/perf/drawerPresentationGatePerf.ts")).toContain("presentation_gate");
     });
 });

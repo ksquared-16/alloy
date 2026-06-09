@@ -33,6 +33,7 @@ type Props = {
      */
     layout?: "composed" | "modal-attention" | "modal-actions";
     proofLayoutActions?: boolean;
+    bosActionVariant?: "default" | "juniper";
 };
 
 function OpportunityDrawerHeaderActionsRow({
@@ -48,6 +49,7 @@ function OpportunityDrawerHeaderActionsRow({
     onActionSelect,
     disabledReason = null,
     proofLayoutActions = false,
+    bosActionVariant = "default",
 }: Pick<
     Props,
     | "opportunityId"
@@ -61,6 +63,7 @@ function OpportunityDrawerHeaderActionsRow({
     | "actionLoadingKey"
     | "onActionSelect"
     | "proofLayoutActions"
+    | "bosActionVariant"
 > & { disabledReason?: string | null }) {
     return (
         <div
@@ -75,6 +78,7 @@ function OpportunityDrawerHeaderActionsRow({
                 queuePreviewSeed={queuePreviewSeed}
                 inquiryWorkflow={inquiryWorkflow}
                 proofLayoutActions={proofLayoutActions}
+                actionVariant={bosActionVariant}
             />
             {showRegistryActions ?
                 <OpportunityDrawerHeaderActionsMenu
@@ -112,6 +116,7 @@ export function OpportunityDrawerHeaderControls({
     actionsDisabledReason = null,
     layout = "composed",
     proofLayoutActions = false,
+    bosActionVariant = "default",
 }: Props) {
     if (layout === "modal-attention") {
         return (
@@ -145,6 +150,7 @@ export function OpportunityDrawerHeaderControls({
                     onActionSelect={onActionSelect}
                     disabledReason={actionsDisabledReason}
                     proofLayoutActions={proofLayoutActions}
+                    bosActionVariant={bosActionVariant}
                 />
                 {actionPreflightBlocked ?
                     <ActionPreflightBlockedPanel
@@ -186,6 +192,7 @@ export function OpportunityDrawerHeaderControls({
                     onActionSelect={onActionSelect}
                     disabledReason={actionsDisabledReason}
                     proofLayoutActions={proofLayoutActions}
+                    bosActionVariant={bosActionVariant}
                 />
             </div>
             {actionPreflightBlocked ?

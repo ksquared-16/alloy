@@ -393,7 +393,7 @@ describe("logDrawerViewModelShadow", () => {
             join(dirname(fileURLToPath(import.meta.url)), "../../../lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadow.ts"),
             "utf8"
         );
-        expect(src).toContain('console.info("[drawer-vm-shadow:summary]"');
-        expect(src).toContain('console.info("[drawer-vm-shadow]"');
+        expect(src).toContain('perfDrawer("vm_shadow_summary"');
+        expect(src).toContain("perfDebugTraceEnabled");
     });
 });

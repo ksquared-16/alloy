@@ -3,6 +3,10 @@
  * Redesign / proof path only — production CRM compact rows unchanged when context absent.
  */
 
+import {
+    formatOpportunityOperatorDisplayLabel,
+    isGenericOpportunityBoilerplateLabel,
+} from "@/lib/admin/opportunityDisplayLabel";
 import type { OperationalQueueRecordViewModel } from "@/lib/layout/runtime/buildOperationalQueueRecordViewModel";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
@@ -18,6 +22,41 @@ function trimOrNull(value: unknown): string | null {
     return t.length > 0 ? t : null;
 }
 
+function contextPrimaryLabelIsBoilerplate(raw: string): boolean {
+    const trimmed = raw.trim();
+    if (!trimmed) return true;
+    return isGenericOpportunityBoilerplateLabel(trimmed) || /^family\s+inquiry\s*[-–—:|]/i.test(trimmed);
+}
+
+function overlayContextHouseholdFields(
+    mutable: Record<string, unknown>,
+    presentation: QueueRowContextPresentation,
+): void {
+    const raw = trimOrNull(presentation.primaryLabel);
+    if (!raw) return;
+
+    const formatted = formatOpportunityOperatorDisplayLabel(raw, {
+        customerName: trimOrNull(mutable["customer.display_name"]) ?? trimOrNull(mutable.name),
+        locationName: trimOrNull(mutable["opportunity.location"]),
+    });
+    const overlayLabel = formatted || raw;
+    const boilerplate = contextPrimaryLabelIsBoilerplate(raw);
+    const existingHousehold = trimOrNull(mutable["customer.display_name"]) ?? trimOrNull(mutable.name);
+
+    if (boilerplate && existingHousehold) {
+        return;
+    }
+
+    const householdKeys = ["customer.display_name", "customer.name", "name", "opportunity.title"] as const;
+    for (const key of householdKeys) {
+        if (boilerplate) {
+            if (!trimOrNull(mutable[key])) mutable[key] = overlayLabel;
+        } else {
+            mutable[key] = overlayLabel;
+        }
+    }
+}
+
 /** Overlay context-first fields onto a layout runtime queue row record (additive). */
 export function applyQueueRowContextToLayoutRecord(
     record: ProofRuntimeRecord,
@@ -30,12 +69,7 @@ export function applyQueueRowContextToLayoutRecord(
     const mutable = record as Record<string, unknown>;
     mutable._queue_row_context = ctx;
 
-    if (presentation.primaryLabel) {
-        mutable.name = presentation.primaryLabel;
-        mutable["customer.display_name"] = presentation.primaryLabel;
-        mutable["customer.name"] = presentation.primaryLabel;
-        mutable["opportunity.title"] = presentation.primaryLabel;
-    }
+    overlayContextHouseholdFields(mutable, presentation);
 
     if (presentation.statusLabel) {
         mutable._status_display = presentation.statusLabel;
@@ -156,7 +190,12 @@ export function mergeOperationalVmWithQueueRowContext(
         ...vm,
         identity: {
             ...vm.identity,
-            title: presentation.primaryLabel || vm.identity.title,
+            title:
+                trimOrNull(record["customer.display_name"])
+                ?? trimOrNull(record.name)
+                ?? (contextPrimaryLabelIsBoilerplate(presentation.primaryLabel) ?
+                    vm.identity.title
+                :   formatOpportunityOperatorDisplayLabel(presentation.primaryLabel) || vm.identity.title),
             contactName: contact?.display_name?.trim() || vm.identity.contactName,
             contactPhone: trimOrNull(contact?.phone) ?? vm.identity.contactPhone,
             contactEmail: trimOrNull(contact?.email) ?? vm.identity.contactEmail,

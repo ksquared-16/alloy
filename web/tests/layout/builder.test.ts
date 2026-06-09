@@ -67,26 +67,36 @@ describe("builderOps", () => {
 });
 
 describe("default Lead layouts", () => {
-    it("drawer default has the four Lead sections and validates", () => {
+    it("drawer default has the six Lead sections and validates", () => {
         const doc = buildLeadDrawerDefaultDoc();
         const res = parseLayoutDoc(doc);
         expect(res.ok, res.errors.join("; ")).toBe(true);
         expect(doc.sections.map((s) => s.key)).toEqual([
             "lead_summary",
-            "children_inquiry",
+            "children_enrollment",
+            "household_contact",
             "lead_source",
             "notes_communication",
+            "activity",
         ]);
         // widgets present
         const allItems = doc.sections.flatMap((s) => s.rows).flatMap((r) => r.columns).flatMap((c) => c.items);
         const widgetKeys = allItems.filter((i) => i.kind === "widget_placeholder").map((i) => i.refKey);
-        expect(widgetKeys).toEqual(expect.arrayContaining(["tasks", "reminders", "actions", "recent_communication", "notes"]));
-        // conditional secondary contact
+        expect(widgetKeys).toEqual(
+            expect.arrayContaining([
+                "attention",
+                "tasks",
+                "tour_summary",
+                "children_list",
+                "recent_communication",
+                "notes",
+                "activity",
+            ]),
+        );
+        // conditional secondary contact lives in household section
         const cond = allItems.find((i) => i.refKey === "person.secondary_contact_name");
         expect(cond?.visibleWhen).toEqual({ type: "exists", path: "person.secondary_contact_name" });
-        // namespaced refs
-        expect(allItems.some((i) => i.refKey === "opportunity.tour_date")).toBe(true);
-        // child fields live in the Lead Children related_list table columns
+        // child fields live in the Children & Enrollment related_list table columns
         const childTable = allItems.find((i) => i.kind === "related_list" && i.displayMode === "table");
         expect(childTable?.columns?.some((c) => c.refKey === "child.name")).toBe(true);
     });
@@ -120,7 +130,7 @@ describe("field catalog", () => {
     });
     it("widget catalog has the V1 widgets", () => {
         expect(LAYOUT_WIDGET_CATALOG.map((w) => w.widgetKey)).toEqual(
-            expect.arrayContaining(["tasks", "reminders", "actions", "tour_summary", "recent_communication", "notes", "children_list"]),
+            expect.arrayContaining(["tasks", "reminders", "actions", "tour_summary", "recent_communication", "notes", "children_list", "activity"]),
         );
     });
     it("namespaces refKeys and parses them back", () => {

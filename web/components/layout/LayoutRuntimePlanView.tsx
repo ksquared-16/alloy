@@ -8,7 +8,8 @@
  * repeaters, widgets. NOT wired to AdminEntityDrawer or VM.
  */
 
-import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { AlertTriangle, CheckSquare2, HeartPulse, MessageSquare } from "lucide-react";
 import {
     LAYOUT_GRID_COLUMNS,
     type LayoutCollectionColumn,
@@ -19,6 +20,7 @@ import {
     type LayoutRow,
     type LayoutSection,
 } from "@/lib/layout/layoutV2";
+import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "@/lib/layout/runtime/layoutRuntimePlan";
 import { classifyLayoutItemBinding } from "@/lib/layout/runtime/classifyLayoutItemBinding";
 import {
@@ -27,21 +29,119 @@ import {
     type ProofBindingResolution,
 } from "@/lib/layout/runtime/resolveProofBindingValue";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
+import { logLayoutRuntimeChildrenRenderDebug } from "@/lib/layout/runtime/logLayoutRuntimeChildrenRenderDebug";
 import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
-import { resolveItemValue } from "@/lib/layout/resolveItemValue";
+import { resolveLayoutRuntimeRepeaterFieldValue } from "@/lib/layout/runtime/resolveLayoutRuntimeRepeaterFieldValue";
 import { FUTURE_MODULE_METADATA_KEY } from "@/lib/layout/runtime/proofLayoutHelpers";
 import { isLayoutItemSupportedForProduction } from "@/lib/layout/runtime/isLayoutItemSupportedForProduction";
 import { evaluateLayoutCondition } from "@/lib/layout/runtime/evaluateLayoutCondition";
 import { resolveLayoutRuntimeWidgetKey } from "@/lib/layout/runtime/resolveLayoutRuntimeWidgetKey";
-import AdornmentIcon from "@/components/layout/AdornmentIcon";
 import { DrawerHeaderAttentionBlock } from "@/components/admin/drawer/DrawerHeaderAttentionBlock";
 import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import LayoutRuntimeTasksWidget from "@/components/layout/LayoutRuntimeTasksWidget";
+import LayoutRuntimeChildrenListWidget from "@/components/layout/LayoutRuntimeChildrenListWidget";
+import LayoutRuntimeChildrenEmptyState from "@/components/layout/LayoutRuntimeChildrenEmptyState";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
+import LayoutRuntimeFieldInput, {
+    layoutRuntimeDependentValueReader,
+} from "@/components/layout/LayoutRuntimeFieldInput";
+import { layoutRuntimeFieldIsEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import LayoutRuntimeAdornmentButton from "@/components/layout/LayoutRuntimeAdornmentButton";
+import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
+import LayoutRuntimeEnrollmentGrid from "@/components/layout/LayoutRuntimeEnrollmentGrid";
+import LeadEnrollmentHealthSummaryCard from "@/components/layout/lead/LeadEnrollmentHealthSummaryCard";
+import LeadEnrollmentCardList from "@/components/layout/lead/LeadEnrollmentCardList";
+import LeadLastTouchSummaryCard from "@/components/layout/lead/LeadLastTouchSummaryCard";
+import LeadOperatingAttentionSummaryCard from "@/components/layout/lead/LeadOperatingAttentionSummaryCard";
+import LeadActivityPreview from "@/components/layout/lead/LeadActivityPreview";
+import LeadOperatingSummaryCard from "@/components/layout/lead/LeadOperatingSummaryCard";
+import PersonActivityPreview from "@/components/layout/person/PersonActivityPreview";
+import { PersonConnectedChildrenSummaryCardShell } from "@/components/layout/person/PersonConnectedChildrenSummaryCard";
+import { PersonHouseholdSummaryCardShell } from "@/components/layout/person/PersonHouseholdSummaryCard";
+import { PersonLastTouchSummaryCardShell } from "@/components/layout/person/PersonLastTouchSummaryCard";
+import LayoutRuntimeNotesCommunicationWidget, {
+    layoutRuntimeCommunicationWidgetHasContent,
+    layoutRuntimeNotesWidgetHasContent,
+} from "@/components/layout/LayoutRuntimeNotesCommunicationWidget";
+import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
+import { logChildLinkInstrumentationMounted } from "@/lib/layout/runtime/childLinkBrowserTrace";
+import { isLayoutRuntimeChildLinkColumn } from "@/lib/layout/runtime/layoutRuntimeLinkHarness";
+import {
+    layoutRepeaterColumnHeaderLabel,
+    layoutRepeaterColumnWidthStyle,
+} from "@/lib/layout/runtime/layoutRepeaterColumnLayout";
+import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
+import { useLayoutRuntimeCompositionHints } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
+import {
+    filterRelatedListColumnsForComposition as filterLeadRelatedListColumnsForComposition,
+    LEAD_COMPOSITION_SECTION_EYEBROWS,
+} from "@/lib/layout/runtime/leadOverviewComposition";
+import {
+    filterRelatedListColumnsForComposition as filterPersonRelatedListColumnsForComposition,
+    PERSON_COMPOSITION_SECTION_EYEBROWS,
+} from "@/lib/layout/runtime/personOverviewComposition";
+import { resolveLeadSummaryLastTouch } from "@/lib/layout/runtime/resolveLeadSummaryLastTouch";
+import { resolveLeadActivityPreview } from "@/lib/layout/runtime/resolveLeadActivityPreview";
+import { resolvePersonActivityPreview } from "@/lib/layout/runtime/resolvePersonActivityPreview";
+import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
+import {
+    scrollToLeadEnrollmentSection,
+    summarizeLeadDrawerEnrollmentHealth,
+} from "@/lib/layout/runtime/summarizeLeadDrawerEnrollmentHealth";
+import {
+    LAYOUT_RUNTIME_BODY_SECTION_HEADER,
+    LAYOUT_RUNTIME_BODY_SECTION_SURFACE,
+    LAYOUT_RUNTIME_COMPOSITION_SECTION_EYEBROW,
+    LAYOUT_RUNTIME_COMPOSITION_SECTION_HEADER,
+    LAYOUT_RUNTIME_COMPOSITION_SECTION_TITLE,
+    LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY,
+    LAYOUT_RUNTIME_COMPOSITION_SECTION_BODY,
+    LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE,
+    LAYOUT_RUNTIME_SUMMARY_WIDGET_MINIMIZED,
+    LAYOUT_RUNTIME_FIELD_READ_SURFACE,
+    LAYOUT_RUNTIME_FIELD_SURFACE,
+    LAYOUT_RUNTIME_GROUP_READ_SURFACE,
+    LAYOUT_RUNTIME_GROUP_SURFACE,
+    LAYOUT_RUNTIME_MUTED,
+    LAYOUT_RUNTIME_PANEL_HEADER,
+    LAYOUT_RUNTIME_PANEL_SURFACE,
+    LAYOUT_RUNTIME_PRIMARY_WORKSPACE_HEADER,
+    LAYOUT_RUNTIME_PRIMARY_WORKSPACE_SECTION,
+    LAYOUT_RUNTIME_SECTION_HEADER,
+    LAYOUT_RUNTIME_SECTION_SURFACE,
+    LAYOUT_RUNTIME_SUMMARY_WIDGET_BODY,
+    LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER,
+    LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE,
+    LAYOUT_RUNTIME_TEXT,
+    LAYOUT_RUNTIME_WORK_RAIL,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 
-const TEXT = "#31394d";
-const MUTED = "#59678b";
-const BORDER = "#e6e8ec";
+const TEXT = LAYOUT_RUNTIME_TEXT;
+const MUTED = LAYOUT_RUNTIME_MUTED;
+const BORDER = "#e2e6ec";
+
+const CHILDREN_REPEATER_KEYS = new Set([
+    "children",
+    "enrollment_children",
+    "inquiry_children",
+    "_inquiry_children",
+    "household_children",
+    "_household_children",
+]);
+
+type LayoutRuntimeHostContextValue = {
+    entityId?: string;
+    canMutate?: boolean;
+    anchorEntity?: string;
+};
+
+const LayoutRuntimeHostContext = createContext<LayoutRuntimeHostContextValue>({});
+
+function isLayoutRuntimeChildrenRepeater(item: LayoutItem): boolean {
+    const keys = [item.source, item.refKey].filter(Boolean).map(String);
+    return keys.some((key) => CHILDREN_REPEATER_KEYS.has(key));
+}
 
 export type AdornmentActionHandler = (
     item: LayoutItem,
@@ -50,6 +150,26 @@ export type AdornmentActionHandler = (
 ) => void;
 const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
 const LayoutRuntimeVariantContext = createContext<"proof" | "production" | "preview">("proof");
+
+type LayoutRuntimeSectionContextValue = {
+    sectionPresentation: LayoutRuntimeSectionPresentation;
+    sectionKey: string;
+    stackRows?: boolean;
+};
+
+const LayoutRuntimeSectionContext = createContext<LayoutRuntimeSectionContextValue>({
+    sectionPresentation: "default",
+    sectionKey: "",
+});
+
+function useLayoutRuntimeOperatorSurfaces(): boolean {
+    const variant = useContext(LayoutRuntimeVariantContext);
+    return variant === "production" || variant === "preview";
+}
+
+function useLayoutRuntimeSummaryStrip(): boolean {
+    return useContext(LayoutRuntimeSectionContext).sectionPresentation === "summary_strip";
+}
 
 const INTERNAL_OPERATOR_TOKENS =
     /\b(inquiry_child|customer_member|ocm_id|child_inquiry)\b|^[0-9a-f-]{36}$/i;
@@ -71,27 +191,14 @@ function Adorn({ item, rowRecord }: { item: LayoutItem; rowRecord?: ProofRuntime
     const onAction = useContext(AdornmentActionContext);
     const ad = item.adornment;
     if (!ad) return null;
-    if (ad.action && onAction) {
-        const title = `Open ${ad.action.entity} drawer`;
-        return (
-            <button
-                type="button"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    onAction(item, ad, rowRecord);
-                }}
-                title={title}
-                aria-label={title}
-                className="inline-flex items-center rounded p-0.5 text-[#00458C] hover:bg-[#eef3fb]"
-            >
-                <AdornmentIcon icon={ad.icon} />
-            </button>
-        );
-    }
     return (
-        <span className="inline-flex items-center text-[rgba(39,63,82,0.55)]">
-            <AdornmentIcon icon={ad.icon} />
-        </span>
+        <LayoutRuntimeAdornmentButton
+            item={item}
+            adornment={ad}
+            rowRecord={rowRecord}
+            onAction={onAction}
+            traceSurface="opportunity_drawer"
+        />
     );
 }
 
@@ -123,6 +230,7 @@ function ValueCell({
     anchorEntity: string;
 }) {
     const variant = useContext(LayoutRuntimeVariantContext);
+    const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const edit = useLayoutRuntimeDrawerEdit();
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
@@ -133,19 +241,21 @@ function ValueCell({
         :   r.display;
     const refKey = item.refKey ?? "";
     const canEdit =
-        item.editable === true &&
-        variant === "production" &&
-        edit?.isEditableRefKey(refKey);
+        layoutRuntimeFieldIsEditable(item, variant) &&
+        Boolean(edit);
     const editValue = canEdit && edit ? edit.getFieldValue(refKey, display ?? "") : display ?? "";
 
     return (
-        <div className="rounded border border-[#e8eaed] bg-gradient-to-br from-white to-[#f9fafb] px-2.5 py-1.5 shadow-[0_1px_2px_rgba(15,23,42,0.035)] transition-shadow hover:shadow-[0_2px_5px_rgba(15,23,42,0.06)] focus-within:border-[rgba(0,162,131,0.28)] focus-within:ring-1 focus-within:ring-[rgba(0,162,131,0.12)]">
+        <div className={operatorSurfaces ? LAYOUT_RUNTIME_FIELD_READ_SURFACE : LAYOUT_RUNTIME_FIELD_SURFACE}>
             {label ?
-                <div className="flex flex-wrap items-center gap-1 text-[11px] font-medium" style={{ color: MUTED }}>
+                <div
+                    className={`flex flex-wrap items-center gap-1 font-medium ${operatorSurfaces ? "text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/50" : "text-[11px]"}`}
+                    style={operatorSurfaces ? undefined : { color: MUTED }}
+                >
                     {label}
                     {variant === "proof" ? <BindingBadge resolution={r} /> : null}
                     {variant === "proof" && r.relationHandle ?
-                        <span className="truncate text-[10px] font-normal text-[#4063b0]" title="Related entity handle">
+                        <span className="truncate text-[10px] font-normal text-[#5c6478]" title="Related entity handle">
                             · {r.relationHandle}
                         </span>
                     :   null}
@@ -154,19 +264,17 @@ function ValueCell({
             <div className="mt-0.5 flex items-center gap-1 text-sm" style={{ color: display || canEdit ? TEXT : "#9aa4bf" }}>
                 {item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
                 {canEdit && edit ?
-                    <input
-                        type="text"
-                        className="w-full rounded border border-[#dfe3ea] bg-white px-2 py-1 text-sm text-[#31394d] outline-none focus:border-[rgba(0,162,131,0.45)] focus:ring-1 focus:ring-[rgba(0,162,131,0.12)]"
+                    <LayoutRuntimeFieldInput
+                        refKey={refKey}
                         value={editValue}
-                        onChange={(e) => edit.setFieldValue(refKey, e.target.value)}
-                        data-layout-runtime-editable="true"
-                        data-layout-runtime-ref-key={refKey}
+                        onChange={(v) => edit.setFieldValue(refKey, v)}
+                        getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue)}
                     />
                 :   <span>
                         {!display ?
                             <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>—</span>
                         : r.renderHint === "status" ?
-                            <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-xs">{display}</span>
+                            <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-xs text-alloy-midnight/85">{display}</span>
                         :   display}
                     </span>
                 }
@@ -178,12 +286,16 @@ function ValueCell({
 
 function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const variant = useContext(LayoutRuntimeVariantContext);
+    const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const hasSubgrid = Array.isArray(item.rows) && item.rows.length > 0;
     const title = operatorLabel(item, variant);
     return (
-        <div className="rounded-md border border-[#e6e8ec] bg-[#fbfcfe] p-2.5">
+        <div className={operatorSurfaces ? LAYOUT_RUNTIME_GROUP_READ_SURFACE : LAYOUT_RUNTIME_GROUP_SURFACE}>
             {title ?
-                <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                <div
+                    className={`${operatorSurfaces ? "text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/50" : "mb-1.5 text-[11px] font-semibold uppercase tracking-wide"}`}
+                    style={operatorSurfaces ? undefined : { color: MUTED }}
+                >
                     {title}
                 </div>
             :   null}
@@ -204,34 +316,89 @@ function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord;
     );
 }
 
-function RepeaterCellContent({ row, col }: { row: ProofRuntimeRecord; col: LayoutCollectionColumn }) {
+function RepeaterCellContent({
+    row,
+    col,
+    rowKey,
+    anchorRecord,
+}: {
+    row: ProofRuntimeRecord;
+    col: LayoutCollectionColumn;
+    rowKey: string;
+    anchorRecord?: ProofRuntimeRecord;
+}) {
+    const variant = useContext(LayoutRuntimeVariantContext);
+    const edit = useLayoutRuntimeDrawerEdit();
+    const onAction = useContext(AdornmentActionContext);
     const synthetic: LayoutItem = {
         id: col.refKey,
         kind: "field",
         refKey: col.refKey,
         renderHint: col.renderHint,
         adornment: col.adornment,
+        editable: col.editable,
     };
-    // Row objects carry namespaced child.* / inquiry_child.* values in enrollment context.
-    const r = resolveItemValue(row, synthetic);
+    const r = resolveLayoutRuntimeRepeaterFieldValue(row, col.refKey, {
+        renderHint: col.renderHint,
+        template: col.template,
+    });
+    const canEdit = layoutRuntimeFieldIsEditable(synthetic, variant) && Boolean(edit);
+    const editValue =
+        canEdit && edit ? edit.getFieldValue(col.refKey, r.display ?? "", rowKey) : r.display ?? "";
+    if (isLayoutRuntimeChildLinkColumn(col.refKey) && !canEdit) {
+        return (
+            <LayoutRuntimeChildLinkSurface
+                componentName="LayoutRuntimePlanView/RepeaterCellContent"
+                surface="drawer"
+                item={synthetic}
+                rowRecord={row}
+                anchorRecord={anchorRecord}
+                adornment={col.adornment}
+                display={
+                    r.isPlaceholder ? "—"
+                    : col.renderHint === "status" ?
+                        <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] text-alloy-midnight/85">{r.display}</span>
+                    :   r.display
+                }
+                onAction={onAction}
+                className="inline-flex min-w-0 items-center gap-1.5 rounded px-0.5 text-sm leading-snug text-left hover:bg-[#eef3fb]"
+            />
+        );
+    }
+
     return (
-        <span className="inline-flex items-center gap-1">
-            {col.adornment && col.adornment.position !== "right" ? <Adorn item={synthetic} rowRecord={row} /> : null}
-            <span style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
-                {r.isPlaceholder ? "—" : col.renderHint === "status" ? (
-                    <span className="inline-block rounded-full bg-[#eef1f6] px-2 py-0.5 text-[11px]">{r.display}</span>
-                ) : (
-                    r.display
-                )}
-            </span>
-            {col.adornment && col.adornment.position === "right" ? <Adorn item={synthetic} rowRecord={row} /> : null}
+        <span className="inline-flex items-center gap-1.5 text-sm leading-snug">
+            {col.adornment && col.adornment.position !== "right" ?
+                <Adorn item={synthetic} rowRecord={row} />
+            :   null}
+            {canEdit && edit ?
+                <LayoutRuntimeFieldInput
+                    refKey={col.refKey}
+                    value={editValue}
+                    rowKey={rowKey}
+                    onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
+                    getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
+                />
+            :   <span style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
+                    {r.isPlaceholder ? "—" : col.renderHint === "status" ?
+                        <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] text-alloy-midnight/85">{r.display}</span>
+                    :   r.display}
+                </span>
+            }
+            {col.adornment && col.adornment.position === "right" ?
+                <Adorn item={synthetic} rowRecord={row} />
+            :   null}
         </span>
     );
 }
 
 function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const variant = useContext(LayoutRuntimeVariantContext);
-    const binding = classifyLayoutItemBinding(item, anchorEntity);
+    const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
+    const { sectionKey } = useContext(LayoutRuntimeSectionContext);
+    const host = useContext(LayoutRuntimeHostContext);
+    const onAdornmentAction = useContext(AdornmentActionContext);
+    const [enrollmentExpanded, setEnrollmentExpanded] = useState(false);
     // A configured collection (any displayMode — table/rows/list) renders its rows
     // whenever it has columns. This matches isLayoutItemSupportedForProduction
     // (which accepts table|rows) so a configured children list is never counted
@@ -247,62 +414,274 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         );
     }
 
+    const composition = useLayoutRuntimeCompositionHints();
     const columns = item.columns as LayoutCollectionColumn[];
-    const raw = record[item.source ?? item.refKey];
-    const rows: ProofRuntimeRecord[] = Array.isArray(raw) ? (raw as ProofRuntimeRecord[]) : [];
+    const allRows = readLayoutRuntimeRepeaterRows(record, item);
     const title = operatorLabel(item, variant);
+    const isChildrenRepeater = isLayoutRuntimeChildrenRepeater(item);
+    const maxEnrollmentRows =
+        composition.enrollmentMaxVisibleRows != null && composition.enrollmentMaxVisibleRows > 0 ?
+            composition.enrollmentMaxVisibleRows
+        :   null;
+    const maxConnectedChildrenRows =
+        composition.connectedChildrenMaxVisibleRows != null && composition.connectedChildrenMaxVisibleRows > 0 ?
+            composition.connectedChildrenMaxVisibleRows
+        :   null;
+    useEffect(() => {
+        if (!isChildrenRepeater) return;
+        logChildLinkInstrumentationMounted("LayoutRuntimePlanView/RelatedCell", {
+            surface: "drawer",
+            rowCount: allRows.length,
+            columnRefKeys: columns.map((c) => c.refKey),
+        });
+    }, [columns, isChildrenRepeater, allRows.length]);
+    if (isChildrenRepeater) {
+        logLayoutRuntimeChildrenRenderDebug(
+            "drawer",
+            record,
+            item,
+            columns.map((c) => c.refKey),
+        );
+    }
+    const isOpportunityAnchor =
+        host.anchorEntity === "opportunities" || host.anchorEntity === "opportunity";
+    const showChildrenEmpty =
+        variant === "production" &&
+        allRows.length === 0 &&
+        isChildrenRepeater &&
+        isOpportunityAnchor &&
+        Boolean(host.entityId);
 
-    return (
-        <div className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white">
-            <div className="flex items-center justify-between border-b border-[#eef0f4] px-2.5 py-1.5">
-                <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                    {title || "Related records"}
-                </span>
-                {variant === "proof" ?
-                    <span className="text-[10px]" style={{ color: MUTED }}>
-                        {rows.length} row{rows.length === 1 ? "" : "s"}
-                        {binding.relationKey === "enrollment_children" ? " · enrollment context" : ""}
-                    </span>
-                :   null}
-            </div>
-            <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] text-left text-xs">
-                    <thead>
-                        <tr className="border-b border-[#eef0f4]" style={{ color: MUTED }}>
-                            {columns.map((c) => (
-                                <th key={c.refKey} className="px-2 py-1.5 font-semibold">{c.label}</th>
-                            ))}
+    const useEnrollmentReadTable =
+        operatorSurfaces &&
+        isChildrenRepeater &&
+        sectionKey === "children_enrollment" &&
+        (item.displayMode ?? "table") === "table";
+    const usePersonConnectedChildrenTable =
+        operatorSurfaces &&
+        isChildrenRepeater &&
+        sectionKey === "connected_children" &&
+        composition.personOverviewComposition &&
+        (item.displayMode ?? "table") === "table";
+    const filterColumnsForComposition = composition.personOverviewComposition ?
+        filterPersonRelatedListColumnsForComposition
+    :   filterLeadRelatedListColumnsForComposition;
+    const visibleColumns = filterColumnsForComposition(
+        columns,
+        item,
+        Boolean(
+            (useEnrollmentReadTable &&
+                composition.enrollmentPrimaryColumnsOnly &&
+                !composition.leadEnrollmentCardList)
+            || (usePersonConnectedChildrenTable && composition.connectedChildrenPrimaryColumnsOnly),
+        ),
+    );
+    const hideInnerHeader = useEnrollmentReadTable || usePersonConnectedChildrenTable;
+    const rowLimit =
+        useEnrollmentReadTable && maxEnrollmentRows != null && !enrollmentExpanded ? maxEnrollmentRows
+        : usePersonConnectedChildrenTable && maxConnectedChildrenRows != null && !enrollmentExpanded ?
+            maxConnectedChildrenRows
+        :   null;
+    const rows = rowLimit != null ? allRows.slice(0, rowLimit) : allRows;
+    const enrollmentOverflow =
+        useEnrollmentReadTable && maxEnrollmentRows != null && allRows.length > maxEnrollmentRows && !enrollmentExpanded ?
+            allRows.length - maxEnrollmentRows
+        :   0;
+
+    const scrollToEnrollmentSection = scrollToLeadEnrollmentSection;
+
+    const enrollmentOverflowFooter =
+        enrollmentOverflow > 0 ?
+            <button
+                type="button"
+                className="w-full border-t border-alloy-stone/10 px-4 py-2.5 text-left text-[11px] font-medium text-alloy-juniper hover:bg-alloy-juniper/[0.04]"
+                data-lead-enrollment-view-all="true"
+                data-lead-overview-enrollment-overflow="true"
+                onClick={() => {
+                    setEnrollmentExpanded(true);
+                    requestAnimationFrame(scrollToEnrollmentSection);
+                }}
+            >
+                +{enrollmentOverflow} more · View all children
+            </button>
+        :   null;
+
+    const binding = classifyLayoutItemBinding(item, anchorEntity);
+
+    const enrollmentGridMarkup = composition.leadEnrollmentCardList ?
+        <LeadEnrollmentCardList
+            item={item}
+            columns={visibleColumns}
+            rows={rows}
+            anchorRecord={record}
+            overflowFooter={enrollmentOverflowFooter}
+            canMutate={host.canMutate}
+            onAdornmentAction={onAdornmentAction}
+        />
+    :   <LayoutRuntimeEnrollmentGrid
+            item={item}
+            columns={visibleColumns}
+            rows={rows}
+            anchorRecord={record}
+            overflowFooter={enrollmentOverflowFooter}
+            canMutate={host.canMutate}
+            onAdornmentAction={onAdornmentAction}
+        />;
+
+    const legacyTableMarkup = (
+        <div className="overflow-x-auto">
+            <table className="min-w-[640px] w-full table-fixed text-left text-xs">
+                <thead>
+                    <tr className="border-b border-admin-border" style={{ color: MUTED }}>
+                        {visibleColumns.map((c) => (
+                            <th
+                                key={c.refKey}
+                                className="px-2 py-1.5 font-semibold"
+                                style={layoutRepeaterColumnWidthStyle(c, visibleColumns)}
+                            >
+                                {layoutRepeaterColumnHeaderLabel(c)}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows.length === 0 ?
+                        <tr>
+                            <td colSpan={visibleColumns.length} className="px-3 py-4 text-alloy-muted">
+                                {variant === "production" ? "No children linked yet." : "No rows in proof context."}
+                            </td>
                         </tr>
-                    </thead>
-                    <tbody>
-                        {rows.length === 0 ? (
-                            <tr>
-                                <td colSpan={columns.length} className="px-2 py-3 text-[#9aa4bf]">
-                                    {variant === "production" ? "No rows yet." : "No rows in proof context."}
-                                </td>
-                            </tr>
-                        ) : (
-                            rows.map((rw, i) => (
-                                <tr key={(rw.id as string) ?? i} className="border-b border-[#f5f6f9]">
-                                    {columns.map((c) => (
-                                        <td key={c.refKey} className="px-2 py-1.5" style={{ color: TEXT }}>
-                                            <RepeaterCellContent row={rw} col={c} />
+                    :   rows.map((rw, i) => {
+                            const rowKey = layoutRuntimeRepeaterRowReactKey(rw, i, item.source ?? item.refKey);
+                            return (
+                                <tr
+                                    key={rowKey}
+                                    className="border-b border-alloy-stone/80 hover:bg-[#fafbfc]"
+                                    data-layout-runtime-enrollment-row="true"
+                                >
+                                    {visibleColumns.map((c) => (
+                                        <td
+                                            key={c.refKey}
+                                            className="px-2.5 py-2.5 align-middle"
+                                            style={{ ...layoutRepeaterColumnWidthStyle(c, visibleColumns), color: TEXT }}
+                                        >
+                                            <RepeaterCellContent row={rw} col={c} rowKey={rowKey} anchorRecord={record} />
                                         </td>
                                     ))}
                                 </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                            );
+                        })
+                    }
+                </tbody>
+            </table>
+        </div>
+    );
+
+    const collectionMarkup = useEnrollmentReadTable ? enrollmentGridMarkup : legacyTableMarkup;
+
+    if (useEnrollmentReadTable) {
+        return (
+            <>
+                {isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null}
+                {showChildrenEmpty ?
+                    <LayoutRuntimeChildrenEmptyState
+                        opportunityId={host.entityId ?? ""}
+                        canMutate={host.canMutate}
+                    />
+                :   collectionMarkup}
+            </>
+        );
+    }
+
+    return (
+        <div className={`${LAYOUT_RUNTIME_PANEL_SURFACE} ${isChildrenRepeater ? LAYOUT_RUNTIME_WORK_RAIL : ""}`}>
+            {isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null}
+            {!hideInnerHeader ?
+                <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                        {title || "Related records"}
+                    </span>
+                    {variant === "proof" ?
+                        <span className="text-[10px]" style={{ color: MUTED }}>
+                            {rows.length} row{rows.length === 1 ? "" : "s"}
+                            {binding.relationKey === "enrollment_children" ? " · enrollment context" : ""}
+                        </span>
+                    :   null}
+                </div>
+            :   null}
+            {showChildrenEmpty ?
+                <LayoutRuntimeChildrenEmptyState
+                    opportunityId={host.entityId ?? ""}
+                    canMutate={host.canMutate}
+                />
+            :   legacyTableMarkup}
         </div>
     );
 }
 
-function WidgetChrome({ title, children }: { title: string; children: ReactNode }) {
+function WidgetChrome({
+    title,
+    children,
+    accentRail,
+    minimized = false,
+    widgetKey,
+    leadCard,
+}: {
+    title: string;
+    children: ReactNode;
+    accentRail?: "work" | "attention";
+    minimized?: boolean;
+    widgetKey?: string;
+    leadCard?: { icon: ReactNode; accent: "attention" | "work" | "neutral" | "muted" };
+}) {
+    const compact = useLayoutRuntimeSummaryStrip();
+    const composition = useLayoutRuntimeCompositionHints();
+
+    if (compact && (composition.leadOperatingSummaryCards || composition.personOperatingSummaryCards) && leadCard) {
+        return (
+            <LeadOperatingSummaryCard
+                title={title}
+                icon={leadCard.icon}
+                accent={leadCard.accent}
+                minimized={minimized}
+                widgetKey={widgetKey}
+            >
+                {children}
+            </LeadOperatingSummaryCard>
+        );
+    }
+
+    if (compact) {
+        const railClass =
+            accentRail === "attention" ? "bg-alloy-ember/80"
+            : accentRail === "work" ? "bg-alloy-juniper/70"
+            : minimized ? "bg-alloy-stone/25"
+            : "bg-alloy-stone/35";
+        const surfaceClass = minimized ? LAYOUT_RUNTIME_SUMMARY_WIDGET_MINIMIZED : LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE;
+        return (
+            <div
+                className={surfaceClass}
+                data-layout-runtime-summary-widget="true"
+                {...(minimized ? { "data-layout-runtime-summary-widget-minimized": "true" } : {})}
+            >
+                <div className={minimized ? `${LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER} py-0.5` : LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER}>
+                    <span className={`h-1 w-1 shrink-0 rounded-full ${railClass}`} aria-hidden />
+                    <span
+                        className={`truncate font-semibold uppercase tracking-[0.08em] ${minimized ? "text-[8px] text-alloy-midnight/35" : "text-[9px] text-alloy-midnight/50"}`}
+                    >
+                        {title}
+                    </span>
+                </div>
+                <div className={`${LAYOUT_RUNTIME_SUMMARY_WIDGET_BODY} overflow-hidden ${minimized ? "py-1" : ""}`}>{children}</div>
+            </div>
+        );
+    }
+    const rail = accentRail === "attention" ? "border-l-alloy-ember/75" : accentRail === "work" ? "border-l-alloy-juniper/45" : "";
     return (
-        <div className="rounded-md border border-[#e6e8ec] bg-white">
-            <div className="border-b border-[#eef0f4] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{title}</div>
+        <div className={`${LAYOUT_RUNTIME_PANEL_SURFACE} ${rail ? `border-l-[3px] ${rail}` : ""}`}>
+            <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{title}</span>
+            </div>
             <div className="px-2.5 py-2">{children}</div>
         </div>
     );
@@ -338,22 +717,48 @@ function FutureModulePlaceholder({ title }: { title: string }) {
 
 function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: LayoutItem }) {
     const variant = useContext(LayoutRuntimeVariantContext);
+    const composition = useLayoutRuntimeCompositionHints();
     const widgetKey = resolveLayoutRuntimeWidgetKey(item);
     const title = operatorLabel(item, variant) || "Details";
     const isFutureModule = item.metadata?.[FUTURE_MODULE_METADATA_KEY] === true;
+    const leadCards = composition.leadOperatingSummaryCards === true;
+    const personCards = composition.personOperatingSummaryCards === true;
+    const operatingCards = leadCards || personCards;
+    const compact = useLayoutRuntimeSummaryStrip();
 
     if (isFutureModule) {
         return <FutureModulePlaceholder title={title} />;
     }
 
-    const empty = <span className="text-xs text-[#9aa4bf]">No {title.toLowerCase()} yet</span>;
+    const empty = <span className="text-[11px] text-alloy-midnight/40">No {title.toLowerCase()} yet</span>;
+    const emptyQuiet = <span className="text-[10px] text-alloy-midnight/35">—</span>;
 
     if (widgetKey === "tasks") {
-        return (
-            <div className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white">
-                <LayoutRuntimeTasksWidget record={record} title={title} />
-            </div>
-        );
+        if (operatingCards && compact) {
+            return (
+                <LeadOperatingSummaryCard
+                    title={title}
+                    icon={<CheckSquare2 className="h-3.5 w-3.5" aria-hidden />}
+                    accent="work"
+                    widgetKey="tasks"
+                >
+                    <LayoutRuntimeTasksWidget record={record} title={title} compact chromeless />
+                </LeadOperatingSummaryCard>
+            );
+        }
+        return <LayoutRuntimeTasksWidget record={record} title={title} compact={compact} />;
+    }
+
+    if (widgetKey === "household_summary" && personCards && compact) {
+        return <PersonHouseholdSummaryCardShell record={record} />;
+    }
+
+    if (widgetKey === "connected_children" && personCards && compact) {
+        return <PersonConnectedChildrenSummaryCardShell record={record} />;
+    }
+
+    if (widgetKey === "last_touch" && personCards && compact) {
+        return <PersonLastTouchSummaryCardShell record={record} />;
     }
 
     if (widgetKey === "attention") {
@@ -361,25 +766,33 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             record._overview_data && typeof record._overview_data === "object"
                 ? (record._overview_data as Record<string, unknown>)
                 : record;
-        if (!isDrawerHeaderAttentionVisible(overview)) {
+        const visible = isDrawerHeaderAttentionVisible(overview);
+        if (leadCards && compact) {
+            return (
+                <LeadOperatingSummaryCard
+                    title={title}
+                    icon={<AlertTriangle className="h-3.5 w-3.5" aria-hidden />}
+                    accent="attention"
+                    minimized={!visible}
+                    widgetKey="attention"
+                >
+                    {visible ?
+                        <LeadOperatingAttentionSummaryCard record={record} />
+                    :   <p className="text-[11px] text-alloy-midnight/45">No attention needed</p>}
+                </LeadOperatingSummaryCard>
+            );
+        }
+        if (!visible) {
             return (
                 <WidgetChrome title={title}>
-                    <span className="text-xs text-[#9aa4bf]">No attention flagged</span>
+                    {emptyQuiet}
                 </WidgetChrome>
             );
         }
         return (
-            <div
-                className="overflow-hidden rounded-md border border-[#e6e8ec] bg-white"
-                data-layout-runtime-attention-widget="true"
-            >
-                <div className="border-b border-[#eef0f4] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                    {title}
-                </div>
-                <div className="px-2.5 py-2">
-                    <DrawerHeaderAttentionBlock overviewData={overview} />
-                </div>
-            </div>
+            <WidgetChrome title={title} accentRail="attention">
+                <DrawerHeaderAttentionBlock overviewData={overview} />
+            </WidgetChrome>
         );
     }
 
@@ -400,6 +813,51 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             </WidgetChrome>
         );
     }
+
+    if (widgetKey === "tour_summary") {
+        const lastTouch = resolveLeadSummaryLastTouch(record);
+        const hasContent = lastTouch.kind !== "empty";
+        if (leadCards && compact) {
+            return (
+                <LeadOperatingSummaryCard
+                    title="Last Touch"
+                    icon={<MessageSquare className="h-3.5 w-3.5" aria-hidden />}
+                    accent={hasContent ? "neutral" : "muted"}
+                    minimized={!hasContent}
+                    widgetKey="last_touch"
+                >
+                    <LeadLastTouchSummaryCard touch={lastTouch} />
+                </LeadOperatingSummaryCard>
+            );
+        }
+        return (
+            <WidgetChrome title="Last Touch" minimized={!hasContent}>
+                <LeadLastTouchSummaryCard touch={lastTouch} />
+            </WidgetChrome>
+        );
+    }
+
+    if (widgetKey === "children_list") {
+        const enrollmentHealth = summarizeLeadDrawerEnrollmentHealth(record);
+        if (leadCards && compact) {
+            return (
+                <LeadOperatingSummaryCard
+                    title="Enrollment Health"
+                    icon={<HeartPulse className="h-3.5 w-3.5" aria-hidden />}
+                    accent="work"
+                    widgetKey="enrollment_health"
+                >
+                    <LeadEnrollmentHealthSummaryCard summary={enrollmentHealth} />
+                </LeadOperatingSummaryCard>
+            );
+        }
+        return (
+            <WidgetChrome title={title}>
+                <LayoutRuntimeChildrenListWidget record={record} compact={compact} />
+            </WidgetChrome>
+        );
+    }
+
     if (widgetKey === "actions" && variant === "proof") {
         return (
             <WidgetChrome title={title}>
@@ -414,6 +872,35 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             </WidgetChrome>
         );
     }
+
+    if (widgetKey === "activity") {
+        const entries =
+            composition.personOverviewComposition ?
+                resolvePersonActivityPreview(record)
+            :   resolveLeadActivityPreview(record);
+        if (composition.compositionSectionSurface && entries.length === 0) return null;
+        return composition.personOverviewComposition ?
+                <PersonActivityPreview entries={entries} />
+            :   <LeadActivityPreview entries={entries} />;
+    }
+
+    if (widgetKey === "notes" || widgetKey === "recent_communication") {
+        const hasContent =
+            widgetKey === "notes"
+                ? layoutRuntimeNotesWidgetHasContent(record)
+                : layoutRuntimeCommunicationWidgetHasContent(record);
+        if (!hasContent) {
+            return composition.compositionSectionSurface ? null : <WidgetChrome title={title}>{empty}</WidgetChrome>;
+        }
+        const markup = (
+            <LayoutRuntimeNotesCommunicationWidget
+                record={record}
+                widgetKey={widgetKey === "notes" ? "notes" : "recent_communication"}
+            />
+        );
+        return composition.compositionSectionSurface ? markup : <WidgetChrome title={title}>{markup}</WidgetChrome>;
+    }
+
     return <WidgetChrome title={title}>{empty}</WidgetChrome>;
 }
 
@@ -439,9 +926,13 @@ function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; 
 }
 
 function ColumnView({ record, column, anchorEntity }: { record: ProofRuntimeRecord; column: LayoutColumn; anchorEntity: string }) {
-    const span = Math.max(1, Math.min(LAYOUT_GRID_COLUMNS, column.width));
+    const summaryCompact = useLayoutRuntimeSummaryStrip() && useLayoutRuntimeCompositionHints().summaryStripCompactRow;
+    const span = summaryCompact ? 1 : Math.max(1, Math.min(LAYOUT_GRID_COLUMNS, column.width));
     return (
-        <div style={{ gridColumn: `span ${span} / span ${span}` }} className="flex flex-col gap-2">
+        <div
+            style={summaryCompact ? undefined : { gridColumn: `span ${span} / span ${span}` }}
+            className="flex min-w-0 flex-col gap-1"
+        >
             {column.items.map((item) => (
                 <ItemCell key={item.id} record={record} item={item} anchorEntity={anchorEntity} />
             ))}
@@ -451,6 +942,32 @@ function ColumnView({ record, column, anchorEntity }: { record: ProofRuntimeReco
 
 function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; row: LayoutRow; anchorEntity: string }) {
     if (!evaluateLayoutCondition(record, row.visibleWhen)) return null;
+    const { stackRows } = useContext(LayoutRuntimeSectionContext);
+    const summaryCompact = useLayoutRuntimeSummaryStrip() && useLayoutRuntimeCompositionHints().summaryStripCompactRow;
+
+    if (stackRows) {
+        return (
+            <div className="flex flex-col gap-2.5" data-layout-runtime-stack-rows="true">
+                {row.columns.map((col) => (
+                    <ColumnView key={col.id} record={record} column={col} anchorEntity={anchorEntity} />
+                ))}
+            </div>
+        );
+    }
+
+    if (summaryCompact) {
+        return (
+            <div
+                className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+                data-layout-runtime-summary-row="true"
+            >
+                {row.columns.map((col) => (
+                    <ColumnView key={col.id} record={record} column={col} anchorEntity={anchorEntity} />
+                ))}
+            </div>
+        );
+    }
+
     return (
         <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${LAYOUT_GRID_COLUMNS}, minmax(0, 1fr))` }}>
             {row.columns.map((col) => (
@@ -460,18 +977,105 @@ function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; ro
     );
 }
 
-function SectionView({ record, section, anchorEntity }: { record: ProofRuntimeRecord; section: LayoutSection; anchorEntity: string }) {
+export type LayoutRuntimeSectionPresentation = "default" | "summary_strip";
+
+function SectionView({
+    record,
+    section,
+    anchorEntity,
+    sectionPresentation = "default",
+}: {
+    record: ProofRuntimeRecord;
+    section: LayoutSection;
+    anchorEntity: string;
+    sectionPresentation?: LayoutRuntimeSectionPresentation;
+}) {
+    const variant = useContext(LayoutRuntimeVariantContext);
+    const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
+    const composition = useLayoutRuntimeCompositionHints();
+    const sectionContext = {
+        sectionPresentation,
+        sectionKey: section.key,
+        stackRows: composition.compositionSectionSurface === true && section.key === "household_contact",
+    };
     if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
+
+    const useCompositionSurfaceEarly = composition.compositionSectionSurface === true && operatorSurfaces;
+    if (
+        useCompositionSurfaceEarly &&
+        sectionPresentation !== "summary_strip" &&
+        !shouldRenderLayoutRuntimeSection(section, record, {
+            compositionShell: true,
+            sectionPresentation,
+        })
+    ) {
+        return null;
+    }
+
+    const body = (
+        <LayoutRuntimeSectionContext.Provider value={sectionContext}>
+            {section.rows.map((row) => (
+                <RowView key={row.id} record={record} row={row} anchorEntity={anchorEntity} />
+            ))}
+        </LayoutRuntimeSectionContext.Provider>
+    );
+
+    if (sectionPresentation === "summary_strip") {
+        return (
+            <div className="flex flex-col gap-2" data-layout-runtime-section-presentation="summary_strip">
+                {body}
+            </div>
+        );
+    }
+
+    const useCompositionSurface = composition.compositionSectionSurface === true && operatorSurfaces;
+    const isEnrollmentSection = section.key === "children_enrollment";
+
+    let surfaceClass = LAYOUT_RUNTIME_SECTION_SURFACE;
+    let headerClass = LAYOUT_RUNTIME_SECTION_HEADER;
+    let bodyPadding = "gap-3 p-3";
+
+    if (useCompositionSurface) {
+        surfaceClass = LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE;
+        headerClass = LAYOUT_RUNTIME_COMPOSITION_SECTION_HEADER;
+        bodyPadding = isEnrollmentSection ? LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY : LAYOUT_RUNTIME_COMPOSITION_SECTION_BODY;
+    } else if (operatorSurfaces) {
+        const isPrimaryWorkspace = isEnrollmentSection;
+        surfaceClass =
+            isPrimaryWorkspace ? LAYOUT_RUNTIME_PRIMARY_WORKSPACE_SECTION : LAYOUT_RUNTIME_BODY_SECTION_SURFACE;
+        headerClass =
+            isPrimaryWorkspace ? LAYOUT_RUNTIME_PRIMARY_WORKSPACE_HEADER : LAYOUT_RUNTIME_BODY_SECTION_HEADER;
+        bodyPadding = isPrimaryWorkspace ? "" : "gap-2.5 p-3 sm:p-3.5";
+    }
+
+    const sectionEyebrow =
+        useCompositionSurface ?
+            (LEAD_COMPOSITION_SECTION_EYEBROWS[section.key] ?? PERSON_COMPOSITION_SECTION_EYEBROWS[section.key])
+        :   null;
+
     return (
-        <div className="overflow-hidden rounded-lg border border-[rgba(39,63,82,0.1)] border-l-[3px] border-l-[rgba(0,162,131,0.55)] bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)] ring-1 ring-[rgba(39,63,82,0.05)]">
-            <div className="border-b border-[rgba(0,162,131,0.10)] bg-gradient-to-r from-[rgba(0,162,131,0.045)] via-white to-[rgba(39,63,82,0.018)] px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em]" style={{ color: "rgba(39,63,82,0.82)" }}>
-                {section.title}
+        <div
+            className={surfaceClass}
+            data-layout-runtime-section-key={section.key}
+            {...(isEnrollmentSection ?
+                { "data-layout-runtime-primary-workspace-section": "true" }
+            :   {})}
+            {...(useCompositionSurface ?
+                {
+                    "data-lead-overview-composition-section": section.key,
+                    "data-person-overview-composition-section": section.key,
+                }
+            :   {})}
+        >
+            <div className={headerClass}>
+                {sectionEyebrow ?
+                    <span className={LAYOUT_RUNTIME_COMPOSITION_SECTION_EYEBROW}>{sectionEyebrow}</span>
+                :   null}
+                <div className={useCompositionSurface ? LAYOUT_RUNTIME_COMPOSITION_SECTION_TITLE : "text-inherit"}>
+                    {section.title}
+                </div>
             </div>
-            <div className="flex flex-col gap-3 p-3">
-                {section.rows.map((row) => (
-                    <RowView key={row.id} record={record} row={row} anchorEntity={anchorEntity} />
-                ))}
-            </div>
+            <div className={`flex flex-col ${bodyPadding}`}>{body}</div>
         </div>
     );
 }
@@ -481,8 +1085,13 @@ export type LayoutRuntimePlanViewProps = {
     record: ProofRuntimeRecord;
     plan?: LayoutRuntimePlan;
     onAdornmentAction?: AdornmentActionHandler;
+    /** Entity id for empty-state actions (e.g. Add Child on opportunity). */
+    entityId?: string;
+    canMutate?: boolean;
     /** `proof` shows binding diagnostics; `production`/`preview` are operator-safe. */
     variant?: "proof" | "production" | "preview";
+    /** Platform shell zone presentation — summary strip omits section chrome. */
+    sectionPresentation?: LayoutRuntimeSectionPresentation;
 };
 
 export default function LayoutRuntimePlanView({
@@ -490,10 +1099,17 @@ export default function LayoutRuntimePlanView({
     record,
     plan: planProp,
     onAdornmentAction,
+    entityId,
+    canMutate = false,
     variant = "proof",
+    sectionPresentation = "default",
 }: LayoutRuntimePlanViewProps) {
     const plan = useMemo(() => planProp ?? buildLayoutRuntimePlan(doc), [planProp, doc]);
     const anchorEntity = plan.entityType;
+    const hostContext = useMemo(
+        () => ({ entityId, canMutate, anchorEntity }),
+        [entityId, canMutate, anchorEntity],
+    );
 
     if (!doc?.sections?.length) {
         return <div className="text-sm" style={{ color: MUTED }}>No drawer layout.</div>;
@@ -501,8 +1117,9 @@ export default function LayoutRuntimePlanView({
 
     return (
         <LayoutRuntimeVariantContext.Provider value={variant}>
-            <AdornmentActionContext.Provider value={onAdornmentAction}>
-                <div className="flex flex-col gap-3" style={{ border: `0 solid ${BORDER}` }}>
+            <LayoutRuntimeHostContext.Provider value={hostContext}>
+                <AdornmentActionContext.Provider value={onAdornmentAction}>
+                <div className={`flex flex-col gap-3 ${variant === "production" || variant === "preview" ? "sm:gap-4" : ""}`} style={{ border: `0 solid ${BORDER}` }}>
                     {variant === "proof" ?
                         <div className="rounded-md border border-[#e6e8ec] bg-[#fbfcfe] px-3 py-2 text-[11px]" style={{ color: MUTED }}>
                             Runtime plan · {plan.layoutKey ?? "default"} · bindings:{" "}
@@ -515,11 +1132,18 @@ export default function LayoutRuntimePlanView({
                     {doc.sections.map((section) => {
                 if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
                 return (
-                    <SectionView key={section.id} record={record} section={section} anchorEntity={anchorEntity} />
+                    <SectionView
+                        key={section.id}
+                        record={record}
+                        section={section}
+                        anchorEntity={anchorEntity}
+                        sectionPresentation={sectionPresentation}
+                    />
                 );
             })}
                 </div>
-            </AdornmentActionContext.Provider>
+                </AdornmentActionContext.Provider>
+            </LayoutRuntimeHostContext.Provider>
         </LayoutRuntimeVariantContext.Provider>
     );
 }

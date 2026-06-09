@@ -210,6 +210,187 @@ describe("queue row layout binding", () => {
         expect(html).not.toContain(">Record<");
     });
 
+    it("renders scalar-only queue child columns for every repeater row (published v9 shape)", () => {
+        const childLink = {
+            position: "left" as const,
+            icon: "child" as const,
+            action: { type: "open_drawer" as const, entity: "child" as const, idPath: "child.id" },
+        };
+        const doc = buildLeadQueueDefaultDoc();
+        const base = doc.sections[0]!;
+        const col = base.rows[0]!.columns[0]!;
+        const withoutChildren = col.items.filter(
+            (item) => (item.metadata as { zone?: string } | undefined)?.zone !== "body.children",
+        );
+        const scalarChildren = [
+            {
+                id: "q-child-first",
+                kind: "field" as const,
+                refKey: "child.first_name",
+                label: "First Name",
+                renderHint: "text" as const,
+                metadata: { zone: "body.children" },
+                adornment: childLink,
+            },
+            {
+                id: "q-child-last",
+                kind: "field" as const,
+                refKey: "child.last_name",
+                label: "Last Name",
+                renderHint: "text" as const,
+                metadata: { zone: "body.children" },
+            },
+        ];
+        const v9Doc = {
+            ...doc,
+            sections: [{
+                ...base,
+                rows: [{
+                    ...base.rows[0]!,
+                    columns: [{ ...col, items: [...withoutChildren, ...scalarChildren] }],
+                }],
+            }],
+        };
+        const item: QueuePreviewItemVm = {
+            id: "opp-mitchell",
+            title: "Mitchell Family",
+            quickActions: [],
+            semanticCrmCompact: {
+                primaryIdentity: "Mitchell Family",
+                childName: null,
+                contactDisplayName: "Parent Name",
+                contactPhoneDisplay: null,
+                programContext: null,
+                statusLabel: "Qualified",
+                stageLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                tourContext: null,
+                locationContext: null,
+                childrenLines: [
+                    { primary: "Jim Pat", personId: "p1" },
+                    { primary: "Alex Johnson", personId: "p2" },
+                ],
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item, v9Doc);
+        const html = renderToStaticMarkup(
+            <QueueCardProofRenderer doc={v9Doc} record={record} onOpen={() => {}} />,
+        );
+        expect(html).toContain("Jim");
+        expect(html).toContain("Pat");
+        expect(html).toContain("Alex");
+        expect(html).toContain("Johnson");
+    });
+
+    it("renders child names when queue related_list has rows but empty columns (published shape)", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        const base = doc.sections[0]!;
+        const col = base.rows[0]!.columns[0]!;
+        const emptyList = {
+            id: "q-children-list",
+            kind: "related_list" as const,
+            refKey: "children",
+            source: "children",
+            displayMode: "rows" as const,
+            related: { entityType: "child" },
+            columns: [] as const,
+            metadata: { zone: "body.children" },
+        };
+        const withoutChildren = col.items.filter(
+            (item) => (item.metadata as { zone?: string } | undefined)?.zone !== "body.children",
+        );
+        const queueDoc = {
+            ...doc,
+            sections: [{
+                ...base,
+                rows: [{
+                    ...base.rows[0]!,
+                    columns: [{ ...col, items: [...withoutChildren, emptyList] }],
+                }],
+            }],
+        };
+        const item: QueuePreviewItemVm = {
+            id: "opp-mitchell",
+            title: "Mitchell Family",
+            quickActions: [],
+            semanticCrmCompact: {
+                primaryIdentity: "Mitchell Family",
+                childName: null,
+                contactDisplayName: "Parent Name",
+                contactPhoneDisplay: null,
+                programContext: null,
+                statusLabel: "Qualified",
+                stageLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                tourContext: null,
+                locationContext: null,
+                childrenLines: [
+                    { primary: "Jim Pat", personId: "p1" },
+                    { primary: "Alex Johnson", personId: "p2" },
+                ],
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item, queueDoc);
+        const html = renderToStaticMarkup(
+            <QueueCardProofRenderer doc={queueDoc} record={record} onOpen={() => {}} />,
+        );
+        expect(html).toContain("Jim Pat");
+        expect(html).toContain("Alex Johnson");
+    });
+
+    it("renders child rows from _inquiry_children when CRM compact child name is absent", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        const item: QueuePreviewItemVm = {
+            id: "opp-mitchell",
+            title: "Mitchell Family",
+            quickActions: [],
+            semanticCrmCompact: {
+                primaryIdentity: "Mitchell Family",
+                childName: null,
+                contactDisplayName: "Parent Name",
+                contactPhoneDisplay: null,
+                programContext: null,
+                statusLabel: "Qualified",
+                stageLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                tourContext: null,
+                locationContext: null,
+            },
+            layoutRuntimeEnrichment: {
+                inquiryChildren: [
+                    { first_name: "Jim", last_name: "Pat", person_id: "p1", display_name: "Jim Pat" },
+                ],
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item);
+        const html = renderToStaticMarkup(
+            <QueueCardProofRenderer doc={doc} record={record} onOpen={() => {}} />,
+        );
+        expect(html).toContain("Jim Pat");
+        expect(html).not.toContain("No children on this record yet");
+    });
+
     it("renders configured contact and tour placeholders when values are blank", () => {
         const doc = buildLeadQueueDefaultDoc();
         const item: QueuePreviewItemVm = {

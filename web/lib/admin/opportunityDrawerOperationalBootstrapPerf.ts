@@ -1,4 +1,5 @@
 import type { OpportunityDrawerOperationalBootstrapResponse } from "@/lib/admin/opportunityDrawerOperationalBootstrapTypes";
+import { perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export type DrawerBootstrapPerfPhases = Record<string, number>;
 
@@ -8,16 +9,14 @@ export function logOpportunityDrawerOperationalBootstrapPerf(params: {
     phases: DrawerBootstrapPerfPhases;
     totalMs: number;
 }): void {
-    const payload = {
-        opportunity_id: params.opportunityId,
-        route_gate_ms: params.routeGateMs,
-        phases_ms: params.phases,
+    if (process.env.NODE_ENV === "production" && params.totalMs <= 400) return;
+    perfDrawer("bootstrap_server", {
+        entity_type: "opportunity",
+        entity_id: params.opportunityId,
+        duration_ms: params.totalMs,
         total_ms: params.totalMs,
-        attention_resolver_passes: 0 as const,
-    };
-    if (process.env.NODE_ENV !== "production" || params.totalMs > 400) {
-        console.info("[drawer-bootstrap-perf]", payload);
-    }
+        source: "network",
+    });
 }
 
 export function drawerBootstrapTimingFromPhases(

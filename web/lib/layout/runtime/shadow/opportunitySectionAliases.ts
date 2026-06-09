@@ -6,7 +6,7 @@
 export const OPPORTUNITY_VM_TO_LAYOUT_SECTION_ALIASES: Readonly<Record<string, readonly string[]>> = {
     inquiry_summary: ["lead_summary"],
     inq_identity: ["lead_summary"],
-    inquiry_children: ["children_inquiry", "enrollment_children"],
+    inquiry_children: ["children_enrollment", "children_inquiry", "enrollment_children"],
     inquiry_tuition: ["lead_source"],
     inquiry_source: ["lead_source"],
     details: ["lead_source", "notes_communication"],

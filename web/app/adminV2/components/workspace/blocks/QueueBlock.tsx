@@ -17,6 +17,7 @@ import type {
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { logAdminV2QueueRowClick } from "@/lib/debug/adminV2QueueRowClickDebug";
+import { logQueueRowOpenHandler } from "@/lib/debug/queueRowClickDebug";
 import {
   prefetchOpportunityDrawerOnRowIntent,
   prefetchOpportunityDrawerFullOnRowIntent,
@@ -30,10 +31,23 @@ import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfi
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import LayoutRuntimeQueueRowView from "@/components/layout/LayoutRuntimeQueueRowView";
 import LayoutRuntimeQueueRowHold from "@/components/layout/LayoutRuntimeQueueRowHold";
+import OperationalQueueRecordRow from "@/components/layout/OperationalQueueRecordRow";
+import { buildOperationalQueueRecordViewModelFromCrmSlots } from "@/lib/layout/runtime/buildOperationalQueueRecordViewModel";
+import type { LayoutFieldAdornment, LayoutItem } from "@/lib/layout/layoutV2";
+import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import OpportunityQueueRowLayoutRuntimeShadowMount from "@/components/admin/workspace/OpportunityQueueRowLayoutRuntimeShadowMount";
 import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/buildOpportunityQueueRowRecordFromPreview";
 import { useOpportunityQueueLayoutRuntime } from "@/lib/layout/runtime/useOpportunityQueueLayoutRuntime";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import {
+  orderedQueueQuickActions,
+  queueQuickActionDispatchId,
+} from "@/lib/ui-v2/queueRowQuickActionHelpers";
+import {
+  resolveQueueRecordLayoutConfig,
+  type QueueRecordLayoutConfig,
+} from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
+import { queueRecordLayoutForDocKind } from "@/lib/layout/queueRecordLayoutConfig";
 import {
   resolveWorkUnitQueueRowPresentationPlan,
   shouldUseOperationalRecordFrame,
@@ -105,6 +119,7 @@ function fireQueueRowOpenRecord(
   surface: "card" | "keyboard" | "chip"
 ) {
   const actionEntityId = queueItemOpportunityId(item);
+  logQueueRowOpenHandler("record_open", `QueueBlock_${surface}`, "fireQueueRowOpenRecord", actionEntityId);
   logAdminV2QueueRowClick({
     phase: "queue_row_click",
     itemId: actionEntityId,
@@ -160,6 +175,7 @@ function fireQueueRowOpenPersonDrawer(
   onAction: WorkspaceActionHandler
 ): void {
   const actionEntityId = queueItemOpportunityId(item);
+  logQueueRowOpenHandler("person_open", "QueueBlock_person_icon", "fireQueueRowOpenPersonDrawer", personId);
   logAdminV2QueueRowClick({
     phase: "queue_row_click",
     itemId: actionEntityId,
@@ -188,6 +204,7 @@ function fireQueueRowOpenChildDrawer(
   onAction: WorkspaceActionHandler
 ): void {
   const actionEntityId = queueItemOpportunityId(item);
+  logQueueRowOpenHandler("child_open", "QueueBlock_child_icon", "fireQueueRowOpenChildDrawer", childPersonId);
   logAdminV2QueueRowClick({
     phase: "queue_row_click",
     itemId: actionEntityId,
@@ -215,6 +232,122 @@ type CrmCompactDrawerRecordIconHandlers = {
   onPrefetchPerson: (personId: string) => void;
   onPrefetchChild: (childPersonId: string) => void;
 };
+
+function buildCrmQueueRowAdornmentHandler(
+  handlers: CrmCompactDrawerRecordIconHandlers,
+  contactPersonId: string | null | undefined
+): (item: LayoutItem, adornment: LayoutFieldAdornment, rowRecord?: ProofRuntimeRecord) => void {
+  return (_item, adornment, rowRecord) => {
+    const action = adornment.action;
+    if (!action || action.type !== "open_drawer") return;
+    if (action.entity === "child") {
+      const id = rowRecord?.["child.id"] ?? rowRecord?.person_id ?? rowRecord?.id;
+      const childId = id == null ? "" : String(id).trim();
+      if (childId) {
+        handlers.onPrefetchChild(childId);
+        handlers.onOpenChild(childId);
+      }
+      return;
+    }
+    const personId = contactPersonId?.trim() ?? "";
+    if (action.entity === "person" && personId) {
+      handlers.onPrefetchPerson(personId);
+      handlers.onOpenPerson(personId);
+    }
+  };
+}
+
+function fireQueueRowQuickAction(
+  queue: QueueVm,
+  item: QueueItemVm,
+  qa: QueueItemQuickActionVm,
+  dispatchId: string,
+  onAction: WorkspaceActionHandler
+): void {
+  const actionEntityId = queueItemOpportunityId(item);
+  onAction({
+    type: "queue.item.action",
+    queueId: queue.id,
+    itemId: actionEntityId,
+    actionId: dispatchId,
+    payload: mergeQueueActionPayload(queue, qa.payload),
+  });
+}
+
+function WorkUnitOperationalQueueRow({
+  slots,
+  queue,
+  item,
+  onAction,
+  onOpen,
+  drawerRecordIconHandlers,
+  rowQuickActions,
+  rowActionsPending,
+  collapsed,
+  onToggleCollapsed,
+  waitlistPlacementPreview,
+  waitlistPlacementV2,
+  waitlistCandidateRow,
+  waitlistStatusLabel,
+  operationalAttentionBadge,
+  queueRecordConfig,
+}: {
+  slots: CrmCompactRowSemanticSlots;
+  queue: QueueVm;
+  item: QueueItemVm;
+  onAction: WorkspaceActionHandler;
+  onOpen?: () => void;
+  drawerRecordIconHandlers: CrmCompactDrawerRecordIconHandlers;
+  rowQuickActions: QueueItemQuickActionVm[];
+  rowActionsPending: boolean;
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
+  waitlistPlacementPreview?: QueueRowPlacementPriorityVm;
+  waitlistPlacementV2?: QueueRowPlacementPriorityV2Vm;
+  waitlistCandidateRow?: import("@/lib/ui-v2/workspace-types").QueueRowPlacementWaitlistCandidateVm;
+  waitlistStatusLabel?: string;
+  operationalAttentionBadge?: boolean;
+  queueRecordConfig?: QueueRecordLayoutConfig;
+}) {
+  const operationalVm = buildOperationalQueueRecordViewModelFromCrmSlots(slots, {
+    config: queueRecordConfig,
+    waitlistStatusLabel,
+    waitlistPlacementLabel:
+      waitlistPlacementV2?.familyBucketLabel?.trim() ||
+      waitlistPlacementPreview?.priorityRuleLabel?.trim() ||
+      waitlistPlacementPreview?.waitlistProgramShortLabel?.trim() ||
+      null,
+    waitlistCandidateChildName: waitlistCandidateRow?.childDisplayName ?? null,
+    waitlistCandidateChildPersonId: slots.childPersonId ?? slots.childrenLines?.[0]?.personId ?? null,
+    waitlistCandidateProgram: waitlistCandidateRow?.cohortLabel ?? null,
+  });
+  const operationalRecord = buildOpportunityQueueRowRecordFromPreview({
+    ...item,
+    semanticCrmCompact: slots,
+  } as import("@/lib/ui-v2/workspace-types").QueuePreviewItemVm);
+
+  return (
+    <div
+      className="adminv2-ws-crm-queue-preview adminv2-ws-enrollment-crm-preview adminv2-ws-crm-queue-preview--scan adminv2-ws-crm-queue-preview--operational-row"
+      data-queue-preview="crm_compact_operational_row"
+      data-queue-row-runtime-path="crm_compact_operational_row"
+    >
+      <OperationalQueueRecordRow
+        vm={operationalVm}
+        record={operationalRecord}
+        config={queueRecordConfig}
+        onOpen={onOpen}
+        drawerHandlers={drawerRecordIconHandlers}
+        rowActions={rowQuickActions}
+        rowActionsPending={rowActionsPending}
+        onRowAction={(qa, dispatchId) => fireQueueRowQuickAction(queue, item, qa, dispatchId, onAction)}
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed}
+        showAttentionAccent={operationalAttentionBadge}
+      />
+    </div>
+  );
+}
 
 function buildCrmCompactDrawerRecordIconHandlers(
   queue: QueueVm,
@@ -568,28 +701,6 @@ function DepartmentRollupLane({ queue, onAction, variant }: RollupLaneProps) {
 
 function workUnitSectionKey(item: QueueItemVm): string | undefined {
   return resolveWaitlistQueueItemSectionKey(item);
-}
-
-function queueQuickActionDispatchId(qa: QueueItemQuickActionVm): string {
-  const withAction = qa as QueueItemQuickActionVm & { actionId?: string };
-  const payload = qa.payload as { actionType?: string; source?: string } | undefined;
-  if (payload?.actionType === "open_drawer") return "open_record";
-  if (typeof withAction.actionId === "string" && withAction.actionId.trim() === "open_record") {
-    return "open_record";
-  }
-  if (qa.id === "open") return "open_record";
-  if (typeof withAction.actionId === "string" && withAction.actionId.trim()) return withAction.actionId.trim();
-  return qa.id;
-}
-
-/** Primary "Open" first for CRM action column scan hierarchy. */
-function orderedQueueQuickActions(actions: QueueItemQuickActionVm[] | undefined): QueueItemQuickActionVm[] {
-  if (!actions?.length) return [];
-  const openIdx = actions.findIndex((qa) => queueQuickActionDispatchId(qa) === "open_record");
-  if (openIdx <= 0) return actions;
-  const next = actions.slice();
-  const [open] = next.splice(openIdx, 1);
-  return [open!, ...next];
 }
 
 /** Sentence-case each segment (split on middot) — work-unit status pill is no longer all-caps in CSS. */
@@ -1200,6 +1311,12 @@ export function CrmCompactQueuePreview({
   waitlistStatusLabel,
   drawerRecordIconHandlers,
   workUnitKey,
+  operationalRowHost,
+  rowQuickActions = [],
+  rowActionsPending = false,
+  collapsed = false,
+  onToggleCollapsed,
+  queueRecordConfig,
 }: {
   slots: CrmCompactRowSemanticSlots;
   urgencyTier?: QueueItemVm["urgencyTier"];
@@ -1215,6 +1332,17 @@ export function CrmCompactQueuePreview({
   drawerRecordIconHandlers?: CrmCompactDrawerRecordIconHandlers;
   /** Lifecycle hint for band resolution — presentation only. */
   workUnitKey?: string | null;
+  /** When set, operational row actions dispatch through the work-unit queue host. */
+  operationalRowHost?: {
+    queue: QueueVm;
+    item: QueueItemVm;
+    onAction: WorkspaceActionHandler;
+  };
+  rowQuickActions?: QueueItemQuickActionVm[];
+  rowActionsPending?: boolean;
+  collapsed?: boolean;
+  onToggleCollapsed?: () => void;
+  queueRecordConfig?: QueueRecordLayoutConfig;
 }) {
   const stageStatus =
     slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
@@ -1268,24 +1396,33 @@ export function CrmCompactQueuePreview({
     workUnitKey,
   });
 
-  if (useOperationalRecord) {
+  if (useOperationalRecord && drawerRecordIconHandlers) {
+    const rowHost =
+      operationalRowHost ??
+      ({
+        queue: { id: "crm-preview", title: "Preview", items: [] } as QueueVm,
+        item: { id: "crm-preview-item", title: slots.primaryIdentity ?? "Preview", quickActions: [] } as QueueItemVm,
+        onAction: (() => {}) as WorkspaceActionHandler,
+      } satisfies { queue: QueueVm; item: QueueItemVm; onAction: WorkspaceActionHandler });
     return (
-      <div
-        className="adminv2-ws-crm-queue-preview adminv2-ws-enrollment-crm-preview adminv2-ws-crm-queue-preview--scan adminv2-ws-crm-queue-preview--operational-record"
-        data-queue-preview="crm_compact_operational_record"
-      >
-        <CrmCompactOperationalRecord
-          slots={slots}
-          urgencyTier={urgencyTier}
-          operationalAttentionBadge={operationalAttentionBadge}
-          drawerRecordIconHandlers={drawerRecordIconHandlers!}
-          waitlistPlacementPreview={waitlistPlacementPreview}
-          waitlistPlacementV2={waitlistPlacementV2}
-          waitlistCandidateRow={waitlistCandidateRow}
-          waitlistStatusLabel={waitlistStatusLabel}
-          workUnitKey={workUnitKey}
-        />
-      </div>
+      <WorkUnitOperationalQueueRow
+        slots={slots}
+        queue={rowHost.queue}
+        item={rowHost.item}
+        onAction={rowHost.onAction}
+        onOpen={() => fireQueueRowOpenRecord(rowHost.queue, rowHost.item, rowHost.onAction, "card")}
+        drawerRecordIconHandlers={drawerRecordIconHandlers}
+        rowQuickActions={rowQuickActions}
+        rowActionsPending={rowActionsPending}
+        collapsed={collapsed}
+        onToggleCollapsed={onToggleCollapsed ?? (() => {})}
+        waitlistPlacementPreview={waitlistPlacementPreview}
+        waitlistPlacementV2={waitlistPlacementV2}
+        waitlistCandidateRow={waitlistCandidateRow}
+        waitlistStatusLabel={waitlistStatusLabel}
+        operationalAttentionBadge={operationalAttentionBadge}
+        queueRecordConfig={queueRecordConfig}
+      />
     );
   }
 
@@ -1583,6 +1720,8 @@ function WorkUnitQueueLane({
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
   /** Client-only collapsed waitlist program/room groups (placement sections). */
   const [collapsedPlacementGroups, setCollapsedPlacementGroups] = useState<Set<string>>(() => new Set());
+  /** Client-only per-row collapse (expanded by default). */
+  const [collapsedRowIds, setCollapsedRowIds] = useState<Set<string>>(() => new Set());
   const v2PlacementCollapseInitRef = useRef(false);
 
   const hasV2PlacementRows = useMemo(
@@ -1610,6 +1749,10 @@ function WorkUnitQueueLane({
   const useLayoutQueueRows = layoutQueueEnabled && queueLayoutRuntime.doc != null;
   const showLayoutQueueHold =
     layoutQueueEnabled && (queueLayoutRuntime.loading || queueLayoutRuntime.doc == null);
+  const queueRecordConfig = useMemo(() => {
+    if (queueLayoutRuntime.doc) return resolveQueueRecordLayoutConfig(queueLayoutRuntime.doc);
+    return queueRecordLayoutForDocKind(hasCandidatePlacementRows);
+  }, [queueLayoutRuntime.doc, hasCandidatePlacementRows]);
 
   const waitlistPlacementSections = useMemo(
     () =>
@@ -1806,6 +1949,15 @@ function WorkUnitQueueLane({
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
           const actionEntityId = queueItemOpportunityId(item);
+          const rowCollapsed = collapsedRowIds.has(item.id);
+          const toggleRowCollapsed = () => {
+            setCollapsedRowIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(item.id)) next.delete(item.id);
+              else next.add(item.id);
+              return next;
+            });
+          };
           const rowOpenPending =
             queueRowOpenPendingOpportunityId != null &&
             queueRowOpenPendingOpportunityId === actionEntityId;
@@ -1873,15 +2025,14 @@ function WorkUnitQueueLane({
               ) : null}
               {rowMode !== "header_only" ? (
               <div
-                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card-interactive adminv2-interactive-surface relative z-[1] cursor-pointer pointer-events-auto adminv2-ws-wu-queue-card--tier-${tier}${
+                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--operational adminv2-interactive-surface relative z-[1] pointer-events-auto adminv2-ws-wu-queue-card--tier-${tier}${
                   attentionAccent ? " adminv2-ws-wu-queue-card--attention-accent" : ""
-                }`}
+                } adminv2-ws-wu-queue-card--operational-row`}
                 data-ws-wu-urgency={tier}
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 data-queue-row-open-pending={rowOpenPending ? "true" : undefined}
+                data-queue-row-operational-card="true"
                 aria-busy={rowOpenPending ? true : undefined}
-                role="button"
-                tabIndex={0}
                 onMouseEnter={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
                 onMouseDown={() => {
                   prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext);
@@ -1890,13 +2041,6 @@ function WorkUnitQueueLane({
                   }
                 }}
                 onFocus={() => prefetchOpportunityQueueRowIntent(queue, actionEntityId, opportunityDrawerWorkspaceContext)}
-                onClick={() => fireQueueRowOpenRecord(queue, item, onAction, "card")}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    fireQueueRowOpenRecord(queue, item, onAction, "keyboard");
-                  }
-                }}
               >
                 {rowOpenPending ? (
                   <span
@@ -1909,128 +2053,96 @@ function WorkUnitQueueLane({
                 {showLayoutQueueHold ?
                   <LayoutRuntimeQueueRowHold />
                 : useLayoutQueueRows && queueLayoutRuntime.doc ?
-                  <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split">
-                    <div className="adminv2-ws-enrollment-crm-row__content">
-                      <LayoutRuntimeQueueRowView
-                        doc={queueLayoutRuntime.doc}
-                        record={buildOpportunityQueueRowRecordFromPreview(item, queueLayoutRuntime.doc)}
-                        item={item}
-                        layoutSource={queueLayoutRuntime.layoutSource}
-                        layoutKey={queueLayoutRuntime.layoutKey}
-                        workUnitKey={queue.drillWorkUnitKey ?? null}
-                        queueRowKey={item.id}
-                        variant={hasCandidatePlacementRows ? "waitlist" : "pipeline"}
-                        vmFallback={
-                          crm ? (
-                          <CrmCompactQueuePreview
-                            slots={crm}
-                            urgencyTier={tier}
-                            operationalAttentionBadge={attentionAccent}
-                            scanMode
-                            drawerRecordIconHandlers={drawerRecordIconHandlers}
-                            waitlistCandidateRow={
-                              item.placementWaitlistCandidate && placementShowBucketChip
-                                ? item.placementWaitlistCandidate
-                                : undefined
-                            }
-                            waitlistPlacementV2={
-                              !item.placementWaitlistCandidate && item.placementPriorityV2 && placementShowBucketChip
-                                ? item.placementPriorityV2
-                                : undefined
-                            }
-                            waitlistPlacementPreview={
-                              !item.placementWaitlistCandidate &&
-                              !item.placementPriorityV2 &&
-                              item.placementPriority &&
-                              placementShowBucketChip
-                                ? item.placementPriority
-                                : undefined
-                            }
-                            waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
-                            workUnitKey={queue.drillWorkUnitKey ?? null}
-                          />
-                          ) : null
-                        }
-                      />
-                    </div>
-                  </div>
+                  <LayoutRuntimeQueueRowView
+                    doc={queueLayoutRuntime.doc}
+                    record={buildOpportunityQueueRowRecordFromPreview(item, queueLayoutRuntime.doc)}
+                    item={item}
+                    layoutSource={queueLayoutRuntime.layoutSource}
+                    layoutKey={queueLayoutRuntime.layoutKey}
+                    workUnitKey={queue.drillWorkUnitKey ?? null}
+                    queueRowKey={item.id}
+                    variant={hasCandidatePlacementRows ? "waitlist" : "pipeline"}
+                    drawerIconHandlers={drawerRecordIconHandlers}
+                    rowActions={rowQuickActions}
+                    rowActionsPending={rowActionsPending}
+                    collapsed={rowCollapsed}
+                    onToggleCollapsed={toggleRowCollapsed}
+                    onOpen={() => fireQueueRowOpenRecord(queue, item, onAction, "card")}
+                    onRowAction={(qa, dispatchId) =>
+                      fireQueueRowQuickAction(queue, item, qa, dispatchId, onAction)
+                    }
+                    vmFallback={
+                      crm ? (
+                        <CrmCompactQueuePreview
+                          slots={crm}
+                          urgencyTier={tier}
+                          operationalAttentionBadge={attentionAccent}
+                          scanMode
+                          drawerRecordIconHandlers={drawerRecordIconHandlers}
+                          operationalRowHost={{ queue, item, onAction }}
+                          rowQuickActions={rowQuickActions}
+                          rowActionsPending={rowActionsPending}
+                          collapsed={rowCollapsed}
+                          onToggleCollapsed={toggleRowCollapsed}
+                          queueRecordConfig={queueRecordConfig}
+                          waitlistCandidateRow={
+                            item.placementWaitlistCandidate && placementShowBucketChip
+                              ? item.placementWaitlistCandidate
+                              : undefined
+                          }
+                          waitlistPlacementV2={
+                            !item.placementWaitlistCandidate && item.placementPriorityV2 && placementShowBucketChip
+                              ? item.placementPriorityV2
+                              : undefined
+                          }
+                          waitlistPlacementPreview={
+                            !item.placementWaitlistCandidate &&
+                            !item.placementPriorityV2 &&
+                            item.placementPriority &&
+                            placementShowBucketChip
+                              ? item.placementPriority
+                              : undefined
+                          }
+                          waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
+                          workUnitKey={queue.drillWorkUnitKey ?? null}
+                        />
+                      ) : null
+                    }
+                  />
                 : crm ? (
-                  <div
-                    className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split"
-                    data-enrollment-row-layout="split_actions"
-                  >
-                    <div className="adminv2-ws-enrollment-crm-row__content">
-                      <CrmCompactQueuePreview
-                        slots={crm}
-                        urgencyTier={tier}
-                        operationalAttentionBadge={attentionAccent}
-                        scanMode
-                        drawerRecordIconHandlers={drawerRecordIconHandlers}
-                        waitlistCandidateRow={
-                          item.placementWaitlistCandidate && placementShowBucketChip
-                            ? item.placementWaitlistCandidate
-                            : undefined
-                        }
-                        waitlistPlacementV2={
-                          !item.placementWaitlistCandidate && item.placementPriorityV2 && placementShowBucketChip
-                            ? item.placementPriorityV2
-                            : undefined
-                        }
-                        waitlistPlacementPreview={
-                          !item.placementWaitlistCandidate &&
-                          !item.placementPriorityV2 &&
-                          item.placementPriority &&
-                          placementShowBucketChip
-                            ? item.placementPriority
-                            : undefined
-                        }
-                        waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
-                        workUnitKey={queue.drillWorkUnitKey ?? null}
-                      />
-                    </div>
-                    {rowActionsPending ? (
-                      <div
-                        className="adminv2-ws-enrollment-crm-row__actions shrink-0 self-center pl-2"
-                        aria-hidden
-                        data-queue-row-actions-pending="true"
-                      >
-                        <span className="inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
-                        <span className="ml-1.5 inline-block h-7 w-[4.5rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
-                      </div>
-                    ) : rowQuickActions.length ? (
-                      <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
-                        <div className="adminv2-ws-enrollment-crm-row__action-stack">
-                          {rowQuickActions.map((qa) => {
-                            const dispatchId = queueQuickActionDispatchId(qa);
-                            const isOpen = dispatchId === "open_record";
-                            return (
-                              <button
-                                key={`${item.id}-qa-${qa.id}`}
-                                type="button"
-                                className={
-                                  isOpen
-                                    ? "adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
-                                    : "adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--quiet"
-                                }
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onAction({
-                                    type: "queue.item.action",
-                                    queueId: queue.id,
-                                    itemId: actionEntityId,
-                                    actionId: dispatchId,
-                                    payload: mergeQueueActionPayload(queue, qa.payload),
-                                  });
-                                }}
-                              >
-                                {qa.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
+                  <CrmCompactQueuePreview
+                    slots={crm}
+                    urgencyTier={tier}
+                    operationalAttentionBadge={attentionAccent}
+                    scanMode
+                    drawerRecordIconHandlers={drawerRecordIconHandlers}
+                    operationalRowHost={{ queue, item, onAction }}
+                    rowQuickActions={rowQuickActions}
+                    rowActionsPending={rowActionsPending}
+                    collapsed={rowCollapsed}
+                    onToggleCollapsed={toggleRowCollapsed}
+                    queueRecordConfig={queueRecordConfig}
+                    waitlistCandidateRow={
+                      item.placementWaitlistCandidate && placementShowBucketChip
+                        ? item.placementWaitlistCandidate
+                        : undefined
+                    }
+                    waitlistPlacementV2={
+                      !item.placementWaitlistCandidate && item.placementPriorityV2 && placementShowBucketChip
+                        ? item.placementPriorityV2
+                        : undefined
+                    }
+                    waitlistPlacementPreview={
+                      !item.placementWaitlistCandidate &&
+                      !item.placementPriorityV2 &&
+                      item.placementPriority &&
+                      placementShowBucketChip
+                        ? item.placementPriority
+                        : undefined
+                    }
+                    waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
+                    workUnitKey={queue.drillWorkUnitKey ?? null}
+                  />
                 ) : (
                   <div className="adminv2-ws-wu-queue-card-compact-text">
                     <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">{item.title}</div>

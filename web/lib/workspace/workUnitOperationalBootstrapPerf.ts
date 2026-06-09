@@ -1,4 +1,4 @@
-/** Structured timing for work-unit operational-bootstrap (server logs). */
+import { perfWorkUnit } from "@/lib/perf/perfNamespaceLog";
 export type WorkUnitBootstrapPerfPhases = {
     dept_fetch_ms?: number;
     work_unit_fetch_ms?: number;
@@ -60,15 +60,12 @@ export function logWorkUnitOperationalBootstrapPerf(params: {
         typeof params.payloadBytes === "number"
             ? Math.round((params.payloadBytes / 1024) * 10) / 10
             : undefined;
-    console.warn("[wu-bootstrap-perf]", {
+    perfWorkUnit("bootstrap_server", {
         work_unit_id: params.workUnitId,
         department_id: params.departmentId,
         total_ms: params.totalMs,
-        route_gate_ms: params.routeGateMs,
-        route_prep_ms: params.prepMs,
-        loader_ms: params.loaderMs,
+        duration_ms: params.totalMs,
         payload_kb: payloadKb,
-        defer_bundle: params.deferBundle,
-        ...params.phases,
+        source: "network",
     });
 }

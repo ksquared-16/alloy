@@ -1,0 +1,145 @@
+import { describe, expect, it } from "vitest";
+import { defaultLeadQueueLayoutV3 } from "@/lib/layout/queueRecordLayoutV3";
+import { normalizeQueueRecordLayoutConfig } from "@/lib/layout/runtime/normalizeQueueRecordLayoutConfig";
+import { resolveQueueRecordField } from "@/lib/layout/runtime/queueRecordScopedResolve";
+
+describe("normalizeQueueRecordLayoutConfig", () => {
+    it("defaults repeated block maxItems to 5 when missing", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const childCol = base.columns.find((c) => c.scope.type === "repeated_related");
+        expect(childCol).toBeTruthy();
+        const repeat = childCol!.blocks[0];
+        if (repeat?.type !== "repeated_record_block") throw new Error("expected repeat block");
+        const withoutMax = {
+            ...base,
+            columns: base.columns.map((col) =>
+                col.id === childCol!.id ?
+                    {
+                        ...col,
+                        blocks: col.blocks.map((b) =>
+                            b.type === "repeated_record_block" ? { ...b, maxItems: undefined } : b,
+                        ),
+                    }
+                :   col,
+            ),
+        };
+        const normalized = normalizeQueueRecordLayoutConfig(withoutMax);
+        const normalizedRepeat = normalized.columns.find((c) => c.id === childCol!.id)!.blocks[0];
+        expect(normalizedRepeat?.type === "repeated_record_block" ? normalizedRepeat.maxItems : null).toBe(5);
+    });
+
+    it("coerces saved text display to pill for status fields", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const statusCol = base.columns.find((c) =>
+            c.blocks.some(
+                (b) => b.type === "field_group" && b.fields.some((f) => f.fieldKey === "opportunity.status_key"),
+            ),
+        );
+        expect(statusCol).toBeTruthy();
+        const withTextDisplay = {
+            ...base,
+            columns: base.columns.map((col) =>
+                col.id === statusCol!.id ?
+                    {
+                        ...col,
+                        blocks: col.blocks.map((b) =>
+                            b.type === "field_group" ?
+                                {
+                                    ...b,
+                                    fields: b.fields.map((f) =>
+                                        f.fieldKey === "opportunity.status_key" ?
+                                            { ...f, display: "text" as const }
+                                        :   f,
+                                    ),
+                                }
+                            :   b,
+                        ),
+                    }
+                :   col,
+            ),
+        };
+        const normalized = normalizeQueueRecordLayoutConfig(withTextDisplay);
+        const block = normalized.columns.find((c) => c.id === statusCol!.id)!.blocks[0];
+        if (block?.type !== "field_group") throw new Error("expected field group");
+        expect(block.fields.find((f) => f.fieldKey === "opportunity.status_key")?.display).toBe("pill");
+    });
+
+    it("preserves explicit repeated block maxItems when set", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const childCol = base.columns.find((c) => c.scope.type === "repeated_related");
+        const withThree = {
+            ...base,
+            columns: base.columns.map((col) =>
+                col.id === childCol!.id ?
+                    {
+                        ...col,
+                        blocks: col.blocks.map((b) =>
+                            b.type === "repeated_record_block" ? { ...b, maxItems: 3 } : b,
+                        ),
+                    }
+                :   col,
+            ),
+        };
+        const normalized = normalizeQueueRecordLayoutConfig(withThree);
+        const repeat = normalized.columns.find((c) => c.id === childCol!.id)!.blocks[0];
+        expect(repeat?.type === "repeated_record_block" ? repeat.maxItems : null).toBe(3);
+    });
+
+    it("infers pill display for status fields missing display in saved JSON", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const statusCol = base.columns.find((c) =>
+            c.blocks.some(
+                (b) => b.type === "field_group" && b.fields.some((f) => f.fieldKey === "opportunity.status_key"),
+            ),
+        );
+        expect(statusCol).toBeTruthy();
+        const block = statusCol!.blocks[0];
+        if (block?.type !== "field_group") throw new Error("expected field group");
+        const statusField = block.fields.find((f) => f.fieldKey === "opportunity.status_key");
+        expect(statusField).toBeTruthy();
+        const stripped = {
+            ...base,
+            columns: base.columns.map((col) =>
+                col.id === statusCol!.id ?
+                    {
+                        ...col,
+                        blocks: col.blocks.map((b) =>
+                            b.type === "field_group" ?
+                                {
+                                    ...b,
+                                    fields: b.fields.map((f) =>
+                                        f.fieldKey === "opportunity.status_key" ?
+                                            { ...f, display: undefined as unknown as typeof f.display }
+                                        :   f,
+                                    ),
+                                }
+                            :   b,
+                        ),
+                    }
+                :   col,
+            ),
+        };
+        const normalized = normalizeQueueRecordLayoutConfig(stripped as typeof base);
+        const normalizedStatus = normalized.columns
+            .find((c) => c.id === statusCol!.id)!
+            .blocks[0];
+        if (normalizedStatus?.type !== "field_group") throw new Error("expected field group");
+        const field = normalizedStatus.fields.find((f) => f.fieldKey === "opportunity.status_key");
+        expect(field?.display).toBe("pill");
+    });
+});
+
+describe("queue record date field formatting", () => {
+    it("formats child.date_of_birth as MM-DD-YYYY even when display is muted", () => {
+        const field = {
+            id: "dob",
+            fieldKey: "child.date_of_birth",
+            display: "muted" as const,
+            inlineWithPrevious: true,
+        };
+        const resolved = resolveQueueRecordField(field, {
+            "child.date_of_birth": "2024-03-15",
+        } as never);
+        expect(resolved.display).toBe("03-15-2024");
+    });
+});

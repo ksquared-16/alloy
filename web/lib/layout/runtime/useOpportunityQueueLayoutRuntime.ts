@@ -4,7 +4,7 @@
  * Lane-level opportunity queue layout runtime — fetch once, render rows from preview record.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { isLayoutRuntimeOpportunityQueueBodyEnabledClient } from "@/lib/layout/featureFlag";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { OpportunityQueueLaneContextInput } from "@/lib/layout/runtime/queue/buildOpportunityQueueLayoutContext";
@@ -26,7 +26,13 @@ export function useOpportunityQueueLayoutRuntime(
     const [doc, setDoc] = useState<LayoutDoc | null>(null);
     const [layoutSource, setLayoutSource] = useState<string | null>(null);
     const [layoutKey, setLayoutKey] = useState<string | null>(null);
-    const lastKeyRef = useRef<string | null>(null);
+    const [refreshToken, setRefreshToken] = useState(0);
+
+    useEffect(() => {
+        const onPublished = () => setRefreshToken((t) => t + 1);
+        window.addEventListener("adminv2:entity-layout-published", onPublished);
+        return () => window.removeEventListener("adminv2:entity-layout-published", onPublished);
+    }, []);
 
     useEffect(() => {
         if (!enabled) {
@@ -34,11 +40,9 @@ export function useOpportunityQueueLayoutRuntime(
             setLayoutSource(null);
             setLayoutKey(null);
             setLoading(false);
-            lastKeyRef.current = null;
             return;
         }
-        if (!laneKey || lastKeyRef.current === laneKey) return;
-        lastKeyRef.current = laneKey;
+        if (!laneKey) return;
         setLoading(true);
 
         const qs = new URLSearchParams();
@@ -64,7 +68,16 @@ export function useOpportunityQueueLayoutRuntime(
             })
             .catch(() => setDoc(null))
             .finally(() => setLoading(false));
-    }, [enabled, laneKey, lane.drillWorkUnitKey, lane.lifecycleKey, lane.stageKey, lane.grain, lane.isWaitlistCandidate]);
+    }, [
+        enabled,
+        laneKey,
+        refreshToken,
+        lane.drillWorkUnitKey,
+        lane.lifecycleKey,
+        lane.stageKey,
+        lane.grain,
+        lane.isWaitlistCandidate,
+    ]);
 
     return { enabled, loading, doc, layoutSource, layoutKey };
 }

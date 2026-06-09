@@ -12,7 +12,7 @@ import { shouldRenderProofItem } from "./resolveProofBindingValue";
 export function isLayoutItemSupportedForProduction(item: LayoutItem): boolean {
     if (!shouldRenderProofItem(item)) return false;
     if (item.kind === "widget_placeholder") return true;
-    if (item.kind === "related_list" && item.displayMode !== "table" && item.displayMode !== "rows") {
+    if (item.kind === "related_list" && item.displayMode !== "table" && item.displayMode !== "rows" && item.displayMode !== "list") {
         return false;
     }
     return true;

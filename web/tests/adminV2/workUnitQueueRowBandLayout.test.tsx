@@ -2,7 +2,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
 import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/blocks/QueueBlock";
-import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import type { CrmCompactRowSemanticSlots, QueueRowPlacementPriorityVm } from "@/lib/ui-v2/workspace-types";
 
 function mockWaitlistPlacement(
@@ -48,7 +47,7 @@ const handlers = {
 };
 
 describe("operational record V3.4 visual hierarchy", () => {
-    it("groups row into summary, people, and facts zones in scan order", () => {
+    it("renders enrollment pipeline rows as horizontal operational columns", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
@@ -63,6 +62,7 @@ describe("operational record V3.4 visual hierarchy", () => {
                     contactPhoneDisplay: "(503) 555-4729",
                     contactPersonId: "parent-1",
                     nextStep: "Call family within one business day to confirm interest.",
+                    attentionReason: "Urgent: overdue follow-up",
                     operationalReadPreview: {
                         operationalRead: "overdue follow-up",
                         whyNow: "Commitment date passed",
@@ -74,6 +74,7 @@ describe("operational record V3.4 visual hierarchy", () => {
                         priorityExplanation: null,
                         previewBoundary: "Preview",
                     },
+                    childrenLines: [{ primary: "Liam (2y)", personId: "child-1", programInline: "Toddler" }],
                     crmFactGroups: [
                         {
                             kind: "children_programs",
@@ -93,17 +94,20 @@ describe("operational record V3.4 visual hierarchy", () => {
                 })}
             />
         );
-        const summaryIdx = html.indexOf('data-queue-zone="summary"');
-        const peopleIdx = html.indexOf('data-queue-zone="people"');
-        const factsIdx = html.indexOf('data-queue-zone="facts"');
-        expect(summaryIdx).toBeGreaterThan(-1);
-        expect(peopleIdx).toBeGreaterThan(summaryIdx);
-        expect(factsIdx).toBeGreaterThan(peopleIdx);
-        expect(html).toContain('data-queue-header-container="true"');
+        const identityIdx = html.indexOf('data-queue-col-scope="main_record"');
+        const relatedIdx = html.indexOf('data-queue-col-scope="repeated_related"');
+        const statusIdx = html.indexOf("queue-record-field--pill");
+        const attentionIdx = html.indexOf("queue-record-widget--attention");
+        expect(identityIdx).toBeGreaterThan(-1);
+        expect(relatedIdx).toBeGreaterThan(identityIdx);
+        expect(statusIdx).toBeGreaterThan(relatedIdx);
+        expect(attentionIdx).toBeGreaterThan(statusIdx);
+        expect(html).toContain('data-queue-record-layout="operational-row"');
+        expect(html).toContain("queue-record-field--link");
         expect(html).not.toContain('data-queue-attention-supplement="true"');
     });
 
-    it("applies waitlist summary and people hierarchy with same zone model", () => {
+    it("renders waitlist rows on the operational column model", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
@@ -135,23 +139,22 @@ describe("operational record V3.4 visual hierarchy", () => {
                 })}
             />
         );
-        expect(html).toContain('data-queue-zone="summary"');
-        expect(html).toContain("#1 Standard Family");
-        expect(html).toContain("Sibling also waitlisted");
-        expect(html).toMatch(
-            /data-testid="queue-header-attention-column"[\s\S]*data-testid="queue-header-waitlist-reason"/
-        );
-        expect(html).toContain('data-queue-row-child-icon="true"');
-        expect(html).toContain('data-queue-zone="people"');
-        expect(html).toContain('data-queue-row-child-icon="true"');
+        expect(html).toContain('data-queue-record-layout="operational-row"');
+        expect(html).toContain('data-queue-col-scope="main_record"');
+        expect(html).toContain('data-queue-col-scope="repeated_related"');
+        expect(html).toContain("Waitlisted");
+        expect(html).toContain("Sam (3y)");
+        expect(html).toContain("queue-record-field--link");
         const parentIdx = html.indexOf("Riley Williams");
         const childIdx = html.indexOf("Sam (3y)");
+        expect(parentIdx).toBeGreaterThan(-1);
+        expect(childIdx).toBeGreaterThan(-1);
         expect(parentIdx).toBeLessThan(childIdx);
     });
 });
 
 describe("operational record V3.2 compact header", () => {
-    it("renders household before status in header order", () => {
+    it("renders household in identity column before status column", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
@@ -162,6 +165,7 @@ describe("operational record V3.2 compact header", () => {
                     stageLabel: "Contact",
                     statusLabel: "Attempted",
                     locationContext: "South Campus",
+                    childrenLines: [{ primary: "Liam (2y)", personId: "child-1", programInline: "Toddler" }],
                     crmFactGroups: [
                         {
                             kind: "children_programs",
@@ -176,23 +180,16 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
-        const householdIdx = html.indexOf('data-testid="queue-header-household"');
-        const statusIdx = html.indexOf('data-testid="queue-header-status"');
+        const householdIdx = html.indexOf("Mitchell household");
+        const statusIdx = html.indexOf("queue-record-field--pill");
         expect(householdIdx).toBeGreaterThan(-1);
         expect(statusIdx).toBeGreaterThan(householdIdx);
-        expect(html).toContain('data-queue-header-layout="four-column"');
-        expect(html).toContain('data-testid="queue-header-household-icon"');
-        expect(html).toContain("Mitchell household");
+        expect(html).toContain('data-queue-col-scope="main_record"');
+        expect(html).toContain("Attempted");
+        expect(html).not.toContain("Contact · Attempted");
     });
 
-    it("shows concise attention in header column row 1 and reason/next step in column row 2 without supplement band", () => {
-        const slot = resolveQueueOperationalReadSlot({
-            _operational_recommendation_preview: {
-                next_label: "Complete the overdue follow-up and log the next step",
-                why_line: "Commitment date passed · breached vs goal",
-                urgency_band: "p0_urgent",
-            },
-        });
+    it("shows attention reason and next step in attention column without supplement band", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
@@ -203,7 +200,9 @@ describe("operational record V3.2 compact header", () => {
                     stageLabel: "Contact",
                     statusLabel: "Attempted",
                     locationContext: "South Campus",
+                    attentionReason: "Urgent: overdue follow-up",
                     nextStep: "Call family within one business day to confirm interest.",
+                    childrenLines: [{ primary: "Liam (2y)", personId: "child-1", secondary: "2y" }],
                     crmFactGroups: [
                         {
                             kind: "children_programs",
@@ -215,32 +214,20 @@ describe("operational record V3.2 compact header", () => {
                             },
                         },
                     ],
-                    operationalReadPreview: slot,
                 })}
             />
         );
-        expect(html).toContain('data-testid="queue-header-attention-inline"');
+        expect(html).toContain("queue-record-widget--attention");
+        expect(html).toContain("queue-record-field--next-step");
         expect(html).toContain("Urgent: overdue follow-up");
-        expect(html).toContain('data-queue-header-container="true"');
-        expect(html).toContain('data-testid="queue-header-attention-column"');
-        expect(html).toContain('data-testid="queue-header-enrollment-subline"');
-        expect(html).toContain('adminv2-ws-queue-operational-record__header-subline--in-attention');
-        expect(html).toMatch(
-            /data-testid="queue-header-attention-column"[\s\S]*data-testid="queue-header-attention-inline"[\s\S]*data-testid="queue-header-enrollment-subline"/
-        );
-        expect(html).toContain('data-queue-header-subline-readable="true"');
-        expect(html).toContain("Commitment date missed");
-        expect(html).toContain("Next step: Call family within one business day to confirm interest.");
-        expect(html).not.toContain("Next stepCall");
-        expect(html).not.toMatch(/Urgent:[^<]*…/);
-        expect(html).not.toContain("breached vs goal");
+        expect(html).toContain("Call family within one business day to confirm interest.");
+        expect(html).toMatch(/queue-record-field--next-step[\s\S]*Next:/);
         expect(html).not.toContain('data-queue-attention-supplement="true"');
         expect(html).not.toContain('data-queue-preview-slot="operational_read"');
         expect(html).not.toContain('data-testid="queue-operational-read-urgency-chip"');
-        expect(html).not.toContain("Complete the overdue follow-up");
     });
 
-    it("renders waitlist ranking inline in header with optional reason subline", () => {
+    it("maps waitlist placement context into status column", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
@@ -269,13 +256,9 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
-        expect(html).toContain('data-testid="queue-header-waitlist-ranking"');
-        expect(html).toContain("#1 Standard Family");
-        expect(html).toContain('data-testid="queue-header-waitlist-reason"');
-        expect(html).toMatch(
-            /data-testid="queue-header-attention-column"[\s\S]*data-testid="queue-header-waitlist-reason"/
-        );
-        expect(html).toContain("Sibling priority");
+        expect(html).toContain("queue-record-field--pill");
+        expect(html).toContain("Waitlisted");
+        expect(html).toContain("North Campus");
         expect(html).not.toContain('data-queue-row-band="lifecycle"');
     });
 
@@ -341,19 +324,15 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
-        expect(html).toContain("#1 of 8 Standard Families");
-        expect(html).toContain("Sibling also waitlisted: Riley Williams — Toddler");
-        expect(html).toContain('data-testid="queue-header-waitlist-reason"');
-        expect(html).toContain('data-testid="queue-header-waitlist-adjust"');
-        expect(html).toContain("Adjust position");
-        expect(html).toContain("Waitlisted since 06/15/2024");
-        expect(html).toContain("#1 of 8 Standard Families");
-        expect(html).not.toContain("Preview position");
-        expect(html).toContain("Desired start: Apr 2026");
+        expect(html).toContain('data-queue-record-layout="operational-row"');
+        expect(html).toContain("Williams Family");
+        expect(html).toContain("Sam (3y)");
+        expect(html).toContain("Riley Williams");
+        expect(html).toContain("Waitlisted");
+        expect(html).toContain("queue-record-field--link");
         expect(html).not.toContain('data-queue-row-band="lifecycle"');
         expect(html).not.toContain('data-queue-placement="candidate-meta"');
         expect(html).not.toContain('data-queue-placement="candidate-context"');
-        expect(html).toContain('data-queue-row-child-icon="true"');
     });
 
     it("renders waitlist child drawer icon when child person id exists", () => {
@@ -386,8 +365,8 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
-        expect(html).toContain('data-queue-row-child-icon="true"');
-        expect(html).toMatch(/data-queue-row-child-icon="true"[\s\S]*Liam \(2y\)/);
+        expect(html).toContain("queue-record-field--link");
+        expect(html).toContain("Liam (2y)");
     });
 
     it("stays compact for three-child household", () => {
@@ -401,6 +380,7 @@ describe("operational record V3.2 compact header", () => {
                     primaryIdentity: "Three Child Family",
                     contactDisplayName: "Parent Name",
                     contactPersonId: "parent-1",
+                    childrenLines: childRows.map(([name]) => ({ primary: name, personId: `child-${name}` })),
                     crmFactGroups: [
                         {
                             kind: "children_programs",
@@ -417,6 +397,7 @@ describe("operational record V3.2 compact header", () => {
         );
         expect(html).toContain("A (1y)");
         expect(html).toContain("C (3y)");
+        expect(html).toContain("queue-record-field--link");
         expect(html).not.toContain('data-queue-attention-supplement="true"');
     });
 
@@ -431,6 +412,7 @@ describe("operational record V3.2 compact header", () => {
                     primaryIdentity: "Large Family",
                     contactDisplayName: "Parent Name",
                     contactPersonId: "parent-1",
+                    childrenLines: childRows.map(([name]) => ({ primary: name, personId: `child-${name}` })),
                     crmFactGroups: [
                         {
                             kind: "children_programs",
@@ -447,11 +429,11 @@ describe("operational record V3.2 compact header", () => {
         );
         expect(html).toContain("A (1y)");
         expect(html).toContain("E (5y)");
-        expect(html).toContain('data-queue-people-role="children"');
+        expect(html).toContain('data-queue-col-scope="repeated_related"');
         expect(html).not.toContain('data-queue-attention-supplement="true"');
     });
 
-    it("renders parent above children with readable contact meta", () => {
+    it("renders parent in identity column and child chips in related column", () => {
         const html = renderToStaticMarkup(
             <CrmCompactQueuePreview
                 scanMode
@@ -463,6 +445,7 @@ describe("operational record V3.2 compact header", () => {
                     contactPhoneDisplay: "(503) 555-4729",
                     contactEmail: "kevin@email.com",
                     contactPersonId: "parent-1",
+                    childrenLines: [{ primary: "Liam Mitchell (2y)", personId: "child-1", programInline: "Toddler" }],
                     crmFactGroups: [
                         {
                             kind: "children_programs",
@@ -477,18 +460,18 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
+        const identityIdx = html.indexOf('data-queue-col-scope="main_record"');
+        const relatedIdx = html.indexOf('data-queue-col-scope="repeated_related"');
         const parentIdx = html.indexOf("Kevin Mitchell");
         const childIdx = html.indexOf("Liam Mitchell (2y)");
+        expect(identityIdx).toBeGreaterThan(-1);
+        expect(relatedIdx).toBeGreaterThan(identityIdx);
         expect(parentIdx).toBeGreaterThan(-1);
         expect(childIdx).toBeGreaterThan(-1);
-        expect(parentIdx).toBeLessThan(childIdx);
         expect(html).toContain("(503) 555-4729");
         expect(html).toContain("kevin@email.com");
-        expect(html).toContain('data-testid="queue-parent-contact-meta"');
-        expect(html).toContain("adminv2-ws-queue-operational-record__parent-identity--inline");
-        expect(html).toContain("adminv2-ws-queue-operational-record__parent-sep");
-        expect(html).toMatch(/Kevin Mitchell[\s\S]*\(503\) 555-4729/);
-        expect(html).toContain('data-queue-people-role="parent"');
+        expect(html).toContain("queue-record-field--link");
+        expect(html).toContain("queue-record-field--link");
     });
 
     it("stays compact for one-child household", () => {
@@ -517,7 +500,7 @@ describe("operational record V3.2 compact header", () => {
             />
         );
         expect(html).toContain("Sam (4y)");
-        expect(html).toContain('data-queue-header-layout="four-column"');
+        expect(html).toContain('data-queue-record-layout="operational-row"');
         expect(html).not.toContain('data-queue-attention-supplement="true"');
     });
 });

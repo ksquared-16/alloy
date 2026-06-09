@@ -14,7 +14,7 @@ describe("prefetchAdminV2AboveFold", () => {
         const mod = read("lib/adminV2/prefetchAdminV2AboveFold.ts");
         expect(mod).toContain("logPrefetchAdminV2");
         const instr = read("lib/adminV2/adminV2PrefetchInstrumentation.ts");
-        expect(instr).toContain("[prefetch.adminv2]");
+        expect(instr).toContain("perfPrefetch");
         expect(mod).toContain("prefetchVisibleDepartmentAboveFoldBundles");
         expect(mod).toContain("workspace_visible_dept_prefetch");
     });

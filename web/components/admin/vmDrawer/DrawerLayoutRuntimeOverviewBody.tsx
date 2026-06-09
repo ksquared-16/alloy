@@ -10,6 +10,8 @@ import OpportunityDrawerLayoutRuntimeBodyErrorBoundary from "@/components/admin/
 import OpportunityDrawerLayoutRuntimeOverviewHold from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeOverviewHold";
 import DrawerLayoutRuntimeStagingDiagnostic from "@/components/admin/vmDrawer/DrawerLayoutRuntimeStagingDiagnostic";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import LeadOverviewRuntimeComposition from "@/components/layout/LeadOverviewRuntimeComposition";
+import PersonOverviewRuntimeComposition from "@/components/layout/person/PersonOverviewRuntimeComposition";
 import LayoutRuntimeDrawerEditProvider from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import LayoutRuntimeErrorPanel from "@/components/layout/LayoutRuntimeErrorPanel";
 import {
@@ -23,6 +25,9 @@ import {
 import { shouldLogLayoutRuntimeEvidence } from "@/lib/layout/runtime/layoutRuntimeEvidenceClient";
 import type { LayoutRuntimeDrawerSurface } from "@/lib/layout/runtime/logLayoutRuntimeBodyRenderFailure";
 import type { UseDrawerLayoutRuntimeBodyResult } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
+import type { LayoutDoc } from "@/lib/layout/layoutV2";
+import { shouldUseLeadOverviewComposition } from "@/lib/layout/runtime/leadOverviewComposition";
+import { shouldUsePersonOverviewComposition } from "@/lib/layout/runtime/personOverviewComposition";
 
 type Props = {
     layoutBody: UseDrawerLayoutRuntimeBodyResult;
@@ -30,7 +35,10 @@ type Props = {
     entityId: string;
     surface: LayoutRuntimeDrawerSurface;
     dataAttribute?: string;
+    canMutate?: boolean;
     onAdornmentAction?: import("@/components/layout/LayoutRuntimePlanView").AdornmentActionHandler;
+    /** When set, renders this doc instead of layoutBody.doc (shell zone body partition). */
+    layoutDocOverride?: LayoutDoc | null;
 };
 
 function shouldShowStagingDiagnostic(): boolean {
@@ -43,17 +51,21 @@ export default function DrawerLayoutRuntimeOverviewBody({
     entityId,
     surface,
     onAdornmentAction,
+    canMutate = false,
+    layoutDocOverride,
 }: Props) {
+    const effectiveDoc = layoutDocOverride ?? layoutBody.doc;
+
     const renderStats = useMemo(
-        () => computeLayoutRuntimeBodyRenderStats(layoutBody.doc, layoutBody.record),
-        [layoutBody.doc, layoutBody.record],
+        () => computeLayoutRuntimeBodyRenderStats(effectiveDoc, layoutBody.record),
+        [effectiveDoc, layoutBody.record],
     );
 
     const evidence = useMemo(
         () =>
             buildLayoutRuntimeDrawerEvidence({
                 opportunityId: entityId,
-                doc: layoutBody.doc,
+                doc: effectiveDoc,
                 record: layoutBody.record,
                 layoutSource: layoutBody.layoutSource,
                 layoutKey: layoutBody.layoutKey,
@@ -65,7 +77,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                 useVmFallback: layoutBody.useVmFallback,
                 lastError: layoutBody.lastError,
             }),
-        [entityId, layoutBody],
+        [entityId, effectiveDoc, layoutBody],
     );
 
     useEffect(() => {
@@ -94,8 +106,12 @@ export default function DrawerLayoutRuntimeOverviewBody({
         vmFallback
     );
 
-    if (layoutBody.bodyReady && layoutBody.doc && layoutBody.record && !useEmptyBodyFallback) {
+    if (layoutBody.bodyReady && effectiveDoc && layoutBody.record && !useEmptyBodyFallback) {
         const noRenderedItems = evidence.renderedItemCount === 0 && evidence.itemEvidence.length > 0;
+        const useLeadComposition =
+            surface === "opportunity_drawer_overview" && shouldUseLeadOverviewComposition(effectiveDoc);
+        const usePersonComposition =
+            surface === "person_drawer_overview" && shouldUsePersonOverviewComposition(effectiveDoc);
         return (
             <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
                 fallback={fallbackNode}
@@ -114,6 +130,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                     data-layout-runtime-record-id={layoutBody.layoutRecordId ?? ""}
                     data-layout-runtime-version={layoutBody.layoutVersion ?? ""}
                     data-drawer-layout-runtime-renderable-count={renderStats.renderableItemCount}
+                    {...(layoutDocOverride != null ? { "data-drawer-layout-runtime-shell-zone": "body" } : {})}
                 >
                     {showStagingDiagnostic ?
                         <DrawerLayoutRuntimeStagingDiagnostic
@@ -133,11 +150,30 @@ export default function DrawerLayoutRuntimeOverviewBody({
                         </div>
                     :   null}
                     <LayoutRuntimeDrawerEditProvider record={layoutBody.record}>
-                        <LayoutRuntimeDrawerBodyView
-                            doc={layoutBody.doc}
-                            record={layoutBody.record}
-                            onAdornmentAction={onAdornmentAction}
-                        />
+                        {useLeadComposition ?
+                            <LeadOverviewRuntimeComposition
+                                doc={effectiveDoc}
+                                record={layoutBody.record}
+                                entityId={entityId}
+                                canMutate={canMutate}
+                                onAdornmentAction={onAdornmentAction}
+                            />
+                        : usePersonComposition ?
+                            <PersonOverviewRuntimeComposition
+                                doc={effectiveDoc}
+                                record={layoutBody.record}
+                                entityId={entityId}
+                                canMutate={canMutate}
+                                onAdornmentAction={onAdornmentAction}
+                            />
+                        :   <LayoutRuntimeDrawerBodyView
+                                doc={effectiveDoc}
+                                record={layoutBody.record}
+                                entityId={entityId}
+                                canMutate={canMutate}
+                                onAdornmentAction={onAdornmentAction}
+                            />
+                        }
                     </LayoutRuntimeDrawerEditProvider>
                 </div>
             </OpportunityDrawerLayoutRuntimeBodyErrorBoundary>

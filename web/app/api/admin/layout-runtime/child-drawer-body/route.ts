@@ -16,11 +16,14 @@ export async function GET(req: NextRequest) {
     const gate = await loadAdminRouteGate();
     if (!gate.ok) return adminRouteGateFailureResponse(gate);
 
-    const childId = req.nextUrl.searchParams.get("childId")?.trim() ?? "";
-    if (!childId) return NextResponse.json({ error: "missing_child_id" }, { status: 400 });
+    const personId =
+        req.nextUrl.searchParams.get("personId")?.trim() ??
+        req.nextUrl.searchParams.get("childId")?.trim() ??
+        "";
+    if (!personId) return NextResponse.json({ error: "missing_person_id" }, { status: 400 });
 
     const result = await evaluateChildLayoutRuntimeBody({
-        childId,
+        personId,
         gate,
         supabase: createAdminClient(),
     });

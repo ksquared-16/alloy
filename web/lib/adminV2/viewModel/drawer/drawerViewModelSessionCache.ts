@@ -98,6 +98,22 @@ export function clearDrawerViewModelSessionCacheForTests(): void {
     shellPinCache.clear();
 }
 
+export function invalidateDrawerViewModelCacheForEntity(
+    entityType: AdminDrawerEntityType,
+    entityId: string,
+    context?: DrawerViewModelCacheContext | null,
+    surface: DrawerViewModelCacheSurface = "opportunity",
+): void {
+    const key = buildDrawerViewModelCacheKey({
+        entityType,
+        entityId: entityId.trim(),
+        surface,
+        context,
+    });
+    cache.delete(key);
+    shellPinCache.delete(key);
+}
+
 export function putDrawerShellPinSnapshot(
     snapshot: Omit<DrawerShellPinSnapshot, "cachedAt"> & { cachedAt?: number },
     context?: DrawerViewModelCacheContext | null

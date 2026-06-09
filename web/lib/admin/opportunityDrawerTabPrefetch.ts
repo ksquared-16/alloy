@@ -5,6 +5,7 @@
 
 import { normalizeDocumentRows } from "@/lib/admin/normalizeDocumentRow";
 import { opportunityRelatedListPath } from "@/lib/admin/opportunityRelatedApiPaths";
+import { perfPrefetch } from "@/lib/perf/perfNamespaceLog";
 
 type DocumentsSnapshot = {
     documents: ReturnType<typeof normalizeDocumentRows>;
@@ -43,9 +44,13 @@ function shouldLog(): boolean {
 
 function log(event: string, payload: Record<string, unknown>): void {
     if (!shouldLog()) return;
-    console.info(`[perf.opportunity_drawer.tab_prefetch:${event}]`, {
-        ts: new Date().toISOString(),
-        ...payload,
+    perfPrefetch(`drawer_tab_${event}`, {
+        entity_type: "opportunity",
+        entity_id: payload.drawer_id ?? payload.opportunity_id,
+        tab: payload.tab,
+        duration_ms: payload.duration_ms ?? payload.prefetch_ms,
+        cache_hit: payload.cache_hit,
+        source: payload.cache_hit ? "cache" : "network",
     });
 }
 

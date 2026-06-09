@@ -6,6 +6,7 @@
  */
 
 import type { RealRecordShadowValidationReport } from "./drawerStructureSnapshot";
+import { perfDebugTraceEnabled, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export type OpportunityDrawerShadowTelemetry = {
     opportunityId: string;
@@ -63,6 +64,12 @@ export function buildOpportunityDrawerShadowTelemetry(
 
 /** Console telemetry hook — non-blocking, swallow-safe. */
 export function logOpportunityDrawerShadowTelemetry(telemetry: OpportunityDrawerShadowTelemetry): void {
-    if (typeof console === "undefined" || typeof console.info !== "function") return;
-    console.info("[layout_runtime_shadow:opportunity_drawer]", telemetry);
+    if (!perfDebugTraceEnabled()) return;
+    perfDrawer("layout_runtime_shadow", {
+        entity_type: "opportunity",
+        entity_id: telemetry.opportunityId,
+        compose_ms: telemetry.composeMs,
+        count: telemetry.missingFields.length + telemetry.missingSections.length,
+        source: "shadow",
+    });
 }

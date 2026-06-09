@@ -41,8 +41,14 @@ import {
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
 import { formatOpportunityTourQueueDisplays } from "@/lib/tours/queue/opportunityQueueTourPreview";
+import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
 import { resolveQueueRowRelatedDrawerPersonIds } from "@/lib/workspace/viewModels/queueRowRelatedDrawerTargets";
+import {
+    hydrateQueueRowInquiryChildrenPersonIds,
+    parseOcmChildPersonLinesFromBatchRow,
+    type QueueRowOcmChildPersonLine,
+} from "@/lib/layout/runtime/hydrateQueueRowInquiryChildrenPersonIds";
 import {
     buildChildcarePlacementOptionLabelLookup,
     indexOcmPlacementByOpportunityAndMember,
@@ -1023,6 +1029,44 @@ function buildStructuredCrmCompactChildren(joinChildNames: string[], inquiryChil
     return undefined;
 }
 
+const QUEUE_ROW_TASK_PREVIEW_LIMIT_PER_OPPORTUNITY = 6;
+
+function buildQueueRowTaskPreviewPayload(
+    rows: Array<{ id?: string; title?: string | null; due_at?: string | null; status?: string | null; source?: string | null }>,
+): InquirySummaryTaskPreviewPayload {
+    const open_tasks = rows
+        .map((r) => ({
+            id: String(r.id ?? "").trim(),
+            title: String(r.title ?? "").trim() || "Task",
+            due_at: String(r.due_at ?? ""),
+            status: String(r.status ?? "").trim() || "open",
+            source: String(r.source ?? "").trim(),
+        }))
+        .filter((r) => r.id);
+    return { state: "loaded", open_tasks, open_count: open_tasks.length };
+}
+
+function indexOpenTasksByOpportunityId(
+    rawRows: unknown[],
+): Map<string, InquirySummaryTaskPreviewPayload> {
+    const grouped = new Map<string, Array<{ id?: string; title?: string | null; due_at?: string | null; status?: string | null; source?: string | null }>>();
+    for (const raw of rawRows) {
+        if (!raw || typeof raw !== "object") continue;
+        const row = raw as { entity_id?: string; id?: string; title?: string | null; due_at?: string | null; status?: string | null; source?: string | null };
+        const oppId = String(row.entity_id ?? "").trim();
+        if (!oppId) continue;
+        const list = grouped.get(oppId) ?? [];
+        if (list.length >= QUEUE_ROW_TASK_PREVIEW_LIMIT_PER_OPPORTUNITY) continue;
+        list.push(row);
+        grouped.set(oppId, list);
+    }
+    const out = new Map<string, InquirySummaryTaskPreviewPayload>();
+    for (const [oppId, tasks] of grouped) {
+        out.set(oppId, buildQueueRowTaskPreviewPayload(tasks));
+    }
+    return out;
+}
+
 async function enrichOpportunityRows(params: {
     supabase: ReturnType<typeof createAdminClient>;
     orgId: string;
@@ -1126,7 +1170,7 @@ async function enrichOpportunityRows(params: {
         ),
     ];
 
-    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed, tourBookingsTimed, locationsTimed, ocmDesiredStartTimed] =
+    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed, tourBookingsTimed, locationsTimed, ocmDesiredStartTimed, openTasksTimed] =
         await Promise.all([
         plan.persons && personIds.length
             ? timedAwait(
@@ -1186,9 +1230,23 @@ async function enrichOpportunityRows(params: {
             ? timedAwait(
                   supabase
                       .from("opportunity_customer_members")
-                      .select("opportunity_id, customer_member_id, desired_start_date, desired_program_type")
+                      .select(
+                          "opportunity_id, customer_member_id, desired_start_date, desired_program_type, customer_members(id, person_id, display_name, first_name, last_name, dob)",
+                      )
                       .eq("org_id", orgId)
                       .in("opportunity_id", opportunityIds as any)
+              )
+            : timedAwait(emptyRel),
+        opportunityIds.length
+            ? timedAwait(
+                  supabase
+                      .from("operational_tasks")
+                      .select("id, title, due_at, status, source, entity_id")
+                      .eq("org_id", orgId)
+                      .eq("entity_type", "opportunities")
+                      .eq("status", "open")
+                      .in("entity_id", opportunityIds as any)
+                      .order("due_at", { ascending: true })
               )
             : timedAwait(emptyRel),
     ]);
@@ -1205,6 +1263,7 @@ async function enrichOpportunityRows(params: {
     }
 
     const ocmDesiredStartByOpportunityId = new Map<string, { desired_start_date?: string | null }[]>();
+    const ocmChildPersonLinesByOpportunityId = new Map<string, QueueRowOcmChildPersonLine[]>();
     const ocmPlacementRows: QueueOcmPlacementRow[] = [];
     for (const raw of (ocmDesiredStartTimed.v as { data?: unknown[] | null }).data ?? []) {
         const row = raw as {
@@ -1212,6 +1271,7 @@ async function enrichOpportunityRows(params: {
             customer_member_id?: string;
             desired_start_date?: string | null;
             desired_program_type?: string | null;
+            customer_members?: unknown;
         };
         const oid = String(row.opportunity_id ?? "").trim();
         if (!oid) continue;
@@ -1226,12 +1286,22 @@ async function enrichOpportunityRows(params: {
                 desired_program_type: String(row.desired_program_type ?? "").trim() || null,
             });
         }
+        const childLine = parseOcmChildPersonLinesFromBatchRow(row as Record<string, unknown>);
+        if (childLine && (childLine.personId || childLine.customerMemberId || childLine.displayName)) {
+            const childLines = ocmChildPersonLinesByOpportunityId.get(oid) ?? [];
+            childLines.push(childLine);
+            ocmChildPersonLinesByOpportunityId.set(oid, childLines);
+        }
     }
     const ocmPlacementByOpportunityId = indexOcmPlacementByOpportunityAndMember(ocmPlacementRows);
     const placementOptionLabelLookup =
         ocmPlacementRows.length > 0
             ? await buildChildcarePlacementOptionLabelLookup(supabase, orgId, ocmPlacementRows)
             : new Map<string, string>();
+
+    const taskPreviewByOppId = indexOpenTasksByOpportunityId(
+        (openTasksTimed.v as { data?: unknown[] | null }).data ?? [],
+    );
 
     const tourBookingByOppId = new Map<string, { start_at: string; timezone: string }>();
     for (const raw of (tourBookingsTimed.v as any).data ?? []) {
@@ -1348,10 +1418,15 @@ async function enrichOpportunityRows(params: {
         const nextStepPreview = typeof md?.next_step === "string" ? md.next_step.trim() : null;
 
         const customerIdStr = r.customer_id ? String(r.customer_id).trim() : "";
+        const oppIdStr = String(r.id ?? "").trim();
         const activeMemberChildren = customerIdStr ? activeChildrenByCustomerId.get(customerIdStr) ?? [] : [];
-        const inquiryChildren = md && Array.isArray((md as { inquiry_children?: unknown }).inquiry_children)
+        const inquiryChildrenRaw = md && Array.isArray((md as { inquiry_children?: unknown }).inquiry_children)
             ? ((md as { inquiry_children: unknown[] }).inquiry_children ?? []).filter((x) => x && typeof x === "object")
             : [];
+        const inquiryChildren = hydrateQueueRowInquiryChildrenPersonIds(
+            inquiryChildrenRaw,
+            ocmChildPersonLinesByOpportunityId.get(oppIdStr) ?? [],
+        );
 
         let childDisplay: string | null = null;
         let programsDisplay: string | null = null;
@@ -1360,7 +1435,6 @@ async function enrichOpportunityRows(params: {
 
         let structuredFromMembers: ReturnType<typeof buildCrmCompactStructuredLinesFromCustomerMembers> | null = null;
 
-        const oppIdStr = String(r.id ?? "").trim();
         const ocmByMemberId = oppIdStr ? ocmPlacementByOpportunityId.get(oppIdStr) ?? new Map() : new Map();
 
         if (activeMemberChildren.length > 0) {
@@ -1569,6 +1643,7 @@ async function enrichOpportunityRows(params: {
             _primary_child_person_id: relatedDrawerPersonIds.childPersonId,
             _child_display_name: childDisplay,
             _crm_compact_children: crmCompactChildrenStructured,
+            ...(inquiryChildren.length > 0 ? { _inquiry_children: inquiryChildren } : {}),
             _requested_program: programsDisplay ?? programCombined,
             _desired_start_date: desiredStart,
             _child_desired_start_summary: childDesiredStartSummary,
@@ -1583,6 +1658,9 @@ async function enrichOpportunityRows(params: {
             _notes_preview: notesPreview,
             _next_step_preview: nextStepPreview,
             _status_display: statusDisplay,
+            _inquiry_summary_tasks:
+                taskPreviewByOppId.get(oppIdStr)
+                ?? ({ state: "loaded", open_tasks: [], open_count: 0 } satisfies InquirySummaryTaskPreviewPayload),
             _attention_reason_label: attentionReasonLabel,
             ...(opportunityAttentionResolution
                 ? {

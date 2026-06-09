@@ -203,4 +203,21 @@ describe("inquiry child placement UI wiring", () => {
         expect(src).toContain('placement_select: "site_program"');
         expect(src).toContain('option_set_key: "childcare_schedule_type"');
     });
+
+    it("OpportunityInquiryChildrenSection uses site-scoped program cascade", () => {
+        const src = readFileSync(
+            resolve(__dirname, "../../../components/admin/entity/OpportunityInquiryChildrenSection.tsx"),
+            "utf8",
+        );
+        expect(src).toContain("resolveProgramsOfferedForSite");
+        expect(src).toContain("applyInquiryChildPlacementFieldChange");
+        expect(src).toContain("applyOcmPlacementCascade");
+        expect(src).toContain("rowProgramOptions");
+        expect(src).not.toMatch(/rowProgramOptions\.map\([\s\S]*programItems/);
+        expect(src).toMatch(/rowProgramOptions\.map\(\(i\) =>/);
+        expect(src).toContain("buildInquiryChildRoomOptionsForSite");
+        expect(src).toMatch(
+            /buildInquiryChildRoomOptionsForSite\([\s\S]*st\.desired_program_type/,
+        );
+    });
 });

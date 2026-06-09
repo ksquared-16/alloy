@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireAdminOrOps } from "@/lib/adminAuth";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { emitEvent } from "@/lib/emitEvent";
 
@@ -108,17 +109,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ members });
 }
 
-/** POST: create customer_member. Admin only. */
+/** POST: create customer_member. Admin + ops can create (matches OCM link path). */
 export async function POST(request: NextRequest) {
+    const forbidden = await requireAdminOrOps();
+    if (forbidden) return forbidden;
+
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        return adminContextFailureResponse(ctx);
     }
 
     let body: {

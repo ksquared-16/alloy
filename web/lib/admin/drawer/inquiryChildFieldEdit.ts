@@ -170,6 +170,7 @@ export async function ensureOpportunityCustomerMemberLink(args: {
 }): Promise<{ ocmId: string }> {
     const res = await fetch("/api/admin/opportunity-customer-members", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
             opportunity_id: args.opportunityId,

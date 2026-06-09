@@ -22,6 +22,7 @@ import { handleLayoutRuntimeAdornmentOpenDrawer } from "@/lib/layout/runtime/res
 import type { UseOpportunityDrawerLayoutRuntimeShadowResult } from "@/lib/layout/runtime/shadow/useOpportunityDrawerLayoutRuntimeShadow";
 import type { UseDrawerLayoutRuntimeBodyResult } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
+import type { LayoutDoc } from "@/lib/layout/layoutV2";
 
 type Props = {
     displayVm: OpportunityDrawerViewModel;
@@ -29,10 +30,13 @@ type Props = {
     opportunitySingular: string;
     onSelectTab: (tab: DrawerTabKey) => void;
     vmReady: boolean;
+    canMutate?: boolean;
     departmentId?: string | null;
     workUnitId?: string | null;
     layoutRuntimeShadow: UseOpportunityDrawerLayoutRuntimeShadowResult;
     layoutBody?: UseDrawerLayoutRuntimeBodyResult;
+    /** Shell zone body partition — omits summary-strip sections when boundary is active. */
+    layoutDocBodyOverride?: LayoutDoc | null;
 };
 
 function VmOverviewBody({
@@ -60,10 +64,12 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         opportunitySingular,
         onSelectTab,
         vmReady,
+        canMutate = false,
         departmentId,
         workUnitId,
         layoutRuntimeShadow,
         layoutBody: layoutBodyProp,
+        layoutDocBodyOverride,
     } = props;
 
     const { openDrawer } = useAdminDrawer();
@@ -108,7 +114,7 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
                 record: mergedLayoutBody.record,
                 rowRecord,
                 opportunityId: drawerId,
-                opportunityRecord: vmRecord,
+                opportunityRecord: mergedLayoutBody.record as Record<string, unknown>,
                 openDrawer,
                 opportunityWorkspaceContext:
                     displayVm.workspace.department_id && displayVm.workspace.work_unit_id ?
@@ -140,9 +146,11 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         <div className="space-y-4" data-adminv2-opportunity-drawer-body="true">
             <DrawerLayoutRuntimeOverviewBody
                 layoutBody={mergedLayoutBody}
+                layoutDocOverride={layoutDocBodyOverride}
                 vmFallback={vmFallback}
                 entityId={drawerId}
                 surface="opportunity_drawer_overview"
+                canMutate={canMutate}
                 onAdornmentAction={onAdornmentAction}
             />
             {showDebugPanel ?

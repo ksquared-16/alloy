@@ -3,6 +3,7 @@
  * Enable: NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG=1
  */
 import { drawerRuntimeDebugEnabled } from "@/lib/adminV2/drawer/drawerRuntimeDebug";
+import { perfDebugTraceEnabled, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export type DrawerHardTraceEvent =
     | "debug_ui_render_blocked"
@@ -25,11 +26,11 @@ export function logDrawerHardTrace(
     sourceFile: string,
     payload: Record<string, unknown> = {}
 ): void {
-    if (!drawerHardTraceEnabled()) return;
-    if (typeof console === "undefined" || typeof console.info !== "function") return;
-    console.info(`[drawer-hard-trace:${event}]`, {
+    if (!drawerHardTraceEnabled() && !perfDebugTraceEnabled()) return;
+    perfDrawer(`debug_${event}`, {
         source: sourceFile,
-        ts: new Date().toISOString(),
-        ...payload,
+        entity_id: payload.person_id ?? payload.child_id ?? payload.opportunity_id ?? payload.entity_id,
+        entity_type: payload.entity_type,
+        detail: event,
     });
 }

@@ -1615,6 +1615,56 @@
   opacity: 0.55;
 }
 
+.adminv2-sidebar-shell {
+  color: #fff;
+}
+
+.adminv2-sidebar-brand-row {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.adminv2-sidebar-toggle,
+.adminv2-sidebar-expand-btn {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.adminv2-sidebar-toggle:hover,
+.adminv2-sidebar-expand-btn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.adminv2-sidebar-section-label {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.adminv2-sidebar-muted {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.adminv2-sidebar-body {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.adminv2-sidebar-footer {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.adminv2-sidebar-primary-link {
+  color: rgba(255, 255, 255, 0.86);
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.adminv2-sidebar-primary-link:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.adminv2-sidebar-primary-link.adminv2-nav-link--active {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow: inset 3px 0 0 #00a283;
+}
+
 .adminv2-sidebar-rail-link {
   display: flex;
   align-items: center;
@@ -1622,10 +1672,16 @@
   width: 100%;
   min-height: 40px;
   border-radius: 8px;
+  color: rgba(255, 255, 255, 0.82);
   transition:
     background-color 120ms ease,
     color 120ms ease,
     transform 80ms ease;
+}
+
+.adminv2-sidebar-rail-link:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .adminv2-sidebar-rail-link:active {
@@ -1633,7 +1689,13 @@
 }
 
 .adminv2-sidebar-rail-link.adminv2-nav-link--active {
-  background-color: rgba(0, 162, 131, 0.12);
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  box-shadow: inset 3px 0 0 #00a283;
+}
+
+.adminv2-sidebar-queue-list {
+  border-color: rgba(255, 255, 255, 0.14) !important;
 }
 
 .adminv2-sidebar-queue-link {
@@ -1644,21 +1706,21 @@
   font-size: 12px;
   font-weight: 500;
   line-height: 1.35;
-  color: rgba(39, 63, 82, 0.58);
+  color: rgba(255, 255, 255, 0.55);
   background-color: transparent;
   transition: background-color 120ms ease, color 120ms ease;
 }
 
 .adminv2-sidebar-queue-link:hover {
-  background-color: rgba(120, 113, 108, 0.06);
-  color: rgba(39, 63, 82, 0.78);
+  background-color: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.86);
 }
 
 .adminv2-sidebar-queue-link.adminv2-nav-link--active {
-  background-color: rgba(39, 63, 82, 0.04);
-  color: rgba(39, 63, 82, 0.92);
+  background-color: rgba(255, 255, 255, 0.08);
+  color: #fff;
   font-weight: 600;
-  box-shadow: inset 2px 0 0 rgba(0, 162, 131, 0.45);
+  box-shadow: inset 2px 0 0 #00a283;
 }
 
 .adminv2-sidebar-queue-link .adminv2-nav-link__inner {

@@ -5,6 +5,7 @@
 import type { LayoutDoc } from "../layoutV2";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import { classifyLayoutItemBinding } from "./classifyLayoutItemBinding";
+import { readLayoutRuntimeRepeaterRows } from "./readLayoutRuntimeRepeaterRows";
 import { isLayoutItemSupportedForProduction } from "./isLayoutItemSupportedForProduction";
 import { resolveProofBindingValue, shouldRenderProofItem } from "./resolveProofBindingValue";
 import type { ProofRuntimeRecord } from "./proofRecordContext";
@@ -36,8 +37,8 @@ function itemHasOperatorValue(
     }
 
     if (item.kind === "related_list") {
-        const raw = record[item.source ?? item.refKey];
-        if (Array.isArray(raw) && raw.length > 0) return true;
+        const rows = readLayoutRuntimeRepeaterRows(record, item);
+        if (rows.length > 0) return true;
         return item.displayMode === "table";
     }
 

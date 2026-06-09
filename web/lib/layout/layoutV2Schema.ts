@@ -319,6 +319,7 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
         if (defaultExpanded !== undefined) section.defaultExpanded = defaultExpanded;
         const secCond = parseCondition(raw.visibleWhen, path);
         if (secCond) section.visibleWhen = secCond;
+        if (isObject(raw.metadata)) section.metadata = raw.metadata as Record<string, unknown>;
         return section;
     };
 

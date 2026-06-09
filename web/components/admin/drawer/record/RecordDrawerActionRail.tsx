@@ -28,6 +28,8 @@ export type RecordDrawerHeaderActionButtonProps = Omit<
     proofLayoutActions?: boolean;
     /** White proof-layout surface for Actions trigger. */
     proofLayoutActionsWhite?: boolean;
+    /** Header action color treatment. */
+    actionVariant?: "default" | "actions-white" | "juniper";
     leadingIcon?: ReactNode;
     busy?: boolean;
 };
@@ -37,6 +39,7 @@ export function RecordDrawerHeaderActionButton({
     inquiryWorkflow = false,
     proofLayoutActions = false,
     proofLayoutActionsWhite = false,
+    actionVariant = "default",
     leadingIcon,
     busy = false,
     disabled,
@@ -51,7 +54,7 @@ export function RecordDrawerHeaderActionButton({
                 recordDrawerHeaderActionClassName(
                     inquiryWorkflow,
                     proofLayoutActions,
-                    proofLayoutActionsWhite ? "actions-white" : "default",
+                    actionVariant !== "default" ? actionVariant : proofLayoutActionsWhite ? "actions-white" : "default",
                 ),
                 className,
             ]

@@ -49,3 +49,16 @@ export function peekDrawerLayoutRuntimeBodyCacheEntry(
 export function clearDrawerLayoutRuntimeBodySessionCacheForTests(): void {
     cache.clear();
 }
+
+/** Drop cached layout body entries for one entity (all query-param variants). */
+export function invalidateDrawerLayoutRuntimeBodyCacheForEntity(
+    apiPathPrefix: string,
+    entityId: string,
+): void {
+    const id = entityId.trim();
+    if (!id) return;
+    const needle = `${apiPathPrefix}:${id}:`;
+    for (const key of [...cache.keys()]) {
+        if (key.startsWith(needle)) cache.delete(key);
+    }
+}

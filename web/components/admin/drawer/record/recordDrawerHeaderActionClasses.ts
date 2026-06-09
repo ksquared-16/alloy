@@ -6,9 +6,12 @@ const BLUE_OUTLINE =
 export function recordDrawerHeaderActionClassName(
     inquiryWorkflow: boolean,
     squareCorners = false,
-    variant: "default" | "actions-white" = "default",
+    variant: "default" | "actions-white" | "juniper" = "default",
 ): string {
     const radius = squareCorners ? "rounded-none" : inquiryWorkflow ? "rounded-full" : "rounded-md";
+    if (variant === "juniper") {
+        return `inline-flex items-center gap-1.5 px-4 py-2 text-[12px] font-semibold ${radius} border border-alloy-juniper/35 bg-alloy-juniper text-white shadow-sm hover:bg-alloy-juniper/90 disabled:opacity-50`;
+    }
     if (variant === "actions-white") {
         return `inline-flex items-center gap-1.5 px-4 py-2 text-[12px] font-semibold ${radius} border border-alloy-stone/20 bg-white text-alloy-midnight shadow-sm hover:bg-alloy-stone/[0.04] disabled:opacity-50`;
     }

@@ -218,3 +218,35 @@ export function isLayoutRuntimeOpportunityDrawerShadowDiagnosticsEnabledClient()
 export function isLayoutRuntimeReadPathEnabled(): boolean {
     return isLayoutV2PreviewEnabledServer() || isLayoutRuntimeEnabledServer();
 }
+
+/**
+ * Non-production default for drawer summary strip boundary.
+ * Production stays off until explicitly enabled; staging/preview/dev default on.
+ */
+function isDrawerSummaryStripBoundaryDefaultOn(): boolean {
+    if (process.env.NEXT_PUBLIC_APP_ENV === "production") return false;
+    if (process.env.APP_ENV === "production") return false;
+    if (process.env.VERCEL_ENV === "production" && process.env.NEXT_PUBLIC_APP_ENV !== "staging") {
+        return false;
+    }
+    if (process.env.NEXT_PUBLIC_APP_ENV === "staging") return true;
+    if (process.env.VERCEL_ENV === "preview") return true;
+    if (process.env.NODE_ENV === "development") return true;
+    return false;
+}
+
+/**
+ * Drawer summary strip shell boundary — routes layout summary sections into
+ * EntityDrawerOperatingShell.summaryStrip.
+ *
+ * Default: on in development + staging/preview; off in production.
+ * Override: `NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY=0|1` (client),
+ * `DRAWER_SUMMARY_STRIP_BOUNDARY=0|1` (server).
+ */
+export function isDrawerSummaryStripBoundaryEnabledServer(): boolean {
+    return readFlag(process.env.DRAWER_SUMMARY_STRIP_BOUNDARY, isDrawerSummaryStripBoundaryDefaultOn());
+}
+
+export function isDrawerSummaryStripBoundaryEnabledClient(): boolean {
+    return readFlag(process.env.NEXT_PUBLIC_DRAWER_SUMMARY_STRIP_BOUNDARY, isDrawerSummaryStripBoundaryDefaultOn());
+}

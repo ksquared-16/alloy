@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { operationalTaskUrgencyBadge } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
+import { useCallback, useState } from "react";
+import LayoutRuntimeTaskDetailPopover, {
+    formatQueueTaskDueShort,
+} from "@/components/layout/queueRecord/LayoutRuntimeTaskDetailPopover";
 import {
     INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS,
     INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS,
@@ -9,27 +11,18 @@ import {
 import type { InquirySummaryTaskPreviewRow } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { mapLayoutRuntimeTasksFromVm } from "@/lib/layout/runtime/mapLayoutRuntimeTasksFromVm";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
-
-const CHIP =
-    "inline-flex max-w-full cursor-pointer items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium leading-snug transition-shadow hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(0,162,131,0.25)]";
-
-function shortWhen(iso: string): string {
-    const t = Date.parse(iso);
-    if (Number.isNaN(t)) return iso;
-    return new Date(t).toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-    });
-}
+import {
+    LAYOUT_RUNTIME_PANEL_HEADER,
+    LAYOUT_RUNTIME_PANEL_SURFACE,
+    LAYOUT_RUNTIME_SUMMARY_WIDGET_BODY,
+    LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER,
+    LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE,
+    LAYOUT_RUNTIME_WORK_RAIL,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
+import { layoutRuntimeTaskChipStyle } from "@/lib/layout/runtime/layoutRuntimeTaskChipStyles";
 
 function toTaskRows(record: ProofRuntimeRecord): InquirySummaryTaskPreviewRow[] {
-    const overview =
-        record._overview_data && typeof record._overview_data === "object"
-            ? (record._overview_data as Record<string, unknown>)
-            : record;
-    return mapLayoutRuntimeTasksFromVm(overview).map((row) => ({
+    return mapLayoutRuntimeTasksFromVm(record as Record<string, unknown>).map((row) => ({
         id: row.id,
         title: row.title,
         due_at: row.due ?? "",
@@ -41,83 +34,19 @@ function toTaskRows(record: ProofRuntimeRecord): InquirySummaryTaskPreviewRow[] 
 type Props = {
     record: ProofRuntimeRecord;
     title?: string;
+    /** Summary-strip presentation — compact card, fewer rows. */
+    compact?: boolean;
+    /** Body only — card chrome provided by LeadOperatingSummaryCard. */
+    chromeless?: boolean;
+    /** Premium operating card body typography. */
+    operatingCard?: boolean;
 };
 
-function TaskDetailPopover({
-    task,
-    anchorEl,
-    onClose,
-}: {
-    task: InquirySummaryTaskPreviewRow;
-    anchorEl: HTMLElement;
-    onClose: () => void;
-}) {
-    const panelRef = useRef<HTMLDivElement>(null);
-    const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-
-    useEffect(() => {
-        const rect = anchorEl.getBoundingClientRect();
-        setPos({
-            top: rect.bottom + 6,
-            left: Math.min(rect.left, window.innerWidth - 280),
-        });
-    }, [anchorEl]);
-
-    useEffect(() => {
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
-        const onMouseDown = (e: MouseEvent) => {
-            const t = e.target as Node;
-            if (anchorEl.contains(t)) return;
-            if (panelRef.current?.contains(t)) return;
-            onClose();
-        };
-        document.addEventListener("keydown", onKey);
-        const tid = window.setTimeout(() => document.addEventListener("mousedown", onMouseDown), 0);
-        return () => {
-            window.clearTimeout(tid);
-            document.removeEventListener("keydown", onKey);
-            document.removeEventListener("mousedown", onMouseDown);
-        };
-    }, [anchorEl, onClose]);
-
-    if (!pos) return null;
-
-    const badge = operationalTaskUrgencyBadge(task);
-
-    return (
-        <div
-            ref={panelRef}
-            className="fixed z-[86] w-[min(18rem,calc(100vw-1.5rem))] rounded-md border border-alloy-stone/15 bg-white p-3 shadow-[0_10px_28px_-10px_rgba(15,23,42,0.2)]"
-            style={{ top: pos.top, left: pos.left }}
-            data-layout-runtime-task-detail-popover="true"
-            role="dialog"
-            aria-label="Task details"
-        >
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Task</div>
-            <div className="mt-1 text-sm font-semibold text-alloy-midnight">{task.title}</div>
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-alloy-midnight/70">
-                <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${badge.className}`}>
-                    {badge.label}
-                </span>
-                {task.due_at ?
-                    <span>Due {shortWhen(task.due_at)}</span>
-                :   null}
-                {task.status ?
-                    <span className="capitalize">{task.status.replace(/_/g, " ")}</span>
-                :   null}
-            </div>
-            {task.source ?
-                <p className="mt-2 text-[11px] text-alloy-midnight/55">Source: {task.source.replace(/_/g, " ")}</p>
-            :   null}
-        </div>
-    );
-}
-
-/** Layout runtime tasks widget — click a task for inline detail overlay. */
-export default function LayoutRuntimeTasksWidget({ record, title = "Tasks" }: Props) {
+/** Layout runtime tasks widget — click a task for anchored detail overlay. */
+export default function LayoutRuntimeTasksWidget({ record, title = "Tasks", compact = false, chromeless = false }: Props) {
     const openTasks = toTaskRows(record);
+    const visibleTasks = compact ? openTasks.slice(0, 2) : openTasks;
+    const overflowCount = compact && openTasks.length > 2 ? openTasks.length - 2 : 0;
     const [activeTask, setActiveTask] = useState<InquirySummaryTaskPreviewRow | null>(null);
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -138,32 +67,55 @@ export default function LayoutRuntimeTasksWidget({ record, title = "Tasks" }: Pr
     }, []);
 
     return (
-        <div data-layout-runtime-tasks-widget="true" data-operational-strip-group="tasks">
-            <div className="border-b border-[#eceef2] px-2.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#5c6478]">
-                {title}
-            </div>
-            <div className={`relative px-2.5 py-2 ${INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS}`}>
-                {openTasks.length > 0 ?
-                    openTasks.map((t) => {
-                        const badge = operationalTaskUrgencyBadge(t);
+        <div
+            className={
+                chromeless ?
+                    "relative flex min-h-0 flex-col gap-1"
+                : compact ?
+                    `${LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE} border-l-2 border-l-alloy-juniper/50`
+                :   `${LAYOUT_RUNTIME_PANEL_SURFACE} ${LAYOUT_RUNTIME_WORK_RAIL}`
+            }
+            data-layout-runtime-tasks-widget="true"
+            data-layout-runtime-summary-widget={compact && !chromeless ? "true" : undefined}
+            data-operational-strip-group="tasks"
+        >
+            {compact && !chromeless ?
+                <div className={LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER}>
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-alloy-juniper/70" aria-hidden />
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/55">{title}</span>
+                </div>
+            :   !chromeless ?
+                <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-alloy-muted">{title}</span>
+                </div>
+            :   null}
+            <div
+                className={
+                    chromeless ?
+                        "relative flex flex-col gap-1"
+                    : compact ?
+                        `${LAYOUT_RUNTIME_SUMMARY_WIDGET_BODY} relative flex flex-col gap-1 overflow-hidden`
+                    :   `relative flex flex-col gap-1.5 px-2.5 py-2 ${INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS}`
+                }
+            >
+                {visibleTasks.length > 0 ?
+                    visibleTasks.map((t) => {
+                        const chipStyle = layoutRuntimeTaskChipStyle(t);
+                        const active = activeTask?.id === t.id;
                         return (
                             <button
                                 key={t.id}
                                 type="button"
-                                className={`${CHIP} border ${badge.className}`}
+                                className={`${chipStyle.rowClassName} ${active ? "ring-1 ring-alloy-juniper/20" : ""}`}
                                 data-inquiry-summary-task-preview-row={t.id}
                                 data-layout-runtime-task-chip="true"
-                                aria-expanded={activeTask?.id === t.id}
+                                aria-expanded={active}
                                 onClick={(e) => onTaskClick(t, e.currentTarget)}
                             >
-                                <span className="truncate font-semibold">{t.title}</span>
-                                <span
-                                    className={`shrink-0 rounded-full border px-1 py-0 text-[8px] font-semibold ${badge.className}`}
-                                >
-                                    {badge.label}
-                                </span>
+                                <span className="truncate font-semibold text-alloy-midnight">{t.title}</span>
+                                <span className={chipStyle.badgeClassName}>{chipStyle.label}</span>
                                 {t.due_at ?
-                                    <span className="shrink-0 opacity-75">· {shortWhen(t.due_at)}</span>
+                                    <span className="shrink-0 text-[10px] text-alloy-muted">· {formatQueueTaskDueShort(t.due_at)}</span>
                                 :   null}
                             </button>
                         );
@@ -172,8 +124,13 @@ export default function LayoutRuntimeTasksWidget({ record, title = "Tasks" }: Pr
                         No open tasks
                     </span>
                 }
+                {overflowCount > 0 ?
+                    <div className="text-[10px] font-medium text-alloy-midnight/45" data-layout-runtime-tasks-overflow="true">
+                        +{overflowCount} more
+                    </div>
+                :   null}
                 {activeTask && anchorEl ?
-                    <TaskDetailPopover task={activeTask} anchorEl={anchorEl} onClose={closePopover} />
+                    <LayoutRuntimeTaskDetailPopover task={activeTask} anchorEl={anchorEl} onClose={closePopover} />
                 :   null}
             </div>
         </div>

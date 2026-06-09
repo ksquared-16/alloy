@@ -38,7 +38,7 @@ describe("person drawer perf follow-up wiring", () => {
         const logs = read("lib/admin/drawer/personDrawerPerfLogs.ts");
         expect(prefetch).toContain("logPersonPrefetch");
         expect(open).toContain("isPersonDrawerSnapshotWarm");
-        expect(logs).toContain("[person-drawer-open]");
-        expect(logs).toContain("[drawer-back-restore]");
+        expect(logs).toContain("perfDrawer");
+        expect(logs).toContain("logDrawerBackRestore");
     });
 });

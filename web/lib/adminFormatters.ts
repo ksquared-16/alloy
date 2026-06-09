@@ -168,6 +168,109 @@ export function formatDate(value: string | number | Date | null | undefined): st
     return formatDateUtcAudit(value);
 }
 
+function parseQueueRecordDateInput(value: string | number | Date): { date: Date; hasTime: boolean } | null {
+    if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) return null;
+        const hasTime =
+            value.getUTCHours() !== 0 ||
+            value.getUTCMinutes() !== 0 ||
+            value.getUTCSeconds() !== 0 ||
+            value.getUTCMilliseconds() !== 0;
+        return { date: value, hasTime };
+    }
+
+    const t = String(value).trim();
+    if (!t) return null;
+
+    const slash = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(.+))?$/.exec(t);
+    if (slash) {
+        const month = Number(slash[1]);
+        const day = Number(slash[2]);
+        const year = Number(slash[3]);
+        const rest = slash[4]?.trim();
+        if (rest && /\d{1,2}:\d{2}/.test(rest)) {
+            const ms = Date.parse(`${month}/${day}/${year} ${rest}`);
+            if (Number.isFinite(ms)) return { date: new Date(ms), hasTime: true };
+        }
+        const date = new Date(Date.UTC(year, month - 1, day));
+        if (!Number.isNaN(date.getTime())) return { date, hasTime: false };
+    }
+
+    if (/^\d{4}-\d{2}-\d{2}/.test(t)) {
+        const iso = t.includes("T") ? t : `${t}T00:00:00.000Z`;
+        const date = new Date(iso);
+        if (Number.isNaN(date.getTime())) return null;
+        const hasTime =
+            /T\d{2}:\d{2}/.test(t) &&
+            (date.getUTCHours() !== 0 ||
+                date.getUTCMinutes() !== 0 ||
+                date.getUTCSeconds() !== 0 ||
+                date.getUTCMilliseconds() !== 0);
+        return { date, hasTime };
+    }
+
+    const monthDay = /^([A-Za-z]+)\s+(\d{1,2})(?:,?\s*(\d{4}))?(?:\s*,?\s*(.+))?$/i.exec(t);
+    if (monthDay) {
+        const monthStr = monthDay[1]!;
+        const day = Number(monthDay[2]);
+        const year = monthDay[3] ? Number(monthDay[3]) : new Date().getUTCFullYear();
+        const rest = monthDay[4]?.trim();
+        const monthIndex = new Date(Date.parse(`${monthStr} 1, ${year}`)).getUTCMonth();
+        if (!Number.isNaN(monthIndex)) {
+            let hours = 0;
+            let minutes = 0;
+            let hasTime = false;
+            if (rest) {
+                const timeMatch = /^(\d{1,2}):(\d{2})\s*(AM|PM)$/i.exec(rest);
+                if (timeMatch) {
+                    hasTime = true;
+                    let h = Number(timeMatch[1]);
+                    minutes = Number(timeMatch[2]);
+                    const ampm = timeMatch[3]!.toUpperCase();
+                    if (ampm === "PM" && h !== 12) h += 12;
+                    if (ampm === "AM" && h === 12) h = 0;
+                    hours = h;
+                }
+            }
+            const date = new Date(Date.UTC(year, monthIndex, day, hours, minutes));
+            if (!Number.isNaN(date.getTime())) return { date, hasTime };
+        }
+    }
+
+    const ms = Date.parse(t);
+    if (!Number.isFinite(ms)) return null;
+    const date = new Date(ms);
+    const hasTime = /\d{1,2}:\d{2}/.test(t);
+    return { date, hasTime };
+}
+
+/**
+ * Queue row date/event display — MM-DD-YYYY; optional time segment.
+ * Date only: "05-11-2026". Date + time: "05-11-2026 · 10:00 AM".
+ */
+export function formatQueueRecordDateDisplay(value: string | number | Date | null | undefined): string {
+    if (value === null || value === undefined || value === "") return "";
+    const parsed = parseQueueRecordDateInput(value);
+    if (!parsed) {
+        const tour = formatQueuePreviewTourTimingUtc(String(value).trim());
+        if (!tour) return String(value).trim();
+        const withTime = /^(\d{2}-\d{2}-\d{4})\s+(.+)$/.exec(tour);
+        return withTime ? `${withTime[1]} · ${withTime[2]}` : tour;
+    }
+
+    const datePart = formatDateUsShortHyphenUtc(parsed.date);
+    if (!parsed.hasTime) return datePart;
+
+    const timePart = new Intl.DateTimeFormat("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "UTC",
+    }).format(parsed.date);
+
+    return `${datePart} · ${timePart}`;
+}
+
 /** Format subscription cadence + interval as label, e.g. "Every 1 week", "Every 2 weeks", "Every 3 months". */
 export function formatFrequencyLabel(cadence: string | null | undefined, interval: number | string | null | undefined): string {
     const c = (cadence ?? "month").toLowerCase();

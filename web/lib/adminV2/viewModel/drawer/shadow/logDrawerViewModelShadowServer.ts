@@ -1,5 +1,6 @@
 import { adminV2DrawerViewModelShadowEnabled } from "@/lib/adminV2/viewModel/drawer/shadow/drawerViewModelShadowGate";
 import type { OpportunityDrawerViewModelResult } from "@/lib/adminV2/viewModel/drawer/types";
+import { perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 /** Server/Vercel summary — compose outcome only; diff fields stay zero until client shadow diff. */
 export type DrawerViewModelShadowServerSummary = {
@@ -38,7 +39,13 @@ export function buildDrawerViewModelShadowServerComposeSummary(params: {
 export function safeLogDrawerViewModelShadowServerSummary(summary: DrawerViewModelShadowServerSummary): void {
     if (!adminV2DrawerViewModelShadowEnabled()) return;
     try {
-        console.info("[drawer-vm-shadow:summary]", summary);
+        perfDrawer("vm_shadow_compose", {
+            entity_type: "opportunity",
+            entity_id: summary.opportunity_id,
+            compose_ms: summary.compose_ms ?? undefined,
+            count: summary.structural_mismatch_count,
+            source: "shadow",
+        });
     } catch {
         /* shadow logging is best-effort only */
     }

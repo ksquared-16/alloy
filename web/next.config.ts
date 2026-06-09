@@ -18,6 +18,11 @@ const nextConfig: NextConfig = {
   },
   async rewrites() {
     return [
+      /** Drawer VM routes live under /api/admin/view-models (not /api/admin/v2) — Turbopack dev mis-resolves nested v2 API segments. */
+      {
+        source: "/api/admin/v2/view-models/:path*",
+        destination: "/api/admin/view-models/:path*",
+      },
       /** UI V2 lives under `app/adminV2/`; serve it under `/admin/v2` so middleware’s `/admin/*` allowlist applies (no separate /adminV2 rules needed). */
       { source: "/admin/v2", destination: "/adminV2/workspace" },
       { source: "/admin/v2/:path*", destination: "/adminV2/:path*" },

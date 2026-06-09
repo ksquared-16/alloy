@@ -20,6 +20,7 @@ import {
     type LayoutSection,
     type LayoutSurface,
 } from "./layoutV2";
+import { buildPersonDrawerDefaultDoc } from "./defaultPersonLayouts";
 
 const id = (...p: string[]) => p.join("-");
 const HALF = LAYOUT_GRID_COLUMNS / 2;
@@ -43,52 +44,8 @@ function section(entity: string, key: string, title: string, rows: LayoutRow[], 
     return { id: id(entity, key), key, title, collapsible: true, defaultExpanded, rows };
 }
 
-/** Person (Contact / Parent) drawer default. */
-export function buildPersonDrawerDefaultDoc(): LayoutDoc {
-    const e = "person";
-    // 1. Person Summary
-    const ps = id(e, "summary");
-    const summary = section(e, "person_summary", "Person Summary", [
-        row(id(ps, "r0"), [
-            col(id(ps, "r0"), 0, HALF, [
-                fieldItem(ps, "person.primary_contact_name", "Full name", "text", ICON("person")),
-                fieldItem(ps, "person.relationship", "Relationship / type", "text"),
-                fieldItem(ps, "household.name", "Household", "text", ICON("home")),
-            ]),
-            col(id(ps, "r0"), 1, HALF, [
-                fieldItem(ps, "person.primary_phone", "Phone", "phone", ICON("phone")),
-                fieldItem(ps, "person.primary_email", "Email", "text", ICON("mail")),
-            ]),
-        ]),
-    ], true);
-
-    // 2. Associated Children / Relationships (related list)
-    const ac = id(e, "children");
-    const children: LayoutItem = {
-        id: id(ac, "list"), kind: "related_list", refKey: "children", label: "Associated children", source: "children", displayMode: "table", related: { entityType: "child" },
-        columns: [
-            { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
-            { label: "Status", refKey: "child.status", width: "small", renderHint: "status" },
-        ],
-    };
-    const relationships = section(e, "associated_children", "Associated Children / Relationships", [row(id(ac, "r0"), [col(id(ac, "r0"), 0, LAYOUT_GRID_COLUMNS, [children])])], true);
-
-    // 3. Communications + 4. Notes (widget placeholders)
-    const cm = id(e, "comms");
-    const comms = section(e, "communications", "Communications / Recent Activity", [row(id(cm, "r0"), [col(id(cm, "r0"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(cm, "recent_communication", "Recent communication", "feed")])])]);
-    const nb = id(e, "notes");
-    const notes = section(e, "notes", "Notes", [row(id(nb, "r0"), [col(id(nb, "r0"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(nb, "notes", "Notes", "list")])])]);
-
-    return {
-        formatVersion: LAYOUT_DOC_FORMAT_VERSION,
-        surface: "drawer",
-        entityType: e,
-        sections: [summary, relationships, comms, notes],
-        metadata: { seededFrom: "person_default", template: "person_drawer_v1" },
-    };
-}
-
-/** Child drawer default. */
+/** Person (Contact / Parent) drawer default — relationship workspace v2. */
+export { buildPersonDrawerDefaultDoc } from "./defaultPersonLayouts";
 export function buildChildDrawerDefaultDoc(): LayoutDoc {
     const e = "child";
     // 1. Child Summary
@@ -101,9 +58,9 @@ export function buildChildDrawerDefaultDoc(): LayoutDoc {
                 fieldItem(cs, "child.age_band", "Age", "text"),
             ]),
             col(id(cs, "r0"), 1, HALF, [
-                fieldItem(cs, "inquiry_child.program", "Program", "text"),
+                fieldItem(cs, "inquiry_child.desired_program_type", "Program", "text"),
                 fieldItem(cs, "inquiry_child.desired_start_date", "Desired start", "date", ICON("calendar")),
-                fieldItem(cs, "inquiry_child.schedule", "Schedule", "text"),
+                fieldItem(cs, "inquiry_child.desired_schedule_type", "Schedule", "text"),
                 fieldItem(cs, "child.status", "Status", "status"),
             ]),
         ]),

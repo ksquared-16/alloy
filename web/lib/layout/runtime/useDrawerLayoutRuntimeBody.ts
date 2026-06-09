@@ -6,12 +6,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
-import { enrichLayoutDocPersonContactEditable } from "@/lib/layout/runtime/enrichLayoutDocPersonContactEditable";
+import { enrichLayoutDocDrawerFieldEditable } from "@/lib/layout/runtime/enrichLayoutDocChildFieldsEditable";
 import {
     buildDrawerLayoutRuntimeBodyCacheKey,
+    invalidateDrawerLayoutRuntimeBodyCacheForEntity,
     peekDrawerLayoutRuntimeBodyCacheEntry,
     putDrawerLayoutRuntimeBodyCacheEntry,
 } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
+import { perfCache } from "@/lib/perf/perfNamespaceLog";
+import {
+    ADMINV2_LAYOUT_RUNTIME_BODY_INVALIDATE,
+    parseDrawerLayoutRuntimeBodyInvalidateDetail,
+} from "@/lib/layout/runtime/drawerLayoutRuntimeBodyInvalidate";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     resolveDrawerLayoutRuntimeBodyPresentation,
@@ -60,6 +66,25 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
     const [layoutVersion, setLayoutVersion] = useState<number | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
     const readyIdRef = useRef<string | null>(null);
+    const [invalidationGen, setInvalidationGen] = useState(0);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onInvalidate = (ev: Event) => {
+            const detail = parseDrawerLayoutRuntimeBodyInvalidateDetail(ev);
+            const id = entityId?.trim() ?? "";
+            if (!detail || !id || detail.entityId !== id) return;
+            if (detail.entityType === "opportunities" && !apiPath.includes("opportunity")) return;
+            if (detail.entityType === "persons" && !apiPath.includes("person-drawer")) return;
+            if (detail.entityType === "child" && !apiPath.includes("child-drawer")) return;
+            invalidateDrawerLayoutRuntimeBodyCacheForEntity(apiPath, id);
+            readyIdRef.current = null;
+            setInvalidationGen((g) => g + 1);
+        };
+        window.addEventListener(ADMINV2_LAYOUT_RUNTIME_BODY_INVALIDATE, onInvalidate as EventListener);
+        return () =>
+            window.removeEventListener(ADMINV2_LAYOUT_RUNTIME_BODY_INVALIDATE, onInvalidate as EventListener);
+    }, [apiPath, entityId]);
 
     useEffect(() => {
         if (!cutoverEnabled) {
@@ -81,13 +106,11 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         const cacheKey = buildDrawerLayoutRuntimeBodyCacheKey(apiPath, id, queryParamsKey);
         const cached = peekDrawerLayoutRuntimeBodyCacheEntry(cacheKey);
         if (cached && readyIdRef.current !== id) {
-            if (typeof console !== "undefined" && typeof console.info === "function") {
-                console.info("[drawer_layout_runtime:cache_hit]", {
-                    ts: new Date().toISOString(),
-                    entity_id: id,
-                    api_path: apiPath,
-                });
-            }
+            perfCache("drawer_layout_runtime_body", {
+                entity_id: id,
+                cache_hit: true,
+                source: "cache",
+            });
             setDoc(cached.doc);
             setRecord(cached.record);
             setLayoutSource(cached.layoutSource);
@@ -139,7 +162,7 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
                     setPhase("fallback");
                     return;
                 }
-                const enrichedDoc = enrichLayoutDocPersonContactEditable(json.doc);
+                const enrichedDoc = enrichLayoutDocDrawerFieldEditable(json.doc);
                 setDoc(enrichedDoc);
                 setRecord(json.record);
                 setLayoutSource(json.layoutSource ?? null);
@@ -170,7 +193,7 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         };
         // queryParams referenced by content via queryParamsKey (stable).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cutoverEnabled, entityId, vmReady, apiPath, logTag, queryParamsKey]);
+    }, [cutoverEnabled, entityId, vmReady, apiPath, logTag, queryParamsKey, invalidationGen]);
 
     useEffect(() => {
         if (!entityId?.trim()) {
@@ -206,6 +229,7 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
 }
 
 function getPrimaryQueryKey(apiPath: string): string {
+    if (apiPath.includes("child-drawer-body")) return "personId";
     if (apiPath.includes("child")) return "childId";
     if (apiPath.includes("person")) return "personId";
     return "opportunityId";

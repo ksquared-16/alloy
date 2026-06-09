@@ -1,9 +1,9 @@
 /**
  * Dev/staging opportunity drawer presentation gate diagnostics.
- * Filter: `[perf.drawer.presentation_gate]` | `[perf.drawer.raw_value_guard]`
+ * Filter: `[perf:drawer]`
  */
 
-const PERF_ENABLED = process.env.NODE_ENV === "development" || process.env.VITEST === "true";
+import { perfDevDetailEnabled, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export function logDrawerPresentationGate(payload: {
     opportunity_id: string;
@@ -15,8 +15,14 @@ export function logDrawerPresentationGate(payload: {
     header_actions_ready?: boolean;
     header_actions_skeleton?: boolean;
 }): void {
-    if (!PERF_ENABLED) return;
-    console.info("[perf.drawer.presentation_gate]", payload);
+    if (!perfDevDetailEnabled()) return;
+    perfDrawer("presentation_gate", {
+        entity_type: "opportunity",
+        entity_id: payload.opportunity_id,
+        duration_ms: payload.reveal_delay_ms,
+        count: payload.missing.length,
+        source: "ui",
+    });
 }
 
 export function logDrawerRawValueGuard(payload: {
@@ -24,6 +30,9 @@ export function logDrawerRawValueGuard(payload: {
     raw_value: string;
     suppressed: boolean;
 }): void {
-    if (!PERF_ENABLED) return;
-    console.info("[perf.drawer.raw_value_guard]", payload);
+    if (!perfDevDetailEnabled()) return;
+    perfDrawer("raw_value_guard", {
+        source: "ui",
+        detail: payload.field,
+    });
 }

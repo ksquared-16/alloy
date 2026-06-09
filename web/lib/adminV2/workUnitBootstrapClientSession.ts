@@ -2,6 +2,7 @@ import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClien
 import { WORK_UNIT_QUEUE_ROWS_FETCH_MIN } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { recordAdminV2JankBudgetRequest } from "@/lib/perf/adminV2JankBudget";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
+import { perfWorkUnit } from "@/lib/perf/perfNamespaceLog";
 import { ADMINV2_ABOVE_FOLD_CACHE_TTL_MS } from "@/lib/adminV2/adminV2AboveFoldCacheContracts";
 import {
     dedupeAdminFetchWithTtlMeta,
@@ -92,7 +93,7 @@ function logWuBootstrapOwner(
     detail: Record<string, unknown>
 ): void {
     if (typeof window === "undefined") return;
-    console.info("[wu-route-perf]", { bootstrap_owner: bootstrapOwner, ...detail });
+    perfWorkUnit("bootstrap_owner", { bootstrap_owner: bootstrapOwner, ...detail });
 }
 
 function startWorkUnitBootstrapInflight(

@@ -14,17 +14,17 @@ function readWebFile(rel: string): string {
 }
 
 describe("personDrawerVmParity", () => {
-    it("PersonsDrawerVmRuntime uses production body and header components, not shell placeholders", () => {
+    it("PersonsDrawerVmRuntime uses layout runtime cutover shell and overview body", () => {
         const runtime = readWebFile("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
-        const body = readWebFile("components/admin/vmDrawer/PersonsDrawerVmBody.tsx");
-        expect(runtime).toContain("PersonsDrawerVmBody");
-        expect(body).toContain("EntityDrawerOverview");
-        expect(body).toContain("PersonDrawerOperatingSections");
-        expect(body).not.toContain("AdminEntityDrawerVmShell");
-        expect(body).not.toContain("data-drawer-vm-placeholder-body");
-        expect(runtime).not.toContain("loadPersonDrawerOperationalBootstrap");
-        expect(runtime).not.toContain("PersonDrawerChildOverviewSkeleton");
-        expect(runtime).not.toContain("PersonDrawerParentOverviewSkeleton");
+        const overview = readWebFile("components/admin/vmDrawer/PersonDrawerOverviewBody.tsx");
+        const legacy = readWebFile("components/admin/vmDrawer/PersonDrawerLegacyOperatingOverview.tsx");
+        expect(runtime).toContain("PersonDrawerOverviewBody");
+        expect(runtime).toContain("PersonDrawerProofLayoutHeader");
+        expect(runtime).not.toContain("PersonsDrawerVmBody");
+        expect(overview).toContain("DrawerLayoutRuntimeOverviewBody");
+        expect(legacy).toContain("PersonDrawerOperatingSections");
+        expect(runtime).not.toContain("AdminEntityDrawerVmShell");
+        expect(runtime).not.toContain("data-drawer-vm-placeholder-body");
     });
 
     it("parent VM surface uses guardian operating sections, not child summary", () => {
@@ -37,20 +37,23 @@ describe("personDrawerVmParity", () => {
         expect(plan.surface).toBe("parent");
         expect(plan.operating_sections).toContain("parent_summary");
         expect(plan.operating_sections).not.toContain("child_summary");
-        const body = readWebFile("components/admin/vmDrawer/PersonsDrawerVmBody.tsx");
-        expect(body).toContain("PersonDrawerParentLifecycleRail");
-        expect(body).toContain("CommunicationsDrawerSection");
+        const runtime = readWebFile("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
+        expect(runtime).toContain("isLayoutRuntimeLegacyEmergencyFallbackEnabledClient");
+        expect(runtime).toContain("PersonDrawerParentLifecycleRail");
+        expect(readWebFile("components/admin/vmDrawer/PersonDrawerVmTabPanes.tsx")).toContain(
+            "CommunicationsDrawerSection",
+        );
     });
 
     it("child VM surface uses child operating sections and lifecycle rail", () => {
         const plan = buildChildFirstViewportPlan();
         expect(plan.viewport_slots).toContain("child_summary");
         expect(plan.viewport_slots).toContain("household");
-        const body = readWebFile("components/admin/vmDrawer/PersonsDrawerVmBody.tsx");
-        expect(body).toContain("PersonDrawerChildLifecycleRail");
-        expect(body).toContain("PersonDrawerOperatingSections");
-        expect(body).not.toMatch(
-            /isChildSurface[\s\S]{0,400}PersonDrawerParentSummary/
+        const runtime = readWebFile("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
+        expect(runtime).toContain("isLayoutRuntimeLegacyEmergencyFallbackEnabledClient");
+        expect(runtime).toContain("PersonDrawerChildLifecycleRail");
+        expect(readWebFile("components/admin/vmDrawer/PersonDrawerLegacyOperatingOverview.tsx")).toContain(
+            "PersonDrawerOperatingSections",
         );
     });
 

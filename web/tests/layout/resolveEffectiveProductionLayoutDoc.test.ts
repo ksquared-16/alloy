@@ -29,7 +29,7 @@ describe("resolveEffectiveProductionLayoutDoc", () => {
         const result = resolveEffectiveProductionLayoutDoc({
             doc,
             source: "org",
-            layoutKey: "lead_drawer_v1",
+            layoutKey: "lead_drawer_v2",
             entityType: "opportunities",
             surface: "drawer",
         });

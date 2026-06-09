@@ -38,6 +38,8 @@ type Props = {
     onPickField: (field: LayoutCatalogField) => void;
     onPickWidget: (widget: LayoutCatalogWidget) => void;
     onClose: () => void;
+    /** Hide the widgets tab — queue record column builder is fields-only. */
+    fieldsOnly?: boolean;
 };
 
 function FieldPickerRow({
@@ -85,6 +87,7 @@ export default function LayoutFieldPickerOverlay({
     onPickField,
     onPickWidget,
     onClose,
+    fieldsOnly = false,
 }: Props) {
     const [searchQuery, setSearchQuery] = useState("");
     const [showUsedFields, setShowUsedFields] = useState(false);
@@ -135,30 +138,34 @@ export default function LayoutFieldPickerOverlay({
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex items-center justify-between border-b border-[#e6e8ec] px-4 py-3">
-                    <div className="flex gap-1 rounded-lg bg-[#f4f6f9] p-0.5">
-                        <button
-                            type="button"
-                            data-testid="layout-field-picker-tab-fields"
-                            onClick={() => setTab("field")}
-                            className={`rounded-md px-3 py-1.5 text-sm ${tab === "field" ? "bg-white font-medium text-[#1d2433] shadow-sm" : "text-[#59678b]"}`}
-                        >
-                            Fields
-                        </button>
-                        <button
-                            type="button"
-                            data-testid="layout-field-picker-tab-widgets"
-                            onClick={() => setTab("widget")}
-                            className={`rounded-md px-3 py-1.5 text-sm ${tab === "widget" ? "bg-white font-medium text-[#1d2433] shadow-sm" : "text-[#59678b]"}`}
-                        >
-                            Widgets
-                        </button>
-                    </div>
+                    {fieldsOnly ? (
+                        <h2 className="text-sm font-semibold text-[#1d2433]">Add field</h2>
+                    ) : (
+                        <div className="flex gap-1 rounded-lg bg-[#f4f6f9] p-0.5">
+                            <button
+                                type="button"
+                                data-testid="layout-field-picker-tab-fields"
+                                onClick={() => setTab("field")}
+                                className={`rounded-md px-3 py-1.5 text-sm ${tab === "field" ? "bg-white font-medium text-[#1d2433] shadow-sm" : "text-[#59678b]"}`}
+                            >
+                                Fields
+                            </button>
+                            <button
+                                type="button"
+                                data-testid="layout-field-picker-tab-widgets"
+                                onClick={() => setTab("widget")}
+                                className={`rounded-md px-3 py-1.5 text-sm ${tab === "widget" ? "bg-white font-medium text-[#1d2433] shadow-sm" : "text-[#59678b]"}`}
+                            >
+                                Widgets
+                            </button>
+                        </div>
+                    )}
                     <button type="button" onClick={onClose} className="rounded px-2 py-1 text-sm text-[#59678b] hover:bg-[#f4f6f9]">
                         Close
                     </button>
                 </div>
 
-                {tab === "field" ? (
+                {fieldsOnly || tab === "field" ? (
                     <div className="flex min-h-0 flex-1">
                         <nav
                             className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[#e6e8ec] bg-[#fafbfc] p-2"

@@ -267,6 +267,19 @@ describe("isLayoutItemSupportedForProduction", () => {
             }),
         ).toBe(true);
     });
+
+    it("supports related_list displayMode list (published v10 child section)", () => {
+        expect(
+            isLayoutItemSupportedForProduction({
+                id: "children",
+                kind: "related_list",
+                refKey: "children",
+                source: "children",
+                displayMode: "list",
+                columns: [{ refKey: "child.first_name", label: "First Name" }],
+            }),
+        ).toBe(true);
+    });
 });
 
 describe("LayoutRuntimeDrawerBodyView production renderer", () => {
@@ -309,6 +322,48 @@ describe("LayoutRuntimeDrawerBodyView production renderer", () => {
         expect(Array.isArray(record.children) && record.children[0]?.["child.name"]).toBe("Alex Johnson");
         const html = renderToStaticMarkup(<LayoutRuntimeDrawerBodyView doc={doc} record={record} />);
         expect(html).toContain("Alex Johnson");
+    });
+
+    it("renders published v10 list-mode child section with first_name columns", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const sections = doc.sections.map((section) =>
+            section.title === "Child Information" ?
+                {
+                    ...section,
+                    rows: section.rows.map((row) => ({
+                        ...row,
+                        columns: row.columns.map((col) => ({
+                            ...col,
+                            items: col.items.map((item) =>
+                                item.kind === "related_list" && item.refKey === "children" ?
+                                    {
+                                        ...item,
+                                        displayMode: "list" as const,
+                                        columns: [
+                                            { refKey: "child.first_name", label: "First Name" },
+                                            { refKey: "child.last_name", label: "Last Name" },
+                                        ],
+                                    }
+                                :   item,
+                            ),
+                        })),
+                    })),
+                }
+            :   section,
+        );
+        const v10Doc = { ...doc, sections };
+        const record = buildOpportunityLayoutRuntimeRecordFromVm({
+            opportunityId: "opp-1",
+            vmRecord: {
+                name: "Mitchell Family",
+                _inquiry_children: [
+                    { id: "ocm-1", first_name: "Jim", last_name: "Pat", person_id: "p1", display_name: "Jim Pat" },
+                ],
+            },
+        });
+        const html = renderToStaticMarkup(<LayoutRuntimeDrawerBodyView doc={v10Doc} record={record} />);
+        expect(html).toContain("Jim");
+        expect(html).toContain("Pat");
     });
 
     it("layout failure path keeps VM presentation resolver on VM", () => {

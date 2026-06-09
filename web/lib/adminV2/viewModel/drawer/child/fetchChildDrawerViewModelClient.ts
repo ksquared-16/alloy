@@ -7,7 +7,7 @@ export function buildChildDrawerViewModelUrl(
     composeDepth: PersonDrawerVmComposeDepth = "first_paint"
 ): string {
     const qs = new URLSearchParams({ compose_depth: composeDepth });
-    return `/api/admin/v2/view-models/drawer/child/${encodeURIComponent(personId)}?${qs}`;
+    return `/api/admin/view-models/drawer/child/${encodeURIComponent(personId)}?${qs}`;
 }
 
 export async function fetchChildDrawerViewModelClient(

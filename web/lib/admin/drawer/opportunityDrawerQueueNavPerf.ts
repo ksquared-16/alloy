@@ -1,9 +1,9 @@
 /**
  * Dev/staging queue prev/next navigation diagnostics.
- * Filter: `[perf.drawer.queue_nav]`
+ * Filter: `[perf:drawer]`
  */
 
-const PERF_ENABLED = process.env.NODE_ENV === "development" || process.env.VITEST === "true";
+import { perfDevDetailEnabled, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 
 export type OpportunityQueueNavPath =
     | "preload_hit"
@@ -24,6 +24,19 @@ export function logOpportunityQueueNav(payload: {
     prefetch_hit: boolean;
     time_to_decision_ms?: number;
 }): void {
-    if (!PERF_ENABLED) return;
-    console.info("[perf.drawer.queue_nav]", payload);
+    if (!perfDevDetailEnabled()) return;
+    perfDrawer("queue_nav", {
+        entity_type: "opportunity",
+        entity_id: payload.target_id,
+        nav_source: payload.nav_source,
+        path: payload.path,
+        overlay_shown: payload.overlay_shown,
+        bootstrap_warm: payload.bootstrap_warm,
+        primary_warm: payload.primary_warm,
+        snapshot_warm: payload.snapshot_warm,
+        prefetch_hit: payload.prefetch_hit,
+        duration_ms: payload.time_to_decision_ms,
+        cache_hit: payload.prefetch_hit || payload.snapshot_warm || payload.path.includes("hit"),
+        source: payload.prefetch_hit || payload.snapshot_warm ? "cache" : "network",
+    });
 }

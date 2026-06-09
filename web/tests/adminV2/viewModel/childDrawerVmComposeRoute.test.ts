@@ -47,9 +47,9 @@ describe("child drawer VM route", () => {
             },
         });
 
-        const { GET } = await import("@/app/api/admin/v2/view-models/drawer/child/[id]/route");
+        const { GET } = await import("@/app/api/admin/view-models/drawer/child/[id]/route");
         const res = await GET(
-            new Request("http://localhost/api/admin/v2/view-models/drawer/child/child-1?compose_depth=first_paint"),
+            new Request("http://localhost/api/admin/view-models/drawer/child/child-1?compose_depth=first_paint"),
             { params: Promise.resolve({ id: "child-1" }) }
         );
         expect(res.status).toBe(200);

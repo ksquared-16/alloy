@@ -8,16 +8,19 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo } from "react";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
-import QueueCardProofRenderer from "@/components/layout/QueueCardProofRenderer";
+import OperationalQueueRecordRow from "@/components/layout/OperationalQueueRecordRow";
+import { buildOperationalQueueRecordViewModelFromLayout } from "@/lib/layout/runtime/buildOperationalQueueRecordViewModel";
+import { resolveQueueRecordLayoutConfig } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
 import LayoutRuntimeQueueRowErrorBoundary from "@/components/layout/LayoutRuntimeQueueRowErrorBoundary";
 import LayoutRuntimeQueueRowErrorCard from "@/components/layout/LayoutRuntimeQueueRowErrorCard";
 import { isLayoutRuntimeHardCutoverActiveClient } from "@/lib/layout/featureFlag";
-import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
+import type { QueueItemQuickActionVm, QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 import {
     buildLayoutRuntimeQueueRowEvidence,
     logLayoutRuntimeQueueRowEvidence,
 } from "@/lib/layout/runtime/layoutRuntimeEvidence";
 import { shouldLogLayoutRuntimeEvidence } from "@/lib/layout/runtime/layoutRuntimeEvidenceClient";
+import type { QueueLayoutDrawerIconHandlers } from "@/lib/layout/runtime/buildQueueLayoutRuntimeAdornmentHandler";
 
 type Props = {
     doc: LayoutDoc;
@@ -30,8 +33,13 @@ type Props = {
     vmFallback: ReactNode;
     queueRowKey?: string;
     variant?: "pipeline" | "waitlist";
-    /** When true, action chips are suppressed — row shell owns open behavior. */
-    suppressActions?: boolean;
+    drawerIconHandlers?: QueueLayoutDrawerIconHandlers;
+    rowActions?: QueueItemQuickActionVm[];
+    onRowAction?: (qa: QueueItemQuickActionVm, dispatchId: string) => void;
+    rowActionsPending?: boolean;
+    collapsed?: boolean;
+    onToggleCollapsed?: () => void;
+    onOpen?: () => void;
 };
 
 export default function LayoutRuntimeQueueRowView({
@@ -44,8 +52,19 @@ export default function LayoutRuntimeQueueRowView({
     vmFallback,
     queueRowKey,
     variant,
-    suppressActions = true,
+    drawerIconHandlers,
+    rowActions,
+    onRowAction,
+    rowActionsPending,
+    collapsed,
+    onToggleCollapsed,
+    onOpen,
 }: Props) {
+    const queueRecordConfig = useMemo(() => resolveQueueRecordLayoutConfig(doc), [doc]);
+    const operationalVm = useMemo(
+        () => buildOperationalQueueRecordViewModelFromLayout(doc, record, queueRecordConfig),
+        [doc, queueRecordConfig, record],
+    );
     const evidence = useMemo(
         () =>
             buildLayoutRuntimeQueueRowEvidence({
@@ -64,8 +83,6 @@ export default function LayoutRuntimeQueueRowView({
         logLayoutRuntimeQueueRowEvidence(evidence);
     }, [evidence]);
 
-    // Hard cutover: a row render failure shows a visible error card, never the
-    // legacy VM queue card.
     const errorFallback = isLayoutRuntimeHardCutoverActiveClient() ? (
         <LayoutRuntimeQueueRowErrorCard reason="queue_row_render_failed" queueRowKey={queueRowKey} />
     ) : (
@@ -80,14 +97,23 @@ export default function LayoutRuntimeQueueRowView({
         >
             <div
                 data-layout-runtime-queue-row="true"
+                data-queue-row-runtime-path="layout-runtime-queue-row-view"
                 className="min-w-0 flex-1"
                 data-layout-runtime-queue-source={layoutSource ?? ""}
                 data-layout-runtime-queue-title={evidence.titleResolution.display ?? ""}
             >
-                <QueueCardProofRenderer
-                    doc={doc}
+                <OperationalQueueRecordRow
+                    vm={operationalVm}
                     record={record}
-                    onAction={suppressActions ? () => {} : undefined}
+                    config={queueRecordConfig}
+                    drawerHandlers={drawerIconHandlers}
+                    onOpen={onOpen}
+                    rowActions={rowActions}
+                    onRowAction={onRowAction}
+                    rowActionsPending={rowActionsPending}
+                    collapsed={collapsed}
+                    onToggleCollapsed={onToggleCollapsed}
+                    showAttentionAccent={operationalVm.hasAttention}
                 />
             </div>
         </LayoutRuntimeQueueRowErrorBoundary>

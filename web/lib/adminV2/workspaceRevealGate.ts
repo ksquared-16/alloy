@@ -1,4 +1,5 @@
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import { perfWorkUnit } from "@/lib/perf/perfNamespaceLog";
 
 export type WorkspaceRevealGatePhase =
     | "gate_start"
@@ -41,7 +42,7 @@ export function markWorkspaceRevealGateStart(detail?: Record<string, unknown>): 
     phaseAtMs.gate_start = gateStartMs;
     alloyPerfSet("workspace_reveal_gate_start", gateStartMs);
     if (typeof window !== "undefined") {
-        console.info("[workspace-reveal-gate]", { event: "gate_start", ...detail });
+        perfWorkUnit("reveal_gate_start", { surface: "workspace", ...(detail ?? {}) });
     }
 }
 
@@ -59,7 +60,7 @@ function logPhase(phase: WorkspaceRevealGatePhase, detail?: Record<string, unkno
     if (phase === "above_fold_ready" && gateStartMs != null) {
         payload.reveal_wait_ms = Math.round(now - gateStartMs);
     }
-    console.info("[workspace-reveal-gate]", payload);
+    perfWorkUnit(`reveal_${phase}`, { surface: "workspace", ...payload });
 }
 
 export function markWorkspaceRevealGatePhases(

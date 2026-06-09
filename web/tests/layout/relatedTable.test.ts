@@ -62,8 +62,8 @@ describe("related_list collection table schema", () => {
     });
 });
 
-describe("default Lead drawer — Lead Children table", () => {
-    it("models children as a related_list table with the expected columns", () => {
+describe("default Lead drawer — Children & Enrollment table", () => {
+    it("models children as a related_list table with enrollment-context columns", () => {
         const doc = buildLeadDrawerDefaultDoc();
         expect(parseLayoutDoc(doc).ok).toBe(true);
         const table = allItems(doc).find((i) => i.kind === "related_list" && i.displayMode === "table");
@@ -72,16 +72,15 @@ describe("default Lead drawer — Lead Children table", () => {
         expect(table!.columns?.map((c) => c.refKey)).toEqual([
             "child.name",
             "child.dob_age",
-            "child.desired_start_date",
-            "child.location",
             "child.program",
-            "child.room",
+            "child.desired_start_date",
             "child.schedule",
+            "child.room",
+            "child.location",
             "child.status",
         ]);
         // Child column links to the child drawer
         expect(table!.columns?.[0].adornment?.action?.entity).toBe("child");
-        // Section is titled Lead Children
-        expect(doc.sections.find((s) => s.key === "children_inquiry")?.title).toBe("Lead Children");
+        expect(doc.sections.find((s) => s.key === "children_enrollment")?.title).toBe("Children & Enrollment");
     });
 });

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ADMINV2_SHELL_COMMAND_INSET } from "@/components/admin/Drawer";
 import OpportunityDrawerHeaderSaveActions from "@/components/admin/entity/OpportunityDrawerHeaderSaveActions";
 import { drawerOperatingIsDirty } from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
 
@@ -10,8 +9,7 @@ type Props = {
 };
 
 /**
- * Floating save rail — bottom-right inside drawer chrome, above BOS command bar.
- * Absolute within drawer body so it never shifts scroll content.
+ * Drawer footer action stripe — embedded bottom chrome, dirty-only, actions right-aligned.
  */
 export default function OpportunityDrawerBodySaveBar({ canMutate }: Props) {
     const [coordDirty, setCoordDirty] = useState(false);
@@ -30,19 +28,17 @@ export default function OpportunityDrawerBodySaveBar({ canMutate }: Props) {
 
     return (
         <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 z-[25] flex justify-end px-3 pb-3"
-            style={{ paddingBottom: `calc(${ADMINV2_SHELL_COMMAND_INSET} + 0.5rem)` }}
+            className="flex w-full items-center justify-end gap-2 border-t border-alloy-midnight/[0.08] bg-gradient-to-b from-white to-alloy-stone/50 px-4 py-2 sm:px-5"
             data-opportunity-drawer-body-save-bar="true"
         >
-            <div className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-md border border-alloy-stone/15 bg-white/98 px-2.5 py-1.5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.28)] backdrop-blur-[2px]">
-                <OpportunityDrawerHeaderSaveActions
-                    canMutate={canMutate}
-                    formDirty={false}
-                    onSaveForm={() => undefined}
-                    onCancelForm={() => undefined}
-                    formSaving={false}
-                />
-            </div>
+            <OpportunityDrawerHeaderSaveActions
+                canMutate={canMutate}
+                formDirty={false}
+                onSaveForm={() => undefined}
+                onCancelForm={() => undefined}
+                formSaving={false}
+                tone="footer"
+            />
         </div>
     );
 }

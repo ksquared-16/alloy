@@ -10,6 +10,7 @@
  * shows placeholders, but the intended source ref is preserved.
  */
 
+import { defaultLeadQueueLayoutV3, defaultWaitlistQueueLayoutV3 } from "./queueRecordLayoutV3";
 import {
     LAYOUT_DOC_FORMAT_VERSION,
     LAYOUT_GRID_COLUMNS,
@@ -23,6 +24,20 @@ import {
     type LayoutSurface,
 } from "./layoutV2";
 import { parseRefKey } from "./fieldCatalog";
+import {
+    COMPOSITION_PRIMARY_COLUMN_REFS_METADATA_KEY,
+    DEFAULT_LEAD_ENROLLMENT_COMPOSITION_PRIMARY_COLUMN_REFS,
+} from "@/lib/layout/runtime/leadOverviewComposition";
+import {
+    DEFAULT_LEAD_ENROLLMENT_GRID_CELL_ROLES,
+    ENROLLMENT_GRID_CELL_ROLES_METADATA_KEY,
+} from "@/lib/layout/runtime/enrollmentGridPresentation";
+import {
+    LAYOUT_SECTION_COLLAPSE_WHEN_EMPTY_METADATA_KEY,
+    LAYOUT_SECTION_PRIORITY_METADATA_KEY,
+    LAYOUT_SECTION_RAIL_SLOT_METADATA_KEY,
+    LAYOUT_SECTION_SHOW_WHEN_EMPTY_METADATA_KEY,
+} from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
 
 const PERSON_LINK: LayoutFieldAdornment = { position: "left", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "opportunity.primary_person_id" } };
 const CHILD_LINK: LayoutFieldAdornment = { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } };
@@ -91,7 +106,7 @@ function section(
     sKey: string,
     title: string,
     rows: LayoutRow[],
-    opts?: { defaultExpanded?: boolean },
+    opts?: { defaultExpanded?: boolean; metadata?: Record<string, unknown> },
 ): LayoutSection {
     return {
         id: id("opportunities", "lead", sKey),
@@ -100,86 +115,109 @@ function section(
         collapsible: true,
         defaultExpanded: opts?.defaultExpanded ?? false,
         rows,
+        ...(opts?.metadata ? { metadata: opts.metadata } : {}),
     };
 }
 
-/** Lead drawer default: Lead Summary, Children Inquiry, Lead Source, Notes/Communication. */
-export function buildLeadDrawerDefaultDoc(): LayoutDoc {
-    // 1. Lead Summary — 2 columns: contacts/tour | tasks/reminders/actions
-    const sumBase = id("opportunities", "lead", "lead_summary");
-    // Contact block: a controlled subgrid (column-in-column) — row1 full name,
-    // row2 email | phone (2 columns) — inside the left column.
-    const cbBase = id(sumBase, "r0c0", "contact");
-    const contactBlock: LayoutItem = {
-        id: id(cbBase, "group"),
-        kind: "field_group",
-        refKey: "contact_block",
-        label: "Contact",
-        rows: [
-            row(id(cbBase, "r0"), [col(id(cbBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [fieldItem(id(cbBase, "r0c0"), "person.primary_contact_name", "Full name", "text", undefined, PERSON_LINK)])]),
-            row(id(cbBase, "r1"), [
-                col(id(cbBase, "r1"), 0, HALF, [fieldItem(id(cbBase, "r1c0"), "person.primary_email", "Email", "text")]),
-                col(id(cbBase, "r1"), 1, HALF, [fieldItem(id(cbBase, "r1c1"), "person.primary_phone", "Phone", "phone")]),
-            ]),
-        ],
+function railSectionMetadata(priority: number): Record<string, unknown> {
+    return {
+        [LAYOUT_SECTION_PRIORITY_METADATA_KEY]: priority,
+        [LAYOUT_SECTION_RAIL_SLOT_METADATA_KEY]: "right_rail",
+        [LAYOUT_SECTION_COLLAPSE_WHEN_EMPTY_METADATA_KEY]: true,
+        [LAYOUT_SECTION_SHOW_WHEN_EMPTY_METADATA_KEY]: false,
     };
+}
+
+/** Lead drawer default — summary strip widgets + Children & Enrollment centerpiece (Patch 5). */
+export function buildLeadDrawerDefaultDoc(): LayoutDoc {
+    // 1. Lead Summary — operational widget row (routes to shell summary strip when boundary flag on)
+    const sumBase = id("opportunities", "lead", "lead_summary");
     const leadSummary = section(
         "lead_summary",
         "Lead Summary",
         [
             row(id(sumBase, "r0"), [
-                col(id(sumBase, "r0"), 0, HALF, [
-                    contactBlock,
-                    fieldItem(
-                        id(sumBase, "r0c0"),
-                        "person.secondary_contact_name",
-                        "Secondary contact",
-                        "text",
-                        { type: "exists", path: "person.secondary_contact_name" },
-                        PERSON_LINK,
-                    ),
-                    fieldItem(id(sumBase, "r0c0"), "opportunity.tour_date", "Tour date", "date", undefined, CALENDAR_ICON),
-                    fieldItem(id(sumBase, "r0c0"), "opportunity.tour_status", "Tour status", "status"),
-                ]),
-                col(id(sumBase, "r0"), 1, HALF, [
-                    widgetItem(id(sumBase, "r0c1"), "tasks", "Tasks"),
-                    widgetItem(id(sumBase, "r0c1"), "reminders", "Reminders"),
-                    widgetItem(id(sumBase, "r0c1"), "actions", "Actions", "buttons"),
-                ]),
+                col(id(sumBase, "r0"), 0, THIRD, [widgetItem(id(sumBase, "r0c0"), "attention", "Attention", "summary")]),
+                col(id(sumBase, "r0"), 1, THIRD, [widgetItem(id(sumBase, "r0c1"), "tasks", "Tasks", "list")]),
+                col(id(sumBase, "r0"), 2, THIRD, [widgetItem(id(sumBase, "r0c2"), "tour_summary", "Tour / Event", "summary")]),
+                col(id(sumBase, "r0"), 3, THIRD, [widgetItem(id(sumBase, "r0c3"), "children_list", "Children", "list")]),
             ]),
         ],
         { defaultExpanded: true },
     );
 
-    // 2. Lead Children — related-list TABLE (rows = children, columns = fields)
-    const ciBase = id("opportunities", "lead", "children_inquiry");
-    const childrenTable: LayoutItem = {
-        id: id(ciBase, "children_table"),
+    // 2. Children & Enrollment — related-list TABLE (enrollment context per child)
+    const ceBase = id("opportunities", "lead", "children_enrollment");
+    const childrenEnrollmentTable: LayoutItem = {
+        id: id(ceBase, "children_table"),
         kind: "related_list",
         refKey: "children",
-        label: "Lead children",
+        label: "Children & enrollment",
         source: "children",
         displayMode: "table",
         related: { entityType: "child" },
         columns: [
             { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
             { label: "DOB / Age", refKey: "child.dob_age", width: "medium" },
-            { label: "Desired Start", refKey: "child.desired_start_date", width: "medium", renderHint: "date" },
-            { label: "Location", refKey: "child.location", width: "medium" },
             { label: "Program", refKey: "child.program", width: "medium" },
-            { label: "Room", refKey: "child.room", width: "medium" },
+            { label: "Desired start", refKey: "child.desired_start_date", width: "medium", renderHint: "date" },
             { label: "Schedule", refKey: "child.schedule", width: "medium" },
+            { label: "Classroom", refKey: "child.room", width: "medium" },
+            { label: "Location", refKey: "child.location", width: "medium" },
             { label: "Status", refKey: "child.status", width: "medium", renderHint: "status" },
         ],
+        metadata: {
+            [COMPOSITION_PRIMARY_COLUMN_REFS_METADATA_KEY]: [
+                ...DEFAULT_LEAD_ENROLLMENT_COMPOSITION_PRIMARY_COLUMN_REFS,
+            ],
+            [ENROLLMENT_GRID_CELL_ROLES_METADATA_KEY]: DEFAULT_LEAD_ENROLLMENT_GRID_CELL_ROLES,
+        },
     };
-    const childrenInquiry = section(
-        "children_inquiry",
-        "Lead Children",
-        [row(id(ciBase, "r0"), [col(id(ciBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [childrenTable])])],
+    const childrenEnrollment = section(
+        "children_enrollment",
+        "Children & Enrollment",
+        [row(id(ceBase, "r0"), [col(id(ceBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [childrenEnrollmentTable])])],
         { defaultExpanded: true },
     );
 
-    // 3. Lead Source — 3 columns
+    // 3. Household & primary contact
+    const hcBase = id("opportunities", "lead", "household_contact");
+    const cbBase = id(hcBase, "r0c0", "contact");
+    const contactBlock: LayoutItem = {
+        id: id(cbBase, "group"),
+        kind: "field_group",
+        refKey: "contact_block",
+        label: "Primary contact",
+        rows: [
+            row(id(cbBase, "r0"), [col(id(cbBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [fieldItem(id(cbBase, "r0c0"), "person.primary_contact_name", "Full name", "text", undefined, PERSON_LINK)])]),
+            row(id(cbBase, "r1"), [
+                col(id(cbBase, "r1"), 0, HALF, [fieldItem(id(cbBase, "r1c0"), "person.primary_email", "Email", "text", undefined, MAIL_ICON)]),
+                col(id(cbBase, "r1"), 1, HALF, [fieldItem(id(cbBase, "r1c1"), "person.primary_phone", "Phone", "phone", undefined, PHONE_ICON)]),
+            ]),
+        ],
+    };
+    const householdContact = section("household_contact", "Household & Primary Contact", [
+        row(id(hcBase, "r0"), [
+            col(id(hcBase, "r0"), 0, HALF, [
+                templateItem(id(hcBase, "r0c0"), "household", "{last_name} Household", "Household", HOME_ICON),
+                fieldItem(id(hcBase, "r0c0"), "opportunity.location", "Location", "text", undefined, LOCATION_ICON),
+                fieldItem(id(hcBase, "r0c0"), "opportunity.status_key", "Lead status", "status"),
+            ]),
+            col(id(hcBase, "r0"), 1, HALF, [
+                contactBlock,
+                fieldItem(
+                    id(hcBase, "r0c1"),
+                    "person.secondary_contact_name",
+                    "Secondary contact",
+                    "text",
+                    { type: "exists", path: "person.secondary_contact_name" },
+                    PERSON_LINK,
+                ),
+            ]),
+        ]),
+    ]);
+
+    // 4. Lead Source — 3 columns
     const lsBase = id("opportunities", "lead", "lead_source");
     const leadSource = section("lead_source", "Lead Source", [
         row(id(lsBase, "r0"), [
@@ -187,21 +225,33 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
             col(id(lsBase, "r0"), 1, THIRD, [fieldItem(id(lsBase, "r0c1"), "opportunity.channel", "Channel", "text")]),
             col(id(lsBase, "r0"), 2, THIRD, [fieldItem(id(lsBase, "r0c2"), "opportunity.campaign", "Campaign", "text")]),
         ]),
-    ]);
+    ], {
+        metadata: {
+            [LAYOUT_SECTION_PRIORITY_METADATA_KEY]: 40,
+            [LAYOUT_SECTION_COLLAPSE_WHEN_EMPTY_METADATA_KEY]: true,
+            [LAYOUT_SECTION_SHOW_WHEN_EMPTY_METADATA_KEY]: false,
+        },
+    });
 
-    // 4. Notes / Recent Communication — widgets
+    // 5. Notes / Recent Communication — widgets (notes before comm per rail priority)
     const ncBase = id("opportunities", "lead", "notes_comm");
     const notesComm = section("notes_communication", "Notes / Recent Communication", [
-        row(id(ncBase, "r0"), [col(id(ncBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(id(ncBase, "r0c0"), "recent_communication", "Recent communication", "feed")])]),
-        row(id(ncBase, "r1"), [col(id(ncBase, "r1"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(id(ncBase, "r1c0"), "notes", "Notes", "list")])]),
-    ]);
+        row(id(ncBase, "r0"), [col(id(ncBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(id(ncBase, "r0c0"), "notes", "Notes", "list")])]),
+        row(id(ncBase, "r1"), [col(id(ncBase, "r1"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(id(ncBase, "r1c0"), "recent_communication", "Recent communication", "feed")])]),
+    ], { metadata: railSectionMetadata(20) });
+
+    // 6. Activity — preview from VM/layout-record fields
+    const actBase = id("opportunities", "lead", "activity");
+    const activity = section("activity", "Activity", [
+        row(id(actBase, "r0"), [col(id(actBase, "r0"), 0, LAYOUT_GRID_COLUMNS, [widgetItem(id(actBase, "r0c0"), "activity", "Activity", "feed")])]),
+    ], { metadata: railSectionMetadata(10) });
 
     return {
         formatVersion: LAYOUT_DOC_FORMAT_VERSION,
         surface: "drawer",
         entityType: "opportunities",
-        sections: [leadSummary, childrenInquiry, leadSource, notesComm],
-        metadata: { seededFrom: "lead_default", template: "lead_drawer_v1" },
+        sections: [leadSummary, childrenEnrollment, householdContact, leadSource, notesComm, activity],
+        metadata: { seededFrom: "lead_default", template: "lead_drawer_v2" },
     };
 }
 
@@ -293,6 +343,7 @@ export function buildLeadQueueDefaultDoc(): LayoutDoc {
             seededFrom: "lead_default",
             template: "lead_queue_card_v1",
             renderAs: "work_unit_card",
+            queue_record_layout: defaultLeadQueueLayoutV3(),
             queue_context: {
                 lifecycle_key: "enrollment",
                 queue_type: "pipeline",
@@ -353,6 +404,7 @@ export function buildEnrollmentWaitlistQueueDoc(): LayoutDoc {
             seededFrom: "waitlist_default",
             template: "enrollment_waitlist_candidate_v1",
             renderAs: "card",
+            queue_record_layout: defaultWaitlistQueueLayoutV3(),
             queue_context: {
                 lifecycle_key: "enrollment",
                 queue_type: "waitlist",

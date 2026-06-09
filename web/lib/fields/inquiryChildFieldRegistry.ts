@@ -41,11 +41,13 @@ export const INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS = [
 
 export type InquiryChildNativeOcmFieldKey = (typeof INQUIRY_CHILD_NATIVE_OCM_FIELD_KEYS)[number];
 
-/** Default option_set_key for native inquiry_child select fields (fallback when field_definitions.config absent). */
+/**
+ * Default option_set_key for native inquiry_child select fields (fallback when field_definitions.config absent).
+ * Program interest uses location-scoped cascade (`programs_for_location`) — not org-wide option_set.
+ */
 export const INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS: Partial<
     Record<InquiryChildNativeOcmFieldKey, string>
 > = {
-    desired_program_type: "childcare_program_type",
     desired_schedule_type: "childcare_schedule_type",
 };
 
@@ -53,6 +55,12 @@ export function fallbackOptionSetKeyForInquiryChildField(fieldKey: string): stri
     const k = fieldKey.trim() as InquiryChildNativeOcmFieldKey;
     return INQUIRY_CHILD_NATIVE_OPTION_SET_KEYS[k] ?? null;
 }
+
+export type InquiryChildNativeFieldConfig = {
+    option_source?: "locations" | "programs_for_location" | "rooms_for_location_program" | "option_set";
+    depends_on_field_key?: InquiryChildNativeOcmFieldKey;
+    option_set_key?: string;
+};
 
 export type InquiryChildNativeFieldManifestRow = {
     field_key: InquiryChildNativeOcmFieldKey;
@@ -63,6 +71,7 @@ export type InquiryChildNativeFieldManifestRow = {
     is_visible_in_drawer: boolean;
     is_visible_in_form: boolean;
     is_visible_in_table: boolean;
+    config?: InquiryChildNativeFieldConfig;
 };
 
 export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifestRow[] = [
@@ -85,6 +94,7 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
         is_visible_in_drawer: true,
         is_visible_in_form: true,
         is_visible_in_table: false,
+        config: { option_source: "locations" },
     },
     {
         field_key: "desired_program_type",
@@ -95,6 +105,7 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
         is_visible_in_drawer: true,
         is_visible_in_form: true,
         is_visible_in_table: false,
+        config: { option_source: "programs_for_location", depends_on_field_key: "location_id" },
     },
     {
         field_key: "program_room_cohort_key",
@@ -105,6 +116,10 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
         is_visible_in_drawer: true,
         is_visible_in_form: true,
         is_visible_in_table: false,
+        config: {
+            option_source: "rooms_for_location_program",
+            depends_on_field_key: "desired_program_type",
+        },
     },
     {
         field_key: "desired_schedule_type",
@@ -115,6 +130,7 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
         is_visible_in_drawer: true,
         is_visible_in_form: true,
         is_visible_in_table: false,
+        config: { option_source: "option_set", option_set_key: "childcare_schedule_type" },
     },
     {
         field_key: "outcome_status_key",

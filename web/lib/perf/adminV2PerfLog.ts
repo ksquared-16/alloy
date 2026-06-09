@@ -2,7 +2,10 @@
  * Standardized perf / timing console payloads for Admin V2 staging & production troubleshooting.
  * — One line per emission; avoids render-loop noise by design (call only at phase boundaries).
  * — Prefer `surface` + `route` so logs filter cleanly in GCP/staging consoles.
+ * — Emits via `[perf:*]` namespaces (see `perfNamespaceLog.ts`).
  */
+
+import { emitPerf, resolvePerfNamespaceFromTag } from "@/lib/perf/perfNamespaceLog";
 
 export type AdminV2PerfSource = "cache" | "network" | "background";
 
@@ -38,7 +41,11 @@ function compact<T extends Record<string, unknown>>(obj: T): Record<string, unkn
 
 /** Merge standard envelope fields with event-specific payloads; emits a single structured line. */
 export function emitAdminV2Perf(tag: string, payload: AdminV2PerfCommon & Record<string, unknown>): void {
-    console.warn(tag, compact(payload as Record<string, unknown>));
+    const phase =
+        typeof payload.phase === "string" && payload.phase.trim() !== ""
+            ? payload.phase
+            : tag.replace(/^\[[^\]]+\]\.?/, "");
+    emitPerf(resolvePerfNamespaceFromTag(tag), phase, compact(payload as Record<string, unknown>));
 }
 
 export function perfWorkspaceLoad(args: {
@@ -168,7 +175,7 @@ export function timingOpportunityDrawerPrimary(args: {
         typeof args.payload_bytes === "number"
             ? Math.round((args.payload_bytes / 1024) * 10) / 10
             : undefined;
-    emitAdminV2Perf("[drawer-primary-perf]", {
+    emitAdminV2Perf("[perf.drawer.primary]", {
         surface: "drawer_primary",
         route: `/api/admin/entity/opportunities/[id]?surface=drawer_primary`,
         entity_id: args.opportunity_id,
@@ -198,7 +205,7 @@ export function timingOpportunityApiVisible(args: {
     source?: AdminV2PerfSource;
     status_defs_cache_hit?: boolean;
 }): void {
-    emitAdminV2Perf("[timing][opportunity-api-visible]", {
+    emitAdminV2Perf("[perf.drawer.visible]", {
         surface: "drawer_visible",
         route: `/api/admin/entity/opportunities/[id]?surface=drawer_visible`,
         entity_id: args.opportunity_id,

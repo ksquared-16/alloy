@@ -10,7 +10,8 @@ import type { LayoutDoc } from "../layoutV2";
 import { normalizeRefKeyOnRead } from "../layoutRefKeyAliases";
 import { OPPORTUNITY_COMPUTE_KEYS } from "./opportunityRelationRegistry";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
-import { mapVmInquiryChildrenToLayoutRuntimeRows } from "./mapLayoutRuntimeChildrenRows";
+import { resolveOpportunityLayoutRuntimeChildrenRows } from "./mapLayoutRuntimeChildrenRows";
+import { overlayPrimaryChildScalarsOnRecord } from "./overlayPrimaryChildScalarsOnRecord";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
 import {
     buildPrimaryContactPersonRelation,
@@ -200,7 +201,7 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         vmRecord.attention_reason,
     );
 
-    const layoutChildren = mapVmInquiryChildrenToLayoutRuntimeRows(vmRecord._inquiry_children);
+    const layoutChildren = resolveOpportunityLayoutRuntimeChildrenRows(vmRecord);
 
     const taskPayload =
         summaries?.tasks ??
@@ -292,5 +293,5 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         }
     }
 
-    return record;
+    return overlayPrimaryChildScalarsOnRecord(record, layoutChildren);
 }

@@ -306,6 +306,8 @@ export interface LayoutSection {
     rows: LayoutRow[];
     /** Optional V1 visibility rule. */
     visibleWhen?: LayoutCondition;
+    /** Presentation-only metadata (priority, rail placement, empty collapse). */
+    metadata?: Record<string, unknown>;
 }
 
 /** The full presentation document for one (entity_type, surface). */

@@ -62,11 +62,21 @@ export async function attachOpportunityInquirySummaryTaskPreview(
     };
 }
 
+function readInquirySummaryTasksRaw(record: Record<string, unknown>): unknown {
+    if (record._inquiry_summary_tasks != null) return record._inquiry_summary_tasks;
+    const overview = record._overview_data;
+    if (overview && typeof overview === "object" && !Array.isArray(overview)) {
+        const nested = (overview as Record<string, unknown>)._inquiry_summary_tasks;
+        if (nested != null) return nested;
+    }
+    return null;
+}
+
 export function parseInquirySummaryTaskPreview(
     record: Record<string, unknown> | null | undefined,
 ): InquirySummaryTaskPreviewPayload | null {
     if (!record || typeof record !== "object") return null;
-    const raw = record._inquiry_summary_tasks;
+    const raw = readInquirySummaryTasksRaw(record);
     if (!raw || typeof raw !== "object") return null;
     const o = raw as Record<string, unknown>;
     if (o.state !== "loaded") return null;

@@ -6,13 +6,17 @@ import { parseQueueRowCrmChildrenStructured } from "@/lib/ui-v2/crmQueueRowPrevi
 import type { CrmCompactChildLineVm, CrmCompactRowSemanticSlots, QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 import type { LayoutDoc } from "../layoutV2";
 import { collectLayoutDocFieldRefKeys } from "./buildOpportunityLayoutRuntimeRecordFromVm";
-import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
+import { enrichLayoutRuntimeChildRowsFromAnchor } from "./enrichLayoutRuntimeChildRowIdentifiers";
+import { ensureQueueRecordLayoutFieldKeys } from "./ensureQueueRecordLayoutFieldKeys";
+import { mergeCanonicalOpportunityLayoutRuntimeChildRows } from "./mergeCanonicalOpportunityLayoutRuntimeChildRows";
+import { isOpaqueIdValue, pickEntityId, type ProofRuntimeRecord } from "./proofRecordContext";
 import {
     buildPrimaryContactPersonRelation,
     resolveOpportunityPrimaryContactPerson,
 } from "./resolveOpportunityPrimaryContactPerson";
 import { applyQueueRowContextToLayoutRecord } from "./applyQueueRowContextToLayoutRuntime";
 import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnrichment";
+import { resolveQueueRecordLayoutConfig } from "./resolveQueueRecordLayoutConfig";
 import type { OpportunityQueueRowWithContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 
 function pickDisplay(...values: unknown[]): string | null {
@@ -49,9 +53,12 @@ function parseContactNameFromLine(contactLine: string | null | undefined): strin
 
 function mapCrmChildLine(line: CrmCompactChildLineVm, index: number, crm: CrmCompactRowSemanticSlots): ProofRuntimeRecord {
     const childId = line.personId ?? crm.childPersonId ?? null;
+    const resolvedId = pickEntityId(childId, line.personId) ?? "";
     return {
-        id: childId ?? line.personId ?? `child-${index}`,
-        "child.id": pickDisplay(childId, line.personId) ?? "",
+        id: resolvedId || `child-${index}`,
+        person_id: resolvedId,
+        customer_member_id: pickDisplay(line.customerMemberId, line.ocmId) ?? "",
+        "child.id": resolvedId,
         "child.name": pickDisplay(line.primary) ?? "—",
         "child.age_band": pickDisplay(line.secondary, crm.ageBandContext, crm.ageContext) ?? "",
         "child.program": pickDisplay(line.programInline, line.secondary, crm.programContext) ?? "",
@@ -61,8 +68,12 @@ function mapCrmChildLine(line: CrmCompactChildLineVm, index: number, crm: CrmCom
 }
 
 function mapStructuredChildLine(line: CrmCompactChildLineVm, index: number, enrichment?: QueueRowLayoutRuntimeEnrichment | null): ProofRuntimeRecord {
+    const resolvedId = pickEntityId(line.personId) ?? "";
     return {
-        id: line.personId ?? `child-${index}`,
+        id: resolvedId || `child-${index}`,
+        person_id: resolvedId,
+        customer_member_id: pickDisplay(line.customerMemberId, line.ocmId) ?? "",
+        "child.id": resolvedId,
         "child.name": pickDisplay(line.primary) ?? "—",
         "child.age_band": pickDisplay(line.secondary) ?? "",
         "child.program": pickDisplay(line.programInline, line.secondary, enrichment?.programLabel) ?? "",
@@ -101,6 +112,109 @@ function mapCrmChildren(crm: CrmCompactRowSemanticSlots, enrichment?: QueueRowLa
         ];
     }
     return [];
+}
+
+function normalizeInquiryChildrenAnchor(raw: unknown): unknown {
+    if (!Array.isArray(raw)) return raw;
+    return raw.map((entry, index) => {
+        if (!entry || typeof entry !== "object") return entry;
+        const row = entry as Record<string, unknown>;
+        const personId = row.person_id ?? row.personId;
+        const memberId = row.customer_member_id ?? row.customerMemberId ?? row.ocmId;
+        return {
+            ...row,
+            id: row.id ?? memberId ?? (personId ? `inquiry-person:${personId}` : `preview-inquiry-${index}`),
+            display_name: row.display_name ?? row.primary,
+            person_id: personId,
+            customer_member_id: memberId,
+            dob: row.dob ?? row.date_of_birth,
+        };
+    });
+}
+
+function normalizeCrmCompactChildrenAnchor(raw: unknown): unknown {
+    const structured = parseQueueRowCrmChildrenStructured(raw);
+    if (structured.length === 0) return undefined;
+    return structured.map((line, index) => ({
+        primary: line.primary,
+        display_name: line.primary,
+        person_id: line.personId ?? "",
+        customer_member_id: line.customerMemberId ?? "",
+        ocm_id: line.ocmId ?? "",
+        id: line.personId ?? line.customerMemberId ?? line.ocmId ?? `crm-compact-${index}`,
+    }));
+}
+
+function buildChildEnrichmentAnchor(
+    enrichment: QueueRowLayoutRuntimeEnrichment | null,
+): Record<string, unknown> {
+    const anchor: Record<string, unknown> = {
+        _primary_child_person_id: enrichment?.primaryChildPersonId ?? null,
+    };
+    if (Array.isArray(enrichment?.inquiryChildren) && enrichment.inquiryChildren.length > 0) {
+        anchor._inquiry_children = normalizeInquiryChildrenAnchor(enrichment.inquiryChildren);
+    }
+    const crmCompact = normalizeCrmCompactChildrenAnchor(enrichment?.crmCompactChildren);
+    if (crmCompact) anchor._crm_compact_children = crmCompact;
+    return anchor;
+}
+
+function mergePersonIdsFromCrmCompactChildren(
+    rows: ProofRuntimeRecord[],
+    enrichment: QueueRowLayoutRuntimeEnrichment | null,
+): ProofRuntimeRecord[] {
+    const structured = parseQueueRowCrmChildrenStructured(enrichment?.crmCompactChildren);
+    if (structured.length === 0) return rows;
+
+    return rows.map((row, index) => {
+        const line =
+            structured[index]
+            ?? structured.find((candidate) => {
+                const rowName = pickDisplay(row["child.name"]) ?? "";
+                return rowName && candidate.primary.trim().toLowerCase() === rowName.trim().toLowerCase();
+            });
+        const personId = pickEntityId(line?.personId) ?? "";
+        if (!personId) return row;
+        return {
+            ...row,
+            person_id: personId,
+            "child.id": personId,
+            id: personId || row.id,
+        };
+    });
+}
+
+function resolvePreviewLayoutChildren(
+    crm: CrmCompactRowSemanticSlots | undefined,
+    enrichment: QueueRowLayoutRuntimeEnrichment | null,
+): ProofRuntimeRecord[] {
+    const slots = crm ?? ({} as CrmCompactRowSemanticSlots);
+    const anchor = buildChildEnrichmentAnchor(enrichment);
+    const hasCrmLines = (slots.childrenLines?.length ?? 0) > 0 || Boolean(slots.childName?.trim());
+    const hasInquiryChildren = Array.isArray(enrichment?.inquiryChildren) && enrichment.inquiryChildren.length > 0;
+    const hasHouseholdChildren = Array.isArray(enrichment?.householdChildren) && enrichment.householdChildren.length > 0;
+
+    if (hasInquiryChildren || hasHouseholdChildren) {
+        const crmRows = hasCrmLines ? mapCrmChildren(slots, enrichment) : [];
+        const merged = mergeCanonicalOpportunityLayoutRuntimeChildRows({
+            inquiryChildren: normalizeInquiryChildrenAnchor(enrichment?.inquiryChildren),
+            householdChildren: enrichment?.householdChildren ?? (crmRows.length > 0 ? crmRows : undefined),
+        });
+        if (merged.length > 0) {
+            return enrichLayoutRuntimeChildRowsFromAnchor(merged, anchor, { collectionKey: "children" });
+        }
+    }
+
+    let rows = mapCrmChildren(slots, enrichment);
+    if (rows.length === 0 && enrichment?.crmCompactChildren) {
+        const structured = parseQueueRowCrmChildrenStructured(enrichment.crmCompactChildren);
+        if (structured.length > 0) {
+            rows = structured.map((line, index) => mapStructuredChildLine(line, index, enrichment));
+        }
+    }
+
+    rows = mergePersonIdsFromCrmCompactChildren(rows, enrichment);
+    return enrichLayoutRuntimeChildRowsFromAnchor(rows, anchor, { collectionKey: "children" });
 }
 
 function resolveTourDate(
@@ -180,7 +294,7 @@ export function buildOpportunityQueueRowRecordFromPreview(
         item.subtitle,
         enrichment?.statusKey,
     );
-    const layoutChildren = mapCrmChildren(crm ?? ({} as CrmCompactRowSemanticSlots), enrichment);
+    const layoutChildren = resolvePreviewLayoutChildren(crm, enrichment);
     const contactName = pickDisplay(
         crm?.contactDisplayName,
         parseContactNameFromLine(enrichment?.contactLine),
@@ -188,6 +302,11 @@ export function buildOpportunityQueueRowRecordFromPreview(
     );
     const contactPhone = pickDisplay(crm?.contactPhoneDisplay, enrichment?.primaryPhone);
     const contactEmail = pickDisplay(crm?.contactEmail, enrichment?.primaryEmail);
+    const primaryPersonId = pickEntityId(
+        crm?.contactPersonId,
+        enrichment?.primaryPersonId,
+        item.relatedPersonId,
+    ) ?? "";
     const primaryContact = resolveOpportunityPrimaryContactPerson({
         "person.primary_contact_name": contactName ?? "",
         "person.primary_phone": contactPhone ?? "",
@@ -199,9 +318,18 @@ export function buildOpportunityQueueRowRecordFromPreview(
         id: item.id,
         name: householdName,
         last_name: lastName,
+        "customer.display_name": householdName,
+        "customer.name": householdName,
         "person.primary_contact_name": primaryContact.displayName ?? "",
         "person.primary_phone": primaryContact.phone ?? "",
         "person.primary_email": primaryContact.email ?? "",
+        "person.phone": primaryContact.phone ?? "",
+        "person.email": primaryContact.email ?? "",
+        "person.id": primaryPersonId,
+        "opportunity.primary_person_id": primaryPersonId,
+        _primary_person_id: primaryPersonId || undefined,
+        _primary_child_person_id: enrichment?.primaryChildPersonId ?? undefined,
+        _inquiry_children: enrichment?.inquiryChildren,
         status_key: statusLabel ?? "",
         _status_display: statusLabel ?? "",
         "opportunity.status_key": statusLabel ?? "",
@@ -214,6 +342,7 @@ export function buildOpportunityQueueRowRecordFromPreview(
         tour_scheduled_at: tourDate,
         children: layoutChildren,
         enrollment_children: layoutChildren,
+        ...(enrichment?.inquirySummaryTasks ? { _inquiry_summary_tasks: enrichment.inquirySummaryTasks } : {}),
         _relations: {
             ...(buildPrimaryContactPersonRelation(primaryContact) ?
                 { primary_contact: buildPrimaryContactPersonRelation(primaryContact)! }
@@ -223,5 +352,7 @@ export function buildOpportunityQueueRowRecordFromPreview(
 
     const withDocKeys = ensureQueueDocRefKeys(baseRecord, doc);
     const rowContext = (item as OpportunityQueueRowWithContext)._queue_row_context ?? null;
-    return rowContext ? applyQueueRowContextToLayoutRecord(withDocKeys, rowContext) : withDocKeys;
+    const withContext = rowContext ? applyQueueRowContextToLayoutRecord(withDocKeys, rowContext) : withDocKeys;
+    if (!doc) return withContext;
+    return ensureQueueRecordLayoutFieldKeys(withContext, resolveQueueRecordLayoutConfig(doc));
 }
