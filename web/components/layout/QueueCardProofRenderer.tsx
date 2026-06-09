@@ -20,7 +20,9 @@
  * engine renders them, it never ranks. Missing optional data renders blank.
  */
 
-import { createContext, useContext, type ReactNode } from "react";
+import { createContext, useContext, useMemo, type ReactNode } from "react";
+import { queueRowContextDebugDataAttributes } from "@/lib/layout/runtime/applyQueueRowContextToLayoutRuntime";
+import { resolveQueueRowContextPresentation } from "@/lib/workUnits/resolveQueueRowContextPresentation";
 import { Home as HomeIcon } from "lucide-react";
 import {
     type LayoutCollectionColumn,
@@ -297,6 +299,14 @@ export default function QueueCardProofRenderer({
     const childrenItem = first(b, "body.children");
 
     const accent = hasAttention ? EMBER : PINE;
+    const contextPresentation = useMemo(
+        () => resolveQueueRowContextPresentation({ legacy: { record } }),
+        [record],
+    );
+    const contextDebugAttrs = useMemo(
+        () => queueRowContextDebugDataAttributes(contextPresentation),
+        [contextPresentation],
+    );
 
     return (
         <QueueAdornCtx.Provider value={{ onAdorn: onAdornmentAction, onAction }}>
@@ -308,6 +318,7 @@ export default function QueueCardProofRenderer({
                 className="flex w-full cursor-pointer items-stretch justify-between gap-3 rounded-lg p-2.5 text-left transition-shadow hover:shadow-md"
                 style={{ border: `1px solid ${CARD_BORDER}`, borderLeft: `3px solid ${accent}`, background: "linear-gradient(172deg,#ffffff 0%, rgba(0,162,131,0.045) 100%)", boxShadow: "0 1px 2px rgba(39,63,82,0.06), inset 0 1px 0 rgba(255,255,255,0.75)" }}
                 data-queue-card
+                {...contextDebugAttrs}
             >
                 <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                     {/* HEADER */}

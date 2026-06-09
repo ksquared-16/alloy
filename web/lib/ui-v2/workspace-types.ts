@@ -143,6 +143,10 @@ export type CrmCompactChildLineVm = {
   programInline?: string | null;
   /** Child person id when enriched on queue rows — opens child drawer inline icon. */
   personId?: string | null;
+  /** Customer member id when present on structured queue child lines. */
+  customerMemberId?: string | null;
+  /** OCM row id when present on structured queue child lines. */
+  ocmId?: string | null;
 };
 
 export type CrmCompactRowSemanticSlots = {
@@ -306,6 +310,8 @@ export type QueueItemVm = {
      * Populated from QueueService fields regardless of row_preview gates.
      */
     layoutRuntimeEnrichment?: import("@/lib/layout/runtime/queueRowLayoutRuntimeEnrichment").QueueRowLayoutRuntimeEnrichment;
+    /** Normalized queue row context from QueueService — optional until layout runtime consumes it. */
+    _queue_row_context?: import("@/lib/workUnits/lifecycleSubjectContracts").QueueRowContext;
 };
 
 /** Candidate-row waitlist queue presentation (`_placement_waitlist_row`). */

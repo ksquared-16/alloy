@@ -4599,6 +4599,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             ? waitlistQueueItemGrouping({ placementPriority })
                             : {}),
                     layoutRuntimeEnrichment: buildQueueRowLayoutRuntimeEnrichment(r as Record<string, unknown>),
+                    ...(r._queue_row_context != null &&
+                    typeof r._queue_row_context === "object" &&
+                    !Array.isArray(r._queue_row_context)
+                        ? {
+                              _queue_row_context: r._queue_row_context as import("@/lib/workUnits/lifecycleSubjectContracts").QueueRowContext,
+                          }
+                        : {}),
                 };
             });
 

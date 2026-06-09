@@ -71,7 +71,21 @@ Layout blocks **consume** `WorkUnitSurfaceContext` / `QueueRowContext` — they 
 
 **Rollback:** `ALLOY_QUEUE_ROW_CONTEXT_DISABLED=1` omits `_queue_row_context` (rows unchanged).
 
-**Additive:** Existing CRM fields (`_status_display`, `_primary_contact_line`, etc.) are preserved. Production queue UI does not read `_queue_row_context` yet.
+**Additive:** Existing CRM fields (`_status_display`, `_primary_contact_line`, etc.) are preserved.
+
+### Layout-runtime queue card consumption (partial — shipped)
+
+| Surface | Reads `_queue_row_context` | Fallback |
+|---------|---------------------------|----------|
+| `LayoutRuntimeQueueRowView` → `QueueCardProofRenderer` | Yes — via `buildOpportunityQueueRowRecordFromPreview` + `applyQueueRowContextToLayoutRecord` | Legacy CRM / enrichment fields on row record |
+| Work-unit page queue item VM | Passes API `_queue_row_context` onto `QueueItemVm` | Omits field when absent |
+| CRM compact lane rows (`QueueBlock` legacy path) | No | Unchanged |
+
+Helper: `resolveQueueRowContextPresentation()` — context first, legacy record second. Overlay: `applyQueueRowContextToLayoutRecord` on layout runtime row records.
+
+**Not consumed yet:** grouped same-stage rows, child-grain `row_subject`, production status chip global replacement.
+
+Debug (proof): `data-queue-row-context-present`, `data-queue-row-placement-omitted-mixed`, `data-queue-row-context-version` on `QueueCardProofRenderer` card shell.
 
 ### Not implemented yet
 

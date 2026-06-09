@@ -48,3 +48,13 @@ export {
     queueRowContextMetaFromLane,
     type OpportunityQueueRowContextLaneParams,
 } from "@/lib/workUnits/attachQueueRowContextToItems";
+
+export {
+    formatSubjectPlacementSummary,
+    inferPlacementOmittedBecauseMixed,
+    readQueueRowContextFromRow,
+    resolveQueueRowContextPresentation,
+    type QueueRowContextPresentation,
+    type QueueRowContextPresentationDebug,
+    type QueueRowRelatedChildPresentation,
+} from "@/lib/workUnits/resolveQueueRowContextPresentation";

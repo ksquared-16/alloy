@@ -11,7 +11,9 @@ import {
     buildPrimaryContactPersonRelation,
     resolveOpportunityPrimaryContactPerson,
 } from "./resolveOpportunityPrimaryContactPerson";
+import { applyQueueRowContextToLayoutRecord } from "./applyQueueRowContextToLayoutRuntime";
 import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnrichment";
+import type { OpportunityQueueRowWithContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -219,5 +221,7 @@ export function buildOpportunityQueueRowRecordFromPreview(
         },
     };
 
-    return ensureQueueDocRefKeys(baseRecord, doc);
+    const withDocKeys = ensureQueueDocRefKeys(baseRecord, doc);
+    const rowContext = (item as OpportunityQueueRowWithContext)._queue_row_context ?? null;
+    return rowContext ? applyQueueRowContextToLayoutRecord(withDocKeys, rowContext) : withDocKeys;
 }

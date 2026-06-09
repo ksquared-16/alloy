@@ -43,7 +43,7 @@ export function ActionWorkspacePasteCanvas({
 
             <div
                 className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/10 bg-[#FAFBFC] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_1px_2px_rgba(15,35,52,0.04)]"
-                style={{ minHeight: hero ? minHeight + 8 : undefined }}
+                style={{ minHeight: hero ? `calc(${heroMinHeight} + 8px)` : undefined }}
             >
                 <textarea
                     value={pasteText}
