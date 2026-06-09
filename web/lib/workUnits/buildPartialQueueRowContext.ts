@@ -30,21 +30,12 @@ import {
     buildAttentionSummary,
     buildNextBestAction,
     buildWorkSummary,
+    resolveBoringCaseStatusLabel,
+    type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
 
-export type PartialQueueRowContextQueueMeta = {
-    key: string;
-    label: string;
-    lifecycle_key?: string;
-    stage_key?: string;
-    /**
-     * Declared membership grain for this queue lane.
-     * Defaults to `case` — honest for current production paths.
-     */
-    subject_grain?: LifecycleSubjectType;
-    count_unit?: import("@/lib/workUnits/lifecycleSubjectContracts").QueueRowCountUnit;
-    location_scope_source?: string | null;
-};
+export type { PartialQueueRowContextQueueMeta };
+export { resolveBoringCaseStatusLabel };
 
 export type BuildPartialQueueRowContextInput = {
     /** Enriched opportunity queue preview row (`enrichOpportunityRows` output shape). */
@@ -91,29 +82,6 @@ function resolveStatusKey(row: Record<string, unknown>): string {
 
 function resolveStatusLabel(row: Record<string, unknown>, statusKey: string): string {
     return trimOrNull(row._status_display) ?? humanizeSnakeCaseToken(statusKey);
-}
-
-/**
- * Target boring case labels — full mapping ships with case status migration (phase 5).
- * Until then, pipeline keys may still appear on case_status_label.
- */
-export function resolveBoringCaseStatusLabel(statusKey: string, fallbackLabel: string): string {
-    const k = statusKey.trim().toLowerCase();
-    switch (k) {
-        case "open":
-        case "new_inquiry":
-        case "new":
-            return "Active";
-        case "closed":
-        case "lost":
-            return "Closed";
-        case "archived":
-            return "Archived";
-        case "inactive":
-            return "Inactive";
-        default:
-            return fallbackLabel;
-    }
 }
 
 function buildSubjectPlacementFromInquiryChildRaw(raw: Record<string, unknown>): SubjectPlacementContext | null {

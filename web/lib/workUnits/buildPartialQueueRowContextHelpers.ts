@@ -2,7 +2,49 @@
  * Shared helpers for case-grain and child-grain QueueRowContext builders.
  */
 
-import type { QueueRowContext, QueueRowNextBestAction } from "@/lib/workUnits/lifecycleSubjectContracts";
+import type {
+    LifecycleSubjectType,
+    QueueRowContext,
+    QueueRowCountUnit,
+    QueueRowNextBestAction,
+} from "@/lib/workUnits/lifecycleSubjectContracts";
+
+export type PartialQueueRowContextQueueMeta = {
+    key: string;
+    label: string;
+    lifecycle_key?: string;
+    stage_key?: string;
+    /**
+     * Declared membership grain for this queue lane.
+     * Defaults to `case` — honest for current production paths.
+     */
+    subject_grain?: LifecycleSubjectType;
+    count_unit?: QueueRowCountUnit;
+    location_scope_source?: string | null;
+};
+
+/**
+ * Target boring case labels — full mapping ships with case status migration (phase 5).
+ * Until then, pipeline keys may still appear on case_status_label.
+ */
+export function resolveBoringCaseStatusLabel(statusKey: string, fallbackLabel: string): string {
+    const k = statusKey.trim().toLowerCase();
+    switch (k) {
+        case "open":
+        case "new_inquiry":
+        case "new":
+            return "Active";
+        case "closed":
+        case "lost":
+            return "Closed";
+        case "archived":
+            return "Archived";
+        case "inactive":
+            return "Inactive";
+        default:
+            return fallbackLabel;
+    }
+}
 
 function trimOrNull(raw: unknown): string | null {
     if (raw == null) return null;

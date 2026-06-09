@@ -19,13 +19,13 @@ import {
     type RelatedSubjectSummary,
     type SubjectPlacementContext,
 } from "@/lib/workUnits/lifecycleSubjectContracts";
-import { resolveBoringCaseStatusLabel } from "@/lib/workUnits/buildPartialQueueRowContext";
 import {
     buildAttentionSummary,
     buildNextBestAction,
     buildWorkSummary,
+    resolveBoringCaseStatusLabel,
+    type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
-import type { PartialQueueRowContextQueueMeta } from "@/lib/workUnits/buildPartialQueueRowContext";
 
 export type BuildChildGrainQueueRowContextInput = {
     row: Record<string, unknown>;
