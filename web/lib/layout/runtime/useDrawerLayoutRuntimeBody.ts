@@ -18,6 +18,10 @@ import {
     ADMINV2_LAYOUT_RUNTIME_BODY_INVALIDATE,
     parseDrawerLayoutRuntimeBodyInvalidateDetail,
 } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyInvalidate";
+import {
+    ADMINV2_LAYOUT_RUNTIME_BODY_RECORD_PATCH,
+    parseDrawerLayoutRuntimeBodyRecordPatchDetail,
+} from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     resolveDrawerLayoutRuntimeBodyPresentation,
@@ -85,6 +89,34 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         return () =>
             window.removeEventListener(ADMINV2_LAYOUT_RUNTIME_BODY_INVALIDATE, onInvalidate as EventListener);
     }, [apiPath, entityId]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onRecordPatch = (ev: Event) => {
+            const detail = parseDrawerLayoutRuntimeBodyRecordPatchDetail(ev);
+            const id = entityId?.trim() ?? "";
+            if (!detail || !id || detail.entityId !== id) return;
+            if (detail.entityType === "opportunities" && !apiPath.includes("opportunity")) return;
+            if (detail.entityType === "persons" && !apiPath.includes("person-drawer")) return;
+            if (detail.entityType === "child" && !apiPath.includes("child-drawer")) return;
+            setRecord(detail.record);
+            const cacheKey = buildDrawerLayoutRuntimeBodyCacheKey(apiPath, id, queryParamsKey);
+            const cached = peekDrawerLayoutRuntimeBodyCacheEntry(cacheKey);
+            if (cached) {
+                putDrawerLayoutRuntimeBodyCacheEntry(cacheKey, {
+                    doc: cached.doc,
+                    record: detail.record,
+                    layoutSource: cached.layoutSource,
+                    layoutKey: cached.layoutKey,
+                    layoutRecordId: cached.layoutRecordId,
+                    layoutVersion: cached.layoutVersion,
+                });
+            }
+        };
+        window.addEventListener(ADMINV2_LAYOUT_RUNTIME_BODY_RECORD_PATCH, onRecordPatch as EventListener);
+        return () =>
+            window.removeEventListener(ADMINV2_LAYOUT_RUNTIME_BODY_RECORD_PATCH, onRecordPatch as EventListener);
+    }, [apiPath, entityId, queryParamsKey]);
 
     useEffect(() => {
         if (!cutoverEnabled) {

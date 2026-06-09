@@ -12,6 +12,7 @@ import {
 import { personDrawerChildChromeActive } from "@/lib/admin/person/personDrawerChildChrome";
 import type { PersonDrawerChildChromeHint } from "@/lib/admin/person/personDrawerChildChrome";
 import { patchPersonDrawerFields } from "@/lib/admin/person/patchPersonDrawerFields";
+import { createPersonDrawerOptimisticSectionHandlers } from "@/lib/admin/person/personDrawerOptimisticSectionHandlers";
 import {
     buildChildSummaryPatch,
     childSummaryDraftFromRecord,
@@ -90,27 +91,35 @@ export default function PersonDrawerChildSummary({
 
     const dirty = useMemo(() => childSummaryDraftIsDirty(record, draft), [draft, record]);
 
-    const saveAll = useCallback(async () => {
-        if (!personId || !canMutate || !dirty) return;
-        const patch = buildChildSummaryPatch(record, draft);
-        if (Object.keys(patch).length === 0) return;
-        setSaving(true);
-        try {
-            const json = await patchPersonDrawerFields(personId, patch);
-            onPersonUpdated?.({ ...record, ...json, ...patch });
-        } finally {
-            setSaving(false);
-        }
-    }, [canMutate, dirty, draft, onPersonUpdated, personId, record]);
+    const optimisticHandlers = useMemo(
+        () =>
+            createPersonDrawerOptimisticSectionHandlers({
+                isDirty: () => childSummaryDraftIsDirty(record, draft),
+                buildPatch: () => buildChildSummaryPatch(record, draft),
+                applyRecordPatch: (patch) => {
+                    const next = { ...record, ...patch };
+                    onPersonUpdated?.(next);
+                    setDraft(childSummaryDraftFromRecord(next));
+                },
+                revertDraft: () => setDraft(childSummaryDraftFromRecord(record)),
+                confirmSave: async (patch) => {
+                    if (!personId || !canMutate) return;
+                    await patchPersonDrawerFields(personId, patch);
+                },
+            }),
+        [canMutate, draft, onPersonUpdated, personId, record],
+    );
 
     useEffect(() => {
         registerPersonDrawerEditSection("child_summary", {
             isDirty: () => childSummaryDraftIsDirty(record, draft),
-            save: saveAll,
+            save: optimisticHandlers.save,
             revert: () => setDraft(childSummaryDraftFromRecord(record)),
+            applyOptimistic: optimisticHandlers.applyOptimistic,
+            rollbackOptimistic: optimisticHandlers.rollbackOptimistic,
         });
         return () => registerPersonDrawerEditSection("child_summary", null);
-    }, [draft, record, saveAll]);
+    }, [draft, optimisticHandlers, record]);
 
     return (
         <section

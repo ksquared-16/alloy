@@ -49,6 +49,7 @@ import { dispatchPersonRecordUpdated } from "@/lib/admin/person/dispatchPersonRe
 import { resolveChildAgeDisplayLabel } from "@/lib/admin/drawer/childAgeDisplay";
 import {
     registerDrawerOperatingEditSection,
+    type DrawerOperatingSaveSectionOptions,
 } from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
 import { resolveInquiryChildProgramCategoryLabel } from "@/lib/admin/drawer/inquiryChildOcmPlacementDisplay";
 import { OPPORTUNITY_INQUIRY_CHILDREN_COLLAPSED_SHELL_CLASS } from "@/lib/admin/drawer/opportunityDrawerLayoutStability";
@@ -65,7 +66,7 @@ import {
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import ViewPersonDrawerIconButton from "@/components/admin/drawer/ViewPersonDrawerIconButton";
 import { inquiryChildRowMatchesSubjectFocus } from "@/lib/admin/drawer/resolveDrawerSubjectFocusPresentation";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 /** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
 const INQUIRY_CHILD_DESKTOP_GRID_7 =
@@ -633,7 +634,7 @@ export default function OpportunityInquiryChildrenSection({
         };
     };
 
-    const saveInquiryChildRow = useCallback(async (row: InquiryChildRow) => {
+    const saveInquiryChildRow = useCallback(async (row: InquiryChildRow, options?: { confirmOnly?: boolean }) => {
         const st = local[row.id];
         const identityDraft = identityLocal[row.id];
         if (!st || !identityDraft) return;
@@ -719,7 +720,9 @@ export default function OpportunityInquiryChildrenSection({
                 }
             }
             markRowSaveState(row.id, "saved");
-            onChildrenMutated?.();
+            if (!options?.confirmOnly) {
+                onChildrenMutated?.();
+            }
         } catch (e) {
             markRowSaveState(row.id, "error", (e as Error).message);
         }
@@ -803,6 +806,84 @@ export default function OpportunityInquiryChildrenSection({
         });
     }, [rows, local, identityLocal, opportunityDesiredStartDate, customFieldKeys]);
 
+    const inquiryChildrenOptimisticSnapshotRef = useRef<{
+        local: typeof local;
+        identityLocal: typeof identityLocal;
+    } | null>(null);
+
+    const dirtyInquiryChildRows = useCallback(() => {
+        return rows.filter((r) => {
+            const st = local[r.id];
+            const identityDraft = identityLocal[r.id];
+            if (!st || !identityDraft) return false;
+            return inquiryChildEditorRowIsDirty({
+                row: r,
+                local: st,
+                identityDraft,
+                identityBaseline: identityBaselineForRow(r),
+                opportunityDesiredStartDate,
+                customFieldKeys,
+            });
+        });
+    }, [rows, local, identityLocal, opportunityDesiredStartDate, customFieldKeys]);
+
+    const applyInquiryChildrenOptimistic = useCallback(() => {
+        const dirtyRows = dirtyInquiryChildRows();
+        if (dirtyRows.length === 0) return;
+        inquiryChildrenOptimisticSnapshotRef.current = {
+            local: { ...local },
+            identityLocal: { ...identityLocal },
+        };
+        for (const row of dirtyRows) {
+            markRowSaveState(row.id, "saved");
+            const oid = (opportunityId ?? "").trim();
+            if (!oid) continue;
+            const identityDraft = identityLocal[row.id];
+            const st = local[row.id];
+            if (!identityDraft || !st) continue;
+            const displayName =
+                [identityDraft.first_name, identityDraft.last_name].filter(Boolean).join(" ").trim()
+                || (row.display_name ?? "").trim();
+            const queuePatch = buildQueueRowDisplayPatchFromInquiryChildRow(
+                {
+                    ...row,
+                    display_name: displayName || row.display_name,
+                    first_name: identityDraft.first_name || row.first_name,
+                    last_name: identityDraft.last_name || row.last_name,
+                    dob: identityDraft.dob || row.dob,
+                    desired_program_type: st.desired_program_type || row.desired_program_type,
+                    desired_schedule_type: st.desired_schedule_type || row.desired_schedule_type,
+                    program_room_cohort_key: st.program_room_cohort_key || row.program_room_cohort_key,
+                    location_label:
+                        (st.location_id ? siteLabelById.get(st.location_id) : null) ?? row.location_label,
+                },
+                programLabelByKey,
+            );
+            dispatchOpportunityQueueUpdated(oid, "inquiry_children_placement", queuePatch);
+        }
+    }, [
+        dirtyInquiryChildRows,
+        identityLocal,
+        local,
+        opportunityId,
+        programLabelByKey,
+        siteLabelById,
+    ]);
+
+    const rollbackInquiryChildrenOptimistic = useCallback(() => {
+        const snapshot = inquiryChildrenOptimisticSnapshotRef.current;
+        if (snapshot) {
+            setLocal(snapshot.local);
+            setIdentityLocal(snapshot.identityLocal);
+        }
+        inquiryChildrenOptimisticSnapshotRef.current = null;
+        for (const row of rows) {
+            setSavingById((p) => ({ ...p, [row.id]: false }));
+            setSavedById((p) => ({ ...p, [row.id]: false }));
+            setErrorById((p) => ({ ...p, [row.id]: null }));
+        }
+    }, [rows]);
+
     useLayoutEffect(() => {
         if (!canEdit) {
             registerDrawerOperatingEditSection("opportunity_inquiry_children", null);
@@ -810,20 +891,25 @@ export default function OpportunityInquiryChildrenSection({
         }
         registerDrawerOperatingEditSection("opportunity_inquiry_children", {
             isDirty: inquiryChildrenSectionIsDirty,
-            save: async () => {
-                for (const r of rows) {
-                    await saveInquiryChildRow(r);
-                }
+            save: async (options?: DrawerOperatingSaveSectionOptions) => {
+                const targets = dirtyInquiryChildRows();
+                await Promise.all(targets.map((r) => saveInquiryChildRow(r, { confirmOnly: options?.confirmOnly })));
+                inquiryChildrenOptimisticSnapshotRef.current = null;
             },
             revert: () => resetEditorStateFromRows(),
+            applyOptimistic: applyInquiryChildrenOptimistic,
+            rollbackOptimistic: rollbackInquiryChildrenOptimistic,
+            saveOrder: 1,
         });
         return () => registerDrawerOperatingEditSection("opportunity_inquiry_children", null);
     }, [
+        applyInquiryChildrenOptimistic,
         canEdit,
-        rows,
+        dirtyInquiryChildRows,
         inquiryChildrenSectionIsDirty,
-        saveInquiryChildRow,
+        rollbackInquiryChildrenOptimistic,
         resetEditorStateFromRows,
+        saveInquiryChildRow,
     ]);
 
     useEffect(() => {

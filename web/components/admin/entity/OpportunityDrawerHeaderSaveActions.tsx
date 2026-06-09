@@ -48,15 +48,17 @@ export default function OpportunityDrawerHeaderSaveActions({
 
     const onSave = async () => {
         if (formDirty) await onSaveForm();
-        if (drawerOperatingIsDirty()) {
-            setCoordSaving(true);
-            try {
-                await drawerOperatingSaveAll();
-            } finally {
-                setCoordSaving(false);
-            }
+        if (!drawerOperatingIsDirty()) {
+            syncCoordDirty();
+            return;
         }
-        syncCoordDirty();
+        setCoordSaving(true);
+        try {
+            await drawerOperatingSaveAll();
+        } finally {
+            setCoordSaving(false);
+            syncCoordDirty();
+        }
     };
 
     const onCancel = () => {

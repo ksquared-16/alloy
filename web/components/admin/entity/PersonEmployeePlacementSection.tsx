@@ -9,6 +9,7 @@ import {
 import { patchLinkedPersonFromOpportunityDrawer } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import { dispatchOpportunityQueueUpdatedBroadcast } from "@/lib/admin/opportunityQueueRefreshEvent";
 import { registerPersonDrawerEditSection } from "@/lib/admin/person/personDrawerEditingCoordinator";
+import type { DrawerOperatingSaveSectionOptions } from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
 
 const INPUT_CLASS =
     "w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:cursor-not-allowed disabled:opacity-60";
@@ -49,36 +50,55 @@ export default function PersonEmployeePlacementSection({
         setDraft(initialValues);
     }, [personId, initialValues.is_employee, initialValues.employee_id, initialValues.employee_source]);
 
-    const persist = useCallback(async () => {
-        const pid = personId.trim();
-        if (!pid || saving || !canMutate) return;
-        const patch = buildPersonEmployeePlacementPatch(draft, baselineRef.current);
-        if (Object.keys(patch).length === 0) return;
+    const optimisticSnapshotRef = useRef<{ baseline: PersonEmployeePlacementValues; draft: PersonEmployeePlacementValues } | null>(
+        null,
+    );
 
-        setSaving(true);
-        setSaveError(null);
-        setSavedFlash(false);
-        try {
-            const result = await patchLinkedPersonFromOpportunityDrawer({ personId: pid, body: patch });
-            if (!result.ok) {
-                setSaveError(result.error);
-                setDraft(baselineRef.current);
-                return;
+    const persist = useCallback(
+        async (options?: DrawerOperatingSaveSectionOptions) => {
+            const pid = personId.trim();
+            if (!pid || !canMutate) return;
+            const patch = buildPersonEmployeePlacementPatch(draft, baselineRef.current);
+            if (Object.keys(patch).length === 0) return;
+
+            if (!options?.confirmOnly) {
+                setSaving(true);
             }
-            const next = readPersonEmployeePlacementValues(result.json);
-            baselineRef.current = next;
-            setDraft(next);
-            setSavedFlash(true);
-            window.setTimeout(() => setSavedFlash(false), 2000);
-            onPersonUpdated?.(result.json);
-            dispatchOpportunityQueueUpdatedBroadcast("person_employee_updated");
-        } catch (e) {
-            setSaveError(e instanceof Error ? e.message : "Save failed");
-            setDraft(baselineRef.current);
-        } finally {
-            setSaving(false);
-        }
-    }, [canMutate, draft, onPersonUpdated, personId, saving]);
+            setSaveError(null);
+            setSavedFlash(false);
+            try {
+                const result = await patchLinkedPersonFromOpportunityDrawer({ personId: pid, body: patch });
+                if (!result.ok) {
+                    setSaveError(result.error);
+                    if (!options?.confirmOnly) {
+                        setDraft(baselineRef.current);
+                    }
+                    throw new Error(result.error);
+                }
+                const next = readPersonEmployeePlacementValues(result.json);
+                baselineRef.current = next;
+                setDraft(next);
+                if (!options?.confirmOnly) {
+                    setSavedFlash(true);
+                    window.setTimeout(() => setSavedFlash(false), 2000);
+                    onPersonUpdated?.(result.json);
+                }
+                dispatchOpportunityQueueUpdatedBroadcast("person_employee_updated");
+                optimisticSnapshotRef.current = null;
+            } catch (e) {
+                if (!options?.confirmOnly) {
+                    setSaveError(e instanceof Error ? e.message : "Save failed");
+                    setDraft(baselineRef.current);
+                }
+                throw e;
+            } finally {
+                if (!options?.confirmOnly) {
+                    setSaving(false);
+                }
+            }
+        },
+        [canMutate, draft, onPersonUpdated, personId],
+    );
 
     const scheduleSave = useCallback(() => {
         if (deferSave) return;
@@ -107,9 +127,30 @@ export default function PersonEmployeePlacementSection({
             },
             save: persist,
             revert: () => setDraft(baselineRef.current),
+            applyOptimistic: () => {
+                const patch = buildPersonEmployeePlacementPatch(draft, baselineRef.current);
+                if (Object.keys(patch).length === 0) return;
+                optimisticSnapshotRef.current = {
+                    baseline: baselineRef.current,
+                    draft,
+                };
+                baselineRef.current = { ...draft };
+                onPersonUpdated?.({
+                    is_employee: draft.is_employee,
+                    employee_id: draft.employee_id,
+                    employee_source: draft.employee_source,
+                });
+            },
+            rollbackOptimistic: () => {
+                const snapshot = optimisticSnapshotRef.current;
+                if (!snapshot) return;
+                baselineRef.current = snapshot.baseline;
+                setDraft(snapshot.baseline);
+                optimisticSnapshotRef.current = null;
+            },
         });
         return () => registerPersonDrawerEditSection("employee_placement", null);
-    }, [deferSave, draft, persist]);
+    }, [deferSave, draft, onPersonUpdated, persist]);
 
     const employeeRowClass = compactOperatingSurface
         ? "flex flex-wrap items-end gap-3"

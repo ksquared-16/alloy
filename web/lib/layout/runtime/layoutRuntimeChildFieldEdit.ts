@@ -195,10 +195,10 @@ export async function saveLayoutRuntimeChildRepeaterEdits(input: {
     );
     if (dirtyRowKeys.length === 0) return { ok: true };
 
-    for (const rowKey of dirtyRowKeys) {
+    const saveOneRow = async (rowKey: string): Promise<{ ok: true } | { ok: false; error: string }> => {
         const rowIndex = input.rowKeys.indexOf(rowKey);
         const row = input.rows[rowIndex];
-        if (!row) continue;
+        if (!row) return { ok: true };
         const ctx = layoutRuntimeChildRowSaveContext(row);
         if (!ctx) {
             return { ok: false, error: "Child row is missing customer member identity." };
@@ -227,7 +227,12 @@ export async function saveLayoutRuntimeChildRepeaterEdits(input: {
                 return { ok: false, error: err instanceof Error ? err.message : "Enrollment field save failed" };
             }
         }
-    }
+        return { ok: true };
+    };
+
+    const rowResults = await Promise.all(dirtyRowKeys.map((rowKey) => saveOneRow(rowKey)));
+    const failed = rowResults.find((r) => !r.ok);
+    if (failed && !failed.ok) return failed;
 
     return { ok: true };
 }

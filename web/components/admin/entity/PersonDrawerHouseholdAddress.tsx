@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     oppInqEyebrow,
     oppInqFieldInput,
@@ -8,6 +8,7 @@ import {
     oppInqLeadSummaryShellClassName,
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import { registerPersonDrawerEditSection } from "@/lib/admin/person/personDrawerEditingCoordinator";
+import type { DrawerOperatingSaveSectionOptions } from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
 import { personDrawerParentChromeActive } from "@/lib/admin/person/personDrawerParentChrome";
 import type { PersonDrawerParentChromeHint } from "@/lib/admin/person/personDrawerParentChrome";
 import {
@@ -107,25 +108,12 @@ export default function PersonDrawerHouseholdAddress({
 
     const dirty = useMemo(() => addressDraftIsDirty(baseline, values), [baseline, values]);
 
-    const persistValues = useCallback(async () => {
-        if (!customerId || !canEditHousehold || !dirty) return;
-        const patch = {
-            address1: values.address_line1.trim() || null,
-            address2: values.address_line2.trim() || null,
-            city: values.city.trim() || null,
-            state: values.state.trim() || null,
-            postal_code: values.postal_code.trim() || null,
-        };
+    const optimisticSnapshotRef = useRef<Record<AddressFieldKey, string> | null>(null);
 
-        let locationId = addressModel.location_id;
-        if (addressModel.source === "none" || !locationId) {
-            const created = await createHouseholdCustomerAddress(customerId, patch);
-            locationId = created.id;
-        } else {
-            await patchHouseholdCustomerLocation(locationId, patch);
-        }
-
-        const row = addressRowFromValues(customerId, locationId, values);
+    const applyOptimisticAddress = useCallback(() => {
+        if (!dirty || !customerId) return;
+        optimisticSnapshotRef.current = { ...values };
+        const row = addressRowFromValues(customerId, addressModel.location_id, values);
         const existing =
             (record._household_customer_addresses as PersonHouseholdCustomerAddressRow[] | undefined) ?? [];
         const filtered = existing.filter((r) => r.customer_id !== customerId);
@@ -133,25 +121,67 @@ export default function PersonDrawerHouseholdAddress({
             ...record,
             _household_customer_addresses: [...filtered, row],
         });
-    }, [
-        addressModel.location_id,
-        addressModel.source,
-        canEditHousehold,
-        customerId,
-        dirty,
-        onRecordUpdated,
-        record,
-        values,
-    ]);
+    }, [addressModel.location_id, customerId, dirty, onRecordUpdated, record, values]);
+
+    const rollbackOptimisticAddress = useCallback(() => {
+        const snapshot = optimisticSnapshotRef.current;
+        if (snapshot) setValues(snapshot);
+        optimisticSnapshotRef.current = null;
+    }, []);
+
+    const persistValues = useCallback(
+        async (options?: DrawerOperatingSaveSectionOptions) => {
+            if (!customerId || !canEditHousehold || (!dirty && !options?.confirmOnly)) return;
+            const patch = {
+                address1: values.address_line1.trim() || null,
+                address2: values.address_line2.trim() || null,
+                city: values.city.trim() || null,
+                state: values.state.trim() || null,
+                postal_code: values.postal_code.trim() || null,
+            };
+
+            let locationId = addressModel.location_id;
+            if (addressModel.source === "none" || !locationId) {
+                const created = await createHouseholdCustomerAddress(customerId, patch);
+                locationId = created.id;
+            } else {
+                await patchHouseholdCustomerLocation(locationId, patch);
+            }
+
+            if (!options?.confirmOnly) {
+                const row = addressRowFromValues(customerId, locationId, values);
+                const existing =
+                    (record._household_customer_addresses as PersonHouseholdCustomerAddressRow[] | undefined) ?? [];
+                const filtered = existing.filter((r) => r.customer_id !== customerId);
+                onRecordUpdated?.({
+                    ...record,
+                    _household_customer_addresses: [...filtered, row],
+                });
+            }
+            optimisticSnapshotRef.current = null;
+        },
+        [
+            addressModel.location_id,
+            addressModel.source,
+            canEditHousehold,
+            customerId,
+            dirty,
+            onRecordUpdated,
+            record,
+            values,
+        ],
+    );
 
     useEffect(() => {
         registerPersonDrawerEditSection("household_address", {
             isDirty: () => addressDraftIsDirty(baseline, values),
             save: persistValues,
             revert: () => setValues(baseline),
+            applyOptimistic: applyOptimisticAddress,
+            rollbackOptimistic: rollbackOptimisticAddress,
         });
         return () => registerPersonDrawerEditSection("household_address", null);
-    }, [baseline, persistValues, values]);
+    }, [applyOptimisticAddress, baseline, persistValues, rollbackOptimisticAddress, values]);
 
     const showCanonicalEditor =
         canEditHousehold || (addressModel.source === "customer_location" && personDrawerHouseholdAddressHasContent(addressModel));

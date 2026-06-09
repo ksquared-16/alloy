@@ -11,8 +11,13 @@ import {
     type ReactNode,
 } from "react";
 import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
-import { registerDrawerOperatingEditSection } from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
-import { dispatchDrawerLayoutRuntimeBodyInvalidate } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyInvalidate";
+import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import {
+    registerDrawerOperatingEditSection,
+    type DrawerOperatingSaveSectionOptions,
+} from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
+import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
+import { applyLayoutRuntimeDraftToRecord } from "@/lib/layout/runtime/applyLayoutRuntimeDraftToRecord";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import { isLayoutRuntimeEditableRefKeySupported } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
@@ -102,6 +107,8 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
     const baselineRef = useRef<Record<string, string>>(collectEditableBaseline(record));
     const [draft, setDraft] = useState<Record<string, string>>(() => ({ ...baselineRef.current }));
     const repeaterRef = useRef(collectRepeaterRows(record));
+    const optimisticSnapshotRef = useRef<Record<string, string> | null>(null);
+    const optimisticRecordRef = useRef<ProofRuntimeRecord | null>(null);
 
     useEffect(() => {
         void prefetchWorkspaceChildcareInquiryOptionSets();
@@ -153,29 +160,87 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
         if (!result.ok) throw new Error(result.error);
     }, [draft, record]);
 
-    const save = useCallback(async () => {
-        await savePersonContact();
-        await saveChildRepeater();
-        baselineRef.current = { ...draft };
-        const opportunityId = String(record.id ?? "").trim();
-        if (opportunityId) {
-            dispatchDrawerLayoutRuntimeBodyInvalidate({
+    const patchOptimisticRecord = useCallback(
+        (nextDraft: Record<string, string>) => {
+            const opportunityId = String(record.id ?? "").trim();
+            if (!opportunityId) return;
+            const nextRecord = applyLayoutRuntimeDraftToRecord({
+                record,
+                baseline: baselineRef.current,
+                draft: nextDraft,
+                rowKeys: repeaterRef.current.rowKeys,
+                rows: repeaterRef.current.rows,
+            });
+            optimisticRecordRef.current = nextRecord;
+            dispatchOpportunityDrawerRecordPatch(opportunityId, nextRecord);
+            dispatchDrawerLayoutRuntimeBodyRecordPatch({
                 entityType: "opportunities",
                 entityId: opportunityId,
+                record: nextRecord,
             });
-            dispatchOpportunityQueueUpdated(opportunityId, "layout_runtime_child_save");
+        },
+        [record],
+    );
+
+    const applyOptimistic = useCallback(() => {
+        if (!isDirty()) return;
+        optimisticSnapshotRef.current = { ...baselineRef.current };
+        baselineRef.current = { ...draft };
+        patchOptimisticRecord(draft);
+    }, [draft, isDirty, patchOptimisticRecord]);
+
+    const rollbackOptimistic = useCallback(() => {
+        const snapshot = optimisticSnapshotRef.current;
+        if (!snapshot) return;
+        baselineRef.current = snapshot;
+        setDraft({ ...snapshot });
+        optimisticSnapshotRef.current = null;
+        if (optimisticRecordRef.current) {
+            const opportunityId = String(record.id ?? "").trim();
+            if (opportunityId) {
+                dispatchOpportunityDrawerRecordPatch(opportunityId, record);
+                dispatchDrawerLayoutRuntimeBodyRecordPatch({
+                    entityType: "opportunities",
+                    entityId: opportunityId,
+                    record,
+                });
+            }
         }
-        onSaved?.();
-    }, [draft, onSaved, record.id, saveChildRepeater, savePersonContact]);
+        optimisticRecordRef.current = null;
+    }, [record]);
+
+    const save = useCallback(
+        async (options?: DrawerOperatingSaveSectionOptions) => {
+            if (!options?.confirmOnly) {
+                await savePersonContact();
+                await saveChildRepeater();
+                baselineRef.current = { ...draft };
+                patchOptimisticRecord(draft);
+            } else {
+                await Promise.all([savePersonContact(), saveChildRepeater()]);
+            }
+            const opportunityId = String(record.id ?? "").trim();
+            if (opportunityId) {
+                dispatchOpportunityQueueUpdated(opportunityId, "layout_runtime_child_save");
+            }
+            optimisticSnapshotRef.current = null;
+            optimisticRecordRef.current = null;
+            onSaved?.();
+        },
+        [draft, onSaved, patchOptimisticRecord, record.id, saveChildRepeater, savePersonContact],
+    );
 
     useEffect(() => {
         registerDrawerOperatingEditSection("layout_runtime_person_contact", {
             isDirty,
             save,
             revert,
+            applyOptimistic,
+            rollbackOptimistic,
+            saveOrder: 0,
         });
         return () => registerDrawerOperatingEditSection("layout_runtime_person_contact", null);
-    }, [isDirty, revert, save]);
+    }, [applyOptimistic, isDirty, revert, rollbackOptimistic, save]);
 
     const value = useMemo(
         (): LayoutRuntimeDrawerEditContextValue => ({
