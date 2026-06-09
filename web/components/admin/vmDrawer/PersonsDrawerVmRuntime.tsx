@@ -16,6 +16,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { personDisplayName } from "@/lib/adminFormatters";
 import { resolvePersonDrawerOperatingBackLink } from "@/lib/admin/person/personDrawerBackLink";
+import { findBackToLeadOpportunityInStack } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveBackToLeadOpportunity";
 import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
 import type { PersonDrawerVmChrome } from "@/lib/admin/person/resolvePersonDrawerVmOverviewSections";
@@ -35,6 +36,7 @@ import {
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import { handlePersonDrawerLayoutRuntimeAdornmentOpenDrawer } from "@/lib/layout/runtime/resolveLayoutAdornmentOpenDrawer";
 import { shouldUsePersonOverviewComposition } from "@/lib/layout/runtime/personOverviewComposition";
+import { shouldUseChildOverviewComposition } from "@/lib/layout/runtime/childOverviewComposition";
 import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawerLayoutDocShellZones";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 
@@ -132,12 +134,23 @@ export default function PersonsDrawerVmRuntime() {
     const layoutPrefetchId =
         drawerVmRender.type === "persons" && drawerVmRender.id ? String(drawerVmRender.id) : null;
 
+    const pinnedOpportunityId = useMemo(() => {
+        const pinned = findBackToLeadOpportunityInStack(stack, drawer);
+        return pinned?.id ?? drawer.personDrawerOpenSeed?.opportunity_id ?? null;
+    }, [stack, drawer]);
+
+    const personLayoutContextQuery = useMemo(
+        () => ({ opportunityId: pinnedOpportunityId }),
+        [pinnedOpportunityId],
+    );
+
     const personOverviewLayoutBody = useDrawerLayoutRuntimeBody({
         cutoverEnabled: isLayoutRuntimePersonDrawerBodyEnabledClient() && !isChildSurface,
         entityId: layoutPrefetchId && !isChildSurface ? layoutPrefetchId : null,
         vmReady: Boolean(displayVm?.structureSettled && layoutPrefetchId && !isChildSurface),
         apiPath: "/api/admin/layout-runtime/person-drawer-body",
         logTag: "person_drawer",
+        queryParams: personLayoutContextQuery,
     });
 
     const childOverviewLayoutBody = useDrawerLayoutRuntimeBody({
@@ -157,21 +170,28 @@ export default function PersonsDrawerVmRuntime() {
         [isChildSurface, personOverviewLayoutBody.doc],
     );
 
+    const childCompositionActive = useMemo(
+        () => isChildSurface && shouldUseChildOverviewComposition(childOverviewLayoutBody.doc),
+        [isChildSurface, childOverviewLayoutBody.doc],
+    );
+
     const layoutShellZones = useMemo(() => {
-        if (
-            isChildSurface
-            || !summaryStripBoundaryEnabled
-            || !personOverviewLayoutBody.doc
-            || !personOverviewLayoutBody.bodyReady
-        ) {
+        if (!summaryStripBoundaryEnabled || !activeOverviewLayoutBody.doc || !activeOverviewLayoutBody.bodyReady) {
             return null;
         }
-        return splitDrawerLayoutDocShellZones(personOverviewLayoutBody.doc, "person");
+        if (isChildSurface && !childCompositionActive) return null;
+        if (!isChildSurface && !personCompositionActive) return null;
+        return splitDrawerLayoutDocShellZones(
+            activeOverviewLayoutBody.doc,
+            isChildSurface ? "child" : "person",
+        );
     }, [
         isChildSurface,
         summaryStripBoundaryEnabled,
-        personOverviewLayoutBody.doc,
-        personOverviewLayoutBody.bodyReady,
+        activeOverviewLayoutBody.doc,
+        activeOverviewLayoutBody.bodyReady,
+        personCompositionActive,
+        childCompositionActive,
     ]);
 
     const overviewLayoutDocBodyOverride = useMemo(() => {
@@ -181,11 +201,11 @@ export default function PersonsDrawerVmRuntime() {
 
     const layoutAdornmentAction = useCallback<AdornmentActionHandler>(
         (item, adornment, rowRecord) => {
-            if (!personOverviewLayoutBody.record || !personId || !record) return;
+            if (!activeOverviewLayoutBody.record || !personId || !record) return;
             handlePersonDrawerLayoutRuntimeAdornmentOpenDrawer({
                 item,
                 adornment,
-                record: personOverviewLayoutBody.record,
+                record: activeOverviewLayoutBody.record,
                 rowRecord,
                 personRecord: record,
                 openDrawer,
@@ -195,7 +215,7 @@ export default function PersonsDrawerVmRuntime() {
             });
         },
         [
-            personOverviewLayoutBody.record,
+            activeOverviewLayoutBody.record,
             personId,
             record,
             openDrawer,
@@ -206,28 +226,22 @@ export default function PersonsDrawerVmRuntime() {
     );
 
     const drawerSummaryStrip = useMemo(() => {
-        if (
-            isChildSurface
-            || !layoutShellZones?.summarySectionKeys.length
-            || !personOverviewLayoutBody.record
-            || !personId
-        ) {
+        if (!layoutShellZones?.summarySectionKeys.length || !activeOverviewLayoutBody.record || !personId) {
             return null;
         }
         return (
             <DrawerLayoutRuntimeShellZoneView
                 zone="summary_strip"
                 doc={layoutShellZones.summaryDoc}
-                record={personOverviewLayoutBody.record}
+                record={activeOverviewLayoutBody.record}
                 entityId={personId}
                 canMutate={!!canMutate}
                 onAdornmentAction={layoutAdornmentAction}
             />
         );
     }, [
-        isChildSurface,
         layoutShellZones,
-        personOverviewLayoutBody.record,
+        activeOverviewLayoutBody.record,
         personId,
         canMutate,
         layoutAdornmentAction,
@@ -323,12 +337,13 @@ export default function PersonsDrawerVmRuntime() {
     const onTabSelect = useCallback((tab: DrawerTabKey) => setDrawerTab(tab), []);
 
     const tabs = useMemo((): DrawerTabKey[] => {
-        if (chrome === "generic") return ["overview"];
-        return OPERATING_TABS;
-    }, [chrome]);
+        if (isChildSurface) return OPERATING_TABS;
+        if (personCompositionActive || chrome === "parent") return OPERATING_TABS;
+        return ["overview"];
+    }, [chrome, isChildSurface, personCompositionActive]);
 
     const lifecycleRail = useMemo(() => {
-        if (personCompositionActive) return null;
+        if (personCompositionActive || childCompositionActive) return null;
         if (!isLayoutRuntimeLegacyEmergencyFallbackEnabledClient()) return null;
         if (!record || chrome === "generic") return null;
         const childChromeHint = { presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS };
@@ -352,7 +367,7 @@ export default function PersonsDrawerVmRuntime() {
             );
         }
         return null;
-    }, [record, chrome, isChildSurface, onTabSelect, personCompositionActive]);
+    }, [record, chrome, isChildSurface, onTabSelect, personCompositionActive, childCompositionActive]);
 
     const proofTitle = useMemo(() => {
         if (!record) return entityLabel;
@@ -382,6 +397,7 @@ export default function PersonsDrawerVmRuntime() {
                 }
                 dataAttribute={isChildSurface ? "child-drawer-runtime" : "person-drawer-runtime"}
                 personCompositionActive={personCompositionActive}
+                childCompositionActive={childCompositionActive}
             />
         );
     }, [
@@ -402,6 +418,7 @@ export default function PersonsDrawerVmRuntime() {
         handleBackLink,
         isChildSurface,
         personCompositionActive,
+        childCompositionActive,
     ]);
 
     return (
@@ -427,7 +444,7 @@ export default function PersonsDrawerVmRuntime() {
                 runtimeDataAttribute={isChildSurface ? "child-vm" : "person-vm"}
                 holdPriorPayload={holdPriorPayload}
                 summaryStrip={
-                    drawerTab === "overview" && committedVisible && !isChildSurface ? drawerSummaryStrip : null
+                    drawerTab === "overview" && committedVisible ? drawerSummaryStrip : null
                 }
             >
                 <div data-person-drawer-vm-chrome={chrome}>

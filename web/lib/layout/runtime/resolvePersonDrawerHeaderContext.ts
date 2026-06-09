@@ -11,14 +11,24 @@ function pickLine(...values: unknown[]): string | null {
     return null;
 }
 
+export type PersonDrawerCommandHeaderMeta = {
+    metaRow: string | null;
+    contactRow: string | null;
+    householdName: string | null;
+    relationshipLabel: string | null;
+};
+
 export function resolvePersonDrawerCommandHeaderMeta(
     record: Record<string, unknown>,
-): { metaRow: string | null; contactRow: string | null } {
+): PersonDrawerCommandHeaderMeta {
     const relationship = pickLine(record["person.relationship"], record.relationship_type, record.role_type);
     const household = pickLine(
         record["customer.household_name"],
         record._household_name,
         record.household_name,
+        (record._household_context as { customer_name?: string | null }[] | undefined)?.map(
+            (row) => row.customer_name,
+        ),
         (record._relations as Record<string, unknown> | undefined)?.household_customer &&
             typeof (record._relations as Record<string, unknown>).household_customer === "object"
             ? ((record._relations as Record<string, unknown>).household_customer as { fields?: { household_name?: string } })
@@ -26,7 +36,7 @@ export function resolvePersonDrawerCommandHeaderMeta(
             : null,
     );
 
-    const metaParts = [relationship, household].filter(Boolean);
+    const metaParts = [relationship].filter(Boolean);
     const phone = pickLine(record["person.primary_phone"], record.phone, record._primary_phone);
     const email = pickLine(record["person.primary_email"], record.email, record._primary_email);
     const contactParts = [phone, email].filter(Boolean);
@@ -34,5 +44,7 @@ export function resolvePersonDrawerCommandHeaderMeta(
     return {
         metaRow: metaParts.length > 0 ? metaParts.join(" · ") : null,
         contactRow: contactParts.length > 0 ? contactParts.join(" · ") : null,
+        householdName: household,
+        relationshipLabel: relationship,
     };
 }

@@ -191,7 +191,7 @@ Layout consumers **compose and behave** using registry keys; they must not maint
 | FC-1.5 | **Layout Contract V1 regression suite** — Extend layout integrity + field policy tests to include inquiry_child keys used in inquiry children grid | No required placement for keys absent from registry |
 | FC-2.* | Policy/storage (see §1) | Adapter registry-first |
 
-**Layout Configuration compatibility (status_ownership §10):** Layout blocks that display field values must receive **resolved values** from runtime/context payloads, not re-query ad hoc catalogs. Field catalog convergence supplies **ref keys** in layout JSON; grain/subject logic stays in `QueueRowContext` / drawer attach — not in catalog modules.
+**Layout Configuration compatibility:** Layout blocks that display field values must receive **resolved values** from runtime/context payloads, not re-query ad hoc catalogs. Field catalog convergence supplies **ref keys** in layout JSON; grain/subject logic stays in `QueueRowContext` / drawer attach — not in catalog modules. System block → contract mapping: [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §7.5; field `entity_scope` + `option_source` for dependent selects: §4.5, §7.5.
 
 ### Risks
 

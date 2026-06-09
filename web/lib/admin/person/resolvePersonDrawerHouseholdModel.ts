@@ -88,6 +88,7 @@ export type PersonDrawerHouseholdGroup = {
     children: PersonDrawerHouseholdChildMember[];
     emergency_contacts: PersonDrawerHouseholdMember[];
     authorized_pickups: PersonDrawerHouseholdMember[];
+    other_household_members: PersonDrawerHouseholdMember[];
 };
 
 export type PersonDrawerHouseholdModel = {
@@ -251,9 +252,11 @@ function partitionNonGuardianAdults(
 ): {
     emergency_contacts: PersonDrawerHouseholdMember[];
     authorized_pickups: PersonDrawerHouseholdMember[];
+    other_household_members: PersonDrawerHouseholdMember[];
 } {
     const emergency_contacts: PersonDrawerHouseholdMember[] = [];
     const authorized_pickups: PersonDrawerHouseholdMember[] = [];
+    const other_household_members: PersonDrawerHouseholdMember[] = [];
     const seen = new Set<string>();
 
     for (const link of adultLinks.filter((l) => l.customer_id === customer_id)) {
@@ -269,10 +272,12 @@ function partitionNonGuardianAdults(
             emergency_contacts.push(person);
         } else if (PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES.has(role)) {
             authorized_pickups.push(person);
+        } else {
+            other_household_members.push(person);
         }
     }
 
-    return { emergency_contacts, authorized_pickups };
+    return { emergency_contacts, authorized_pickups, other_household_members };
 }
 
 function childrenForCustomer(
@@ -302,7 +307,8 @@ function groupHasContent(group: PersonDrawerHouseholdGroup): boolean {
         group.guardians.length > 0 ||
         group.children.length > 0 ||
         group.emergency_contacts.length > 0 ||
-        group.authorized_pickups.length > 0
+        group.authorized_pickups.length > 0 ||
+        group.other_household_members.length > 0
     );
 }
 
@@ -359,6 +365,7 @@ export function resolvePersonDrawerHouseholdModel(
             children,
             emergency_contacts: adults.emergency_contacts,
             authorized_pickups: adults.authorized_pickups,
+            other_household_members: adults.other_household_members,
         };
     });
 

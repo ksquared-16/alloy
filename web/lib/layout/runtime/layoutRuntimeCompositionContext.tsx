@@ -22,6 +22,10 @@ export type LayoutRuntimeCompositionHints = {
     leadOperatingSummaryCards?: boolean;
     /** Patch 19 — person relationship workspace summary cards. */
     personOperatingSummaryCards?: boolean;
+    /** Patch 21 — connected children card list instead of table in person workspace. */
+    personConnectedChildrenCardList?: boolean;
+    /** Patch 21 — connected children roster is read-first (no inline edit). */
+    personConnectedChildrenReadFirst?: boolean;
     /** Patch 12 — enrollment card list instead of table/grid roster. */
     leadEnrollmentCardList?: boolean;
     /** Patch 19 — person overview composition active. */
@@ -32,6 +36,16 @@ export type LayoutRuntimeCompositionHints = {
     connectedChildrenMaxVisibleRows?: number | null;
     /** Prefer layout metadata primary column refs for person connected children. */
     connectedChildrenPrimaryColumnsOnly?: boolean;
+    /** Patch 20 — child overview composition active. */
+    childOverviewComposition?: boolean;
+    /** Patch 20 — child enrollment/care summary cards in strip. */
+    childOperatingSummaryCards?: boolean;
+    /** Summary-strip family widget shows count only. */
+    familySummaryOnly?: boolean;
+    /** Cap family related-list rows in child workspace. */
+    familyMaxVisibleRows?: number | null;
+    /** Prefer layout metadata primary column refs for child family table. */
+    familyPrimaryColumnsOnly?: boolean;
 };
 
 const LayoutRuntimeCompositionContext = createContext<LayoutRuntimeCompositionHints>({});

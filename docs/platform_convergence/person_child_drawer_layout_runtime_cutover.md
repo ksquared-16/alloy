@@ -1,7 +1,7 @@
 # Person + Child Drawer Layout Runtime Cutover
 
-**Status:** Planned — reference implementation is Opportunity drawer (`OpportunityDrawerVmRuntime`).  
-**Date:** 2026-06-08  
+**Status:** In progress — Person + Child VM runtime cutover landed; Opportunity remains canonical reference.  
+**Date:** 2026-06-08 (updated)
 **Do not start:** field catalog cleanup, seed/demo cleanup, broad performance refactor.
 
 ---
@@ -45,40 +45,80 @@
 
 ## Person Drawer Pass/Fail Matrix
 
-| # | Requirement | Current | Target | Blocker / notes |
-|---|-------------|---------|--------|-----------------|
-| P1 | Proof-layout runtime header | ❌ Legacy VM header in `PersonsDrawerVmRuntime` | `PersonDrawerProofLayoutHeader` + `ProofRecordModalHeaderShell` | New header component mirroring Opportunity |
-| P2 | Overview body from Layout Runtime | ❌ `PersonsDrawerVmBody` / operating sections | `DrawerLayoutRuntimeOverviewBody` + person layout API | Need `/api/admin/layout-runtime/person-drawer-body` (or shared route) |
-| P3 | No `PersonDrawerOperatingSections` normal path | ❌ Active | Remove from normal path | Layout API + record mapper |
-| P4 | No `EntityDrawerOverview` fallback | ❌ Possible via legacy router | Hard cutover + hold panel | Feature flag parity with Opportunity |
-| P5 | Opportunity → Person no blank shell | ⚠️ Partial transition hold | Opening overlay + warm VM | Preload + `vmDrawerTransitionCoordinator` |
-| P6 | Back to Opportunity seamless | ⚠️ Cache exists | Warm restore header+body together | Align `goBack()` with Opportunity pattern |
-| P7 | Tabs: Overview, Comms, Notes, Docs, Activity | ⚠️ Partial | Same tab doctrine + background preload | Person tab prefetch module |
-| P8 | Header: BOS → Actions → Status → Close | ❌ Different chrome | Same control row as Opportunity | Port header controls |
-| P9 | Actions from runtime header (single stack) | ❌ Legacy actions | Registry modals + portal | `usePersonDrawerVmRegistryModals` |
-| P10 | Save only when real editable path | ⚠️ Partial | Floating save rail + coordinator | Person-contact / layout edit registration |
-| P11 | Layout widgets use real VM data | ❌ VM sections | Widget record mapper | `buildPersonLayoutRuntimeRecordFromVm` |
-| P12 | Preload from Opportunity open | ❌ Not wired | Background person/child VM + layout | New preload arm in Opportunity runtime |
-| P13 | DOM markers for QA | ⚠️ Partial | See DOM table below | Add `data-drawer-runtime="person-vm"` etc. |
-| P14 | Emergency legacy flag only | ❌ Legacy drawer still routes some paths | `AdminEntityDrawer` routes person/child to VM only | Already routed — finish VM shell |
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| P1 | Proof-layout runtime header | ✅ | `PersonDrawerProofLayoutHeader` + `ProofRecordModalHeaderShell` |
+| P2 | Overview body from Layout Runtime | ✅ | `PersonDrawerOverviewBody` → `DrawerLayoutRuntimeOverviewBody` + `/api/admin/layout-runtime/person-drawer-body` |
+| P3 | No `PersonDrawerOperatingSections` normal path | ✅ | Moved to `PersonDrawerLegacyOperatingOverview` (emergency flag only) |
+| P4 | No `EntityDrawerOverview` fallback | ✅ | Hard cutover error panel; legacy behind `LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK=1` |
+| P5 | Opportunity → Person no blank shell | ⚠️ | Opening overlay + transition hold; verify in browser |
+| P6 | Back to Opportunity seamless | ⚠️ | `warmRelatedDrawerGraph` + session cache — verify Person → Opp restore |
+| P7 | Tabs (Overview / Activity / Docs / Comms) | ✅ | Proof tab strip; generic person = Overview only |
+| P8 | Header: BOS → Actions → Status → Close | ✅ | Same shell row; Actions menu stub (empty registry) |
+| P9 | Actions from runtime header (single stack) | ⚠️ | Portal pattern ready; person registry modals not wired |
+| P10 | Save only when real editable path | ⚠️ | Shared floating save bar in `panelFooterChrome` |
+| P11 | Layout record mapper | ✅ | `buildPersonLayoutRuntimeRecordFromVm` + `household_children` child.id |
+| P12 | Preload from Opportunity open | ⚠️ | Existing graph warm — layout body session cache on navigate |
+| P13 | DOM markers | ✅ | `data-drawer-runtime="person-vm"`, `data-person-drawer-layout-runtime-overview` |
+| P14 | Emergency legacy flag only | ✅ | `PersonDrawerLegacyOperatingOverview` |
 
 ---
 
 ## Child Drawer Pass/Fail Matrix
 
-| # | Requirement | Current | Target | Blocker / notes |
-|---|-------------|---------|--------|-----------------|
-| C1 | Proof-layout runtime header | ❌ Same as Person VM shell | Child-specific title row in proof header | `customer_member` display name |
-| C2 | Overview body from Layout Runtime | ❌ VM operating sections | `DrawerLayoutRuntimeOverviewBody` | Child layout API + `child.*` + `inquiry_child.*` mapper |
-| C3 | Durable child = `customer_member` | ⚠️ Partial | Record mapper uses `child.*` refKeys | FC-CM-1 field registry |
-| C4 | Participation = `inquiry_child.*` | ⚠️ Partial in layout catalog | No `child_inquiry.*` anywhere | Audit mappers |
-| C5 | Opportunity → Child no blank shell | ⚠️ Partial | Opening Child overlay | Preload child drawer targets |
-| C6 | Back to Opportunity seamless | ⚠️ Same as P6 | Shared drawer VM cache | |
-| C7 | Tabs + preload | ⚠️ Partial | Same as Opportunity | Child tab prefetch |
-| C8 | Header/actions/save | ❌ | Opportunity pattern | |
-| C9 | Layout widgets | ❌ | Tasks/attention if configured | Child may omit tasks — intentional empty |
-| C10 | Adornment → Person/Opportunity | ⚠️ | `handleLayoutRuntimeAdornmentOpenDrawer` | Extend for child surface |
-| C11 | Preload from Opportunity | ❌ | Preload linked child drawer VMs | From `_inquiry_children` / layout related list |
+| # | Requirement | Status | Notes |
+|---|-------------|--------|-------|
+| C1 | Proof-layout runtime header | ✅ | Same shell; `dataAttribute="child-drawer-runtime"` |
+| C2 | Overview body from Layout Runtime | ✅ | Child layout API uses **person id** (not customer_member id) |
+| C3 | Durable child = `customer_member` fields | ✅ | `buildChildLayoutRuntimeRecordFromVm` — `child.*` refKeys |
+| C4 | Participation = `inquiry_child.*` | ✅ | Mapper uses `inquiry_child.*`; no `child_inquiry.*` |
+| C5 | Opportunity → Child no blank shell | ⚠️ | Opening overlay + child seed — verify in browser |
+| C6 | Back to Opportunity seamless | ⚠️ | Same warm graph as P6 |
+| C7 | Tabs + preload | ✅ | Operating tabs + `PersonDrawerVmTabPanes` |
+| C8 | Header/actions/save | ✅ | Shared shell; Actions stub |
+| C9 | Layout widgets | ⚠️ | Depends on published child LayoutDoc |
+| C10 | Adornment → Person/Opportunity/Child | ✅ | `handlePersonDrawerLayoutRuntimeAdornmentOpenDrawer` |
+
+---
+
+## Opportunity blank children — root cause + fix
+
+| Item | Detail |
+|------|--------|
+| **Symptom** | Child Information / enrollment repeaters empty while Person household shows children |
+| **Root cause** | Layout runtime mapped only `_inquiry_children`. When OCM-linked rows are empty but household members exist on the person record (`_children` / `_household_children`), `buildOpportunityLayoutRuntimeRecordFromVm` produced empty `children` / `enrollment_children` arrays. |
+| **Fix** | `resolveOpportunityLayoutRuntimeChildrenRows()` — inquiry rows first, then metadata + household `_children` fallback. |
+| **Data source (Person)** | Person VM `_children` / `children` from household compose |
+| **Data source (Opportunity)** | `_inquiry_children` (OCM + household merge in `attachOpportunityInquiryChildrenShell`) with household fallback |
+| **Layout entity** | Person drawer → `entityType: "person"` LayoutDoc; Child drawer → `entityType: "child"` LayoutDoc (separate APIs) |
+
+---
+
+## Browser QA checklist
+
+- [ ] Opportunity save bar sits bottom-right inside drawer panel, above BOS, dirty-only
+- [ ] Person drawer: BOS → Actions → Status → Close; Back to Lead below title (not replacing header)
+- [ ] Person overview: configured LayoutDoc only — no operating sections / module pills
+- [ ] Child drawer: same header shell; body from **child** LayoutDoc (not person)
+- [ ] Child enrollment fields show `inquiry_child.*` values where configured
+- [ ] Opportunity child repeater rows populated when household has children
+- [ ] Child row adornment opens child drawer with warm navigation
+- [ ] Person household child links open child drawer
+- [ ] Opportunity ↔ Person ↔ Child transitions: no title-only swap / blank shell
+- [ ] Tabs: navy active, neutral inactive with green accent hover (all three drawers)
+- [ ] `LAYOUT_RUNTIME_LEGACY_EMERGENCY_FALLBACK=1` restores legacy operating overview
+
+---
+
+## Legacy components removed from normal path
+
+| Component | Normal path | Emergency fallback |
+|-----------|-------------|-------------------|
+| `PersonsDrawerVmBody` | ❌ not routed | — |
+| `PersonDrawerOperatingSections` | ❌ | ✅ `PersonDrawerLegacyOperatingOverview` |
+| `EntityDrawerOverview` (person) | ❌ | ✅ legacy overview |
+| `PersonsDrawerVmTabStrip` (module pills) | ❌ | — |
+| Lifecycle rails in body | ❌ | ✅ legacy only (rails now in proof header when parent/child) |
 
 ---
 
@@ -123,8 +163,8 @@ Person/Child opening copy: **"Opening Person…"** / **"Opening Child…"** — 
 | Marker | Meaning |
 |--------|---------|
 | `data-drawer-runtime="opportunity-vm"` | Opportunity VM runtime body |
-| `data-drawer-runtime="person-vm"` | Person VM runtime (to add) |
-| `data-drawer-runtime="child-vm"` | Child VM runtime (to add) |
+| `data-drawer-runtime="person-vm"` | Person VM runtime |
+| `data-drawer-runtime="child-vm"` | Child VM runtime |
 | `data-opportunity-drawer-opening-overlay` | Opening overlay |
 | `data-drawer-composed-sticky-header` | Proof layout header mounted |
 | `data-layout-runtime-drawer-body` | Layout runtime overview rendered |

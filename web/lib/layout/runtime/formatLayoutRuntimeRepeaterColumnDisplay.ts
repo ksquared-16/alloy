@@ -32,3 +32,14 @@ export function formatLeadEnrollmentCardMetaLine(
         })
         .join(" · ");
 }
+
+/** Connected children card meta — omit empty segments (no `{label} —` noise). */
+export function formatPersonConnectedChildMetaLine(
+    row: ProofRuntimeRecord,
+    metaColumns: LayoutCollectionColumn[],
+): string {
+    return metaColumns
+        .map((col) => formatLayoutRuntimeRepeaterColumnDisplay(row, col))
+        .filter((part) => part !== "—" && part.trim().length > 0)
+        .join(" · ");
+}

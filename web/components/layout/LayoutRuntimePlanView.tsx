@@ -52,6 +52,8 @@ import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChil
 import LayoutRuntimeEnrollmentGrid from "@/components/layout/LayoutRuntimeEnrollmentGrid";
 import LeadEnrollmentHealthSummaryCard from "@/components/layout/lead/LeadEnrollmentHealthSummaryCard";
 import LeadEnrollmentCardList from "@/components/layout/lead/LeadEnrollmentCardList";
+import PersonConnectedChildrenCardList from "@/components/layout/person/PersonConnectedChildrenCardList";
+import PersonRelatedPeopleGroupsWidget from "@/components/layout/person/PersonRelatedPeopleGroupsWidget";
 import LeadLastTouchSummaryCard from "@/components/layout/lead/LeadLastTouchSummaryCard";
 import LeadOperatingAttentionSummaryCard from "@/components/layout/lead/LeadOperatingAttentionSummaryCard";
 import LeadActivityPreview from "@/components/layout/lead/LeadActivityPreview";
@@ -60,6 +62,10 @@ import PersonActivityPreview from "@/components/layout/person/PersonActivityPrev
 import { PersonConnectedChildrenSummaryCardShell } from "@/components/layout/person/PersonConnectedChildrenSummaryCard";
 import { PersonHouseholdSummaryCardShell } from "@/components/layout/person/PersonHouseholdSummaryCard";
 import { PersonLastTouchSummaryCardShell } from "@/components/layout/person/PersonLastTouchSummaryCard";
+import { ChildDocumentsRequirementsSummaryCardShell } from "@/components/layout/child/ChildDocumentsRequirementsSummaryCard";
+import { ChildFamilySummaryCardShell } from "@/components/layout/child/ChildFamilySummaryCard";
+import { ChildLastTouchSummaryCardShell } from "@/components/layout/child/ChildLastTouchSummaryCard";
+import { ChildProgramEnrollmentSummaryCardShell } from "@/components/layout/child/ChildProgramEnrollmentSummaryCard";
 import LayoutRuntimeNotesCommunicationWidget, {
     layoutRuntimeCommunicationWidgetHasContent,
     layoutRuntimeNotesWidgetHasContent,
@@ -81,9 +87,14 @@ import {
     filterRelatedListColumnsForComposition as filterPersonRelatedListColumnsForComposition,
     PERSON_COMPOSITION_SECTION_EYEBROWS,
 } from "@/lib/layout/runtime/personOverviewComposition";
+import {
+    filterRelatedListColumnsForComposition as filterChildRelatedListColumnsForComposition,
+    CHILD_COMPOSITION_SECTION_EYEBROWS,
+} from "@/lib/layout/runtime/childOverviewComposition";
 import { resolveLeadSummaryLastTouch } from "@/lib/layout/runtime/resolveLeadSummaryLastTouch";
 import { resolveLeadActivityPreview } from "@/lib/layout/runtime/resolveLeadActivityPreview";
 import { resolvePersonActivityPreview } from "@/lib/layout/runtime/resolvePersonActivityPreview";
+import { resolveChildActivityPreview } from "@/lib/layout/runtime/resolveChildActivityPreview";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
 import {
     scrollToLeadEnrollmentSection,
@@ -427,6 +438,10 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         composition.connectedChildrenMaxVisibleRows != null && composition.connectedChildrenMaxVisibleRows > 0 ?
             composition.connectedChildrenMaxVisibleRows
         :   null;
+    const maxFamilyRows =
+        composition.familyMaxVisibleRows != null && composition.familyMaxVisibleRows > 0 ?
+            composition.familyMaxVisibleRows
+        :   null;
     useEffect(() => {
         if (!isChildrenRepeater) return;
         logChildLinkInstrumentationMounted("LayoutRuntimePlanView/RelatedCell", {
@@ -463,7 +478,15 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         sectionKey === "connected_children" &&
         composition.personOverviewComposition &&
         (item.displayMode ?? "table") === "table";
-    const filterColumnsForComposition = composition.personOverviewComposition ?
+    const useChildFamilyTable =
+        operatorSurfaces &&
+        isChildrenRepeater &&
+        sectionKey === "family_relationships" &&
+        composition.childOverviewComposition &&
+        (item.displayMode ?? "table") === "table";
+    const filterColumnsForComposition = composition.childOverviewComposition ?
+        filterChildRelatedListColumnsForComposition
+    : composition.personOverviewComposition ?
         filterPersonRelatedListColumnsForComposition
     :   filterLeadRelatedListColumnsForComposition;
     const visibleColumns = filterColumnsForComposition(
@@ -473,19 +496,29 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
             (useEnrollmentReadTable &&
                 composition.enrollmentPrimaryColumnsOnly &&
                 !composition.leadEnrollmentCardList)
-            || (usePersonConnectedChildrenTable && composition.connectedChildrenPrimaryColumnsOnly),
+            || (usePersonConnectedChildrenTable && composition.connectedChildrenPrimaryColumnsOnly)
+            || (useChildFamilyTable && composition.familyPrimaryColumnsOnly),
         ),
     );
-    const hideInnerHeader = useEnrollmentReadTable || usePersonConnectedChildrenTable;
+    const hideInnerHeader = useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyTable;
     const rowLimit =
         useEnrollmentReadTable && maxEnrollmentRows != null && !enrollmentExpanded ? maxEnrollmentRows
         : usePersonConnectedChildrenTable && maxConnectedChildrenRows != null && !enrollmentExpanded ?
             maxConnectedChildrenRows
+        : useChildFamilyTable && maxFamilyRows != null && !enrollmentExpanded ?
+            maxFamilyRows
         :   null;
     const rows = rowLimit != null ? allRows.slice(0, rowLimit) : allRows;
     const enrollmentOverflow =
         useEnrollmentReadTable && maxEnrollmentRows != null && allRows.length > maxEnrollmentRows && !enrollmentExpanded ?
             allRows.length - maxEnrollmentRows
+        :   0;
+    const connectedChildrenOverflow =
+        usePersonConnectedChildrenTable
+        && maxConnectedChildrenRows != null
+        && allRows.length > maxConnectedChildrenRows
+        && !enrollmentExpanded ?
+            allRows.length - maxConnectedChildrenRows
         :   0;
 
     const scrollToEnrollmentSection = scrollToLeadEnrollmentSection;
@@ -503,6 +536,18 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
                 }}
             >
                 +{enrollmentOverflow} more · View all children
+            </button>
+        :   null;
+
+    const connectedChildrenOverflowFooter =
+        connectedChildrenOverflow > 0 ?
+            <button
+                type="button"
+                className="w-full border-t border-alloy-stone/10 px-4 py-2.5 text-left text-[11px] font-medium text-[#0d9488] hover:bg-[#0d9488]/[0.04]"
+                data-person-connected-children-view-all="true"
+                onClick={() => setEnrollmentExpanded(true)}
+            >
+                +{connectedChildrenOverflow} more · View all children
             </button>
         :   null;
 
@@ -577,9 +622,23 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         </div>
     );
 
-    const collectionMarkup = useEnrollmentReadTable ? enrollmentGridMarkup : legacyTableMarkup;
+    const personConnectedChildrenMarkup = composition.personConnectedChildrenCardList ?
+        <PersonConnectedChildrenCardList
+            item={item}
+            columns={visibleColumns}
+            rows={rows}
+            anchorRecord={record}
+            overflowFooter={connectedChildrenOverflowFooter}
+            onAdornmentAction={onAdornmentAction}
+        />
+    :   legacyTableMarkup;
 
-    if (useEnrollmentReadTable) {
+    const collectionMarkup =
+        useEnrollmentReadTable ? enrollmentGridMarkup
+        : usePersonConnectedChildrenTable ? personConnectedChildrenMarkup
+        : legacyTableMarkup;
+
+    if (useEnrollmentReadTable || usePersonConnectedChildrenTable) {
         return (
             <>
                 {isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null}
@@ -637,7 +696,7 @@ function WidgetChrome({
     const compact = useLayoutRuntimeSummaryStrip();
     const composition = useLayoutRuntimeCompositionHints();
 
-    if (compact && (composition.leadOperatingSummaryCards || composition.personOperatingSummaryCards) && leadCard) {
+    if (compact && (composition.leadOperatingSummaryCards || composition.personOperatingSummaryCards || composition.childOperatingSummaryCards) && leadCard) {
         return (
             <LeadOperatingSummaryCard
                 title={title}
@@ -718,12 +777,14 @@ function FutureModulePlaceholder({ title }: { title: string }) {
 function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: LayoutItem }) {
     const variant = useContext(LayoutRuntimeVariantContext);
     const composition = useLayoutRuntimeCompositionHints();
+    const onAdornmentAction = useContext(AdornmentActionContext);
     const widgetKey = resolveLayoutRuntimeWidgetKey(item);
     const title = operatorLabel(item, variant) || "Details";
     const isFutureModule = item.metadata?.[FUTURE_MODULE_METADATA_KEY] === true;
     const leadCards = composition.leadOperatingSummaryCards === true;
     const personCards = composition.personOperatingSummaryCards === true;
-    const operatingCards = leadCards || personCards;
+    const childCards = composition.childOperatingSummaryCards === true;
+    const operatingCards = leadCards || personCards || childCards;
     const compact = useLayoutRuntimeSummaryStrip();
 
     if (isFutureModule) {
@@ -757,8 +818,30 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
         return <PersonConnectedChildrenSummaryCardShell record={record} />;
     }
 
+    if (widgetKey === "related_people" && composition.personOverviewComposition) {
+        return (
+            <PersonRelatedPeopleGroupsWidget record={record} onAdornmentAction={onAdornmentAction} />
+        );
+    }
+
     if (widgetKey === "last_touch" && personCards && compact) {
         return <PersonLastTouchSummaryCardShell record={record} />;
+    }
+
+    if (widgetKey === "program_enrollment" && childCards && compact) {
+        return <ChildProgramEnrollmentSummaryCardShell record={record} />;
+    }
+
+    if (widgetKey === "family" && childCards && compact) {
+        return <ChildFamilySummaryCardShell record={record} />;
+    }
+
+    if (widgetKey === "documents_requirements" && childCards && compact) {
+        return <ChildDocumentsRequirementsSummaryCardShell record={record} />;
+    }
+
+    if (widgetKey === "last_touch" && childCards && compact) {
+        return <ChildLastTouchSummaryCardShell record={record} />;
     }
 
     if (widgetKey === "attention") {
@@ -875,11 +958,13 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
 
     if (widgetKey === "activity") {
         const entries =
-            composition.personOverviewComposition ?
+            composition.childOverviewComposition ?
+                resolveChildActivityPreview(record)
+            : composition.personOverviewComposition ?
                 resolvePersonActivityPreview(record)
             :   resolveLeadActivityPreview(record);
         if (composition.compositionSectionSurface && entries.length === 0) return null;
-        return composition.personOverviewComposition ?
+        return composition.childOverviewComposition || composition.personOverviewComposition ?
                 <PersonActivityPreview entries={entries} />
             :   <LeadActivityPreview entries={entries} />;
     }
@@ -1050,7 +1135,9 @@ function SectionView({
 
     const sectionEyebrow =
         useCompositionSurface ?
-            (LEAD_COMPOSITION_SECTION_EYEBROWS[section.key] ?? PERSON_COMPOSITION_SECTION_EYEBROWS[section.key])
+            (LEAD_COMPOSITION_SECTION_EYEBROWS[section.key]
+                ?? PERSON_COMPOSITION_SECTION_EYEBROWS[section.key]
+                ?? CHILD_COMPOSITION_SECTION_EYEBROWS[section.key])
         :   null;
 
     return (

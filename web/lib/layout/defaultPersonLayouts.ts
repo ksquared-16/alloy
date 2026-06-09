@@ -142,6 +142,11 @@ export function buildPersonDrawerDefaultDoc(): LayoutDoc {
                     fieldItem(hhBase, "location.household_address", "Household address", "text", HOME_ICON),
                 ]),
             ]),
+            row(id(hhBase, "r1"), [
+                col(id(hhBase, "r1"), 0, LAYOUT_GRID_COLUMNS, [
+                    widgetItem(id(hhBase, "r1c0"), "related_people", "Related people", "list"),
+                ]),
+            ]),
         ],
         { defaultExpanded: true },
     );
@@ -164,6 +169,7 @@ export function buildPersonDrawerDefaultDoc(): LayoutDoc {
             },
             { label: "Date of birth", refKey: "child.date_of_birth", width: "medium", renderHint: "date" },
             { label: "Age", refKey: "child.age_band", width: "medium" },
+            { label: "Program", refKey: "child.program", width: "medium" },
             { label: "Status", refKey: "child.status", width: "medium", renderHint: "status" },
         ],
         metadata: {
@@ -171,6 +177,7 @@ export function buildPersonDrawerDefaultDoc(): LayoutDoc {
                 "child.name",
                 "child.date_of_birth",
                 "child.age_band",
+                "child.program",
                 "child.status",
             ],
         },

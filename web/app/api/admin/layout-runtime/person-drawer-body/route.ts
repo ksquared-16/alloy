@@ -19,10 +19,13 @@ export async function GET(req: NextRequest) {
     const personId = req.nextUrl.searchParams.get("personId")?.trim() ?? "";
     if (!personId) return NextResponse.json({ error: "missing_person_id" }, { status: 400 });
 
+    const opportunityId = req.nextUrl.searchParams.get("opportunityId")?.trim() ?? null;
+
     const result = await evaluatePersonLayoutRuntimeBody({
         personId,
         gate,
         supabase: createAdminClient(),
+        opportunityId,
     });
 
     if (!result.ok) {

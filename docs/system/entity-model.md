@@ -34,7 +34,7 @@ All physical / site / room-style location records use the hierarchical **`locati
 
 **Rooms are not a separate table.** Classrooms and rooms are **`locations` rows** where **`location_type = 'unit'`**, linked to a parent site via **`parent_location_id`**. Optional **`metadata`** (e.g. `semantic_kind: "classroom"`) may further describe the unit; the type CHECK allows only `address`, `site`, and `unit`.
 
-**Programs and cohorts (enrollment):** Childcare **program** bands are org option-set keys (`childcare_program_type`), not location rows. **Room/cohort interest** on a child inquiry is stored as **`program_room_cohort_key`** (text), usually the **`locations.id`** of a `unit` row. Waitlist grain uses **`placement_candidates.site_id`** + **`program_room_cohort_key`**.
+**Programs and cohorts (enrollment):** Childcare **program** bands are org option-set keys (`childcare_program_type`), not location rows. **Room/cohort interest** on a child inquiry is stored as **`program_room_cohort_key`** (text), usually the **`locations.id`** of a `unit` row. Waitlist grain uses **`placement_candidates.site_id`** + **`program_room_cohort_key`**. **Gap (2026-06-08):** program options are org-wide today; site-scoped offerings and form select wiring are documented in **`docs/sprints/06_2026/program_interest_configurable_model_audit.md`** — implement only after audit sign-off.
 
 ### Child vs opportunity location authority
 

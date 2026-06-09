@@ -17,6 +17,7 @@
 - [`docs/system/adminv2-runtime-performance-doctrine.md`](../system/adminv2-runtime-performance-doctrine.md) — composed reveal, known-empty, queue lane hold, stale guards
 - [`docs/system/drawer-view-model-runtime-contract.md`](../system/drawer-view-model-runtime-contract.md) — VM first-paint settlement rules
 - [`docs/system/work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) — `QueueRowContext` / `WorkUnitSurfaceContext` consumption model
+- [`docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §7 — builder → queue → context → drawer → layout integration
 - [`docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md`](../sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md) — lifecycle subject grain; no enrollment branching in layout JSON
 
 ---

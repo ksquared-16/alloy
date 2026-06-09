@@ -12,6 +12,7 @@ import { resolveLayoutForOrg } from "../resolveLayoutRuntime";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "./layoutRuntimePlan";
 import { buildChildLayoutRuntimeRecordFromVm } from "./buildChildLayoutRuntimeRecordFromVm";
 import { isLayoutDocRenderableForProduction } from "./isLayoutDocRenderableForProduction";
+import { resolveEffectiveProductionLayoutDoc } from "./resolveEffectiveProductionLayoutDoc";
 import type { LayoutDoc } from "../layoutV2";
 import type { ProofRuntimeRecord } from "./proofRecordContext";
 
@@ -48,7 +49,15 @@ export async function evaluateChildLayoutRuntimeBody(input: {
         fetchPublishedLayouts: true,
     });
 
-    const doc = layoutResolution.doc;
+    const effective = resolveEffectiveProductionLayoutDoc({
+        doc: layoutResolution.doc,
+        source: layoutResolution.source,
+        layoutKey: layoutResolution.layoutKey,
+        entityType: "child",
+        surface: "drawer",
+    });
+
+    const doc = effective.doc;
     if (!isLayoutDocRenderableForProduction(doc)) {
         return { ok: false, reason: "layout_not_renderable", status: 422 };
     }
@@ -63,6 +72,6 @@ export async function evaluateChildLayoutRuntimeBody(input: {
         doc,
         record,
         plan: buildLayoutRuntimePlan(doc),
-        layoutSource: layoutResolution.source,
+        layoutSource: effective.usedFallback ? effective.source : layoutResolution.source,
     };
 }

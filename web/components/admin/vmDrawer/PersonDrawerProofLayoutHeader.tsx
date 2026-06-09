@@ -9,6 +9,7 @@ import ProofRecordModalHeaderShell, {
     type ProofHeaderTab,
 } from "@/components/layout/proofShell/ProofRecordModalHeaderShell";
 import PersonDrawerCommandHeader from "@/components/layout/person/PersonDrawerCommandHeader";
+import ChildDrawerCommandHeader from "@/components/layout/child/ChildDrawerCommandHeader";
 import { PersonDrawerHeaderControls } from "@/components/admin/entity/PersonDrawerHeaderControls";
 import VmPersonStatusControl from "@/components/admin/vmDrawer/VmPersonStatusControl";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
@@ -29,6 +30,7 @@ export type PersonDrawerProofLayoutHeaderProps = {
     backLink?: { label: string; onClick: () => void } | null;
     dataAttribute?: string;
     personCompositionActive?: boolean;
+    childCompositionActive?: boolean;
 };
 
 export default function PersonDrawerProofLayoutHeader({
@@ -47,6 +49,7 @@ export default function PersonDrawerProofLayoutHeader({
     backLink,
     dataAttribute = "person-drawer-runtime",
     personCompositionActive = false,
+    childCompositionActive = false,
 }: PersonDrawerProofLayoutHeaderProps) {
     const proofTabs: ProofHeaderTab[] = tabs.map((key) => ({
         key,
@@ -86,7 +89,39 @@ export default function PersonDrawerProofLayoutHeader({
         </button>
     );
 
-    const titleNode =
+    const titleNode = title;
+
+    if (childCompositionActive) {
+        return (
+            <ChildDrawerCommandHeader
+                title={titleNode}
+                record={record}
+                tabs={proofTabs}
+                activeTab={activeTab}
+                onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
+                actionsControl={headerControlsRow}
+                closeButton={closeButton}
+                backLink={backLink}
+            />
+        );
+    }
+
+    if (personCompositionActive) {
+        return (
+            <PersonDrawerCommandHeader
+                title={titleNode}
+                record={record}
+                tabs={proofTabs}
+                activeTab={activeTab}
+                onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
+                actionsControl={headerControlsRow}
+                closeButton={closeButton}
+                backLink={backLink}
+            />
+        );
+    }
+
+    const legacyTitleNode =
         backLink ?
             <div className="min-w-0">
                 <span className="break-words text-xl font-bold leading-snug text-[#273F52]">{title}</span>
@@ -101,25 +136,11 @@ export default function PersonDrawerProofLayoutHeader({
                     </button>
                 </div>
             </div>
-        :   title;
-
-    if (personCompositionActive) {
-        return (
-            <PersonDrawerCommandHeader
-                title={titleNode}
-                record={record}
-                tabs={proofTabs}
-                activeTab={activeTab}
-                onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
-                actionsControl={headerControlsRow}
-                closeButton={closeButton}
-            />
-        );
-    }
+        :   titleNode;
 
     return (
         <ProofRecordModalHeaderShell
-            title={titleNode}
+            title={legacyTitleNode}
             showLocationChip={false}
             statusControl={null}
             actionsControl={headerControlsRow}

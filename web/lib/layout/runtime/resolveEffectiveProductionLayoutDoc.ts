@@ -4,6 +4,7 @@
 
 import { buildLeadDrawerDefaultDoc, buildLeadQueueDefaultDoc } from "../defaultLeadLayouts";
 import { buildPersonDrawerDefaultDoc } from "../defaultPersonLayouts";
+import { buildChildDrawerDefaultDoc } from "../defaultChildLayouts";
 import type { LayoutDoc, LayoutSurface } from "../layoutV2";
 import { isLayoutDocRenderableForProduction } from "./isLayoutDocRenderableForProduction";
 import { shouldFallbackToDefaultLayoutDoc } from "./layoutRuntimeEvidence";
@@ -19,6 +20,7 @@ export type EffectiveLayoutDocResolution = {
 function defaultDocFor(entityType: string, surface: LayoutSurface, isWaitlist?: boolean): LayoutDoc | null {
     if (entityType === "opportunities" && surface === "drawer") return buildLeadDrawerDefaultDoc();
     if (entityType === "person" && surface === "drawer") return buildPersonDrawerDefaultDoc();
+    if (entityType === "child" && surface === "drawer") return buildChildDrawerDefaultDoc();
     if (entityType === "opportunities" && surface === "queue") {
         return isWaitlist ? null : buildLeadQueueDefaultDoc();
     }

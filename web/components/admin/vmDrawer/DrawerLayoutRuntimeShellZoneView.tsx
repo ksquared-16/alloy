@@ -10,6 +10,7 @@ import LayoutRuntimeDrawerEditProvider from "@/components/layout/LayoutRuntimeDr
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { leadOverviewCompositionHints, shouldUseLeadOverviewComposition } from "@/lib/layout/runtime/leadOverviewComposition";
 import { personOverviewCompositionHints, shouldUsePersonOverviewComposition } from "@/lib/layout/runtime/personOverviewComposition";
+import { childOverviewCompositionHints, shouldUseChildOverviewComposition } from "@/lib/layout/runtime/childOverviewComposition";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
@@ -39,6 +40,7 @@ export default function DrawerLayoutRuntimeShellZoneView({
     const compositionHints =
         isSummaryStrip && shouldUseLeadOverviewComposition(doc) ? leadOverviewCompositionHints()
         : isSummaryStrip && shouldUsePersonOverviewComposition(doc) ? personOverviewCompositionHints()
+        : isSummaryStrip && shouldUseChildOverviewComposition(doc) ? childOverviewCompositionHints()
         :   {};
 
     return (

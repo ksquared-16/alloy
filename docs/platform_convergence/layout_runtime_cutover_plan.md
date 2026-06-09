@@ -21,6 +21,7 @@
 - [`entity_relationship_reference_model.md`](./entity_relationship_reference_model.md)
 - [`docs/system/adminv2-runtime-performance-doctrine.md`](../system/adminv2-runtime-performance-doctrine.md)
 - [`docs/system/drawer-view-model-runtime-contract.md`](../system/drawer-view-model-runtime-contract.md)
+- [`docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md) §7 — domain model for `QueueRowContext`, `active_subject`, placement, and layout block consumption
 
 ---
 

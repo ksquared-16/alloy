@@ -39,6 +39,7 @@ export const DEFAULT_PERSON_CONNECTED_CHILDREN_PRIMARY_COLUMN_REFS = [
     "child.name",
     "child.date_of_birth",
     "child.age_band",
+    "child.program",
     "child.status",
 ] as const;
 
@@ -116,6 +117,8 @@ export function personOverviewCompositionHints(): import("@/lib/layout/runtime/l
         connectedChildrenPrimaryColumnsOnly: true,
         summaryStripCompactRow: true,
         personOperatingSummaryCards: true,
+        personConnectedChildrenCardList: true,
+        personConnectedChildrenReadFirst: true,
     };
 }
 

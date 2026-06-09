@@ -12,6 +12,7 @@ import DrawerLayoutRuntimeStagingDiagnostic from "@/components/admin/vmDrawer/Dr
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
 import LeadOverviewRuntimeComposition from "@/components/layout/LeadOverviewRuntimeComposition";
 import PersonOverviewRuntimeComposition from "@/components/layout/person/PersonOverviewRuntimeComposition";
+import ChildOverviewRuntimeComposition from "@/components/layout/child/ChildOverviewRuntimeComposition";
 import LayoutRuntimeDrawerEditProvider from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import LayoutRuntimeErrorPanel from "@/components/layout/LayoutRuntimeErrorPanel";
 import {
@@ -28,6 +29,7 @@ import type { UseDrawerLayoutRuntimeBodyResult } from "@/lib/layout/runtime/useD
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { shouldUseLeadOverviewComposition } from "@/lib/layout/runtime/leadOverviewComposition";
 import { shouldUsePersonOverviewComposition } from "@/lib/layout/runtime/personOverviewComposition";
+import { shouldUseChildOverviewComposition } from "@/lib/layout/runtime/childOverviewComposition";
 
 type Props = {
     layoutBody: UseDrawerLayoutRuntimeBodyResult;
@@ -112,6 +114,8 @@ export default function DrawerLayoutRuntimeOverviewBody({
             surface === "opportunity_drawer_overview" && shouldUseLeadOverviewComposition(effectiveDoc);
         const usePersonComposition =
             surface === "person_drawer_overview" && shouldUsePersonOverviewComposition(effectiveDoc);
+        const useChildComposition =
+            surface === "child_drawer_overview" && shouldUseChildOverviewComposition(effectiveDoc);
         return (
             <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
                 fallback={fallbackNode}
@@ -160,6 +164,14 @@ export default function DrawerLayoutRuntimeOverviewBody({
                             />
                         : usePersonComposition ?
                             <PersonOverviewRuntimeComposition
+                                doc={effectiveDoc}
+                                record={layoutBody.record}
+                                entityId={entityId}
+                                canMutate={canMutate}
+                                onAdornmentAction={onAdornmentAction}
+                            />
+                        : useChildComposition ?
+                            <ChildOverviewRuntimeComposition
                                 doc={effectiveDoc}
                                 record={layoutBody.record}
                                 entityId={entityId}

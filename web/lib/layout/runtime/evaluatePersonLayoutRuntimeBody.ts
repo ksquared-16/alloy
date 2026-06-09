@@ -9,6 +9,7 @@ import { composePersonDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/per
 import { resolveLayoutForOrg } from "../resolveLayoutRuntime";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "./layoutRuntimePlan";
 import { buildPersonLayoutRuntimeRecordFromVm } from "./buildPersonLayoutRuntimeRecordFromVm";
+import { enrichPersonVmRecordWithOpportunityContext } from "./enrichPersonVmRecordWithOpportunityContext";
 import { isLayoutDocRenderableForProduction } from "./isLayoutDocRenderableForProduction";
 import { resolveEffectiveProductionLayoutDoc } from "./resolveEffectiveProductionLayoutDoc";
 import type { LayoutDoc } from "../layoutV2";
@@ -22,6 +23,7 @@ export async function evaluatePersonLayoutRuntimeBody(input: {
     personId: string;
     gate: AdminRouteGateSuccess;
     supabase: SupabaseClient;
+    opportunityId?: string | null;
 }): Promise<EvaluatePersonLayoutRuntimeBodyResult> {
     const personId = input.personId.trim();
     if (!personId) return { ok: false, reason: "missing_person_id", status: 400 };
@@ -59,8 +61,16 @@ export async function evaluatePersonLayoutRuntimeBody(input: {
         return { ok: false, reason: "layout_not_renderable", status: 422 };
     }
 
-    const record = buildPersonLayoutRuntimeRecordFromVm({
+    const enrichedVmRecord = await enrichPersonVmRecordWithOpportunityContext({
+        supabase: input.supabase,
+        orgId: input.gate.orgId,
+        personId,
+        opportunityId: input.opportunityId,
         vmRecord: composeResult.viewModel.record,
+    });
+
+    const record = buildPersonLayoutRuntimeRecordFromVm({
+        vmRecord: enrichedVmRecord,
         personId,
     });
 

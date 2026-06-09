@@ -352,6 +352,19 @@ export function buildOpportunityQueueRowRecordFromPreview(
         children: layoutChildren,
         enrollment_children: layoutChildren,
         ...(enrichment?.inquirySummaryTasks ? { _inquiry_summary_tasks: enrichment.inquirySummaryTasks } : {}),
+        ...(enrichment?.operationalAttention != null ?
+            { _operational_attention: enrichment.operationalAttention }
+        :   {}),
+        ...(enrichment?.operationalRecommendation != null ?
+            { _operational_recommendation: enrichment.operationalRecommendation }
+        :   {}),
+        ...(enrichment?.operationalRecommendationPreview != null ?
+            { _operational_recommendation_preview: enrichment.operationalRecommendationPreview }
+        :   {}),
+        ...(enrichment?.attentionSuggestion != null ? { _attention_suggestion: enrichment.attentionSuggestion } : {}),
+        ...(enrichment?.attentionSuggestionPreview != null ?
+            { _attention_suggestion_preview: enrichment.attentionSuggestionPreview }
+        :   {}),
         _relations: {
             ...(buildPrimaryContactPersonRelation(primaryContact) ?
                 { primary_contact: buildPrimaryContactPersonRelation(primaryContact)! }

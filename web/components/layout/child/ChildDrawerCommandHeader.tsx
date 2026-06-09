@@ -1,22 +1,22 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Home, User } from "lucide-react";
-import { resolvePersonDrawerCommandHeaderMeta } from "@/lib/layout/runtime/resolvePersonDrawerHeaderContext";
+import { Baby, Home } from "lucide-react";
+import { resolveChildDrawerCommandHeaderMeta } from "@/lib/layout/runtime/resolveChildDrawerHeaderContext";
 
 const HEADER_BORDER = "rgba(39,63,82,0.14)";
 const HEADER_TEXT = "#273F52";
 const TAB_ACTIVE = "#273F52";
 
-export type PersonDrawerCommandHeaderTab = {
+export type ChildDrawerCommandHeaderTab = {
     key: string;
     label: string;
 };
 
-export type PersonDrawerCommandHeaderProps = {
+export type ChildDrawerCommandHeaderProps = {
     title: ReactNode;
     record: Record<string, unknown>;
-    tabs: readonly PersonDrawerCommandHeaderTab[];
+    tabs: readonly ChildDrawerCommandHeaderTab[];
     activeTab: string;
     onTabSelect: (tab: string) => void;
     actionsControl: ReactNode;
@@ -24,16 +24,8 @@ export type PersonDrawerCommandHeaderProps = {
     backLink?: { label: string; onClick: () => void } | null;
 };
 
-function MetaSegment({ children, muted = false }: { children: ReactNode; muted?: boolean }) {
-    return (
-        <span className={muted ? "text-alloy-midnight/45" : "font-medium text-alloy-midnight/72"}>
-            {children}
-        </span>
-    );
-}
-
-/** Person relationship drawer command header — no lifecycle rail by default. */
-export default function PersonDrawerCommandHeader({
+/** Child enrollment/care drawer command header — no lifecycle rail by default. */
+export default function ChildDrawerCommandHeader({
     title,
     record,
     tabs,
@@ -42,38 +34,38 @@ export default function PersonDrawerCommandHeader({
     actionsControl,
     closeButton,
     backLink,
-}: PersonDrawerCommandHeaderProps) {
-    const meta = resolvePersonDrawerCommandHeaderMeta(record);
+}: ChildDrawerCommandHeaderProps) {
+    const meta = resolveChildDrawerCommandHeaderMeta(record);
 
     return (
         <div
             className="shrink-0 border-b border-solid bg-white"
             style={{ borderColor: HEADER_BORDER }}
-            data-person-drawer-command-header-root="true"
+            data-child-drawer-command-header-root="true"
             data-proof-layout-header="true"
-            data-proof-layout-header-variant="person-drawer-command"
+            data-proof-layout-header-variant="child-drawer-command"
         >
             <div
                 className="flex items-start justify-between gap-5 px-6 pb-2.5 pt-4"
                 data-proof-layout-header-row="title-actions"
             >
                 <div
-                    className="flex min-w-0 flex-1 items-start gap-4 rounded-2xl border border-alloy-stone/14 bg-gradient-to-br from-white via-white to-[#0d9488]/[0.04] px-4 py-3.5 shadow-[0_3px_12px_rgba(24,39,58,0.06)] ring-1 ring-[#0d9488]/[0.08]"
-                    data-person-drawer-command-header="true"
+                    className="flex min-w-0 flex-1 items-start gap-4 rounded-2xl border border-alloy-stone/14 bg-gradient-to-br from-white via-white to-alloy-blue/[0.03] px-4 py-3.5 shadow-[0_3px_12px_rgba(24,39,58,0.06)] ring-1 ring-alloy-blue/[0.08]"
+                    data-child-drawer-command-header="true"
                 >
                     <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#0d9488]/25 bg-gradient-to-br from-[#0d9488]/[0.14] to-white text-[#0d9488] shadow-[0_1px_4px_rgba(13,148,136,0.12)]"
-                        data-person-drawer-command-avatar="true"
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-alloy-blue/20 bg-gradient-to-br from-alloy-blue/[0.1] to-white text-alloy-blue shadow-[0_1px_4px_rgba(0,69,140,0.1)]"
+                        data-child-drawer-command-avatar="true"
                     >
-                        <User className="h-5 w-5" aria-hidden />
+                        <Baby className="h-5 w-5" aria-hidden />
                     </div>
                     <div className="min-w-0 flex-1">
                         {backLink ?
                             <button
                                 type="button"
                                 onClick={backLink.onClick}
-                                className="mb-1 text-[11px] font-medium text-[#0d9488]/70 hover:text-[#0d9488] hover:underline"
-                                data-person-drawer-command-back-link="true"
+                                className="mb-1 text-[11px] font-medium text-alloy-blue/70 hover:text-alloy-blue hover:underline"
+                                data-child-drawer-command-back-link="true"
                             >
                                 ← {backLink.label}
                             </button>
@@ -94,36 +86,36 @@ export default function PersonDrawerCommandHeader({
                                 {title}
                             </div>
                         }
-                        {(meta.relationshipLabel || meta.householdName) ?
+                        {(meta.ageDobRow || meta.householdName || meta.programRow) ?
                             <p
-                                className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] leading-snug"
-                                data-person-drawer-header-meta-row="true"
+                                className="mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] leading-snug text-alloy-midnight/72"
+                                data-child-drawer-header-meta-row="true"
                             >
-                                {meta.relationshipLabel ?
-                                    <MetaSegment>{meta.relationshipLabel}</MetaSegment>
+                                {meta.ageDobRow ?
+                                    <span className="font-medium">{meta.ageDobRow}</span>
                                 :   null}
-                                {meta.relationshipLabel && meta.householdName ?
+                                {meta.ageDobRow && meta.householdName ?
                                     <span className="text-alloy-midnight/25" aria-hidden>
                                         ·
                                     </span>
                                 :   null}
                                 {meta.householdName ?
                                     <span
-                                        className="inline-flex items-center gap-1 rounded-full border border-[#0d9488]/20 bg-[#0d9488]/[0.06] px-2 py-0.5 text-[11px] font-medium text-[#0d9488]"
-                                        data-person-drawer-header-household-chip="true"
+                                        className="inline-flex items-center gap-1 rounded-full border border-alloy-blue/20 bg-alloy-blue/[0.06] px-2 py-0.5 text-[11px] font-medium text-alloy-blue"
+                                        data-child-drawer-header-household-chip="true"
                                     >
                                         <Home className="h-3 w-3" aria-hidden />
                                         {meta.householdName}
                                     </span>
                                 :   null}
-                            </p>
-                        :   null}
-                        {meta.contactRow ?
-                            <p
-                                className="mt-1 text-[11px] leading-snug text-alloy-midnight/42 md:block"
-                                data-person-drawer-header-contact-row="true"
-                            >
-                                {meta.contactRow}
+                                {(meta.ageDobRow || meta.householdName) && meta.programRow ?
+                                    <span className="text-alloy-midnight/25" aria-hidden>
+                                        ·
+                                    </span>
+                                :   null}
+                                {meta.programRow ?
+                                    <span className="text-alloy-midnight/55">{meta.programRow}</span>
+                                :   null}
                             </p>
                         :   null}
                     </div>
@@ -147,9 +139,9 @@ export default function PersonDrawerCommandHeader({
                                 key={t.key}
                                 type="button"
                                 onClick={() => onTabSelect(t.key)}
-                                className={`rounded-t-md px-3.5 py-1.5 text-xs font-medium leading-snug transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#0d9488]/40 ${active ? "border-b-2 border-[#0d9488] text-alloy-midnight" : "text-alloy-midnight/55 hover:bg-alloy-stone/[0.04] hover:text-alloy-midnight/80"}`}
+                                className={`rounded-t-md px-3.5 py-1.5 text-xs font-medium leading-snug transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-alloy-blue/40 ${active ? "border-b-2 border-alloy-blue text-alloy-midnight" : "text-alloy-midnight/55 hover:bg-alloy-stone/[0.04] hover:text-alloy-midnight/80"}`}
                                 style={active ? { color: TAB_ACTIVE } : undefined}
-                                data-person-drawer-tab={t.key}
+                                data-child-drawer-tab={t.key}
                             >
                                 {t.label}
                             </button>

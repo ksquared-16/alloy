@@ -48,7 +48,7 @@ export function resolvePersonDrawerParentHouseholdModel(
                 children: group.children,
                 emergency_contacts: group.emergency_contacts,
                 authorized_pickups: group.authorized_pickups,
-                other_adults: [],
+                other_adults: group.other_household_members,
             };
         }),
     };

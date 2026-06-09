@@ -16,6 +16,7 @@ export const DRAWER_SUMMARY_STRIP_SECTION_KEYS: Readonly<
 > = {
     opportunity: ["lead_summary"],
     person: ["person_summary"],
+    child: ["child_summary"],
 };
 
 export type DrawerLayoutShellZoneSplit = {

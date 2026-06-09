@@ -56,16 +56,24 @@ describe("Child drawer preset", () => {
         expect(doc.entityType).toBe("child");
         expect(titlesOf(doc)).toEqual([
             "Child Summary",
-            "Family / Contacts",
-            "Enrollment / Opportunity context",
-            "Notes / Activity",
+            "Program & Enrollment",
+            "Family",
+            "Schedule & Attendance",
+            "Notes / Communication",
+            "Recent Activity",
+            "Documents",
         ]);
     });
     it("uses canonical child.* / inquiry_child.* refKeys — never new child_inquiry.*", () => {
         const refs = refKeysOf(doc);
-        expect(refs).toContain("child.name");
         expect(refs).toContain("inquiry_child.program");
+        expect(refs).toContain("inquiry_child.desired_program_type");
+        expect(refs).toContain("family_adults");
+        expect(refs).toContain("program_enrollment");
+        expect(refs).toContain("family");
+        expect(refs).toContain("last_touch");
         expect(refs.some((r) => r.startsWith("child_inquiry."))).toBe(false);
+        expect(doc.metadata?.template).toBe("child_drawer_v2");
     });
     it("buildRecordDrawerDefaultDoc only serves person/child drawers", () => {
         expect(buildRecordDrawerDefaultDoc("person", "drawer")).not.toBeNull();

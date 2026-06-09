@@ -108,8 +108,8 @@ describe("person drawer resolvers", () => {
             "person.primary_email": "jamie.j@example.com",
         });
         const meta = resolvePersonDrawerCommandHeaderMeta(record);
-        expect(meta.metaRow).toContain("Primary guardian");
-        expect(meta.metaRow).toContain("Johnson Household");
+        expect(meta.relationshipLabel).toBe("Primary guardian");
+        expect(meta.householdName).toBe("Johnson Household");
         expect(meta.contactRow).toContain("(555) 234-8901");
         expect(meta.contactRow).toContain("jamie.j@example.com");
     });
