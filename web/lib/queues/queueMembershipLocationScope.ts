@@ -166,11 +166,11 @@ export function filterOcmEnrollmentTrackRowsByLocationScope<T extends {
     });
 }
 
-export function filterWaitlistCandidateRowsByLocationScope(
-    rows: readonly CandidateLocationScopeRow[],
+export function filterWaitlistCandidateRowsByLocationScope<T extends CandidateLocationScopeRow>(
+    rows: readonly T[],
     constraints: RecordScopeConstraints | null,
     scopeSource: QueueMembershipLocationScopeSource,
-): CandidateLocationScopeRow[] {
+): T[] {
     if (!isUserLocationScopeRestricted(constraints)) return [...rows];
 
     return rows.filter((row) => {
