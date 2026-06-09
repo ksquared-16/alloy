@@ -1,6 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 
+function mapCategoryRow(row: Record<string, unknown>): LocationProgramCategoryRow | null {
+    const id = String(row.id ?? "").trim();
+    const location_id = String(row.location_id ?? "").trim();
+    const key = String(row.key ?? "").trim();
+    const label = String(row.label ?? "").trim();
+    if (!id || !location_id || !key || !label) return null;
+    return {
+        id,
+        org_id: String(row.org_id ?? "").trim(),
+        location_id,
+        key,
+        label,
+        sort_order: row.sort_order != null ? Number(row.sort_order) : null,
+        is_active: row.is_active !== false,
+        metadata:
+            row.metadata != null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+                ? (row.metadata as Record<string, unknown>)
+                : null,
+    };
+}
+
 /** Server-side batch load for org location program categories (includes inactive for display). */
 export async function loadLocationProgramCategoriesForOrg(
     supabase: SupabaseClient,
@@ -16,26 +37,6 @@ export async function loadLocationProgramCategoriesForOrg(
     if (error || !data?.length) return [];
 
     return data
-        .map((raw) => {
-            const row = raw as Record<string, unknown>;
-            const id = String(row.id ?? "").trim();
-            const location_id = String(row.location_id ?? "").trim();
-            const key = String(row.key ?? "").trim();
-            const label = String(row.label ?? "").trim();
-            if (!id || !location_id || !key || !label) return null;
-            return {
-                id,
-                org_id: String(row.org_id ?? "").trim(),
-                location_id,
-                key,
-                label,
-                sort_order: row.sort_order != null ? Number(row.sort_order) : null,
-                is_active: row.is_active !== false,
-                metadata:
-                    row.metadata != null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-                        ? (row.metadata as Record<string, unknown>)
-                        : null,
-            } satisfies LocationProgramCategoryRow;
-        })
+        .map((raw) => mapCategoryRow(raw as Record<string, unknown>))
         .filter((r): r is LocationProgramCategoryRow => r != null);
 }

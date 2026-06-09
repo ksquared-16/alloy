@@ -271,7 +271,7 @@ function findQueueByKey(def: QueueDefinitionV1, queueKey: string): QueueConfig {
 
 function logQueueMembershipRouting(routing: OpportunityQueueLaneRouting, executableQueueKey: string): void {
     const meta = queueMembershipRoutingLogMeta(routing, executableQueueKey);
-    if (meta.routing_source === "builder") {
+    if (meta?.routing_source === "builder") {
         perfQueue("queue_membership_from_builder", meta);
     }
 }
