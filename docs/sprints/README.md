@@ -29,6 +29,7 @@
 | AdminV2 backend query & payload optimization | [`06_2026/adminv2_backend_query_payload_optimization_phase.md`](./06_2026/adminv2_backend_query_payload_optimization_phase.md) | **Backlog** — next performance phase |
 | Child-grain queue conversion (design gate) | [`06_2026/child_grain_queue_conversion_design.md`](./06_2026/child_grain_queue_conversion_design.md) | **Frozen** — architecture before membership/count changes |
 | Child-grain Phase C preflight | [`06_2026/child_grain_phase_c_preflight.md`](./06_2026/child_grain_phase_c_preflight.md) | **Complete** — lane comparison before first flip |
+| Child-grain Phase C Enrolled staging | [`06_2026/completed/child_grain_phase_c_enrolled_staging_flip.md`](./06_2026/completed/child_grain_phase_c_enrolled_staging_flip.md) | **Staging** — `enrollment_completed` only |
 
 ---
 

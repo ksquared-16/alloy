@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/06_2026/child_grain_phase_c_preflight.md`  
 **Date:** 2026-06-06  
-**Status:** **Preflight complete — no lane flipped**  
+**Status:** **Preflight complete** · Enrolled staging flip documented in [`completed/child_grain_phase_c_enrolled_staging_flip.md`](./completed/child_grain_phase_c_enrolled_staging_flip.md)  
 **Prerequisites:** Phase A (`cca53e7a`), Phase B (see below), design [`child_grain_queue_conversion_design.md`](./child_grain_queue_conversion_design.md)
 
 **Goal:** Know exact count/membership deltas before the first lane flip. This sprint changes **nothing** in production queue routing unless `ALLOY_QUEUE_CHILD_GRAIN_LANES` is set on an environment.
