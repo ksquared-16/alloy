@@ -39,6 +39,12 @@ import type {
     QueueMembershipCountUnit,
     QueueMembershipLocationScopeSource,
 } from "@/lib/lifecycle/queueMembershipV1";
+import {
+    applyWaitlistCandidateLocationScopeToQuery,
+    filterWaitlistCandidateRowsByLocationScope,
+    passesSubjectLocationScope,
+    resolveCandidateRowSubjectLocationId,
+} from "@/lib/queues/queueMembershipLocationScope";
 
 export type WaitlistCandidateGrainFilterSpec = {
     candidate_statuses: PlacementCandidateStatus[];
@@ -124,6 +130,7 @@ export function resolveWaitlistCandidateGrainContext(params: {
         queueEntry: entry,
         filters: parseWaitlistCandidateGrainFilters(entry),
         placementQueueKey: resolveWaitlistPlacementConfigQueueKey(entry),
+        locationScopeSource: "placement_site",
     };
 }
 
@@ -156,29 +163,24 @@ type CandidateQueryRow = {
     opportunity_customer_members: { outcome_status_key: string | null } | { outcome_status_key: string | null }[] | null;
 };
 
-/** Candidate-grain waitlist: filter by child/candidate `site_id`, opportunity `location_id` as fallback. */
-export function applyWaitlistCandidateLocationScopeToQuery(
-    q: any,
-    constraints: RecordScopeConstraints | null
-): any {
-    if (!constraints?.locationIds?.length) return q;
-    const ids = constraints.locationIds.filter((id) => id.trim()).join(",");
-    if (!ids) return q;
-    return q.or(`site_id.in.(${ids}),and(site_id.is.null,opportunities.location_id.in.(${ids}))`);
+function resolveWaitlistLaneLocationScopeSource(ctx: WaitlistCandidateGrainContext): QueueMembershipLocationScopeSource {
+    return ctx.locationScopeSource ?? "placement_site";
 }
 
 function passesWaitlistCandidateLocationScope(
     row: CandidateQueryRow,
-    constraints: RecordScopeConstraints | null
+    constraints: RecordScopeConstraints | null,
+    scopeSource: QueueMembershipLocationScopeSource = "placement_site",
 ): boolean {
-    const locationIds = constraints?.locationIds;
-    if (!locationIds?.length) return true;
-    const allowed = new Set(locationIds);
-    const siteId = row.site_id?.trim() ?? "";
-    if (siteId) return allowed.has(siteId);
     const opp = readCandidateOpportunity(row);
-    const oppLoc = opp.location_id?.trim() ?? "";
-    return oppLoc ? allowed.has(oppLoc) : false;
+    return passesSubjectLocationScope({
+        subjectLocationId: resolveCandidateRowSubjectLocationId({
+            siteId: row.site_id,
+            opportunityLocationId: opp.location_id,
+            scopeSource,
+        }),
+        recordScopeConstraints: constraints,
+    });
 }
 
 function readCandidateOpportunity(row: CandidateQueryRow): CandidateOpportunityPreview {
@@ -349,6 +351,7 @@ async function queryWaitlistCandidates(params: {
     departmentId?: string | null;
     filters: WaitlistCandidateGrainFilterSpec;
     recordScopeConstraints: RecordScopeConstraints | null;
+    locationScopeSource: QueueMembershipLocationScopeSource;
     workUnitMetadata?: unknown | null;
     queueDefinition?: unknown | null;
     executableQueueKey?: string | null;
@@ -402,7 +405,11 @@ async function queryWaitlistCandidates(params: {
                 .eq("org_id", params.orgId)
                 .in("opportunity_id", oppIds)
                 .in("status", params.filters.candidate_statuses);
-            q = applyWaitlistCandidateLocationScopeToQuery(q, params.recordScopeConstraints);
+            q = applyWaitlistCandidateLocationScopeToQuery(
+                q,
+                params.recordScopeConstraints,
+                params.locationScopeSource,
+            );
             const { data, error } = await q;
             if (error) {
                 throw new Error(`waitlist candidate-grain query failed: ${error.message}`);
@@ -429,7 +436,11 @@ async function queryWaitlistCandidates(params: {
             .eq("org_id", params.orgId)
             .in("status", params.filters.candidate_statuses)
             .eq("opportunities.work_unit_id", params.workUnitId);
-        q = applyWaitlistCandidateLocationScopeToQuery(q, params.recordScopeConstraints);
+        q = applyWaitlistCandidateLocationScopeToQuery(
+            q,
+            params.recordScopeConstraints,
+            params.locationScopeSource,
+        );
         const { data, error } = await q;
         if (error) {
             throw new Error(`waitlist candidate-grain query failed: ${error.message}`);
@@ -437,9 +448,14 @@ async function queryWaitlistCandidates(params: {
         candidateRows = (data ?? []) as unknown as CandidateQueryRow[];
     }
 
-    const filtered = candidateRows
-        .filter((r) => passesChildLifecycleFilter(r, params.filters.child_lifecycle_statuses))
-        .filter((r) => passesWaitlistCandidateLocationScope(r, params.recordScopeConstraints));
+    const locationFiltered = filterWaitlistCandidateRowsByLocationScope(
+        candidateRows,
+        params.recordScopeConstraints,
+        params.locationScopeSource,
+    );
+
+    const filtered = locationFiltered
+        .filter((r) => passesChildLifecycleFilter(r, params.filters.child_lifecycle_statuses));
 
     const meta =
         params.workUnitMetadata != null &&
@@ -513,6 +529,7 @@ export async function countWaitlistCandidateGrainItems(params: {
         departmentId: params.departmentId,
         filters: params.ctx.filters,
         recordScopeConstraints: params.recordScopeConstraints,
+        locationScopeSource: resolveWaitlistLaneLocationScopeSource(params.ctx),
         workUnitMetadata: params.workUnitMetadata,
         queueDefinition: params.queueDefinition,
         executableQueueKey: params.executableQueueKey ?? params.ctx.queueEntry.key,
@@ -575,6 +592,7 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
         departmentId: params.departmentId,
         filters: params.ctx.filters,
         recordScopeConstraints: params.recordScopeConstraints,
+        locationScopeSource: resolveWaitlistLaneLocationScopeSource(params.ctx),
         workUnitMetadata: params.workUnitMetadata,
         queueDefinition: params.queueDefinition,
         executableQueueKey: params.executableQueueKey ?? params.ctx.queueEntry.key,

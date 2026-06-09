@@ -27,6 +27,10 @@ import {
     isQueueMembershipGrain,
 } from "@/lib/workUnits/lifecycleSubjectContracts";
 import {
+    applyRelatedSubjectLocationVisibility,
+    relatedSubjectVisibilityForLocation,
+} from "@/lib/queues/queueMembershipLocationScope";
+import {
     buildAttentionSummary,
     buildNextBestAction,
     buildWorkSummary,
@@ -44,6 +48,7 @@ export type BuildPartialQueueRowContextInput = {
     work_unit_id?: string;
     /** Operator case type label — default "Enrollment Case". */
     case_type_label?: string;
+    allowedLocationIds?: readonly string[] | null;
 };
 
 function trimOrNull(raw: unknown): string | null {
@@ -147,7 +152,10 @@ export function resolveRowPlacementContextFromInquiryChildren(
     return allSame ? placements[0] : undefined;
 }
 
-function buildRelatedSubjectsSummary(row: Record<string, unknown>): RelatedSubjectSummary[] {
+function buildRelatedSubjectsSummary(
+    row: Record<string, unknown>,
+    allowedLocationIds?: readonly string[] | null,
+): RelatedSubjectSummary[] {
     const inquiryChildren = readInquiryChildrenFromRow(row);
     if (!inquiryChildren.length) {
         // TODO(phase-6): child-grain rows — derive siblings from OCM join, not metadata.inquiry_children.
@@ -181,17 +189,20 @@ function buildRelatedSubjectsSummary(row: Record<string, unknown>): RelatedSubje
 
         const placement = buildSubjectPlacementFromInquiryChildRaw(raw);
 
-        out.push({
+        const subjectLocationId = placement?.location_id ?? trimOrNull(raw.location_id);
+        const summary: RelatedSubjectSummary = {
             subject_type: "child",
             subject_id: subjectId,
             display_name: displayName,
             status_label: statusLabel,
-            location_id: placement?.location_id ?? trimOrNull(raw.location_id),
+            location_id: subjectLocationId,
             location_label: placement?.location_label ?? trimOrNull(raw.location_label),
             program_label: placement?.program_label ?? null,
             room_label: placement?.room_label ?? trimOrNull(raw.program_room_cohort_label),
             schedule_label: placement?.schedule_label ?? trimOrNull(raw.desired_schedule_label),
-        });
+        };
+        const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
+        out.push(applyRelatedSubjectLocationVisibility(summary, visibility));
     }
 
     return out;
@@ -295,7 +306,7 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
             case_status_label: boringCaseLabel,
         },
         primary_contact: primaryContact,
-        related_subjects_summary: buildRelatedSubjectsSummary(row),
+        related_subjects_summary: buildRelatedSubjectsSummary(row, input.allowedLocationIds),
         attention_summary: buildAttentionSummary(row),
         work_summary: buildWorkSummary(row),
         next_best_action: buildNextBestAction(row),
@@ -312,7 +323,7 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
 export function attachPartialQueueRowContext(
     row: Record<string, unknown>,
     queue: PartialQueueRowContextQueueMeta,
-    options?: { case_type_label?: string }
+    options?: { case_type_label?: string; allowedLocationIds?: readonly string[] | null },
 ): Record<string, unknown> {
     return {
         ...row,
@@ -320,6 +331,7 @@ export function attachPartialQueueRowContext(
             row,
             queue,
             case_type_label: options?.case_type_label,
+            allowedLocationIds: options?.allowedLocationIds,
         }),
     };
 }
@@ -327,7 +339,7 @@ export function attachPartialQueueRowContext(
 export function attachPartialQueueRowContextToRows(
     rows: Record<string, unknown>[],
     queue: PartialQueueRowContextQueueMeta,
-    options?: { case_type_label?: string }
+    options?: { case_type_label?: string; allowedLocationIds?: readonly string[] | null },
 ): Record<string, unknown>[] {
     return rows.map((row) => attachPartialQueueRowContext(row, queue, options));
 }

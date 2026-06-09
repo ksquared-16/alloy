@@ -103,7 +103,7 @@ Existing grain-shaped rows always receive honest `row_subject` via `buildChildGr
 - Grouped same-stage rows (`row_subjects`, `active_subject_group`) — types documented § grouped rows
 - ~~Partial `placement_context`~~ — **shipped (partial)** on case-grain rows when `_inquiry_children` placement is deterministic (see § placement_context)
 - Full child-grain `placement_context` (per active OCM subject) — later
-- `visibility` / `location_id` on `related_subjects_summary` (access redaction — phase 7)
+- ~~`visibility` on `related_subjects_summary`~~ — **shipped (partial)** when queue list passes `allowedLocationIds` from `RecordScopeConstraints` (Phase E)
 - Subject-scoped attention and work summaries
 - `count_unit` on `WorkUnitSurfaceContext`
 - `WorkUnitSurfaceContext` wrapper on API responses (rows only today)
@@ -137,7 +137,7 @@ Layout runtime may consume **row-level** `_queue_row_context` on queue API items
 | `row_status_key` / `row_status_label` | Yes | From opportunity row |
 | `case_context` | Yes | |
 | `primary_contact` | When enriched | |
-| `related_subjects_summary` | When `metadata.inquiry_children` | `visibility` / location fields not populated yet |
+| `related_subjects_summary` | When `metadata.inquiry_children` or child-grain row | `visibility` redacts out-of-scope siblings when site scope restricted |
 | `placement_context` | **Partial** — when one child or all children share same OCM placement in `_inquiry_children` | Full per-child when `row_subject` is honest child grain |
 | `related_subjects_summary[].location_label` etc. | When inquiry child rows carry labels | Program/room/schedule labels additive |
 | `attention_summary` | When resolver enriched row | |

@@ -348,7 +348,8 @@ Aligned with child-grain Phase C–F but **builder-metadata-first** so lane flip
 - [x] Phase B: seed plan/apply + script (metadata only)
 - [x] Phase C: runtime read behind `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER` (default off)
 - [x] Phase D: full builder routing for tour/waitlist/enrollment/enrolled + row context + count_unit
-- [ ] Phase E–F: save path UI, production lane flip sign-off, legacy cleanup
+- [x] Phase E: location-scope filtering + sibling redaction on builder child/candidate lanes
+- [ ] Phase F: save path UI, production lane flip sign-off, legacy cleanup
 
 ---
 
@@ -526,6 +527,23 @@ export ALLOY_QUEUE_MEMBERSHIP_BUILDER_LANES=enrolled,enrollment,tour,waitlist
 ```
 
 **Remaining gaps:** `saveLifecycleStageRuntimeConfig` persistence, builder UI editors, `queue_definition` materialization from membership, production lane flip sign-off.
+
+---
+
+## Phase E implementation note (2026-06-09)
+
+**Status:** Location-scope filtering for builder-backed child/candidate lanes — **flag-gated with Phase D**.
+
+| Rule | Detail |
+|------|--------|
+| Child lanes (`ocm_site`) | Filter OCM `location_id`; `case_site` uses `opportunities.location_id` |
+| Waitlist (`placement_site`) | Filter `placement_candidates.site_id`; fallback to opportunity when site null |
+| Missing location | **Restricted** site scope: exclude row; **unrestricted**: include |
+| Related siblings | `related_subjects_summary.visibility` — `full` in scope, `redacted` out of scope |
+| Module | `web/lib/queues/queueMembershipLocationScope.ts` |
+| Defaults | Enrollment stage defaults now seed `location_scope_source` (`ocm_site` / `placement_site`) |
+
+**No change:** Lead/Qualification case-grain legacy paths; flags/rollback unchanged.
 
 ---
 

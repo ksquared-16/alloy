@@ -173,7 +173,10 @@ type OpportunityRowPreview = {
 function withOpportunityQueueRowContext(
     items: unknown[],
     lane: OpportunityQueueRowContextLaneParams,
-    options?: { attachCaseGrainRowContext?: boolean }
+    options?: {
+        attachCaseGrainRowContext?: boolean;
+        allowedLocationIds?: readonly string[] | null;
+    },
 ): unknown[] {
     if (!items.length || lane.entityType !== "opportunity") return items;
     return attachOpportunityQueueRowsWithRowContext(items, lane, options);
@@ -3657,8 +3660,10 @@ export async function getWorkUnitQueueItems(params: {
                   skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
               })
             : null;
+    const scopeFilter = params.recordScopeConstraints ?? null;
     const rowContextAttach = {
         attachCaseGrainRowContext: opportunityEnrichmentPlan?.attachCaseGrainRowContext ?? true,
+        allowedLocationIds: scopeFilter?.locationIds ?? null,
     };
     const rowContextLane: OpportunityQueueRowContextLaneParams = {
         entityType: def.entity_type,
@@ -3667,8 +3672,6 @@ export async function getWorkUnitQueueItems(params: {
         queueLabel: q.label,
         normalized,
     };
-
-    const scopeFilter = params.recordScopeConstraints ?? null;
 
     const finalize = (
         queueItems: QueueItemsResult,

@@ -20,6 +20,10 @@ import {
     type SubjectPlacementContext,
 } from "@/lib/workUnits/lifecycleSubjectContracts";
 import {
+    applyRelatedSubjectLocationVisibility,
+    relatedSubjectVisibilityForLocation,
+} from "@/lib/queues/queueMembershipLocationScope";
+import {
     buildAttentionSummary,
     buildNextBestAction,
     buildWorkSummary,
@@ -31,6 +35,8 @@ export type BuildChildGrainQueueRowContextInput = {
     row: Record<string, unknown>;
     queue: PartialQueueRowContextQueueMeta;
     case_type_label?: string;
+    /** When set, redact sibling summaries outside allowed site scope. */
+    allowedLocationIds?: readonly string[] | null;
 };
 
 function trimOrNull(raw: unknown): string | null {
@@ -265,6 +271,7 @@ function buildRelatedSubjectsSummary(
     row: Record<string, unknown>,
     activeSubjectId: string,
     activeSubjectType: LifecycleSubjectType,
+    allowedLocationIds?: readonly string[] | null,
 ): RelatedSubjectSummary[] {
     const inquiryChildren = readInquiryChildrenFromRow(row);
     const out: RelatedSubjectSummary[] = [];
@@ -290,17 +297,20 @@ function buildRelatedSubjectsSummary(
 
         const placement = buildSubjectPlacementFromInquiryChildRaw(rec);
 
-        out.push({
+        const subjectLocationId = placement?.location_id ?? trimOrNull(rec.location_id);
+        const summary: RelatedSubjectSummary = {
             subject_type: subjectType,
             subject_id: subjectId,
             display_name: displayName,
             status_label: statusLabel,
-            location_id: placement?.location_id ?? trimOrNull(rec.location_id),
+            location_id: subjectLocationId,
             location_label: placement?.location_label ?? trimOrNull(rec.location_label),
             program_label: placement?.program_label ?? null,
             room_label: placement?.room_label ?? trimOrNull(rec.program_room_cohort_label),
             schedule_label: placement?.schedule_label ?? trimOrNull(rec.desired_schedule_label),
-        });
+        };
+        const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
+        out.push(applyRelatedSubjectLocationVisibility(summary, visibility));
     }
 
     return out;
@@ -413,7 +423,12 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             case_status_label: boringCaseLabel,
         },
         primary_contact: primaryContact,
-        related_subjects_summary: buildRelatedSubjectsSummary(row, active.subjectId, subjectType),
+        related_subjects_summary: buildRelatedSubjectsSummary(
+            row,
+            active.subjectId,
+            subjectType,
+            input.allowedLocationIds,
+        ),
         attention_summary: buildAttentionSummary(row),
         work_summary: buildWorkSummary(row),
         next_best_action: buildNextBestAction(row),
@@ -430,12 +445,13 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
 export function attachChildGrainQueueRowContext(
     row: Record<string, unknown>,
     queue: PartialQueueRowContextQueueMeta,
-    options?: { case_type_label?: string },
+    options?: { case_type_label?: string; allowedLocationIds?: readonly string[] | null },
 ): Record<string, unknown> {
     const context = buildChildGrainQueueRowContext({
         row,
         queue,
         case_type_label: options?.case_type_label,
+        allowedLocationIds: options?.allowedLocationIds,
     });
     if (!context) return row;
     return {

@@ -113,6 +113,7 @@ describe("defaultQueueMembershipForEnrollmentStage", () => {
             stage_key: "tour",
             subject_type: "child",
             count_unit: "enrollment_tracks",
+            location_scope_source: "ocm_site",
             included_disposition_keys: [
                 "tour_requested",
                 "tour_scheduled",
@@ -127,6 +128,7 @@ describe("defaultQueueMembershipForEnrollmentStage", () => {
             stage_key: "waitlist",
             subject_type: "candidate",
             count_unit: "candidates",
+            location_scope_source: "placement_site",
             included_disposition_keys: ["waitlisted", "waitlist_paused"],
         });
 
@@ -136,6 +138,7 @@ describe("defaultQueueMembershipForEnrollmentStage", () => {
             stage_key: "enrollment",
             subject_type: "child",
             count_unit: "enrollment_tracks",
+            location_scope_source: "ocm_site",
             included_disposition_keys: [
                 "offer_pending",
                 "registration_pending",
@@ -150,6 +153,7 @@ describe("defaultQueueMembershipForEnrollmentStage", () => {
             stage_key: "enrolled",
             subject_type: "child",
             count_unit: "enrollment_tracks",
+            location_scope_source: "ocm_site",
             included_disposition_keys: ["enrolled"],
         });
     });

@@ -171,7 +171,11 @@ export function parseQueueMembershipV1(raw: unknown): QueueMembershipV1 | null {
 
 type EnrollmentDefaultSpec = Pick<
     QueueMembershipV1,
-    "subject_type" | "count_unit" | "included_disposition_keys" | "included_status_keys"
+    | "subject_type"
+    | "count_unit"
+    | "included_disposition_keys"
+    | "included_status_keys"
+    | "location_scope_source"
 >;
 
 const ENROLLMENT_STAGE_DEFAULTS: Record<string, EnrollmentDefaultSpec> = {
@@ -189,6 +193,7 @@ const ENROLLMENT_STAGE_DEFAULTS: Record<string, EnrollmentDefaultSpec> = {
     tour: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
         included_disposition_keys: [
             "tour_requested",
             "tour_scheduled",
@@ -199,11 +204,13 @@ const ENROLLMENT_STAGE_DEFAULTS: Record<string, EnrollmentDefaultSpec> = {
     waitlist: {
         subject_type: "candidate",
         count_unit: "candidates",
+        location_scope_source: "placement_site",
         included_disposition_keys: ["waitlisted", "waitlist_paused"],
     },
     enrollment: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
         included_disposition_keys: [
             "offer_pending",
             "registration_pending",
@@ -214,6 +221,7 @@ const ENROLLMENT_STAGE_DEFAULTS: Record<string, EnrollmentDefaultSpec> = {
     enrolled: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
         included_disposition_keys: ["enrolled"],
     },
 };
@@ -233,6 +241,7 @@ export function defaultQueueMembershipForEnrollmentStage(stageKey: string): Queu
         subject_type: spec.subject_type,
         count_unit: spec.count_unit,
         included_disposition_keys: [...spec.included_disposition_keys],
+        ...(spec.location_scope_source ? { location_scope_source: spec.location_scope_source } : {}),
         ...(spec.included_status_keys?.length ?
             { included_status_keys: [...spec.included_status_keys] }
         :   {}),

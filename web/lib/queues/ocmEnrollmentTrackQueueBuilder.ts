@@ -22,6 +22,10 @@ import type {
     QueueMembershipCountUnit,
     QueueMembershipLocationScopeSource,
 } from "@/lib/lifecycle/queueMembershipV1";
+import {
+    applyOcmLocationScopeToQuery,
+    filterOcmEnrollmentTrackRowsByLocationScope,
+} from "@/lib/queues/queueMembershipLocationScope";
 
 type OpportunityPreview = {
     id: string;
@@ -87,23 +91,9 @@ function programLineFromOcm(row: OcmEnrollmentTrackQueryRow): string | null {
     return parts.length ? parts.join(" · ") : null;
 }
 
-function applyRecordScopeToOcmQuery<T extends { in: (col: string, vals: string[]) => T }>(
-    q: T,
-    constraints: RecordScopeConstraints | null,
-    ocmLocationScoped: boolean,
-): T {
-    if (!constraints) return q;
-    if (constraints.workUnitIds?.length) {
-        q = q.in("opportunities.work_unit_id", constraints.workUnitIds);
-    }
-    if (constraints.locationIds?.length) {
-        if (ocmLocationScoped) {
-            q = q.in("location_id", constraints.locationIds);
-        } else {
-            q = q.in("opportunities.location_id", constraints.locationIds);
-        }
-    }
-    return q;
+function resolveOcmLaneLocationScopeSource(ctx: OcmEnrollmentTrackLaneContext): QueueMembershipLocationScopeSource {
+    if (ctx.locationScopeSource) return ctx.locationScopeSource;
+    return "ocm_site";
 }
 
 async function queryOcmEnrollmentTrackRows(params: {
@@ -113,6 +103,7 @@ async function queryOcmEnrollmentTrackRows(params: {
     stage: OcmEnrollmentTrackStage;
     dispositionKeys?: readonly string[];
     recordScopeConstraints: RecordScopeConstraints | null;
+    locationScopeSource: QueueMembershipLocationScopeSource;
 }): Promise<OcmEnrollmentTrackQueryRow[]> {
     const statusKeys =
         params.dispositionKeys?.length ?
@@ -135,14 +126,19 @@ async function queryOcmEnrollmentTrackRows(params: {
         .eq("opportunities.work_unit_id", params.workUnitId)
         .in("outcome_status_key", statusKeys);
 
-    q = applyRecordScopeToOcmQuery(q, params.recordScopeConstraints, true);
+    q = applyOcmLocationScopeToQuery(q, params.recordScopeConstraints, params.locationScopeSource);
 
     const { data, error } = await q;
     if (error) {
         throw new Error(`ocm enrollment-track query failed: ${error.message}`);
     }
 
-    return (data ?? []) as unknown as OcmEnrollmentTrackQueryRow[];
+    const rows = (data ?? []) as unknown as OcmEnrollmentTrackQueryRow[];
+    return filterOcmEnrollmentTrackRowsByLocationScope(
+        rows,
+        params.recordScopeConstraints,
+        params.locationScopeSource,
+    );
 }
 
 function opportunityPreviewFromOcmRow(row: OcmEnrollmentTrackQueryRow) {
@@ -187,6 +183,7 @@ export function resolveOcmEnrollmentTrackLaneContext(params: {
         stage,
         stageLabel: enrollmentOperatorStageLabel(stage),
         membershipSource: "child_grain_flag",
+        locationScopeSource: "ocm_site",
     };
 }
 
@@ -281,6 +278,7 @@ export async function countOcmEnrollmentTrackQueueItems(params: {
     recordScopeImpossible?: boolean;
 }): Promise<number> {
     if (params.recordScopeImpossible) return 0;
+    const locationScopeSource = resolveOcmLaneLocationScopeSource(params.ctx);
     const rows = await queryOcmEnrollmentTrackRows({
         supabase: params.supabase,
         orgId: params.orgId,
@@ -288,6 +286,7 @@ export async function countOcmEnrollmentTrackQueueItems(params: {
         stage: params.ctx.stage,
         dispositionKeys: params.ctx.dispositionKeys,
         recordScopeConstraints: params.recordScopeConstraints,
+        locationScopeSource,
     });
     return rows.length;
 }
@@ -312,6 +311,7 @@ export async function loadOcmEnrollmentTrackQueueItems(params: {
         return { items: [], total: 0 };
     }
 
+    const locationScopeSource = resolveOcmLaneLocationScopeSource(params.ctx);
     const matched = await queryOcmEnrollmentTrackRows({
         supabase: params.supabase,
         orgId: params.orgId,
@@ -319,6 +319,7 @@ export async function loadOcmEnrollmentTrackQueueItems(params: {
         stage: params.ctx.stage,
         dispositionKeys: params.ctx.dispositionKeys,
         recordScopeConstraints: params.recordScopeConstraints,
+        locationScopeSource,
     });
 
     const total = matched.length;

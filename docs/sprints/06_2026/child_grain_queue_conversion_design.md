@@ -709,6 +709,8 @@ export ALLOY_QUEUE_MEMBERSHIP_BUILDER_LANES=enrolled,enrollment,tour,waitlist
 
 **Phase D (shipped):** Builder routing covers Enrolled / Enrolling / Tour / Waitlist when seeded metadata + flags set. Lead/Qualification remain case-grain legacy. See alignment plan §Phase D.
 
+**Phase E (shipped):** `queueMembershipLocationScope.ts` applies `location_scope_source` + user `RecordScopeConstraints` on OCM and waitlist candidate queries. Missing OCM/candidate site excludes restricted users. `related_subjects_summary` redacts out-of-scope siblings.
+
 ### Remains for lane flip + cleanup
 
 | Phase | Work |

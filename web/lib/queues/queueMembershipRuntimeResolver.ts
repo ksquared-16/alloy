@@ -22,6 +22,7 @@ import {
     type QueueMembershipCountUnit,
     type QueueMembershipV1,
 } from "@/lib/lifecycle/queueMembershipV1";
+import { resolveEffectiveLocationScopeSource } from "@/lib/queues/queueMembershipLocationScope";
 import { QUEUE_MEMBERSHIP_METADATA_KEY } from "@/lib/lifecycle/seedEnrollmentQueueMembershipV1";
 import type { NormalizedQueueDefinitionDocument } from "@/lib/config/queueDefinitionV2Runtime";
 import {
@@ -197,7 +198,7 @@ function buildOcmLaneFromMembership(
         dispositionKeys: dispositionKeysForMembership(membership),
         countUnit: membership.count_unit,
         membershipSource: "builder",
-        locationScopeSource: membership.location_scope_source ?? undefined,
+        locationScopeSource: resolveEffectiveLocationScopeSource(membership),
     };
 }
 
@@ -233,7 +234,7 @@ function buildWaitlistLaneFromMembership(
         },
         countUnit: membership.count_unit,
         membershipSource: "builder",
-        locationScopeSource: membership.location_scope_source ?? undefined,
+        locationScopeSource: resolveEffectiveLocationScopeSource(membership),
     };
 }
 
