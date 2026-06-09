@@ -91,7 +91,7 @@ Debug (proof): `data-queue-row-context-present`, `data-queue-row-placement-omitt
 
 - Child-grain / candidate-grain `row_subject` (Touring per child)
 - Grouped same-stage rows (`row_subjects`, `active_subject_group`) — types documented § grouped rows
-- **Partial** `placement_context` on case-grain rows when `_inquiry_children` placement is deterministic (see § placement_context)
+- ~~Partial `placement_context`~~ — **shipped (partial)** on case-grain rows when `_inquiry_children` placement is deterministic (see § placement_context)
 - Full child-grain `placement_context` (per active OCM subject) — later
 - `visibility` / `location_id` on `related_subjects_summary` (access redaction — phase 7)
 - Subject-scoped attention and work summaries
