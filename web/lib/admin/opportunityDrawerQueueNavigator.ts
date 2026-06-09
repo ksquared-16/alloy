@@ -8,6 +8,8 @@ import {
     opportunityDrawerSeedFromQueueItem,
     type OpportunityDrawerQueuePreviewSeed,
 } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import { opportunityDrawerSubjectContextFromQueueItem } from "@/lib/admin/opportunityDrawerSubjectContextFromQueueItem";
+import type { DrawerSubjectContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 
 /** Loaded work-unit queue slice — used for in-drawer prev/next (no full-queue fetch). */
@@ -18,7 +20,11 @@ export type OpportunityDrawerQueueNavigator = {
     queue_key: string;
     /** Canonical filter context for this navigator instance. */
     selection: WorkUnitQueueSelection;
-    records: Array<{ id: string; preview_seed?: OpportunityDrawerQueuePreviewSeed | null }>;
+    records: Array<{
+        id: string;
+        preview_seed?: OpportunityDrawerQueuePreviewSeed | null;
+        drawer_subject_context?: DrawerSubjectContext | null;
+    }>;
     /** Ordered ids from the loaded filtered page — same order as `records`. */
     loaded_record_ids_in_order: string[];
     /** Queue summary total when known (may exceed `records.length`). */
@@ -106,7 +112,11 @@ export function buildOpportunityDrawerQueueNavigatorFromDisplayItems(params: {
         if (!id || seen.has(id)) continue;
         seen.add(id);
         loaded_record_ids_in_order.push(id);
-        records.push({ id, preview_seed: opportunityDrawerSeedFromQueueItem(item) });
+        records.push({
+            id,
+            preview_seed: opportunityDrawerSeedFromQueueItem(item),
+            drawer_subject_context: opportunityDrawerSubjectContextFromQueueItem(item),
+        });
     }
     if (!records.length) return null;
     return {
@@ -148,4 +158,13 @@ export function previewSeedForQueueNavigatorRecord(
     const id = recordId.trim();
     if (!id || !navigator?.records?.length) return undefined;
     return navigator.records.find((r) => r.id.trim() === id)?.preview_seed ?? undefined;
+}
+
+export function drawerSubjectContextForQueueNavigatorRecord(
+    navigator: OpportunityDrawerQueueNavigator | null | undefined,
+    recordId: string,
+): DrawerSubjectContext | null | undefined {
+    const id = recordId.trim();
+    if (!id || !navigator?.records?.length) return undefined;
+    return navigator.records.find((r) => r.id.trim() === id)?.drawer_subject_context ?? undefined;
 }

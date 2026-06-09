@@ -204,7 +204,7 @@ export default function OpportunityDrawerVmRuntime() {
     const layoutPrefetchId =
         drawerVmRender.type === "opportunities" && drawerVmRender.id ?
             String(drawerVmRender.id)
-        :   null;
+            : null;
 
     const overviewLayoutBody = useDrawerLayoutRuntimeBody({
         cutoverEnabled: isLayoutRuntimeOpportunityDrawerBodyEnabledClient(),
@@ -266,7 +266,7 @@ export default function OpportunityDrawerVmRuntime() {
                             department_id: displayVm.workspace.department_id,
                             work_unit_id: displayVm.workspace.work_unit_id,
                         }
-                    :   drawer.opportunityWorkspaceContext ?? null,
+                        : drawer.opportunityWorkspaceContext ?? null,
             });
         },
         [
@@ -352,21 +352,21 @@ export default function OpportunityDrawerVmRuntime() {
             return null;
         }
         return (
-                <OpportunityDrawerHeaderControls
-                    layout="modal-attention"
-                    opportunityId={drawer.id}
-                    overviewData={record}
-                    opportunitySingular={opportunitySingular}
-                    queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
-                    inquiryWorkflow
-                    menuActions={displayVm?.actions.header ?? []}
-                    showRegistryActions={false}
-                    canMutate={statusCanMutate}
-                    onActionSelect={onActionSelect}
-                    actionPreflightBlocked={actionPreflightBlocked}
-                    onDismissActionPreflightBlocked={clearActionPreflightBlocked}
-                    registryActionFeedback={registryActionFeedback}
-                />
+            <OpportunityDrawerHeaderControls
+                layout="modal-attention"
+                opportunityId={drawer.id}
+                overviewData={record}
+                opportunitySingular={opportunitySingular}
+                queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
+                inquiryWorkflow
+                menuActions={displayVm?.actions.header ?? []}
+                showRegistryActions={false}
+                canMutate={statusCanMutate}
+                onActionSelect={onActionSelect}
+                actionPreflightBlocked={actionPreflightBlocked}
+                onDismissActionPreflightBlocked={clearActionPreflightBlocked}
+                registryActionFeedback={registryActionFeedback}
+            />
         );
     }, [
         committedVisible,
@@ -431,8 +431,8 @@ export default function OpportunityDrawerVmRuntime() {
                     registryActionFeedback={registryActionFeedback}
                     actionsDisabledReason={
                         actionLoadingKey ? "An action is running — wait for it to finish."
-                        : !statusCanMutate ? "You don't have permission to run actions on this record."
-                        :   null
+                            : !statusCanMutate ? "You don't have permission to run actions on this record."
+                                : null
                     }
                 />
             </div>
@@ -567,33 +567,33 @@ export default function OpportunityDrawerVmRuntime() {
 
     return (
         <>
-        {showRuntimeOpeningOverlay ?
-            <OpportunityDrawerOpeningOverlay
-                onCancel={closeDrawer}
-                recordLabel={opportunitySingular}
-            />
-        :   null}
-        <EntityDrawerOperatingShell
-            entity="opportunity"
-            isOpen={drawerOpen}
-            onClose={closeDrawer}
-            title={drawerTitleNode}
-            headerSubtitle={layoutCutoverHeader ? undefined : headerSubtitleBelowTitle}
-            headerTitleCenter={layoutCutoverHeader ? undefined : headerAttentionCenter}
-            headerTitleRight={layoutCutoverHeader ? undefined : headerTitleRight}
-            composedStickyHeader={composedProofHeader}
-            panelFooterChrome={
-                layoutCutoverHeader && committedVisible ?
-                    <OpportunityDrawerBodySaveBar canMutate={statusCanMutate} />
-                :   undefined
-            }
-            runtimeDataAttribute="opportunity-vm"
-            runtimeShellDataAttributes={drawerSubjectShellAttrs}
-            holdPriorPayload={holdPriorPayload}
-            summaryStrip={
-                drawerTab === "overview" && committedVisible ? drawerSummaryStrip : null
-            }
-        >
+            {showRuntimeOpeningOverlay ?
+                <OpportunityDrawerOpeningOverlay
+                    onCancel={closeDrawer}
+                    recordLabel={opportunitySingular}
+                />
+                : null}
+            <EntityDrawerOperatingShell
+                entity="opportunity"
+                isOpen={drawerOpen}
+                onClose={closeDrawer}
+                title={drawerTitleNode}
+                headerSubtitle={layoutCutoverHeader ? undefined : headerSubtitleBelowTitle}
+                headerTitleCenter={layoutCutoverHeader ? undefined : headerAttentionCenter}
+                headerTitleRight={layoutCutoverHeader ? undefined : headerTitleRight}
+                composedStickyHeader={composedProofHeader}
+                panelFooterChrome={
+                    layoutCutoverHeader && committedVisible ?
+                        <OpportunityDrawerBodySaveBar canMutate={statusCanMutate} />
+                        : undefined
+                }
+                runtimeDataAttribute="opportunity-vm"
+                runtimeShellDataAttributes={drawerSubjectShellAttrs}
+                holdPriorPayload={holdPriorPayload}
+                summaryStrip={
+                    drawerTab === "overview" && committedVisible ? drawerSummaryStrip : null
+                }
+            >
                 {isOpportunityQueueNavPending ?
                     <div
                         className="absolute inset-0 z-20 flex items-center justify-center bg-white/75"
@@ -602,7 +602,7 @@ export default function OpportunityDrawerVmRuntime() {
                     >
                         <p className="text-sm font-medium text-alloy-midnight/85">Opening record…</p>
                     </div>
-                :   null}
+                    : null}
                 {queuePosition && queuePosition.total >= 2 ?
                     <div className="mb-3 flex justify-end">
                         <OpportunityDrawerQueueNavigatorControls
@@ -612,85 +612,85 @@ export default function OpportunityDrawerVmRuntime() {
                             onNext={() => navigateOpportunityInQueue("next")}
                         />
                     </div>
-                :   null}
+                    : null}
                 {error ?
                     <p className="text-sm text-alloy-ember">{error}</p>
-                :   null}
+                    : null}
                 {showColdShell ?
                     <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
                         <p className="text-sm font-medium text-alloy-midnight/75">Loading opportunity…</p>
                     </div>
-                :   committedVisible && displayVm && record ?
-                    <>
-                        {!layoutCutoverHeader ?
-                            <>
-                                <div
-                                    className="mb-3 flex flex-wrap gap-0.5 border-b border-alloy-stone/15 pb-2"
-                                    data-opportunity-drawer-tab-strip="true"
-                                >
-                                    {tabs.map((tab) => (
-                                        <button
-                                            key={tab}
-                                            type="button"
-                                            onClick={() => onTabSelect(tab)}
-                                            className={clsx(
-                                                "rounded-md px-3 py-1.5 text-xs font-semibold capitalize",
-                                                drawerTab === tab ?
-                                                    "bg-alloy-blue/10 text-alloy-blue"
-                                                :   "text-alloy-midnight/60 hover:bg-alloy-stone/10",
-                                            )}
-                                            data-opportunity-drawer-tab={tab}
-                                        >
-                                            {OPPORTUNITY_TAB_LABELS[tab] ?? tab}
-                                        </button>
-                                    ))}
-                                </div>
-                                {lifecycleRail ?
+                    : committedVisible && displayVm && record ?
+                        <>
+                            {!layoutCutoverHeader ?
+                                <>
                                     <div
-                                        className="mb-3"
-                                        data-opportunity-drawer-lifecycle-rail-wrap="true"
+                                        className="mb-3 flex flex-wrap gap-0.5 border-b border-alloy-stone/15 pb-2"
+                                        data-opportunity-drawer-tab-strip="true"
                                     >
-                                        {lifecycleRail}
+                                        {tabs.map((tab) => (
+                                            <button
+                                                key={tab}
+                                                type="button"
+                                                onClick={() => onTabSelect(tab)}
+                                                className={clsx(
+                                                    "rounded-md px-3 py-1.5 text-xs font-semibold capitalize",
+                                                    drawerTab === tab ?
+                                                        "bg-alloy-blue/10 text-alloy-blue"
+                                                        : "text-alloy-midnight/60 hover:bg-alloy-stone/10",
+                                                )}
+                                                data-opportunity-drawer-tab={tab}
+                                            >
+                                                {OPPORTUNITY_TAB_LABELS[tab] ?? tab}
+                                            </button>
+                                        ))}
                                     </div>
-                                :   null}
-                            </>
-                        :   null}
-                        {drawer.id ?
-                            <>
-                                <CommunicationsDrawerBackgroundLoader
-                                    apiEntityType="opportunities"
-                                    entityId={drawer.id}
+                                    {lifecycleRail ?
+                                        <div
+                                            className="mb-3"
+                                            data-opportunity-drawer-lifecycle-rail-wrap="true"
+                                        >
+                                            {lifecycleRail}
+                                        </div>
+                                        : null}
+                                </>
+                                : null}
+                            {drawer.id ?
+                                <>
+                                    <CommunicationsDrawerBackgroundLoader
+                                        apiEntityType="opportunities"
+                                        entityId={drawer.id}
+                                    />
+                                    <OpportunityDrawerTabBackgroundLoader drawerId={drawer.id} />
+                                </>
+                                : null}
+                            {drawerTab === "overview" ?
+                                <OpportunityDrawerOverviewBody
+                                    displayVm={displayVm}
+                                    drawerId={String(displayVm.entity.id)}
+                                    opportunitySingular={opportunitySingular}
+                                    onSelectTab={onTabSelect}
+                                    vmReady={Boolean(displayVm.structureSettled && committedVisible)}
+                                    canMutate={statusCanMutate}
+                                    departmentId={displayVm.workspace.department_id}
+                                    workUnitId={displayVm.workspace.work_unit_id}
+                                    layoutRuntimeShadow={layoutRuntimeShadow}
+                                    layoutBody={overviewLayoutBody}
+                                    layoutDocBodyOverride={overviewLayoutDocBodyOverride}
                                 />
-                                <OpportunityDrawerTabBackgroundLoader drawerId={drawer.id} />
-                            </>
-                        :   null}
-                        {drawerTab === "overview" ?
-                            <OpportunityDrawerOverviewBody
-                                displayVm={displayVm}
-                                drawerId={String(displayVm.entity.id)}
-                                opportunitySingular={opportunitySingular}
-                                onSelectTab={onTabSelect}
-                                vmReady={Boolean(displayVm.structureSettled && committedVisible)}
-                                canMutate={statusCanMutate}
-                                departmentId={displayVm.workspace.department_id}
-                                workUnitId={displayVm.workspace.work_unit_id}
-                                layoutRuntimeShadow={layoutRuntimeShadow}
-                                layoutBody={overviewLayoutBody}
-                                layoutDocBodyOverride={overviewLayoutDocBodyOverride}
-                            />
-                        :   <OpportunityDrawerVmTabPanes
-                                drawerId={String(displayVm.entity.id)}
-                                drawerTab={drawerTab}
-                                record={record}
-                                onSelectTab={onTabSelect}
-                            />
-                        }
-                    </>
-                :   null}
-        </EntityDrawerOperatingShell>
-        {registryModals ?
-            <VmDrawerActionModalsPortal>{registryModals}</VmDrawerActionModalsPortal>
-        :   null}
-    </>
+                                : <OpportunityDrawerVmTabPanes
+                                    drawerId={String(displayVm.entity.id)}
+                                    drawerTab={drawerTab}
+                                    record={record}
+                                    onSelectTab={onTabSelect}
+                                />
+                            }
+                        </>
+                        : null}
+            </EntityDrawerOperatingShell>
+            {registryModals ?
+                <VmDrawerActionModalsPortal>{registryModals}</VmDrawerActionModalsPortal>
+                : null}
+        </>
     );
 }

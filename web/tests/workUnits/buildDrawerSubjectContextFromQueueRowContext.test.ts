@@ -22,6 +22,7 @@ describe("buildDrawerSubjectContextFromQueueRowContext", () => {
         expect(drawerCtx!.active_subject?.subject_id).toBe("opp-1");
         expect(drawerCtx!.focus_mode).toBe("case_default");
         expect(drawerCtx!.lifecycle_visual_stage_key).toBe("tour");
+        expect(drawerCtx!.stage_focus_label).toBe("Tours");
         expect(drawerCtx!.related_subjects.length).toBeGreaterThanOrEqual(0);
     });
 

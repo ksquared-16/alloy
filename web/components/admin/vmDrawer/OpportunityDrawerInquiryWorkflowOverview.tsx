@@ -26,6 +26,7 @@ import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGa
 import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
 import { opportunityDrawerVmFirstPaintDependencySettled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelFirstPaint";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import { resolveDrawerSubjectFocusPresentation } from "@/lib/admin/drawer/resolveDrawerSubjectFocusPresentation";
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 
 type Props = {
@@ -48,6 +49,11 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
 
     const record = displayVm.above_fold.record ?? {};
+
+    const subjectFocusPresentation = useMemo(
+        () => resolveDrawerSubjectFocusPresentation(drawer.drawerSubjectContext),
+        [drawer.drawerSubjectContext],
+    );
     const inqModel = displayVm.above_fold.render_model.inquiry_summary;
     const shellContract = displayVm.layout.shell;
     const fcSlot = inqModel?.family_contacts;
@@ -244,6 +250,7 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                     <div className="mt-1 min-w-0 px-0.5 pb-0.5">
                     <OpportunityInquiryChildrenSection
                         rows={drawerChildRows}
+                        highlightSubjectIds={subjectFocusPresentation.highlightSubjectIds}
                         opportunityId={drawerId}
                         opportunityDesiredStartDate={(() => {
                             const rawStart =

@@ -50,6 +50,7 @@ export function buildDrawerSubjectContextFromQueueRowContext(
         active_subject_group,
         focus_mode: resolveDrawerSubjectFocusMode(drawerOpen),
         lifecycle_visual_stage_key: resolveLifecycleVisualStageKey(context, drawerOpen),
+        stage_focus_label: trimOrNull(context.row_stage) ?? undefined,
         related_subjects: context.related_subjects_summary ?? [],
     };
 }

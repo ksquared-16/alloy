@@ -63,6 +63,7 @@ import {
     type InquiryChildFieldDefLike,
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import ViewPersonDrawerIconButton from "@/components/admin/drawer/ViewPersonDrawerIconButton";
+import { inquiryChildRowMatchesSubjectFocus } from "@/lib/admin/drawer/resolveDrawerSubjectFocusPresentation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 
 /** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
@@ -295,6 +296,7 @@ export default function OpportunityInquiryChildrenSection({
     placementLabelFetchEnabled = false,
     shellReservedRowCount = 0,
     opportunityDisplayLocationKind,
+    highlightSubjectIds = [],
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
@@ -313,6 +315,8 @@ export default function OpportunityInquiryChildrenSection({
     shellReservedRowCount?: number;
     /** Resolved opportunity-level location display — used for multi-location operator hint. */
     opportunityDisplayLocationKind?: "none" | "single" | "multiple" | null;
+    /** Queue-row drawer subject ids — highlight matching inquiry child rows. */
+    highlightSubjectIds?: string[];
 }) {
     const rootCol = embeddedInPremiumSection ? "min-w-0 w-full" : "md:col-span-2";
     const emptyBox = embeddedInPremiumSection
@@ -1048,7 +1052,9 @@ export default function OpportunityInquiryChildrenSection({
                         outcomeKey: st.outcome_status_key,
                         outcomeLabel: fallbackOutcome,
                     });
+                    const subjectFocusHighlight = inquiryChildRowMatchesSubjectFocus(r, highlightSubjectIds);
                     const rowAttentionClass = attention ? "bg-amber-50/30" : "";
+                    const rowSubjectFocusClass = subjectFocusHighlight ? "bg-alloy-blue/[0.07] ring-1 ring-inset ring-alloy-blue/20" : "";
                     const outcomeSelectAttention =
                         attention && isWaitlistedInquiryOutcome(st.outcome_status_key, fallbackOutcome)
                             ? "border-amber-300/80 bg-amber-50/50"
@@ -1057,9 +1063,10 @@ export default function OpportunityInquiryChildrenSection({
                     return (
                         <div
                             key={r.id}
-                            className={`${desktopGridClass} border-t border-alloy-stone/8 px-3 py-2 ${rowAttentionClass}`}
+                            className={`${desktopGridClass} border-t border-alloy-stone/8 px-3 py-2 ${rowAttentionClass} ${rowSubjectFocusClass}`}
                             data-inquiry-child-row="true"
                             data-inquiry-child-card="true"
+                            data-inquiry-child-queue-subject-focus={subjectFocusHighlight ? "true" : undefined}
                             role="row"
                         >
                             {!r.linked_on_inquiry && rowCanEdit ? (

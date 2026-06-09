@@ -66,6 +66,7 @@ import type { ChildDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/chil
 import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
 import { resolveDrawerVmRenderDrawer } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 import {
+    drawerSubjectContextForQueueNavigatorRecord,
     previewSeedForQueueNavigatorRecord,
     resolveOpportunityQueueNavigateTargetId,
     type OpportunityDrawerQueueNavigator,
@@ -461,6 +462,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             workspace: OpportunityWorkspaceContext | null | undefined
         ) => {
             const seed = previewSeedForQueueNavigatorRecord(navigator, targetId) ?? null;
+            const subjectContext = drawerSubjectContextForQueueNavigatorRecord(navigator, targetId) ?? null;
             const navContext: OpportunityDrawerQueueNavigator = {
                 ...navigator,
                 drawer_nav_generation: (navigator.drawer_nav_generation ?? 0) + 1,
@@ -481,7 +483,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 opportunityWorkspaceContext: workspace ?? prev.opportunityWorkspaceContext ?? null,
                 opportunityQueuePreviewSeed: seed,
                 opportunityQueueNavigator: navContext,
-                drawerSubjectContext: null,
+                drawerSubjectContext: subjectContext,
             }));
 
             prefetchAdjacentOpportunityDrawers({

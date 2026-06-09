@@ -214,6 +214,8 @@ export type DrawerSubjectContext = {
     focus_mode: DrawerSubjectFocusMode;
     /** Stage key for lifecycle visual block — from active subject or group stage_focus. */
     lifecycle_visual_stage_key: string;
+    /** Operator stage label from queue row (e.g. "Tours") — display only. */
+    stage_focus_label?: string;
     related_subjects: RelatedSubjectSummary[];
 };
 
