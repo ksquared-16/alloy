@@ -300,6 +300,50 @@ describe("OperationalQueueRecordRow", () => {
         expect(html).toContain('data-layout-runtime-adornment-entity="person"');
     });
 
+    it("renders fixed action rail when lifecycle actions are empty", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        const item: QueuePreviewItemVm = {
+            id: "opp-empty-actions",
+            title: "Empty Actions Family",
+            quickActions: [{ id: "open", label: "Open" }],
+            semanticCrmCompact: {
+                primaryIdentity: "Empty Actions Family",
+                childName: null,
+                contactDisplayName: "Pat Empty",
+                contactPersonId: "person-empty",
+                contactPhoneDisplay: null,
+                contactEmail: null,
+                programContext: null,
+                statusLabel: "New",
+                stageLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                tourContext: null,
+                locationContext: null,
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item, doc);
+        const vm = buildOperationalQueueRecordViewModelFromLayout(doc, record);
+        const html = renderToStaticMarkup(
+            <OperationalQueueRecordRow
+                vm={vm}
+                record={record}
+                rowActions={[]}
+                onRowAction={() => {}}
+            />,
+        );
+        expect(html).toContain("operational-queue-row__action-rail");
+        expect(html).toContain("Work with BOS");
+        expect(html).toContain("operational-queue-row__actions-trigger");
+        expect(html).toContain("data-queue-row-bos-button");
+    });
+
     it("renders drawer-style Actions and Work with BOS buttons", () => {
         const doc = buildLeadQueueDefaultDoc();
         const item: QueuePreviewItemVm = {

@@ -4,6 +4,7 @@ import {
     isQueueRowBosAction,
     isQueueRowOpenAction,
     partitionQueueRowActions,
+    queueRowBosPlaceholderAction,
 } from "@/lib/ui-v2/queueRowQuickActionHelpers";
 import type { QueueItemQuickActionVm } from "@/lib/ui-v2/workspace-types";
 
@@ -18,6 +19,14 @@ describe("queueRowQuickActionHelpers", () => {
         expect(bosAction?.actionId).toBe("ask_bos");
         expect(menuActions.map((a) => a.label)).toEqual(["Message"]);
         expect(isQueueRowBosAction(bosAction!)).toBe(true);
+    });
+
+    it("provides a BOS placeholder for fixed controls when registry actions are empty", () => {
+        const placeholder = queueRowBosPlaceholderAction();
+        expect(isQueueRowBosAction(placeholder)).toBe(true);
+        const { bosAction, menuActions } = partitionQueueRowActions([placeholder]);
+        expect(bosAction?.actionId).toBe("ask_bos");
+        expect(menuActions).toEqual([]);
     });
 
     it("excludes Open from Actions menu", () => {

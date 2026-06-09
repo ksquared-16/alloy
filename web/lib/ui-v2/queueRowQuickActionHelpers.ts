@@ -40,6 +40,16 @@ export function isQueueRowBosAction(qa: QueueItemQuickActionVm): boolean {
     );
 }
 
+/** Fixed-control BOS action when registry hydration did not place ask_bos on the row. */
+export function queueRowBosPlaceholderAction(): QueueItemQuickActionVm {
+    return {
+        id: "registry-ask_bos",
+        label: "Ask BOS",
+        actionId: "ask_bos",
+        payload: { source: "queue_row_fixed_control", intent: "ask_bos" },
+    };
+}
+
 /** Split BOS into its own button; remaining lifecycle actions go in the Actions menu (not Open). */
 export function partitionQueueRowActions(actions: QueueItemQuickActionVm[]): {
     menuActions: QueueItemQuickActionVm[];

@@ -108,8 +108,10 @@ export default function OperationalQueueRecordRow({
     onToggleCollapsed,
     showAttentionAccent = false,
 }: Props) {
-    const showActions = Boolean((rowActions?.length ?? 0) > 0 && onRowAction);
-    const fixedControls = config.fixedControls ?? { actionsMenu: true, workWithBos: true };
+    const fixedControls = config.fixedControls ?? { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" };
+    const showActionRail = Boolean(
+        onRowAction && (fixedControls.workWithBos !== false || fixedControls.actionsMenu !== false),
+    );
     const visibleColumns = config.columns;
     const childrenRepeatBlock = config.columns
         .flatMap((col) => col.blocks)
@@ -186,11 +188,13 @@ export default function OperationalQueueRecordRow({
                         />
                     ))}
                 </div>
-                {showActions && fixedControls.actionsMenu !== false ?
+                {showActionRail ?
                     <QueueRowActionRail
-                        actions={rowActions!}
+                        actions={rowActions ?? []}
                         pending={rowActionsPending}
                         onSelect={onRowAction!}
+                        showWorkWithBos={fixedControls.workWithBos !== false}
+                        showActionsMenu={fixedControls.actionsMenu !== false}
                     />
                 :   null}
             </div>

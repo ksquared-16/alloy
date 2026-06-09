@@ -4,6 +4,31 @@ import { normalizeQueueRecordLayoutConfig } from "@/lib/layout/runtime/normalize
 import { resolveQueueRecordField } from "@/lib/layout/runtime/queueRecordScopedResolve";
 
 describe("normalizeQueueRecordLayoutConfig", () => {
+    it("defaults fixedControls when missing from saved metadata", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const withoutFixed = { ...base, fixedControls: undefined as unknown as typeof base.fixedControls };
+        const normalized = normalizeQueueRecordLayoutConfig(withoutFixed);
+        expect(normalized.fixedControls).toEqual({
+            actionsMenu: true,
+            workWithBos: true,
+            actionRailStyle: "stacked",
+        });
+    });
+
+    it("preserves explicit fixedControls opt-out", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const withOptOut = {
+            ...base,
+            fixedControls: { actionsMenu: false, workWithBos: true, actionRailStyle: "compact" as const },
+        };
+        const normalized = normalizeQueueRecordLayoutConfig(withOptOut);
+        expect(normalized.fixedControls).toEqual({
+            actionsMenu: false,
+            workWithBos: true,
+            actionRailStyle: "compact",
+        });
+    });
+
     it("defaults repeated block maxItems to 5 when missing", () => {
         const base = defaultLeadQueueLayoutV3();
         const childCol = base.columns.find((c) => c.scope.type === "repeated_related");

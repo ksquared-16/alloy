@@ -7,10 +7,25 @@ import type {
     QueueRecordBlockConfig,
     QueueRecordFieldConfig,
     QueueRecordFieldDisplay,
+    QueueRecordFixedControls,
     QueueRecordLayoutConfigV3,
 } from "@/lib/layout/queueRecordLayoutV3";
 
 const DEFAULT_REPEATED_MAX_ITEMS = 5;
+
+const DEFAULT_FIXED_CONTROLS: QueueRecordFixedControls = {
+    actionsMenu: true,
+    workWithBos: true,
+    actionRailStyle: "stacked",
+};
+
+function normalizeFixedControls(fixedControls?: Partial<QueueRecordFixedControls>): QueueRecordFixedControls {
+    return {
+        actionsMenu: fixedControls?.actionsMenu ?? DEFAULT_FIXED_CONTROLS.actionsMenu,
+        workWithBos: fixedControls?.workWithBos ?? DEFAULT_FIXED_CONTROLS.workWithBos,
+        actionRailStyle: fixedControls?.actionRailStyle ?? DEFAULT_FIXED_CONTROLS.actionRailStyle,
+    };
+}
 
 function isQueueStatusFieldKey(fieldKey: string): boolean {
     return (
@@ -50,6 +65,7 @@ function normalizeBlock(block: QueueRecordBlockConfig): QueueRecordBlockConfig {
 export function normalizeQueueRecordLayoutConfig(config: QueueRecordLayoutConfigV3): QueueRecordLayoutConfigV3 {
     return {
         ...config,
+        fixedControls: normalizeFixedControls(config.fixedControls),
         columns: config.columns.map((col) => ({
             ...col,
             blocks: col.blocks.map(normalizeBlock),

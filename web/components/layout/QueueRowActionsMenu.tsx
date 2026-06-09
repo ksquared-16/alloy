@@ -3,7 +3,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Sparkles, Zap } from "lucide-react";
 import type { QueueItemQuickActionVm } from "@/lib/ui-v2/workspace-types";
-import { partitionQueueRowActions, queueQuickActionDispatchId } from "@/lib/ui-v2/queueRowQuickActionHelpers";
+import {
+    partitionQueueRowActions,
+    queueQuickActionDispatchId,
+    queueRowBosPlaceholderAction,
+} from "@/lib/ui-v2/queueRowQuickActionHelpers";
 import { BOS_ASSIST_CTA_DRAWER } from "@/lib/adminV2/bos/bosDrawerAssistHandoff";
 import { RecordDrawerHeaderActionButton } from "@/components/admin/drawer/record/RecordDrawerActionRail";
 import { recordDrawerHeaderActionClassName } from "@/components/admin/drawer/record/recordDrawerHeaderActionClasses";
@@ -12,14 +16,21 @@ type Props = {
     actions: QueueItemQuickActionVm[];
     onSelect: (qa: QueueItemQuickActionVm, dispatchId: string) => void;
     pending?: boolean;
+    showWorkWithBos?: boolean;
+    showActionsMenu?: boolean;
 };
 
 export default function QueueRowActionRail({
     actions,
     onSelect,
     pending = false,
+    showWorkWithBos = true,
+    showActionsMenu = true,
 }: Props) {
     const { menuActions, bosAction } = partitionQueueRowActions(actions);
+    const resolvedBosAction =
+        bosAction ?? (showWorkWithBos ? queueRowBosPlaceholderAction() : null);
+    const showRail = Boolean((showWorkWithBos && resolvedBosAction) || showActionsMenu);
     const [open, setOpen] = useState(false);
     const rootRef = useRef<HTMLDivElement>(null);
     const menuId = useId();
@@ -41,7 +52,7 @@ export default function QueueRowActionRail({
         };
     }, [open]);
 
-    if (!menuActions.length && !bosAction) return null;
+    if (!showRail) return null;
 
     return (
         <div
@@ -53,7 +64,7 @@ export default function QueueRowActionRail({
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
         >
-            {bosAction ? (
+            {showWorkWithBos && resolvedBosAction ?
                 <RecordDrawerHeaderActionButton
                     label={BOS_ASSIST_CTA_DRAWER}
                     inquiryWorkflow
@@ -65,11 +76,11 @@ export default function QueueRowActionRail({
                     data-record-drawer-header-action="true"
                     onClick={(e) => {
                         e.stopPropagation();
-                        onSelect(bosAction, queueQuickActionDispatchId(bosAction));
+                        onSelect(resolvedBosAction, queueQuickActionDispatchId(resolvedBosAction));
                     }}
                 />
-            ) : null}
-            {menuActions.length ? (
+            :   null}
+            {showActionsMenu ?
                 <div className="operational-queue-row__actions-menu relative shrink-0">
                     <button
                         type="button"
@@ -93,7 +104,7 @@ export default function QueueRowActionRail({
                             ▾
                         </span>
                     </button>
-                    {open ? (
+                    {open ?
                         <div
                             id={menuId}
                             role="menu"
@@ -103,28 +114,37 @@ export default function QueueRowActionRail({
                             onClick={(e) => e.stopPropagation()}
                             onKeyDown={(e) => e.stopPropagation()}
                         >
-                            {menuActions.map((qa) => {
-                                const dispatchId = queueQuickActionDispatchId(qa);
-                                return (
-                                    <button
-                                        key={`${qa.id}-${dispatchId}`}
-                                        type="button"
-                                        role="menuitem"
-                                        className="operational-queue-row__actions-item"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setOpen(false);
-                                            onSelect(qa, dispatchId);
-                                        }}
-                                    >
-                                        {qa.label}
-                                    </button>
-                                );
-                            })}
+                            {menuActions.length ?
+                                menuActions.map((qa) => {
+                                    const dispatchId = queueQuickActionDispatchId(qa);
+                                    return (
+                                        <button
+                                            key={`${qa.id}-${dispatchId}`}
+                                            type="button"
+                                            role="menuitem"
+                                            className="operational-queue-row__actions-item"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOpen(false);
+                                                onSelect(qa, dispatchId);
+                                            }}
+                                        >
+                                            {qa.label}
+                                        </button>
+                                    );
+                                })
+                            :   <p
+                                    className="operational-queue-row__actions-empty px-3 py-2 text-[11px] text-alloy-midnight/50"
+                                    role="presentation"
+                                    data-queue-row-actions-empty="true"
+                                >
+                                    No lifecycle actions configured
+                                </p>
+                            }
                         </div>
-                    ) : null}
+                    :   null}
                 </div>
-            ) : null}
+            :   null}
         </div>
     );
 }
