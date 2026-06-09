@@ -15,9 +15,14 @@ import { configuredStageKeysForMetadata } from "@/lib/lifecycle/lifecycleBuilder
 import { statusKeysForBuilderStageQueueSync, stageStatusKeysForDepartmentStage } from "@/lib/lifecycle/lifecycleStageWorkUnitQueueSync";
 import { defaultWorkUnitQueueNameForStageKey } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import {
+    mergeInertQueueMembershipIntoQueueDefinition,
+    mergeLifecycleStageWorkUnitMetadataWithMembership,
+    resolveMembershipForWorkUnitDenormalization,
+} from "@/lib/lifecycle/persistQueueMembershipV1";
+import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import {
     applyStatusKeysToLifecycleStageQueueDefinition,
     buildLifecycleStageQueueDefinition,
-    buildLifecycleStageWorkUnitMetadata,
     lifecycleStageWorkUnitKey,
     stageKeyFromLifecycleWorkUnitMetadata,
     type LifecycleStageWorkUnitRow,
@@ -398,7 +403,13 @@ export async function upsertLifecycleStageWorkUnitForDepartment(
     orgId: string,
     departmentId: string,
     stageKey: string,
-    opts: { name?: string; processId?: string | null; sortOrder?: number; statusKeys?: readonly string[] }
+    opts: {
+        name?: string;
+        processId?: string | null;
+        sortOrder?: number;
+        statusKeys?: readonly string[];
+        stageMembership?: QueueMembershipV1 | null;
+    },
 ): Promise<{
     identity: LifecycleStageWorkUnitIdentity;
     snapshot: EnrollmentPipelineWorkUnitSnapshot;
@@ -454,12 +465,31 @@ export async function upsertLifecycleStageWorkUnitForDepartment(
     const wuKey = lifecycleStageWorkUnitKey(sk);
     let created = false;
 
-    if (identity.state === "not_created") {
-        const queue_definition = buildLifecycleStageQueueDefinition({
-            stageKey: sk,
-            label: displayName,
+    const membershipForWorkUnit = resolveMembershipForWorkUnitDenormalization(
+        sk,
+        opts.stageMembership ?? null,
+        identity.workUnit?.metadata ?? null,
+    );
+    const workUnitMetadata = mergeLifecycleStageWorkUnitMetadataWithMembership(
+        sk,
+        {
+            processId: processId ?? undefined,
             statusKeys: filterKeys,
-        });
+            stageLabel: stageRecord?.label,
+            queueMembership: membershipForWorkUnit,
+        },
+        identity.workUnit?.metadata ?? null,
+    );
+
+    if (identity.state === "not_created") {
+        let queue_definition = mergeInertQueueMembershipIntoQueueDefinition(
+            buildLifecycleStageQueueDefinition({
+                stageKey: sk,
+                label: displayName,
+                statusKeys: filterKeys,
+            }),
+            membershipForWorkUnit,
+        );
         const { data: inserted, error: insErr } = await supabase
             .from("work_units")
             .insert({
@@ -471,11 +501,7 @@ export async function upsertLifecycleStageWorkUnitForDepartment(
                 sort_order: sortOrder,
                 is_active: true,
                 queue_definition,
-                metadata: buildLifecycleStageWorkUnitMetadata(sk, {
-                    processId: processId ?? undefined,
-                    statusKeys: filterKeys,
-                    stageLabel: stageRecord?.label,
-                }),
+                metadata: workUnitMetadata,
                 updated_at: now,
             })
             .select("id, key, name, department_id, queue_definition, is_active, metadata")
@@ -488,22 +514,19 @@ export async function upsertLifecycleStageWorkUnitForDepartment(
         );
     } else {
         const row = identity.workUnit!;
-        const queue_definition = applyStatusKeysToLifecycleStageQueueDefinition(
+        let queue_definition = applyStatusKeysToLifecycleStageQueueDefinition(
             row.queue_definition,
             filterKeys,
-            sk
+            sk,
         );
+        queue_definition = mergeInertQueueMembershipIntoQueueDefinition(queue_definition, membershipForWorkUnit);
         const { data: updated, error: upErr } = await supabase
             .from("work_units")
             .update({
                 name: displayName,
                 sort_order: sortOrder,
                 queue_definition,
-                metadata: buildLifecycleStageWorkUnitMetadata(sk, {
-                    processId: processId ?? undefined,
-                    statusKeys: filterKeys,
-                    stageLabel: stageRecord?.label,
-                }),
+                metadata: workUnitMetadata,
                 is_active: true,
                 updated_at: now,
             })

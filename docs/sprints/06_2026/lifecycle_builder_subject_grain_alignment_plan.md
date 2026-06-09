@@ -349,7 +349,8 @@ Aligned with child-grain Phase C–F but **builder-metadata-first** so lane flip
 - [x] Phase C: runtime read behind `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER` (default off)
 - [x] Phase D: full builder routing for tour/waitlist/enrollment/enrolled + row context + count_unit
 - [x] Phase E: location-scope filtering + sibling redaction on builder child/candidate lanes
-- [ ] Phase F: save path UI, production lane flip sign-off, legacy cleanup
+- [x] Phase F: save path persists queue_membership_v1 + WU denormalization
+- [ ] Phase G: Builder UI, production lane flip sign-off, legacy cleanup
 
 ---
 
@@ -544,6 +545,23 @@ export ALLOY_QUEUE_MEMBERSHIP_BUILDER_LANES=enrolled,enrollment,tour,waitlist
 | Defaults | Enrollment stage defaults now seed `location_scope_source` (`ocm_site` / `placement_site`) |
 
 **No change:** Lead/Qualification case-grain legacy paths; flags/rollback unchanged.
+
+---
+
+## Phase F implementation note (2026-06-09)
+
+**Status:** `saveLifecycleStageRuntimeConfig` persists `queue_membership_v1` — **metadata only**.
+
+| Behavior | Detail |
+|----------|--------|
+| Stage save | Preserve explicit valid membership; seed enrollment default when missing |
+| Work unit | Denormalize membership to `lifecycle_wu_*` metadata on upsert/sync |
+| Queue definition | Inert `metadata.queue_membership_v1`, `subject_type`, `count_unit` — **filters unchanged** |
+| Unknown stages | No bogus membership (e.g. custom `enrolling` slug without default) |
+| Builder load | `lifecycleBuilderConfig` already round-trips `queue_membership_v1` on parse |
+| Module | `web/lib/lifecycle/persistQueueMembershipV1.ts` |
+
+**Still pending:** Builder UI grain/disposition editors; production lane flip; `queue_definition` filter materialization from membership.
 
 ---
 

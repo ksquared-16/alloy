@@ -38,6 +38,7 @@ import type { LifecycleActivationV1 } from "@/lib/lifecycle/lifecycleActivationC
 import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import { persistLifecycleStageFieldRules } from "@/lib/lifecycle/persistLifecycleStageFieldRules";
+import { persistQueueMembershipForLifecycleStageSave } from "@/lib/lifecycle/persistQueueMembershipV1";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 
 export type SaveLifecycleStageRuntimeConfigInput = {
@@ -193,6 +194,14 @@ export async function saveLifecycleStageRuntimeConfig(
         selectedStatusKeys
     );
 
+    const membershipPersist = await persistQueueMembershipForLifecycleStageSave(supabase, {
+        orgId: input.orgId,
+        departmentId: input.departmentId,
+        stageKey,
+        metadata,
+    });
+    metadata = membershipPersist.metadata;
+
     const statusStagesPayload = await loadLifecycleStageStatusStagesPayload(
         supabase,
         input.orgId,
@@ -227,7 +236,8 @@ export async function saveLifecycleStageRuntimeConfig(
                 processId,
                 sortOrder: stageRecord?.sort_order,
                 statusKeys: selectedStatusKeys,
-            }
+                stageMembership: membershipPersist.membership,
+            },
         );
         if (identity.state === "conflict" || !identity.workUnit) {
             throw new Error(`Work unit queue conflict for stage "${stageKey}".`);
@@ -253,19 +263,47 @@ export async function saveLifecycleStageRuntimeConfig(
             processId,
         });
         if (identity.workUnit) {
-            workUnitId = identity.workUnit.id;
-            workUnitName = identity.workUnit.name;
-            queueDefinitionRaw = identity.workUnit.queue_definition;
-            metadataStatusKeys = readMetadataStatusKeys(identity.workUnit.metadata);
-            queueFilterKeys = queueStatusKeysForLifecycleWorkUnitValidation(
-                {
-                    id: workUnitId,
-                    key: identity.workUnit.key,
-                    name: workUnitName,
-                    queue_definition: queueDefinitionRaw,
-                },
-                stageKey
-            );
+            if (membershipPersist.membership) {
+                const { identity: syncedIdentity } = await upsertLifecycleStageWorkUnitForDepartment(
+                    supabase,
+                    input.orgId,
+                    input.departmentId,
+                    stageKey,
+                    {
+                        name: identity.workUnit.name,
+                        processId,
+                        statusKeys: selectedStatusKeys,
+                        stageMembership: membershipPersist.membership,
+                    },
+                );
+                if (syncedIdentity.workUnit) {
+                    workUnitId = syncedIdentity.workUnit.id;
+                    workUnitName = syncedIdentity.workUnit.name;
+                    queueDefinitionRaw = syncedIdentity.workUnit.queue_definition;
+                    metadataStatusKeys = readMetadataStatusKeys(syncedIdentity.workUnit.metadata);
+                } else {
+                    workUnitId = identity.workUnit.id;
+                    workUnitName = identity.workUnit.name;
+                    queueDefinitionRaw = identity.workUnit.queue_definition;
+                    metadataStatusKeys = readMetadataStatusKeys(identity.workUnit.metadata);
+                }
+            } else {
+                workUnitId = identity.workUnit.id;
+                workUnitName = identity.workUnit.name;
+                queueDefinitionRaw = identity.workUnit.queue_definition;
+                metadataStatusKeys = readMetadataStatusKeys(identity.workUnit.metadata);
+            }
+            if (workUnitId) {
+                queueFilterKeys = queueStatusKeysForLifecycleWorkUnitValidation(
+                    {
+                        id: workUnitId,
+                        key: identity.workUnit?.key ?? workUnitKey,
+                        name: workUnitName,
+                        queue_definition: queueDefinitionRaw,
+                    },
+                    stageKey,
+                );
+            }
         }
     }
 

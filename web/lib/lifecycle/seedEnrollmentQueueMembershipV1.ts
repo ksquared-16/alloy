@@ -84,7 +84,7 @@ function readMembershipFromContainer(container: unknown): {
     return { raw, parsed: parseQueueMembershipV1(raw) };
 }
 
-function membershipSeedDecision(
+export function membershipSeedDecision(
     stageKey: string,
     container: unknown,
 ): {
