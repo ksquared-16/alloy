@@ -35,7 +35,26 @@ export function readQueueRowCaseDisplayLabel(record: ProofRuntimeRecord): string
     );
 }
 
-/** Remove `queue_row.subject_label` when it duplicates the case name on the row record. */
+function readQueueRowContextSubjectType(record: ProofRuntimeRecord): string | null {
+    const ctx = (record as Record<string, unknown>)._queue_row_context;
+    if (ctx == null || typeof ctx !== "object" || Array.isArray(ctx)) return null;
+    const subject = (ctx as { row_subject?: { subject_type?: unknown } }).row_subject;
+    return typeof subject?.subject_type === "string" ? subject.subject_type.trim() : null;
+}
+
+/** True when context marks this row as case-grain (duplicate subject suppression applies). */
+export function isCaseGrainQueueRowContext(record: ProofRuntimeRecord): boolean {
+    const subjectType = readQueueRowContextSubjectType(record);
+    if (subjectType === "case") return true;
+    if (subjectType === "child" || subjectType === "candidate") return false;
+    const id = trimOrNull((record as Record<string, unknown>).id) ?? "";
+    if (id.startsWith("ocmrow:") || id.startsWith("pcrow:")) return false;
+    const grain = trimOrNull((record as Record<string, unknown>).row_grain);
+    if (grain === "child" || grain === "candidate") return false;
+    return true;
+}
+
+/** Remove `queue_row.subject_label` when it duplicates the case name on case-grain rows only. */
 export function suppressDuplicateQueueRowSubjectOnRecord(record: ProofRuntimeRecord): ProofRuntimeRecord {
     const mutable = record as Record<string, unknown>;
     const subject = trimOrNull(mutable["queue_row.subject_label"]);
@@ -43,6 +62,10 @@ export function suppressDuplicateQueueRowSubjectOnRecord(record: ProofRuntimeRec
         if ("queue_row.subject_label" in mutable) {
             delete mutable["queue_row.subject_label"];
         }
+        return record;
+    }
+
+    if (!isCaseGrainQueueRowContext(record)) {
         return record;
     }
 
@@ -57,5 +80,6 @@ export function isQueueRowSubjectFieldVisible(record: ProofRuntimeRecord, fieldK
     if (fieldKey !== "queue_row.subject_label") return true;
     const subject = trimOrNull((record as Record<string, unknown>)["queue_row.subject_label"]);
     if (!subject) return false;
+    if (!isCaseGrainQueueRowContext(record)) return true;
     return !shouldSuppressDuplicateCaseSubjectLabel(readQueueRowCaseDisplayLabel(record), subject);
 }

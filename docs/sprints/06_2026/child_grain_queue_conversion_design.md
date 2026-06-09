@@ -678,12 +678,19 @@ cd web && npm run test -- tests/queues/childGrainLaneBuilders.test.ts
 
 Compare lane counts before/after flag on a copy of staging data — Tour count may shift (case → OCM tracks). Do not enable in production until Phase C sign-off.
 
-### Remains for Phase B / C
+### Phase B implementation (shipped)
+
+Honest `row_subject` on existing `ocmrow:` / `pcrow:` / Card 6/8 rows **without** `ALLOY_QUEUE_CHILD_GRAIN_LANES`. Case opportunity rows unchanged. See `attachQueueRowContextToItems.ts`, `buildChildGrainQueueRowContext.ts`, `queueRowSubjectPresentation.ts` (case-only duplicate suppression).
+
+### Phase C preflight
+
+Before first lane flip: [`child_grain_phase_c_preflight.md`](./child_grain_phase_c_preflight.md) — lane counts, rollout order, staging checklist.
+
+### Remains for Phase C–F
 
 | Phase | Work |
 |-------|------|
-| **B** | Honest `row_subject` on existing Card 6/8 rows **without** flag (always when grain row) |
-| **C** | Lane flip default-on per stage; Lead/Qualification policy |
+| **C** | Per-lane flip via `ALLOY_QUEUE_CHILD_GRAIN_LANES` — **Enrolled first** (see preflight) |
 | **D–F** | KPI labels, navigator groups, legacy compat removal |
 
 ---

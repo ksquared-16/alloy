@@ -71,14 +71,8 @@ export function attachOpportunityQueueRowsWithRowContext(
     const recordRows = asRecordRows(rows);
     if (!recordRows.length) return recordRows;
     const meta = queueRowContextMetaFromLane(lane);
-    const laneKey = meta.key.trim() || lane.executableQueueKey.trim();
-    const honestChildGrain =
-        isChildGrainLaneBuildersEnabled(laneKey) || isChildGrainLaneBuildersEnabled(lane.executableQueueKey);
 
-    if (!honestChildGrain) {
-        return attachPartialQueueRowContextToRows(recordRows, meta);
-    }
-
+    // Phase B: honest row_subject for existing child/candidate-shaped rows (no flag).
     return recordRows.map((row) => {
         if (isHonestChildCandidateGrainRow(row)) {
             return attachChildGrainQueueRowContext(row, meta);

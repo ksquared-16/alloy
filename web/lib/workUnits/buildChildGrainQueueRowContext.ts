@@ -314,8 +314,26 @@ function resolveStageLabel(queue: PartialQueueRowContextQueueMeta): string {
     return queue.label.trim() || queue.key;
 }
 
+/** Executable queue key → enrollment operator stage_key for drawer lifecycle visual. */
+const QUEUE_KEY_ENROLLMENT_STAGE: Record<string, string> = {
+    tours: "tour",
+    tours_follow_up: "tour",
+    enrollment_offers: "enrolling",
+    enrollment_completed: "enrolled",
+    waitlist: "waitlist",
+};
+
+function resolveEnrollmentStageKeyFromQueue(queue: PartialQueueRowContextQueueMeta): string | null {
+    const key = queue.key.trim();
+    return QUEUE_KEY_ENROLLMENT_STAGE[key] ?? null;
+}
+
 function resolveStageKey(queue: PartialQueueRowContextQueueMeta, activeStageKey: string): string {
-    return trimOrNull(queue.stage_key) ?? activeStageKey ?? queue.key;
+    const fromActive = trimOrNull(activeStageKey);
+    if (fromActive) return fromActive;
+    const fromQueueKey = resolveEnrollmentStageKeyFromQueue(queue);
+    if (fromQueueKey) return fromQueueKey;
+    return trimOrNull(queue.stage_key) ?? queue.key;
 }
 
 /** Whether this row should receive honest child/candidate QueueRowContext. */
@@ -338,10 +356,12 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
     const caseDisplayName = resolveCaseDisplayName(row);
     const lifecycleKey = resolveLifecycleKey(input.queue);
     const stageKey = resolveStageKey(input.queue, active.stageKey);
-    const rowStage =
+    const operatorStageLabel =
         trimOrNull(row.enrollment_track_stage_label) ??
-        trimOrNull(input.queue.label) ??
-        resolveStageLabel(input.queue);
+        (resolveEnrollmentStageKeyFromQueue(input.queue)
+            ? humanizeSnakeCaseToken(resolveEnrollmentStageKeyFromQueue(input.queue)!)
+            : null);
+    const rowStage = operatorStageLabel ?? resolveStageLabel(input.queue);
 
     const caseStatusKey =
         trimOrNull(row.opportunity_status_key) ?? trimOrNull(row.status_key) ?? "open";

@@ -313,21 +313,21 @@ describe("attachOpportunityQueueRowsWithRowContext flag gating", () => {
         else process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES = prevEnv;
     });
 
-    it("uses case-grain context when flag is off", () => {
+    it("uses honest child context without flag (Phase B)", () => {
         delete process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES;
-        const [attached] = attachOpportunityQueueRowsWithRowContext([childRow], lane);
-        const ctx = attached._queue_row_context as { row_subject: { subject_type: string } };
-        expect(ctx.row_subject.subject_type).toBe("case");
-    });
-
-    it("uses honest child context when flag is on", () => {
-        process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES = "tours";
         const [attached] = attachOpportunityQueueRowsWithRowContext([childRow], lane);
         const ctx = attached._queue_row_context as {
             row_subject: { subject_type: string; subject_id: string };
         };
         expect(ctx.row_subject.subject_type).toBe("child");
         expect(ctx.row_subject.subject_id).toBe("ocm-b");
+    });
+
+    it("flag on enables OCM lane routing (Phase A)", () => {
+        process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES = "tours";
+        expect(
+            resolveOcmEnrollmentTrackLaneContext({ executableQueueKey: "tours" }),
+        ).not.toBeNull();
     });
 
     it("keeps case-grain context for opportunity rows when flag on", () => {
