@@ -148,6 +148,7 @@ export default function AdminV2Shell({
             className="flex h-screen w-full overflow-hidden"
             style={{ backgroundColor: neutral.background }}
             data-adminv2-app-shell="workspace-v2"
+            data-adminv2-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
           >
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />
             <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">

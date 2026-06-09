@@ -6,7 +6,10 @@ import { mapLayoutRuntimeTasksFromVm } from "@/lib/layout/runtime/mapLayoutRunti
 import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import { layoutRuntimeTaskChipStyle } from "@/lib/layout/runtime/layoutRuntimeTaskChipStyles";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
-import LayoutRuntimeTaskDetailPopover, { formatQueueTaskDueShort } from "@/components/layout/queueRecord/LayoutRuntimeTaskDetailPopover";
+import LayoutRuntimeTaskDetailPopover, {
+    formatQueueTaskDueMiniCard,
+    formatQueueTaskDueShort,
+} from "@/components/layout/queueRecord/LayoutRuntimeTaskDetailPopover";
 
 function toTaskRows(record: ProofRuntimeRecord): InquirySummaryTaskPreviewRow[] {
     return mapLayoutRuntimeTasksFromVm(record as Record<string, unknown>).map((row) => ({
@@ -104,7 +107,12 @@ export default function QueueRecordTasksWidget({ record, title = "Tasks", maxVis
                                     {chipStyle.label}
                                 </span>
                                 {task.due_at ?
-                                    <span className="queue-record-widget__task-due">{formatQueueTaskDueShort(task.due_at)}</span>
+                                    <span
+                                        className="queue-record-widget__task-due"
+                                        title={formatQueueTaskDueShort(task.due_at)}
+                                    >
+                                        {formatQueueTaskDueMiniCard(task.due_at)}
+                                    </span>
                                 :   null}
                             </span>
                         </button>

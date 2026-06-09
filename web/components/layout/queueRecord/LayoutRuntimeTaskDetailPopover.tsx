@@ -11,6 +11,17 @@ export function formatQueueTaskDueShort(iso: string): string {
     return formatted || iso;
 }
 
+/** Compact due label for queue-row task mini-cards — avoids mid-string CSS clipping. */
+export function formatQueueTaskDueMiniCard(iso: string): string {
+    const formatted = formatLayoutRuntimeOperatorDate(iso);
+    if (!formatted) return iso;
+    const withTime = /^(\d{2}-\d{2})-\d{4}\s+(.+)$/.exec(formatted);
+    if (withTime) return `${withTime[1]} ${withTime[2]}`;
+    const dateOnly = /^(\d{2}-\d{2})-\d{4}$/.exec(formatted);
+    if (dateOnly) return dateOnly[1]!;
+    return formatted;
+}
+
 /** Anchored task detail overlay — shared by drawer and queue row task widgets. */
 export default function LayoutRuntimeTaskDetailPopover({
     task,

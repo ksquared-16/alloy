@@ -20,9 +20,6 @@ function isQueueStatusFieldKey(fieldKey: string): boolean {
 }
 
 function inferMissingFieldDisplay(field: QueueRecordFieldConfig): QueueRecordFieldConfig {
-    if (isQueueStatusFieldKey(field.fieldKey) && field.display !== "pill" && field.display !== "badge") {
-        return { ...field, display: "pill" };
-    }
     if (field.display) return field;
     const rk = field.fieldKey.toLowerCase();
     let display: QueueRecordFieldDisplay = "text";

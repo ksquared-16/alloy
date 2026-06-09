@@ -15,7 +15,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 | Folder       | Files                                                                                                                                                                                                              |
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `core/`      | `system-overview.md`, `glossary.md`                                                                                                                                                                                |
-| `system/`    | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md`, **`adminv2-runtime-performance-doctrine.md`** |
+| `system/`    | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, **`queue-record-doctrine.md`**, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md`, **`adminv2-runtime-performance-doctrine.md`** |
 | `product/`   | `crm-system.md`, `communications.md`, `documents-and-forms.md`, `billing-and-financials.md`, `bos-foundation.md`, `ai-system.md` (stub)                                                                            |
 | `execution/` | `operating-doctrine.md`, `roadmap-and-gaps.md`                                                                                                                                                                     |
 
@@ -28,7 +28,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 3. **`system/entity-model.md`** — Tables and identity (persons, customer_persons, customers, opportunities, etc.).
 4. **`system/actions-and-workflows.md`** — Events, workflows, admin actions; do not bypass.
 5. **`system/record-system.md`** — Resolver-backed records (RRS), drawer/API truth vs previews.
-6. **`system/workspace-system.md`** — Departments, work units, queues, Admin V2 workspace; needs-attention count semantics. **Runtime performance doctrine (locked):** **`system/adminv2-runtime-performance-doctrine.md`**.
+6. **`system/workspace-system.md`** — Departments, work units, queues, Admin V2 workspace; needs-attention count semantics. **Queue row contract (locked):** **`system/queue-record-doctrine.md`**. **Runtime performance doctrine (locked):** **`system/adminv2-runtime-performance-doctrine.md`**.
 7. **`system/roles-and-permissions.md`** — Capabilities (`role_permission_grants`) vs visibility (`user_access_profiles`); API enforcement.
 8. **`system/configuration-system.md`** — Config vs code/workflows; **Admin Settings four-plane control plane** (Fields, Field grouping, Layouts, Actions). Closeout detail: **`docs/sprints/05_2026/completed/settings_control_plane_closeout.md`**.
 9. **`system/api-contracts.md`** — Representative admin/public API boundaries.

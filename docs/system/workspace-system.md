@@ -99,6 +99,16 @@ Org/work-unit tuning for visible buckets: `metadata.opportunity_attention_rules.
 
 **Parity rule:** Align cohort + cap before QA comparisons. Job needs-attention summaries are separate (`getNeedsAttentionSummary`).
 
+## Queue record doctrine (operational row — locked)
+
+Work-unit **layout-runtime operational rows** (`metadata.queue_record_layout` v3) are governed by **`docs/system/queue-record-doctrine.md`**.
+
+**Summary:** `/settings/layouts` owns columns, fields, widgets, display modes, and link targets; the renderer owns spacing, typography, hover, and display treatment only. One linked-field path for all entities; non-linked row space opens the opportunity drawer; widgets are compact summaries; all dates **`MM-DD-YYYY`**. Queue rows remain **preview-only** — see **[Queue truth boundary](#queue-truth-boundary-critical-rule)**.
+
+**Implementation:** `OperationalQueueRecordRow` + `QueueRecordFieldRenderer` + `QueueRecordScopedColumn`; do not reintroduce parallel person/child link or chip render paths.
+
+---
+
 ## Opportunity CRM compact previews — child vs program (doctrine)
 
 Work-unit **CRM compact** queue rows show **Child** and **Program** columns using enriched preview fields, not raw opportunity rows alone.

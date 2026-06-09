@@ -138,11 +138,8 @@ export function QueueRecordLinkedField({
     );
 }
 
-function isQueueStatusField(field: QueueRecordFieldConfig): boolean {
-    return (
-        /(?:^|\.)(?:status|lifecycle_status|stage)(?:_key|_label|_name)?$/i.test(field.fieldKey)
-        && !/tour_status/i.test(field.fieldKey)
-    );
+function isQueueStatusSurfaceDisplay(display: QueueRecordFieldConfig["display"]): boolean {
+    return display === "pill" || display === "badge";
 }
 
 function fieldSurfaceClass(field: QueueRecordFieldConfig): string {
@@ -192,18 +189,23 @@ export default function QueueRecordFieldRenderer({
         );
     }
 
-    if (field.display === "pill" || field.display === "badge" || isQueueStatusField(field)) {
+    if (isQueueStatusSurfaceDisplay(field.display)) {
         const statusKey = String(
             anchorRecord["opportunity.status_key"]
             ?? anchorRecord.status_key
             ?? "",
         ).trim();
         const statusTone = resolveQueueRecordStatusPillTone(anchorRecord);
+        const isBadge = field.display === "badge";
+        const surfaceModifier = isBadge
+            ? "queue-record-field--badge queue-record-field--status-badge"
+            : "queue-record-field--pill queue-record-field--status-pill";
         return (
             <QueueRowOpenZone
                 onOpen={onOpen}
-                className={`queue-record-field queue-record-field--pill queue-record-field--status-pill ${queueRecordStatusPillToneClass(statusTone)}`}
-                data-queue-status-pill="true"
+                className={`queue-record-field ${surfaceModifier} ${queueRecordStatusPillToneClass(statusTone)}`}
+                data-queue-status-pill={isBadge ? undefined : "true"}
+                data-queue-status-badge={isBadge ? "true" : undefined}
                 data-queue-field-key={field.fieldKey}
                 data-queue-status-key={statusKey || undefined}
                 data-queue-status-tone={statusTone}

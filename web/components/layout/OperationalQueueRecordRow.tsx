@@ -3,6 +3,9 @@
 /**
  * Operational queue record row — v3 config-driven card shell.
  * One content grid + fixed action rail. Field rendering via QueueRecordFieldRenderer.
+ *
+ * DOCTRINE entry shell (docs/system/queue-record-doctrine.md): Lead, Qualification, and Waitlist
+ * work-unit rows compose columns through QueueRecordScopedColumn — not bespoke per-queue renderers.
  */
 
 import { useMemo, type KeyboardEvent, type MouseEvent } from "react";

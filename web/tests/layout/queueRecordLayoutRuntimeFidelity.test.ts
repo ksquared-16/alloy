@@ -189,14 +189,14 @@ describe("queue record layout runtime fidelity", () => {
         expect(html).not.toContain("queue-record-field--pill-pine");
     });
 
-    it("renders status as pill when saved config display is text (runtime normalize)", () => {
+    it("renders status as text when saved config display is text", () => {
         const doc = buildLeadQueueDefaultDoc();
         const rawConfig = layoutWithChildDobAndTour();
         const statusCol = rawConfig.columns[2]!;
         const statusBlock = statusCol.blocks[0];
         if (statusBlock?.type === "field_group") {
             statusBlock.fields = statusBlock.fields.map((f) =>
-                f.fieldKey === "opportunity.status_key" ? { ...f, display: "text" as const } : f,
+                f.fieldKey === "opportunity.status_label" ? { ...f, display: "text" as const } : f,
             );
         }
         const config = resolveQueueRecordLayoutConfig({
@@ -222,8 +222,47 @@ describe("queue record layout runtime fidelity", () => {
             }),
         );
         expect(html).toContain("Contact Attempted");
-        expect(html).toContain("queue-record-field--pill");
-        expect(html).toContain('data-queue-field-key="opportunity.status_key"');
+        expect(html).toContain("queue-record-field--text");
+        expect(html).not.toContain("queue-record-field--pill");
+        expect(html).not.toContain("queue-record-field--badge");
+    });
+
+    it("renders status as badge when saved config display is badge", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        const rawConfig = layoutWithChildDobAndTour();
+        const statusCol = rawConfig.columns[2]!;
+        const statusBlock = statusCol.blocks[0];
+        if (statusBlock?.type === "field_group") {
+            statusBlock.fields = statusBlock.fields.map((f) =>
+                f.fieldKey === "opportunity.status_label" ? { ...f, display: "badge" as const } : f,
+            );
+        }
+        const config = resolveQueueRecordLayoutConfig({
+            ...doc,
+            metadata: { ...(doc.metadata ?? {}), queue_record_layout: rawConfig },
+        });
+        const docWithLayout = {
+            ...doc,
+            metadata: { ...(doc.metadata ?? {}), queue_record_layout: config },
+        };
+        const item = previewItemWithDobAndTasks();
+        const record = buildOpportunityQueueRowRecordFromPreview(item, docWithLayout);
+        const vm = buildOperationalQueueRecordViewModelFromLayout(docWithLayout, record, config);
+        const html = renderToStaticMarkup(
+            createElement(OperationalQueueRecordRow, {
+                vm,
+                record,
+                config,
+                onOpen: () => {},
+                drawerHandlers: { onOpenPerson: () => {}, onOpenChild: () => {} },
+                rowActions: item.quickActions,
+                onRowAction: () => {},
+            }),
+        );
+        expect(html).toContain("Contact Attempted");
+        expect(html).toContain("queue-record-field--badge");
+        expect(html).toContain('data-queue-status-badge="true"');
+        expect(html).not.toContain("queue-record-field--pill");
     });
 
     it("child linked field uses same contact-link classes as person", () => {

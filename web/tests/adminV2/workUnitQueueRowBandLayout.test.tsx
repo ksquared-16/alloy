@@ -143,10 +143,10 @@ describe("operational record V3.4 visual hierarchy", () => {
         expect(html).toContain('data-queue-col-scope="main_record"');
         expect(html).toContain('data-queue-col-scope="repeated_related"');
         expect(html).toContain("Waitlisted");
-        expect(html).toContain("Sam (3y)");
+        expect(html).toContain("Sam");
         expect(html).toContain("queue-record-field--link");
         const parentIdx = html.indexOf("Riley Williams");
-        const childIdx = html.indexOf("Sam (3y)");
+        const childIdx = html.indexOf(">Sam<");
         expect(parentIdx).toBeGreaterThan(-1);
         expect(childIdx).toBeGreaterThan(-1);
         expect(parentIdx).toBeLessThan(childIdx);
@@ -326,7 +326,7 @@ describe("operational record V3.2 compact header", () => {
         );
         expect(html).toContain('data-queue-record-layout="operational-row"');
         expect(html).toContain("Williams Family");
-        expect(html).toContain("Sam (3y)");
+        expect(html).toContain("Sam");
         expect(html).toContain("Riley Williams");
         expect(html).toContain("Waitlisted");
         expect(html).toContain("queue-record-field--link");
@@ -366,7 +366,7 @@ describe("operational record V3.2 compact header", () => {
             />
         );
         expect(html).toContain("queue-record-field--link");
-        expect(html).toContain("Liam (2y)");
+        expect(html).toContain("Liam");
     });
 
     it("stays compact for three-child household", () => {
@@ -395,8 +395,8 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
-        expect(html).toContain("A (1y)");
-        expect(html).toContain("C (3y)");
+        expect(html).toContain(">A<");
+        expect(html).toContain(">C<");
         expect(html).toContain("queue-record-field--link");
         expect(html).not.toContain('data-queue-attention-supplement="true"');
     });
@@ -427,8 +427,8 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
-        expect(html).toContain("A (1y)");
-        expect(html).toContain("E (5y)");
+        expect(html).toContain(">A<");
+        expect(html).toContain(">E<");
         expect(html).toContain('data-queue-col-scope="repeated_related"');
         expect(html).not.toContain('data-queue-attention-supplement="true"');
     });
@@ -463,7 +463,7 @@ describe("operational record V3.2 compact header", () => {
         const identityIdx = html.indexOf('data-queue-col-scope="main_record"');
         const relatedIdx = html.indexOf('data-queue-col-scope="repeated_related"');
         const parentIdx = html.indexOf("Kevin Mitchell");
-        const childIdx = html.indexOf("Liam Mitchell (2y)");
+        const childIdx = html.indexOf("Liam Mitchell");
         expect(identityIdx).toBeGreaterThan(-1);
         expect(relatedIdx).toBeGreaterThan(identityIdx);
         expect(parentIdx).toBeGreaterThan(-1);
@@ -499,7 +499,7 @@ describe("operational record V3.2 compact header", () => {
                 })}
             />
         );
-        expect(html).toContain("Sam (4y)");
+        expect(html).toContain(">Sam<");
         expect(html).toContain('data-queue-record-layout="operational-row"');
         expect(html).not.toContain('data-queue-attention-supplement="true"');
     });

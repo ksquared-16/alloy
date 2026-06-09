@@ -45,6 +45,7 @@
    * Operational row: 3 lanes (throughput | attention | command) or 2 when no secondary queue.
    */
   --ws-dept-page-max-width: 1520px;
+  --ws-dept-contain-margin-inline: auto;
   --ws-dept-contain-padding-x: 12px;
   --ws-dept-contain-padding-top: 8px;
   --ws-dept-contain-padding-bottom: 24px;
@@ -85,6 +86,25 @@
 /* Work-unit surface: tighter vertical rhythm; queue records scroll inside lane shell on full route (`.adminv2-ws-work-unit`). */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
   --ws-dept-section-gap: 12px;
+}
+
+/* Collapsed nav frees ~224px — left-align contain and widen cap so KPI/queue uses reclaimed space. */
+[data-adminv2-app-shell="workspace-v2"][data-adminv2-sidebar-collapsed="true"] [data-ws-surface="department"].adminv2-ws-dept-v2,
+[data-adminv2-app-shell="workspace-v2"][data-adminv2-sidebar-collapsed="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2,
+[data-adminv2-app-shell="workspace-v2"][data-adminv2-sidebar-collapsed="true"] [data-ws-surface="record"].adminv2-ws-record-v2,
+[data-adminv2-app-shell="workspace-v2"][data-adminv2-sidebar-collapsed="true"] [data-ws-surface="company"].adminv2-ws-company-v2 {
+  --ws-dept-page-max-width: min(100%, 1680px);
+  --ws-dept-contain-margin-inline: 0 auto;
+  --ws-dept-contain-padding-x: 10px;
+}
+
+@media (min-width: 1440px) {
+  [data-adminv2-app-shell="workspace-v2"][data-adminv2-sidebar-collapsed="true"] [data-ws-surface="department"].adminv2-ws-dept-v2,
+  [data-adminv2-app-shell="workspace-v2"][data-adminv2-sidebar-collapsed="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2,
+  [data-adminv2-app-shell="workspace-v2"][data-adminv2-sidebar-collapsed="true"] [data-ws-surface="record"].adminv2-ws-record-v2,
+  [data-adminv2-app-shell="workspace-v2"][data-adminv2-sidebar-collapsed="true"] [data-ws-surface="company"].adminv2-ws-company-v2 {
+    --ws-dept-page-max-width: min(100%, 1760px);
+  }
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
@@ -454,7 +474,8 @@
   gap: 0;
   width: 100%;
   max-width: var(--ws-dept-page-max-width);
-  margin: 0 auto;
+  margin-inline: var(--ws-dept-contain-margin-inline);
+  margin-block: 0;
   padding: var(--ws-dept-contain-padding-top) var(--ws-dept-contain-padding-x) var(--ws-dept-contain-padding-bottom);
   box-sizing: border-box;
 }
@@ -7914,6 +7935,7 @@
 [data-ws-surface="work_unit"] .queue-record-field--link:focus-visible,
 [data-ws-surface="department"] .queue-record-field--link:focus-visible {
   background: rgba(49, 57, 77, 0.06);
+  color: #1b1b27;
 }
 
 [data-ws-surface="work_unit"] .queue-record-field--link:not(.queue-record-field--title) .queue-record-field__text,
@@ -7945,6 +7967,13 @@
 [data-ws-surface="work_unit"] .queue-record-field--link .queue-record-field__icon,
 [data-ws-surface="department"] .queue-record-field--link .queue-record-field__icon {
   color: color-mix(in srgb, var(--d-pine, #00a283) 52%, var(--d-fg, #273f52) 48%);
+}
+
+[data-ws-surface="work_unit"] .queue-record-field--link:hover .queue-record-field__icon,
+[data-ws-surface="department"] .queue-record-field--link:hover .queue-record-field__icon,
+[data-ws-surface="work_unit"] .queue-record-field--link:focus-visible .queue-record-field__icon,
+[data-ws-surface="department"] .queue-record-field--link:focus-visible .queue-record-field__icon {
+  color: color-mix(in srgb, var(--d-pine, #00a283) 46%, var(--d-fg, #273f52) 54%);
 }
 
 [data-ws-surface="work_unit"] .queue-record-field__icon-wrap,
@@ -8069,7 +8098,9 @@
 }
 
 [data-ws-surface="work_unit"] .queue-record-field--pill,
-[data-ws-surface="department"] .queue-record-field--pill {
+[data-ws-surface="department"] .queue-record-field--pill,
+[data-ws-surface="work_unit"] .queue-record-field--badge,
+[data-ws-surface="department"] .queue-record-field--badge {
   display: inline-flex;
   align-items: center;
   flex: 0 1 auto;
@@ -8078,19 +8109,30 @@
   min-width: 0;
   padding: 2px 8px;
   border: 1px solid color-mix(in srgb, var(--d-fg, #273f52) 12%, var(--d-border, #d4d0c8) 88%);
-  border-radius: 999px;
   background: color-mix(in srgb, var(--d-fg, #273f52) 4%, var(--d-surface, #fff) 96%);
   box-shadow: none;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: clamp(10px, 0.72vw, 12px);
+  font-weight: 650;
   line-height: 1.15;
   letter-spacing: 0.01em;
   text-transform: none;
   color: color-mix(in srgb, var(--d-fg, #273f52) 84%, transparent);
 }
 
+[data-ws-surface="work_unit"] .queue-record-field--pill,
+[data-ws-surface="department"] .queue-record-field--pill {
+  border-radius: 999px;
+}
+
+[data-ws-surface="work_unit"] .queue-record-field--badge,
+[data-ws-surface="department"] .queue-record-field--badge {
+  border-radius: 5px;
+}
+
 [data-ws-surface="work_unit"] .queue-record-field--status-pill,
-[data-ws-surface="department"] .queue-record-field--status-pill {
+[data-ws-surface="department"] .queue-record-field--status-pill,
+[data-ws-surface="work_unit"] .queue-record-field--status-badge,
+[data-ws-surface="department"] .queue-record-field--status-badge {
   align-self: flex-start;
   width: 100%;
   max-width: 100%;
@@ -8354,9 +8396,8 @@
 
 [data-ws-surface="work_unit"] .queue-record-widget__task-title,
 [data-ws-surface="department"] .queue-record-widget__task-title {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
-  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8371,15 +8412,13 @@
 [data-ws-surface="work_unit"] .queue-record-widget__task-meta,
 [data-ws-surface="department"] .queue-record-widget__task-meta {
   display: inline-flex;
-  flex: 0 1 auto;
+  flex: 0 0 auto;
+  flex-shrink: 0;
   flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
-  min-width: 0;
-  max-width: 46%;
   font-size: 9.5px;
   line-height: 1.2;
-  overflow: hidden;
 }
 
 [data-ws-surface="work_unit"] .queue-record-widget__task-badge,
@@ -8387,8 +8426,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 auto;
-  min-width: 2.85rem;
+  flex: 0 0 2.85rem;
+  width: 2.85rem;
+  max-width: 2.85rem;
   padding: 1px 5px;
   border: 1px solid color-mix(in srgb, var(--d-border, #d4d0c8) 78%, var(--d-fg, #273f52) 22%);
   border-radius: 4px;
@@ -8439,11 +8479,8 @@
 
 [data-ws-surface="work_unit"] .queue-record-widget__task-due,
 [data-ws-surface="department"] .queue-record-widget__task-due {
-  flex: 1 1 auto;
-  min-width: 0;
-  max-width: 4.75rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: 0 0 auto;
+  flex-shrink: 0;
   white-space: nowrap;
   font-size: 9px;
   font-weight: 500;
@@ -8586,7 +8623,9 @@
 }
 
 [data-ws-surface="work_unit"] .operational-queue-row__column--scoped[data-queue-col-scope="lifecycle_context"] .queue-record-field--status-pill,
-[data-ws-surface="department"] .operational-queue-row__column--scoped[data-queue-col-scope="lifecycle_context"] .queue-record-field--status-pill {
+[data-ws-surface="department"] .operational-queue-row__column--scoped[data-queue-col-scope="lifecycle_context"] .queue-record-field--status-pill,
+[data-ws-surface="work_unit"] .operational-queue-row__column--scoped[data-queue-col-scope="lifecycle_context"] .queue-record-field--status-badge,
+[data-ws-surface="department"] .operational-queue-row__column--scoped[data-queue-col-scope="lifecycle_context"] .queue-record-field--status-badge {
   align-self: flex-start;
   width: 100%;
   max-width: 100%;
@@ -9697,33 +9736,49 @@
   text-align: inherit;
 }
 
-/* Status pill — override queue-row-open-zone transparent reset (must follow .queue-row-open-zone) */
+/* Status pill/badge — override queue-row-open-zone transparent reset (must follow .queue-row-open-zone) */
 [data-ws-surface="work_unit"] .queue-row-open-zone.queue-record-field--pill,
-[data-ws-surface="department"] .queue-row-open-zone.queue-record-field--pill {
+[data-ws-surface="department"] .queue-row-open-zone.queue-record-field--pill,
+[data-ws-surface="work_unit"] .queue-row-open-zone.queue-record-field--badge,
+[data-ws-surface="department"] .queue-row-open-zone.queue-record-field--badge {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
-  flex: 0 0 auto;
-  max-width: 11rem;
+  flex: 0 1 auto;
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   margin: 0;
   padding: 3px 8px;
   border: 1px solid color-mix(in srgb, var(--d-border, #d4d0c8) 72%, var(--d-fg, #273f52) 28%);
-  border-radius: 999px;
   background: color-mix(in srgb, var(--d-slate, #e8edf2) 42%, #ffffff 58%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
     0 1px 2px rgba(39, 63, 82, 0.06);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: clamp(10px, 0.72vw, 12px);
+  font-weight: 650;
   line-height: 1.2;
   letter-spacing: 0.01em;
   color: color-mix(in srgb, var(--d-midnight, #273f52) 88%, transparent);
   cursor: pointer;
 }
 
+[data-ws-surface="work_unit"] .queue-row-open-zone.queue-record-field--pill,
+[data-ws-surface="department"] .queue-row-open-zone.queue-record-field--pill {
+  border-radius: 999px;
+}
+
+[data-ws-surface="work_unit"] .queue-row-open-zone.queue-record-field--badge,
+[data-ws-surface="department"] .queue-row-open-zone.queue-record-field--badge {
+  border-radius: 5px;
+}
+
 [data-ws-surface="work_unit"] .queue-row-open-zone.queue-record-field--pill .queue-record-field__pill-label,
-[data-ws-surface="department"] .queue-row-open-zone.queue-record-field--pill .queue-record-field__pill-label {
+[data-ws-surface="department"] .queue-row-open-zone.queue-record-field--pill .queue-record-field__pill-label,
+[data-ws-surface="work_unit"] .queue-row-open-zone.queue-record-field--badge .queue-record-field__pill-label,
+[data-ws-surface="department"] .queue-row-open-zone.queue-record-field--badge .queue-record-field__pill-label {
+  display: block;
+  width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -9736,12 +9791,10 @@
 
 [data-ws-surface="work_unit"] .queue-record-field--status-tone-info,
 [data-ws-surface="department"] .queue-record-field--status-tone-info {
-  border-color: rgba(49, 57, 77, 0.42);
-  background: linear-gradient(180deg, #e4edf8 0%, #d7e3f3 100%);
-  color: #1b2333;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.96),
-    0 1px 3px rgba(49, 57, 77, 0.12);
+  border-color: #8fa1bf;
+  background: #e7edf7;
+  color: #25324a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 [data-ws-surface="work_unit"] .queue-record-field--status-tone-success,
@@ -9893,7 +9946,7 @@
 
 [data-ws-surface="work_unit"] .operational-queue-row__contact-link:hover .operational-queue-row__contact-link-icon,
 [data-ws-surface="department"] .operational-queue-row__contact-link:hover .operational-queue-row__contact-link-icon {
-  color: var(--d-pine, #00a283);
+  color: color-mix(in srgb, var(--d-pine, #00a283) 46%, var(--d-fg, #273f52) 54%);
 }
 
 [data-ws-surface="work_unit"] .operational-queue-row__household-link,
@@ -9912,7 +9965,8 @@
 
 [data-ws-surface="work_unit"] .operational-queue-row__household-link:hover,
 [data-ws-surface="department"] .operational-queue-row__household-link:hover {
-  color: color-mix(in srgb, var(--d-accent, #00a283) 72%, var(--d-fg, #273f52) 28%);
+  background: rgba(49, 57, 77, 0.06);
+  color: #1b1b27;
 }
 
 [data-ws-surface="work_unit"] .operational-queue-row__action-rail,

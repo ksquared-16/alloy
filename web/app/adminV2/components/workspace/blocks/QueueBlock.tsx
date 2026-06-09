@@ -274,6 +274,7 @@ function fireQueueRowQuickAction(
   });
 }
 
+/** CRM/layout-runtime fallback host — must keep routing to OperationalQueueRecordRow (queue-record-doctrine). */
 function WorkUnitOperationalQueueRow({
   slots,
   queue,

@@ -28,11 +28,11 @@ describe("normalizeQueueRecordLayoutConfig", () => {
         expect(normalizedRepeat?.type === "repeated_record_block" ? normalizedRepeat.maxItems : null).toBe(5);
     });
 
-    it("coerces saved text display to pill for status fields", () => {
+    it("preserves explicit text display for status fields", () => {
         const base = defaultLeadQueueLayoutV3();
         const statusCol = base.columns.find((c) =>
             c.blocks.some(
-                (b) => b.type === "field_group" && b.fields.some((f) => f.fieldKey === "opportunity.status_key"),
+                (b) => b.type === "field_group" && b.fields.some((f) => f.fieldKey === "opportunity.status_label"),
             ),
         );
         expect(statusCol).toBeTruthy();
@@ -47,7 +47,7 @@ describe("normalizeQueueRecordLayoutConfig", () => {
                                 {
                                     ...b,
                                     fields: b.fields.map((f) =>
-                                        f.fieldKey === "opportunity.status_key" ?
+                                        f.fieldKey === "opportunity.status_label" ?
                                             { ...f, display: "text" as const }
                                         :   f,
                                     ),
@@ -61,7 +61,43 @@ describe("normalizeQueueRecordLayoutConfig", () => {
         const normalized = normalizeQueueRecordLayoutConfig(withTextDisplay);
         const block = normalized.columns.find((c) => c.id === statusCol!.id)!.blocks[0];
         if (block?.type !== "field_group") throw new Error("expected field group");
-        expect(block.fields.find((f) => f.fieldKey === "opportunity.status_key")?.display).toBe("pill");
+        expect(block.fields.find((f) => f.fieldKey === "opportunity.status_label")?.display).toBe("text");
+    });
+
+    it("preserves explicit badge display for status fields", () => {
+        const base = defaultLeadQueueLayoutV3();
+        const statusCol = base.columns.find((c) =>
+            c.blocks.some(
+                (b) => b.type === "field_group" && b.fields.some((f) => f.fieldKey === "opportunity.status_label"),
+            ),
+        );
+        expect(statusCol).toBeTruthy();
+        const withBadgeDisplay = {
+            ...base,
+            columns: base.columns.map((col) =>
+                col.id === statusCol!.id ?
+                    {
+                        ...col,
+                        blocks: col.blocks.map((b) =>
+                            b.type === "field_group" ?
+                                {
+                                    ...b,
+                                    fields: b.fields.map((f) =>
+                                        f.fieldKey === "opportunity.status_label" ?
+                                            { ...f, display: "badge" as const }
+                                        :   f,
+                                    ),
+                                }
+                            :   b,
+                        ),
+                    }
+                :   col,
+            ),
+        };
+        const normalized = normalizeQueueRecordLayoutConfig(withBadgeDisplay);
+        const block = normalized.columns.find((c) => c.id === statusCol!.id)!.blocks[0];
+        if (block?.type !== "field_group") throw new Error("expected field group");
+        expect(block.fields.find((f) => f.fieldKey === "opportunity.status_label")?.display).toBe("badge");
     });
 
     it("preserves explicit repeated block maxItems when set", () => {
@@ -89,13 +125,13 @@ describe("normalizeQueueRecordLayoutConfig", () => {
         const base = defaultLeadQueueLayoutV3();
         const statusCol = base.columns.find((c) =>
             c.blocks.some(
-                (b) => b.type === "field_group" && b.fields.some((f) => f.fieldKey === "opportunity.status_key"),
+                (b) => b.type === "field_group" && b.fields.some((f) => f.fieldKey === "opportunity.status_label"),
             ),
         );
         expect(statusCol).toBeTruthy();
         const block = statusCol!.blocks[0];
         if (block?.type !== "field_group") throw new Error("expected field group");
-        const statusField = block.fields.find((f) => f.fieldKey === "opportunity.status_key");
+        const statusField = block.fields.find((f) => f.fieldKey === "opportunity.status_label");
         expect(statusField).toBeTruthy();
         const stripped = {
             ...base,
@@ -108,7 +144,7 @@ describe("normalizeQueueRecordLayoutConfig", () => {
                                 {
                                     ...b,
                                     fields: b.fields.map((f) =>
-                                        f.fieldKey === "opportunity.status_key" ?
+                                        f.fieldKey === "opportunity.status_label" ?
                                             { ...f, display: undefined as unknown as typeof f.display }
                                         :   f,
                                     ),
@@ -124,7 +160,7 @@ describe("normalizeQueueRecordLayoutConfig", () => {
             .find((c) => c.id === statusCol!.id)!
             .blocks[0];
         if (normalizedStatus?.type !== "field_group") throw new Error("expected field group");
-        const field = normalizedStatus.fields.find((f) => f.fieldKey === "opportunity.status_key");
+        const field = normalizedStatus.fields.find((f) => f.fieldKey === "opportunity.status_label");
         expect(field?.display).toBe("pill");
     });
 });

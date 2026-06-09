@@ -67,7 +67,7 @@ function FieldRows({
 }) {
     const resolved = resolveQueueRecordFieldsForRecord(fields, record);
     const groups = groupResolvedFieldsInline(resolved);
-    if (!groups.length) return <span className="queue-record-field queue-record-field--empty">—</span>;
+    if (!groups.length) return null;
 
     let collapsePlaced = false;
 

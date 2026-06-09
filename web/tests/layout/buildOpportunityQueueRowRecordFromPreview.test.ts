@@ -3,6 +3,40 @@ import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 
 describe("buildOpportunityQueueRowRecordFromPreview person link ids", () => {
+    it("splits parenthetical age out of CRM childrenLines primary into child.name and child.age_band", () => {
+        const item: QueuePreviewItemVm = {
+            id: "opp-age",
+            title: "Mitchell Household",
+            quickActions: [],
+            semanticCrmCompact: {
+                primaryIdentity: "Mitchell Household",
+                childName: null,
+                contactDisplayName: "Kev Mitchell",
+                contactPersonId: "person-parent",
+                contactPhoneDisplay: null,
+                contactEmail: null,
+                programContext: null,
+                statusLabel: "Contact Attempted",
+                stageLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                tourContext: null,
+                locationContext: null,
+                childrenLines: [{ primary: "Alex Kelly (6m)", personId: "child-alex" }],
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item);
+        const child = (record.children as Array<Record<string, unknown>>)[0];
+        expect(child?.["child.name"]).toBe("Alex Kelly");
+        expect(child?.["child.age_band"]).toBe("6m");
+    });
+
     it("projects primary person id for queue adornment open_drawer", () => {
         const item: QueuePreviewItemVm = {
             id: "opp-1",

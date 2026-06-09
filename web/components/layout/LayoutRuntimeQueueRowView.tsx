@@ -2,6 +2,9 @@
 
 /**
  * Production queue row renderer — layout doc + operator-safe record + VM fallback.
+ *
+ * DOCTRINE: All queue record surfaces must route through this view → OperationalQueueRecordRow
+ * unless explicitly exempted in docs/system/queue-record-doctrine.md. Do not add parallel row renderers.
  */
 
 import type { ReactNode } from "react";
