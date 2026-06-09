@@ -42,6 +42,7 @@ import * as ops from "@/lib/layout/builderOps";
 import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
 import QueueRecordLayoutSettingsPanel from "@/components/layout/QueueRecordLayoutSettingsPanel";
 import type { QueueRecordLayoutEditorConfig } from "@/lib/layout/queueRecordLayoutV3";
+import { isWaitlistQueueLayoutDoc } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
 
 /** Display/render modes a user can pick per field or related-list column. */
 const RENDER_MODES: { key: LayoutRenderHint; label: string }[] = [
@@ -205,6 +206,8 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
     const [list, setList] = useState<ListResponse | null>(null);
     const [labelMap, setLabelMap] = useState<EntityLabelMap>({});
     const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
+    /** v3 queue row editor catalog — opportunities-backed for waitlist queue docs. */
+    const [queueRecordCatalog, setQueueRecordCatalog] = useState<CatalogResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -267,24 +270,46 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
             if (!parsed.ok || !parsed.doc) {
                 throw new Error(parsed.errors.join("; ") || "Invalid layout document");
             }
+            const layoutDoc = parsed.doc;
             setSelectedId(rec.id);
-            setWorkingDoc(parsed.doc);
+            setWorkingDoc(layoutDoc);
             setWorkingName(rec.name);
             setSelectedStatus(rec.status);
-            setJsonText(JSON.stringify(parsed.doc, null, 2));
+            setJsonText(JSON.stringify(layoutDoc, null, 2));
             setJsonError(parsed.warnings.length ? `OK (warnings: ${parsed.warnings.join("; ")})` : null);
             setDirty(false);
             setShowJson(false);
-            fetch(`/api/admin/entity-layouts/field-catalog?entity_type=${encodeURIComponent(rec.entityType)}`)
-                .then((r) => (r.ok ? r.json() : null))
-                .then((j) => {
-                    const cat = j as CatalogResponse | null;
-                    setCatalog(cat);
-                    // Default the field-picker group to the first available group
-                    // (waitlist catalogs don't have an "opportunity" group).
-                    if (cat?.groups?.length) setPickerGroup(cat.groups[0].entityKey);
-                })
-                .catch(() => setCatalog(null));
+            const loadCatalogs = async () => {
+                try {
+                    const entityRes = await fetch(
+                        `/api/admin/entity-layouts/field-catalog?entity_type=${encodeURIComponent(rec.entityType)}`,
+                    );
+                    const entityCat = entityRes.ok ? ((await entityRes.json()) as CatalogResponse) : null;
+                    setCatalog(entityCat);
+
+                    // Waitlist queue v3 editor uses the opportunities catalog (same as Lead Queue).
+                    // queue_record_layout runtime resolves Lead-style refKeys (child.*, inquiry_child.*,
+                    // customer.*, opportunity.*). placement_candidate catalog stays on `catalog` for
+                    // legacy zone sections only — avoids saving flat VM keys (household.*, waitlist.*)
+                    // into v3 scoped columns where runtime scope rules do not apply.
+                    const useOpportunitiesQueueCatalog =
+                        layoutDoc.surface === "queue" && isWaitlistQueueLayoutDoc(layoutDoc);
+                    let v3Cat = entityCat;
+                    if (useOpportunitiesQueueCatalog) {
+                        const oppRes = await fetch(
+                            "/api/admin/entity-layouts/field-catalog?entity_type=opportunities",
+                        );
+                        v3Cat = oppRes.ok ? ((await oppRes.json()) as CatalogResponse) : entityCat;
+                    }
+                    setQueueRecordCatalog(v3Cat);
+
+                    if (entityCat?.groups?.length) setPickerGroup(entityCat.groups[0].entityKey);
+                } catch {
+                    setCatalog(null);
+                    setQueueRecordCatalog(null);
+                }
+            };
+            void loadCatalogs();
         } catch (e) {
             setError((e as Error).message);
         } finally {
@@ -680,7 +705,7 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                                             <QueueRecordLayoutSettingsPanel
                                                 doc={workingDoc}
                                                 editable={editable}
-                                                catalog={catalog}
+                                                catalog={queueRecordCatalog ?? catalog}
                                                 onChange={(config: QueueRecordLayoutEditorConfig) => {
                                                     applyDoc({
                                                         ...workingDoc,

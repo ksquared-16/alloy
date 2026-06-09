@@ -35,6 +35,7 @@ import { QUEUE_RECORD_WIDTH_OPTIONS } from "@/lib/layout/queueRecordLayoutWidth"
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
 import type { LayoutCatalogField, LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
 import { scopeLabel } from "@/lib/layout/queueRecordScopeCatalog";
+import { isWaitlistQueueLayoutDoc } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
 
 type Props = {
     doc: LayoutDoc;
@@ -44,12 +45,6 @@ type Props = {
 };
 
 type PickerTarget = { columnId: string; blockId: string } | null;
-
-function isWaitlistDoc(doc: LayoutDoc): boolean {
-    const meta = doc.metadata as { queue_context?: { queue_type?: string }; template?: string } | undefined;
-    if (meta?.queue_context?.queue_type === "waitlist") return true;
-    return (meta?.template ?? "").toLowerCase().includes("waitlist");
-}
 
 function blockLabel(block: QueueRecordBlockConfig): string {
     if (block.type === "widget") return `Widget · ${block.label ?? block.widgetKey}`;
@@ -62,7 +57,7 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
         () =>
             resolveEditorConfigFromDoc(
                 (doc.metadata as { queue_record_layout?: unknown } | undefined)?.queue_record_layout,
-                isWaitlistDoc(doc),
+                isWaitlistQueueLayoutDoc(doc),
             ),
         [doc],
     );

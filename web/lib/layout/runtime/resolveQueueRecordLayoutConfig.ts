@@ -14,7 +14,8 @@ import { normalizeQueueRecordLayoutConfig } from "@/lib/layout/runtime/normalize
 export type { QueueRecordLayoutConfigV3 as QueueRecordLayoutConfig } from "@/lib/layout/queueRecordLayoutV3";
 export type QueueRecordLayoutEditorConfig = QueueRecordLayoutConfigV3;
 
-function isWaitlistQueueDoc(doc?: LayoutDoc | null): boolean {
+/** True when layout doc metadata identifies an enrollment waitlist queue variant. */
+export function isWaitlistQueueLayoutDoc(doc?: LayoutDoc | null): boolean {
     const meta = doc?.metadata as { queue_context?: { queue_type?: string }; template?: string } | undefined;
     if (meta?.queue_context?.queue_type === "waitlist") return true;
     const t = (meta?.template ?? "").toLowerCase();
@@ -36,7 +37,7 @@ export function parseQueueRecordLayoutConfig(raw: unknown, isWaitlist = false): 
 /** Runtime + settings: saved config on doc metadata, else lifecycle default preset. */
 export function resolveQueueRecordLayoutConfig(doc?: LayoutDoc | null): QueueRecordLayoutConfigV3 {
     const meta = doc?.metadata as { queue_record_layout?: unknown } | undefined;
-    const isWaitlist = isWaitlistQueueDoc(doc);
+    const isWaitlist = isWaitlistQueueLayoutDoc(doc);
     const parsed = parseQueueRecordLayoutConfig(meta?.queue_record_layout, isWaitlist);
     if (parsed) return parsed;
     return normalizeQueueRecordLayoutConfig(
