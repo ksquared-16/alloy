@@ -46,6 +46,8 @@ export type OpportunityDrawerProofLayoutHeaderProps = {
     tabLabels: Partial<Record<DrawerTabKey, string>>;
     /** When true, render Lead command-center header anatomy (Patch 8). */
     leadCompositionActive?: boolean;
+    /** Queue prev/next — above tabs, below header actions/status. */
+    queueNavigation?: ReactNode | null;
 };
 
 export default function OpportunityDrawerProofLayoutHeader({
@@ -71,6 +73,7 @@ export default function OpportunityDrawerProofLayoutHeader({
     registryActionFeedback,
     tabLabels,
     leadCompositionActive = false,
+    queueNavigation = null,
 }: OpportunityDrawerProofLayoutHeaderProps) {
     const proofTabs: ProofHeaderTab[] = tabs.map((key) => ({
         key,
@@ -171,6 +174,7 @@ export default function OpportunityDrawerProofLayoutHeader({
                 lifecycleRail={lifecycleRail}
                 actionsControl={headerControlsRow}
                 closeButton={closeButton}
+                queueNavigation={queueNavigation}
             />
         :   <ProofRecordModalHeaderShell
             title={title}
@@ -186,5 +190,6 @@ export default function OpportunityDrawerProofLayoutHeader({
             onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
             lifecycleRail={lifecycleRail}
             dataAttribute="opportunity-drawer-runtime"
+            queueNavigation={queueNavigation}
         />;
 }

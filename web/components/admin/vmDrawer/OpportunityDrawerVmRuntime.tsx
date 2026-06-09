@@ -324,6 +324,18 @@ export default function OpportunityDrawerVmRuntime() {
         return resolveOpportunityQueueNavigatorPosition(drawer.id, drawer.opportunityQueueNavigator);
     }, [drawer.id, drawer.opportunityQueueNavigator]);
 
+    const queueNavigationControls = useMemo(() => {
+        if (!queuePosition || queuePosition.total < 2) return null;
+        return (
+            <OpportunityDrawerQueueNavigatorControls
+                position={queuePosition}
+                pending={isOpportunityQueueNavPending}
+                onPrev={() => navigateOpportunityInQueue("prev")}
+                onNext={() => navigateOpportunityInQueue("next")}
+            />
+        );
+    }, [queuePosition, isOpportunityQueueNavPending, navigateOpportunityInQueue]);
+
     const drawerTitle = useMemo(() => {
         if (!committedVisible || !record) return committedTitleRef.current;
         const next =
@@ -535,6 +547,7 @@ export default function OpportunityDrawerVmRuntime() {
                 registryActionFeedback={registryActionFeedback}
                 tabLabels={OPPORTUNITY_TAB_LABELS}
                 leadCompositionActive={leadCompositionActive}
+                queueNavigation={queueNavigationControls}
             />
         );
     }, [
@@ -561,6 +574,7 @@ export default function OpportunityDrawerVmRuntime() {
         clearActionPreflightBlocked,
         registryActionFeedback,
         leadCompositionActive,
+        queueNavigationControls,
     ]);
 
     const drawerTitleNode = drawerTitle;
@@ -603,14 +617,9 @@ export default function OpportunityDrawerVmRuntime() {
                         <p className="text-sm font-medium text-alloy-midnight/85">Opening record…</p>
                     </div>
                     : null}
-                {queuePosition && queuePosition.total >= 2 ?
+                {!layoutCutoverHeader && queueNavigationControls ?
                     <div className="mb-3 flex justify-end">
-                        <OpportunityDrawerQueueNavigatorControls
-                            position={queuePosition}
-                            pending={isOpportunityQueueNavPending}
-                            onPrev={() => navigateOpportunityInQueue("prev")}
-                            onNext={() => navigateOpportunityInQueue("next")}
-                        />
+                        {queueNavigationControls}
                     </div>
                     : null}
                 {error ?

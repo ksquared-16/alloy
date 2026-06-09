@@ -44,6 +44,8 @@ export type ProofRecordModalHeaderShellProps = {
     closeButton?: ReactNode;
     /** Attention card body (row 2). */
     attention?: ReactNode | null;
+    /** Queue prev/next — rendered above tabs, below title/actions row. */
+    queueNavigation?: ReactNode | null;
     tabs: readonly ProofHeaderTab[];
     activeTab: string;
     onTabSelect: (tab: string) => void;
@@ -63,6 +65,7 @@ export default function ProofRecordModalHeaderShell({
     actionsControl,
     closeButton,
     attention,
+    queueNavigation,
     tabs,
     activeTab,
     onTabSelect,
@@ -193,6 +196,15 @@ export default function ProofRecordModalHeaderShell({
                     <div className="w-full rounded-xl border-l-[3px] border-l-[rgba(0,69,140,0.5)] bg-gradient-to-br from-white via-white to-[rgba(0,0,0,0.06)] px-2.5 py-1.5 ring-1 ring-[rgba(39,63,82,0.06)]">
                         {attention}
                     </div>
+                </div>
+            :   null}
+
+            {queueNavigation ?
+                <div
+                    className="flex justify-end px-6 pb-1 pt-0"
+                    data-proof-layout-header-row="queue-navigation"
+                >
+                    {queueNavigation}
                 </div>
             :   null}
 

@@ -43,6 +43,24 @@ describe("ProofRecordModalHeaderShell", () => {
         expect(html).toContain('data-test-status="true"');
         expect(html).toContain('data-test-actions="true"');
     });
+
+    it("renders queue navigation above tabs when provided", () => {
+        const html = renderToStaticMarkup(
+            <ProofRecordModalHeaderShell
+                title="Mitchell Household"
+                actionsControl={<span>Actions</span>}
+                closeButton={<button type="button">Close</button>}
+                queueNavigation={<div data-test-queue-nav="true">Nav</div>}
+                tabs={[{ key: "overview", label: "Overview" }]}
+                activeTab="overview"
+                onTabSelect={() => {}}
+            />,
+        );
+        expect(html.indexOf('data-proof-layout-header-row="queue-navigation"')).toBeLessThan(
+            html.indexOf('data-proof-layout-header-row="tabs"'),
+        );
+        expect(html).toContain('data-test-queue-nav="true"');
+    });
 });
 
 describe("resolveOpportunityPrimaryContactPerson", () => {

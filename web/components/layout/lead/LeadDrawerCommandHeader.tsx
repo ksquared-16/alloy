@@ -28,6 +28,8 @@ export type LeadDrawerCommandHeaderProps = {
     activeTab: string;
     onTabSelect: (tab: string) => void;
     lifecycleRail?: ReactNode | null;
+    /** Queue prev/next — rendered above tabs, below title/actions row. */
+    queueNavigation?: ReactNode | null;
     actionsControl: ReactNode;
     closeButton: ReactNode;
 };
@@ -48,6 +50,7 @@ export default function LeadDrawerCommandHeader({
     activeTab,
     onTabSelect,
     lifecycleRail,
+    queueNavigation,
     actionsControl,
     closeButton,
 }: LeadDrawerCommandHeaderProps) {
@@ -140,6 +143,15 @@ export default function LeadDrawerCommandHeader({
                     {closeButton}
                 </div>
             </div>
+
+            {queueNavigation ?
+                <div
+                    className="flex justify-end px-6 pb-1 pt-0"
+                    data-proof-layout-header-row="queue-navigation"
+                >
+                    {queueNavigation}
+                </div>
+            :   null}
 
             <div className="border-b border-alloy-stone/10 px-6 pb-0.5 pt-0" data-proof-layout-header-row="tabs">
                 <div className="flex min-h-0 flex-wrap gap-1">
