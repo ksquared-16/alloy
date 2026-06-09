@@ -13,6 +13,7 @@
 |------|------------|
 | Status / lifecycle grain | [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) |
 | Enrollment disposition matrix | [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) |
+| Lifecycle Builder subject-grain bridge | [`lifecycle_builder_subject_grain_alignment_plan.md`](./lifecycle_builder_subject_grain_alignment_plan.md) |
 | Stage, location, access | [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) |
 | Developer contract | [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) |
 | Queue row context (partial) | [`completed/queue_row_context_consumption_closeout.md`](./completed/queue_row_context_consumption_closeout.md) |
@@ -631,6 +632,7 @@ These phases are **implementation** — none ship in the design sprint.
 
 | Document | Link |
 |----------|------|
+| Lifecycle Builder membership bridge | [`lifecycle_builder_subject_grain_alignment_plan.md`](./lifecycle_builder_subject_grain_alignment_plan.md) |
 | Grain expansion § Phase 6 | [`status_ownership_and_lifecycle_grain_expansion.md`](./status_ownership_and_lifecycle_grain_expansion.md) §12 |
 | Entity status § child-grain queues | [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) §7.6 |
 | Enrollment matrix Phase 5–6 | [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) §7 |

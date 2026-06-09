@@ -18,6 +18,7 @@ Customers may rename, add, hide, and reorder **disposition** labels within confi
 - [`docs/system/work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) — `QueueRowContext` runtime output
 - [`completed/lifecycle_canonical_vocabulary.md`](./completed/lifecycle_canonical_vocabulary.md) — operator vs internal terminology
 - [`lifecycle_builder_hardening_and_v2_canonical_model.md`](./lifecycle_builder_hardening_and_v2_canonical_model.md) — Lifecycle Builder surfaces and metadata keys
+- [`lifecycle_builder_subject_grain_alignment_plan.md`](./lifecycle_builder_subject_grain_alignment_plan.md) — `queue_membership_v1` bridge for per-stage grain + disposition predicates
 - [`enrollment_status_stage_binding_reality_check_v1.md`](./enrollment_status_stage_binding_reality_check_v1.md) — transitional `enrollment_operator_stage` on status definitions
 
 **Authority:** Enrollment status configuration, Lifecycle Builder stage cards, seed migrations, layout field labels, and queue membership convergence align with this document unless an explicit exception is recorded in §12.

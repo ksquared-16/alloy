@@ -91,6 +91,7 @@ All durable builder config lives on **`departments.metadata`** unless noted.
 | `metadata.lifecycle_stage_key` | Back-link to builder stage |
 | `metadata.status_keys` | Denormalized status filter list |
 | `metadata.lifecycle_builder_owned_v1` | Builder-owned WU marker |
+| `stages[].queue_membership_v1` (planned) | Subject grain + disposition predicates — see [`lifecycle_builder_subject_grain_alignment_plan.md`](./lifecycle_builder_subject_grain_alignment_plan.md) |
 
 **Status definitions:**
 
