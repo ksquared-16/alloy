@@ -13,6 +13,7 @@
 - [`docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md`](../entity_status_lifecycle_stage_and_location_scope_contract.md) — stage, location scope, placement on OCM
 - [`docs/sprints/06_2026/enrollment_lifecycle_status_matrix_contract.md`](../enrollment_lifecycle_status_matrix_contract.md) — enrollment disposition vocabulary
 - [`docs/sprints/06_2026/enrollment_status_seed_and_migration_plan.md`](../enrollment_status_seed_and_migration_plan.md) — status_definitions seed (related)
+- [`docs/sprints/06_2026/child_grain_queue_conversion_design.md`](../child_grain_queue_conversion_design.md) — **design gate** before child/candidate membership + honest `row_subject` (Phase 6 A–F)
 
 **Types / modules:**
 

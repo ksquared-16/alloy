@@ -61,7 +61,7 @@ cd web && npm run test -- \
 
 ## Next recommended sprint
 
-**Child-grain queue rows (phase 6)** — honest `row_subject` per OCM/candidate so queue open + drawer focus reflect real child membership.
+**Child-grain queue conversion design** — frozen in [`child_grain_queue_conversion_design.md`](../child_grain_queue_conversion_design.md). **Implementation** (Phase A builders → honest `row_subject` → lane flip) follows that gate; drawer pipe/display above are ready for honest child/candidate `drawer_open.active_subject`.
 
 ## Suggested commit message
 

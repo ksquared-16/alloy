@@ -1,7 +1,7 @@
 # Work Unit Surface Context — Developer Contract
 
 **Status:** Contract frozen — **partial API wiring shipped** (case-grain rows only)  
-**Architecture:** [`status_ownership_and_lifecycle_grain_expansion.md`](../sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md), [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md), [`enrollment_lifecycle_status_matrix_contract.md`](../sprints/06_2026/enrollment_lifecycle_status_matrix_contract.md)  
+**Architecture:** [`status_ownership_and_lifecycle_grain_expansion.md`](../sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md), [`entity_status_lifecycle_stage_and_location_scope_contract.md`](../sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md), [`enrollment_lifecycle_status_matrix_contract.md`](../sprints/06_2026/enrollment_lifecycle_status_matrix_contract.md), **child-grain queue conversion (design gate):** [`child_grain_queue_conversion_design.md`](../sprints/06_2026/child_grain_queue_conversion_design.md)  
 **Types:** `web/lib/workUnits/`  
 **Contract version:** `1.1-partial` (grouped same-stage rows — optional fields; backward compatible with `1.0-partial`)
 

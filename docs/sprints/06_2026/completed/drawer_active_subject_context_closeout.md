@@ -46,6 +46,10 @@ cd web && npm run test -- \
   tests/admin/adminV2QueueRowClick.test.ts
 ```
 
+## Forward
+
+Child-grain membership + honest `row_subject` — design gate [`child_grain_queue_conversion_design.md`](../child_grain_queue_conversion_design.md); implementation phases A–F after merge.
+
 ## Suggested commit message
 
 ```

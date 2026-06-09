@@ -699,8 +699,9 @@ Freeze `lifecycle_subject`, `QueueRowContext`, drawer context, status display, l
 
 ### Phase 6 — Child/candidate queue convergence
 
+- **Design gate (frozen):** [`child_grain_queue_conversion_design.md`](./child_grain_queue_conversion_design.md) — row IDs, membership per stage, grouping, location scope, `QueueRowContext` targets, migration phases A–F, risks
 - Align existing `childGrainEnrollmentQueue` / `candidateGrainWaitlistQueue` to `QueueRowContext`
-- Extend touring to child-grain membership ( **implementation** — not this sprint)
+- Extend touring to child-grain membership (**implementation** — after design gate merge)
 - Count units verified per lane
 
 ### Phase 7 — Attention / work / automation depth

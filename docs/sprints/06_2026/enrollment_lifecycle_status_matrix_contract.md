@@ -368,6 +368,8 @@ Default case keys remain **Open / Closed / Inactive / Archived** — not pipelin
 | **5** | Queue membership shifts from opportunity `status_key` / transitional sets to OCM enrollment track | Planned |
 | **6** | Automations / BOS use normalized transition model (`automation_meaning`, stage change events) | Planned |
 
+**Phase 5–6 queue membership design (frozen before implementation):** [`child_grain_queue_conversion_design.md`](./child_grain_queue_conversion_design.md) — per-stage predicates, row IDs, grouping, migration phases A–F.
+
 **Parallel (not blocked):** Placement cascade UI, layout runtime cutover, case status migration, child-grain `QueueRowContext`, access redaction.
 
 ---

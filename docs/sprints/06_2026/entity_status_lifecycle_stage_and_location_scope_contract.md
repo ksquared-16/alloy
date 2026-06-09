@@ -891,7 +891,7 @@ Configured layouts (published `entity_layouts` / drawer variants) **place system
 | **Layout Configuration** | System block catalog + field `entity_scope` + `option_source` metadata | **Yes** — author against contract fields and fixtures |
 | **Drawer VM** | `active_subject` + `placement_context` + redacted `related_subjects_summary` | **Yes, partial** — case-focused today; child focus + placement **later** |
 | **Status migration** | Boring case vocabulary (`open` / `closed` / …) | **Later** — Phase 5 |
-| **Child-grain queues** | Child/candidate membership predicates on OCM / candidate + location | **Later** — Phase 6; paths exist from convergence, contract alignment pending |
+| **Child-grain queues** | Child/candidate membership predicates on OCM / candidate + location | **Design frozen** — [`child_grain_queue_conversion_design.md`](./child_grain_queue_conversion_design.md); implementation Phase 6 A–F |
 | **Location cascade** | `option_source` + `depends_on_field_key` on inquiry_child fields | **Yes** — metadata + resolver API; settings offerings **later** |
 
 ---

@@ -27,6 +27,7 @@
 | Lifecycle runtime alignment matrix | [`06_2026/lifecycle_runtime_alignment_matrix_v1.md`](./06_2026/lifecycle_runtime_alignment_matrix_v1.md) | **Reference** |
 | Action button configuration UX | [`06_2026/action_button_configuration_ux_sprint.md`](./06_2026/action_button_configuration_ux_sprint.md) | **Active** |
 | AdminV2 backend query & payload optimization | [`06_2026/adminv2_backend_query_payload_optimization_phase.md`](./06_2026/adminv2_backend_query_payload_optimization_phase.md) | **Backlog** — next performance phase |
+| Child-grain queue conversion (design gate) | [`06_2026/child_grain_queue_conversion_design.md`](./06_2026/child_grain_queue_conversion_design.md) | **Frozen** — architecture before membership/count changes |
 
 ---
 
