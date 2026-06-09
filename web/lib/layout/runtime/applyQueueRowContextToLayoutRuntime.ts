@@ -97,6 +97,23 @@ export function applyQueueRowContextToLayoutRecord(
         }
     }
 
+    if (presentation.stageLabel) {
+        mutable["queue_row.stage_label"] = presentation.stageLabel;
+    }
+
+    const subjectLabel = trimOrNull(ctx.row_subject?.display_name);
+    if (subjectLabel) {
+        mutable["queue_row.subject_label"] = subjectLabel;
+    }
+
+    if (ctx.work_summary?.primary_open_label) {
+        mutable["queue_row.work_summary"] = ctx.work_summary.primary_open_label;
+    }
+
+    if (ctx.next_best_action?.label) {
+        mutable["queue_row.next_best_action_label"] = ctx.next_best_action.label;
+    }
+
     if (presentation.attentionSummary?.primary_reason_label) {
         const reason = presentation.attentionSummary.primary_reason_label;
         mutable["opportunity.attention_reason"] = reason;
@@ -181,10 +198,9 @@ export function mergeOperationalVmWithQueueRowContext(
 
     const contact = presentation.primaryContact;
     const statusLabel =
-        presentation.statusLabel
-        || (presentation.stageLabel && presentation.statusLabel
+        presentation.stageLabel && presentation.statusLabel
             ? `${presentation.stageLabel} · ${presentation.statusLabel}`
-            : presentation.stageLabel || vm.status.label);
+            : presentation.statusLabel || presentation.stageLabel || vm.status.label;
 
     return {
         ...vm,
