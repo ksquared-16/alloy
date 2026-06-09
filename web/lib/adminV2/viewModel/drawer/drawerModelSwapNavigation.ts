@@ -1,6 +1,6 @@
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
-import { loadOpportunityDrawerComposedOpen } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
+import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
 import { loadChildDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/child/loadChildDrawerViaViewModel";
 import type { ChildDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
 import { childDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/child/childDrawerHardCutoverGate";
@@ -17,6 +17,7 @@ import {
     type DrawerViewModelCacheSurface,
 } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
+import { resolveOpportunityDrawerVmCacheContext } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerVmCacheScope";
 import { resolveWarmDrawerTargetsFromOpportunityRecord } from "@/lib/adminV2/viewModel/drawer/opportunity/resolveWarmDrawerTargetsFromOpportunityRecord";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
@@ -62,11 +63,16 @@ export async function prepareDrawerViewModel(
     });
 
     if (params.entityType === "opportunities") {
+        const ws = params.opportunityWorkspaceContext;
+        const resolvedContext = resolveOpportunityDrawerVmCacheContext({
+            workspaceContext: ws ?? null,
+            context: params.context ?? null,
+        });
         const cached = peekDrawerViewModelCacheEntry({
             entityType: "opportunities",
             entityId,
             surface: "opportunity",
-            context: params.context,
+            context: resolvedContext,
         });
         if (cached && cached.entityType === "opportunities") {
             logDrawerVmRuntimeDiagnostic("drawer_vm_model_swap_cache_hit", {
@@ -77,25 +83,25 @@ export async function prepareDrawerViewModel(
             return { entityType: "opportunities", entityId, preload: cached.preload };
         }
 
-        const ws = params.opportunityWorkspaceContext;
         if (!ws) return null;
-        const { preload } = await loadOpportunityDrawerComposedOpen(
-            entityId,
-            ws,
-            params.init ?? workspaceDataFetchInit()
-        );
+        const vmResult = await loadOpportunityDrawerViaViewModel(entityId, ws, {
+            init: params.init ?? workspaceDataFetchInit(),
+            cacheContext: resolvedContext,
+        });
+        if (!vmResult.ok) return null;
+
         putDrawerViewModelCacheEntry(
             {
                 entityType: "opportunities",
                 entityId,
                 surface: "opportunity",
-                preload,
-                generation: preload.viewModel?.generation ?? null,
+                preload: vmResult.preload,
+                generation: vmResult.preload.viewModel?.generation ?? null,
                 cachedAt: Date.now(),
             },
-            params.context
+            resolvedContext
         );
-        return { entityType: "opportunities", entityId, preload };
+        return { entityType: "opportunities", entityId, preload: vmResult.preload };
     }
 
     if (params.entityType === "persons") {
@@ -308,7 +314,10 @@ export function drawerViewModelSwapCacheKey(params: PrepareDrawerViewModelParams
             entityType: "opportunities",
             entityId,
             surface: "opportunity",
-            context: params.context,
+            context: resolveOpportunityDrawerVmCacheContext({
+                workspaceContext: params.opportunityWorkspaceContext ?? null,
+                context: params.context ?? null,
+            }),
         });
     }
     if (params.entityType === "persons") {

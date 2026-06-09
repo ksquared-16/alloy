@@ -7,6 +7,7 @@ import {
     resolvePersonDrawerViewModelSurface,
     type DrawerViewModelCacheContext,
 } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
+import { resolveOpportunityDrawerVmCacheContext } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerVmCacheScope";
 import {
     prepareDrawerViewModel,
     type DrawerViewModelPreload,
@@ -41,14 +42,10 @@ export function isShellPinnedModelSwapOpenSource(openSource: string | null | und
 export function buildPrepareParamsFromOpenDrawer(
     params: OpenDrawerParams & { context?: DrawerViewModelCacheContext | null }
 ): PrepareDrawerViewModelParams {
-    const context =
-        params.context ??
-        (params.opportunityWorkspaceContext ?
-            {
-                departmentId: params.opportunityWorkspaceContext.department_id,
-                workUnitId: params.opportunityWorkspaceContext.work_unit_id,
-            }
-        :   null);
+    const context = resolveOpportunityDrawerVmCacheContext({
+        workspaceContext: params.opportunityWorkspaceContext ?? null,
+        context: params.context ?? null,
+    });
     return {
         entityType: params.type,
         entityId: params.id,

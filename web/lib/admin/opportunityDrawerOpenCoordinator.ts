@@ -150,6 +150,8 @@ export async function loadOpportunityDrawerComposedOpen(
 
     const vmOpen = await loadOpportunityDrawerViaViewModel(id, workspaceContext ?? null, init);
     if (vmOpen.ok) {
+        const vmWarm =
+            vmOpen.open_path === "cache_hit" || vmOpen.open_path === "inflight_join";
         safeLogDrawerViewModelCutover("open_committed", {
             opportunity_id: id,
             ...cutoverFlags,
@@ -167,9 +169,9 @@ export async function loadOpportunityDrawerComposedOpen(
         return {
             preload: vmOpen.preload,
             metrics: {
-                prefetch_hit: false,
+                prefetch_hit: vmWarm,
                 bootstrap_warm: false,
-                primary_warm: false,
+                primary_warm: vmWarm,
                 full_warm: false,
                 bootstrap_ms: 0,
                 primary_ms: vmOpen.compose_ms,

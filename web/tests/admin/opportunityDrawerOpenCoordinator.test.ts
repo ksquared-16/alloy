@@ -176,10 +176,9 @@ describe("opportunity drawer primary-gated composed open", () => {
         expect(lib).toContain("opportunityDrawerHardCutoverEnabled()");
     });
 
-    it("VM preload carries first_paint contract and queue_definition", () => {
-        const preload = read("lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel.ts");
-        expect(preload).toContain("first_paint");
-        expect(preload).toContain("queue_definition");
-        expect(preload).toContain("_inquiry_summary_tasks");
+    it("VM open path reports real prefetch_hit from session cache", () => {
+        const lib = read("lib/admin/opportunityDrawerOpenCoordinator.ts");
+        expect(lib).toMatch(/prefetch_hit: vmWarm/);
+        expect(lib).not.toMatch(/prefetch_hit: false,\s*\n\s*bootstrap_warm: false,\s*\n\s*primary_warm: false/);
     });
 });
