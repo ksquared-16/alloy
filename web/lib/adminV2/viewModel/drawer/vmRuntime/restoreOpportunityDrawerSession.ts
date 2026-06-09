@@ -32,6 +32,7 @@ export function buildRestoredOpportunityDrawerState(
             lead.opportunityWorkspaceContext ?? fallbackWorkspace ?? null,
         opportunityQueuePreviewSeed: lead.opportunityQueuePreviewSeed ?? null,
         opportunityQueueNavigator: lead.opportunityQueueNavigator ?? null,
+        drawerSubjectContext: lead.drawerSubjectContext ?? null,
         openSource: restoredOpportunityDrawerOpenSource(lead),
         personDrawerOpenSeed: null,
     };

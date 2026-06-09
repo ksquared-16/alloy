@@ -12,6 +12,7 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import type { DrawerSubjectContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
 import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import {
@@ -156,6 +157,8 @@ export interface AdminDrawerState {
     opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
     /** Loaded WU queue slice for in-drawer prev/next (pipeline opportunities). */
     opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
+    /** Queue row `drawer_open` subject focus — from `_queue_row_context` when opening from work-unit queue. */
+    drawerSubjectContext?: DrawerSubjectContext | null;
     /** Dev/diagnostic — how this drawer was opened (e.g. opportunity_primary_contact). */
     openSource?: string | null;
     /** Display-only person labels from opportunity contact card — first paint before GET. */
@@ -176,6 +179,7 @@ export type OpenDrawerParams = {
     opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
     opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
     opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
+    drawerSubjectContext?: DrawerSubjectContext | null;
     /** Dev/diagnostic — caller surface (e.g. opportunity_primary_contact). */
     source?: string;
     /** Parent record for stack back navigation when opening a linked drawer. */
@@ -192,6 +196,7 @@ export type OpportunityDrawerOpeningParams = {
     opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
     opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
     opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
+    drawerSubjectContext?: DrawerSubjectContext | null;
 };
 
 export type DrawerStackItem = {
@@ -208,6 +213,7 @@ export type DrawerStackItem = {
     opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
     opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
     opportunityQueueNavigator?: OpportunityDrawerQueueNavigator | null;
+    drawerSubjectContext?: DrawerSubjectContext | null;
     openSource?: string | null;
     personDrawerOpenSeed?: PersonDrawerOpenSeed | null;
 };
@@ -381,6 +387,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     opportunityWorkspaceContext: prev.opportunityWorkspaceContext,
                     opportunityQueuePreviewSeed: prev.opportunityQueuePreviewSeed,
                     opportunityQueueNavigator: prev.opportunityQueueNavigator,
+                    drawerSubjectContext: prev.drawerSubjectContext ?? null,
                     openSource: prev.openSource ?? null,
                     personDrawerOpenSeed: prev.personDrawerOpenSeed ?? null,
                 },
@@ -402,6 +409,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 opportunityWorkspaceContext: opening.opportunityWorkspaceContext ?? null,
                 opportunityQueuePreviewSeed: opening.opportunityQueuePreviewSeed ?? null,
                 opportunityQueueNavigator: opening.opportunityQueueNavigator ?? null,
+                drawerSubjectContext: opening.drawerSubjectContext ?? null,
             });
             const nav = opening.opportunityQueueNavigator;
             const ws = opening.opportunityWorkspaceContext;
@@ -437,6 +445,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     opportunityWorkspaceContext: item.opportunityWorkspaceContext,
                     opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
                     opportunityQueueNavigator: item.opportunityQueueNavigator,
+                    drawerSubjectContext: item.drawerSubjectContext ?? null,
                 });
             } else {
                 setDrawer({ type: null, id: null });
@@ -472,6 +481,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 opportunityWorkspaceContext: workspace ?? prev.opportunityWorkspaceContext ?? null,
                 opportunityQueuePreviewSeed: seed,
                 opportunityQueueNavigator: navContext,
+                drawerSubjectContext: null,
             }));
 
             prefetchAdjacentOpportunityDrawers({
@@ -668,6 +678,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     opportunityWorkspaceContext: oppCtx.opportunityWorkspaceContext,
                     opportunityQueuePreviewSeed: oppCtx.opportunityQueuePreviewSeed,
                     opportunityQueueNavigator: oppCtx.opportunityQueueNavigator,
+                    drawerSubjectContext: oppCtx.drawerSubjectContext ?? null,
                     openSource: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
                     personDrawerOpenSeed:
                         params.type === "persons" ? params.personDrawerOpenSeed ?? null : null,
@@ -920,6 +931,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     opportunityWorkspaceContext: params.opportunityWorkspaceContext ?? null,
                     opportunityQueuePreviewSeed: params.opportunityQueuePreviewSeed ?? null,
                     opportunityQueueNavigator: params.opportunityQueueNavigator ?? null,
+                    drawerSubjectContext: params.drawerSubjectContext ?? null,
                 });
                 return;
             }
@@ -978,6 +990,8 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                         params.type === "opportunities" ? params.opportunityQueuePreviewSeed ?? null : null,
                     opportunityQueueNavigator:
                         params.type === "opportunities" ? params.opportunityQueueNavigator ?? null : null,
+                    drawerSubjectContext:
+                        params.type === "opportunities" ? params.drawerSubjectContext ?? null : null,
                     openSource: params.source ?? null,
                     personDrawerOpenSeed:
                         params.type === "persons" ? params.personDrawerOpenSeed ?? null : null,
@@ -1083,6 +1097,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                             opportunityWorkspaceContext: item.opportunityWorkspaceContext,
                             opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
                             opportunityQueueNavigator: item.opportunityQueueNavigator,
+                            drawerSubjectContext: item.drawerSubjectContext ?? null,
                             personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
                             openSource: item.openSource ?? null,
                         };
@@ -1135,6 +1150,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                         opportunityWorkspaceContext: item.opportunityWorkspaceContext,
                         opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
                         opportunityQueueNavigator: item.opportunityQueueNavigator,
+                        drawerSubjectContext: item.drawerSubjectContext ?? null,
                         personDrawerOpenSeed: item.personDrawerOpenSeed ?? null,
                         openSource: item.openSource ?? null,
                     });
@@ -1168,6 +1184,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     lead.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
                 opportunityQueuePreviewSeed: lead.opportunityQueuePreviewSeed ?? null,
                 opportunityQueueNavigator: lead.opportunityQueueNavigator ?? null,
+                drawerSubjectContext: lead.drawerSubjectContext ?? null,
             });
             const syncBack = peekDrawerViewModelPreloadSync(backParams);
             logDrawerVmRuntimeDiagnostic(

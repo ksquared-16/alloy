@@ -35,6 +35,8 @@ export type EntityDrawerOperatingShellProps = {
     panelClassName?: string;
     /** Value for `data-drawer-runtime` on the body wrapper. */
     runtimeDataAttribute: string;
+    /** Optional diagnostic attrs on the runtime body wrapper (e.g. drawer subject context). */
+    runtimeShellDataAttributes?: Record<string, string | undefined>;
     holdPriorPayload?: boolean;
     /** Layout-owned operational widgets — platform container only. Omitted when null/empty. */
     summaryStrip?: ReactNode;
@@ -55,6 +57,7 @@ export default function EntityDrawerOperatingShell({
     panelFooterChrome,
     panelClassName = DEFAULT_PANEL_CLASS,
     runtimeDataAttribute,
+    runtimeShellDataAttributes,
     holdPriorPayload = false,
     summaryStrip,
 }: EntityDrawerOperatingShellProps) {
@@ -85,6 +88,7 @@ export default function EntityDrawerOperatingShell({
                 data-drawer-runtime={runtimeDataAttribute}
                 data-entity-drawer-operating-shell={entity}
                 {...(holdPriorPayload ? { "data-drawer-vm-transition-hold": "true" } : {})}
+                {...runtimeShellDataAttributes}
             >
                 <div
                     className={

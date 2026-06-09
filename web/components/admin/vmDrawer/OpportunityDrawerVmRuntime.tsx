@@ -49,6 +49,7 @@ import OpportunityDrawerTabBackgroundLoader from "@/components/admin/vmDrawer/Op
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";
 
 const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -502,6 +503,11 @@ export default function OpportunityDrawerVmRuntime() {
         return null;
     }, [record]);
 
+    const drawerSubjectShellAttrs = useMemo(
+        () => drawerSubjectContextDiagnosticAttrs(drawer.drawerSubjectContext),
+        [drawer.drawerSubjectContext],
+    );
+
     const composedProofHeader = useMemo(() => {
         if (!layoutCutoverHeader || !committedVisible || !drawer.id || !displayVm || !record) return undefined;
         return (
@@ -582,6 +588,7 @@ export default function OpportunityDrawerVmRuntime() {
                 :   undefined
             }
             runtimeDataAttribute="opportunity-vm"
+            runtimeShellDataAttributes={drawerSubjectShellAttrs}
             holdPriorPayload={holdPriorPayload}
             summaryStrip={
                 drawerTab === "overview" && committedVisible ? drawerSummaryStrip : null

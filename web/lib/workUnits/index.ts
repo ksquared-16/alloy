@@ -58,3 +58,8 @@ export {
     type QueueRowContextPresentationDebug,
     type QueueRowRelatedChildPresentation,
 } from "@/lib/workUnits/resolveQueueRowContextPresentation";
+
+export {
+    buildDrawerSubjectContextFromQueueRowContext,
+    drawerSubjectContextDiagnosticAttrs,
+} from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";

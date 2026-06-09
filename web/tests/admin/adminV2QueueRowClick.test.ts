@@ -19,12 +19,18 @@ describe("work-unit queue row open contract", () => {
         expect(registryIdx).toBeGreaterThan(openIdx);
         expect(src).toContain("openWorkUnitQueueRecord");
         expect(src).toContain("applyRegistryResolvedActionClient");
+        expect(src).toContain("drawerSubjectContext");
+        expect(src).toContain("opportunityDrawerSubjectContextFromQueueItem");
     });
 
     it("maps registry open_drawer quick actions to open_record dispatch", () => {
-        const src = readFileSync(queueBlockPath, "utf8");
-        expect(src).toContain('payload?.actionType === "open_drawer"');
-        expect(src).toContain("fireQueueRowOpenRecord");
+        const queueBlock = readFileSync(queueBlockPath, "utf8");
+        const quickActionHelpers = readFileSync(
+            join(root, "../../lib/ui-v2/queueRowQuickActionHelpers.ts"),
+            "utf8",
+        );
+        expect(quickActionHelpers).toContain('payload?.actionType === "open_drawer"');
+        expect(queueBlock).toContain("fireQueueRowOpenRecord");
     });
 
     it("keeps queue rows clickable during lane refresh", () => {

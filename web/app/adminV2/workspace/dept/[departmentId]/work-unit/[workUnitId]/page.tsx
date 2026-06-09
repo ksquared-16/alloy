@@ -270,6 +270,7 @@ import {
     findQueuePreviewItemById,
     opportunityDrawerSeedFromQueueItem,
 } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import { opportunityDrawerSubjectContextFromQueueItem } from "@/lib/admin/opportunityDrawerSubjectContextFromQueueItem";
 import {
     prefetchOpportunityDrawerOnRowIntent,
     prefetchVisibleWorkUnitDrawerPrimary,
@@ -5215,6 +5216,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     ? opportunityDrawerSeedFromQueueItem(previewRow)
                     : undefined,
                 opportunityQueueNavigator: buildWuOpportunityQueueNavigator() ?? undefined,
+                drawerSubjectContext: previewRow
+                    ? opportunityDrawerSubjectContextFromQueueItem(previewRow)
+                    : undefined,
             };
         },
         [buildWuOpportunityQueueNavigator, oppDrawerExtra]

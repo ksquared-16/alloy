@@ -138,16 +138,21 @@ export function resolveModelSwapOpportunityContext(
         opportunityWorkspaceContext?: { work_unit_id: string; department_id: string } | null;
         opportunityQueueNavigator?: OpenDrawerParams["opportunityQueueNavigator"];
         opportunityQueuePreviewSeed?: OpenDrawerParams["opportunityQueuePreviewSeed"];
+        drawerSubjectContext?: OpenDrawerParams["drawerSubjectContext"];
     }
 ): Pick<
     OpenDrawerParams,
-    "opportunityWorkspaceContext" | "opportunityQueueNavigator" | "opportunityQueuePreviewSeed"
+    | "opportunityWorkspaceContext"
+    | "opportunityQueueNavigator"
+    | "opportunityQueuePreviewSeed"
+    | "drawerSubjectContext"
 > {
     if (params.type !== "opportunities") {
         return {
             opportunityWorkspaceContext: prev.opportunityWorkspaceContext ?? null,
             opportunityQueueNavigator: prev.opportunityQueueNavigator ?? null,
             opportunityQueuePreviewSeed: prev.opportunityQueuePreviewSeed ?? null,
+            drawerSubjectContext: prev.drawerSubjectContext ?? null,
         };
     }
     return {
@@ -157,6 +162,7 @@ export function resolveModelSwapOpportunityContext(
             params.opportunityQueueNavigator ?? prev.opportunityQueueNavigator ?? null,
         opportunityQueuePreviewSeed:
             params.opportunityQueuePreviewSeed ?? prev.opportunityQueuePreviewSeed ?? null,
+        drawerSubjectContext: params.drawerSubjectContext ?? prev.drawerSubjectContext ?? null,
     };
 }
 
