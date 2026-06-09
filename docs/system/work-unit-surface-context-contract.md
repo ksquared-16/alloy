@@ -77,7 +77,8 @@ Layout blocks **consume** `WorkUnitSurfaceContext` / `QueueRowContext` — they 
 
 - Child-grain / candidate-grain `row_subject` (Touring per child)
 - Grouped same-stage rows (`row_subjects`, `active_subject_group`) — types documented § grouped rows
-- `placement_context` on `QueueRowContext` (types only — see location scope contract §6)
+- **Partial** `placement_context` on case-grain rows when `_inquiry_children` placement is deterministic (see § placement_context)
+- Full child-grain `placement_context` (per active OCM subject) — later
 - `visibility` / `location_id` on `related_subjects_summary` (access redaction — phase 7)
 - Subject-scoped attention and work summaries
 - `count_unit` on `WorkUnitSurfaceContext`
@@ -113,7 +114,8 @@ Layout runtime may consume **row-level** `_queue_row_context` on queue API items
 | `case_context` | Yes | |
 | `primary_contact` | When enriched | |
 | `related_subjects_summary` | When `metadata.inquiry_children` | `visibility` / location fields not populated yet |
-| `placement_context` | No (types shipped) | Target: `location_id`, `program_key`, `room_id` + labels — see entity contract §4.6 |
+| `placement_context` | **Partial** — when one child or all children share same OCM placement in `_inquiry_children` | Full per-child when `row_subject` is honest child grain |
+| `related_subjects_summary[].location_label` etc. | When inquiry child rows carry labels | Program/room/schedule labels additive |
 | `attention_summary` | When resolver enriched row | |
 | `work_summary` | Rare | When `_operational_summary_preview` present |
 | `next_best_action` | When BOS preview present | |
@@ -169,6 +171,55 @@ Entity contract §7.4 — queue row click:
 3. Lifecycle visual uses **active subject stage** (shared for group), not case pipeline status
 4. Location/program/room blocks use **active subject `placement_context`** (single focus); multi-child placement may show first subject or per-child in children block
 5. Family context via `related_subjects_summary` — siblings **outside** the focused group; **redacted** entries pre-resolved before layout render
+
+---
+
+## `placement_context` — partial case-grain bridge (shipped)
+
+**Adapter:** `buildPartialQueueRowContext` in `web/lib/workUnits/buildPartialQueueRowContext.ts`
+
+**Data source:** Enriched opportunity queue row `_inquiry_children` (or `metadata.inquiry_children`) after `enrichOpportunityRows` + `hydrateQueueRowInquiryChildrenPersonIds`. Fields read per child:
+
+| `placement_context` field | Inquiry child source |
+|---------------------------|----------------------|
+| `location_id` | `location_id` |
+| `location_label` | `location_label` |
+| `program_key` | `desired_program_type` |
+| `program_label` | `desired_program_label` or humanized program key |
+| `room_id` | `program_room_cohort_key` |
+| `room_label` | `program_room_cohort_label` |
+| `schedule_key` | `desired_schedule_type` |
+| `schedule_label` | `desired_schedule_label` or humanized schedule key |
+
+**Row-level `placement_context` rules (case-grain):**
+
+| Children on row | `placement_context` |
+|-----------------|---------------------|
+| None / no placement fields | Omitted |
+| One child with placement | That child's placement |
+| Multiple children, **identical** placement keys | Shared placement |
+| Multiple children, **distinct** placements | **Omitted** — do not guess |
+
+`row_subject` remains `case`. `related_subjects_summary[]` carries per-child `location_label`, `program_label`, `room_label`, `schedule_label` when present on inquiry child rows.
+
+**Not in this bridge:** `opportunities.location_id` as child placement; OCM batch without inquiry_children metadata; access redaction `visibility`; child-grain rows with subject-scoped placement.
+
+### Sample (single child)
+
+```json
+{
+  "placement_context": {
+    "location_id": "loc-north",
+    "location_label": "North Campus",
+    "program_key": "infant",
+    "program_label": "Infant",
+    "room_id": "cohort-infant-a",
+    "room_label": "Infant A",
+    "schedule_key": "full_time",
+    "schedule_label": "Full time"
+  }
+}
+```
 
 ---
 

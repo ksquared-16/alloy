@@ -22,6 +22,7 @@ import {
     type QueueRowContext,
     type QueueRowNextBestAction,
     type RelatedSubjectSummary,
+    type SubjectPlacementContext,
     type WorkUnitSurfaceContext,
     type WorkUnitSurfaceContextRow,
     isQueueMembershipGrain,
@@ -110,6 +111,69 @@ export function resolveBoringCaseStatusLabel(statusKey: string, fallbackLabel: s
     }
 }
 
+function buildSubjectPlacementFromInquiryChildRaw(raw: Record<string, unknown>): SubjectPlacementContext | null {
+    const location_id = trimOrNull(raw.location_id);
+    const location_label = trimOrNull(raw.location_label);
+    const program_key = trimOrNull(raw.desired_program_type);
+    const program_label =
+        trimOrNull(raw.desired_program_label) ??
+        (program_key ? humanizeSnakeCaseToken(program_key) : null);
+    const room_id = trimOrNull(raw.program_room_cohort_key);
+    const room_label = trimOrNull(raw.program_room_cohort_label);
+    const schedule_key = trimOrNull(raw.desired_schedule_type);
+    const schedule_label =
+        trimOrNull(raw.desired_schedule_label) ??
+        (schedule_key ? humanizeSnakeCaseToken(schedule_key) : null);
+
+    if (!location_id && !program_key && !room_id && !schedule_key) {
+        return null;
+    }
+
+    return {
+        location_id,
+        location_label,
+        program_key,
+        program_label,
+        room_id,
+        room_label,
+        schedule_key,
+        schedule_label,
+    };
+}
+
+function placementSignature(placement: SubjectPlacementContext): string {
+    return [
+        placement.location_id ?? "",
+        placement.program_key ?? "",
+        placement.room_id ?? "",
+        placement.schedule_key ?? "",
+    ].join("|");
+}
+
+/**
+ * Case-grain rows: populate placement when one child or all children share identical OCM placement.
+ * Returns undefined when ambiguous (multiple distinct placements).
+ */
+export function resolveRowPlacementContextFromInquiryChildren(
+    inquiryChildren: unknown[],
+): SubjectPlacementContext | undefined {
+    if (!inquiryChildren.length) return undefined;
+
+    const placements: SubjectPlacementContext[] = [];
+    for (const raw of inquiryChildren) {
+        if (raw == null || typeof raw !== "object" || Array.isArray(raw)) continue;
+        const placement = buildSubjectPlacementFromInquiryChildRaw(raw as Record<string, unknown>);
+        if (placement) placements.push(placement);
+    }
+
+    if (!placements.length) return undefined;
+    if (placements.length === 1) return placements[0];
+
+    const firstSig = placementSignature(placements[0]!);
+    const allSame = placements.every((p) => placementSignature(p) === firstSig);
+    return allSame ? placements[0] : undefined;
+}
+
 function buildRelatedSubjectsSummary(row: Record<string, unknown>): RelatedSubjectSummary[] {
     const inquiryChildren = readInquiryChildrenFromRow(row);
     if (!inquiryChildren.length) {
@@ -142,11 +206,18 @@ function buildRelatedSubjectsSummary(row: Record<string, unknown>): RelatedSubje
                 ? humanizeSnakeCaseToken(member.outcome_status_key)
                 : "—");
 
+        const placement = buildSubjectPlacementFromInquiryChildRaw(raw);
+
         out.push({
             subject_type: "child",
             subject_id: subjectId,
             display_name: displayName,
             status_label: statusLabel,
+            location_id: placement?.location_id ?? trimOrNull(raw.location_id),
+            location_label: placement?.location_label ?? trimOrNull(raw.location_label),
+            program_label: placement?.program_label ?? null,
+            room_label: placement?.room_label ?? trimOrNull(raw.program_room_cohort_label),
+            schedule_label: placement?.schedule_label ?? trimOrNull(raw.desired_schedule_label),
         });
     }
 
@@ -284,6 +355,8 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
             : null;
 
     const boringCaseLabel = resolveBoringCaseStatusLabel(statusKey, statusLabel);
+    const inquiryChildren = readInquiryChildrenFromRow(row);
+    const placement_context = resolveRowPlacementContextFromInquiryChildren(inquiryChildren);
 
     return {
         contract_version: QUEUE_ROW_CONTEXT_CONTRACT_VERSION,
@@ -313,6 +386,7 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
             entity_id: caseId,
             active_subject: activeSubject,
         },
+        ...(placement_context ? { placement_context } : {}),
     };
 }
 

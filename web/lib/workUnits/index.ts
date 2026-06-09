@@ -21,6 +21,8 @@ export {
     type QueueRowSubjectPresentation,
     type QueueRowWorkSummary,
     type RelatedSubjectSummary,
+    type RelatedSubjectVisibility,
+    type SubjectPlacementContext,
     type WorkUnitQueueCountUnit,
     type WorkUnitSurfaceContext,
     type WorkUnitSurfaceContextRow,

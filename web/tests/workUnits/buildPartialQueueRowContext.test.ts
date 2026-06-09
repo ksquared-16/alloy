@@ -86,6 +86,147 @@ describe("buildPartialQueueRowContext", () => {
         ]);
     });
 
+    it("populates placement_context when one inquiry child has placement", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "tour_scheduled",
+                _inquiry_children: [
+                    {
+                        id: "ocm-b",
+                        display_name: "Child B",
+                        outcome_status_key: "tour_scheduled",
+                        location_id: "loc-1",
+                        location_label: "North Campus",
+                        desired_program_type: "infant",
+                        desired_program_label: "Infant",
+                        program_room_cohort_key: "room-a",
+                        program_room_cohort_label: "Infant A",
+                        desired_schedule_type: "full_time",
+                        desired_schedule_label: "Full time",
+                    },
+                ],
+            },
+            queue,
+        });
+
+        expect(ctx.placement_context).toEqual({
+            location_id: "loc-1",
+            location_label: "North Campus",
+            program_key: "infant",
+            program_label: "Infant",
+            room_id: "room-a",
+            room_label: "Infant A",
+            schedule_key: "full_time",
+            schedule_label: "Full time",
+        });
+    });
+
+    it("does not fake placement_context when children have distinct placements", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "open",
+                _inquiry_children: [
+                    {
+                        id: "ocm-a",
+                        display_name: "Child A",
+                        location_id: "loc-1",
+                        location_label: "Site 1",
+                        desired_program_type: "infant",
+                    },
+                    {
+                        id: "ocm-b",
+                        display_name: "Child B",
+                        location_id: "loc-2",
+                        location_label: "Site 2",
+                        desired_program_type: "preschool",
+                    },
+                ],
+            },
+            queue,
+        });
+
+        expect(ctx.placement_context).toBeUndefined();
+    });
+
+    it("uses shared placement when all children match", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "tour_scheduled",
+                _inquiry_children: [
+                    {
+                        id: "ocm-a",
+                        display_name: "Child A",
+                        location_id: "loc-1",
+                        location_label: "North Campus",
+                        desired_program_type: "infant",
+                    },
+                    {
+                        id: "ocm-b",
+                        display_name: "Child B",
+                        location_id: "loc-1",
+                        location_label: "North Campus",
+                        desired_program_type: "infant",
+                    },
+                ],
+            },
+            queue,
+        });
+
+        expect(ctx.placement_context?.location_id).toBe("loc-1");
+        expect(ctx.placement_context?.program_key).toBe("infant");
+    });
+
+    it("related_subjects_summary includes placement labels when present", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: {
+                id: "opp-1",
+                name: "Smith Household",
+                status_key: "open",
+                metadata: {
+                    inquiry_children: [
+                        {
+                            id: "ocm-a",
+                            display_name: "Child A",
+                            outcome_status_label: "Enrolled",
+                            location_id: "loc-1",
+                            location_label: "North Campus",
+                            desired_program_label: "Infant",
+                            program_room_cohort_label: "Infant A",
+                            desired_schedule_label: "Full time",
+                        },
+                    ],
+                },
+            },
+            queue,
+        });
+
+        expect(ctx.related_subjects_summary[0]).toMatchObject({
+            display_name: "Child A",
+            status_label: "Enrolled",
+            location_label: "North Campus",
+            program_label: "Infant",
+            room_label: "Infant A",
+            schedule_label: "Full time",
+        });
+    });
+
+    it("missing inquiry children does not crash and leaves placement unset", () => {
+        const ctx = buildPartialQueueRowContext({
+            row: { id: "opp-1", name: "Empty Case", status_key: "new_inquiry" },
+            queue,
+        });
+
+        expect(ctx.placement_context).toBeUndefined();
+        expect(ctx.related_subjects_summary).toEqual([]);
+        expect(ctx.row_subject.subject_type).toBe("case");
+    });
+
     it("attaches _queue_row_context without mutating source row fields", () => {
         const row = { id: "opp-2", name: "Jones Family", status_key: "new_inquiry" };
         const out = attachPartialQueueRowContext(row, { key: "new_leads", label: "New Leads" });

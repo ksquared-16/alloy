@@ -809,7 +809,7 @@ membership(subject, stage, user_scope) =
 | Aspect | Today (`1.0-partial`) | Target |
 |--------|---------------------|--------|
 | `row_subject.subject_type` | Often `case` even on child/candidate lanes | Honest `child` / `candidate` id + type |
-| `placement_context` | Types only; often omitted | Populated from OCM / candidate |
+| `placement_context` | **Partial** on case-grain rows when `_inquiry_children` placement is deterministic | Full from OCM / candidate on honest child-grain `row_subject` |
 | `related_subjects_summary.visibility` | Types only | `full` / `redacted` / `hidden` from access resolver |
 | `active_subject` in `drawer_open` | Often case | Matches `row_subject` for child/candidate lanes |
 | `row_subjects` / grouped mode | Not implemented | Same-case + same-stage sibling grouping (§3.3–§3.4) |

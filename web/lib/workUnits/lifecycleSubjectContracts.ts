@@ -97,11 +97,15 @@ export type RelatedSubjectSummary = {
     subject_type: LifecycleSubjectType;
     subject_id: string;
     display_name: string;
+    /** Enrollment disposition / stage label for this child's OCM track. */
     status_label: string;
     /** TODO(phase-7): set by access-scope resolver — default `full` when omitted. */
     visibility?: RelatedSubjectVisibility;
     location_id?: string | null;
     location_label?: string | null;
+    program_label?: string | null;
+    room_label?: string | null;
+    schedule_label?: string | null;
 };
 
 export type QueueRowAttentionSummary = {
