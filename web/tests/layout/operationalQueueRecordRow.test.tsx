@@ -8,8 +8,9 @@ import {
     buildOperationalQueueRecordViewModelFromLayout,
 } from "@/lib/layout/runtime/buildOperationalQueueRecordViewModel";
 import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/buildOpportunityQueueRowRecordFromPreview";
-import { defaultLeadQueueLayoutV3 } from "@/lib/layout/queueRecordLayoutV3";
+import { defaultLeadQueueLayoutV3, type QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 import type { CrmCompactRowSemanticSlots, QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
+import { buildPartialQueueRowContext } from "@/lib/workUnits/buildPartialQueueRowContext";
 
 function crmSlots(
     partial: Partial<CrmCompactRowSemanticSlots> & Pick<CrmCompactRowSemanticSlots, "primaryIdentity">
@@ -145,6 +146,50 @@ describe("OperationalQueueRecordRow", () => {
         expect(html).toContain("queue-record-field--pill");
         expect(html).toContain("queue-record-field--status-tone-");
         expect(html).toContain('data-queue-status-tone="');
+    });
+
+    it("does not duplicate household name in subject focus line for case-grain context", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        const queue = { key: "tours", label: "Tours", lifecycle_key: "enrollment", stage_key: "tour" };
+        const context = buildPartialQueueRowContext({
+            row: { id: "opp-dup", name: "Smith Household", status_key: "tour_scheduled" },
+            queue,
+        });
+        const item: QueuePreviewItemVm = {
+            id: "opp-dup",
+            title: "Smith Household",
+            quickActions: [],
+            _queue_row_context: context,
+            semanticCrmCompact: {
+                primaryIdentity: "Smith Household",
+                childName: null,
+                contactDisplayName: null,
+                contactPhoneDisplay: null,
+                contactEmail: null,
+                programContext: null,
+                statusLabel: "Tour scheduled",
+                stageLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                tourContext: null,
+                locationContext: null,
+                childrenLines: [],
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item, doc);
+        const vm = buildOperationalQueueRecordViewModelFromLayout(doc, record);
+        const html = renderToStaticMarkup(
+            <OperationalQueueRecordRow vm={vm} record={record} onOpen={() => {}} />,
+        );
+        expect(html).toContain('data-queue-row-runtime-path="operational-queue-record-row-v3"');
+        expect(html).toContain("Smith Household");
+        expect(html).not.toContain("queue-record-field--subject-focus");
     });
 
     it("renders one child per row with inline DOB labels", () => {
@@ -406,5 +451,34 @@ describe("OperationalQueueRecordRow", () => {
         expect(html).toContain("operational-queue-row__collapsed-icon");
         expect(html).not.toContain("1 related");
         expect(html).not.toContain("operational-queue-row__collapsed-actions");
+    });
+
+    it("hides tour date field when visibleWhen exists fails on placeholder value", () => {
+        const config: QueueRecordLayoutConfigV3 = structuredClone(defaultLeadQueueLayoutV3());
+        const dateCol = config.columns[config.columns.length - 1]!;
+        const fieldGroup = dateCol.blocks[0];
+        if (fieldGroup.type === "field_group") {
+            const tourField = fieldGroup.fields.find((f) => f.fieldKey === "opportunity.tour_date");
+            if (tourField) {
+                tourField.visibleWhen = { type: "exists", path: "opportunity.tour_date" };
+            }
+        }
+
+        const record = {
+            id: "opp-tour-empty",
+            name: "Mitchell household",
+            "customer.display_name": "Mitchell household",
+            "opportunity.tour_date": "—",
+            status_key: "Qualified",
+            children: [],
+        };
+
+        const vm = buildOperationalQueueRecordViewModelFromLayout(buildLeadQueueDefaultDoc(), record);
+        const html = renderToStaticMarkup(
+            <OperationalQueueRecordRow vm={vm} record={record} config={config} onOpen={() => {}} />,
+        );
+
+        expect(html).not.toContain("Tour date");
+        expect(html).not.toContain("queue-record-field--inline-labeled");
     });
 });

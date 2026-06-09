@@ -8,11 +8,13 @@ import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRu
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { formatQueueRecordDateDisplay } from "@/lib/adminFormatters";
+import { stripParentheticalAgeFromChildDisplayName } from "@/lib/layout/runtime/splitQueuePreviewChildPrimaryLabel";
 import type {
     QueueRecordFieldConfig,
     QueueRecordFieldLinkTarget,
     QueueRecordScope,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { isQueueRowSubjectFieldVisible } from "@/lib/layout/runtime/queueRowSubjectPresentation";
 
 export type QueueRecordResolvedField = {
     field: QueueRecordFieldConfig;
@@ -69,7 +71,10 @@ export function resolveQueueRecordFieldDisplay(
     const item = queueRecordFieldToLayoutItem(field);
     const resolved = resolveItemValue(record, item);
     if (hasResolvableValue(resolved.display) && !resolved.isPlaceholder) {
-        const rawDisplay = String(resolved.display).trim();
+        let rawDisplay = String(resolved.display).trim();
+        if (field.fieldKey === "child.name" || field.fieldKey === "child.display_name") {
+            rawDisplay = stripParentheticalAgeFromChildDisplayName(rawDisplay);
+        }
         return { display: formatQueueRecordFieldValue(rawDisplay, field), isPlaceholder: false };
     }
 
@@ -199,7 +204,10 @@ export function resolveQueueRecordField(
     record: ProofRuntimeRecord,
 ): QueueRecordResolvedField {
     const item = queueRecordFieldToLayoutItem(field);
-    const visible = evaluateLayoutCondition(record, field.visibleWhen);
+    let visible = evaluateLayoutCondition(record, field.visibleWhen);
+    if (visible && !isQueueRowSubjectFieldVisible(record, field.fieldKey)) {
+        visible = false;
+    }
     const resolved = resolveQueueRecordFieldDisplay(record, field);
     return {
         field,

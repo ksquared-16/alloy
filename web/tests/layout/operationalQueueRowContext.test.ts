@@ -9,6 +9,7 @@ import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/
 import { buildLeadQueueDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { defaultLeadQueueLayoutV3 } from "@/lib/layout/queueRecordLayoutV3";
 import { evaluateLayoutCondition } from "@/lib/layout/runtime/evaluateLayoutCondition";
+import { resolveQueueRecordField } from "@/lib/layout/runtime/queueRecordScopedResolve";
 import type { QueuePreviewItemVm } from "@/lib/ui-v2/workspace-types";
 
 const queue = { key: "tours", label: "Tours", lifecycle_key: "enrollment", stage_key: "tour" };
@@ -71,6 +72,7 @@ describe("operational queue row QueueRowContext", () => {
         const config = defaultLeadQueueLayoutV3();
         const record = buildOpportunityQueueRowRecordFromPreview(item, doc);
         expect(record["customer.display_name"]).toBe("Smith Household");
+        expect(record["queue_row.subject_label"]).toBeUndefined();
         expect(record["queue_row.stage_label"]).toBe("Tours");
         expect(record["opportunity.status_label"]).toBe("Tour scheduled");
         expect(String(record["opportunity.location"])).toContain("Main Campus");
@@ -152,6 +154,21 @@ describe("operational queue row QueueRowContext", () => {
             hasAttention: false,
         };
         expect(mergeOperationalVmWithQueueRowContext(vm, { name: "Keep" })).toBe(vm);
+    });
+
+    it("suppresses duplicate case-grain subject in layout field resolution", () => {
+        const context = buildPartialQueueRowContext({
+            row: { id: "opp-1", name: "Smith Household", status_key: "tour_scheduled" },
+            queue,
+        });
+        const record = applyQueueRowContextToLayoutRecord({ id: "opp-1", name: "Smith Household" }, context);
+        const subjectField = defaultLeadQueueLayoutV3().columns
+            .flatMap((col) => col.blocks)
+            .flatMap((block) => (block.type === "field_group" ? block.fields : []))
+            .find((f) => f.fieldKey === "queue_row.subject_label");
+        expect(subjectField).toBeTruthy();
+        const resolved = resolveQueueRecordField(subjectField!, record);
+        expect(resolved.visible).toBe(false);
     });
 
     it("default lead preset includes queue_row context field keys", () => {

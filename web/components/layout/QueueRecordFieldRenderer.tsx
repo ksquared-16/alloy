@@ -121,6 +121,7 @@ export function QueueRecordLinkedField({
             data-layout-runtime-adornment-entity={entity ? linkEntityAttr(entity) : undefined}
             data-queue-status-tone={statusTone ?? undefined}
             onClick={openLinked}
+            onMouseDown={(e) => e.stopPropagation()}
         >
             {adornment?.icon ?
                 <span className={`queue-record-field__icon-wrap${iconToneClass}`}>
@@ -170,6 +171,9 @@ export default function QueueRecordFieldRenderer({
     const { field, item, display, isPlaceholder } = resolved;
     const text = display?.trim() ?? "";
     const showEmpty = !text || isPlaceholder;
+    if (showEmpty && field.visibleWhen?.type === "exists") {
+        return null;
+    }
     const link = field.link;
     const entity = link?.target ? linkTargetEntity(link.target) : null;
     const showLabel = queueRecordFieldShowsLabel(field);

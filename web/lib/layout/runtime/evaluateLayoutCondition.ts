@@ -12,9 +12,14 @@ function readPath(record: ProofRuntimeRecord, path: string): unknown {
     return undefined;
 }
 
+function isPlaceholderDisplay(value: string): boolean {
+    const trimmed = value.trim();
+    return trimmed.length === 0 || trimmed === "—" || trimmed === "-" || trimmed === "–";
+}
+
 function isEmptyValue(value: unknown): boolean {
     if (value === undefined || value === null) return true;
-    if (typeof value === "string") return value.trim().length === 0;
+    if (typeof value === "string") return isPlaceholderDisplay(value);
     if (Array.isArray(value)) return value.length === 0;
     return false;
 }

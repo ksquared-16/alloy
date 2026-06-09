@@ -15,6 +15,8 @@ import {
     resolveOpportunityPrimaryContactPerson,
 } from "./resolveOpportunityPrimaryContactPerson";
 import { applyQueueRowContextToLayoutRecord } from "./applyQueueRowContextToLayoutRuntime";
+import { suppressDuplicateQueueRowSubjectOnRecord } from "./queueRowSubjectPresentation";
+import { splitQueuePreviewChildPrimaryLabel } from "./splitQueuePreviewChildPrimaryLabel";
 import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnrichment";
 import { resolveQueueRecordLayoutConfig } from "./resolveQueueRecordLayoutConfig";
 import type { OpportunityQueueRowWithContext } from "@/lib/workUnits/lifecycleSubjectContracts";
@@ -54,13 +56,15 @@ function parseContactNameFromLine(contactLine: string | null | undefined): strin
 function mapCrmChildLine(line: CrmCompactChildLineVm, index: number, crm: CrmCompactRowSemanticSlots): ProofRuntimeRecord {
     const childId = line.personId ?? crm.childPersonId ?? null;
     const resolvedId = pickEntityId(childId, line.personId) ?? "";
+    const primaryRaw = pickDisplay(line.primary) ?? "";
+    const { name, inlineAge } = splitQueuePreviewChildPrimaryLabel(primaryRaw);
     return {
         id: resolvedId || `child-${index}`,
         person_id: resolvedId,
         customer_member_id: pickDisplay(line.customerMemberId, line.ocmId) ?? "",
         "child.id": resolvedId,
-        "child.name": pickDisplay(line.primary) ?? "—",
-        "child.age_band": pickDisplay(line.secondary, crm.ageBandContext, crm.ageContext) ?? "",
+        "child.name": name || "—",
+        "child.age_band": pickDisplay(line.secondary, inlineAge, crm.ageBandContext, crm.ageContext) ?? "",
         "child.program": pickDisplay(line.programInline, line.secondary, crm.programContext) ?? "",
         "child.status": pickDisplay(crm.statusLabel, crm.stageLabel) ?? "",
         "child.location": pickDisplay(crm.locationContext, crm.roomContext) ?? "",
@@ -69,13 +73,15 @@ function mapCrmChildLine(line: CrmCompactChildLineVm, index: number, crm: CrmCom
 
 function mapStructuredChildLine(line: CrmCompactChildLineVm, index: number, enrichment?: QueueRowLayoutRuntimeEnrichment | null): ProofRuntimeRecord {
     const resolvedId = pickEntityId(line.personId) ?? "";
+    const primaryRaw = pickDisplay(line.primary) ?? "";
+    const { name, inlineAge } = splitQueuePreviewChildPrimaryLabel(primaryRaw);
     return {
         id: resolvedId || `child-${index}`,
         person_id: resolvedId,
         customer_member_id: pickDisplay(line.customerMemberId, line.ocmId) ?? "",
         "child.id": resolvedId,
-        "child.name": pickDisplay(line.primary) ?? "—",
-        "child.age_band": pickDisplay(line.secondary) ?? "",
+        "child.name": name || "—",
+        "child.age_band": pickDisplay(line.secondary, inlineAge) ?? "",
         "child.program": pickDisplay(line.programInline, line.secondary, enrichment?.programLabel) ?? "",
         "child.status": pickDisplay(enrichment?.statusDisplay) ?? "",
         "child.location": pickDisplay(enrichment?.locationLabel) ?? "",
@@ -87,12 +93,13 @@ function mapCrmChildren(crm: CrmCompactRowSemanticSlots, enrichment?: QueueRowLa
         return crm.childrenLines.map((line, i) => mapCrmChildLine(line, i, crm));
     }
     if (crm.childName) {
+        const { name, inlineAge } = splitQueuePreviewChildPrimaryLabel(crm.childName);
         return [
             {
                 id: crm.childPersonId ?? "child-preview",
                 "child.id": pickDisplay(crm.childPersonId) ?? "",
-                "child.name": crm.childName,
-                "child.age_band": pickDisplay(crm.ageBandContext, crm.ageContext) ?? "",
+                "child.name": name || crm.childName,
+                "child.age_band": pickDisplay(crm.ageBandContext, crm.ageContext, inlineAge) ?? "",
                 "child.program": pickDisplay(crm.programContext) ?? "",
                 "child.status": pickDisplay(crm.statusLabel, crm.stageLabel) ?? "",
                 "child.location": pickDisplay(crm.locationContext, crm.roomContext) ?? "",
@@ -355,6 +362,8 @@ export function buildOpportunityQueueRowRecordFromPreview(
     const withDocKeys = ensureQueueDocRefKeys(baseRecord, doc);
     const rowContext = (item as OpportunityQueueRowWithContext)._queue_row_context ?? null;
     const withContext = rowContext ? applyQueueRowContextToLayoutRecord(withDocKeys, rowContext) : withDocKeys;
-    if (!doc) return withContext;
-    return ensureQueueRecordLayoutFieldKeys(withContext, resolveQueueRecordLayoutConfig(doc));
+    const finalized = doc
+        ? ensureQueueRecordLayoutFieldKeys(withContext, resolveQueueRecordLayoutConfig(doc))
+        : withContext;
+    return suppressDuplicateQueueRowSubjectOnRecord(finalized);
 }

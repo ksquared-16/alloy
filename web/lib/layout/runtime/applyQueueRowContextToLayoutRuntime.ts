@@ -15,6 +15,10 @@ import {
     type QueueRowContextPresentation,
 } from "@/lib/workUnits/resolveQueueRowContextPresentation";
 import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import {
+    shouldSuppressDuplicateCaseSubjectLabel,
+    suppressDuplicateQueueRowSubjectOnRecord,
+} from "@/lib/layout/runtime/queueRowSubjectPresentation";
 
 function trimOrNull(value: unknown): string | null {
     if (typeof value !== "string") return null;
@@ -102,7 +106,11 @@ export function applyQueueRowContextToLayoutRecord(
     }
 
     const subjectLabel = trimOrNull(ctx.row_subject?.display_name);
-    if (subjectLabel) {
+    const caseLabel =
+        trimOrNull(mutable["customer.display_name"])
+        ?? trimOrNull(mutable.name)
+        ?? trimOrNull(presentation.caseFamilyLabel);
+    if (subjectLabel && !shouldSuppressDuplicateCaseSubjectLabel(caseLabel, subjectLabel)) {
         mutable["queue_row.subject_label"] = subjectLabel;
     }
 
@@ -142,7 +150,7 @@ export function applyQueueRowContextToLayoutRecord(
         }
     }
 
-    return record;
+    return suppressDuplicateQueueRowSubjectOnRecord(record);
 }
 
 function buildRelatedChipsFromPresentation(

@@ -1,8 +1,8 @@
 # QueueRowContext Consumption — Sprint Closeout
 
 **Path:** `docs/sprints/06_2026/completed/queue_row_context_consumption_closeout.md`  
-**Date:** 2026-06-09 (updated with queue card redesign prep)  
-**Status:** **Closed — partial live on `staging`; redesign contract frozen**  
+**Date:** 2026-06-09 (updated 2026-06-06 — visual polish + runtime QA)  
+**Status:** **Closed — `OperationalQueueRecordRow` live on staging; polish sprint complete**  
 **Head commit (consumption):** `bfb0e02a`  
 **Staging URL:** https://staging.workwithalloy.com
 
@@ -352,13 +352,12 @@ cd web && npx tsc --noEmit   # required on web/ TS changes before merge
 
 ## 15. Known gaps / follow-ups
 
-1. **Wire `OperationalQueueRecordRow` path** when operational v3 queue shell merges to staging (local WIP uses `mergeOperationalVmWithQueueRowContext` — not on staging branch yet).
-2. **Drawer consumption** — `DrawerSubjectContext` / lifecycle rail from row click + `active_subject`.
-3. **Child-grain queue rows** — honest `row_subject` per OCM/candidate membership.
-4. **Grouped same-stage card** — `row_subjects`, count = enrollment tracks, optional grouped UI.
-5. **CRM compact lane** — optional context consumption or deprecation plan with layout cutover.
-6. **Access redaction** — `RelatedSubjectVisibility` on cross-site siblings.
-7. **Fix stale doc bullet** in work-unit contract § "Not implemented" for `placement_context` (partial bridge is shipped).
+1. **Drawer `active_subject`** — next recommended sprint: row click sets drawer subject context from `QueueRowContext` / related children.
+2. **Child-grain queue rows** — honest `row_subject` per OCM/candidate membership.
+3. **Grouped same-stage card** — `row_subjects`, count = enrollment tracks, optional grouped UI.
+4. **CRM compact lane** — optional context consumption or deprecation plan with layout cutover.
+5. **Access redaction** — `RelatedSubjectVisibility` on cross-site siblings.
+6. **Fix stale doc bullet** in work-unit contract § "Not implemented" for `placement_context` (partial bridge is shipped).
 
 ---
 
@@ -374,11 +373,52 @@ cd web && npx tsc --noEmit   # required on web/ TS changes before merge
 
 ---
 
-## 17. Suggested commit message
+## 17. Visual polish + runtime QA (2026-06-06)
+
+### Polish shipped
+
+| Area | Change |
+|------|--------|
+| **Duplicate subject** | `queueRowSubjectPresentation` suppresses `queue_row.subject_label` when it matches household/case name (overlay + field resolution). |
+| **Typography tiers** | Stage caption, placement muted metadata, attention/work/next-action muted with 2-line clamp. |
+| **Spacing** | Column/field-stack gaps, narrower action rail (`156px`), `<420px` stacks action rail below content. |
+| **CSS modifiers** | `--stage-label`, `--subject-focus`, `--placement-meta`, `--context-meta`. |
+
+### Runtime QA checklist (code + unit tests)
+
+| Check | Result |
+|-------|--------|
+| `data-queue-row-runtime-path="operational-queue-record-row-v3"` | **Pass** — `OperationalQueueRecordRow` root attr; tests assert markup. |
+| `data-queue-row-context-present="true"` when API attaches context | **Pass** — work-unit `QueueBlock` maps `_queue_row_context`; verify in browser Network tab. |
+| Rows without context still render | **Pass** — `applyQueueRowContextToLayoutRecord` noop; CRM compact fallback preserved. |
+| Placement line omitted when absent | **Pass** — `visibleWhen: exists` on `opportunity.location`; mixed-placement omits overlay. |
+| No fake shared placement on mixed rows | **Pass** — `placement_context` omitted in adapter when siblings differ. |
+| Children summary from context / repeater | **Pass** — `related_subjects_summary` → `children` overlay + repeater column. |
+| Row click opens opportunity drawer | **Not regressed in code** — manual confirm on staging. |
+| Duplicate “Smith Household / Smith Household” | **Pass** — suppressed until child-grain rows ship. |
+
+### Remaining gaps after polish
+
+- Live browser QA on staging (lane counts, click-to-drawer, attention accent).
+- Child-grain `row_subject`, grouped same-stage rows, drawer `active_subject`.
+- `getWorkUnitQueueItems` still blocked outside Next request context for scripted smoke tests.
+
+### Tests (polish sprint)
+
+```bash
+cd web && npm run test -- \
+  tests/layout/queueRowSubjectPresentation.test.ts \
+  tests/layout/operationalQueueRowContext.test.ts \
+  tests/layout/operationalQueueRecordRow.test.tsx
+```
+
+---
+
+## 18. Suggested commit message
 
 ```
-docs(sprints): close out QueueRowContext + queue card redesign contract
+fix(adminV2): polish operational queue row visuals and suppress duplicate subject
 
-Document rendering paths, visual/data mapping, fallbacks, and
-OperationalQueueRecordRow as first implementation target.
+Hide case-grain subject line when it matches family name; tighten row
+spacing and metadata hierarchy; add regression tests and QA notes.
 ```
