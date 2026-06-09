@@ -1,10 +1,8 @@
 /**
- * Org-level program/category keys for waitlist queue section grouping.
+ * Org-level program/category keys — fallback classification and analytics only.
  *
- * Doctrine:
- * - **Category/program** (Infant, Toddler, Preschool, Pre-K) = org-level — consistent across sites.
- * - **Classroom/room** (Toddler A, Preschool 1) = location-level under a site — not waitlist section keys.
- * - **Site** (`placement_candidates.site_id`) scopes which candidates appear; category sections span sites until filtered.
+ * Waitlist grouping labels and sort order prefer `location_program_categories` when site context exists.
+ * This module classifies cohort slugs/labels into stable keys when location config is unavailable.
  *
  * Does not implement rates, classroom assignment, or site-scoped program catalogs.
  */

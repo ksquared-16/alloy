@@ -323,6 +323,9 @@ export type QueueRowPlacementWaitlistCandidateVm = {
   parentDisplayName: string | null;
   cohortKey: string;
   cohortLabel: string;
+  siteId?: string | null;
+  desiredProgramType?: string | null;
+  desiredProgramCategoryId?: string | null;
   cohortSectionTitle: string;
   bucketLabel: string;
   waitSinceLabel: string | null;
@@ -481,6 +484,8 @@ export type QueueVm = {
   rowsRefreshing?: boolean;
   /** Reserved action chips while queue-row registry actions hydrate (avoids pop-in). */
   rowActionsPending?: boolean;
+  /** Location-owned program categories for waitlist section sort/labels when site filter is active. */
+  waitlistProgramCategoryContext?: import("@/lib/orchestration/placement/waitlistProgramCategoryResolution").WaitlistProgramCategoryContext;
 };
 
 export type WorkStepVm = {

@@ -9,6 +9,7 @@ import type { HouseholdPlacementFactContextByCustomerId } from "@/lib/orchestrat
 import {
     resolveEnrolledSiblingDisplayRefs,
     type HouseholdEnrolledSiblingDisplayRef,
+    type HouseholdPlacementFactHouseholdSlice,
 } from "@/lib/orchestration/placement/householdPlacementFacts";
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { resolvePlacementWaitlistChildDisplayLabel } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
@@ -41,6 +42,10 @@ export type PlacementWaitlistCandidateRowProjection = {
     parent_display_name?: string | null;
     program_room_cohort_key: string;
     program_room_group_label: string;
+    /** Site scope for location-owned program category resolution. */
+    site_id?: string | null;
+    desired_program_type?: string | null;
+    desired_program_category_id?: string | null;
     bucket: string;
     wait_since?: string | null;
     is_synthetic_fallback?: boolean;
@@ -134,6 +139,31 @@ const OPPORTUNITY_ROW_PRESENTATION_OMIT_KEYS = [
     "_placement_priority_v2",
     "_child_display_name",
 ] as const;
+
+function resolveProjectionProgramCategoryScope(args: {
+    candidateId: string;
+    household: HouseholdPlacementFactHouseholdSlice | null;
+    candidateSiteId: string | null;
+}): {
+    site_id: string | null;
+    desired_program_type: string | null;
+    desired_program_category_id: string | null;
+} {
+    const pcMatch = args.household?.active_placement_candidates.find(
+        (pc) => pc.placement_candidate_id === args.candidateId
+    );
+    const site_id = (pcMatch?.site_id ?? args.candidateSiteId)?.trim() || null;
+    const ocmId = pcMatch?.opportunity_customer_member_id?.trim() || null;
+    const ocm =
+        ocmId && args.household
+            ? args.household.inquiry_children.find((c) => c.opportunity_customer_member_id === ocmId)
+            : null;
+    return {
+        site_id,
+        desired_program_type: ocm?.desired_program_type?.trim() || null,
+        desired_program_category_id: ocm?.desired_program_category_id?.trim() || null,
+    };
+}
 
 function stripOpportunityPresentationFromCandidateRow(row: Record<string, unknown>): Record<string, unknown> {
     const out = { ...row };
@@ -233,6 +263,12 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                 }
             }
 
+            const programCategoryScope = resolveProjectionProgramCategoryScope({
+                candidateId,
+                household,
+                candidateSiteId,
+            });
+
             const projection: PlacementWaitlistCandidateRowProjection = {
                 row_projection: "placement_candidate",
                 placement_candidate_id: candidateId,
@@ -245,6 +281,9 @@ export function expandOpportunityRowsToPlacementCandidateRows(
                 parent_display_name: parentName,
                 program_room_cohort_key: cohortKey,
                 program_room_group_label: cohortLabel,
+                site_id: programCategoryScope.site_id,
+                desired_program_type: programCategoryScope.desired_program_type,
+                desired_program_category_id: programCategoryScope.desired_program_category_id,
                 bucket: cand.bucket,
                 wait_since: cand.wait_since ?? null,
                 is_synthetic_fallback: cand.is_synthetic_fallback === true,

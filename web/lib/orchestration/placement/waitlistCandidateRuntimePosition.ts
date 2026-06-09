@@ -6,6 +6,10 @@
 import { comparePlacementSortTuples } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
+import {
+    readWaitlistRowProgramCategoryScope,
+    type WaitlistProgramCategoryContext,
+} from "@/lib/orchestration/placement/waitlistProgramCategoryResolution";
 
 export const WAITLIST_RUNTIME_POSITION_HELP =
     "Position is calculated from the current priority rules and filters. It is not a permanent stored rank.";
@@ -69,8 +73,11 @@ function rowHasManualPinOverride(row: Record<string, unknown>): boolean {
     return readRowActiveOverrideKinds(row).includes("pin");
 }
 
-/** Org-level category section key for one candidate queue row. */
-export function readWaitlistCandidateSectionKey(row: Record<string, unknown>): string | null {
+/** Category section key for one candidate queue row. */
+export function readWaitlistCandidateSectionKey(
+    row: Record<string, unknown>,
+    context?: WaitlistProgramCategoryContext | null
+): string | null {
     const wr = row._placement_waitlist_row;
     if (wr == null || typeof wr !== "object" || Array.isArray(wr)) return null;
     const o = wr as { program_room_cohort_key?: string; program_room_group_label?: string };
@@ -78,7 +85,15 @@ export function readWaitlistCandidateSectionKey(row: Record<string, unknown>): s
         o.program_room_cohort_key,
         o.program_room_group_label
     );
-    return resolveWaitlistQueueSection({ cohortKey, cohortLabel }).sectionKey;
+    const scope = readWaitlistRowProgramCategoryScope(row);
+    return resolveWaitlistQueueSection({
+        cohortKey,
+        cohortLabel,
+        siteId: scope.siteId,
+        desiredProgramType: scope.desiredProgramType,
+        desiredProgramCategoryId: scope.desiredProgramCategoryId,
+        locationCategoryContext: context,
+    }).sectionKey;
 }
 
 function isWaitlistCandidateRow(row: Record<string, unknown>): boolean {
@@ -124,14 +139,15 @@ function writeRuntimePositionOnRow(
  */
 export function assignWaitlistCandidateRuntimePositions(
     rows: Array<Record<string, unknown>>,
-    shadowMode: boolean
+    shadowMode: boolean,
+    context?: WaitlistProgramCategoryContext | null
 ): void {
     const mode: WaitlistRuntimePositionMode = shadowMode ? "preview" : "live";
     const bySection = new Map<string, number[]>();
 
     rows.forEach((row, idx) => {
         if (!isWaitlistCandidateRow(row)) return;
-        const sk = readWaitlistCandidateSectionKey(row);
+        const sk = readWaitlistCandidateSectionKey(row, context);
         if (!sk) return;
         const list = bySection.get(sk) ?? [];
         list.push(idx);
@@ -175,13 +191,14 @@ export function assignWaitlistCandidateRuntimePositions(
 /** True when display order matches priority tuple order within each section. */
 export function waitlistVisibleOrderMatchesPriority(
     rows: Array<Record<string, unknown>>,
-    shadowMode: boolean
+    shadowMode: boolean,
+    context?: WaitlistProgramCategoryContext | null
 ): boolean {
     if (shadowMode) return false;
     const bySection = new Map<string, number[]>();
     rows.forEach((row, idx) => {
         if (!isWaitlistCandidateRow(row)) return;
-        const sk = readWaitlistCandidateSectionKey(row);
+        const sk = readWaitlistCandidateSectionKey(row, context);
         if (!sk) return;
         const list = bySection.get(sk) ?? [];
         list.push(idx);

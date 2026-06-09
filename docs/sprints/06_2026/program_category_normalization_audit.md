@@ -151,7 +151,6 @@ location_program_categories.label (preferred)
 
 ### Intentionally unchanged (this pass)
 
-- `orgProgramCategory.ts` waitlist classification (follow-up: source sort order from location config)
 - Demo scripts, dev mockups, test fixture labels
 - `childcare_program_type` option set (legacy fallback only)
 
@@ -221,7 +220,15 @@ Do not add new UI surfaces that read from `ORG_PROGRAM_CATEGORY_LABELS` or hardc
 - **`desired_program_category_id`** — normalized FK; auto-resolved from `location_id` + key on write.
 - Existing records with key-only OCM rows continue to display via fallback chain; migration backfills FK where site + key match.
 
+### Waitlist grouping (implemented)
+
+| Surface | Behavior |
+|---------|----------|
+| `waitlistProgramCategoryResolution.ts` | Resolves section key/label from `location_program_categories` when site + OCM category fields exist |
+| Server sort (`sortPlacementCandidateQueueRows`, `candidateGrainWaitlistQueue`, `QueueService`) | Loads org categories once; uses location `sort_order` when workspace site filter is active |
+| Client (`page.tsx`, `QueueBlock`) | Fetches categories; passes `waitlistProgramCategoryContext` with `activeSiteId` |
+| `orgProgramCategory.ts` | Fallback classification + cross-site analytics only |
+
 ### Out of scope (follow-up)
 
-- Waitlist queue section sort order sourced from location config (today uses `orgProgramCategory.ts` classification).
 - Retiring `childcare_program_type` option set entirely once all tenants have location categories configured.

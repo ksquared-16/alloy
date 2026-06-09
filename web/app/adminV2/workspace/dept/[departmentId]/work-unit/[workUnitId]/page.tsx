@@ -401,6 +401,9 @@ import {
 import { waitlistQueueItemGrouping } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
 import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/sortPlacementCandidateQueueRows";
 import { assignWaitlistCandidateRuntimePositions } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
+import type { WaitlistProgramCategoryContext } from "@/lib/orchestration/placement/waitlistProgramCategoryResolution";
+import { fetchLocationProgramCategories } from "@/lib/admin/location/fetchLocationProgramCategories";
+import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { readOpportunityIdFromQueueRow } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { parseQueueRowGrainContext } from "@/lib/queues/queueRowGrainContext";
 
@@ -659,6 +662,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
     const siteSelectionReady = siteFilter?.siteSelectionReady ?? true;
+    const [locationProgramCategories, setLocationProgramCategories] = useState<LocationProgramCategoryRow[]>([]);
+    const waitlistProgramCategoryContext = useMemo<WaitlistProgramCategoryContext>(
+        () => ({
+            categories: locationProgramCategories,
+            activeSiteId: selectedSiteId,
+        }),
+        [locationProgramCategories, selectedSiteId]
+    );
     const viewScopeFingerprint = workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId);
     const { openDrawer, drawer } = useAdminDrawer();
     const [queueRowOpenPendingOpportunityId, setQueueRowOpenPendingOpportunityId] = useState<string | null>(
@@ -984,6 +995,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [lifecycleSiblingTotalsById, setLifecycleSiblingTotalsById] = useState<Record<string, number>>({});
     const lifecycleSiblingWorkUnitsRef = useRef<LifecycleSiblingWorkUnitNavRow[] | null>(null);
     lifecycleSiblingWorkUnitsRef.current = lifecycleSiblingWorkUnits;
+
+    useEffect(() => {
+        if (!orgId) {
+            setLocationProgramCategories([]);
+            return;
+        }
+        let cancelled = false;
+        void fetchLocationProgramCategories(undefined, { includeInactive: true }).then((rows) => {
+            if (!cancelled) setLocationProgramCategories(rows);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [orgId]);
 
     useEffect(() => {
         if (consumeLifecycleWorkUnitSwitchPreserveSiblingsFlag() && orgId && departmentId) {
@@ -4324,9 +4349,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
             ? (() => {
                   const sorted = sortPlacementCandidateQueueRows(
                       filteredSourceRows as Array<Record<string, unknown>>,
-                      waitlistShadowMode
+                      waitlistShadowMode,
+                      waitlistProgramCategoryContext
                   );
-                  assignWaitlistCandidateRuntimePositions(sorted, waitlistShadowMode);
+                  assignWaitlistCandidateRuntimePositions(
+                      sorted,
+                      waitlistShadowMode,
+                      waitlistProgramCategoryContext
+                  );
                   return sorted;
               })()
             : filteredSourceRows;
@@ -4350,7 +4380,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const listRowId = r.id as string;
                 const opportunityId = readOpportunityIdFromQueueRow(r);
                 const waitlistCandidate = parsePlacementWaitlistCandidateRowVm(
-                    (r as { _placement_waitlist_row?: unknown })._placement_waitlist_row
+                    (r as { _placement_waitlist_row?: unknown })._placement_waitlist_row,
+                    waitlistProgramCategoryContext
                 );
                 const rid = opportunityId || listRowId;
                 const title =
@@ -4596,11 +4627,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     ...(waitlistCandidate ? { placementWaitlistCandidate: waitlistCandidate } : {}),
                     ...(placementPriorityV2 && usePlacementV2 ? { placementPriorityV2 } : {}),
                     ...(waitlistCandidate
-                        ? waitlistQueueItemGrouping({ placementWaitlistCandidate: waitlistCandidate })
+                        ? waitlistQueueItemGrouping(
+                              { placementWaitlistCandidate: waitlistCandidate },
+                              waitlistProgramCategoryContext
+                          )
                         : usePlacementV2 && placementPriorityV2
-                          ? waitlistQueueItemGrouping({ placementPriorityV2 })
+                          ? waitlistQueueItemGrouping(
+                                { placementPriorityV2 },
+                                waitlistProgramCategoryContext
+                            )
                           : placementPriority
-                            ? waitlistQueueItemGrouping({ placementPriority })
+                            ? waitlistQueueItemGrouping(
+                                  { placementPriority },
+                                  waitlistProgramCategoryContext
+                              )
                             : {}),
                     layoutRuntimeEnrichment: buildQueueRowLayoutRuntimeEnrichment(r as Record<string, unknown>),
                     ...(r._queue_row_context != null &&
@@ -4731,12 +4771,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const workUnitGroupHeaders = hasPlacementCandidateRows
             ? buildPlacementWaitlistWorkUnitGroupHeaders(
                   liveVmItems.map((item) => {
-                      const g = waitlistQueueItemGrouping(item);
+                      const g = waitlistQueueItemGrouping(item, waitlistProgramCategoryContext);
                       return {
                           groupKey: "groupKey" in g ? g.groupKey : undefined,
                           groupLabel: "groupLabel" in g ? g.groupLabel : undefined,
                       };
-                  })
+                  }),
+                  waitlistProgramCategoryContext
               )
             : undefined;
 
@@ -4797,6 +4838,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     !queueRowActionsHydratedRef.current &&
                     !lifecycleRetainPaint,
                 ...(workUnitGroupHeaders ? { workUnitGroupHeaders } : {}),
+                waitlistProgramCategoryContext,
             },
             workSummary: null,
             actionsRail: enrollmentActionsRail(),
@@ -4825,6 +4867,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         normalizedQueueDef,
         recordFilters,
         selectedSiteId,
+        waitlistProgramCategoryContext,
         workUnitLaneReveal.mayPaintRows,
         workUnitLaneReveal.settled,
         lifecyclePillRetainRows,

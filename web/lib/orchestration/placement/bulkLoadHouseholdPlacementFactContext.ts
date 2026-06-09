@@ -34,7 +34,7 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
     const { data: ocmRows, error: ocmErr } = await params.supabase
         .from("opportunity_customer_members")
         .select(
-            "id, customer_member_id, outcome_status_key, location_id, program_room_cohort_key, desired_program_type, customer_members(display_name, first_name, last_name, persons(first_name, last_name)), opportunities!inner(customer_id)"
+            "id, customer_member_id, outcome_status_key, location_id, program_room_cohort_key, desired_program_type, desired_program_category_id, customer_members(display_name, first_name, last_name, persons(first_name, last_name)), opportunities!inner(customer_id)"
         )
         .eq("org_id", params.orgId)
         .in("opportunities.customer_id", ids);
@@ -51,6 +51,7 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
             location_id?: string | null;
             program_room_cohort_key?: string | null;
             desired_program_type?: string | null;
+            desired_program_category_id?: string | null;
             customer_members?: {
                 display_name?: string | null;
                 first_name?: string | null;
@@ -81,6 +82,7 @@ export async function bulkLoadHouseholdPlacementFactContext(params: {
             child_display_name: childDisplayName,
             program_room_cohort_key: cohort.program_room_cohort_key,
             desired_program_type: row.desired_program_type ?? null,
+            desired_program_category_id: row.desired_program_category_id ?? null,
         });
     }
 

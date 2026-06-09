@@ -1,22 +1,26 @@
 import { comparePlacementSortTuples } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { readNormalizedCohortFromWaitlistRow } from "@/lib/orchestration/placement/normalizePlacementWaitlistCohort";
-import {
-    ORG_PROGRAM_CATEGORY_SORT_ORDER,
-    type OrgProgramCategoryKey,
-} from "@/lib/orchestration/placement/orgProgramCategory";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
+import {
+    readWaitlistRowProgramCategoryScope,
+    resolveWaitlistCategorySortIndex,
+    type WaitlistProgramCategoryContext,
+} from "@/lib/orchestration/placement/waitlistProgramCategoryResolution";
 
-function orgCategorySortIndex(sectionKey: string): number {
-    const idx = ORG_PROGRAM_CATEGORY_SORT_ORDER.indexOf(sectionKey as OrgProgramCategoryKey);
-    return idx >= 0 ? idx : ORG_PROGRAM_CATEGORY_SORT_ORDER.length;
-}
-
-function waitlistOrgSectionKey(row: Record<string, unknown>): string | null {
+function waitlistSectionKey(
+    row: Record<string, unknown>,
+    context?: WaitlistProgramCategoryContext | null
+): string | null {
     const cohort = readNormalizedCohortFromWaitlistRow(row);
     if (!cohort) return null;
+    const scope = readWaitlistRowProgramCategoryScope(row);
     return resolveWaitlistQueueSection({
         cohortKey: cohort.cohortKey,
         cohortLabel: cohort.cohortLabel,
+        siteId: scope.siteId,
+        desiredProgramType: scope.desiredProgramType,
+        desiredProgramCategoryId: scope.desiredProgramCategoryId,
+        locationCategoryContext: context,
     }).sectionKey;
 }
 
@@ -31,7 +35,8 @@ function waitlistOrgSectionKey(row: Record<string, unknown>): string | null {
  */
 export function sortPlacementCandidateQueueRows(
     rows: Array<Record<string, unknown>>,
-    shadowMode: boolean
+    shadowMode: boolean,
+    context?: WaitlistProgramCategoryContext | null
 ): Array<Record<string, unknown>> {
     if (rows.length < 2) return rows;
 
@@ -41,9 +46,11 @@ export function sortPlacementCandidateQueueRows(
         if (ca && !cb) return -1;
         if (!ca && cb) return 1;
         if (ca && cb) {
-            const sectionA = waitlistOrgSectionKey(a) ?? "";
-            const sectionB = waitlistOrgSectionKey(b) ?? "";
-            const bySection = orgCategorySortIndex(sectionA) - orgCategorySortIndex(sectionB);
+            const sectionA = waitlistSectionKey(a, context) ?? "";
+            const sectionB = waitlistSectionKey(b, context) ?? "";
+            const bySection =
+                resolveWaitlistCategorySortIndex(sectionA, context) -
+                resolveWaitlistCategorySortIndex(sectionB, context);
             if (bySection !== 0) return bySection;
 
             const byCohort = ca.cohortKey.localeCompare(cb.cohortKey);

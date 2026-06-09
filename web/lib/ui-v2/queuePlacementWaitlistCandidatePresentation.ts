@@ -7,6 +7,7 @@ import { normalizePlacementWaitlistCohort } from "@/lib/orchestration/placement/
 import { formatPlacementBucketLabel } from "@/lib/ui-v2/queuePlacementPriorityV2Presentation";
 import { resolvePlacementWaitlistChildDisplayLabel } from "@/lib/orchestration/placement/resolvePlacementCandidateChildDisplayName";
 import { resolveWaitlistQueueSection } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
+import type { WaitlistProgramCategoryContext } from "@/lib/orchestration/placement/waitlistProgramCategoryResolution";
 import { WAITLIST_RUNTIME_POSITION_HELP } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import { formatDateUtcAudit } from "@/lib/adminFormatters";
 import type { QueueRowPlacementWaitlistCandidateVm } from "@/lib/ui-v2/workspace-types";
@@ -24,7 +25,8 @@ function formatWaitSince(iso: string | null | undefined): string | null {
 }
 
 export function parsePlacementWaitlistCandidateRowVm(
-    raw: unknown
+    raw: unknown,
+    context?: WaitlistProgramCategoryContext | null
 ): QueueRowPlacementWaitlistCandidateVm | undefined {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
     const o = raw as PlacementWaitlistCandidateRowProjection;
@@ -34,7 +36,14 @@ export function parsePlacementWaitlistCandidateRowVm(
         o.program_room_cohort_key,
         o.program_room_group_label
     );
-    const waitlistSection = resolveWaitlistQueueSection({ cohortKey, cohortLabel });
+    const waitlistSection = resolveWaitlistQueueSection({
+        cohortKey,
+        cohortLabel,
+        siteId: o.site_id,
+        desiredProgramType: o.desired_program_type,
+        desiredProgramCategoryId: o.desired_program_category_id,
+        locationCategoryContext: context,
+    });
     const bucketLabel = formatPlacementBucketLabel(o.bucket);
     const waitSince = formatWaitSince(o.wait_since);
     const linkMode = o.sibling_context?.link_mode ?? o.placement_priority_v2?.link_mode ?? "independent";
@@ -96,6 +105,9 @@ export function parsePlacementWaitlistCandidateRowVm(
         parentDisplayName: o.parent_display_name?.trim() || null,
         cohortKey,
         cohortLabel,
+        siteId: o.site_id?.trim() || null,
+        desiredProgramType: o.desired_program_type?.trim() || null,
+        desiredProgramCategoryId: o.desired_program_category_id?.trim() || null,
         cohortSectionTitle: waitlistSection.sectionTitle,
         bucketLabel,
         waitSinceLabel: waitSince,
@@ -164,13 +176,15 @@ export type PlacementWaitlistGroupHeaderInput = {
 
 /** Map normalized cohort keys → human section titles for queue headers. */
 export function buildPlacementWaitlistWorkUnitGroupHeaders(
-    items: ReadonlyArray<PlacementWaitlistGroupHeaderInput>
+    items: ReadonlyArray<PlacementWaitlistGroupHeaderInput>,
+    context?: WaitlistProgramCategoryContext | null
 ): Record<string, { label: string }> {
     const sections = items.map((item) =>
         resolveWaitlistQueueSection({
             cohortKey: item.groupKey,
             cohortLabel: item.groupLabel,
             legacyProgramGroupLabel: item.groupLabel,
+            locationCategoryContext: context,
         })
     );
     const out: Record<string, { label: string }> = {};

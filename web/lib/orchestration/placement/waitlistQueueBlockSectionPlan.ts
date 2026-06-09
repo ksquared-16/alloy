@@ -3,14 +3,14 @@
  */
 
 import {
-    ORG_PROGRAM_CATEGORY_SORT_ORDER,
-    type OrgProgramCategoryKey,
-} from "@/lib/orchestration/placement/orgProgramCategory";
-import {
     resolveWaitlistQueueItemSection,
     resolveWaitlistQueueItemSectionKey,
     type WaitlistQueueItemSectionInput,
 } from "@/lib/orchestration/placement/waitlistQueueSectionPresentation";
+import {
+    resolveWaitlistCategorySortIndex,
+    type WaitlistProgramCategoryContext,
+} from "@/lib/orchestration/placement/waitlistProgramCategoryResolution";
 
 /** Dev-only — section header attrs + console log for waitlist live smoke. */
 export const WAITLIST_SECTION_LIVE_DIAG_ENABLED =
@@ -38,9 +38,11 @@ export type WaitlistQueueBlockSectionPlan = {
     unsortedDuplicateSectionKeys: string[];
 };
 
-export function waitlistQueueItemSectionSortIndex(sectionKey: string): number {
-    const idx = ORG_PROGRAM_CATEGORY_SORT_ORDER.indexOf(sectionKey as OrgProgramCategoryKey);
-    return idx >= 0 ? idx : ORG_PROGRAM_CATEGORY_SORT_ORDER.length;
+export function waitlistQueueItemSectionSortIndex(
+    sectionKey: string,
+    context?: WaitlistProgramCategoryContext | null
+): number {
+    return resolveWaitlistCategorySortIndex(sectionKey, context);
 }
 
 function isWaitlistPlacementRow(item: WaitlistQueueItemSectionInput): boolean {
@@ -53,17 +55,19 @@ function isWaitlistPlacementRow(item: WaitlistQueueItemSectionInput): boolean {
     );
 }
 
-/** Sort queue VM rows so org-level sections stay contiguous (live QueueBlock path). */
+/** Sort queue VM rows so category sections stay contiguous (live QueueBlock path). */
 export function sortWaitlistQueueItemsForDisplay<T extends WaitlistQueueBlockRowInput>(
-    items: ReadonlyArray<T>
+    items: ReadonlyArray<T>,
+    context?: WaitlistProgramCategoryContext | null
 ): T[] {
     if (items.length < 2) return [...items];
     if (!items.some(isWaitlistPlacementRow)) return [...items];
 
     return [...items].sort((a, b) => {
-        const sa = resolveWaitlistQueueItemSectionKey(a) ?? "unspecified";
-        const sb = resolveWaitlistQueueItemSectionKey(b) ?? "unspecified";
-        const bySection = waitlistQueueItemSectionSortIndex(sa) - waitlistQueueItemSectionSortIndex(sb);
+        const sa = resolveWaitlistQueueItemSectionKey(a, context) ?? "unspecified";
+        const sb = resolveWaitlistQueueItemSectionKey(b, context) ?? "unspecified";
+        const bySection =
+            waitlistQueueItemSectionSortIndex(sa, context) - waitlistQueueItemSectionSortIndex(sb, context);
         if (bySection !== 0) return bySection;
 
         const rawA =
@@ -89,12 +93,15 @@ function rawGroupKeyForItem(item: WaitlistQueueBlockRowInput): string {
     );
 }
 
-function headersFromItemOrder(items: ReadonlyArray<WaitlistQueueBlockRowInput>): WaitlistQueueBlockSectionHeader[] {
+function headersFromItemOrder(
+    items: ReadonlyArray<WaitlistQueueBlockRowInput>,
+    context?: WaitlistProgramCategoryContext | null
+): WaitlistQueueBlockSectionHeader[] {
     const headers: WaitlistQueueBlockSectionHeader[] = [];
     let lastKey: string | undefined;
 
     for (const item of items) {
-        const section = resolveWaitlistQueueItemSection(item);
+        const section = resolveWaitlistQueueItemSection(item, context);
         if (!section) continue;
         const sk = section.sectionKey;
         const raw = rawGroupKeyForItem(item);
@@ -122,12 +129,13 @@ function headersFromItemOrder(items: ReadonlyArray<WaitlistQueueBlockRowInput>):
 
 /** Build section headers exactly as QueueBlock would after sorting. */
 export function buildWaitlistQueueBlockSectionPlan(
-    items: ReadonlyArray<WaitlistQueueBlockRowInput>
+    items: ReadonlyArray<WaitlistQueueBlockRowInput>,
+    context?: WaitlistProgramCategoryContext | null
 ): WaitlistQueueBlockSectionPlan {
-    const sortedItems = sortWaitlistQueueItemsForDisplay(items);
-    const headers = headersFromItemOrder(sortedItems);
+    const sortedItems = sortWaitlistQueueItemsForDisplay(items, context);
+    const headers = headersFromItemOrder(sortedItems, context);
 
-    const unsortedHeaders = headersFromItemOrder(items);
+    const unsortedHeaders = headersFromItemOrder(items, context);
     const seen = new Set<string>();
     const unsortedDuplicateSectionKeys: string[] = [];
     for (const h of unsortedHeaders) {

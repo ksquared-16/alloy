@@ -24,6 +24,7 @@ export type HouseholdInquiryChildRecord = {
     child_display_name?: string | null;
     program_room_cohort_key?: string | null;
     desired_program_type?: string | null;
+    desired_program_category_id?: string | null;
 };
 
 export type HouseholdActivePlacementCandidateRecord = {

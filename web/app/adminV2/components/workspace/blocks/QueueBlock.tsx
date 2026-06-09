@@ -1766,18 +1766,22 @@ function WorkUnitQueueLane({
     [queue.items]
   );
 
+  const waitlistCategoryContext = queue.waitlistProgramCategoryContext ?? null;
+
   const waitlistSectionPlan = useMemo(
     () =>
-      waitlistPlacementSections ? buildWaitlistQueueBlockSectionPlan(queue.items) : null,
-    [queue.items, waitlistPlacementSections]
+      waitlistPlacementSections
+        ? buildWaitlistQueueBlockSectionPlan(queue.items, waitlistCategoryContext)
+        : null,
+    [queue.items, waitlistPlacementSections, waitlistCategoryContext]
   );
 
   const displayQueueItems = useMemo(
     () =>
       waitlistPlacementSections
-        ? sortWaitlistQueueItemsForDisplay(queue.items)
+        ? sortWaitlistQueueItemsForDisplay(queue.items, waitlistCategoryContext)
         : queue.items,
-    [queue.items, waitlistPlacementSections]
+    [queue.items, waitlistPlacementSections, waitlistCategoryContext]
   );
 
   useLayoutEffect(() => {

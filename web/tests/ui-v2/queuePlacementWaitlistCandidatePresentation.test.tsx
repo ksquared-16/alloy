@@ -99,6 +99,48 @@ describe("queuePlacementWaitlistCandidatePresentation", () => {
         expect(vm?.cohortSectionTitle).not.toMatch(/Young Toddler/);
     });
 
+    it("resolves row section title from location categories when OCM site context exists", () => {
+        const vm = parsePlacementWaitlistCandidateRowVm(
+            {
+                row_projection: "placement_candidate",
+                placement_candidate_id: "pc-1",
+                opportunity_id: "opp-1",
+                child_display_name: "Liam Hayes",
+                family_display_name: "Hayes household",
+                program_room_cohort_key: "infant",
+                program_room_group_label: "Infant",
+                site_id: "site-a",
+                desired_program_type: "infant",
+                desired_program_category_id: "cat-infant",
+                bucket: "tier_general_waitlist",
+                placement_priority_v2: {
+                    placement_candidate_id: "pc-1",
+                    program_room_cohort_key: "infant",
+                    bucket: "tier_general_waitlist",
+                    sort_tuple: [],
+                    link_mode: "independent",
+                    active_override_kinds: [],
+                },
+            },
+            {
+                categories: [
+                    {
+                        id: "cat-infant",
+                        org_id: "org-1",
+                        location_id: "site-a",
+                        key: "infant",
+                        label: "Babies",
+                        sort_order: 10,
+                        is_active: true,
+                    },
+                ],
+            }
+        );
+        expect(vm?.cohortSectionTitle).toBe("Babies waitlist");
+        expect(vm?.siteId).toBe("site-a");
+        expect(vm?.desiredProgramType).toBe("infant");
+    });
+
     it("parses manual position adjustment from pin override", () => {
         const vm = parsePlacementWaitlistCandidateRowVm({
             row_projection: "placement_candidate",
