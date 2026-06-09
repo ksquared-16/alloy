@@ -10,6 +10,10 @@ import {
     attachPartialQueueRowContextToRows,
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContext";
+import {
+    attachChildGrainQueueRowContext,
+    isHonestChildCandidateGrainRow,
+} from "@/lib/workUnits/buildChildGrainQueueRowContext";
 
 /** Rollback: set `ALLOY_QUEUE_ROW_CONTEXT_DISABLED=1` to omit `_queue_row_context`. */
 export function isQueueRowContextWiringEnabled(): boolean {
@@ -36,7 +40,6 @@ export function queueRowContextMetaFromLane(
         label: lane.queueLabel.trim() || executable,
         lifecycle_key: lane.lifecycleKey?.trim() || "enrollment",
         stage_key: entry?.domain?.trim() || executable,
-        // Declared lane grain — row_subject may still be `case` until phase 6.
         subject_grain: entry?.grain ?? "case",
     };
 }
@@ -68,5 +71,18 @@ export function attachOpportunityQueueRowsWithRowContext(
     const recordRows = asRecordRows(rows);
     if (!recordRows.length) return recordRows;
     const meta = queueRowContextMetaFromLane(lane);
-    return attachPartialQueueRowContextToRows(recordRows, meta);
+    const laneKey = meta.key.trim() || lane.executableQueueKey.trim();
+    const honestChildGrain =
+        isChildGrainLaneBuildersEnabled(laneKey) || isChildGrainLaneBuildersEnabled(lane.executableQueueKey);
+
+    if (!honestChildGrain) {
+        return attachPartialQueueRowContextToRows(recordRows, meta);
+    }
+
+    return recordRows.map((row) => {
+        if (isHonestChildCandidateGrainRow(row)) {
+            return attachChildGrainQueueRowContext(row, meta);
+        }
+        return attachPartialQueueRowContextToRows([row], meta)[0]!;
+    });
 }

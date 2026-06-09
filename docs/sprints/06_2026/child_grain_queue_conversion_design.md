@@ -553,7 +553,7 @@ These phases are **implementation** — none ship in the design sprint.
 
 | Phase | Name | Deliverable | Membership changes? | Rollback |
 |-------|------|-------------|---------------------|----------|
-| **A** | Query builders behind flag | Child/candidate SQL builders per §2; env `ALLOY_QUEUE_CHILD_GRAIN_LANES` lane list | **No** — builders unused in production path | Flag off |
+| **A** | Query builders behind flag | **Shipped** — see §13 below | **No** when flag unset (default) | Flag off |
 | **B** | Honest `row_subject` | `buildChildGrainQueueRowContext()` / `buildCandidateGrainQueueRowContext()`; attach when row already child/candidate sourced | **No** if membership still case-compat | `ALLOY_QUEUE_ROW_CONTEXT_DISABLED` |
 | **C** | Enable selected lanes | Flip membership per lane: Tour → child, Waitlist → candidate (already partial), Enrolling/Enrolled → child; Lead/Qualification remain case until Phase 5 | **Yes** — counts shift | Per-lane flag + `filters_compat_v1` |
 | **D** | Count unit / KPI | `count_unit` on summaries; pill labels “children” / “families”; `pipeline_total` grain label | **Yes** — display counts | Config rollback |
@@ -637,6 +637,54 @@ These phases are **implementation** — none ship in the design sprint.
 | Developer contract | [`work-unit-surface-context-contract.md`](../system/work-unit-surface-context-contract.md) |
 | Queue consumption closeout | [`completed/queue_row_context_consumption_closeout.md`](./completed/queue_row_context_consumption_closeout.md) |
 | Drawer closeouts | [`completed/drawer_active_subject_context_closeout.md`](./completed/drawer_active_subject_context_closeout.md), [`completed/drawer_subject_display_closeout.md`](./completed/drawer_subject_display_closeout.md) |
+
+---
+
+## 13. Phase A implementation (shipped)
+
+**Status:** Builders + honest `QueueRowContext` attach behind flag. **Default production unchanged** (`ALLOY_QUEUE_CHILD_GRAIN_LANES` unset).
+
+### Flag
+
+| Env | Behavior |
+|-----|----------|
+| unset / empty | Legacy queue runtime — case-grain tours, existing Card 6/8 waitlist/enrollment child paths |
+| `all` or `1` or `true` | All Phase A lane keys enabled |
+| `tours,enrollment_completed` | Comma/space-separated executable queue keys |
+
+**Lane keys:** `tours`, `tours_follow_up`, `enrollment_offers`, `enrollment_completed`, `waitlist`
+
+### Modules
+
+| Module | Role |
+|--------|------|
+| `web/lib/queues/childGrainLanesFeatureFlag.ts` | Flag parse + `isChildGrainLaneBuildersEnabled` |
+| `web/lib/queues/ocmEnrollmentTrackStageKeys.ts` | Stage ↔ disposition keys (Tour / Enrolling / Enrolled) |
+| `web/lib/queues/ocmEnrollmentTrackQueueBuilder.ts` | OCM query + `ocmrow:` row build + QueueService routing when flag on |
+| `web/lib/workUnits/buildChildGrainQueueRowContext.ts` | Honest child/candidate `QueueRowContext` |
+| `web/lib/workUnits/buildPartialQueueRowContextHelpers.ts` | Shared attention/work/NBA helpers |
+| `web/lib/workUnits/attachQueueRowContextToItems.ts` | Honest attach when flag + grain row |
+
+**Existing (unchanged when flag off):** `childGrainEnrollmentQueue.ts`, `candidateGrainWaitlistQueue.ts`.
+
+### Safe testing
+
+```bash
+# Local / staging only — enable Tour child-grain builder + honest context
+export ALLOY_QUEUE_CHILD_GRAIN_LANES=tours
+
+cd web && npm run test -- tests/queues/childGrainLaneBuilders.test.ts
+```
+
+Compare lane counts before/after flag on a copy of staging data — Tour count may shift (case → OCM tracks). Do not enable in production until Phase C sign-off.
+
+### Remains for Phase B / C
+
+| Phase | Work |
+|-------|------|
+| **B** | Honest `row_subject` on existing Card 6/8 rows **without** flag (always when grain row) |
+| **C** | Lane flip default-on per stage; Lead/Qualification policy |
+| **D–F** | KPI labels, navigator groups, legacy compat removal |
 
 ---
 

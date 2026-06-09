@@ -25,6 +25,11 @@ import {
     loadChildGrainEnrollmentQueueItems,
     resolveEnrollmentOffersChildGrainContext,
 } from "@/lib/queues/childGrainEnrollmentQueue";
+import {
+    countOcmEnrollmentTrackQueueItems,
+    loadOcmEnrollmentTrackQueueItems,
+    resolveOcmEnrollmentTrackLaneContext,
+} from "@/lib/queues/ocmEnrollmentTrackQueueBuilder";
 import { getQueueUiConfig, type QueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import {
     assertLifecycleStageOpportunityQueryHasStatusFilters,
@@ -2653,6 +2658,90 @@ export async function getWorkUnitQueueSummaries(params: {
             );
         }
 
+        // opportunity — Phase A OCM enrollment-track lanes (flag-gated)
+        const ocmTrackLaneCtx = resolveOcmEnrollmentTrackLaneContext({
+            executableQueueKey: q.key,
+        });
+        if (ocmTrackLaneCtx) {
+            try {
+                const tOcm0 = Date.now();
+                if (!includePreviews) {
+                    const count = await countOcmEnrollmentTrackQueueItems({
+                        supabase,
+                        orgId: params.orgId,
+                        workUnitId: params.workUnitId,
+                        ctx: ocmTrackLaneCtx,
+                        recordScopeConstraints: scopeFilter,
+                        recordScopeImpossible: params.recordScopeImpossible,
+                    });
+                    countMs = Date.now() - tOcm0;
+                    return finish(
+                        augmentQueueSummary(
+                            {
+                                key: q.key,
+                                label: q.label,
+                                description: queueSummaryOptionalString(q.description),
+                                entity_type: def.entity_type,
+                                priority: q.priority ?? "standard",
+                                display: q.display ?? "list",
+                                count,
+                                preview: [],
+                                grain: "child",
+                                domain: ocmTrackLaneCtx.stage,
+                            },
+                            normalized
+                        )
+                    );
+                }
+
+                const ocmLoad = await loadOcmEnrollmentTrackQueueItems({
+                    supabase,
+                    orgId: params.orgId,
+                    workUnitId: params.workUnitId,
+                    ctx: ocmTrackLaneCtx,
+                    recordScopeConstraints: scopeFilter,
+                    recordScopeImpossible: params.recordScopeImpossible,
+                    limit: previewLimit,
+                    offset: 0,
+                    enrichOpportunityRows: async (rows) =>
+                        enrichOpportunityRows({
+                            supabase,
+                            orgId: params.orgId,
+                            rows: rows as OpportunityRowPreview[],
+                            enrichment: "queue_preview",
+                            viewerDisplayTimeZoneIana: viewerPreviewIana,
+                        }),
+                });
+                countMs = Date.now() - tOcm0;
+                previewMs = countMs;
+                enrichMs = 0;
+                rowsEnriched = ocmLoad.items.length;
+                return finish(
+                    augmentQueueSummary(
+                        {
+                            key: q.key,
+                            label: q.label,
+                            description: queueSummaryOptionalString(q.description),
+                            entity_type: def.entity_type,
+                            priority: q.priority ?? "standard",
+                            display: q.display ?? "list",
+                            count: ocmLoad.total,
+                            preview: previewWithRowContext(ocmLoad.items as unknown[]),
+                            grain: "child",
+                            domain: ocmTrackLaneCtx.stage,
+                        },
+                        normalized
+                    )
+                );
+            } catch (e) {
+                console.warn("[queue-perf] ocm enrollment-track summary fallback to v1 compat", {
+                    work_unit_id: params.workUnitId,
+                    queue_key: q.key,
+                    error: e instanceof Error ? e.message : String(e),
+                });
+            }
+        }
+
         // opportunity — candidate-grain waitlist (Card 6)
         const waitlistGrainCtx = resolveWaitlistCandidateGrainContext({
             normalized,
@@ -2750,12 +2839,12 @@ export async function getWorkUnitQueueSummaries(params: {
             }
         }
 
-        // opportunity — child-grain enrollment_offers (Card 8)
+        // opportunity — child-grain enrollment_offers (Card 8) — skip when Phase A OCM builder owns lane
         const enrollmentChildGrainCtx = resolveEnrollmentOffersChildGrainContext({
             normalized,
             executableQueueKey: q.key,
         });
-        if (enrollmentChildGrainCtx) {
+        if (enrollmentChildGrainCtx && !ocmTrackLaneCtx) {
             try {
                 const tChild0 = Date.now();
                 if (!includePreviews) {
@@ -3684,7 +3773,79 @@ export async function getWorkUnitQueueItems(params: {
         );
     }
 
-    // opportunity entity
+    // opportunity entity — Phase A OCM enrollment-track lanes (flag-gated)
+    const ocmTrackLaneCtx = resolveOcmEnrollmentTrackLaneContext({
+        executableQueueKey,
+    });
+    if (ocmTrackLaneCtx) {
+        try {
+            const tOcm0 = Date.now();
+            const ocmLoad = await loadOcmEnrollmentTrackQueueItems({
+                supabase,
+                orgId: params.orgId,
+                workUnitId: params.workUnitId,
+                ctx: ocmTrackLaneCtx,
+                recordScopeConstraints: scopeFilter,
+                recordScopeImpossible: params.recordScopeImpossible,
+                limit: effectiveLimit,
+                offset: effectiveOffset,
+                enrichOpportunityRows: async (rows) => {
+                    const statusTimed = await timedBranch(
+                        fetchEffectiveStatusDefinitionsTagged(supabase as never, params.orgId, def.entity_type, {
+                            activeOnly: true,
+                        })
+                    );
+                    return enrichOpportunityRows({
+                        supabase,
+                        orgId: params.orgId,
+                        rows: rows as OpportunityRowPreview[],
+                        effectiveStatusDefs: statusTimed.value.rows,
+                        enrichment: enrichMode,
+                        relationFetchPlan: queueListRelationPlan,
+                        viewerDisplayTimeZoneIana: viewerPreviewIana,
+                        skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
+                    });
+                },
+            });
+            const base_query_ms = Date.now() - tOcm0;
+            return finalize(
+                {
+                    queue: {
+                        key: q.key,
+                        label: q.label,
+                        description: queueSummaryOptionalString(q.description),
+                        entity_type: def.entity_type,
+                        priority: q.priority ?? "standard",
+                        display: q.display ?? "list",
+                    },
+                    items: withOpportunityQueueRowContext(ocmLoad.items as unknown[], rowContextLane),
+                    total: ocmLoad.total,
+                    limit: effectiveLimit,
+                    offset: effectiveOffset,
+                },
+                {
+                    load_def_ms,
+                    operational_day_ms,
+                    base_query_ms,
+                    count_ms: 0,
+                    status_defs_ms: 0,
+                    enrichment_ms: base_query_ms,
+                    status_defs_cache_hit: null,
+                    status_defs_resolve: null,
+                    queue_def_cache_hit: queueDefCacheHit,
+                    operational_day_cache_hit: operationalDayCacheHit,
+                    enrichment_subtimings_ms: ocmLoad.enrichmentSubtimings ?? null,
+                }
+            );
+        } catch (e) {
+            console.warn("[queue-perf] ocm enrollment-track items fallback to v1 compat", {
+                work_unit_id: params.workUnitId,
+                queue_key: executableQueueKey,
+                error: e instanceof Error ? e.message : String(e),
+            });
+        }
+    }
+
     const waitlistGrainCtx = resolveWaitlistCandidateGrainContext({
         normalized,
         executableQueueKey,
@@ -3773,7 +3934,7 @@ export async function getWorkUnitQueueItems(params: {
         normalized,
         executableQueueKey,
     });
-    if (enrollmentChildGrainCtx) {
+    if (enrollmentChildGrainCtx && !ocmTrackLaneCtx) {
         try {
             const tChild0 = Date.now();
             const childLoad = await loadChildGrainEnrollmentQueueItems({

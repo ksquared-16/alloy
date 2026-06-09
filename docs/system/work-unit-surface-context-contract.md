@@ -87,9 +87,13 @@ Helper: `resolveQueueRowContextPresentation()` — context first, legacy record 
 
 Debug (proof): `data-queue-row-context-present`, `data-queue-row-placement-omitted-mixed`, `data-queue-row-context-version` on `QueueCardProofRenderer` card shell.
 
+### Phase A (flag-gated — shipped)
+
+`ALLOY_QUEUE_CHILD_GRAIN_LANES` enables OCM enrollment-track builders (`ocmEnrollmentTrackQueueBuilder.ts`) and honest `row_subject` attach (`buildChildGrainQueueRowContext.ts`) for listed queue keys. **Unset = legacy behavior.**
+
 ### Not implemented yet
 
-- Child-grain / candidate-grain `row_subject` (Touring per child)
+- Child-grain / candidate-grain `row_subject` without flag (Phase B)
 - Grouped same-stage rows (`row_subjects`, `active_subject_group`) — types documented § grouped rows
 - ~~Partial `placement_context`~~ — **shipped (partial)** on case-grain rows when `_inquiry_children` placement is deterministic (see § placement_context)
 - Full child-grain `placement_context` (per active OCM subject) — later
