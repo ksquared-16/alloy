@@ -44,7 +44,7 @@ describe("ProofRecordModalHeaderShell", () => {
         expect(html).toContain('data-test-actions="true"');
     });
 
-    it("renders queue navigation above tabs when provided", () => {
+    it("renders queue navigation in title-actions band above tabs when provided", () => {
         const html = renderToStaticMarkup(
             <ProofRecordModalHeaderShell
                 title="Mitchell Household"
@@ -56,7 +56,10 @@ describe("ProofRecordModalHeaderShell", () => {
                 onTabSelect={() => {}}
             />,
         );
-        expect(html.indexOf('data-proof-layout-header-row="queue-navigation"')).toBeLessThan(
+        expect(html.indexOf('data-proof-layout-header-row="title-actions"')).toBeLessThan(
+            html.indexOf('data-proof-layout-header-queue-navigation="true"'),
+        );
+        expect(html.indexOf('data-proof-layout-header-queue-navigation="true"')).toBeLessThan(
             html.indexOf('data-proof-layout-header-row="tabs"'),
         );
         expect(html).toContain('data-test-queue-nav="true"');

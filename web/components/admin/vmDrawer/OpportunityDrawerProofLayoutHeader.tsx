@@ -46,7 +46,7 @@ export type OpportunityDrawerProofLayoutHeaderProps = {
     tabLabels: Partial<Record<DrawerTabKey, string>>;
     /** When true, render Lead command-center header anatomy (Patch 8). */
     leadCompositionActive?: boolean;
-    /** Queue prev/next — above tabs, below header actions/status. */
+    /** Queue prev/next — under header actions/status, same row band as title. */
     queueNavigation?: ReactNode | null;
 };
 

@@ -44,7 +44,7 @@ export type ProofRecordModalHeaderShellProps = {
     closeButton?: ReactNode;
     /** Attention card body (row 2). */
     attention?: ReactNode | null;
-    /** Queue prev/next — rendered above tabs, below title/actions row. */
+    /** Queue prev/next — nested under header controls, same row band as title. */
     queueNavigation?: ReactNode | null;
     tabs: readonly ProofHeaderTab[];
     activeTab: string;
@@ -181,12 +181,19 @@ export default function ProofRecordModalHeaderShell({
                     }
                 </div>
                 <div
-                    className="flex shrink-0 items-center gap-2"
+                    className="flex shrink-0 flex-col items-end gap-1"
                     data-proof-layout-header-controls="true"
                 >
-                    {actionsControl}
-                    {statusControl}
-                    {closeButton}
+                    <div className="flex items-center gap-2">
+                        {actionsControl}
+                        {statusControl}
+                        {closeButton}
+                    </div>
+                    {queueNavigation ?
+                        <div data-proof-layout-header-queue-navigation="true">
+                            {queueNavigation}
+                        </div>
+                    :   null}
                 </div>
             </div>
 
@@ -196,15 +203,6 @@ export default function ProofRecordModalHeaderShell({
                     <div className="w-full rounded-xl border-l-[3px] border-l-[rgba(0,69,140,0.5)] bg-gradient-to-br from-white via-white to-[rgba(0,0,0,0.06)] px-2.5 py-1.5 ring-1 ring-[rgba(39,63,82,0.06)]">
                         {attention}
                     </div>
-                </div>
-            :   null}
-
-            {queueNavigation ?
-                <div
-                    className="flex justify-end px-6 pb-1 pt-0"
-                    data-proof-layout-header-row="queue-navigation"
-                >
-                    {queueNavigation}
                 </div>
             :   null}
 

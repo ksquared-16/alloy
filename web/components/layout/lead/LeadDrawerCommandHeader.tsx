@@ -28,7 +28,7 @@ export type LeadDrawerCommandHeaderProps = {
     activeTab: string;
     onTabSelect: (tab: string) => void;
     lifecycleRail?: ReactNode | null;
-    /** Queue prev/next — rendered above tabs, below title/actions row. */
+    /** Queue prev/next — nested under header controls, same row band as title. */
     queueNavigation?: ReactNode | null;
     actionsControl: ReactNode;
     closeButton: ReactNode;
@@ -136,22 +136,20 @@ export default function LeadDrawerCommandHeader({
                 </div>
 
                 <div
-                    className="flex shrink-0 items-center gap-2 self-start pt-1"
+                    className="flex shrink-0 flex-col items-end gap-1 self-start pt-1"
                     data-proof-layout-header-controls="true"
                 >
-                    {actionsControl}
-                    {closeButton}
+                    <div className="flex items-center gap-2">
+                        {actionsControl}
+                        {closeButton}
+                    </div>
+                    {queueNavigation ?
+                        <div data-proof-layout-header-queue-navigation="true">
+                            {queueNavigation}
+                        </div>
+                    :   null}
                 </div>
             </div>
-
-            {queueNavigation ?
-                <div
-                    className="flex justify-end px-6 pb-1 pt-0"
-                    data-proof-layout-header-row="queue-navigation"
-                >
-                    {queueNavigation}
-                </div>
-            :   null}
 
             <div className="border-b border-alloy-stone/10 px-6 pb-0.5 pt-0" data-proof-layout-header-row="tabs">
                 <div className="flex min-h-0 flex-wrap gap-1">
