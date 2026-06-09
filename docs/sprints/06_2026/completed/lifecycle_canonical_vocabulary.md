@@ -10,6 +10,7 @@
 - [`lifecycle_builder_hardening_closeout.md`](./lifecycle_builder_hardening_closeout.md) (shipped terminology)
 - [`../lifecycle_v2_discovery_and_operating_model.md`](../lifecycle_v2_discovery_and_operating_model.md)
 - [`../lifecycle_builder_hardening_and_v2_canonical_model.md`](../lifecycle_builder_hardening_and_v2_canonical_model.md)
+- [`../enrollment_lifecycle_status_matrix_contract.md`](../enrollment_lifecycle_status_matrix_contract.md) — configurable labels vs fixed enrollment layers
 - [`docs/core/glossary.md`](../../../core/glossary.md)
 - [`docs/product/bos-foundation.md`](../../../product/bos-foundation.md)
 

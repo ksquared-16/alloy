@@ -22,7 +22,7 @@ describe("buildPartialQueueRowContext", () => {
             queue,
         });
 
-        expect(ctx.contract_version).toBe("1.0-partial");
+        expect(ctx.contract_version).toBe("1.1-partial");
         expect(ctx.row_subject).toEqual({
             subject_type: "case",
             subject_id: "opp-1",

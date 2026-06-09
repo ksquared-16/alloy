@@ -48,7 +48,7 @@ describe("attachQueueRowContextToItems", () => {
         expect(out.id).toBe("opp-1");
         expect(out.name).toBe("Smith Household");
         expect(out._status_display).toBe("Tour scheduled");
-        const ctx = out._queue_row_context as { row_subject: { subject_type: string } };
+        const ctx = out._queue_row_context!;
         expect(ctx.row_subject.subject_type).toBe("case");
         expect(ctx.row_stage).toBe("Tours");
     });

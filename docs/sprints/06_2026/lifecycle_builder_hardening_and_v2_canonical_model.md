@@ -5,6 +5,8 @@
 **Date:** 2026-06-02  
 **Prerequisite:** [`lifecycle_v2_discovery_and_operating_model.md`](./lifecycle_v2_discovery_and_operating_model.md) (domain architecture for NA, Tasks, Orchestration, status ownership)
 
+**Status matrix (frozen):** [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) — enrollment disposition ↔ stage mapping, customer configurability bounds, default seed matrix.
+
 **Goal:** Freeze architecture and hardening priorities **before** Lifecycle V2 implementation. No migrations, no new tables, no runtime behavior changes in this sprint.
 
 ---

@@ -16,6 +16,9 @@
 **Parallel work (must not block):**
 
 - **Layout Configuration** — may proceed using contracts in §4–§6 and §10; must not hardcode enrollment-specific subject logic.
+- **Program interest configurable model** — audit + location-scoped settings design complete; programs under Settings → Locations (not standalone); see [`program_interest_configurable_model_audit.md`](./program_interest_configurable_model_audit.md), [`location_scoped_programs_configuration_design.md`](./location_scoped_programs_configuration_design.md).
+- **Entity status + lifecycle stage + location scope** — extends this contract with status vocabulary, placement ownership, cascade, access redaction, and **integration with Lifecycle Builder, work-unit queues, `QueueRowContext`, drawer, and Layout Configuration** (§7 of that doc); see [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md).
+- **Enrollment lifecycle + status matrix** — configurable labels vs fixed layers, disposition mapping metadata, default seed matrix, display naming; see [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md).
 
 **Canonical inputs:**
 
@@ -125,12 +128,15 @@ See discovery audit: visibility vs assignment home, OCM fields, mixed-household 
 
 | Lifecycle subject type | Authoritative field | Owns |
 |------------------------|---------------------|------|
-| **case** (`opportunities`) | `status_key` | Case open/closed, household coordination shell, case-grain attention |
-| **child** (`opportunity_customer_members`) | `outcome_status_key` | Per-child enrollment lifecycle (touring, waitlisted, enrolled, …) |
-| **candidate** (`placement_candidates`) | candidate `status` + ordering | Waitlist position — not a substitute for child disposition |
+| **case** (`opportunities`) | `status_key` | Case Open/Closed/Inactive/Archived — household coordination shell |
+| **child person** (`persons`, `child_lifecycle` profile) | `status_key` | **Child identity** — Active, Withdrawn, Graduated, … — **not** enrollment stage |
+| **child enrollment track** (`opportunity_customer_members`) | `enrollment_stage_key` (target) / `outcome_status_key` (disposition, transitional) | **Enrollment lifecycle stage** on this case (Lead, Tour, Enrolled, …) — children do not “tour” as identity |
+| **candidate** (`placement_candidates`) | candidate `status` + ordering | Waitlist position — not enrollment stage label |
 | **Future subjects** | Entity-specific `status_key` | Vertical lifecycle (vendor onboarding, associate credentialing, …) |
 
-**Rejected:** Single household status column; derived status as source of truth; persisted `lifecycle_stage_membership` column.
+**Rejected:** Single household status column; Tour/Enrolled as **child identity** status; replacing Lifecycle Builder stages with new status labels; derived status as source of truth without disposition/stage columns.
+
+**See:** [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) §1–§2.5 for five-layer model and schema conflicts.
 
 ### 2.2 Status change authority
 
@@ -160,7 +166,7 @@ A **`lifecycle_subject`** is the entity whose lifecycle stage and status **creat
 | `subject_type` | Entity / table | Status field | Enrollment example |
 |----------------|----------------|--------------|-------------------|
 | `case` | `opportunities` | `status_key` | Smith Household enrollment case |
-| `child` | `opportunity_customer_members` | `outcome_status_key` | Child B — touring |
+| `child` | `opportunity_customer_members` | enrollment stage on OCM track | Child B — **Tour** stage (not child identity “touring”) |
 | `candidate` | `placement_candidates` | `status` (+ child disposition filters) | Child C — waitlist row |
 | `customer` | `customers` (future) | TBD | Household account lifecycle |
 | `vendor` | vendor entity (future) | TBD | Vendor onboarding |
@@ -286,12 +292,23 @@ type QueueRowContext = {
     drawer_open: {
         entity_type: "opportunities";
         entity_id: string;              // always case drawer
-        active_subject: LifecycleSubjectRef;
+        active_subject?: LifecycleSubjectRef;       // single-subject row / child click in group
+        active_subject_group?: LifecycleSubjectRef[]; // same-case + same-stage group open
+        stage_focus_key?: string;                   // builder stage when group opens
     };
+
+    // --- Grouped presentation (optional — same case + same enrollment stage) ---
+    row_presentation_mode?: "single_subject" | "grouped_subjects"; // default single when omitted
+    row_subjects?: Array<QueueRowContext["row_subject"]>;
+    row_grouping_key?: string;          // case_id:stage_key[:scope]
+    row_count?: number;                 // enrollment tracks represented (grouped card)
+    row_count_unit?: "enrollment_track" | "cases" | "children" | "candidates";
 };
 ```
 
-### 4.3 Example — Smith Household (mixed)
+**Grouped row rule:** When multiple OCM tracks on one case share the same enrollment stage, membership still counts **each track**. Renderer may emit one grouped `QueueRowContext` with `row_subjects[]` — see §4.3.1 and entity status contract §3.3–§3.4.
+
+### 4.3 Example — Smith Household (mixed stages)
 
 **Truth:**
 
@@ -307,11 +324,31 @@ type QueueRowContext = {
 
 | Lane | Grain | Count contribution |
 |------|-------|------------------|
-| Touring | child | **1** (Child B only) |
+| Touring | child | **1** (Child B only — baseline §3.1) |
 | Waitlist | candidate | **1** (Child C) |
 | Enrolled | child | **1** (Child A) |
 
-**Example row — Touring lane (Child B):**
+### 4.3.1 Example — Smith Household (same stage: A + B both Tour)
+
+**Truth:** Child A and Child B are **two** Tour enrollment tracks on one **Open** case. Child C **Enrolled**.
+
+| Lane | Membership matches | Count truth | UI |
+|------|---------------------|-------------|-----|
+| Tour | A, B | **2** enrollment tracks | 1 grouped card **or** 2 single-child rows |
+| Enrolled | C | **1** | 1 row |
+
+**Grouped Tour card:**
+
+- Primary: **2 children — Tour**
+- Children in stage: A, B
+- Other children: C — Enrolled
+- `row_count`: 2 · `row_count_unit`: `enrollment_track`
+- Click card → drawer with `active_subject_group` [A, B], `stage_focus_key`: `tour`
+- Click Child A in card → same drawer, `active_subject` = A
+
+Grouped display does **not** reduce lane count to 1 household.
+
+**Example row — Touring lane (Child B only — mixed-stage baseline):**
 
 ```json
 {
@@ -562,7 +599,7 @@ Layout Configuration may proceed **in parallel** with this contract freeze. It m
 
 ### 10.2 Configurable system blocks (target)
 
-Layout Configuration should support these **system block types** (names illustrative):
+Full builder → queue → `QueueRowContext` → drawer → layout block integration is in [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) §7. Layout Configuration should support these **system block types** (names illustrative):
 
 | Block key | Consumes | Hardcode risk to avoid |
 |-----------|----------|------------------------|
@@ -730,3 +767,5 @@ Update when:
 | [`needs_attention_v2_operating_model.md`](./needs_attention_v2_operating_model.md) | Attention doctrine |
 | [`completed/operational_work_and_action_execution_closeout.md`](./completed/operational_work_and_action_execution_closeout.md) | Work execution |
 | [`operational_work_creation_model_discovery.md`](./operational_work_creation_model_discovery.md) | Work instantiation |
+| [`entity_status_lifecycle_stage_and_location_scope_contract.md`](./entity_status_lifecycle_stage_and_location_scope_contract.md) | Status vocabulary, location/program/room, access redaction, builder/queue/layout integration (§7) |
+| [`enrollment_lifecycle_status_matrix_contract.md`](./enrollment_lifecycle_status_matrix_contract.md) | Configurable enrollment labels, disposition ↔ stage mapping, default matrix, naming debt |

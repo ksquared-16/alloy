@@ -2,6 +2,7 @@
  * Lifecycle subject + work-unit surface context contracts.
  *
  * @see docs/sprints/06_2026/status_ownership_and_lifecycle_grain_expansion.md
+ * @see docs/sprints/06_2026/entity_status_lifecycle_stage_and_location_scope_contract.md
  * @see docs/system/work-unit-surface-context-contract.md
  *
  * Frozen architecture contracts for Layout Configuration and queue/drawer runtime.
@@ -11,8 +12,11 @@
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 
-/** Frozen partial contract — bump when breaking shape changes. */
-export const QUEUE_ROW_CONTEXT_CONTRACT_VERSION = "1.0-partial" as const;
+/**
+ * Frozen partial contract — bump when breaking shape changes.
+ * `1.1-partial`: optional grouped same-stage row fields (backward compatible).
+ */
+export const QUEUE_ROW_CONTEXT_CONTRACT_VERSION = "1.1-partial" as const;
 
 export type QueueRowContextContractVersion = typeof QUEUE_ROW_CONTEXT_CONTRACT_VERSION;
 
@@ -74,11 +78,30 @@ export type QueueRowPrimaryContact = {
     email?: string | null;
 };
 
+/** Sibling visibility under site/department access scope — see entity status + location contract §5.3. */
+export type RelatedSubjectVisibility = "full" | "redacted" | "hidden";
+
+/** Child inquiry placement — authoritative on OCM; optional on queue row context. */
+export type SubjectPlacementContext = {
+    location_id: string | null;
+    location_label?: string | null;
+    program_key?: string | null;
+    program_label?: string | null;
+    room_id?: string | null;
+    room_label?: string | null;
+    schedule_key?: string | null;
+    schedule_label?: string | null;
+};
+
 export type RelatedSubjectSummary = {
     subject_type: LifecycleSubjectType;
     subject_id: string;
     display_name: string;
     status_label: string;
+    /** TODO(phase-7): set by access-scope resolver — default `full` when omitted. */
+    visibility?: RelatedSubjectVisibility;
+    location_id?: string | null;
+    location_label?: string | null;
 };
 
 export type QueueRowAttentionSummary = {
@@ -97,10 +120,20 @@ export type QueueRowNextBestAction = {
     source: "recommendation" | "action_placement" | "none";
 };
 
+export type QueueRowPresentationMode = "single_subject" | "grouped_subjects";
+
+/** Lane / row count unit — `enrollment_track` preferred for child OCM lanes. */
+export type QueueRowCountUnit = "enrollment_track" | "cases" | "children" | "candidates";
+
 export type QueueRowDrawerOpen = {
     entity_type: "opportunities";
     entity_id: string;
-    active_subject: LifecycleSubjectRef;
+    /** Single-child focus — row click or child line click inside grouped card. */
+    active_subject?: LifecycleSubjectRef;
+    /** Same-case + same-stage group open — highlights multiple OCM tracks. */
+    active_subject_group?: LifecycleSubjectRef[];
+    /** Builder stage_key when opening from grouped card (e.g. `tour`). */
+    stage_focus_key?: string;
 };
 
 /**
@@ -110,7 +143,24 @@ export type QueueRowDrawerOpen = {
 export type QueueRowContext = {
     contract_version: QueueRowContextContractVersion;
 
+    /**
+     * Presentation mode — default `single_subject` when omitted.
+     * Grouped rows: same case + same enrollment stage (§ entity status contract §3.3–§3.4).
+     */
+    row_presentation_mode?: QueueRowPresentationMode;
+
     row_subject: QueueRowSubjectPresentation;
+    /**
+     * All enrollment tracks in a grouped row. Omitted for single-subject rows.
+     * Count truth = length of this array (not deduped to one household).
+     */
+    row_subjects?: QueueRowSubjectPresentation[];
+    /** Stable group id, e.g. `{case_id}:{stage_key}` + optional location/program scope. */
+    row_grouping_key?: string;
+    /** Enrollment tracks represented by this presentation row (grouped card). */
+    row_count?: number;
+    row_count_unit?: QueueRowCountUnit;
+
     /** Operator stage label for the queue lane (e.g. "Tours", "New Leads"). */
     row_stage: string;
     lifecycle_key: string;
@@ -140,12 +190,25 @@ export type QueueRowContext = {
     next_best_action: QueueRowNextBestAction | null;
 
     drawer_open: QueueRowDrawerOpen;
+
+    /**
+     * Placement on the row lifecycle subject (OCM / candidate).
+     * TODO(phase-1): populate from OCM columns in partial adapter.
+     */
+    placement_context?: SubjectPlacementContext | null;
 };
 
+export type DrawerSubjectFocusMode =
+    | "case_default"
+    | "subject_highlight"
+    | "subject_group_highlight";
+
 export type DrawerSubjectContext = {
-    active_subject: LifecycleSubjectRef;
-    focus_mode: "case_default" | "subject_highlight";
-    /** Stage key for lifecycle visual block — from active_subject. */
+    active_subject?: LifecycleSubjectRef;
+    /** Multiple children same enrollment stage — shared lifecycle visual. */
+    active_subject_group?: LifecycleSubjectRef[];
+    focus_mode: DrawerSubjectFocusMode;
+    /** Stage key for lifecycle visual block — from active subject or group stage_focus. */
     lifecycle_visual_stage_key: string;
     related_subjects: RelatedSubjectSummary[];
 };
