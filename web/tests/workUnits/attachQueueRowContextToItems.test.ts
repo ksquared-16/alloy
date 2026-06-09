@@ -72,6 +72,37 @@ describe("attachQueueRowContextToItems", () => {
         expect(out[0]!._queue_row_context).toBeDefined();
     });
 
+    it("API attach path includes placement_context when inquiry child placement is deterministic", () => {
+        const [out] = attachOpportunityQueueRowsWithRowContext(
+            [
+                {
+                    ...baseRow,
+                    _inquiry_children: [
+                        {
+                            id: "ocm-b",
+                            display_name: "Child B",
+                            outcome_status_key: "tour_scheduled",
+                            location_id: "loc-1",
+                            location_label: "North Campus",
+                            desired_program_type: "infant",
+                            desired_program_label: "Infant",
+                        },
+                    ],
+                },
+            ],
+            lane,
+        );
+        const ctx = out._queue_row_context as {
+            placement_context?: { location_id: string; program_key: string };
+            related_subjects_summary: Array<{ program_label?: string }>;
+        };
+        expect(ctx.placement_context).toMatchObject({
+            location_id: "loc-1",
+            program_key: "infant",
+        });
+        expect(ctx.related_subjects_summary[0]?.program_label).toBe("Infant");
+    });
+
     it("builds context when optional enrichment fields are missing", () => {
         const [out] = attachOpportunityQueueRowsWithRowContext(
             [{ id: "opp-2", status_key: "new_inquiry" }],
