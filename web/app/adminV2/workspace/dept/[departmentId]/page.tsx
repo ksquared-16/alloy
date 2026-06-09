@@ -2046,6 +2046,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         workUnitId: primaryWorkUnit?.id ?? null,
                         surface: "right_rail",
                     });
+                    return { opportunity_id: opportunityId };
+                }}
+                onCreated={(opportunityId) => {
                     openDrawer({ type: "opportunities", id: opportunityId });
                     router.refresh();
                 }}
