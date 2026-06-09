@@ -18,7 +18,10 @@ import {
     type OcmEnrollmentTrackStage,
 } from "@/lib/queues/ocmEnrollmentTrackStageKeys";
 import { isChildGrainLaneBuildersEnabled } from "@/lib/queues/childGrainLanesFeatureFlag";
-import type { QueueMembershipCountUnit } from "@/lib/lifecycle/queueMembershipV1";
+import type {
+    QueueMembershipCountUnit,
+    QueueMembershipLocationScopeSource,
+} from "@/lib/lifecycle/queueMembershipV1";
 
 type OpportunityPreview = {
     id: string;
@@ -169,6 +172,7 @@ export type OcmEnrollmentTrackLaneContext = {
     dispositionKeys?: readonly string[];
     countUnit?: QueueMembershipCountUnit;
     membershipSource?: "builder" | "child_grain_flag";
+    locationScopeSource?: QueueMembershipLocationScopeSource | null;
 };
 
 export function resolveOcmEnrollmentTrackLaneContext(params: {

@@ -12,6 +12,7 @@ describe("seedEnrollmentQueueMembershipV1 script", () => {
     it("documents dry-run and apply env flags", () => {
         const script = read("scripts/seedEnrollmentQueueMembershipV1.ts");
         expect(script).toContain("CONFIRM_QUEUE_MEMBERSHIP_SEED=1");
+        expect(script).toContain("SEED_ALL_ORGS=1");
         expect(script).toContain("planEnrollmentQueueMembershipSeed");
         expect(script).toContain("queue_definition changed");
     });

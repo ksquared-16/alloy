@@ -41,7 +41,10 @@ import {
     resolveWaitlistCandidateGrainContext,
     type WaitlistCandidateGrainContext,
 } from "@/lib/queues/candidateGrainWaitlistQueue";
-import { isQueueMembershipFromBuilderEnabled } from "@/lib/queues/queueMembershipFromBuilderFeatureFlag";
+import {
+    isBuilderMembershipLaneAllowed,
+    isQueueMembershipFromBuilderEnabled,
+} from "@/lib/queues/queueMembershipFromBuilderFeatureFlag";
 
 export type QueueMembershipRoutingSource = "builder" | "child_grain_flag" | "legacy";
 
@@ -51,6 +54,9 @@ export type OpportunityQueueLaneRouting = {
     ocmTrackLaneCtx: OcmEnrollmentTrackLaneContext | null;
     waitlistGrainCtx: WaitlistCandidateGrainContext | null;
     enrollmentChildGrainCtx: EnrollmentOffersChildGrainContext | null;
+    /** Present when routingSource is builder — safe summary metadata. */
+    countUnit?: QueueMembershipCountUnit;
+    locationScopeSource?: QueueMembershipV1["location_scope_source"];
 };
 
 const STAGE_PIPELINE_QUEUE_KEYS: Record<string, readonly string[]> = {
@@ -191,6 +197,7 @@ function buildOcmLaneFromMembership(
         dispositionKeys: dispositionKeysForMembership(membership),
         countUnit: membership.count_unit,
         membershipSource: "builder",
+        locationScopeSource: membership.location_scope_source ?? undefined,
     };
 }
 
@@ -209,14 +216,24 @@ function buildWaitlistLaneFromMembership(
     if (!base) return null;
 
     const dispositionKeys = dispositionKeysForMembership(membership);
+    const placementScope = membership.placement_scope;
+    let candidate_statuses = base.filters.candidate_statuses;
+    if (placementScope === "active_only") {
+        candidate_statuses = ["active"];
+    } else if (placementScope === "active_and_paused") {
+        candidate_statuses = ["active", "paused"];
+    }
+
     return {
         ...base,
         filters: {
             ...base.filters,
+            candidate_statuses,
             child_lifecycle_statuses: dispositionKeys ?? base.filters.child_lifecycle_statuses,
         },
         countUnit: membership.count_unit,
         membershipSource: "builder",
+        locationScopeSource: membership.location_scope_source ?? undefined,
     };
 }
 
@@ -270,7 +287,11 @@ export function resolveOpportunityQueueLaneRouting(params: {
                 workUnitMetadata: params.workUnitMetadata,
                 departmentMetadata: params.departmentMetadata,
             });
-            if (membership && membershipAppliesToExecutableQueueKey(membership, executableQueueKey)) {
+            if (
+                membership &&
+                membershipAppliesToExecutableQueueKey(membership, executableQueueKey) &&
+                isBuilderMembershipLaneAllowed(membership)
+            ) {
                 const ocmTrackLaneCtx = buildOcmLaneFromMembership(executableQueueKey, membership);
                 if (ocmTrackLaneCtx) {
                     return {
@@ -279,6 +300,8 @@ export function resolveOpportunityQueueLaneRouting(params: {
                         ocmTrackLaneCtx,
                         waitlistGrainCtx: null,
                         enrollmentChildGrainCtx: null,
+                        countUnit: membership.count_unit,
+                        locationScopeSource: membership.location_scope_source ?? undefined,
                     };
                 }
 
@@ -294,16 +317,8 @@ export function resolveOpportunityQueueLaneRouting(params: {
                         ocmTrackLaneCtx: null,
                         waitlistGrainCtx,
                         enrollmentChildGrainCtx: null,
-                    };
-                }
-
-                if (membership.subject_type === "case") {
-                    return {
-                        routingSource: "builder",
-                        builderMembership: membership,
-                        ocmTrackLaneCtx: null,
-                        waitlistGrainCtx: null,
-                        enrollmentChildGrainCtx: null,
+                        countUnit: membership.count_unit,
+                        locationScopeSource: membership.location_scope_source ?? undefined,
                     };
                 }
             }

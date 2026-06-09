@@ -11,6 +11,7 @@
  *   CONFIRM_QUEUE_MEMBERSHIP_SEED=1 ORG_ID=<uuid> npx tsx --tsconfig tsconfig.json scripts/seedEnrollmentQueueMembershipV1.ts
  *
  * Optional: DEPARTMENT_ID=<uuid> to scope to one department.
+ * Optional: SEED_ALL_ORGS=1 to scan every org (ORG_ID not required).
  */
 
 import { config as loadEnv } from "dotenv";
@@ -37,6 +38,7 @@ const orgId =
     "";
 
 const departmentIdFilter = process.env.DEPARTMENT_ID?.trim() ?? "";
+const seedAllOrgs = process.env.SEED_ALL_ORGS === "1";
 const confirm = process.env.CONFIRM_QUEUE_MEMBERSHIP_SEED === "1";
 
 type DepartmentRow = {
@@ -129,9 +131,77 @@ function departmentHasEnrollmentBuilder(metadata: unknown): boolean {
     return builder.processes.some((p) => p.key === ENROLLMENT_PROCESS_KEY && p.is_active);
 }
 
+async function processOrg(
+    supabase: ReturnType<typeof createAdminClient>,
+    targetOrgId: string,
+    totals: {
+        departments_scanned: number;
+        plans_applied: number;
+        stages_seeded: number;
+        work_units_seeded: number;
+        stages_skipped: number;
+    },
+) {
+    let deptQuery = supabase
+        .from("departments")
+        .select("id, org_id, name, key, metadata")
+        .eq("org_id", targetOrgId);
+    if (departmentIdFilter) {
+        deptQuery = deptQuery.eq("id", departmentIdFilter);
+    }
+    const { data: departments, error: deptError } = await deptQuery;
+    if (deptError) {
+        throw new Error(`org ${targetOrgId}: ${deptError.message}`);
+    }
+
+    const targets = (departments ?? []).filter((d) => departmentHasEnrollmentBuilder(d.metadata));
+    totals.departments_scanned += targets.length;
+    if (!targets.length) {
+        console.log(`org ${targetOrgId}: no enrollment lifecycle_builder_v1 departments`);
+        return;
+    }
+
+    for (const department of targets as DepartmentRow[]) {
+        const workUnits = await loadWorkUnitsForDepartment(supabase, targetOrgId, department.id);
+        const lifecycleWuCount = workUnits.filter((wu) =>
+            isLifecycleStageWorkUnitKey(String(wu.key ?? "")),
+        ).length;
+
+        const plan = planEnrollmentQueueMembershipSeed({
+            departmentId: department.id,
+            orgId: targetOrgId,
+            departmentMetadata: department.metadata,
+            workUnits,
+        });
+
+        if (!plan) {
+            console.log(
+                `\n--- org ${targetOrgId} skip department ${department.id} (${department.name}) — no enrollment process ---`,
+            );
+            continue;
+        }
+
+        console.log(
+            `\n--- org ${targetOrgId} | ${department.name} (${department.key}) dept=${department.id} lifecycle_wu_rows=${lifecycleWuCount} ---`,
+        );
+        console.log(summarizeEnrollmentQueueMembershipSeedPlan(plan));
+
+        for (const row of plan.stage_actions) {
+            if (row.action === "seeded") totals.stages_seeded += 1;
+            else totals.stages_skipped += 1;
+        }
+        totals.work_units_seeded += plan.work_unit_actions.filter((r) => r.action === "seeded").length;
+
+        if (confirm) {
+            await applyPlan(supabase, department, plan);
+            totals.plans_applied += 1;
+        }
+    }
+}
+
 async function main() {
-    if (!orgId) {
-        console.error("Set ORG_ID, SIMULATION_ORG_ID, or DEV_QUEUE_ORG_ID.");
+    if (!orgId && !seedAllOrgs) {
+        console.error("Set ORG_ID (or SIMULATION_ORG_ID / DEV_QUEUE_ORG_ID) or SEED_ALL_ORGS=1.");
         process.exit(1);
     }
 
@@ -140,78 +210,54 @@ async function main() {
             ? "=== EXECUTE enrollment queue_membership_v1 seed (metadata only) ==="
             : "=== DRY RUN enrollment queue_membership_v1 seed (metadata only) ===",
     );
-    console.log({ orgId, departmentIdFilter: departmentIdFilter || "all", confirm });
+    console.log({
+        orgId: orgId || "(all orgs)",
+        seedAllOrgs,
+        departmentIdFilter: departmentIdFilter || "all",
+        confirm,
+    });
 
     const supabase = createAdminClient();
-    let deptQuery = supabase.from("departments").select("id, org_id, name, key, metadata").eq("org_id", orgId);
-    if (departmentIdFilter) {
-        deptQuery = deptQuery.eq("id", departmentIdFilter);
-    }
-    const { data: departments, error: deptError } = await deptQuery;
-    if (deptError) {
-        console.error(deptError.message);
-        process.exit(1);
-    }
+    const totals = {
+        departments_scanned: 0,
+        plans_applied: 0,
+        stages_seeded: 0,
+        work_units_seeded: 0,
+        stages_skipped: 0,
+    };
 
-    const targets = (departments ?? []).filter((d) => departmentHasEnrollmentBuilder(d.metadata));
-    if (!targets.length) {
-        console.log("No departments with enrollment lifecycle_builder_v1 process found.");
-        process.exit(0);
-    }
-
-    let plansApplied = 0;
-    let stagesSeeded = 0;
-    let workUnitsSeeded = 0;
-    let skippedStages = 0;
-
-    for (const department of targets as DepartmentRow[]) {
-        const workUnits = await loadWorkUnitsForDepartment(supabase, orgId, department.id);
-        const lifecycleWuCount = workUnits.filter((wu) =>
-            isLifecycleStageWorkUnitKey(String(wu.key ?? "")),
-        ).length;
-
-        const plan = planEnrollmentQueueMembershipSeed({
-            departmentId: department.id,
-            orgId,
-            departmentMetadata: department.metadata,
-            workUnits,
-        });
-
-        if (!plan) {
-            console.log(`\n--- skip department ${department.id} (${department.name}) — no enrollment process ---`);
-            continue;
+    const orgIds: string[] = [];
+    if (seedAllOrgs) {
+        const { data: orgRows, error } = await supabase.from("organizations").select("id");
+        if (error) {
+            console.error(error.message);
+            process.exit(1);
         }
-
-        console.log(`\n--- ${department.name} (${department.key}) id=${department.id} lifecycle_wu_rows=${lifecycleWuCount} ---`);
-        console.log(summarizeEnrollmentQueueMembershipSeedPlan(plan));
-
-        for (const row of plan.stage_actions) {
-            if (row.action === "seeded") stagesSeeded += 1;
-            else skippedStages += 1;
+        for (const row of orgRows ?? []) {
+            const id = String((row as { id?: string }).id ?? "").trim();
+            if (id) orgIds.push(id);
         }
-        workUnitsSeeded += plan.work_unit_actions.filter((r) => r.action === "seeded").length;
+    } else {
+        orgIds.push(orgId);
+    }
 
-        if (confirm) {
-            await applyPlan(supabase, department, plan);
-            plansApplied += 1;
-        }
+    for (const targetOrgId of orgIds) {
+        await processOrg(supabase, targetOrgId, totals);
     }
 
     console.log("\n=== summary ===");
     console.log({
-        departments_scanned: targets.length,
-        plans_applied: confirm ? plansApplied : 0,
-        stages_seeded: stagesSeeded,
-        work_units_seeded: workUnitsSeeded,
-        stages_skipped: skippedStages,
+        orgs_processed: orgIds.length,
+        ...totals,
         dry_run: !confirm,
     });
 
     if (!confirm) {
         console.log(
-            "\nTo apply: CONFIRM_QUEUE_MEMBERSHIP_SEED=1 ORG_ID=" +
-                orgId +
-                " npx tsx --tsconfig tsconfig.json scripts/seedEnrollmentQueueMembershipV1.ts",
+            "\nTo apply one org: CONFIRM_QUEUE_MEMBERSHIP_SEED=1 ORG_ID=<uuid> npx tsx --tsconfig tsconfig.json scripts/seedEnrollmentQueueMembershipV1.ts",
+        );
+        console.log(
+            "To apply all orgs: CONFIRM_QUEUE_MEMBERSHIP_SEED=1 SEED_ALL_ORGS=1 npx tsx --tsconfig tsconfig.json scripts/seedEnrollmentQueueMembershipV1.ts",
         );
     }
 }

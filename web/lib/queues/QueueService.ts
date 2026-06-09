@@ -119,6 +119,7 @@ import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportun
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 import {
     attachOpportunityQueueRowsWithRowContext,
+    opportunityRowContextLaneWithBuilderMembership,
     type OpportunityQueueRowContextLaneParams,
 } from "@/lib/workUnits/attachQueueRowContextToItems";
 import { findAllRecordsQueueKey, workUnitScopeTotalFromSummaries } from "@/lib/workspace/workUnitQueueDerived";
@@ -364,7 +365,18 @@ async function attachPlacementToEnrichedOpportunityItems(params: {
         const expanded = expandOpportunityRowsToPlacementCandidateRows(out.rows, {
             householdFactsByCustomerId,
         });
-        const sorted = sortPlacementCandidateQueueRows(expanded.rows, out.diagnostics.shadow_mode);
+        const locationProgramCategories = await loadLocationProgramCategoriesForOrg(
+            params.supabase,
+            params.orgId
+        );
+        const waitlistCategoryContext = {
+            categories: locationProgramCategories,
+        };
+        const sorted = sortPlacementCandidateQueueRows(
+            expanded.rows,
+            out.diagnostics.shadow_mode,
+            waitlistCategoryContext
+        );
         const stripped = sorted.map((row) => {
             const { __placement_v2_sort_tuple: _t, ...rest } = row;
             return rest;
@@ -2653,7 +2665,7 @@ export async function getWorkUnitQueueSummaries(params: {
             queueLabel: q.label,
             normalized,
         };
-        const previewWithRowContext = (preview: unknown[]) =>
+        let previewWithRowContext = (preview: unknown[]) =>
             withOpportunityQueueRowContext(preview, rowContextLane);
 
         if (def.entity_type === "job") {
@@ -2738,6 +2750,11 @@ export async function getWorkUnitQueueSummaries(params: {
             departmentMetadata,
         });
         logQueueMembershipRouting(laneRouting, q.key);
+        previewWithRowContext = (preview: unknown[]) =>
+            withOpportunityQueueRowContext(
+                preview,
+                opportunityRowContextLaneWithBuilderMembership(rowContextLane, laneRouting.builderMembership),
+            );
         const ocmTrackLaneCtx = laneRouting.ocmTrackLaneCtx;
         if (ocmTrackLaneCtx) {
             try {
@@ -2765,6 +2782,7 @@ export async function getWorkUnitQueueSummaries(params: {
                                 preview: [],
                                 grain: "child",
                                 domain: ocmTrackLaneCtx.stage,
+                                ...(laneRouting.countUnit ? { count_unit: laneRouting.countUnit } : {}),
                             },
                             normalized
                         )
@@ -2806,6 +2824,7 @@ export async function getWorkUnitQueueSummaries(params: {
                             preview: previewWithRowContext(ocmLoad.items as unknown[]),
                             grain: "child",
                             domain: ocmTrackLaneCtx.stage,
+                            ...(laneRouting.countUnit ? { count_unit: laneRouting.countUnit } : {}),
                         },
                         normalized
                     )
@@ -2851,6 +2870,7 @@ export async function getWorkUnitQueueSummaries(params: {
                                 preview: [],
                                 grain: "candidate",
                                 domain: waitlistGrainCtx.queueEntry.domain ?? "waitlist",
+                                ...(laneRouting.countUnit ? { count_unit: laneRouting.countUnit } : {}),
                             },
                             normalized
                         )
@@ -2899,6 +2919,7 @@ export async function getWorkUnitQueueSummaries(params: {
                             preview: previewWithRowContext(candLoad.items as unknown[]),
                             grain: "candidate",
                             domain: waitlistGrainCtx.queueEntry.domain ?? "waitlist",
+                            ...(laneRouting.countUnit ? { count_unit: laneRouting.countUnit } : {}),
                         },
                         normalized
                     )
@@ -3856,13 +3877,28 @@ export async function getWorkUnitQueueItems(params: {
         );
     }
 
-    const laneRouting = resolveOpportunityQueueLaneRouting({
-        normalized,
-        executableQueueKey,
-        workUnitMetadata,
-        departmentMetadata,
-    });
-    logQueueMembershipRouting(laneRouting, executableQueueKey);
+    const laneRouting =
+        def.entity_type === "opportunity"
+            ? resolveOpportunityQueueLaneRouting({
+                  normalized,
+                  executableQueueKey,
+                  workUnitMetadata,
+                  departmentMetadata,
+              })
+            : {
+                  routingSource: "legacy" as const,
+                  builderMembership: null,
+                  ocmTrackLaneCtx: null,
+                  waitlistGrainCtx: null,
+                  enrollmentChildGrainCtx: null,
+              };
+    if (def.entity_type === "opportunity") {
+        logQueueMembershipRouting(laneRouting, executableQueueKey);
+    }
+    const effectiveRowContextLane = opportunityRowContextLaneWithBuilderMembership(
+        rowContextLane,
+        laneRouting.builderMembership,
+    );
     const ocmTrackLaneCtx = laneRouting.ocmTrackLaneCtx;
     if (ocmTrackLaneCtx) {
         try {
@@ -3905,7 +3941,11 @@ export async function getWorkUnitQueueItems(params: {
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
                     },
-                    items: withOpportunityQueueRowContext(ocmLoad.items as unknown[], rowContextLane, rowContextAttach),
+                    items: withOpportunityQueueRowContext(
+                        ocmLoad.items as unknown[],
+                        effectiveRowContextLane,
+                        rowContextAttach,
+                    ),
                     total: ocmLoad.total,
                     limit: effectiveLimit,
                     offset: effectiveOffset,
@@ -3983,7 +4023,11 @@ export async function getWorkUnitQueueItems(params: {
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
                     },
-                    items: withOpportunityQueueRowContext(candLoad.items as unknown[], rowContextLane, rowContextAttach),
+                    items: withOpportunityQueueRowContext(
+                        candLoad.items as unknown[],
+                        effectiveRowContextLane,
+                        rowContextAttach,
+                    ),
                     total: candLoad.total,
                     limit: effectiveLimit,
                     offset: effectiveOffset,
@@ -4056,7 +4100,11 @@ export async function getWorkUnitQueueItems(params: {
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
                     },
-                    items: withOpportunityQueueRowContext(childLoad.items as unknown[], rowContextLane, rowContextAttach),
+                    items: withOpportunityQueueRowContext(
+                        childLoad.items as unknown[],
+                        effectiveRowContextLane,
+                        rowContextAttach,
+                    ),
                     total: childLoad.total,
                     limit: effectiveLimit,
                     offset: effectiveOffset,
@@ -4185,7 +4233,11 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: withOpportunityQueueRowContext(placementPack.rows as unknown[], rowContextLane, rowContextAttach),
+                items: withOpportunityQueueRowContext(
+                    placementPack.rows as unknown[],
+                    effectiveRowContextLane,
+                    rowContextAttach,
+                ),
                 total: matched.length,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
@@ -4310,7 +4362,11 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: withOpportunityQueueRowContext(placementPackOmit.rows as unknown[], rowContextLane, rowContextAttach),
+                items: withOpportunityQueueRowContext(
+                    placementPackOmit.rows as unknown[],
+                    effectiveRowContextLane,
+                    rowContextAttach,
+                ),
                 total: 0,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
@@ -4443,7 +4499,11 @@ export async function getWorkUnitQueueItems(params: {
                 priority: q.priority ?? "standard",
                 display: q.display ?? "list",
             },
-            items: withOpportunityQueueRowContext(placementPackFull.rows as unknown[], rowContextLane, rowContextAttach),
+            items: withOpportunityQueueRowContext(
+                placementPackFull.rows as unknown[],
+                effectiveRowContextLane,
+                rowContextAttach,
+            ),
             total: count ?? 0,
             limit: effectiveLimit,
             offset: effectiveOffset,

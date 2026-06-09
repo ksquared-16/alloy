@@ -346,7 +346,9 @@ Aligned with child-grain Phase C–F but **builder-metadata-first** so lane flip
 - [x] Conflicts and sequence documented
 - [x] Phase A: types, parser, enrollment defaults, tests
 - [x] Phase B: seed plan/apply + script (metadata only)
-- [ ] Phase C–F: runtime flag, save path, lane flips
+- [x] Phase C: runtime read behind `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER` (default off)
+- [x] Phase D: full builder routing for tour/waitlist/enrollment/enrolled + row context + count_unit
+- [ ] Phase E–F: save path UI, production lane flip sign-off, legacy cleanup
 
 ---
 
@@ -440,14 +442,90 @@ order by wu.key;
 
 Expect `subject_type` / `count_unit` / `included_disposition_keys` per §3 defaults; Lead stage has `included_status_keys: ["new_inquiry"]` and empty disposition list.
 
-**Intentionally not wired yet:**
+**Intentionally not wired yet (post Phase C):**
 
 - `saveLifecycleStageRuntimeConfig` persistence on operator save
-- `QueueService` / `ALLOY_QUEUE_CHILD_GRAIN_LANES` reading metadata
 - Lifecycle Builder UI grain/disposition picker
 - `queue_definition` filter materialization from membership
+- Production lane flips without explicit env flags
 
-**Next:** Phase C — runtime read behind flag; then lane flips from seeded metadata.
+---
+
+## Phase C implementation note (2026-06-09)
+
+**Status:** QueueService reads `queue_membership_v1` behind flag — **default production unchanged**.
+
+| Deliverable | Location |
+|-------------|----------|
+| Builder membership flag | `web/lib/queues/queueMembershipFromBuilderFeatureFlag.ts` |
+| Runtime resolver + lane routing | `web/lib/queues/queueMembershipRuntimeResolver.ts` |
+| QueueService wiring | `web/lib/queues/QueueService.ts` |
+| OCM disposition override | `web/lib/queues/ocmEnrollmentTrackQueueBuilder.ts` — `ctx.dispositionKeys` |
+| Tests | `web/tests/queues/queueMembershipRuntimeResolver.test.ts` |
+
+### Flag
+
+| Env | Behavior |
+|-----|----------|
+| unset | Legacy routing only (`ALLOY_QUEUE_CHILD_GRAIN_LANES` may still apply per Phase A) |
+| `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1` | When valid `queue_membership_v1` matches executable queue key, builder config drives OCM / waitlist builders |
+
+### Precedence (locked)
+
+1. **`ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1`** + valid membership for queue key → builder routing (`subject_type`, `included_disposition_keys`, `count_unit` logged via `[queue-perf] queue_membership_from_builder`)
+2. Else **`ALLOY_QUEUE_CHILD_GRAIN_LANES`** → Phase A hardcoded lane builders
+3. Else **legacy** case-grain / compat paths
+
+Invalid explicit `queue_membership_v1` on a work unit does **not** fall back to enrollment defaults — routes to step 2/3.
+
+### Membership resolution order
+
+1. `work_units.metadata.queue_membership_v1` (valid parse only)
+2. Builder stage blob on `departments.metadata.lifecycle_builder_v1` (via `lifecycle_stage_key`)
+3. `defaultQueueMembershipForEnrollmentStage(stage_key)` when stage key known and no invalid explicit blob
+
+### Local test
+
+```bash
+# Seed metadata (optional)
+cd web
+ORG_ID=<uuid> CONFIRM_QUEUE_MEMBERSHIP_SEED=1 npx tsx --tsconfig tsconfig.json scripts/seedEnrollmentQueueMembershipV1.ts
+
+# Enable builder routing (counts may change vs legacy)
+export ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1
+
+cd web && npm run test -- tests/queues/queueMembershipRuntimeResolver.test.ts
+```
+
+**Next:** Phase D — lane flip from builder config in staging (can combine both flags or builder-only after seed).
+
+---
+
+## Phase D implementation note (2026-06-09)
+
+**Status:** Full builder-backed routing for enrollment child/candidate lanes — **still flag-gated**.
+
+| Capability | Detail |
+|------------|--------|
+| Lane coverage | `enrolled`, `enrollment` (Enrolling), `tour`, `waitlist` via builder metadata |
+| Case lanes | `lead`, `qualification` stay **legacy** (builder lane allowlist excludes case `subject_type`) |
+| Flags | `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1` + optional `ALLOY_QUEUE_MEMBERSHIP_BUILDER_LANES` |
+| Precedence | Builder (allowlisted) → `ALLOY_QUEUE_CHILD_GRAIN_LANES` → legacy |
+| Count unit | On queue summaries (`count_unit`) + `QueueRowContext.row_count_unit` when builder meta passed |
+| Row context | `builderMembership` on lane params → honest `row_subject` / `drawer_open.active_subject` |
+| Seed | `SEED_ALL_ORGS=1` scans all orgs; dry-run per department/stage/work unit |
+
+**Local QA (full stack):**
+
+```bash
+cd web
+CONFIRM_QUEUE_MEMBERSHIP_SEED=1 ORG_ID=<uuid> npx tsx --tsconfig tsconfig.json scripts/seedEnrollmentQueueMembershipV1.ts
+export ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1
+export ALLOY_QUEUE_MEMBERSHIP_BUILDER_LANES=enrolled,enrollment,tour,waitlist
+# optional rollback compare: ALLOY_QUEUE_CHILD_GRAIN_LANES=enrollment_completed
+```
+
+**Remaining gaps:** `saveLifecycleStageRuntimeConfig` persistence, builder UI editors, `queue_definition` materialization from membership, production lane flip sign-off.
 
 ---
 

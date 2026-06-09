@@ -30,11 +30,15 @@ import {
     type ExpandToPlacementCandidateRowsResult,
 } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
+import { loadLocationProgramCategoriesForOrg } from "@/lib/locations/loadLocationProgramCategoriesForOrg";
 import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/sortPlacementCandidateQueueRows";
 import { assignWaitlistCandidateRuntimePositions } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import type { PlacementCandidateStatus } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { PLACEMENT_CANDIDATE_STATUSES } from "@/lib/orchestration/placement/placementCandidateTypes";
-import type { QueueMembershipCountUnit } from "@/lib/lifecycle/queueMembershipV1";
+import type {
+    QueueMembershipCountUnit,
+    QueueMembershipLocationScopeSource,
+} from "@/lib/lifecycle/queueMembershipV1";
 
 export type WaitlistCandidateGrainFilterSpec = {
     candidate_statuses: PlacementCandidateStatus[];
@@ -48,6 +52,7 @@ export type WaitlistCandidateGrainContext = {
     placementQueueKey: string;
     countUnit?: QueueMembershipCountUnit;
     membershipSource?: "builder" | "child_grain_flag";
+    locationScopeSource?: QueueMembershipLocationScopeSource | null;
 };
 
 const DEFAULT_CANDIDATE_STATUSES = ["active", "paused"] as const satisfies readonly PlacementCandidateStatus[];
@@ -614,6 +619,11 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
     });
 
     const skipPlacementProjection = params.skipPlacementProjection === true;
+    const locationProgramCategories = await loadLocationProgramCategoriesForOrg(
+        params.supabase,
+        params.orgId
+    );
+    const waitlistCategoryContext = { categories: locationProgramCategories };
 
     let shadowMode = true;
     let placementDiagnostics: WaitlistCandidateGrainLoadResult["placementDiagnostics"] = null;
@@ -657,8 +667,8 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
             waitlistRowMatchesMatchedSet(row, candidateIdSet, matchedOpportunityIdSet)
         );
         placementDiagnostics = v2Out.diagnostics;
-        expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode);
-        assignWaitlistCandidateRuntimePositions(expandedRows, shadowMode);
+        expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode, waitlistCategoryContext);
+        assignWaitlistCandidateRuntimePositions(expandedRows, shadowMode, waitlistCategoryContext);
     } else {
         const candidatesByOpportunityId = await bulkLoadPlacementCandidatesByOpportunity({
             supabase: params.supabase,
@@ -716,8 +726,8 @@ export async function loadWaitlistCandidateGrainQueueItems(params: {
             waitlistRowMatchesMatchedSet(row, candidateIdSet, matchedOpportunityIdSet)
         );
         shadowMode = true;
-        expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode);
-        assignWaitlistCandidateRuntimePositions(expandedRows, shadowMode);
+        expandedRows = sortPlacementCandidateQueueRows(expandedRows, shadowMode, waitlistCategoryContext);
+        assignWaitlistCandidateRuntimePositions(expandedRows, shadowMode, waitlistCategoryContext);
     }
 
     for (const row of expandedRows) {

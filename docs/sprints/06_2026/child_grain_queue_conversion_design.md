@@ -688,12 +688,33 @@ Honest `row_subject` on existing `ocmrow:` / `pcrow:` / Card 6/8 rows **without*
 
 Before first lane flip: [`child_grain_phase_c_preflight.md`](./child_grain_phase_c_preflight.md) — lane counts, rollout order, staging checklist.
 
-### Remains for Phase C–F
+### Phase C — builder membership runtime (shipped)
+
+QueueService can read seeded `queue_membership_v1` when **`ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1`**. See [`lifecycle_builder_subject_grain_alignment_plan.md`](./lifecycle_builder_subject_grain_alignment_plan.md) §Phase C.
+
+| Flag | Role |
+|------|------|
+| `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1` | Builder metadata wins when valid for executable queue key |
+| `ALLOY_QUEUE_CHILD_GRAIN_LANES` | Fallback when builder flag off or membership missing/invalid |
+
+**Precedence:** builder flag + valid config → OCM/candidate builders with `included_disposition_keys` from metadata; else child-grain lanes flag; else legacy.
+
+**Default production:** both unset — no behavior change from pre-Phase C.
+
+```bash
+export ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1
+export ALLOY_QUEUE_MEMBERSHIP_BUILDER_LANES=enrolled,enrollment,tour,waitlist
+# optional: ALLOY_QUEUE_CHILD_GRAIN_LANES still works as fallback when builder lane blocked/missing
+```
+
+**Phase D (shipped):** Builder routing covers Enrolled / Enrolling / Tour / Waitlist when seeded metadata + flags set. Lead/Qualification remain case-grain legacy. See alignment plan §Phase D.
+
+### Remains for lane flip + cleanup
 
 | Phase | Work |
 |-------|------|
-| **C** | Per-lane flip via `ALLOY_QUEUE_CHILD_GRAIN_LANES` — **Enrolled first** (see preflight) |
-| **D–F** | KPI labels, navigator groups, legacy compat removal |
+| **D** | Staging lane flip from builder config (Enrolled first — see preflight) |
+| **E–F** | KPI labels, navigator groups, legacy compat removal |
 
 ---
 

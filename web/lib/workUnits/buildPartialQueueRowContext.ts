@@ -40,9 +40,10 @@ export type PartialQueueRowContextQueueMeta = {
     /**
      * Declared membership grain for this queue lane.
      * Defaults to `case` — honest for current production paths.
-     * TODO(phase-6): pass child/candidate from NormalizedQueueEntry.grain.
      */
     subject_grain?: LifecycleSubjectType;
+    count_unit?: import("@/lib/workUnits/lifecycleSubjectContracts").QueueRowCountUnit;
+    location_scope_source?: string | null;
 };
 
 export type BuildPartialQueueRowContextInput = {

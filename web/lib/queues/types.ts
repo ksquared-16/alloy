@@ -36,6 +36,8 @@ export type QueueSummary = {
     /** v2 queue config metadata (Card 4+) — does not change membership semantics. */
     domain?: string;
     grain?: QueueGrain;
+    /** Builder membership count unit when routed via queue_membership_v1 (metadata only). */
+    count_unit?: string;
     overlay?: boolean;
     requested_queue_key?: string;
     resolved_queue_key?: string;

@@ -6,6 +6,7 @@
  */
 
 import type { NormalizedQueueDefinitionDocument } from "@/lib/config/queueDefinitionV2Runtime";
+import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import {
     attachPartialQueueRowContextToRows,
     type PartialQueueRowContextQueueMeta,
@@ -28,13 +29,46 @@ export type OpportunityQueueRowContextLaneParams = {
     normalized: NormalizedQueueDefinitionDocument;
     /** Defaults to `enrollment` until department lifecycle_key resolver ships. */
     lifecycleKey?: string;
+    /** When builder routing is active — drives honest stage/grain/count_unit. */
+    builderMembership?: QueueMembershipV1 | null;
 };
+
+function queueRowCountUnitFromMembership(
+    countUnit: QueueMembershipV1["count_unit"],
+): PartialQueueRowContextQueueMeta["count_unit"] {
+    switch (countUnit) {
+        case "enrollment_tracks":
+            return "enrollment_track";
+        case "cases":
+            return "cases";
+        case "children":
+            return "children";
+        case "candidates":
+            return "candidates";
+        default:
+            return undefined;
+    }
+}
 
 export function queueRowContextMetaFromLane(
     lane: OpportunityQueueRowContextLaneParams
 ): PartialQueueRowContextQueueMeta {
     const executable = lane.executableQueueKey.trim();
     const entry = lane.normalized.queues.find((q) => q.key === executable) ?? null;
+    const membership = lane.builderMembership ?? null;
+
+    if (membership) {
+        return {
+            key: lane.requestedQueueKey.trim() || executable,
+            label: lane.queueLabel.trim() || executable,
+            lifecycle_key: membership.lifecycle_key.trim() || lane.lifecycleKey?.trim() || "enrollment",
+            stage_key: membership.stage_key.trim() || entry?.domain?.trim() || executable,
+            subject_grain: membership.subject_type,
+            count_unit: queueRowCountUnitFromMembership(membership.count_unit),
+            location_scope_source: membership.location_scope_source ?? undefined,
+        };
+    }
+
     return {
         key: lane.requestedQueueKey.trim() || executable,
         label: lane.queueLabel.trim() || executable,
@@ -42,6 +76,14 @@ export function queueRowContextMetaFromLane(
         stage_key: entry?.domain?.trim() || executable,
         subject_grain: entry?.grain ?? "case",
     };
+}
+
+export function opportunityRowContextLaneWithBuilderMembership(
+    lane: OpportunityQueueRowContextLaneParams,
+    membership: QueueMembershipV1 | null | undefined,
+): OpportunityQueueRowContextLaneParams {
+    if (!membership) return lane;
+    return { ...lane, builderMembership: membership };
 }
 
 function asRecordRows(rows: unknown[]): Array<Record<string, unknown>> {

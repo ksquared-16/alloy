@@ -398,7 +398,9 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             display_name: active.displayName,
         },
         row_count: 1,
-        row_count_unit: subjectType === "candidate" ? "candidates" : "enrollment_track",
+        row_count_unit:
+            input.queue.count_unit ??
+            (subjectType === "candidate" ? "candidates" : "enrollment_track"),
         row_stage: rowStage,
         lifecycle_key: lifecycleKey,
         row_status_key: active.statusKey,
