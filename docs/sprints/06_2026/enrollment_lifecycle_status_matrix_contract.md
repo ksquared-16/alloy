@@ -134,7 +134,7 @@ Every **enrollment disposition** (`entity_type = opportunity_customer_members`) 
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `status_layer` | string | `enrollment_disposition` (distinguishes from case/person layers) |
+| `alloy_layer` | string | **Seeded in migration** — `enrollment_disposition` (distinguishes from case/person layers). Synonym in earlier drafts: `status_layer` |
 | `entity_scope` | string | `enrollment_track` (OCM row) |
 | `enrollment_stage_key` | string | Builder stage: `lead` \| `qualification` \| `tour` \| `waitlist` \| `enrolling` \| `enrolled` |
 | `is_active_disposition` | boolean | Track is still in active enrollment workflow |
