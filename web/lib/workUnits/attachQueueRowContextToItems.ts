@@ -60,7 +60,8 @@ function asRecordRows(rows: unknown[]): Array<Record<string, unknown>> {
  */
 export function attachOpportunityQueueRowsWithRowContext(
     rows: Array<Record<string, unknown>> | unknown[],
-    lane: OpportunityQueueRowContextLaneParams
+    lane: OpportunityQueueRowContextLaneParams,
+    options?: { attachCaseGrainRowContext?: boolean }
 ): Array<Record<string, unknown>> {
     if (!isQueueRowContextWiringEnabled()) {
         return asRecordRows(rows);
@@ -71,11 +72,15 @@ export function attachOpportunityQueueRowsWithRowContext(
     const recordRows = asRecordRows(rows);
     if (!recordRows.length) return recordRows;
     const meta = queueRowContextMetaFromLane(lane);
+    const attachCaseGrain = options?.attachCaseGrainRowContext !== false;
 
     // Phase B: honest row_subject for existing child/candidate-shaped rows (no flag).
     return recordRows.map((row) => {
         if (isHonestChildCandidateGrainRow(row)) {
             return attachChildGrainQueueRowContext(row, meta);
+        }
+        if (!attachCaseGrain) {
+            return row;
         }
         return attachPartialQueueRowContextToRows([row], meta)[0]!;
     });

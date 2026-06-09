@@ -18,6 +18,7 @@ import {
     type OcmEnrollmentTrackStage,
 } from "@/lib/queues/ocmEnrollmentTrackStageKeys";
 import { isChildGrainLaneBuildersEnabled } from "@/lib/queues/childGrainLanesFeatureFlag";
+import type { QueueMembershipCountUnit } from "@/lib/lifecycle/queueMembershipV1";
 
 type OpportunityPreview = {
     id: string;
@@ -107,9 +108,13 @@ async function queryOcmEnrollmentTrackRows(params: {
     orgId: string;
     workUnitId: string;
     stage: OcmEnrollmentTrackStage;
+    dispositionKeys?: readonly string[];
     recordScopeConstraints: RecordScopeConstraints | null;
 }): Promise<OcmEnrollmentTrackQueryRow[]> {
-    const statusKeys = [...ocmStatusKeysForEnrollmentTrackStage(params.stage)];
+    const statusKeys =
+        params.dispositionKeys?.length ?
+            [...params.dispositionKeys]
+        :   [...ocmStatusKeysForEnrollmentTrackStage(params.stage)];
     let q = params.supabase
         .from("opportunity_customer_members")
         .select(
@@ -160,6 +165,10 @@ export type OcmEnrollmentTrackLaneContext = {
     queueKey: string;
     stage: OcmEnrollmentTrackStage;
     stageLabel: string;
+    /** When set (builder Phase C), overrides hardcoded stage disposition lists. */
+    dispositionKeys?: readonly string[];
+    countUnit?: QueueMembershipCountUnit;
+    membershipSource?: "builder" | "child_grain_flag";
 };
 
 export function resolveOcmEnrollmentTrackLaneContext(params: {
@@ -173,6 +182,7 @@ export function resolveOcmEnrollmentTrackLaneContext(params: {
         queueKey: params.executableQueueKey.trim(),
         stage,
         stageLabel: enrollmentOperatorStageLabel(stage),
+        membershipSource: "child_grain_flag",
     };
 }
 
@@ -272,6 +282,7 @@ export async function countOcmEnrollmentTrackQueueItems(params: {
         orgId: params.orgId,
         workUnitId: params.workUnitId,
         stage: params.ctx.stage,
+        dispositionKeys: params.ctx.dispositionKeys,
         recordScopeConstraints: params.recordScopeConstraints,
     });
     return rows.length;
@@ -302,6 +313,7 @@ export async function loadOcmEnrollmentTrackQueueItems(params: {
         orgId: params.orgId,
         workUnitId: params.workUnitId,
         stage: params.ctx.stage,
+        dispositionKeys: params.ctx.dispositionKeys,
         recordScopeConstraints: params.recordScopeConstraints,
     });
 

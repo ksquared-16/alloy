@@ -34,6 +34,7 @@ import { sortPlacementCandidateQueueRows } from "@/lib/orchestration/placement/s
 import { assignWaitlistCandidateRuntimePositions } from "@/lib/orchestration/placement/waitlistCandidateRuntimePosition";
 import type { PlacementCandidateStatus } from "@/lib/orchestration/placement/placementCandidateTypes";
 import { PLACEMENT_CANDIDATE_STATUSES } from "@/lib/orchestration/placement/placementCandidateTypes";
+import type { QueueMembershipCountUnit } from "@/lib/lifecycle/queueMembershipV1";
 
 export type WaitlistCandidateGrainFilterSpec = {
     candidate_statuses: PlacementCandidateStatus[];
@@ -45,6 +46,8 @@ export type WaitlistCandidateGrainContext = {
     queueEntry: NormalizedQueueEntry;
     filters: WaitlistCandidateGrainFilterSpec;
     placementQueueKey: string;
+    countUnit?: QueueMembershipCountUnit;
+    membershipSource?: "builder" | "child_grain_flag";
 };
 
 const DEFAULT_CANDIDATE_STATUSES = ["active", "paused"] as const satisfies readonly PlacementCandidateStatus[];

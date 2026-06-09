@@ -28,8 +28,18 @@ import {
 import {
     countOcmEnrollmentTrackQueueItems,
     loadOcmEnrollmentTrackQueueItems,
-    resolveOcmEnrollmentTrackLaneContext,
 } from "@/lib/queues/ocmEnrollmentTrackQueueBuilder";
+import {
+    queueMembershipRoutingLogMeta,
+    resolveOpportunityQueueLaneRouting,
+    type OpportunityQueueLaneRouting,
+} from "@/lib/queues/queueMembershipRuntimeResolver";
+import { perfQueue } from "@/lib/perf/perfNamespaceLog";
+import {
+    buildQueueRowEnrichmentPlan,
+    enrichmentQueriesRunFromPlan,
+    type QueueRowEnrichmentPlan,
+} from "@/lib/queues/queueRowEnrichmentPlan";
 import { getQueueUiConfig, type QueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import {
     assertLifecycleStageOpportunityQueryHasStatusFilters,
@@ -157,9 +167,13 @@ type OpportunityRowPreview = {
 };
 
 /** Additive `_queue_row_context` on opportunity queue rows — no membership/count changes. */
-function withOpportunityQueueRowContext(items: unknown[], lane: OpportunityQueueRowContextLaneParams): unknown[] {
+function withOpportunityQueueRowContext(
+    items: unknown[],
+    lane: OpportunityQueueRowContextLaneParams,
+    options?: { attachCaseGrainRowContext?: boolean }
+): unknown[] {
     if (!items.length || lane.entityType !== "opportunity") return items;
-    return attachOpportunityQueueRowsWithRowContext(items, lane);
+    return attachOpportunityQueueRowsWithRowContext(items, lane, options);
 }
 
 /** Parallel phase wall + per-branch elapsed (branches overlap; sums may exceed `enrichment_ms`). */
@@ -250,6 +264,13 @@ function findQueueByKey(def: QueueDefinitionV1, queueKey: string): QueueConfig {
         throw new QueueServiceError(`Unknown queue key: ${queueKey}`, 404, "UNKNOWN_QUEUE_KEY");
     }
     return q;
+}
+
+function logQueueMembershipRouting(routing: OpportunityQueueLaneRouting, executableQueueKey: string): void {
+    const meta = queueMembershipRoutingLogMeta(routing, executableQueueKey);
+    if (meta.routing_source === "builder") {
+        perfQueue("queue_membership_from_builder", meta);
+    }
 }
 
 /** Status keys declared on lane filters — passed to placement cohort overlap checks when present. */
@@ -393,34 +414,19 @@ function planContextOrUtcFallback(ctx: OperationalDayPlanContext | undefined, re
     return ctx ?? utcFallbackOperationalDayContext(refUtc);
 }
 
-function queueListRelationFetchPlan(
-    ui: QueueUiConfig,
-    /**
-     * Force the contact/person/household joins regardless of the queue's
-     * row_preview "wants". The layout-runtime queue card binds person.* /
-     * household / children refKeys, so it needs these relations even when the
-     * legacy row_preview variant didn't request them (otherwise the card shows
-     * blank contact/children while the drawer — which composes the full VM —
-     * has the data).
-     */
-    forceRelations = false,
-): {
-    persons: boolean;
-    contacts: boolean;
-    customers: boolean;
-    customerMembers: boolean;
-} {
-    const fields = ui.row_preview.fields;
-    const isCrm = ui.row_preview.variant === "crm_compact";
-    const wants = (k: (typeof fields)[number]) => fields.includes(k);
-    const wantsContact = wants("primary_contact") || wants("phone") || wants("email");
-    const wantsHousehold = wants("child_name") || wants("program");
-    return {
-        persons: isCrm || wantsContact || forceRelations,
-        contacts: isCrm || wantsContact || forceRelations,
-        customers: isCrm || wantsContact || wantsHousehold || forceRelations,
-        customerMembers: (isCrm && wantsHousehold) || forceRelations,
-    };
+function buildOpportunityQueueEnrichmentPlan(params: {
+    ui: QueueUiConfig;
+    enrichmentMode: QueueRowEnrichmentPlan["enrichmentMode"];
+    executableQueueKey: string;
+    skipOptionalEnrichmentFetches?: boolean;
+}): QueueRowEnrichmentPlan {
+    return buildQueueRowEnrichmentPlan({
+        ui: params.ui,
+        enrichmentMode: params.enrichmentMode,
+        layoutRuntimeQueueBody: isLayoutRuntimeOpportunityQueueBodyEnabledServer(),
+        executableQueueKey: params.executableQueueKey,
+        skipOptionalEnrichmentFetches: params.skipOptionalEnrichmentFetches,
+    });
 }
 
 async function resolveOperationalDayPlanContextWithTelemetry(
@@ -1088,6 +1094,7 @@ async function enrichOpportunityRows(params: {
     /**
      * When `queue_list`, narrows relational batch queries from work-unit CRM row preview config (`ui.row_preview`)
      * so basic lanes skip heavy joins. Omit for previews / drawer paths (full hydrate).
+     * @deprecated Prefer `enrichmentPlan`.
      */
     relationFetchPlan?: {
         persons: boolean;
@@ -1095,6 +1102,8 @@ async function enrichOpportunityRows(params: {
         customers: boolean;
         customerMembers: boolean;
     };
+    /** Preview/list/reveal enrichment diet — gates relational + batch queries and row context attach. */
+    enrichmentPlan?: QueueRowEnrichmentPlan;
     /** User → org → UTC for `_notes_preview` / `_tour_context` (Timezone Contract v1). */
     viewerDisplayTimeZoneIana?: string;
     /**
@@ -1117,6 +1126,7 @@ async function enrichOpportunityRows(params: {
         effectiveStatusDefs: preloadedDefs,
         enrichment = "full",
         relationFetchPlan,
+        enrichmentPlan: enrichmentPlanInput,
         viewerDisplayTimeZoneIana: viewerTzRaw,
         opportunityAttentionResolution,
         skipOptionalEnrichmentFetches = false,
@@ -1128,12 +1138,29 @@ async function enrichOpportunityRows(params: {
         return { rows: [] };
     }
 
-    const plan = relationFetchPlan ?? {
-        persons: true,
-        contacts: true,
-        customers: true,
-        customerMembers: true,
-    };
+    const enrichmentPlan =
+        enrichmentPlanInput ??
+        ({
+            enrichmentMode: enrichment,
+            relationFetch:
+                relationFetchPlan ?? {
+                    persons: true,
+                    contacts: true,
+                    customers: true,
+                    customerMembers: true,
+                },
+            batchFetch: {
+                locations: true,
+                tourBookings: !skipOptionalEnrichmentFetches,
+                ocmDesiredStart: !skipOptionalEnrichmentFetches,
+                openTasks: enrichment === "full",
+            },
+            attachCaseGrainRowContext: enrichment !== "queue_reveal",
+            skippedEnrichment: [],
+        } satisfies QueueRowEnrichmentPlan);
+
+    const plan = enrichmentPlan.relationFetch;
+    const batch = enrichmentPlan.batchFetch;
 
     const tEnrich0 = Date.now();
     const nowForAttention = new Date();
@@ -1212,7 +1239,7 @@ async function enrichOpportunityRows(params: {
         preloadedDefs != null
             ? timedAwait(Promise.resolve(preloadedDefs))
             : timedAwait(fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true })),
-        !skipOptionalEnrichmentFetches && opportunityIds.length > 0
+        !skipOptionalEnrichmentFetches && batch.tourBookings && opportunityIds.length > 0
             ? timedAwait(
                   supabase
                       .from("tour_bookings")
@@ -1222,7 +1249,7 @@ async function enrichOpportunityRows(params: {
                       .in("status_key", [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS] as any)
               )
             : timedAwait(emptyRel),
-        locationIds.length
+        batch.locations && locationIds.length
             ? timedAwait(
                   supabase
                       .from("locations")
@@ -1231,7 +1258,7 @@ async function enrichOpportunityRows(params: {
                       .in("id", locationIds as any)
               )
             : timedAwait(emptyRel),
-        !skipOptionalEnrichmentFetches && opportunityIds.length
+        !skipOptionalEnrichmentFetches && batch.ocmDesiredStart && opportunityIds.length
             ? timedAwait(
                   supabase
                       .from("opportunity_customer_members")
@@ -1242,7 +1269,7 @@ async function enrichOpportunityRows(params: {
                       .in("opportunity_id", opportunityIds as any)
               )
             : timedAwait(emptyRel),
-        opportunityIds.length
+        batch.openTasks && opportunityIds.length
             ? timedAwait(
                   supabase
                       .from("operational_tasks")
@@ -1679,6 +1706,15 @@ async function enrichOpportunityRows(params: {
     // QueueRowContext attached on API return via withOpportunityQueueRowContext (QueueService finalize paths).
     const mapMs = Date.now() - tMap0;
     const enrichMs = Date.now() - tEnrich0;
+    const queriesRun = enrichmentQueriesRunFromPlan(enrichmentPlan);
+    perfQueue("enrichment_complete", {
+        enrichment_mode: enrichmentPlan.enrichmentMode,
+        enrichment_queries_run: queriesRun,
+        skipped_enrichment: enrichmentPlan.skippedEnrichment,
+        duration_ms: enrichMs,
+        row_count: rows.length,
+        attach_case_row_context: enrichmentPlan.attachCaseGrainRowContext,
+    });
     const queueListSubtimings: QueueListEnrichmentSubtimingsMs | undefined =
         enrichment === "queue_list"
             ? {
@@ -2265,6 +2301,9 @@ export type QueueRowsPerfBreakdown = {
     queue_def_cache_hit: boolean | null;
     operational_day_cache_hit: boolean | null;
     enrichment_subtimings_ms: QueueListEnrichmentSubtimingsMs | null;
+    enrichment_mode?: QueueRowEnrichmentPlan["enrichmentMode"];
+    enrichment_queries_run?: string[];
+    skipped_enrichment?: string[];
 };
 
 export type WorkUnitQueueItemsWithPerf = {
@@ -2446,6 +2485,7 @@ export async function getWorkUnitQueueSummaries(params: {
     let workUnitDepartmentId: string | null;
     let workUnitKey: string | null;
     let queueDefinitionDoc: unknown;
+    let departmentMetadata: unknown | null = preloaded?.departmentMetadata ?? null;
     let operationalDay: OperationalDayPlanContext;
     if (preloaded?.queue_definition != null) {
         operationalDay = await operationalDayPromise;
@@ -2473,6 +2513,16 @@ export async function getWorkUnitQueueSummaries(params: {
     const loadDefMs = Date.now() - tParallelBoot0;
     assertSupportedEntityType(def);
 
+    if (def.entity_type === "opportunity" && workUnitDepartmentId && departmentMetadata == null) {
+        const { data: deptRow } = await supabase
+            .from("departments")
+            .select("metadata")
+            .eq("org_id", params.orgId)
+            .eq("id", workUnitDepartmentId)
+            .maybeSingle();
+        departmentMetadata = deptRow?.metadata ?? null;
+    }
+
     const opportunityScopeBundle =
         def.entity_type === "opportunity"
             ? resolveOpportunityQueueScopeBundle({
@@ -2482,7 +2532,7 @@ export async function getWorkUnitQueueSummaries(params: {
                   workUnitMetadata,
                   workUnitKey,
                   queueDefinition: preloaded?.queue_definition,
-                  departmentMetadata: preloaded?.departmentMetadata,
+                  departmentMetadata,
                   departmentWorkUnitIdsForLifecycleScope:
                       preloaded?.departmentWorkUnitIdsForLifecycleScope,
               })
@@ -2658,10 +2708,15 @@ export async function getWorkUnitQueueSummaries(params: {
             );
         }
 
-        // opportunity — Phase A OCM enrollment-track lanes (flag-gated)
-        const ocmTrackLaneCtx = resolveOcmEnrollmentTrackLaneContext({
+        // opportunity — builder membership (Phase C) or child-grain flag (Phase A)
+        const laneRouting = resolveOpportunityQueueLaneRouting({
+            normalized,
             executableQueueKey: q.key,
+            workUnitMetadata,
+            departmentMetadata,
         });
+        logQueueMembershipRouting(laneRouting, q.key);
+        const ocmTrackLaneCtx = laneRouting.ocmTrackLaneCtx;
         if (ocmTrackLaneCtx) {
             try {
                 const tOcm0 = Date.now();
@@ -2742,11 +2797,7 @@ export async function getWorkUnitQueueSummaries(params: {
             }
         }
 
-        // opportunity — candidate-grain waitlist (Card 6)
-        const waitlistGrainCtx = resolveWaitlistCandidateGrainContext({
-            normalized,
-            executableQueueKey: q.key,
-        });
+        const waitlistGrainCtx = laneRouting.waitlistGrainCtx;
         if (waitlistGrainCtx) {
             try {
                 const tCand0 = Date.now();
@@ -2839,11 +2890,7 @@ export async function getWorkUnitQueueSummaries(params: {
             }
         }
 
-        // opportunity — child-grain enrollment_offers (Card 8) — skip when Phase A OCM builder owns lane
-        const enrollmentChildGrainCtx = resolveEnrollmentOffersChildGrainContext({
-            normalized,
-            executableQueueKey: q.key,
-        });
+        const enrollmentChildGrainCtx = laneRouting.enrollmentChildGrainCtx;
         if (enrollmentChildGrainCtx && !ocmTrackLaneCtx) {
             try {
                 const tChild0 = Date.now();
@@ -3556,11 +3603,20 @@ export async function getWorkUnitQueueItems(params: {
     assertSupportedEntityType(def);
     const q = findQueueByKey(def, executableQueueKey);
     const rowListUi = resolveWorkUnitRowListUi(def, workUnitKey, workUnitMetadata);
-    // Layout-runtime opportunity queue cards bind contact/household/children — force
-    // those relations so the card shows the same data the drawer does.
-    const layoutQueueForcesRelations =
-        def.entity_type === "opportunity" && isLayoutRuntimeOpportunityQueueBodyEnabledServer();
-    const queueListRelationPlan = queueListRelationFetchPlan(rowListUi, layoutQueueForcesRelations);
+    const rowEnrichment = params.rowEnrichment ?? "queue_list";
+    const enrichMode = rowEnrichment === "queue_reveal" ? "queue_reveal" : "queue_list";
+    const opportunityEnrichmentPlan =
+        def.entity_type === "opportunity"
+            ? buildOpportunityQueueEnrichmentPlan({
+                  ui: rowListUi,
+                  enrichmentMode: enrichMode,
+                  executableQueueKey,
+                  skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
+              })
+            : null;
+    const rowContextAttach = {
+        attachCaseGrainRowContext: opportunityEnrichmentPlan?.attachCaseGrainRowContext ?? true,
+    };
     const rowContextLane: OpportunityQueueRowContextLaneParams = {
         entityType: def.entity_type,
         requestedQueueKey: params.queueKey,
@@ -3581,6 +3637,13 @@ export async function getWorkUnitQueueItems(params: {
         },
         rowsPerf: {
             ...timings,
+            ...(opportunityEnrichmentPlan
+                ? {
+                      enrichment_mode: opportunityEnrichmentPlan.enrichmentMode,
+                      enrichment_queries_run: enrichmentQueriesRunFromPlan(opportunityEnrichmentPlan),
+                      skipped_enrichment: opportunityEnrichmentPlan.skippedEnrichment,
+                  }
+                : {}),
             service_total_ms: Date.now() - tSvc0,
         },
     });
@@ -3664,8 +3727,6 @@ export async function getWorkUnitQueueItems(params: {
                   readinessMemoScope: queueReadinessMemo,
               })
             : undefined;
-    const rowEnrichment = params.rowEnrichment ?? "queue_list";
-    const enrichMode = rowEnrichment === "queue_reveal" ? "queue_reveal" : "queue_list";
     const skipPlacementProjection = rowEnrichment === "queue_reveal";
 
     if (def.entity_type === "job") {
@@ -3773,10 +3834,14 @@ export async function getWorkUnitQueueItems(params: {
         );
     }
 
-    // opportunity entity — Phase A OCM enrollment-track lanes (flag-gated)
-    const ocmTrackLaneCtx = resolveOcmEnrollmentTrackLaneContext({
+    const laneRouting = resolveOpportunityQueueLaneRouting({
+        normalized,
         executableQueueKey,
+        workUnitMetadata,
+        departmentMetadata,
     });
+    logQueueMembershipRouting(laneRouting, executableQueueKey);
+    const ocmTrackLaneCtx = laneRouting.ocmTrackLaneCtx;
     if (ocmTrackLaneCtx) {
         try {
             const tOcm0 = Date.now();
@@ -3801,7 +3866,7 @@ export async function getWorkUnitQueueItems(params: {
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
-                        relationFetchPlan: queueListRelationPlan,
+                        enrichmentPlan: opportunityEnrichmentPlan ?? undefined,
                         viewerDisplayTimeZoneIana: viewerPreviewIana,
                         skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
                     });
@@ -3818,7 +3883,7 @@ export async function getWorkUnitQueueItems(params: {
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
                     },
-                    items: withOpportunityQueueRowContext(ocmLoad.items as unknown[], rowContextLane),
+                    items: withOpportunityQueueRowContext(ocmLoad.items as unknown[], rowContextLane, rowContextAttach),
                     total: ocmLoad.total,
                     limit: effectiveLimit,
                     offset: effectiveOffset,
@@ -3846,10 +3911,7 @@ export async function getWorkUnitQueueItems(params: {
         }
     }
 
-    const waitlistGrainCtx = resolveWaitlistCandidateGrainContext({
-        normalized,
-        executableQueueKey,
-    });
+    const waitlistGrainCtx = laneRouting.waitlistGrainCtx;
     if (waitlistGrainCtx) {
         try {
             const tCand0 = Date.now();
@@ -3882,7 +3944,7 @@ export async function getWorkUnitQueueItems(params: {
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
-                        relationFetchPlan: queueListRelationPlan,
+                        enrichmentPlan: opportunityEnrichmentPlan ?? undefined,
                         viewerDisplayTimeZoneIana: viewerPreviewIana,
                         skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
                     });
@@ -3899,7 +3961,7 @@ export async function getWorkUnitQueueItems(params: {
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
                     },
-                    items: withOpportunityQueueRowContext(candLoad.items as unknown[], rowContextLane),
+                    items: withOpportunityQueueRowContext(candLoad.items as unknown[], rowContextLane, rowContextAttach),
                     total: candLoad.total,
                     limit: effectiveLimit,
                     offset: effectiveOffset,
@@ -3930,10 +3992,7 @@ export async function getWorkUnitQueueItems(params: {
         }
     }
 
-    const enrollmentChildGrainCtx = resolveEnrollmentOffersChildGrainContext({
-        normalized,
-        executableQueueKey,
-    });
+    const enrollmentChildGrainCtx = laneRouting.enrollmentChildGrainCtx;
     if (enrollmentChildGrainCtx && !ocmTrackLaneCtx) {
         try {
             const tChild0 = Date.now();
@@ -3958,7 +4017,7 @@ export async function getWorkUnitQueueItems(params: {
                         rows: rows as OpportunityRowPreview[],
                         effectiveStatusDefs: statusTimed.value.rows,
                         enrichment: enrichMode,
-                        relationFetchPlan: queueListRelationPlan,
+                        enrichmentPlan: opportunityEnrichmentPlan ?? undefined,
                         viewerDisplayTimeZoneIana: viewerPreviewIana,
                         skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
                     });
@@ -3975,7 +4034,7 @@ export async function getWorkUnitQueueItems(params: {
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
                     },
-                    items: withOpportunityQueueRowContext(childLoad.items as unknown[], rowContextLane),
+                    items: withOpportunityQueueRowContext(childLoad.items as unknown[], rowContextLane, rowContextAttach),
                     total: childLoad.total,
                     limit: effectiveLimit,
                     offset: effectiveOffset,
@@ -4074,7 +4133,7 @@ export async function getWorkUnitQueueItems(params: {
             rows: slice,
             effectiveStatusDefs,
             enrichment: enrichMode,
-            relationFetchPlan: queueListRelationPlan,
+            enrichmentPlan: opportunityEnrichmentPlan ?? undefined,
             viewerDisplayTimeZoneIana: viewerPreviewIana,
             skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
             opportunityAttentionResolution: queueAttentionEnrich(effectiveStatusDefs, refUtc.getTime()),
@@ -4104,7 +4163,7 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: withOpportunityQueueRowContext(placementPack.rows as unknown[], rowContextLane),
+                items: withOpportunityQueueRowContext(placementPack.rows as unknown[], rowContextLane, rowContextAttach),
                 total: matched.length,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
@@ -4179,7 +4238,7 @@ export async function getWorkUnitQueueItems(params: {
             rows: itemRows,
             effectiveStatusDefs,
             enrichment: enrichMode,
-            relationFetchPlan: queueListRelationPlan,
+            enrichmentPlan: opportunityEnrichmentPlan ?? undefined,
             viewerDisplayTimeZoneIana: viewerPreviewIana,
             skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
             opportunityAttentionResolution: queueAttentionEnrich(effectiveStatusDefs, refUtc.getTime()),
@@ -4229,7 +4288,7 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: withOpportunityQueueRowContext(placementPackOmit.rows as unknown[], rowContextLane),
+                items: withOpportunityQueueRowContext(placementPackOmit.rows as unknown[], rowContextLane, rowContextAttach),
                 total: 0,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
@@ -4303,7 +4362,7 @@ export async function getWorkUnitQueueItems(params: {
         rows: itemRows,
         effectiveStatusDefs,
         enrichment: enrichMode,
-        relationFetchPlan: queueListRelationPlan,
+        enrichmentPlan: opportunityEnrichmentPlan ?? undefined,
         viewerDisplayTimeZoneIana: viewerPreviewIana,
         skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
         opportunityAttentionResolution: opportunityAttentionConfigResolved
@@ -4362,7 +4421,7 @@ export async function getWorkUnitQueueItems(params: {
                 priority: q.priority ?? "standard",
                 display: q.display ?? "list",
             },
-            items: withOpportunityQueueRowContext(placementPackFull.rows as unknown[], rowContextLane),
+            items: withOpportunityQueueRowContext(placementPackFull.rows as unknown[], rowContextLane, rowContextAttach),
             total: count ?? 0,
             limit: effectiveLimit,
             offset: effectiveOffset,
@@ -4404,6 +4463,7 @@ export function seedSharedQueueSummariesBootstrapCacheForTests(
 export const __testing = {
     buildJobPlan,
     buildOpportunityPlan,
+    buildOpportunityQueueEnrichmentPlan,
     buildOpportunityNeedsAttentionOrExpr,
     buildOpportunityNeedsAttentionCandidateOrExpr,
     opportunityNeedsAttention,

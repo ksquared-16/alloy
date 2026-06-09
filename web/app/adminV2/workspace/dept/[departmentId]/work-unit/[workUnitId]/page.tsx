@@ -1836,6 +1836,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 omit_total_count: "true",
             });
             if (abSnap) qs.set("attention_bucket", abSnap);
+            if (options?.quietStaleRefresh) {
+                qs.set("row_mode", "reveal");
+            }
             const route = appendWorkspaceSiteToUrl(
                 `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(apiQueueKey)}?${qs.toString()}`,
                 selectedSiteId
