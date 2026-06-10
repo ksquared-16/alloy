@@ -50,7 +50,7 @@ export function ConfigLayoutAssistApplyOutcomeList({
             :   null}
             {showIntegrityLink && outcome.showLayoutIntegrityLink ?
                 <CommandSurfaceCardLink
-                    href="/adminV2/settings/layouts"
+                    href="/admin/settings/layouts"
                     className="inline-block text-[10px] font-semibold text-alloy-blue hover:underline"
                     data-config-assist-layout-integrity-link="true"
                 >

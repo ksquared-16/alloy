@@ -588,7 +588,7 @@ export default function LayoutSectionFieldsPanel({
             ) : (
                 <p className="mt-3 text-[10px] text-alloy-midnight/45">
                     Create new fields on{" "}
-                    <Link href="/adminV2/settings/fields" className="font-medium text-alloy-pine hover:underline">
+                    <Link href="/admin/settings/fields" className="font-medium text-alloy-pine hover:underline">
                         Fields
                     </Link>
                     .

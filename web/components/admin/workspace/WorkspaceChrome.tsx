@@ -4,18 +4,14 @@ import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+import {
+    normalizeToCanonicalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
 
 export type WorkspaceBreadcrumb = { href?: string | null; label: string };
 
 function normalizedPathname(pathname: string): string {
-    if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
-        if (pathname === "/admin/v2") return "/adminV2/workspace";
-        return `/adminV2${pathname.slice("/admin/v2".length)}`;
-    }
-    if (pathname === "/adminv2" || pathname.startsWith("/adminv2/")) {
-        return `/adminV2${pathname.slice("/adminv2".length)}`;
-    }
-    return pathname;
+    return normalizeToCanonicalAdminPath(pathname);
 }
 
 export function WorkspaceChrome({
@@ -37,12 +33,15 @@ export function WorkspaceChrome({
 
     const outer =
         variant === "bridge"
-            ? "w-full max-w-none mx-0 px-0 pt-1 pb-0 space-y-2"
+            ? "w-full max-w-none mx-0 px-0 pt-0 pb-0 space-y-1"
             : "max-w-6xl mx-auto px-4 py-6 space-y-6";
 
     return (
         <div className={outer}>
-            <nav className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 px-1" aria-label="Breadcrumb">
+            <nav
+                className={`${variant === "bridge" ? "adminv2-ws-inline-breadcrumb" : "text-sm"} text-alloy-midnight/60 flex flex-wrap items-center gap-1 px-1`}
+                aria-label="Breadcrumb"
+            >
                 {breadcrumbs.map((b, i) => {
                     const isLast = i === breadcrumbs.length - 1;
                     const href = b.href?.trim() || null;

@@ -1,5 +1,6 @@
 "use client";
 
+import { ADMIN_WORKFLOWS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import Link from "next/link";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
@@ -114,7 +115,7 @@ export function AutomationWorkflowsBlock(props: {
         workflows = null,
         partitions = null,
         title = "Automations",
-        href = "/adminV2/workflows",
+        href = ADMIN_WORKFLOWS_HREF,
         kpisLoading = false,
         metadataAssociationNote = null,
         workflowAssistHref = null,

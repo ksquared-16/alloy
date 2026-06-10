@@ -2,6 +2,14 @@ import type { GlobalSearchAdminV2DrawerEntityType } from "@/lib/admin/globalSear
 import type { GlobalRecordSearchHit } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
 import type { GlobalRecordSearchCluster } from "@/lib/admin/globalSearch/globalRecordSearchTypes";
 import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import {
+    ADMIN_FORMS_HREF,
+    ADMIN_SETTINGS_SUBPATH_PREFIX,
+    CANONICAL_ADMIN_WORKSPACE,
+    CANONICAL_OPERATOR_BASE,
+    canonicalAdminHref,
+} from "@/lib/admin/canonicalAdminRoutes";
+import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 import { ADMINV2_SHELL_CHROME_Z } from "@/components/admin/Drawer";
 
 export type GlobalRecordSearchOpenDetail = {
@@ -24,16 +32,29 @@ export type GlobalRecordSearchOpenIntent = GlobalRecordSearchOpenDetail & {
 };
 
 const DRAWER_HOST_PREFIXES = [
+    CANONICAL_OPERATOR_BASE,
+    CANONICAL_ADMIN_WORKSPACE,
+    ADMIN_SETTINGS_SUBPATH_PREFIX,
+    ADMIN_FORMS_HREF,
     "/adminV2/workspace",
     "/admin/v2/workspace",
     "/adminV2/settings",
     "/admin/v2/settings",
     "/adminV2/forms",
     "/admin/v2/forms",
-];
+] as const;
 
 export function adminV2PathHasDrawerHost(pathname: string): boolean {
-    const p = pathname.trim();
+    const raw = pathname.trim();
+    if (
+        raw.startsWith("/adminV2/workspace") ||
+        raw.startsWith("/admin/v2/workspace") ||
+        raw.startsWith(`${CANONICAL_ADMIN_WORKSPACE}/`) ||
+        raw === CANONICAL_ADMIN_WORKSPACE
+    ) {
+        return true;
+    }
+    const p = canonicalAdminHref(raw);
     return DRAWER_HOST_PREFIXES.some((prefix) => p === prefix || p.startsWith(`${prefix}/`));
 }
 
@@ -87,7 +108,7 @@ export function launchGlobalRecordSearchOpen(detail: GlobalRecordSearchOpenDetai
     }
 
     storeGlobalRecordSearchOpenIntent(detail);
-    return "/adminV2/workspace";
+    return OPERATOR_WORKSPACE_HREF;
 }
 
 export function flattenGlobalSearchClustersForKeyboard(

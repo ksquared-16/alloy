@@ -669,7 +669,7 @@ describe("drawer open targets", () => {
             open_entity_type: "persons",
             open_entity_id: PARENT_PERSON,
         });
-        expect(nav).toBe("/adminV2/workspace");
+        expect(nav).toBe("/workspace");
         expect(readGlobalRecordSearchOpenIntent()?.open_entity_type).toBe("persons");
         clearGlobalRecordSearchOpenIntent();
     });

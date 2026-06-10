@@ -263,7 +263,7 @@ export default function EnrollmentProcessStageStatusesCard({
             </div>
 
             <Link
-                href="/adminV2/settings/statuses?entity_type=opportunities"
+                href="/admin/settings/statuses?entity_type=opportunities"
                 className="inline-block text-[11px] font-medium text-alloy-pine hover:underline"
             >
                 Create or edit status definitions

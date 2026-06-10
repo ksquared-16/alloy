@@ -238,7 +238,7 @@ export default function LifecycleHubClient() {
                 id: "statuses",
                 title: "Statuses",
                 summary: statusCount ? `${statusCount} status${statusCount === 1 ? "" : "es"} assigned` : "None assigned",
-                manageHref: "/adminV2/settings/statuses?entity_type=opportunities",
+                manageHref: "/admin/settings/statuses?entity_type=opportunities",
                 manageLabel: "All statuses",
                 content: departmentId ? (
                     <EnrollmentProcessStageStatusesCard
@@ -274,7 +274,7 @@ export default function LifecycleHubClient() {
                 id: "forms",
                 title: "Forms",
                 summary: "Forms and packets for this stage",
-                manageHref: "/adminV2/forms",
+                manageHref: "/admin/forms",
                 manageLabel: "Forms",
                 content:
                     departmentId && operatorStage ? (
@@ -291,7 +291,7 @@ export default function LifecycleHubClient() {
                 id: "attention",
                 title: "Attention",
                 summary: "Follow-up and overdue signals",
-                manageHref: "/adminV2/settings/attention-sla-rules",
+                manageHref: "/admin/settings/attention-sla-rules",
                 manageLabel: "Attention & SLA",
                 content: <LifecycleNeedsAttentionCard stageKey={activeStageKey} />,
             },

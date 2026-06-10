@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 import Link from "next/link";
+import { useState } from "react";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import type { WorkspaceOpportunityQueueRuntime, WorkspaceQueueBlock, WorkspaceRuntimeData } from "@/lib/workspace/types";
@@ -158,7 +159,8 @@ export function QueueBlock({
     departmentId,
     runtime,
     presentation = "flat",
-    workspaceBasePath = "/admin/workspace",
+    /** Base path for workspace routes. Queue dept links are legacy compat — prefer slug routes under {@link CANONICAL_OPERATOR_BASE}. */
+    workspaceBasePath = CANONICAL_OPERATOR_BASE,
 }: {
     block: WorkspaceQueueBlock;
     departmentId: string;

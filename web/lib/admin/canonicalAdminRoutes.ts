@@ -195,6 +195,32 @@ export function isCanonicalDrawerHostPath(pathname: string | null | undefined): 
     return false;
 }
 
+/** Product nav — forms module base. */
+export const ADMIN_FORMS_HREF = `${CANONICAL_ADMIN_BASE}/forms` as const;
+
+/** Product nav — workflows module base. */
+export const ADMIN_WORKFLOWS_HREF = `${CANONICAL_ADMIN_BASE}/workflows` as const;
+
+/** Product nav — AI activity module base. */
+export const ADMIN_AI_ACTIVITY_HREF = `${CANONICAL_ADMIN_BASE}/ai-activity` as const;
+
+/** Product nav — settings sub-surfaces (`/admin/settings/...`). Exact `/admin` is settings landing. */
+export const ADMIN_SETTINGS_SUBPATH_PREFIX = `${CANONICAL_ADMIN_BASE}/settings` as const;
+
+/** Build `/admin/settings/:subpath` for product nav (never `/adminV2/settings/...`). */
+export function adminSettingsSubpathHref(subpath: string): string {
+    const trimmed = subpath.trim().replace(/^\//, "").replace(/^settings\/?/, "");
+    if (!trimmed) return ADMIN_SETTINGS_SUBPATH_PREFIX;
+    return `${ADMIN_SETTINGS_SUBPATH_PREFIX}/${trimmed}`;
+}
+
+/** Build `/admin/:segment` for product nav (forms, workflows, settings/…, etc.). */
+export function adminProductHref(segment: string): string {
+    const trimmed = segment.trim().replace(/^\//, "");
+    if (!trimmed) return CANONICAL_ADMIN_CONFIG_LANDING;
+    return `${CANONICAL_ADMIN_BASE}/${trimmed}`;
+}
+
 /** Build canonical admin href (prefer over `/adminV2/...` in product nav). */
 export function canonicalAdminHref(path: string): string {
     const trimmed = path.trim();

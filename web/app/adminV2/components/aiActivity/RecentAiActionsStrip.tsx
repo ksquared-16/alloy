@@ -1,5 +1,6 @@
 "use client";
 
+import { ADMIN_AI_ACTIVITY_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
@@ -80,8 +81,8 @@ export default function RecentAiActionsStrip() {
                 Recent operational activity
             </span>
             <Link
-                href="/adminV2/ai-activity"
-                prefetch={shouldDisableAdminV2LinkPrefetch("/adminV2/ai-activity") ? false : undefined}
+                href={ADMIN_AI_ACTIVITY_HREF}
+                prefetch={shouldDisableAdminV2LinkPrefetch(ADMIN_AI_ACTIVITY_HREF) ? false : undefined}
                 className="text-[10px] font-medium underline-offset-2 hover:underline"
                 style={{ color: derived.textSecondary }}
             >

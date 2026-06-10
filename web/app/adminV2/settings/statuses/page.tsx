@@ -7,7 +7,7 @@ export default function AdminV2SettingsStatusesPage() {
   return (
     <div className="w-full min-w-0 space-y-3">
       <LifecycleSettingsCrossLinkBanner variant="statuses" />
-      <StatusesClient basePath="/adminV2/settings/statuses" adminV2Chrome />
+      <StatusesClient basePath="/admin/settings/statuses" adminV2Chrome />
     </div>
   );
 }

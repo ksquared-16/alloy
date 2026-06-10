@@ -1,6 +1,4 @@
-/**
- * Platform process types (lifecycle instances). Enrollment is the first shipped type.
- */
+import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 
 export const ENROLLMENT_PROCESS_KEY = "enrollment" as const;
 
@@ -17,7 +15,7 @@ export type LifecycleProcessTypeDefinition = {
 export const LIFECYCLE_PROCESS_TYPES: readonly LifecycleProcessTypeDefinition[] = [
     {
         key: ENROLLMENT_PROCESS_KEY,
-        settingsPath: "/adminV2/settings/lifecycle",
+        settingsPath: ADMIN_V2_SETTINGS_LIFECYCLE_PATH,
         title: "Enrollment",
         subtitle: "Lead to enrolled — the default lifecycle example.",
     },

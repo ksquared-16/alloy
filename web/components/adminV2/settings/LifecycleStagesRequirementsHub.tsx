@@ -135,13 +135,13 @@ export default function LifecycleStagesRequirementsHub() {
                 <p className="mt-4 text-[11px] text-alloy-midnight/45">
                     Button visibility:{" "}
                     <Link
-                        href="/adminV2/settings/actions?entity_type=opportunity"
+                        href="/admin/settings/actions?entity_type=opportunity"
                         className="font-medium text-alloy-pine hover:underline"
                     >
                         Action Buttons
                     </Link>
                     . Queues:{" "}
-                    <Link href="/adminV2/settings/work-units" className="font-medium text-alloy-pine hover:underline">
+                    <Link href="/admin/settings/work-units" className="font-medium text-alloy-pine hover:underline">
                         Work Units &amp; Queues
                     </Link>
                     .

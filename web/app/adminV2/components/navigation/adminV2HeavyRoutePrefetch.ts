@@ -7,19 +7,37 @@
  * for paths below. Click navigation is unchanged. Add explicit, intent-based prefetch later only
  * if we introduce a thin shell, static segments, or other bounded prefetch targets.
  */
+import {
+    ADMIN_AI_ACTIVITY_HREF,
+    ADMIN_FORMS_HREF,
+    ADMIN_SETTINGS_SUBPATH_PREFIX,
+    ADMIN_WORKFLOWS_HREF,
+    CANONICAL_ADMIN_WORKSPACE,
+    CANONICAL_OPERATOR_BASE,
+    canonicalAdminHref,
+} from "@/lib/admin/canonicalAdminRoutes";
+
+const HEAVY_ROUTE_PREFIXES = [
+    CANONICAL_OPERATOR_BASE,
+    CANONICAL_ADMIN_WORKSPACE,
+    ADMIN_WORKFLOWS_HREF,
+    ADMIN_AI_ACTIVITY_HREF,
+    ADMIN_SETTINGS_SUBPATH_PREFIX,
+    ADMIN_FORMS_HREF,
+    "/adminV2/workspace",
+    "/adminV2/workflows",
+    "/adminV2/ai-activity",
+    "/adminV2/settings",
+    "/adminV2/forms",
+    "/admin/v2",
+    "/adminv2",
+    "/admin/opportunities",
+    "/admin/system/work-units",
+] as const;
+
 export function shouldDisableAdminV2LinkPrefetch(href: string): boolean {
-    const path = href.split(/[?#]/)[0] ?? "";
-    if (path === "/adminV2/workspace") return true;
-    if (path.startsWith("/adminV2/workspace/")) return true;
-    if (path === "/adminV2/workflows" || path.startsWith("/adminV2/workflows/")) return true;
-    if (path === "/adminV2/ai-activity" || path.startsWith("/adminV2/ai-activity/")) return true;
-    if (path === "/adminV2/settings" || path.startsWith("/adminV2/settings/")) return true;
-    if (path === "/adminV2/forms" || path.startsWith("/adminV2/forms/")) return true;
-    if (path === "/admin/v2" || path.startsWith("/admin/v2/")) return true;
-    if (path === "/adminv2" || path.startsWith("/adminv2/")) return true;
-    if (path.startsWith("/admin/opportunities")) return true;
-    if (path.startsWith("/admin/system/work-units")) return true;
-    /** Legacy workspace bridge under classic `/admin` still mounts heavy department/queue pages. */
-    if (path.startsWith("/admin/workspace")) return true;
-    return false;
+    const path = canonicalAdminHref(href.split(/[?#]/)[0] ?? "");
+    return HEAVY_ROUTE_PREFIXES.some(
+        (prefix) => path === prefix || path.startsWith(`${prefix}/`),
+    );
 }

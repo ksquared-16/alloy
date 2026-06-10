@@ -1,5 +1,5 @@
 import { DepartmentQueueRouteShell } from "@/components/admin/workspace/DepartmentQueueRouteShell";
 
 export default function AdminV2UnassignedJobsWorkspacePage() {
-    return <DepartmentQueueRouteShell workspaceBase="/adminV2/workspace" mode="unassigned" />;
+    return <DepartmentQueueRouteShell workspaceBase="/workspace" mode="unassigned" />;
 }

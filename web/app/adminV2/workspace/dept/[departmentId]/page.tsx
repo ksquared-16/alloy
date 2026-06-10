@@ -2020,7 +2020,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     success_rate_last_7d: workflowKpis.success_rate_last_7d,
                                 }}
                                 partitions={workflowPartitions}
-                                href="/adminV2/workflows"
+                                href="/admin/workflows"
                                 onAskWorkflowAssist={askWorkflowAssist}
                             />
                         </div>

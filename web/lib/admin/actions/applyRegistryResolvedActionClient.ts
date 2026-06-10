@@ -1,4 +1,10 @@
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import {
+    ADMIN_WORKFLOWS_HREF,
+} from "@/lib/admin/canonicalAdminRoutes";
+import {
+    operatorWorkUnitHrefFromKey,
+} from "@/lib/admin/canonicalOperatorRoutes";
 import type { ApplyRegistryResolvedActionResult } from "@/lib/admin/actions/applyRegistryResolvedActionResult";
 import {
     invocationFromApplyRegistryHost,
@@ -356,7 +362,7 @@ export async function applyRegistryResolvedActionClient(
         }
 
         if (intent === "review_automations") {
-            host.router.push("/adminV2/workflows");
+            host.router.push(ADMIN_WORKFLOWS_HREF);
             return { ok: true };
         }
         if (intent === "create_inquiry") {
@@ -364,11 +370,7 @@ export async function applyRegistryResolvedActionClient(
             return { ok: true };
         }
         if (intent === "open_enrollment_pipeline") {
-            if (host.departmentId?.trim()) {
-                host.router.push(`/adminV2/workspace/dept/${encodeURIComponent(host.departmentId.trim())}`);
-            } else {
-                host.router.push("/adminV2/workspace");
-            }
+            host.router.push(operatorWorkUnitHrefFromKey("new_leads"));
             return { ok: true };
         }
         if (intent === "view_needs_attention") {
@@ -377,11 +379,7 @@ export async function applyRegistryResolvedActionClient(
                 host.router.push(href);
                 return { ok: true };
             }
-            if (host.departmentId?.trim()) {
-                host.router.push(`/adminV2/workspace/dept/${encodeURIComponent(host.departmentId.trim())}`);
-            } else {
-                host.router.push("/adminV2/workspace");
-            }
+            host.router.push(operatorWorkUnitHrefFromKey("needs_attention"));
             return { ok: true };
         }
         if (intent === "send_message_placeholder") {

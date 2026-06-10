@@ -5,6 +5,12 @@ import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operat
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { usePathname } from "next/navigation";
+import {
+    ADMIN_FORMS_HREF,
+    isCanonicalFormsPath,
+    isCanonicalWorkspacePath,
+    normalizeToCanonicalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
@@ -18,23 +24,11 @@ import {
 } from "@/lib/adminV2/quickMessageLaunch";
 
 function normalizeAdminPath(pathname: string): string {
-  if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
-    if (pathname === "/admin/v2") return "/adminV2/workspace";
-    return `/adminV2${pathname.slice("/admin/v2".length)}`;
-  }
-  if (pathname === "/adminv2" || pathname.startsWith("/adminv2/")) {
-    return `/adminV2${pathname.slice("/adminv2".length)}`;
-  }
-  return pathname;
+  return normalizeToCanonicalAdminPath(pathname);
 }
 
 function isWorkspaceOperatorPath(normalizedPath: string): boolean {
-  return (
-    normalizedPath.startsWith("/adminV2/workspace") ||
-    normalizedPath.startsWith("/adminV2/forms") ||
-    normalizedPath === "/workspace" ||
-    normalizedPath.startsWith("/workspace/")
-  );
+  return isCanonicalWorkspacePath(normalizedPath) || isCanonicalFormsPath(normalizedPath);
 }
 
 /** Fixed-width reserve so location chrome does not jump when bootstrap revalidates. */

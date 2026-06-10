@@ -265,7 +265,7 @@ export default function EnrollmentProcessFormsCoverageCard({
         return (
             <div className="space-y-2" data-testid="enrollment-process-forms-coverage">
                 <p className="text-xs text-alloy-midnight/55">No connected forms for this stage yet.</p>
-                <Link href="/adminV2/forms" className="text-xs font-medium text-alloy-pine hover:underline">
+                <Link href="/admin/forms" className="text-xs font-medium text-alloy-pine hover:underline">
                     Open Forms &amp; Packets
                 </Link>
             </div>
@@ -372,7 +372,7 @@ export default function EnrollmentProcessFormsCoverageCard({
                     ) : null}
                 </div>
             ))}
-            <Link href="/adminV2/forms" className="inline-block text-xs font-medium text-alloy-pine hover:underline">
+            <Link href="/admin/forms" className="inline-block text-xs font-medium text-alloy-pine hover:underline">
                 Open Forms &amp; Packets
             </Link>
         </div>

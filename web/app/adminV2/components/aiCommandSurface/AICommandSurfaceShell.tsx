@@ -1,5 +1,6 @@
 "use client";
 
+import { ADMIN_AI_ACTIVITY_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import {
   useCallback,
   useEffect,
@@ -532,7 +533,7 @@ function AIActionsRow(props: {
       ) : null}
 
       <a
-        href="/adminV2/ai-activity"
+        href={ADMIN_AI_ACTIVITY_HREF}
         className="text-[10px] underline-offset-2 hover:underline opacity-70"
         style={{ color: CMD.textSupporting }}
         title="Full audit log (recent actions are above the command bar)"

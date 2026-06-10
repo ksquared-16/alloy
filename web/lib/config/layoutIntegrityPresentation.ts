@@ -111,7 +111,7 @@ export function fixLinksForIssue(issue: LayoutIntegrityIssue): LayoutIntegrityFi
     const entity = issue.entity_type ?? "opportunity";
     const links: LayoutIntegrityFixLink[] = [
         { href: `/adminV2/settings/fields?entity=${encodeURIComponent(entity)}`, label: "Fields" },
-        { href: "/adminV2/settings/field-sections", label: "Field grouping" },
+        { href: "/admin/settings/field-sections", label: "Field grouping" },
     ];
     if (
         issue.code === "layout_ordering_conflict" ||
@@ -119,10 +119,10 @@ export function fixLinksForIssue(issue: LayoutIntegrityIssue): LayoutIntegrityFi
         issue.code === "duplicate_field_placement" ||
         issue.code === "required_on_layout_not_visible"
     ) {
-        links.push({ href: "/adminV2/settings/layouts", label: "Layouts" });
+        links.push({ href: "/admin/settings/layouts", label: "Layouts" });
     }
     if (issue.code === "option_field_no_active_options") {
-        links.push({ href: "/adminV2/settings/option-sets", label: "Option sets" });
+        links.push({ href: "/admin/settings/option-sets", label: "Option sets" });
     }
     return links;
 }

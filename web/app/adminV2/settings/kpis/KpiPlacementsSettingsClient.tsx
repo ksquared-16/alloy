@@ -14,7 +14,7 @@ import {
     validateMetricForSurface,
 } from "@/lib/kpi/registry";
 
-const SETTINGS_ROOT = "/adminV2/settings";
+const SETTINGS_ROOT = "/admin/settings";
 
 type DeptRow = { id: string; name: string | null; key: string | null };
 type WuRow = { id: string; name: string | null; department_id: string; key: string | null };
@@ -626,8 +626,8 @@ export default function KpiPlacementsSettingsClient() {
                 </Link>
                 {" · "}
                 <Link
-                    href="/adminV2/workspace"
-                    prefetch={shouldDisableAdminV2LinkPrefetch("/adminV2/workspace") ? false : undefined}
+                    href="/workspace"
+                    prefetch={shouldDisableAdminV2LinkPrefetch("/workspace") ? false : undefined}
                     className="font-medium text-alloy-blue hover:underline"
                 >
                     Open workspace

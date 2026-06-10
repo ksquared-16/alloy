@@ -41,6 +41,7 @@ import {
     safeLogDrawerViewModelCutover,
 } from "@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelCutover";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import { isCanonicalDrawerHostPath } from "@/lib/admin/canonicalAdminRoutes";
 
 /** Max overlay floor when cold — avoids sub-frame flash; skipped when intent prefetch is warm. */
 export const OPPORTUNITY_DRAWER_OPEN_ANTI_FLICKER_MS = 200;
@@ -101,7 +102,7 @@ export function shouldDeferOpportunityDrawerOpen(
     const id = entityId.trim();
     if (!id || id === "new") return false;
     const p = pathname ?? "";
-    return p.startsWith("/adminV2") || p.startsWith("/admin/workspace");
+    return isCanonicalDrawerHostPath(p);
 }
 
 /** Non-blocking peek: attach full entity only if the in-flight/full cache promise is already settled. */

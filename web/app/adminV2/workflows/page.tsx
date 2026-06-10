@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
+import {
+    ADMIN_WORKFLOWS_HREF,
+    CANONICAL_ADMIN_CONFIG_LANDING,
+} from "@/lib/admin/canonicalAdminRoutes";
+import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { derived } from "@/styles/tokens/colors";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
@@ -113,7 +118,7 @@ type WorkflowConditionRow = {
     enabled: boolean | null;
 };
 
-const WORKSPACE = "/adminV2/workspace";
+const WORKSPACE = OPERATOR_WORKSPACE_HREF;
 
 const DEFAULT_KPIS: WorkflowKpis = {
     runs_today: 0,
@@ -212,7 +217,7 @@ export default function AdminV2WorkflowsPage() {
             setSelectedWorkflowId(workflowId);
             const sp = new URLSearchParams(searchParams?.toString() ?? "");
             sp.set("workflow", workflowId);
-            router.replace(`/adminV2/workflows?${sp.toString()}`);
+            router.replace(`${ADMIN_WORKFLOWS_HREF}?${sp.toString()}`);
         },
         [router, searchParams]
     );
@@ -416,7 +421,7 @@ export default function AdminV2WorkflowsPage() {
         (runId: string) => {
             const sp = new URLSearchParams(searchParams?.toString() ?? "");
             sp.set("run", runId);
-            router.replace(`/adminV2/workflows?${sp.toString()}`);
+            router.replace(`${ADMIN_WORKFLOWS_HREF}?${sp.toString()}`);
         },
         [router, searchParams]
     );
@@ -424,7 +429,7 @@ export default function AdminV2WorkflowsPage() {
     const closeRun = useCallback(() => {
         const sp = new URLSearchParams(searchParams?.toString() ?? "");
         sp.delete("run");
-        router.replace(`/adminV2/workflows?${sp.toString()}`);
+        router.replace(`${ADMIN_WORKFLOWS_HREF}?${sp.toString()}`);
     }, [router, searchParams]);
 
     useEffect(() => {
@@ -437,7 +442,7 @@ export default function AdminV2WorkflowsPage() {
             variant="bridge"
             breadcrumbs={[
                 { href: WORKSPACE, label: "Workspace" },
-                { href: "/adminV2/settings", label: "Settings" },
+                { href: CANONICAL_ADMIN_CONFIG_LANDING, label: "Settings" },
                 { label: "Workflows" },
             ]}
             title="Workflows"

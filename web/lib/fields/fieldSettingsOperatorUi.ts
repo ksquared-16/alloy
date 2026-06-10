@@ -1,3 +1,5 @@
+import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+
 /**
  * Operator-facing field Settings helpers (display filtering + labels).
  * UI-only; does not change PATCH enforcement or policy maps.
@@ -56,9 +58,9 @@ export function fieldsTableShowsPolicyColumns(entityType: string): boolean {
 export function recordLayoutsSettingsHref(entityType: string): string {
     const et = entityType.trim().toLowerCase();
     if (et === "opportunity" || et === "job") {
-        return `/adminV2/settings/layouts?entity=${encodeURIComponent(et)}`;
+        return `${adminSettingsSubpathHref("layouts")}?entity=${encodeURIComponent(et)}`;
     }
-    return "/adminV2/settings/layouts";
+    return adminSettingsSubpathHref("layouts");
 }
 
 /** Keys that are always hidden from the default operator field list. */

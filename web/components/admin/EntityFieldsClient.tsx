@@ -1,5 +1,6 @@
 "use client";
 
+import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
@@ -718,14 +719,14 @@ export default function EntityFieldsClient({
                             ) : (
                                 <>
                                     Drawer section order and visibility are on{" "}
-                                    <Link href="/adminV2/settings/layouts" className="font-medium text-alloy-pine hover:underline">
+                                    <Link href={adminSettingsSubpathHref("layouts")} className="font-medium text-alloy-pine hover:underline">
                                         Record layouts
                                     </Link>
                                     .
                                 </>
                             )}{" "}
                             Catalog group labels are on{" "}
-                            <Link href="/adminV2/settings/field-sections" className="font-medium text-alloy-pine hover:underline">
+                            <Link href={adminSettingsSubpathHref("field-sections")} className="font-medium text-alloy-pine hover:underline">
                                 Field grouping
                             </Link>
                             .

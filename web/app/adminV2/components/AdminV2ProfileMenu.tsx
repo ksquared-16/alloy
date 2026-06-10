@@ -7,8 +7,9 @@ import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+import { CANONICAL_ADMIN_CONFIG_LANDING } from "@/lib/admin/canonicalAdminRoutes";
 
-const SETTINGS_HREF = "/adminV2/settings";
+const SETTINGS_HREF = CANONICAL_ADMIN_CONFIG_LANDING;
 
 function displayInitial(email: string): string {
     const local = email.split("@")[0]?.trim() ?? "";

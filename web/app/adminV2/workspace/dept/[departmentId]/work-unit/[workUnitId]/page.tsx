@@ -5857,7 +5857,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 if (action.actionId === "wu_manage_work_units") {
-                    window.location.href = "/adminV2/settings/work-units";
+                    window.location.href = "/admin/settings/work-units";
                     return;
                 }
                 if (action.actionId === "wu_workspace_root") {
@@ -6531,7 +6531,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             role="status"
                         >
                             {actionFeedback}{" "}
-                            <a href="/adminV2/workflows" className="font-semibold text-alloy-blue hover:underline">
+                            <a href="/admin/workflows" className="font-semibold text-alloy-blue hover:underline">
                                 View workflows
                             </a>
                         </div>
@@ -6563,7 +6563,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                         success_rate_last_7d: workflowKpis.success_rate_last_7d,
                                     }}
                                     partitions={workflowPartitions}
-                                    href="/adminV2/workflows"
+                                    href="/admin/workflows"
                                     onAskWorkflowAssist={askWorkflowAssist}
                                 />
                             ) : null

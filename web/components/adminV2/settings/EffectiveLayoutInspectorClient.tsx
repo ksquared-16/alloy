@@ -108,7 +108,7 @@ export default function EffectiveLayoutInspectorClient({
                     <p className="text-xs text-alloy-midnight/60">
                         Read-only resolution via <code>/api/admin/entity-layouts/effective</code>.{" "}
                         {previewOn ?
-                            <Link href="/adminV2/settings/layouts" className="text-alloy-blue underline">
+                            <Link href="/admin/settings/layouts" className="text-alloy-blue underline">
                                 Open layout editor
                             </Link>
                         :   "Editor requires preview flag."}

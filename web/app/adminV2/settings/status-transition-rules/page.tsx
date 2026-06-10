@@ -77,17 +77,17 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
                     These are <strong>workflow automation rules</strong> that may update status when business conditions are met — not
                     a separate status-rules product. Example: when a tour date is set → update status to Tour Scheduled. Status{" "}
                     <strong>display names</strong> are edited on{" "}
-                    <Link href="/adminV2/settings/statuses" className="font-medium text-alloy-pine hover:underline">
+                    <Link href="/admin/settings/statuses" className="font-medium text-alloy-pine hover:underline">
                         Statuses
                     </Link>
                     ; triggers and side effects are owned by{" "}
-                    <Link href="/adminV2/workflows" className="font-medium text-alloy-pine hover:underline">
+                    <Link href="/admin/workflows" className="font-medium text-alloy-pine hover:underline">
                         Automations
                     </Link>
                     . This table is read-only reference.
                 </p>
                 <p className="mt-2 text-xs text-alloy-midnight/45">
-                    <Link href="/adminV2/settings" className="font-medium text-alloy-pine hover:underline">
+                    <Link href="/admin/settings" className="font-medium text-alloy-pine hover:underline">
                         ← Back to Settings
                     </Link>
                 </p>

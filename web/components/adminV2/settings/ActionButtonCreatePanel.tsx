@@ -182,7 +182,7 @@ export default function ActionButtonCreatePanel({
 
                     <p className="rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.04] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/65">
                         {ACTION_BUTTON_CREATE_DEFERRED_NOTE}{" "}
-                        <Link href="/adminV2/workflows" className="font-medium text-alloy-pine hover:underline">
+                        <Link href="/admin/workflows" className="font-medium text-alloy-pine hover:underline">
                             Automations
                         </Link>
                         .

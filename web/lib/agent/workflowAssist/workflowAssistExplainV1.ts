@@ -4,6 +4,7 @@
  */
 
 import { workflowAssistErrorEnvelope, type WorkflowAssistErrorEnvelopeV1 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import { ADMIN_WORKFLOWS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 
 export const WORKFLOW_ASSIST_EXPLAIN_AGENT_KEY = "workflow_assist_explain" as const;
 
@@ -216,7 +217,7 @@ export type WorkflowAssistExplainSourceDataV1 = {
 };
 
 function automationsHref(workflowId?: string | null, runId?: string | null): string {
-    const base = "/adminV2/workflows";
+    const base = ADMIN_WORKFLOWS_HREF;
     if (runId) return `${base}?run=${encodeURIComponent(runId)}`;
     if (workflowId) return `${base}?workflow=${encodeURIComponent(workflowId)}`;
     return base;

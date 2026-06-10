@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { lifecycleStageWorkspaceAppearance } from "@/lib/completion/lifecycleStageWorkspaceMapping";
 
-const WORK_UNITS_SETTINGS_PATH = "/adminV2/settings/work-units";
+const WORK_UNITS_SETTINGS_PATH = "/admin/settings/work-units";
 
 export default function LifecycleStageWhereAppears({ stage }: { stage: LifecycleOperatorStage }) {
     const appearance = lifecycleStageWorkspaceAppearance(stage);
@@ -82,7 +82,7 @@ export default function LifecycleStageWhereAppears({ stage }: { stage: Lifecycle
                             <p className="mt-1 text-[11px] text-alloy-midnight/45">
                                 Configure thresholds in{" "}
                                 <Link
-                                    href="/adminV2/settings/attention-sla-rules"
+                                    href="/admin/settings/attention-sla-rules"
                                     className="font-medium text-alloy-pine hover:underline"
                                 >
                                     Attention &amp; SLA

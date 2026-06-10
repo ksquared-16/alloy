@@ -5,6 +5,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { AdminEntityDrawerLegacy } from "@/components/admin/AdminEntityDrawerLegacy";
 import OpportunityDrawerVmRuntime from "@/components/admin/vmDrawer/OpportunityDrawerVmRuntime";
 import PersonsDrawerVmRuntime from "@/components/admin/vmDrawer/PersonsDrawerVmRuntime";
+import { legacyDrawerMustNotRenderVmBackedEntity } from "@/lib/adminV2/viewModel/drawer/vmRuntime/legacyDrawerVmEntityQuarantine";
 import { resolveVmDrawerDisplayRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 
 /**
@@ -22,6 +23,10 @@ export default function AdminEntityDrawer() {
     }
     if (route === "person" || route === "child") {
         return <PersonsDrawerVmRuntime />;
+    }
+
+    if (legacyDrawerMustNotRenderVmBackedEntity(drawer, pathname)) {
+        return null;
     }
 
     return <AdminEntityDrawerLegacy />;

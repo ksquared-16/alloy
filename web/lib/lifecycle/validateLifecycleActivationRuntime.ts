@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { OPERATOR_WORKSPACE_HREF, operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
@@ -66,6 +67,13 @@ import {
     workspaceRenderedTileFailureReason,
 } from "@/lib/workspace/workspaceRootTilePipeline";
 import { workspaceDeptHref } from "@/lib/lifecycle/lifecycleRuntimeIdentity";
+
+function lifecycleValidationWorkUnitHref(workUnit: { id: string; key?: string | null } | null | undefined): string | null {
+    if (!workUnit) return null;
+    const key = String(workUnit.key ?? "").trim();
+    if (key) return operatorWorkUnitHrefFromKey(key);
+    return OPERATOR_WORKSPACE_HREF;
+}
 
 export { fetchWorkspaceActiveDepartments };
 export type { LifecycleDepartmentIdAudit };
@@ -342,7 +350,7 @@ export async function validateLifecycleActivationRuntime(
         id: "workspace_tile",
         label: "Lifecycle name matches tile",
         pass: nameMatchPass,
-        href: nameMatchPass ? "/adminV2/workspace" : null,
+        href: nameMatchPass ? OPERATOR_WORKSPACE_HREF : null,
         detail: !activation.activation_owned
             ? "Legacy lifecycle uses shared department tile (name match not required)."
             : !tileRow
@@ -451,7 +459,7 @@ export async function validateLifecycleActivationRuntime(
         pass: deptQueuePass || lifecycleStageWorkUnits.length > 0,
         href:
             departmentId && (workUnit || lifecycleStageWorkUnits.length)
-                ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}`
+                ? OPERATOR_WORKSPACE_HREF
                 : null,
         detail: !workUnit && !lifecycleStageWorkUnits.length
             ? "No Work Unit Queue saved for this department. Complete the Work Unit Queue step with a name and create the queue."
@@ -488,7 +496,7 @@ export async function validateLifecycleActivationRuntime(
         id: "dept_runtime_lifecycle_work_units",
         label: "Department uses lifecycle work units",
         pass: !builderOwnedRuntime || lifecycleStageWorkUnits.length > 0,
-        href: departmentId ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}` : null,
+        href: departmentId ? OPERATOR_WORKSPACE_HREF : null,
         detail: !builderOwnedRuntime
             ? "Legacy department — lifecycle work unit mode not required."
             : lifecycleStageWorkUnits.length > 0
@@ -500,7 +508,7 @@ export async function validateLifecycleActivationRuntime(
         id: "dept_no_legacy_pipeline_lanes",
         label: "No legacy enrollment pipeline lanes on /dept",
         pass: !builderOwnedRuntime || !legacyPipelineLanesVisible,
-        href: departmentId ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}` : null,
+        href: departmentId ? OPERATOR_WORKSPACE_HREF : null,
         detail: !builderOwnedRuntime
             ? "Not a builder-owned lifecycle department."
             : legacyPipelineLanesVisible
@@ -639,10 +647,7 @@ export async function validateLifecycleActivationRuntime(
             } else if (totalVisible === 0) {
                 recordsQueryPass = true;
                 recordsQueryDetail = LIFECYCLE_NO_RECORDS_IN_LIFECYCLE_YET_COPY;
-                recordsQueryHref =
-                    departmentId && firstWuId
-                        ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(firstWuId)}`
-                        : null;
+                recordsQueryHref = firstWuId ? OPERATOR_WORKSPACE_HREF : null;
             } else {
                 recordsQueryPass = true;
                 const notAssigned = Math.max(0, totalVisible - totalAssignedHome);
@@ -650,10 +655,7 @@ export async function validateLifecycleActivationRuntime(
                     notAssigned > 0
                         ? `${totalVisible} record(s) visible by lifecycle filters. ${totalAssignedHome} assigned to lifecycle work units (${lifecycleRecordsVisibleNotAssignedCopy(notAssigned)}).`
                         : `${totalVisible} record(s) visible by lifecycle filters. ${totalAssignedHome} assigned to lifecycle work units.`;
-                recordsQueryHref =
-                    departmentId && firstWuId
-                        ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(firstWuId)}`
-                        : null;
+                recordsQueryHref = firstWuId ? OPERATOR_WORKSPACE_HREF : null;
             }
 
             checks.push({
@@ -699,17 +701,11 @@ export async function validateLifecycleActivationRuntime(
             } else if ((count ?? 0) === 0) {
                 recordsQueryPass = true;
                 recordsQueryDetail = LIFECYCLE_RECORDS_QUERY_ZERO_COPY;
-                recordsQueryHref =
-                    departmentId && workUnit
-                        ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(workUnit.id)}`
-                        : null;
+                recordsQueryHref = lifecycleValidationWorkUnitHref(workUnit);
             } else {
                 recordsQueryPass = true;
                 recordsQueryDetail = `${count} record(s) match the selected status filter and should appear in the queue.`;
-                recordsQueryHref =
-                    departmentId && workUnit
-                        ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(workUnit.id)}`
-                        : null;
+                recordsQueryHref = lifecycleValidationWorkUnitHref(workUnit);
             }
         }
     } else if (builderOwnedRuntime && lifecycleStageWorkUnits.length === 0) {
@@ -725,9 +721,9 @@ export async function validateLifecycleActivationRuntime(
         pass: queueFiltersPass,
         href:
             departmentId && lifecycleStageWorkUnits[0]
-                ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}`
+                ? OPERATOR_WORKSPACE_HREF
                 : departmentId && workUnit
-                  ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}`
+                  ? OPERATOR_WORKSPACE_HREF
                   : null,
         detail: queueFiltersDetail,
     });
@@ -758,7 +754,7 @@ export async function validateLifecycleActivationRuntime(
         id: "drawer_actions",
         label: "Actions — configured placements",
         pass: actionPass,
-        href: "/adminV2/workspace",
+        href: OPERATOR_WORKSPACE_HREF,
         detail: actionDetail,
     });
 
@@ -767,7 +763,7 @@ export async function validateLifecycleActivationRuntime(
         id: "needs_attention_optional",
         label: "Needs Attention (optional)",
         pass: true,
-        href: departmentId ? `/adminV2/workspace/dept/${encodeURIComponent(departmentId)}` : null,
+        href: departmentId ? OPERATOR_WORKSPACE_HREF : null,
         detail: naConfigured
             ? "Needs Attention work unit is present (legacy or hybrid)."
             : "Not configured yet — throughput lifecycle stages still operate; Needs Attention sprint is optional.",

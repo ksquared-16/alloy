@@ -125,7 +125,7 @@ function JobLayoutActionsRow(props: {
                 </button>
             :   null}
             <a
-                href="/adminV2/ai-activity"
+                href="/admin/ai-activity"
                 className="text-[10px] underline-offset-2 hover:underline opacity-70"
                 style={{ color: CMD.textSupporting }}
             >

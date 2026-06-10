@@ -153,7 +153,7 @@ export function resolveEntityTypeFromPhrase(
 /** Review URL for Settings proposal detail (supports id + proposalId query keys). */
 export function buildConfigProposalReviewHref(proposalId: string | null | undefined): string {
     if (!proposalId?.trim()) {
-        return "/adminV2/settings/config-proposals";
+        return "/admin/settings/config-proposals";
     }
     return `/adminV2/settings/config-proposals?proposalId=${encodeURIComponent(proposalId.trim())}`;
 }

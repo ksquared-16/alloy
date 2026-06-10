@@ -1,6 +1,7 @@
 "use client";
 
 import type { DepartmentWorkspaceLayout, WorkspaceRuntimeData } from "@/lib/workspace/types";
+import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 import { partitionDepartmentBlocks } from "@/lib/workspace/partitionBlocks";
 import { DepartmentWorkspaceBridgeShell } from "./DepartmentWorkspaceBridgeShell";
 import { ActionsBlock } from "./blocks/ActionsBlock";
@@ -26,8 +27,8 @@ export function WorkspaceRenderer({
     presentation = "flat",
     bridgeBriefTitle,
     bridgeBriefSubtitle,
-    /** Base path for workspace routes (e.g. `/admin/workspace` or `/adminV2/workspace`). Queue links resolve under `…/dept/:id/…`. */
-    workspaceBasePath = "/admin/workspace",
+    /** Base path for workspace routes (default: canonical `/workspace`). */
+    workspaceBasePath = CANONICAL_OPERATOR_BASE,
 }: {
     layout: DepartmentWorkspaceLayout;
     departmentId: string;

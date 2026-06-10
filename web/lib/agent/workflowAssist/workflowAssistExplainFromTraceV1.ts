@@ -12,7 +12,7 @@ import type {
 } from "@/lib/agent/workflowAssist/workflowAssistExplainV1";
 
 function automationsHref(workflowId?: string | null, runId?: string | null): string {
-    const base = "/adminV2/workflows";
+    const base = "/admin/workflows";
     if (runId) return `${base}?run=${encodeURIComponent(runId)}`;
     if (workflowId) return `${base}?workflow=${encodeURIComponent(workflowId)}`;
     return base;

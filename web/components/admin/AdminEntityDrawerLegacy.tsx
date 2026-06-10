@@ -465,6 +465,8 @@ import {
     personDrawerViewModelHardCutoverFailureMessage,
 } from "@/lib/adminV2/viewModel/drawer/person/personDrawerViewModelHardCutover";
 import { isVmBackedDrawerEntityType } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
+import { isCanonicalDrawerHostPath } from "@/lib/admin/canonicalAdminRoutes";
+import { legacyDrawerMustNotRenderVmBackedEntity } from "@/lib/adminV2/viewModel/drawer/vmRuntime/legacyDrawerVmEntityQuarantine";
 import {
     shouldAllowColdOpenLoading,
     shouldHoldPriorDrawerContent,
@@ -1568,9 +1570,8 @@ export function AdminEntityDrawerLegacy() {
         (v: string | number | Date | null | undefined) => formatDateForUserDisplay(v, viewerTz),
         [viewerTz]
     );
-    /** `/admin/workspace` uses the same V2 record surfaces as `/adminV2/workspace` (modal + schedule/job chrome). */
-    const drawerShellVariant =
-        pathname?.startsWith("/adminV2") || pathname?.startsWith("/admin/workspace") ? "adminV2" : "legacy";
+    /** Canonical `/workspace` and `/admin/*` drawer hosts use V2 record surfaces. */
+    const drawerShellVariant = isCanonicalDrawerHostPath(pathname) ? "adminV2" : "legacy";
     const opportunityDrawerShellInstant =
         drawerShellVariant === "adminV2" &&
         drawer.type === "opportunities" &&
@@ -9266,6 +9267,7 @@ export function AdminEntityDrawerLegacy() {
             opportunityLinkedPersonsPrefetchedRef.current = null;
             return;
         }
+        if (legacyDrawerMustNotRenderVmBackedEntity(drawer, pathname)) return;
         // Fire as soon as the primary payload is applied — don't wait for full hydrate / BOS reveal.
         // Starting the person snapshot prefetch here gives it a 1–2s head start so that View Parent
         // and View Child resolve against a warm cache rather than a cold fetch.
@@ -9292,6 +9294,7 @@ export function AdminEntityDrawerLegacy() {
             personLinkedPersonsPrefetchedRef.current = null;
             return;
         }
+        if (legacyDrawerMustNotRenderVmBackedEntity(drawer, pathname)) return;
         if (!drawerReady || !data || !dataMatchesDrawer) return;
         if (personLinkedPersonsPrefetchedRef.current === drawer.id) return;
         if (!personChildLifecycleChrome && !personParentGuardianChrome) return;
@@ -13802,6 +13805,10 @@ export function AdminEntityDrawerLegacy() {
         locationRecordChromeBodyShell;
 
     const drawerPresentation = useAdminV2RecordModalPresentation ? "modal" : "sidebar";
+
+    if (legacyDrawerMustNotRenderVmBackedEntity(drawer, pathname)) {
+        return null;
+    }
 
     return (
         <Drawer

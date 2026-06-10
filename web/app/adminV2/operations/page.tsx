@@ -11,7 +11,7 @@ export default function AdminV2OperationsPage() {
                 <p>This area is not migrated to AdminV2 yet.</p>
                 <p className="text-xs text-alloy-midnight/55">
                     Task notifications (V1): in-app badge on the top nav and{" "}
-                    <a href="/adminV2/tasks" className="font-semibold text-alloy-blue hover:underline">
+                    <a href="/admin/tasks" className="font-semibold text-alloy-blue hover:underline">
                         My tasks
                     </a>
                     . Planned later: email digest, SMS/Slack, push.

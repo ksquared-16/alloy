@@ -1,4 +1,5 @@
 import type { DepartmentWorkspaceLayout } from "./types";
+import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 
 /**
  * Department workspace layouts — code-first registry (slice 2).
@@ -319,7 +320,7 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
                 { id: "new_inquiry", label: "New inquiry", variant: "primary", href: "/admin/opportunities" },
                 { id: "open_all", label: "Open all inquiries", href: "/admin/opportunities" },
                 { id: "manage_work_units", label: "Manage work units", variant: "secondary", href: "/admin/system/work-units" },
-                { id: "open_system", label: "System config snapshot", href: "/adminV2/workspace" },
+                { id: "open_system", label: "System config snapshot", href: OPERATOR_WORKSPACE_HREF },
             ],
         },
         {

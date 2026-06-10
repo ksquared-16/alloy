@@ -1,9 +1,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
+import { launchGlobalRecordSearchOpen } from "@/lib/adminV2/globalRecordSearchOpen";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -16,7 +19,30 @@ function hrefLiterals(source: string): string[] {
     return matches.map((m) => m.replace(/^href:\s*"/, "").replace(/"$/, ""));
 }
 
+const PRODUCT_NAV_FILES = [
+    "app/adminV2/components/Sidebar.tsx",
+    "app/adminV2/components/TopNavBar.tsx",
+    "app/adminV2/components/AdminV2ProfileMenu.tsx",
+    "app/adminV2/components/workspace/WorkspaceRootActionsRail.tsx",
+    "lib/admin/actions/applyRegistryResolvedActionClient.ts",
+    "lib/adminV2/navigation/buildWorkspaceNavDeptChildren.ts",
+    "app/adminV2/workflows/page.tsx",
+    "components/adminV2/settings/LifecycleRelatedSettingsLinks.tsx",
+] as const;
+
+const FORBIDDEN_EMIT_PATTERNS = [
+    /href=\{?"\/adminV2\/(workspace|settings)/,
+    /href=\{?"\/admin\/workspace/,
+    /router\.(push|replace)\(\s*`?\/adminV2\/(workspace|settings)/,
+    /router\.(push|replace)\(\s*`?\/admin\/workspace/,
+    /return\s+"\/adminV2\/workspace"/,
+] as const;
+
 describe("operator nav route audit", () => {
+    afterEach(() => {
+        vi.unstubAllGlobals();
+    });
+
     it("sidebar lifecycle queue links use /workspace work-unit slugs", () => {
         const sidebar = read("app/adminV2/components/Sidebar.tsx");
         expect(sidebar).toContain("CANONICAL_OPERATOR_BASE");
@@ -44,5 +70,26 @@ describe("operator nav route audit", () => {
         expect(
             workUnitRouteSlugsEquivalent(withRecord.workUnitSlug ?? "", withoutRecord.workUnitSlug ?? ""),
         ).toBe(true);
+    });
+
+    it("canonical path constants avoid transitional /adminV2 emitters", () => {
+        expect(ADMIN_FORMS_UI_BASE).toBe("/admin/forms");
+        expect(ADMIN_V2_SETTINGS_LIFECYCLE_PATH).toBe("/admin/settings/lifecycle");
+        vi.stubGlobal("window", {
+            location: { pathname: "/login" },
+            sessionStorage: { setItem: vi.fn(), getItem: vi.fn(), removeItem: vi.fn() },
+            dispatchEvent: vi.fn(),
+        });
+        expect(launchGlobalRecordSearchOpen({
+            open_entity_type: "opportunities",
+            open_entity_id: "x",
+        })).toBe("/workspace");
+    });
+
+    it.each(PRODUCT_NAV_FILES)("product nav file %s does not emit forbidden workspace paths", (rel) => {
+        const src = read(rel);
+        for (const pattern of FORBIDDEN_EMIT_PATTERNS) {
+            expect(src, `${rel} must not match ${pattern}`).not.toMatch(pattern);
+        }
     });
 });

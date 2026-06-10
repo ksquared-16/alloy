@@ -58,7 +58,7 @@ export default function LifecycleNeedsAttentionCard({
                 </p>
             ) : null}
             <Link
-                href="/adminV2/settings/attention-sla-rules"
+                href="/admin/settings/attention-sla-rules"
                 className="inline-block font-medium text-alloy-pine hover:underline"
             >
                 Attention &amp; SLA settings

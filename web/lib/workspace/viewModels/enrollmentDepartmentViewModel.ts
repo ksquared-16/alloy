@@ -5,6 +5,8 @@ import type {
     WorkspaceOpportunityQueueRuntime,
     WorkspaceRuntimeData,
 } from "@/lib/workspace/types";
+import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 
 export type EnrollmentDepartmentActionLinkVm = {
     id: string;
@@ -300,15 +302,15 @@ export function buildEnrollmentDepartmentActionLinks(params?: {
         {
             id: "new_inquiry",
             label: "New inquiry",
-            href: primaryHref ?? "/adminV2/workspace",
+            href: primaryHref ?? OPERATOR_WORKSPACE_HREF,
             variant: "primary",
         },
         {
             id: "open_all_inquiries",
             label: "Open all inquiries",
-            href: primaryHref ?? "/adminV2/workspace",
+            href: primaryHref ?? OPERATOR_WORKSPACE_HREF,
             variant: "secondary",
         },
-        { id: "manage_work_units", label: "Manage work units", href: "/adminV2/settings/work-units", variant: "secondary" },
+        { id: "manage_work_units", label: "Manage work units", href: adminSettingsSubpathHref("work-units"), variant: "secondary" },
     ];
 }

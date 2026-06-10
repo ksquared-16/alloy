@@ -112,7 +112,7 @@ export function WorkspaceRootShell({
       showRail
       railContent={<WorkspaceRootActionsRail />}
       containLead={
-        <nav className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 pb-2" aria-label="Breadcrumb">
+        <nav className="adminv2-ws-inline-breadcrumb text-alloy-midnight/60 flex flex-wrap items-center gap-0.5 pb-1" aria-label="Breadcrumb">
           <span className="text-alloy-midnight/80 font-medium">Workspace</span>
         </nav>
       }

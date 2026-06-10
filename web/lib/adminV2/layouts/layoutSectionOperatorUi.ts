@@ -113,7 +113,7 @@ export function resolveLayoutSectionOperatorProfile(
             fixedFieldsNote: null,
             capabilitySummary: "Field behavior on this layout",
             actionsLinkLabel: "Header actions",
-            actionsLinkHref: "/adminV2/settings/actions?entity_type=opportunity&surface=record_header",
+            actionsLinkHref: "/admin/settings/actions?entity_type=opportunity&surface=record_header",
         };
     }
 

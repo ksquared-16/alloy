@@ -1,6 +1,6 @@
 "use client";
 
-import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
+import { ADMIN_WORKFLOWS_HREF, CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
@@ -11,7 +11,7 @@ import {
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
 
-const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
+const WORKSPACE_BASE = CANONICAL_OPERATOR_BASE;
 
 const DEFAULT_WF_KPIS = {
     runs_today: 0,
@@ -51,7 +51,7 @@ export function DepartmentWorkspaceColdShell({ departmentTitle = "Department" }:
                             kpisLoading
                             kpis={DEFAULT_WF_KPIS}
                             partitions={null}
-                            href="/adminV2/workflows"
+                            href={ADMIN_WORKFLOWS_HREF}
                         />
                     </div>
                 }

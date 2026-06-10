@@ -183,7 +183,7 @@ export function configApplyOutcomeToExecutionReceipt(
             "Check layout integrity in Settings → Layouts."
         :   null,
         link: outcome.showLayoutIntegrityLink ?
-            { href: "/adminV2/settings/layouts", label: "Settings → Layouts" }
+            { href: "/admin/settings/layouts", label: "Settings → Layouts" }
         :   null,
         operationRows: outcome.rows.map((r) => ({
             label: r.label,

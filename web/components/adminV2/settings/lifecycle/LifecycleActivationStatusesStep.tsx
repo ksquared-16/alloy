@@ -46,7 +46,7 @@ export default function LifecycleActivationStatusesStep({
                     No statuses exist yet for this record type.
                 </p>
                 <Link
-                    href="/adminV2/settings/statuses?entity_type=opportunities"
+                    href="/admin/settings/statuses?entity_type=opportunities"
                     className="inline-flex rounded-md border border-alloy-pine/30 bg-alloy-pine/5 px-2.5 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/10"
                     data-testid="lifecycle-activation-create-status"
                 >
@@ -98,7 +98,7 @@ export default function LifecycleActivationStatusesStep({
             )}
 
             <Link
-                href="/adminV2/settings/statuses?entity_type=opportunities"
+                href="/admin/settings/statuses?entity_type=opportunities"
                 className="inline-block text-[11px] font-medium text-alloy-pine hover:underline"
             >
                 Create or edit status definitions

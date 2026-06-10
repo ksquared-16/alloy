@@ -73,7 +73,7 @@ export default function ActionInventoryDiagnosticsClient() {
                 <p className="font-medium">Editing not available here yet</p>
                 <p className="mt-1 text-xs leading-relaxed text-amber-950/85">
                     This page is a read-only reference for configured buttons. To change what a button does, use{" "}
-                    <Link href="/adminV2/workflows" className="font-medium underline">
+                    <Link href="/admin/workflows" className="font-medium underline">
                         Automations
                     </Link>{" "}
                     or contact your Alloy administrator.

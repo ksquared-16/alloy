@@ -141,7 +141,7 @@ const navGroups: { label: string; icon: IconComponent; items: NavItem[] }[] = [
         label: "Workspace",
         icon: LayoutTemplate,
         items: [
-            { href: "/admin/workspace", label: "V2 workspace (cleaning slice)" },
+            { href: "/workspace", label: "V2 workspace (cleaning slice)" },
             { href: "/legacy-admin/system/entity-labels", label: "Entity labels" },
         ],
     },

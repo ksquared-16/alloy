@@ -6,33 +6,37 @@ import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLi
 import { ChevronRight } from "lucide-react";
 import { derived, neutral } from "@/styles/tokens/colors";
 
-const SETTINGS_ROOT = "/adminV2/settings";
+import {
+    ADMIN_SETTINGS_SUBPATH_PREFIX,
+    CANONICAL_ADMIN_CONFIG_LANDING,
+    normalizeToCanonicalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
+import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
+
+const SETTINGS_ROOT = ADMIN_SETTINGS_SUBPATH_PREFIX;
 
 /** Normalize rewrites so `/admin/v2/settings/...` and `/adminv2/...` match route logic. */
 function normalizedPathname(pathname: string): string {
-    if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
-        if (pathname === "/admin/v2") return "/adminV2/workspace";
-        return `/adminV2${pathname.slice("/admin/v2".length)}`;
-    }
-    if (pathname === "/adminv2" || pathname.startsWith("/adminv2/")) {
-        return `/adminV2${pathname.slice("/adminv2".length)}`;
-    }
-    return pathname;
+    return normalizeToCanonicalAdminPath(pathname);
 }
 
 type Crumb = { label: string; href: string | null };
 
 function crumbsForPath(path: string): Crumb[] {
-    if (!path.startsWith(SETTINGS_ROOT)) {
+    const settingsPath =
+        path === CANONICAL_ADMIN_CONFIG_LANDING || path.startsWith(`${CANONICAL_ADMIN_CONFIG_LANDING}/`)
+            ? path.replace(CANONICAL_ADMIN_CONFIG_LANDING, SETTINGS_ROOT)
+            : path;
+    if (!settingsPath.startsWith(SETTINGS_ROOT)) {
         return [{ label: "Settings", href: null }];
     }
 
-    const tail = path.slice(SETTINGS_ROOT.length);
+    const tail = settingsPath.slice(SETTINGS_ROOT.length);
     if (tail === "" || tail === "/") {
         return [{ label: "Settings", href: null }];
     }
 
-    const base: Crumb[] = [{ label: "Settings", href: SETTINGS_ROOT }];
+    const base: Crumb[] = [{ label: "Settings", href: CANONICAL_ADMIN_CONFIG_LANDING }];
 
     if (tail.startsWith("/documents/document-fields")) {
         base.push({ label: "Document field definitions", href: null });
@@ -118,7 +122,7 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     const remainder = tail.replace(/^\//, "").replace(/\/$/, "") || "Page";
-    return [{ label: "Settings", href: SETTINGS_ROOT }, { label: remainder, href: null }];
+    return [{ label: "Settings", href: CANONICAL_ADMIN_CONFIG_LANDING }, { label: remainder, href: null }];
 }
 
 function crumbActive(href: string, path: string): boolean {

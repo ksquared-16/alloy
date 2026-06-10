@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import type { WorkUnitLifecycleCoverage } from "@/lib/workspace/workUnitQueueDerived";
 import { summarizeUnmappedRowsForDiagnostics } from "@/lib/workspace/workUnitQueueDerived";
 
-const SETTINGS_STATUSES_HREF = "/adminV2/settings/statuses";
-const SETTINGS_WORK_UNITS_HREF = "/adminV2/settings/work-units";
+import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+
+const SETTINGS_STATUSES_HREF = adminSettingsSubpathHref("statuses");
+const SETTINGS_WORK_UNITS_HREF = adminSettingsSubpathHref("work-units");
 
 export type WorkUnitLifecycleCoveragePanelProps = {
     /** Lifecycle/stage style work unit (has at least one status-filter lane). */

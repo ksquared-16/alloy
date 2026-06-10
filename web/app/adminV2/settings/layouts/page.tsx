@@ -36,7 +36,7 @@ export default async function AdminV2SettingsLayoutsPage({ searchParams }: PageP
                         initialSurface="drawer"
                     />
                     <p className="text-xs text-alloy-midnight/55">
-                        <Link href="/adminV2/settings/layouts/effective" className="text-alloy-blue underline">
+                        <Link href="/admin/settings/layouts/effective" className="text-alloy-blue underline">
                             Full-screen effective layout inspector
                         </Link>
                     </p>

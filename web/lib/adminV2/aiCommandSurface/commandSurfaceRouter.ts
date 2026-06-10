@@ -21,6 +21,7 @@ import {
     type WorkflowAssistReadIntentV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import { WORKFLOW_ASSIST_BOUNDARY_NOTICE } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRoutingCopy";
+import { ADMIN_WORKFLOWS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 
 export type CommandSurfaceRouteKind =
     | "workflow_assist"
@@ -46,7 +47,7 @@ export type CommandSurfaceRouteResult = {
 };
 
 export const WORKFLOW_ASSIST_NOTICE_TEXT = WORKFLOW_ASSIST_BOUNDARY_NOTICE;
-export const WORKFLOW_ASSIST_AUTOMATIONS_HREF = "/adminV2/workflows";
+export const WORKFLOW_ASSIST_AUTOMATIONS_HREF = ADMIN_WORKFLOWS_HREF;
 
 const CLARIFY_DEFAULT =
     "Tell me what you'd like to do — for example, text a family, schedule an email, adjust the job overview layout, or set a reminder.";

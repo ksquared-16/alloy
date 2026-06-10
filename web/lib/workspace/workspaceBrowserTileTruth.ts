@@ -1,4 +1,5 @@
 import type { WorkspaceRootDepartmentRow } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 import { findWorkspaceRootCacheForPrincipal } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { bustWorkspaceDepartmentsFetchDedupe } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import {
@@ -33,7 +34,7 @@ export async function evaluateWorkspaceBrowserTileTruth(
             id: "workspace_browser_cache",
             label: "Visible in browser (/workspace)",
             pass: false,
-            href: "/adminV2/workspace",
+            href: OPERATOR_WORKSPACE_HREF,
             detail: json.error ?? "Failed to load departments for browser truth check.",
         };
         return {
@@ -58,7 +59,7 @@ export async function evaluateWorkspaceBrowserTileTruth(
         const apiIds = networkTrace.apiDepartmentIds.join(", ") || "(none)";
         detail = `Fail: Selected lifecycle department ID is not returned by /workspace API. Selected=${departmentId}. Browser API ids=[${apiIds}].`;
     } else if (cachedTrace && inCache === false) {
-        detail = `sessionStorage workspace cache is stale (${cachedTrace.renderedTileIds.length} tile(s), missing this department). Network has ${networkTrace.renderedTileIds.length} tile(s). Open /adminV2/workspace — it refetches after lifecycle changes.`;
+        detail = `sessionStorage workspace cache is stale (${cachedTrace.renderedTileIds.length} tile(s), missing this department). Network has ${networkTrace.renderedTileIds.length} tile(s). Open /workspace — it refetches after lifecycle changes.`;
     } else if (cachedTrace && inCache === true) {
         pass = true;
         detail = `Network and sessionStorage both include this department (${networkTrace.renderedTileIds.length} workspace tile(s)).`;
@@ -71,7 +72,7 @@ export async function evaluateWorkspaceBrowserTileTruth(
         id: "workspace_browser_cache",
         label: "Visible in browser (/workspace)",
         pass,
-        href: "/adminV2/workspace",
+        href: OPERATOR_WORKSPACE_HREF,
         detail,
     };
 

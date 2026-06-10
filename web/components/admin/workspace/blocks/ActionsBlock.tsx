@@ -1,5 +1,6 @@
 "use client";
 
+import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 import Link from "next/link";
 import { resolveWorkspaceActionHref } from "@/lib/workspace/resolveWorkspaceActionHref";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
@@ -16,7 +17,7 @@ export function ActionsBlock({
     block,
     presentation = "flat",
     departmentId = "",
-    workspaceBasePath = "/admin/workspace",
+    workspaceBasePath = CANONICAL_OPERATOR_BASE,
 }: {
     block: WorkspaceActionsBlock;
     presentation?: "flat" | "bridge";

@@ -115,7 +115,7 @@ export function buildLifecycleActivationCompactChecks(
             label: "Workspace tile visible",
             pass: workspaceTilePass,
             summary: workspaceTileSummary,
-            href: "/adminV2/workspace",
+            href: "/workspace",
             repairable: !workspaceTilePass,
         },
         {

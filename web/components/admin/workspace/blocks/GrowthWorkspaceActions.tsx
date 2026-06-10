@@ -1,7 +1,8 @@
 "use client";
 
+import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
@@ -26,7 +27,7 @@ function laneHref(baseDeptUrl: string, lane: GrowthWorkUnitLaneKey | "clear"): s
 function GrowthWorkspaceActionsInner({
     block,
     departmentId,
-    workspaceBasePath = "/admin/workspace",
+    workspaceBasePath = CANONICAL_OPERATOR_BASE,
     presentation = "flat",
 }: {
     block: WorkspaceGrowthWorkspaceActionsBlock;
