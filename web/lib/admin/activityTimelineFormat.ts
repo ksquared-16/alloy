@@ -3,7 +3,7 @@
  * Entity-specific label maps are passed via options — no workflow_events changes.
  */
 
-import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
 import { resolveCommunicationMessageEventTitle } from "@/lib/admin/activityMessageEventLabels";
 import { UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
@@ -230,13 +230,11 @@ export function formatActivityTimelineEvent(
 
 // --- Queue / CRM note line primitives (storage-agnostic) ---
 
-/** MM/DD/YYYY h:mm AM/PM in the given IANA timezone (default UTC for tests / server VMs). No comma between date and time. */
+/** Activity doctrine — `Today • 9:12 AM`, `Jun 15, 2026 • 2:15 PM` in resolved timezone. */
 export function formatQueueNoteDateTime(ms: number, timeZoneIana: string = UTC_FALLBACK_IANA): string {
     const d = new Date(ms);
     if (!Number.isFinite(d.getTime())) return "";
-    const s = formatDateTimeForUserDisplay(d, timeZoneIana);
-    if (s === "-") return "";
-    return s.replace(",", "").replace(/\s+/g, " ").trim();
+    return formatActivityTimestamp(d, { timeZone: timeZoneIana, nowMs: Date.now() });
 }
 
 /** `[2026-04-29T21:15:05Z] Note text` → timestamp ms + remainder */

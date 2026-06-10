@@ -3,23 +3,26 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { InquirySummaryTaskPreviewRow } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
-import { formatLayoutRuntimeOperatorDate } from "@/lib/layout/runtime/formatLayoutRuntimeOperatorDate";
+import { formatTaskDueDate } from "@/lib/presentation/presentationDateFormat";
 import { layoutRuntimeTaskChipStyle } from "@/lib/layout/runtime/layoutRuntimeTaskChipStyles";
 
 export function formatQueueTaskDueShort(iso: string): string {
-    const formatted = formatLayoutRuntimeOperatorDate(iso);
+    const formatted = formatTaskDueDate(iso);
     return formatted || iso;
 }
 
-/** Compact due label for queue-row task mini-cards — avoids mid-string CSS clipping. */
+/** Compact due label for queue-row task mini-cards — weekday omitted to avoid clipping. */
 export function formatQueueTaskDueMiniCard(iso: string): string {
-    const formatted = formatLayoutRuntimeOperatorDate(iso);
+    const formatted = formatTaskDueDate(iso);
     if (!formatted) return iso;
-    const withTime = /^(\d{2}-\d{2})-\d{4}\s+(.+)$/.exec(formatted);
-    if (withTime) return `${withTime[1]} ${withTime[2]}`;
-    const dateOnly = /^(\d{2}-\d{2})-\d{4}$/.exec(formatted);
-    if (dateOnly) return dateOnly[1]!;
-    return formatted;
+    const withoutWeekday = formatted.replace(/^[A-Za-z]{3},\s*/, "");
+    const withTime = /^(.+?) · (.+)$/.exec(withoutWeekday);
+    if (withTime) {
+        const datePart = withTime[1]!.trim();
+        const timePart = withTime[2]!.trim().replace(/:00 /, " ");
+        return `${datePart} · ${timePart}`;
+    }
+    return withoutWeekday;
 }
 
 /** Anchored task detail overlay — shared by drawer and queue row task widgets. */

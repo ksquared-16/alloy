@@ -160,19 +160,23 @@ Normalization may default missing status display to `pill`; it must **never** ov
 
 ## Date doctrine
 
-All dates in queue row **fields** use:
+All dates in queue row **fields** use the **compact display format** from `typography-and-presentation-doctrine.md`:
 
-**`MM-DD-YYYY`**
+**`Jan 15`** (same calendar year) · **`Mar 15, 2024`** (when year is necessary)
 
-If time exists:
+If time exists on the source value:
 
-**`MM-DD-YYYY h:mm A`** (space separator in operator surfaces)
+**`May 20 · 2:30 PM`**
 
-No queue row should show **`YYYY-MM-DD`** unless the user specifically configures raw value display.
+Configured field labels prefix the value: **`Created Jan 15`**, **`Tour Jun 22`**, **`Start Aug 1`**.
 
-Formatter: **`formatQueueRecordDateDisplay`** (`web/lib/adminFormatters.ts`); field-key detection: **`isQueueRecordDateFieldKey`** (`web/lib/layout/runtime/queueRecordScopedResolve.ts`).
+No queue row should show **`YYYY-MM-DD`** or **`MM-DD-YYYY`** as read-only display unless the user specifically configures raw value display.
 
-**Task mini-card due dates** use a shorter compact format so due text never clips mid-string: **`MM-DD h:mm A`** when timed, else **`MM-DD`**. Full due remains on `title` / popover via **`formatQueueTaskDueShort`**.
+Formatter: **`formatQueueRecordDateDisplay`** (`web/lib/presentation/presentationDateFormat.ts`, re-exported from `web/lib/adminFormatters.ts`); field-key detection: **`isQueueRecordDateFieldKey`** (`web/lib/layout/runtime/queueRecordScopedResolve.ts`).
+
+**Task mini-card due dates** use task due doctrine: **`formatTaskDueDate`** / **`formatQueueTaskDueMiniCard`** (weekday omitted in mini-card). Full due remains on `title` / popover via **`formatQueueTaskDueShort`**.
+
+**Presentation doctrine (typography + dates):** **`docs/system/typography-and-presentation-doctrine.md`**
 
 ---
 
@@ -189,6 +193,8 @@ Use Alloy hierarchy:
 | Secondary details | muted slate |
 | Status pill/badge | compact, weight 650, ellipsis inside column |
 | Widgets | compact, readable, not oversized |
+
+Typography tiers 1–6: **`docs/system/typography-and-presentation-doctrine.md`**
 
 Avoid random font sizes and weights.
 

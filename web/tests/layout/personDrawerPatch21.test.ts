@@ -12,6 +12,7 @@ import {
 } from "@/lib/layout/runtime/personOverviewComposition";
 import {
     personOverviewRelatedPeopleHasContent,
+    resolvePersonOverviewHouseholdConnectedChildren,
     resolvePersonOverviewRelatedPeopleGroups,
 } from "@/lib/layout/runtime/resolvePersonOverviewRelatedPeopleGroups";
 import type { LayoutCollectionColumn } from "@/lib/layout/layoutV2";
@@ -102,6 +103,26 @@ describe("resolvePersonOverviewRelatedPeopleGroups", () => {
         expect(resolvePersonOverviewRelatedPeopleGroups(record)).toEqual([]);
         expect(personOverviewRelatedPeopleHasContent(record)).toBe(false);
     });
+
+    it("includes connected children in household content checks", () => {
+        const record = buildProofPersonRecord({
+            id: "parent-1",
+            _household_context: [{ customer_id: "cust-1", customer_name: "Johnson Household" }],
+            _household_child_links: [
+                {
+                    customer_member_id: "cm-1",
+                    customer_id: "cust-1",
+                    person_id: "child-1",
+                    display_name: "Riley Brooks",
+                    age_label: "Infant",
+                    status_label: "Active",
+                },
+            ],
+        });
+        const childrenGroup = resolvePersonOverviewHouseholdConnectedChildren(record);
+        expect(childrenGroup?.children).toHaveLength(1);
+        expect(personOverviewRelatedPeopleHasContent(record)).toBe(true);
+    });
 });
 
 describe("formatPersonConnectedChildMetaLine", () => {
@@ -119,7 +140,7 @@ describe("formatPersonConnectedChildMetaLine", () => {
             { refKey: "child.status", label: "Status" },
         ];
         const line = formatPersonConnectedChildMetaLine(row, columns);
-        expect(line).toMatch(/03-15-2024|2024-03-15/);
+        expect(line).toMatch(/Mar 15, 2024/);
         expect(line).toContain("Infant");
         expect(line).toContain("Active");
         expect(line).not.toContain("Program —");

@@ -153,7 +153,7 @@ describe("queue record layout runtime fidelity", () => {
         expect(dobField.type === "repeated_record_block" ? dobField.fields[1] : null).toBeTruthy();
         if (dobField.type !== "repeated_record_block") throw new Error("expected repeat block");
         const resolved = resolveQueueRecordField(dobField.fields[1]!, childRow as never);
-        expect(resolved.display).toBe("03-15-2024");
+        expect(resolved.display).toBe("Mar 15, 2024");
         expect(resolved.display).not.toBe("(2y)");
     });
 
@@ -181,7 +181,7 @@ describe("queue record layout runtime fidelity", () => {
 
         expect(html).toContain("queue-record-field--pill");
         expect(html).toContain("Contact Attempted");
-        expect(html).toMatch(/05-20-\d{4}/);
+        expect(html).toMatch(/May 20/);
         expect(html).toContain("data-queue-tasks-widget");
         expect(html).toContain("queue-record-widget--tasks");
         expect(html).toContain("queue-record-widget__task-title");

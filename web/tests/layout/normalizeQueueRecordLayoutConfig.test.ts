@@ -191,7 +191,7 @@ describe("normalizeQueueRecordLayoutConfig", () => {
 });
 
 describe("queue record date field formatting", () => {
-    it("formats child.date_of_birth as MM-DD-YYYY even when display is muted", () => {
+    it("formats child.date_of_birth as compact display date even when display is muted", () => {
         const field = {
             id: "dob",
             fieldKey: "child.date_of_birth",
@@ -201,6 +201,6 @@ describe("queue record date field formatting", () => {
         const resolved = resolveQueueRecordField(field, {
             "child.date_of_birth": "2024-03-15",
         } as never);
-        expect(resolved.display).toBe("03-15-2024");
+        expect(resolved.display).toBe("Mar 15, 2024");
     });
 });

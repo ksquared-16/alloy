@@ -6,7 +6,7 @@
  */
 
 import type { InquirySummaryTaskPreviewRow } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
-import { formatLayoutRuntimeOperatorDate } from "@/lib/layout/runtime/formatLayoutRuntimeOperatorDate";
+import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 export type LeadActivityPreviewKind = "note" | "communication" | "task" | "activity" | "created" | "updated";
@@ -43,7 +43,7 @@ function truncate(text: string, max = 100): string {
 function formatAt(raw: unknown): string | null {
     const text = pickLine(raw);
     if (!text) return null;
-    return formatLayoutRuntimeOperatorDate(text) || text;
+    return formatActivityTimestamp(text) || text;
 }
 
 function readOpenTasks(record: ProofRuntimeRecord): InquirySummaryTaskPreviewRow[] {

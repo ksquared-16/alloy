@@ -45,7 +45,7 @@ function isHouseholdDisplayFieldKey(fieldKey: string): boolean {
         || /^(customer\.(display_name|name)|household\.name|opportunity\.title)$/.test(fieldKey);
 }
 
-/** Date-like queue row fields — format as MM-DD-YYYY regardless of display mode when value is date-shaped. */
+/** Date-like queue row fields — format as compact display dates regardless of display mode when value is date-shaped. */
 export function isQueueRecordDateFieldKey(fieldKey: string): boolean {
     const rk = fieldKey.toLowerCase();
     return /date_of_birth|\.dob$|tour_date|appointment|created_at|updated_at|desired_start|_date$|\.date$/.test(rk)
@@ -59,7 +59,7 @@ function shouldFormatQueueRecordDateField(field: QueueRecordFieldConfig): boolea
 function formatQueueRecordFieldValue(rawDisplay: string, field: QueueRecordFieldConfig): string {
     if (!shouldFormatQueueRecordDateField(field)) return rawDisplay;
     const formatted = formatQueueRecordDateDisplay(rawDisplay) || rawDisplay;
-    // Queue rows: dates render as MM-DD-YYYY only (no time segment).
+    // Queue rows: date values omit time segment in the field column (time stays in popover/title when needed).
     return formatted.split(" · ")[0]?.trim() || formatted;
 }
 

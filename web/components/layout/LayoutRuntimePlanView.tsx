@@ -54,6 +54,7 @@ import LeadEnrollmentHealthSummaryCard from "@/components/layout/lead/LeadEnroll
 import LeadEnrollmentCardList from "@/components/layout/lead/LeadEnrollmentCardList";
 import PersonConnectedChildrenCardList from "@/components/layout/person/PersonConnectedChildrenCardList";
 import PersonRelatedPeopleGroupsWidget from "@/components/layout/person/PersonRelatedPeopleGroupsWidget";
+import LeadHouseholdContactsWidget from "@/components/layout/lead/LeadHouseholdContactsWidget";
 import LeadLastTouchSummaryCard from "@/components/layout/lead/LeadLastTouchSummaryCard";
 import LeadOperatingAttentionSummaryCard from "@/components/layout/lead/LeadOperatingAttentionSummaryCard";
 import LeadActivityPreview from "@/components/layout/lead/LeadActivityPreview";
@@ -64,13 +65,16 @@ import { PersonHouseholdSummaryCardShell } from "@/components/layout/person/Pers
 import { PersonLastTouchSummaryCardShell } from "@/components/layout/person/PersonLastTouchSummaryCard";
 import { ChildDocumentsRequirementsSummaryCardShell } from "@/components/layout/child/ChildDocumentsRequirementsSummaryCard";
 import { ChildFamilySummaryCardShell } from "@/components/layout/child/ChildFamilySummaryCard";
+import ChildFamilyMembersCardList from "@/components/layout/child/ChildFamilyMembersCardList";
 import { ChildLastTouchSummaryCardShell } from "@/components/layout/child/ChildLastTouchSummaryCard";
 import { ChildProgramEnrollmentSummaryCardShell } from "@/components/layout/child/ChildProgramEnrollmentSummaryCard";
 import LayoutRuntimeNotesCommunicationWidget, {
     layoutRuntimeCommunicationWidgetHasContent,
     layoutRuntimeNotesWidgetHasContent,
 } from "@/components/layout/LayoutRuntimeNotesCommunicationWidget";
+import LayoutRuntimeDocumentsOverviewWidget from "@/components/layout/LayoutRuntimeDocumentsOverviewWidget";
 import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
+import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
 import { logChildLinkInstrumentationMounted } from "@/lib/layout/runtime/childLinkBrowserTrace";
 import { isLayoutRuntimeChildLinkColumn } from "@/lib/layout/runtime/layoutRuntimeLinkHarness";
 import {
@@ -127,6 +131,12 @@ import {
     LAYOUT_RUNTIME_TEXT,
     LAYOUT_RUNTIME_WORK_RAIL,
 } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
+
+import {
+    PRESENTATION_DATA_VALUE,
+    PRESENTATION_LABEL,
+    PRESENTATION_VALUE_PLACEHOLDER,
+} from "@/lib/presentation/presentationTypography";
 
 const TEXT = LAYOUT_RUNTIME_TEXT;
 const MUTED = LAYOUT_RUNTIME_MUTED;
@@ -260,7 +270,7 @@ function ValueCell({
         <div className={operatorSurfaces ? LAYOUT_RUNTIME_FIELD_READ_SURFACE : LAYOUT_RUNTIME_FIELD_SURFACE}>
             {label ?
                 <div
-                    className={`flex flex-wrap items-center gap-1 font-medium ${operatorSurfaces ? "text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/50" : "text-[11px]"}`}
+                    className={`flex flex-wrap items-center gap-1 ${operatorSurfaces ? PRESENTATION_LABEL : "text-[11px] font-medium"}`}
                     style={operatorSurfaces ? undefined : { color: MUTED }}
                 >
                     {label}
@@ -272,7 +282,7 @@ function ValueCell({
                     :   null}
                 </div>
             :   null}
-            <div className="mt-0.5 flex items-center gap-1 text-sm" style={{ color: display || canEdit ? TEXT : "#9aa4bf" }}>
+            <div className={`mt-0.5 flex items-center gap-1 ${operatorSurfaces ? PRESENTATION_DATA_VALUE : "text-sm"}`}>
                 {item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
                 {canEdit && edit ?
                     <LayoutRuntimeFieldInput
@@ -281,11 +291,11 @@ function ValueCell({
                         onChange={(v) => edit.setFieldValue(refKey, v)}
                         getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue)}
                     />
-                :   <span>
+                :   <span className={!display ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>
                         {!display ?
                             <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>—</span>
                         : r.renderHint === "status" ?
-                            <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-xs text-alloy-midnight/85">{display}</span>
+                            <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-xs font-medium text-alloy-midnight/90">{display}</span>
                         :   display}
                     </span>
                 }
@@ -378,7 +388,7 @@ function RepeaterCellContent({
     }
 
     return (
-        <span className="inline-flex items-center gap-1.5 text-sm leading-snug">
+        <span className={`inline-flex items-center gap-1.5 ${PRESENTATION_DATA_VALUE_GRID}`}>
             {col.adornment && col.adornment.position !== "right" ?
                 <Adorn item={synthetic} rowRecord={row} />
             :   null}
@@ -390,9 +400,9 @@ function RepeaterCellContent({
                     onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
                     getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
                 />
-            :   <span style={{ color: r.isPlaceholder ? "#9aa4bf" : TEXT }}>
+            :   <span className={r.isPlaceholder ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>
                     {r.isPlaceholder ? "—" : col.renderHint === "status" ?
-                        <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] text-alloy-midnight/85">{r.display}</span>
+                        <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">{r.display}</span>
                     :   r.display}
                 </span>
             }
@@ -593,7 +603,11 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
                     {rows.length === 0 ?
                         <tr>
                             <td colSpan={visibleColumns.length} className="px-3 py-4 text-alloy-muted">
-                                {variant === "production" ? "No children linked yet." : "No rows in proof context."}
+                                {variant === "production" ?
+                                    sectionKey === "family_relationships" ?
+                                        "No linked family members yet."
+                                    :   "No children linked yet."
+                                :   "No rows in proof context."}
                             </td>
                         </tr>
                     :   rows.map((rw, i) => {
@@ -633,12 +647,24 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         />
     :   legacyTableMarkup;
 
+    const childFamilyMarkup = composition.childFamilyCardList ?
+        <ChildFamilyMembersCardList
+            item={item}
+            columns={visibleColumns}
+            rows={rows}
+            anchorRecord={record}
+            overflowFooter={undefined}
+            onAdornmentAction={onAdornmentAction}
+        />
+    :   legacyTableMarkup;
+
     const collectionMarkup =
         useEnrollmentReadTable ? enrollmentGridMarkup
         : usePersonConnectedChildrenTable ? personConnectedChildrenMarkup
+        : useChildFamilyTable ? childFamilyMarkup
         : legacyTableMarkup;
 
-    if (useEnrollmentReadTable || usePersonConnectedChildrenTable) {
+    if (useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyTable) {
         return (
             <>
                 {isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null}
@@ -778,6 +804,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     const variant = useContext(LayoutRuntimeVariantContext);
     const composition = useLayoutRuntimeCompositionHints();
     const onAdornmentAction = useContext(AdornmentActionContext);
+    const { onSelectDrawerTab, activityTabKey } = useLayoutRuntimeDrawerHost();
     const widgetKey = resolveLayoutRuntimeWidgetKey(item);
     const title = operatorLabel(item, variant) || "Details";
     const isFutureModule = item.metadata?.[FUTURE_MODULE_METADATA_KEY] === true;
@@ -788,6 +815,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     const compact = useLayoutRuntimeSummaryStrip();
 
     if (isFutureModule) {
+        if (variant === "production") return null;
         return <FutureModulePlaceholder title={title} />;
     }
 
@@ -816,6 +844,10 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
 
     if (widgetKey === "connected_children" && personCards && compact) {
         return <PersonConnectedChildrenSummaryCardShell record={record} />;
+    }
+
+    if (widgetKey === "household_contacts" && composition.leadOverviewComposition) {
+        return <LeadHouseholdContactsWidget record={record} onAdornmentAction={onAdornmentAction} />;
     }
 
     if (widgetKey === "related_people" && composition.personOverviewComposition) {
@@ -900,10 +932,11 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     if (widgetKey === "tour_summary") {
         const lastTouch = resolveLeadSummaryLastTouch(record);
         const hasContent = lastTouch.kind !== "empty";
+        const cardTitle = title.trim() || "Last Touch";
         if (leadCards && compact) {
             return (
                 <LeadOperatingSummaryCard
-                    title="Last Touch"
+                    title={cardTitle}
                     icon={<MessageSquare className="h-3.5 w-3.5" aria-hidden />}
                     accent={hasContent ? "neutral" : "muted"}
                     minimized={!hasContent}
@@ -914,7 +947,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             );
         }
         return (
-            <WidgetChrome title="Last Touch" minimized={!hasContent}>
+            <WidgetChrome title={cardTitle} minimized={!hasContent}>
                 <LeadLastTouchSummaryCard touch={lastTouch} />
             </WidgetChrome>
         );
@@ -922,10 +955,11 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
 
     if (widgetKey === "children_list") {
         const enrollmentHealth = summarizeLeadDrawerEnrollmentHealth(record);
+        const cardTitle = title.trim() || "Enrollment Health";
         if (leadCards && compact) {
             return (
                 <LeadOperatingSummaryCard
-                    title="Enrollment Health"
+                    title={cardTitle}
                     icon={<HeartPulse className="h-3.5 w-3.5" aria-hidden />}
                     accent="work"
                     widgetKey="enrollment_health"
@@ -964,9 +998,34 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 resolvePersonActivityPreview(record)
             :   resolveLeadActivityPreview(record);
         if (composition.compositionSectionSurface && entries.length === 0) return null;
-        return composition.childOverviewComposition || composition.personOverviewComposition ?
-                <PersonActivityPreview entries={entries} />
-            :   <LeadActivityPreview entries={entries} />;
+        const viewAll =
+            onSelectDrawerTab && activityTabKey ?
+                () => onSelectDrawerTab(activityTabKey)
+            :   undefined;
+        const preview =
+            composition.childOverviewComposition || composition.personOverviewComposition ?
+                <PersonActivityPreview entries={entries} onViewAll={viewAll} />
+            :   <LeadActivityPreview entries={entries} onViewAll={viewAll} />;
+        const activityMarkup = (
+            <div className="min-w-0 break-words" data-layout-runtime-activity-widget="true">
+                {preview}
+            </div>
+        );
+        return composition.compositionSectionSurface ? activityMarkup : <WidgetChrome title={title}>{activityMarkup}</WidgetChrome>;
+    }
+
+    if (widgetKey === "documents") {
+        const hasContent =
+            record.documents != null
+            || record._documents_preview != null
+            || (record._overview_data
+                && typeof record._overview_data === "object"
+                && Array.isArray((record._overview_data as Record<string, unknown>).documents));
+        if (!hasContent) {
+            return composition.compositionSectionSurface ? null : <WidgetChrome title={title}>{empty}</WidgetChrome>;
+        }
+        const markup = <LayoutRuntimeDocumentsOverviewWidget record={record} title={title} />;
+        return composition.compositionSectionSurface ? markup : <WidgetChrome title={title}>{markup}</WidgetChrome>;
     }
 
     if (widgetKey === "notes" || widgetKey === "recent_communication") {
@@ -1139,6 +1198,25 @@ function SectionView({
                 ?? PERSON_COMPOSITION_SECTION_EYEBROWS[section.key]
                 ?? CHILD_COMPOSITION_SECTION_EYEBROWS[section.key])
         :   null;
+
+    const compositionPanelShellSection =
+        (composition.leadOverviewComposition === true
+            && (section.key === "household_contact" || section.key === "children_enrollment"))
+        || (composition.personOverviewComposition === true
+            && (section.key === "household_relationships" || section.key === "connected_children"))
+        || (composition.childOverviewComposition === true
+            && (section.key === "family_relationships" || section.key === "program_enrollment"));
+
+    if (compositionPanelShellSection) {
+        return (
+            <div
+                className="flex min-w-0 flex-col gap-2"
+                data-drawer-overview-composition-section={section.key}
+            >
+                {body}
+            </div>
+        );
+    }
 
     return (
         <div

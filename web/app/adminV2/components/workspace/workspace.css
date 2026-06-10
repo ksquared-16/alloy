@@ -7490,6 +7490,8 @@
   display: inline-flex;
   align-items: flex-start;
   flex-shrink: 0;
+  min-width: max-content;
+  overflow: visible;
   white-space: nowrap;
   align-self: start;
 }
@@ -8147,14 +8149,14 @@
 [data-ws-surface="department"] .queue-record-field--typography-primary.queue-record-field__pill-label {
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--d-midnight, var(--d-text-primary, #273f52));
+  color: color-mix(in srgb, var(--d-midnight, var(--d-text-primary, #273f52)) 94%, transparent);
 }
 
 [data-ws-surface="work_unit"] .queue-record-field--typography-secondary .queue-record-field__text,
 [data-ws-surface="department"] .queue-record-field--typography-secondary .queue-record-field__text {
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 500;
-  color: color-mix(in srgb, var(--d-fg, #273f52) 62%, transparent);
+  color: color-mix(in srgb, var(--d-fg, #273f52) 72%, transparent);
 }
 
 [data-ws-surface="work_unit"] .queue-record-field--typography-muted .queue-record-field__text,
@@ -8215,7 +8217,22 @@
 [data-ws-surface="work_unit"] .queue-record-field--date,
 [data-ws-surface="department"] .queue-record-field--date {
   font-size: 12px;
-  color: color-mix(in srgb, var(--d-fg, #273f52) 72%, transparent);
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-fg, #273f52) 86%, transparent);
+}
+
+[data-ws-surface="work_unit"] .queue-record-field__inline-label,
+[data-ws-surface="department"] .queue-record-field__inline-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--d-fg, #273f52) 48%, transparent);
+}
+
+[data-ws-surface="work_unit"] .queue-record-field__inline-value,
+[data-ws-surface="department"] .queue-record-field__inline-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-fg, #273f52) 88%, transparent);
 }
 
 [data-ws-surface="work_unit"] .queue-record-field--attention,
@@ -8619,7 +8636,9 @@
   justify-content: flex-start;
   align-self: stretch;
   gap: 4px;
-  max-width: 100%;
+  min-width: min-content;
+  max-width: none;
+  overflow: visible;
 }
 
 [data-ws-surface="work_unit"] .operational-queue-row__column--scoped[data-queue-col-scope="lifecycle_context"] .queue-record-field--status-pill,
@@ -9368,9 +9387,9 @@
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
-  flex: 0 1 auto;
-  max-width: 100%;
-  min-width: 0;
+  flex: 0 0 auto;
+  max-width: none;
+  min-width: min-content;
   padding: 2px 8px;
   border: 1px solid color-mix(in srgb, var(--d-fg, #273f52) 12%, var(--d-border, #d4d0c8) 88%);
   border-radius: 999px;
@@ -9382,7 +9401,7 @@
   text-transform: none;
   color: color-mix(in srgb, var(--d-fg, #273f52) 84%, transparent);
   white-space: nowrap;
-  overflow: hidden;
+  overflow: visible;
 }
 
 [data-ws-surface="work_unit"] .operational-queue-row__status-pill--pine,
@@ -13260,4 +13279,23 @@
     flex: 1 1 calc(50% - 4px);
     max-width: none;
   }
+}
+
+/* Patch 5 — surface persistence: queue row pressed state (replaces "Opening…" badge) */
+[data-ws-surface="work_unit"] .adminv2-ws-wu-queue-card--operational-row[data-queue-row-open-pending="true"],
+[data-ws-surface="department"] .adminv2-ws-wu-queue-card--operational-row[data-queue-row-open-pending="true"] {
+  border-color: color-mix(in srgb, var(--d-pine, #00a283) 38%, var(--d-border, #e2e6ec) 62%);
+  border-left-color: var(--d-pine, #00a283);
+  background: color-mix(in srgb, var(--d-pine, #00a283) 4%, #ffffff 96%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--d-pine, #00a283) 22%, transparent 78%);
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-wu-queue-card--operational-row[data-queue-row-open-pending="true"]:active,
+[data-ws-surface="department"] .adminv2-ws-wu-queue-card--operational-row[data-queue-row-open-pending="true"]:active {
+  background: color-mix(in srgb, var(--d-pine, #00a283) 8%, #ffffff 92%);
+}
+
+/* Patch 5 — drawer VM swap hold crossfade */
+[data-drawer-vm-transition-hold="true"] {
+  transition: opacity 180ms ease-out;
 }

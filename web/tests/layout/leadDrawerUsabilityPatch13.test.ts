@@ -26,7 +26,7 @@ describe("resolveLeadSummaryLastTouch", () => {
         );
         expect(touch.kind).toBe("communication");
         expect(touch.primaryLine).toBe("Tour reminder");
-        expect(touch.secondaryLine).toMatch(/06-01-2026 2:30 PM/);
+        expect(touch.secondaryLine).toMatch(/Jun 1, 2026 · 2:30 PM/);
     });
 
     it("does not duplicate open tasks from Tasks card", () => {
@@ -70,12 +70,12 @@ describe("resolveLeadSummaryLastTouch", () => {
 });
 
 describe("formatLayoutRuntimeOperatorDate", () => {
-    it("formats date-only as MM-DD-YYYY", () => {
-        expect(formatLayoutRuntimeOperatorDate("2026-09-01")).toBe("09-01-2026");
+    it("formats date-only as display doctrine month", () => {
+        expect(formatLayoutRuntimeOperatorDate("2026-09-01")).toBe("Sep 1, 2026");
     });
 
-    it("formats date+time with space separator (not middle dot)", () => {
-        expect(formatLayoutRuntimeOperatorDate("2026-05-20T14:30:00.000Z")).toBe("05-20-2026 2:30 PM");
+    it("formats date+time with middle dot separator", () => {
+        expect(formatLayoutRuntimeOperatorDate("2026-05-20T14:30:00.000Z")).toBe("May 20, 2026 · 2:30 PM");
     });
 });
 
@@ -89,17 +89,17 @@ describe("formatLeadEnrollmentCardMetaLine", () => {
         ];
         const line = formatLeadEnrollmentCardMetaLine(row, metaColumns);
         expect(line).toContain("Preschool —");
-        expect(line).toContain("09-01-2026");
+        expect(line).toContain("Sep 1, 2026");
         expect(line).toContain("Active inquiry");
     });
 });
 
 describe("summarizeLeadDrawerEnrollmentHealth", () => {
-    it("summarizes child counts and formats latest start as MM-DD-YYYY", () => {
+    it("summarizes child counts and formats latest start as display doctrine date", () => {
         const summary = summarizeLeadDrawerEnrollmentHealth(buildProofOpportunityRecord());
         expect(summary.childCount).toBeGreaterThan(0);
         expect(summary.headline).toMatch(/child/i);
-        expect(summary.detailLine).toMatch(/09-01-2026|Complete|Latest start/);
+        expect(summary.detailLine).toMatch(/Sep 1, 2026|Complete|Latest start/);
     });
 });
 

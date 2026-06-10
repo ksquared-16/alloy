@@ -2,6 +2,7 @@
 
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
+import LayoutRuntimeEnrollmentLeadLink from "@/components/layout/LayoutRuntimeEnrollmentLeadLink";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import {
     formatLayoutRuntimeRepeaterColumnDisplay,
@@ -41,7 +42,7 @@ export default function PersonConnectedChildrenCardList({
             data-layout-runtime-connected-children-read-mode="card-list"
         >
             {rows.length === 0 ?
-                <div className="px-4 py-5 text-[12px] text-alloy-midnight/40">No children linked yet.</div>
+                <div className="px-4 py-5 text-[12px] leading-snug text-alloy-midnight/40">No children linked yet.</div>
             :   <ul className="flex flex-col gap-2 p-2">
                     {rows.map((row, index) => {
                         const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);
@@ -53,6 +54,9 @@ export default function PersonConnectedChildrenCardList({
                             adornment: nameCol.adornment,
                         };
                         const metaLine = formatPersonConnectedChildMetaLine(row, metaColumns);
+                        const opportunityId = String(row["child.opportunity_id"] ?? "").trim();
+                        const opportunityName = String(row["child.opportunity_name"] ?? "").trim();
+                        const enrollmentStatus = String(row["child.enrollment_status"] ?? "").trim();
 
                         return (
                             <li
@@ -79,6 +83,18 @@ export default function PersonConnectedChildrenCardList({
                                         >
                                             {metaLine}
                                         </p>
+                                    :   null}
+                                    {enrollmentStatus && !metaLine.includes(enrollmentStatus) ?
+                                        <p className="mt-0.5 text-[11px] text-alloy-midnight/45">{enrollmentStatus}</p>
+                                    :   null}
+                                    {opportunityId ?
+                                        <div className="mt-1.5">
+                                            <LayoutRuntimeEnrollmentLeadLink
+                                                opportunityId={opportunityId}
+                                                label="Open Family Lead"
+                                                detail={opportunityName || null}
+                                            />
+                                        </div>
                                     :   null}
                                 </div>
                             </li>

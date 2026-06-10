@@ -1,18 +1,24 @@
 /**
  * Operator-facing date display for layout runtime (drawer + summary cards).
  *
- * Date only: MM-DD-YYYY
- * Date + time: MM-DD-YYYY h:mm A
+ * Display doctrine: `Jan 13, 2024` · `Jan 13, 2024 · 2:30 PM`
+ * Input fields may continue MM-DD-YYYY — see typography-and-presentation-doctrine.md
  */
 
-import { formatQueueRecordDateDisplay } from "@/lib/adminFormatters";
+import {
+    formatDisplayDate,
+    formatDisplayDateTime,
+    parsePresentationDateInput,
+} from "@/lib/presentation/presentationDateFormat";
 import { isQueueRecordDateFieldKey } from "@/lib/layout/runtime/queueRecordScopedResolve";
 
 /** Format a user-facing date/time value for layout runtime surfaces. */
 export function formatLayoutRuntimeOperatorDate(value: string | number | Date | null | undefined): string {
-    const formatted = formatQueueRecordDateDisplay(value);
-    if (!formatted) return "";
-    return formatted.replace(" · ", " ");
+    if (value === null || value === undefined || value === "") return "";
+    const parsed = parsePresentationDateInput(value);
+    if (!parsed) return String(value).trim();
+    if (parsed.hasTime) return formatDisplayDateTime(parsed.date);
+    return formatDisplayDate(parsed.date);
 }
 
 /** True when a layout refKey should receive operator date formatting. */

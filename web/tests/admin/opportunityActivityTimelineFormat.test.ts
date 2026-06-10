@@ -90,8 +90,7 @@ describe("opportunityActivityTimelineFormat", () => {
         const wantDate = formatQueueNoteDateTime(Date.parse("2026-06-20"));
         expect(out).toBeTruthy();
         expect(out).toBe(`${wantDate} — Second note wins`);
-        expect(wantDate).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
-        expect(wantDate).not.toContain(",");
+        expect(wantDate).toMatch(/^[A-Za-z]{3} \d{1,2}(, \d{4})?$/);
     });
 
     it("queue note preview parts match string formatter (dateFirst)", () => {

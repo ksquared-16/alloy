@@ -26,7 +26,7 @@ export function resolveQueueRecordTypographyTier(field: QueueRecordFieldConfig):
 
     if (field.display === "phone" || field.display === "email") return "secondary";
     if (field.display === "muted") return "muted";
-    if (field.display === "date") return "secondary";
+    if (field.display === "date") return "primary";
     if (field.display === "pill" || field.display === "badge" || field.display === "chip") return "primary";
 
     return "primary";
