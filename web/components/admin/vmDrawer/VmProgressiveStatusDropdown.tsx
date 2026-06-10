@@ -12,7 +12,7 @@ type Props = {
     onDebugModeChange?: (mode: "vm-readonly-pill" | "vm-dropdown") => void;
 };
 
-/** Opportunity drawer header status — first-click native select. */
+/** Opportunity drawer header status — Alloy menu on first click. */
 export default function VmProgressiveStatusDropdown({
     opportunityId,
     firstPaintLabel,

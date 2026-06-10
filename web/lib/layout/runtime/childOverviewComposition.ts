@@ -18,9 +18,9 @@ export const CHILD_OVERVIEW_SECTION_KEYS = {
 } as const;
 
 export const CHILD_OVERVIEW_SHELL_GRID = {
-    family: 3,
-    program: 7,
-    rightRail: 2,
+    family: 4,
+    program: 5,
+    rightRail: 3,
 } as const;
 
 export const CHILD_COMPOSITION_SECTION_EYEBROWS: Record<string, string> = {

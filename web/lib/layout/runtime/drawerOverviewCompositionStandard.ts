@@ -11,11 +11,11 @@
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import { PRESENTATION_EMPTY_STATE } from "@/lib/presentation/presentationTypography";
 
-/** Twelve-column shell: left 3 / main 7 / right rail 2. */
+/** Twelve-column shell: left 4 / main 5 / right rail 3 — relationship cards / enrollment / comms rail. */
 export const DRAWER_OVERVIEW_SHELL_GRID = {
-    leftColumn: 3,
-    mainColumn: 7,
-    rightRail: 2,
+    leftColumn: 4,
+    mainColumn: 5,
+    rightRail: 3,
     columns: 12,
 } as const;
 

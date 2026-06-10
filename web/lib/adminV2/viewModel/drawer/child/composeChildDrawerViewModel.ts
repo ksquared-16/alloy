@@ -165,7 +165,11 @@ export async function composeChildDrawerViewModel(
         statusDefsPack.rows,
         PERSON_STATUS_PROFILE_CHILD_LIFECYCLE
     );
-    const status = buildPersonDrawerStatusControlVm({ record, statusDefs: filteredStatusDefs });
+    const status = buildPersonDrawerStatusControlVm({
+        record,
+        statusDefs: filteredStatusDefs,
+        statusProfile: PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
+    });
 
     const viewModel: ChildDrawerViewModel = {
         generation: `child:${personId}:${plan.variant_key}:${CHILD_DRAWER_VM_COMPOSE_VERSION}`,

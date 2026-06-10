@@ -14,7 +14,7 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 | **What the button does** | `action_definitions` (handler, payload schema) — label editable in Settings V1; create/migrate still platform/seed | `POST /api/admin/actions/execute` → `executeAdminAction.ts` |
 | **Side effects & workflows** | Workflow definitions in Automations hub | `emitEvent`, `executeWorkflowRun` |
 
-Settings configures **placement + enablement**, not execution semantics. Older **`record_actions`** chrome and dedicated modals (tour, quote, job) remain alongside the registry — see **`docs/system/configuration-system.md`** (Admin Settings capability inventory).
+Settings configures **placement + enablement**, not execution semantics. **Status ownership:** case status on `opportunities.status_key`; child enrollment on `opportunity_customer_members.outcome_status_key` — see **`docs/product/crm-system.md`** § Lifecycle ownership. Older **`record_actions`** chrome and dedicated modals (tour, quote, job) remain alongside the registry — see **`docs/system/configuration-system.md`** (Admin Settings capability inventory).
 
 ### `action_definitions` uniqueness (migrations)
 

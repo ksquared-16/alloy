@@ -15,7 +15,7 @@ type Props = {
     childSurface?: boolean;
 };
 
-/** Person/child drawer header status — first-click native select when editable. */
+/** Person/child drawer header status — Alloy menu on first click when editable. */
 export default function VmPersonStatusControl({
     personId,
     entityLabel = "Person",

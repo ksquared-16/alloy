@@ -5,6 +5,7 @@ import DrawerHouseholdContactCardList from "@/components/layout/DrawerHouseholdC
 import DrawerHouseholdPersonLinkAvatar, {
     DRAWER_HOUSEHOLD_PERSON_LINK_ITEM,
 } from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
+import DrawerRelationshipOverflowText from "@/components/layout/DrawerRelationshipOverflowText";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import PersonRelatedPeopleGroupsWidget from "@/components/layout/person/PersonRelatedPeopleGroupsWidget";
@@ -22,7 +23,7 @@ import {
     PRESENTATION_SUPPORTING,
     PRESENTATION_VALUE_PLACEHOLDER,
 } from "@/lib/presentation/presentationTypography";
-import { Home, Mail, MapPin, Phone } from "lucide-react";
+import { Mail, MapPin, Phone } from "lucide-react";
 
 type Props = {
     record: ProofRuntimeRecord;
@@ -42,12 +43,15 @@ function ContactChannelRow({
     placeholder: string;
 }) {
     return (
-        <div className="flex min-w-0 items-center gap-2">
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-alloy-stone/10 bg-alloy-stone/[0.03] text-alloy-midnight/45">
+        <div className="flex min-w-0 items-start gap-2">
+            <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-alloy-stone/10 bg-alloy-stone/[0.03] text-alloy-midnight/45">
                 {icon}
             </span>
             {value ?
-                <span className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>{value}</span>
+                <DrawerRelationshipOverflowText
+                    value={value}
+                    className={PRESENTATION_DATA_VALUE_COMPACT}
+                />
             :   <span className={PRESENTATION_VALUE_PLACEHOLDER}>{placeholder}</span>}
         </div>
     );
@@ -84,11 +88,10 @@ function PrimaryContactProfileCard({
     };
 
     return (
-        <div
-            className="rounded-lg border border-alloy-stone/12 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(24,39,58,0.03)]"
+        <li
+            className="rounded-lg border border-alloy-stone/12 bg-white px-3 py-2 shadow-[0_1px_2px_rgba(24,39,58,0.03)]"
             data-drawer-household-primary-contact="true"
         >
-            <p className={`mb-2 ${PRESENTATION_LABEL}`}>Primary contact</p>
             <div className="flex items-start gap-2.5">
                 <DrawerHouseholdPersonLinkAvatar
                     personId={personId}
@@ -112,12 +115,20 @@ function PrimaryContactProfileCard({
                                     adornment={null}
                                     display={name}
                                     onAction={onAdornmentAction}
-                                    className={`block truncate text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                                    className={`block text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                                 />
-                            :   <p className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>{name}</p>
+                            :   <DrawerRelationshipOverflowText
+                                    value={name}
+                                    as="p"
+                                    className={PRESENTATION_DATA_VALUE_COMPACT}
+                                />
                         :   null}
                         {role ?
-                            <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{role}</p>
+                            <DrawerRelationshipOverflowText
+                                value={role}
+                                as="p"
+                                className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}
+                            />
                         :   null}
                     </div>
                     <ContactChannelRow
@@ -132,6 +143,109 @@ function PrimaryContactProfileCard({
                     />
                 </div>
             </div>
+        </li>
+    );
+}
+
+function PersonHouseholdIdentityStrip({
+    profile,
+}: {
+    profile: ReturnType<typeof resolvePersonDrawerHouseholdProfile>;
+}) {
+    const hasIdentity =
+        profile.householdName
+        || profile.location
+        || profile.address
+        || profile.relationshipLabel
+        || profile.status;
+
+    if (!hasIdentity) return null;
+
+    return (
+        <div
+            className="space-y-2 border-b border-alloy-stone/10 px-3 py-2.5"
+            data-drawer-household-identity-group="true"
+        >
+            {profile.householdName ?
+                <div>
+                    <p className={PRESENTATION_LABEL}>Household</p>
+                    <DrawerRelationshipOverflowText
+                        value={profile.householdName}
+                        as="p"
+                        className={`mt-0.5 ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                    />
+                </div>
+            :   null}
+            {profile.location ?
+                <div>
+                    <p className={PRESENTATION_LABEL}>Location</p>
+                    <p className={`mt-0.5 flex min-w-0 items-start gap-1 ${PRESENTATION_SUPPORTING}`}>
+                        <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-alloy-midnight/40" aria-hidden />
+                        <DrawerRelationshipOverflowText value={profile.location} />
+                    </p>
+                </div>
+            :   null}
+            {profile.address ?
+                <div>
+                    <p className={PRESENTATION_LABEL}>Address</p>
+                    <DrawerRelationshipOverflowText
+                        value={profile.address}
+                        as="p"
+                        className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}
+                    />
+                </div>
+            :   null}
+            {profile.relationshipLabel ?
+                <DrawerRelationshipOverflowText
+                    value={profile.relationshipLabel}
+                    as="p"
+                    className={PRESENTATION_SUPPORTING}
+                />
+            :   null}
+            {profile.status ?
+                <div data-drawer-household-status-group="true">
+                    <p className={PRESENTATION_LABEL}>Status</p>
+                    <span className="mt-1 inline-flex items-center rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">
+                        {profile.status}
+                    </span>
+                </div>
+            :   null}
+        </div>
+    );
+}
+
+function LeadHouseholdIdentityStrip({
+    profile,
+}: {
+    profile: ReturnType<typeof resolveLeadDrawerHouseholdProfile>;
+}) {
+    return (
+        <div className="space-y-2 px-3 py-2.5" data-drawer-household-identity-group="true">
+            {profile.householdName ?
+                <div>
+                    <p className={PRESENTATION_LABEL}>Household</p>
+                    <p className={`mt-0.5 ${PRESENTATION_DATA_VALUE}`}>{profile.householdName}</p>
+                </div>
+            :   <p className={PRESENTATION_VALUE_PLACEHOLDER}>Household name unavailable</p>}
+            {profile.location ?
+                <div>
+                    <p className={PRESENTATION_LABEL}>Location</p>
+                    <p className={`mt-0.5 flex min-w-0 items-start gap-1 ${PRESENTATION_SUPPORTING}`}>
+                        <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-alloy-midnight/40" aria-hidden />
+                        <DrawerRelationshipOverflowText value={profile.location} />
+                    </p>
+                </div>
+            :   null}
+            {profile.address ?
+                <div>
+                    <p className={PRESENTATION_LABEL}>Address</p>
+                    <DrawerRelationshipOverflowText
+                        value={profile.address}
+                        as="p"
+                        className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}
+                    />
+                </div>
+            :   null}
         </div>
     );
 }
@@ -150,50 +264,23 @@ export default function DrawerHouseholdProfileSection({
 
     const initials = personDrawerHouseholdInitials(profile.primaryName ?? profile.householdName ?? "Household");
 
-    return (
-        <div className="space-y-4 p-3" data-drawer-household-profile-section="true" data-drawer-household-profile-variant={variant}>
-            <div className="space-y-2.5" data-drawer-household-identity-group="true">
-                <div className="flex items-start gap-2">
-                    <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-alloy-stone/10 bg-alloy-juniper/[0.08] text-alloy-juniper/80">
-                        <Home className="h-3.5 w-3.5" aria-hidden />
-                    </span>
-                    <div className="min-w-0 flex-1 space-y-1">
-                        {profile.householdName ?
-                            <p className={PRESENTATION_DATA_VALUE}>{profile.householdName}</p>
-                        :   <p className={PRESENTATION_VALUE_PLACEHOLDER}>Household name unavailable</p>}
-                        {profile.location ?
-                            <div className="pt-0.5">
-                                <p className={PRESENTATION_LABEL}>Location</p>
-                                <p className={`mt-0.5 flex items-center gap-1 ${PRESENTATION_SUPPORTING}`}>
-                                    <MapPin className="h-3 w-3 shrink-0 text-alloy-midnight/40" aria-hidden />
-                                    <span className="truncate">{profile.location}</span>
-                                </p>
-                            </div>
-                        :   null}
-                        {profile.address ?
-                            <div className="pt-0.5">
-                                <p className={PRESENTATION_LABEL}>Address</p>
-                                <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{profile.address}</p>
-                            </div>
-                        :   null}
-                        {profile.relationshipLabel && variant === "person" ?
-                            <p className={`pt-0.5 ${PRESENTATION_SUPPORTING}`}>{profile.relationshipLabel}</p>
-                        :   null}
-                    </div>
+    if (variant === "person") {
+        return (
+            <div className="min-w-0" data-drawer-household-profile-section="true" data-drawer-household-profile-variant="person">
+                <PersonHouseholdIdentityStrip profile={profile} />
+                <div className="flex flex-col gap-3 p-2" data-drawer-household-relationships-group="true">
+                    <PersonRelatedPeopleGroupsWidget record={record} onAdornmentAction={onAdornmentAction} />
                 </div>
-                {profile.status ?
-                    <div className="pl-9" data-drawer-household-status-group="true">
-                        <p className={PRESENTATION_LABEL}>Status</p>
-                        <span className="mt-1 inline-flex items-center rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">
-                            {profile.status}
-                        </span>
-                    </div>
-                :   null}
             </div>
+        );
+    }
 
-            {variant === "lead" ?
-                <div className="space-y-3 border-t border-alloy-stone/10 pt-3" data-drawer-household-contacts-group="true">
-                    {!showContactsList ?
+    return (
+        <div className="min-w-0" data-drawer-household-profile-section="true" data-drawer-household-profile-variant="lead">
+            <LeadHouseholdIdentityStrip profile={profile} />
+            <div className="space-y-3 border-t border-alloy-stone/10 p-2" data-drawer-household-contacts-group="true">
+                {!showContactsList ?
+                    <ul className="flex flex-col gap-2">
                         <PrimaryContactProfileCard
                             name={profile.primaryName}
                             role={profile.primaryRole}
@@ -204,30 +291,32 @@ export default function DrawerHouseholdProfileSection({
                             anchorRecord={record}
                             onAdornmentAction={onAdornmentAction}
                         />
-                    :   null}
-                    {profile.secondaryName ?
-                        <div className="rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.015] px-3 py-2">
-                            <p className={PRESENTATION_LABEL}>Secondary contact</p>
-                            <p className={`mt-0.5 ${PRESENTATION_DATA_VALUE_COMPACT}`}>{profile.secondaryName}</p>
-                        </div>
-                    :   null}
-                    {showContactsList && leadContacts ?
-                        <div className="space-y-1.5">
-                            <p className={PRESENTATION_LABEL}>Household contacts</p>
-                            <DrawerHouseholdContactCardList
-                                contacts={leadContacts.visible}
-                                overflowCount={leadContacts.overflowCount}
-                                anchorRecord={record}
-                                onAdornmentAction={onAdornmentAction}
-                                emptyMessage="No household contacts linked yet."
-                                showPrimaryBadge
-                            />
-                        </div>
-                    :   null}
-                </div>
-            :   <div className="border-t border-alloy-stone/10 pt-3" data-drawer-household-relationships-group="true">
-                    <PersonRelatedPeopleGroupsWidget record={record} onAdornmentAction={onAdornmentAction} />
-                </div>}
+                    </ul>
+                :   null}
+                {profile.secondaryName ?
+                    <div className="rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.015] px-3 py-2">
+                        <p className={PRESENTATION_LABEL}>Secondary contact</p>
+                        <DrawerRelationshipOverflowText
+                            value={profile.secondaryName}
+                            as="p"
+                            className={`mt-0.5 ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                        />
+                    </div>
+                :   null}
+                {showContactsList && leadContacts ?
+                    <div className="space-y-1.5 px-1">
+                        <p className={PRESENTATION_LABEL}>Household contacts</p>
+                        <DrawerHouseholdContactCardList
+                            contacts={leadContacts.visible}
+                            overflowCount={leadContacts.overflowCount}
+                            anchorRecord={record}
+                            onAdornmentAction={onAdornmentAction}
+                            emptyMessage="No household contacts linked yet."
+                            showPrimaryBadge
+                        />
+                    </div>
+                :   null}
+            </div>
         </div>
     );
 }

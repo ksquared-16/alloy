@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { enrollmentIntakePersonStatusFields } from "@/lib/admin/person/enrollmentPersonDefaultStatus";
 
 type MinimalSupabase = Pick<SupabaseClient, "from">;
 
@@ -186,6 +187,7 @@ export async function findOrCreateChildPersonInOrg(
             date_of_birth: dob,
             email: null,
             phone: null,
+            ...enrollmentIntakePersonStatusFields(),
         })
         .select("id")
         .single();

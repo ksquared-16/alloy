@@ -115,7 +115,7 @@ export default function LeadOverviewRuntimeComposition({
     return (
         <LayoutRuntimeCompositionProvider value={hints}>
             <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-lead-overview-composition="true">
-                {/* Shell grid: household 3 / enrollment 7 / right rail 2 — see LEAD_OVERVIEW_SHELL_GRID */}
+                {/* Shell grid: household 4 / enrollment 5 / right rail 3 — see LEAD_OVERVIEW_SHELL_GRID */}
                 <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
                     {slots.household ?
                         <CompositionSlot

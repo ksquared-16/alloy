@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Check, ChevronDown } from "lucide-react";
 import VmReadonlyStatusPill from "@/components/admin/vmDrawer/VmReadonlyStatusPill";
 import type { StatusControlVm, StatusOptionVm } from "@/lib/adminV2/viewModel/drawer/types";
 import type { PersonStatusProfileKey } from "@/lib/admin/person/personStatusApplicability";
@@ -35,6 +35,12 @@ type Props = {
     onDebugModeChange?: (mode: "vm-readonly-pill" | "vm-dropdown") => void;
 };
 
+const TRIGGER_CLASS =
+    "flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-alloy-stone/15 bg-white px-3 py-2 text-[12px] font-semibold leading-tight text-alloy-midnight/90 shadow-[0_4px_14px_rgba(39,63,82,0.08)] ring-1 ring-alloy-stone/10 transition-[border-color,box-shadow,background-color] hover:border-alloy-stone/25 hover:bg-alloy-stone/[0.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/20 disabled:cursor-not-allowed disabled:opacity-60";
+
+const MENU_CLASS =
+    "absolute right-0 top-[calc(100%+6px)] z-[120] min-w-full max-h-[min(16rem,60vh)] overflow-y-auto rounded-xl border border-alloy-stone/15 bg-white py-1.5 shadow-[0_10px_28px_-10px_rgba(15,23,42,0.18)] ring-1 ring-alloy-stone/10";
+
 function optionsFromVmStatus(status: StatusControlVm | null | undefined): StatusOptionVm[] | null {
     if (!status || status.renderAs === "hidden") return null;
     if (status.renderAs === "dropdown" && status.options?.length) return status.options;
@@ -67,8 +73,17 @@ function statusOptionsFetchUrl(entityKind: EntityKind, statusProfile?: PersonSta
     return base;
 }
 
+function menuItemClass(selected: boolean): string {
+    return [
+        "flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] font-medium leading-snug transition-colors",
+        selected ?
+            "bg-alloy-juniper/[0.07] text-alloy-midnight"
+        :   "text-alloy-midnight/88 hover:bg-alloy-stone/[0.06]",
+    ].join(" ");
+}
+
 /**
- * Drawer header status — native select on first paint when editable; immediate PATCH on change.
+ * Drawer header status — Alloy menu on first click; immediate PATCH on selection.
  */
 export default function VmDrawerHeaderStatusSelect({
     entityKind,
@@ -88,6 +103,12 @@ export default function VmDrawerHeaderStatusSelect({
     const [fetchError, setFetchError] = useState<string | null>(null);
     const [statusKey, setStatusKey] = useState(currentStatusKey);
     const [saving, setSaving] = useState(false);
+    const [menuOpen, setMenuOpen] = useState(false);
+    const shellRef = useRef<HTMLDivElement>(null);
+    const menuId = useMemo(
+        () => `drawer-status-menu-${entityKind}-${entityId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
+        [entityId, entityKind]
+    );
 
     useEffect(() => {
         setStatusKey(currentStatusKey);
@@ -133,19 +154,41 @@ export default function VmDrawerHeaderStatusSelect({
         };
     }, [canMutate, embeddedOptions, entityId, entityKind, statusProfile]);
 
+    useEffect(() => {
+        if (!menuOpen) return;
+        const onPointerDown = (e: MouseEvent) => {
+            const t = e.target as Node;
+            if (shellRef.current?.contains(t)) return;
+            setMenuOpen(false);
+        };
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "Escape") setMenuOpen(false);
+        };
+        document.addEventListener("mousedown", onPointerDown);
+        document.addEventListener("keydown", onKey);
+        return () => {
+            document.removeEventListener("mousedown", onPointerDown);
+            document.removeEventListener("keydown", onKey);
+        };
+    }, [menuOpen]);
+
     const editableOptions = options ?? [];
-    const showSelect = canMutate && editableOptions.length >= 2;
+    const showMenu = canMutate && editableOptions.length >= 2;
     const showSkeleton = canMutate && optionsLoading && editableOptions.length < 2;
 
     useEffect(() => {
-        onDebugModeChange?.(showSelect ? "vm-dropdown" : "vm-readonly-pill");
-    }, [onDebugModeChange, showSelect]);
+        onDebugModeChange?.(showMenu ? "vm-dropdown" : "vm-readonly-pill");
+    }, [onDebugModeChange, showMenu]);
 
     const onStatusChange = useCallback(
         async (nextKey: string) => {
-            if (!canMutate || !nextKey.trim() || nextKey === statusKey) return;
+            if (!canMutate || !nextKey.trim() || nextKey === statusKey) {
+                setMenuOpen(false);
+                return;
+            }
             setSaving(true);
             setFetchError(null);
+            setMenuOpen(false);
             try {
                 const path =
                     entityKind === "opportunities" ?
@@ -173,11 +216,7 @@ export default function VmDrawerHeaderStatusSelect({
         [canMutate, entityId, entityKind, statusKey]
     );
 
-    const shellClass = "flex min-w-0 max-w-[11rem] shrink-0 flex-col gap-0.5 sm:max-w-[15rem]";
-    const editableSelectShellClass =
-        "relative w-full min-w-0 rounded-full border border-alloy-stone/30 bg-white shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 focus-within:border-alloy-blue focus-within:ring-2 focus-within:ring-alloy-blue/20";
-    const editableChevronClass =
-        "pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-alloy-midnight/45";
+    const shellClass = "relative flex min-w-0 max-w-[11rem] shrink-0 flex-col gap-0.5 sm:max-w-[15rem]";
 
     const resolvedLabel =
         editableOptions.find((o) => o.status_key === statusKey)?.label ??
@@ -195,7 +234,7 @@ export default function VmDrawerHeaderStatusSelect({
             <div className={shellClass} data-vm-drawer-header-status="skeleton" data-record-drawer-header-status="skeleton">
                 <span className="sr-only">{entityLabel} status</span>
                 <div
-                    className="h-9 w-full skeleton-pulse rounded-full border border-alloy-stone/20 bg-alloy-stone/8"
+                    className="h-9 w-full skeleton-pulse rounded-xl border border-alloy-stone/20 bg-alloy-stone/8"
                     aria-hidden
                     data-person-status-skeleton="true"
                 />
@@ -203,39 +242,72 @@ export default function VmDrawerHeaderStatusSelect({
         );
     }
 
-    if (showSelect) {
+    if (showMenu) {
         const key = statusKey.trim();
         return (
             <div
+                ref={shellRef}
                 className={shellClass}
-                data-vm-drawer-header-status="select"
+                data-vm-drawer-header-status="menu"
                 data-vm-progressive-status="dropdown"
-                data-vm-status-dropdown-affordance="select"
+                data-vm-status-dropdown-affordance="menu"
                 data-status-debug-owner="vm-dropdown"
-                data-record-drawer-header-status="select"
+                data-record-drawer-header-status="menu"
                 {...rootDataProps}
             >
                 <span className="sr-only">{entityLabel} status</span>
-                <div className={editableSelectShellClass}>
-                    <select
-                        value={key}
-                        disabled={!canMutate || saving}
-                        onChange={(e) => void onStatusChange(e.target.value)}
-                        className="w-full min-w-0 appearance-none rounded-full border-0 bg-transparent py-2 pl-3 pr-8 text-[12px] font-semibold text-alloy-midnight/90 focus:outline-none disabled:opacity-60"
-                        aria-label={`${entityLabel} status`}
-                        aria-busy={saving}
-                    >
+                <button
+                    type="button"
+                    className={TRIGGER_CLASS}
+                    disabled={!canMutate || saving}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    aria-controls={menuId}
+                    aria-busy={saving}
+                    aria-label={`${entityLabel} status: ${resolvedLabel}`}
+                    onClick={() => setMenuOpen((open) => !open)}
+                >
+                    <span className="min-w-0 truncate">{resolvedLabel}</span>
+                    <ChevronDown
+                        className={`h-3.5 w-3.5 shrink-0 text-alloy-midnight/45 transition-transform ${menuOpen ? "rotate-180" : ""}`}
+                        aria-hidden
+                    />
+                </button>
+                {menuOpen ?
+                    <div id={menuId} role="menu" aria-label={`${entityLabel} status options`} className={MENU_CLASS}>
                         {key && !editableOptions.some((o) => o.status_key === key) ?
-                            <option value={key}>{resolvedLabel}</option>
+                            <button
+                                type="button"
+                                role="menuitem"
+                                className={menuItemClass(true)}
+                                onClick={() => void onStatusChange(key)}
+                            >
+                                <Check className="h-3.5 w-3.5 shrink-0 text-alloy-juniper" aria-hidden />
+                                <span className="truncate">{resolvedLabel}</span>
+                            </button>
                         :   null}
-                        {editableOptions.map((o) => (
-                            <option key={o.status_key} value={o.status_key}>
-                                {o.label}
-                            </option>
-                        ))}
-                    </select>
-                    <ChevronDown className={editableChevronClass} aria-hidden />
-                </div>
+                        {editableOptions.map((o) => {
+                            const selected = o.status_key === key;
+                            return (
+                                <button
+                                    key={o.status_key}
+                                    type="button"
+                                    role="menuitem"
+                                    className={menuItemClass(selected)}
+                                    aria-current={selected ? "true" : undefined}
+                                    onClick={() => void onStatusChange(o.status_key)}
+                                >
+                                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
+                                        {selected ?
+                                            <Check className="h-3.5 w-3.5 text-alloy-juniper" />
+                                        :   null}
+                                    </span>
+                                    <span className="truncate">{o.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                :   null}
                 {fetchError ?
                     <span className="text-[10px] text-alloy-ember" role="status">
                         {fetchError}

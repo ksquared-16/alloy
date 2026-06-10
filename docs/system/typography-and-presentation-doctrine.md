@@ -327,8 +327,62 @@ Any new operational surface (action workspace cards, BOS summaries, global searc
 | Queue row CSS | `web/app/adminV2/components/workspace/workspace.css` |
 | Activity timestamps | `web/lib/admin/activityTimelineFormat.ts` |
 | Task due (queue mini-card) | `web/components/layout/queueRecord/LayoutRuntimeTaskDetailPopover.tsx` |
+| Drawer header status menu | `web/components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx` |
+| Person status applicability | `web/lib/admin/person/personStatusApplicability.ts` |
+| Status MVP reseed | `web/scripts/reseedStatusDefinitionsForOrg.ts` |
 
-**Tests:** `web/tests/presentation/presentationTypography.test.ts`, `web/tests/presentation/presentationDateFormat.test.ts`, `web/tests/layout/drawerOverviewCompositionStandard.test.ts`, `web/tests/admin/formatQueueRecordDateDisplay.test.ts`, `web/tests/admin/activityTimelineFormat.test.ts`
+**Tests:** `web/tests/presentation/presentationTypography.test.ts`, `web/tests/presentation/presentationDateFormat.test.ts`, `web/tests/layout/drawerOverviewCompositionStandard.test.ts`, `web/tests/admin/formatQueueRecordDateDisplay.test.ts`, `web/tests/admin/activityTimelineFormat.test.ts`, `web/tests/admin/person/personStatusApplicability.test.ts`, `web/tests/adminV2/viewModel/drawerHeaderStatusSelect.test.ts`
+
+---
+
+## Status ownership reference
+
+All drawer status dropdowns resolve from **`status_definitions`** only. No hardcoded option arrays in drawer runtime.
+
+| Drawer | Column | Settings section | Filter |
+|--------|--------|------------------|--------|
+| **Lead** | `opportunities.status_key` | Opportunities | MVP case keys: `open`, `closed`, `inactive`, `archived` |
+| **Person** | `persons.status_key` | People | `entity_type=persons` + `person_generic` applicability |
+| **Child** | `persons.status_key` | People | `entity_type=persons` + `child_lifecycle` applicability |
+| **Enrollment track** | `opportunity_customer_members.outcome_status_key` | Opportunity Sub Statuses | Not shown in Person/Child header dropdown |
+
+Profile-specific labels use `metadata.labels_by_profile` when the same key serves both Person and Child drawers.
+
+**Reseed (dev/demo org):** `ORG_ID=<uuid> EXECUTE=1 BACKFILL=1 npx tsx scripts/reseedStatusDefinitionsForOrg.ts`
+
+---
+
+## Status dropdown doctrine
+
+Drawer header status controls use the **Alloy status menu** — not native `<select>`.
+
+### Visual contract
+
+| Property | Value |
+|----------|--------|
+| Surface | White (`bg-white`) |
+| Border | `border-alloy-stone/15` |
+| Radius | `rounded-xl` (12px) |
+| Shadow | Trigger: `shadow-[0_4px_14px_rgba(39,63,82,0.08)]`; menu: `shadow-[0_10px_28px_-10px_rgba(15,23,42,0.18)]` |
+| Typography | 12px semibold trigger; 12px medium menu items |
+| Selected state | Juniper tint background + checkmark icon |
+| Hover | Subtle stone wash on trigger and menu items |
+
+Match spacing and elevation with **drawer Actions menu** (`OpportunityDrawerHeaderActionsMenu`).
+
+### Interaction
+
+1. **First click** opens the menu — no activation step.
+2. **Selection** PATCHes immediately and closes the menu.
+3. **Read-only** surfaces use `VmReadonlyStatusPill` when fewer than two options or mutation disabled.
+4. **No configure link** in drawer headers — operators manage vocabulary in Settings separately.
+
+### Drawer status presentation rules
+
+1. Dropdown options = active `status_definitions` for the drawer’s entity type and profile filter.
+2. Legacy persisted keys outside the MVP set may appear once as `(legacy)` via `appendLegacyPersonStatusOption` until backfilled.
+3. Do not show enrollment (OCM) statuses in Person/Child header dropdowns.
+4. Do not add Settings shortcut links to drawer status controls.
 
 ---
 
@@ -364,6 +418,48 @@ Any new operational surface (action workspace cards, BOS summaries, global searc
 | Before | After |
 |--------|-------|
 | `Created: 03-15-2024` | `Created Mar 15` (same year) / `Created Mar 15, 2024` (other year) |
+
+---
+
+## Drawer overview composition ownership (`/settings/layouts`)
+
+Drawer row-two layout is a **hybrid** of layout config and composition defaults. This pass does **not** redesign Layout Builder.
+
+### Layout configurable today
+
+Org-published **LayoutDocs** from `/adminV2/settings/layouts` remain authoritative for:
+
+- Section **presence** and **order** (including overflow sections)
+- Section **title** and layout-owned **rows / columns / items**
+- Related-list **columns** and **column refs** (`compositionPrimaryColumnRefs` metadata narrows visible columns in tight grids)
+- Widget placeholders (tasks, documents, household_contacts, related_people, etc.)
+- Field items inside sections (household name, contact fields, enrollment fields)
+
+Composition **never** hardcodes business field values — it routes layout-owned sections into dashboard slots and applies presentation hints only.
+
+### Composition-owned premium defaults today
+
+When Lead / Person / Child v2 overview composition activates (`*OverviewRuntimeComposition` + `LayoutRuntimeCompositionProvider` hints):
+
+| Concern | Owner | Notes |
+|---------|--------|-------|
+| Shell grid placement | `drawerOverviewCompositionStandard.ts` + `adminV2.css` container queries | **4 / 5 / 3** twelve-column split: relationship column / centerpiece / right rail |
+| Panel shell chrome | `DrawerOverviewPanelShell` | Pine accent, eyebrow, icon badge |
+| Relationship repeaters | Composition hints (`childFamilyCardList`, `personConnectedChildrenCardList`, `leadEnrollmentCardList`) | Card/list presentation instead of legacy table markup |
+| Household / family empty states | Shared relationship card components | Tier-6 copy + soft hint |
+| Section eyebrows | `*OverviewComposition` modules | Presentation labels only |
+
+CSS uses **container queries** on `.adminv2-drawer-overview-canvas` (min width 1040px) — not viewport `lg:`.
+
+### Future `/settings/layouts` capability
+
+Not implemented in this pass. Planned extensions:
+
+- Per-section **column span** / width ratio via layout metadata (replacing hardcoded 4/5/3 defaults)
+- Optional **right-rail stack order** overrides beyond current metadata priority
+- Layout Builder controls for relationship **card vs table** display mode without composition hints
+
+Until span metadata exists, treat `DRAWER_OVERVIEW_SHELL_GRID` and entity `*_OVERVIEW_SHELL_GRID` constants as the composition placement contract.
 
 ---
 

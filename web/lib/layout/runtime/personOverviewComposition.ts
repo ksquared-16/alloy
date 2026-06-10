@@ -19,9 +19,9 @@ export const PERSON_OVERVIEW_SECTION_KEYS = {
 } as const;
 
 export const PERSON_OVERVIEW_SHELL_GRID = {
-    household: 3,
-    children: 7,
-    rightRail: 2,
+    household: 4,
+    children: 5,
+    rightRail: 3,
 } as const;
 
 export const PERSON_COMPOSITION_SECTION_EYEBROWS: Record<string, string> = {

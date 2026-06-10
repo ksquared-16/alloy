@@ -3,6 +3,7 @@
 import DrawerHouseholdPersonLinkAvatar, {
     DRAWER_HOUSEHOLD_PERSON_LINK_ITEM,
 } from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
+import DrawerRelationshipOverflowText from "@/components/layout/DrawerRelationshipOverflowText";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import {
@@ -14,6 +15,7 @@ import type { PersonDrawerHouseholdMember } from "@/lib/admin/person/resolvePers
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
     PRESENTATION_EMPTY_STATE,
+    PRESENTATION_EMPTY_STATE_SOFT,
     PRESENTATION_LABEL,
     PRESENTATION_SUPPORTING,
 } from "@/lib/presentation/presentationTypography";
@@ -72,14 +74,21 @@ function RelatedPersonCard({
                             adornment={null}
                             display={member.display_name}
                             onAction={onAdornmentAction}
-                            className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                            className={`block text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                         />
-                    :   <p className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>
-                            {member.display_name}
-                        </p>
+                    :   <DrawerRelationshipOverflowText
+                            value={member.display_name}
+                            as="p"
+                            className={PRESENTATION_DATA_VALUE_COMPACT}
+                        />
                     }
                     {metaLine ?
-                        <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{metaLine}</p>
+                        <DrawerRelationshipOverflowText
+                            value={metaLine}
+                            as="p"
+                            lineClamp={3}
+                            className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}
+                        />
                     :   null}
                 </div>
             </div>
@@ -97,8 +106,8 @@ function RelatedPeopleGroupBlock({
     onAdornmentAction?: AdornmentActionHandler;
 }) {
     return (
-        <div className="space-y-2" data-person-related-people-group={group.key}>
-            <h4 className={PRESENTATION_LABEL}>
+        <section className="min-w-0" data-person-related-people-group={group.key}>
+            <h4 className={`mb-1.5 px-1 ${PRESENTATION_LABEL}`}>
                 {group.title}
             </h4>
             <ul className="flex flex-col gap-2">
@@ -111,7 +120,7 @@ function RelatedPeopleGroupBlock({
                     />
                 ))}
             </ul>
-        </div>
+        </section>
     );
 }
 
@@ -119,19 +128,31 @@ function RelatedPeopleGroupBlock({
 export default function PersonRelatedPeopleGroupsWidget({ record, onAdornmentAction }: Props) {
     const groups = resolvePersonOverviewRelatedPeopleGroups(record);
     if (groups.length === 0) {
-        return <p className={PRESENTATION_EMPTY_STATE}>No related people linked yet.</p>;
+        return (
+            <div
+                className={`px-4 py-5 ${PRESENTATION_EMPTY_STATE}`}
+                data-person-related-people-empty="true"
+            >
+                <p>No linked family members yet.</p>
+                <p className={`mt-1 ${PRESENTATION_EMPTY_STATE_SOFT}`}>
+                    Related adults and guardians appear here when linked on the household record.
+                </p>
+            </div>
+        );
     }
 
     return (
-        <div className="space-y-4" data-person-related-people-groups="true">
-            {groups.map((group) => (
-                <RelatedPeopleGroupBlock
-                    key={group.key}
-                    group={group}
-                    anchorRecord={record}
-                    onAdornmentAction={onAdornmentAction}
-                />
-            ))}
+        <div className="min-w-0" data-person-related-people-groups="true">
+            <div className="flex flex-col gap-3">
+                {groups.map((group) => (
+                    <RelatedPeopleGroupBlock
+                        key={group.key}
+                        group={group}
+                        anchorRecord={record}
+                        onAdornmentAction={onAdornmentAction}
+                    />
+                ))}
+            </div>
         </div>
     );
 }

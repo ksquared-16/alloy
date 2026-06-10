@@ -76,18 +76,17 @@ describe("findOrCreateChildPersonInOrg", () => {
             enumerable: false,
         });
         const insertQuery = {
-            select: vi.fn(function select() {
-                return this;
-            }),
+            select: vi.fn(() => insertQuery),
             single: vi.fn(async () => ({ data: { id: "person-new" }, error: null })),
         };
+        const insert = vi.fn(() => insertQuery);
         const supabase = {
             from: vi.fn((table: string) => {
                 if (table === "customer_members") return emptyHousehold;
                 if (table === "persons") {
                     return {
                         select: vi.fn(() => emptyPersons),
-                        insert: vi.fn(() => insertQuery),
+                        insert,
                     };
                 }
                 throw new Error(`unexpected table ${table}`);
@@ -101,6 +100,10 @@ describe("findOrCreateChildPersonInOrg", () => {
             lastName: "Nguyen",
             dob: "2021-06-02",
         });
+
+        expect(insert).toHaveBeenCalledWith(
+            expect.objectContaining({ status_key: "pre_enrolled" })
+        );
 
         expect(result).toEqual({
             person_id: "person-new",

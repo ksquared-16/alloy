@@ -36,18 +36,45 @@ function personStatusDef(
 }
 
 describe("buildPersonDrawerStatusControlVm", () => {
+    it("uses profile-specific labels when statusProfile is provided", () => {
+        const control = buildPersonDrawerStatusControlVm({
+            record: { status_key: "active", _status_display: "Active" },
+            statusDefs: [
+                {
+                    ...personStatusDef("active", "Active", "both"),
+                    metadata: {
+                        ...buildPersonStatusApplicabilityMetadata("both"),
+                        labels_by_profile: {
+                            person_generic: "Active Family",
+                            child_lifecycle: "Active",
+                        },
+                    },
+                },
+                personStatusDef("pre_enrolled", "Pre-Enrolled", "both"),
+            ],
+            statusProfile: PERSON_STATUS_PROFILE_GENERIC,
+        });
+        expect(control.renderAs).toBe("dropdown");
+        if (control.renderAs === "dropdown") {
+            expect(control.options.find((o) => o.status_key === "active")?.label).toBe("Active Family");
+        }
+    });
+
     it("returns child lifecycle dropdown options from filtered persons status defs", () => {
         const control = buildPersonDrawerStatusControlVm({
             record: { status_key: "active", _status_display: "Active" },
             statusDefs: [
                 personStatusDef("active", "Active", "both"),
-                personStatusDef("future_start", "Future start", "child_lifecycle"),
-                personStatusDef("withdrawn", "Withdrawn", "child_lifecycle"),
+                personStatusDef("pre_enrolled", "Pre-Enrolled", "both"),
+                personStatusDef("inactive", "Inactive", "both"),
             ],
+            statusProfile: PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
         });
         expect(control.renderAs).toBe("dropdown");
         if (control.renderAs === "dropdown") {
-            expect(control.options.map((o) => o.status_key)).toEqual(["active", "future_start", "withdrawn"]);
+            expect(control.options.map((o) => o.status_key).sort()).toEqual(
+                ["active", "pre_enrolled", "inactive"].sort()
+            );
         }
     });
 
@@ -70,14 +97,14 @@ describe("buildPersonDrawerStatusControlVm", () => {
 });
 
 describe("drawer header status select wiring", () => {
-    it("Lead runtime uses first-click native select via VmDrawerHeaderStatusSelect", () => {
+    it("Lead runtime uses first-click Alloy status menu via VmDrawerHeaderStatusSelect", () => {
         const progressive = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
         expect(progressive).toContain("VmDrawerHeaderStatusSelect");
         const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
         expect(select).toContain('data-vm-progressive-status="dropdown"');
-        expect(select).toContain("<select");
+        expect(select).toContain('role="menu"');
+        expect(select).not.toContain("<select");
         expect(select).not.toContain("activateDropdown");
-        expect(select).not.toContain('void activateDropdown("click")');
     });
 
     it("Person/child runtime passes VM status control into VmPersonStatusControl", () => {

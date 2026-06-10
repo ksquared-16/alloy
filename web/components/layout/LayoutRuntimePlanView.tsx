@@ -494,12 +494,17 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         sectionKey === "connected_children" &&
         composition.personOverviewComposition &&
         (item.displayMode ?? "table") === "table";
-    const useChildFamilyTable =
+    const useChildFamilySection =
         operatorSurfaces &&
         isChildrenRepeater &&
         sectionKey === "family_relationships" &&
-        composition.childOverviewComposition &&
+        composition.childOverviewComposition;
+    const useChildFamilyCardList = Boolean(useChildFamilySection && composition.childFamilyCardList);
+    const useChildFamilyTable =
+        useChildFamilySection &&
+        !composition.childFamilyCardList &&
         (item.displayMode ?? "table") === "table";
+    const useChildFamilyPresentation = useChildFamilyCardList || useChildFamilyTable;
     const filterColumnsForComposition = composition.childOverviewComposition ?
         filterChildRelatedListColumnsForComposition
     : composition.personOverviewComposition ?
@@ -513,15 +518,15 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
                 composition.enrollmentPrimaryColumnsOnly &&
                 !composition.leadEnrollmentCardList)
             || (usePersonConnectedChildrenTable && composition.connectedChildrenPrimaryColumnsOnly)
-            || (useChildFamilyTable && composition.familyPrimaryColumnsOnly),
+            || (useChildFamilyPresentation && composition.familyPrimaryColumnsOnly),
         ),
     );
-    const hideInnerHeader = useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyTable;
+    const hideInnerHeader = useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyPresentation;
     const rowLimit =
         useEnrollmentReadTable && maxEnrollmentRows != null && !enrollmentExpanded ? maxEnrollmentRows
         : usePersonConnectedChildrenTable && maxConnectedChildrenRows != null && !enrollmentExpanded ?
             maxConnectedChildrenRows
-        : useChildFamilyTable && maxFamilyRows != null && !enrollmentExpanded ?
+        : useChildFamilyPresentation && maxFamilyRows != null && !enrollmentExpanded ?
             maxFamilyRows
         :   null;
     const rows = rowLimit != null ? allRows.slice(0, rowLimit) : allRows;
@@ -667,10 +672,10 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
     const collectionMarkup =
         useEnrollmentReadTable ? enrollmentGridMarkup
         : usePersonConnectedChildrenTable ? personConnectedChildrenMarkup
-        : useChildFamilyTable ? childFamilyMarkup
+        : useChildFamilyPresentation ? childFamilyMarkup
         : legacyTableMarkup;
 
-    if (useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyTable) {
+    if (useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyPresentation) {
         return (
             <>
                 {isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null}
@@ -1210,7 +1215,9 @@ function SectionView({
             isEnrollmentSection
             || section.key === "connected_children"
             || section.key === "program_enrollment"
-            || section.key === "family_relationships" ?
+            || section.key === "family_relationships"
+            || section.key === "household_relationships"
+            || section.key === "household_contact" ?
                 DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS
             :   DRAWER_OVERVIEW_PANEL_BODY_CLASS;
 

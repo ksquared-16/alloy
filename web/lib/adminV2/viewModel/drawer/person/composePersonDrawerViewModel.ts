@@ -187,7 +187,11 @@ export async function composePersonDrawerViewModel(
         :   [];
     const status =
         statusProfile === PERSON_STATUS_PROFILE_GENERIC ?
-            buildPersonDrawerStatusControlVm({ record, statusDefs: filteredStatusDefs })
+            buildPersonDrawerStatusControlVm({
+                record,
+                statusDefs: filteredStatusDefs,
+                statusProfile: PERSON_STATUS_PROFILE_GENERIC,
+            })
         :   { renderAs: "hidden" as const };
 
     const viewModel: PersonDrawerViewModel = {

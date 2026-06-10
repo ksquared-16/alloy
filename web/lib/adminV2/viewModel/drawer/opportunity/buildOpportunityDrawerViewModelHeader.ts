@@ -1,5 +1,6 @@
 import { resolveOpportunityStatusDisplay } from "@/lib/admin/drawer/opportunityStatusDisplayResolve";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
+import { OPPORTUNITY_CASE_STATUS_KEYS } from "@/lib/admin/statusReseed/statusMvpCatalog";
 import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
 
 function trimOrNull(v: unknown): string | null {
@@ -25,7 +26,9 @@ export function buildOpportunityStatusControlVm(params: {
         return { renderAs: "hidden" };
     }
 
-    const activeDefs = params.statusDefs.filter((d) => d.is_active);
+    const activeDefs = params.statusDefs.filter(
+        (d) => d.is_active && OPPORTUNITY_CASE_STATUS_KEYS.has(d.status_key)
+    );
     const statusKey = opportunityStatusKey(params.record);
     const pipelineStageId = trimOrNull(params.record.pipeline_stage_id);
     const pipelineStageName = trimOrNull(params.record._pipeline_stage_name);

@@ -14,6 +14,7 @@ import {
     DRAWER_OVERVIEW_CONTAINER_CLASS,
     DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX,
     DRAWER_OVERVIEW_PANEL_SURFACE,
+    DRAWER_OVERVIEW_SHELL_GRID,
     DRAWER_OVERVIEW_SHELL_GRID_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
@@ -43,6 +44,15 @@ describe("drawerOverviewCompositionStandard", () => {
         expect(DRAWER_OVERVIEW_SHELL_GRID_CLASS).toBe("adminv2-drawer-overview-shell-grid");
         expect(DRAWER_OVERVIEW_CANVAS_CLASS).not.toContain("lg:grid-cols-12");
         expect(DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX).toBe(1040);
+    });
+
+    it("defines balanced 4/5/3 shell grid spans", () => {
+        expect(DRAWER_OVERVIEW_SHELL_GRID.leftColumn + DRAWER_OVERVIEW_SHELL_GRID.mainColumn + DRAWER_OVERVIEW_SHELL_GRID.rightRail).toBe(
+            DRAWER_OVERVIEW_SHELL_GRID.columns,
+        );
+        expect(DRAWER_OVERVIEW_SHELL_GRID.leftColumn).toBe(4);
+        expect(DRAWER_OVERVIEW_SHELL_GRID.mainColumn).toBe(5);
+        expect(DRAWER_OVERVIEW_SHELL_GRID.rightRail).toBe(3);
     });
 
     it("panel surface includes pine left accent", () => {

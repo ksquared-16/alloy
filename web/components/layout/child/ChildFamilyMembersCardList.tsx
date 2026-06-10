@@ -4,6 +4,7 @@ import DrawerHouseholdChildLinkAvatar from "@/components/layout/DrawerHouseholdC
 import DrawerHouseholdPersonLinkAvatar, {
     DRAWER_HOUSEHOLD_PERSON_LINK_ITEM,
 } from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
+import DrawerRelationshipOverflowText from "@/components/layout/DrawerRelationshipOverflowText";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
@@ -119,7 +120,7 @@ function FamilyMemberCard({
                             adornment={null}
                             display={displayName}
                             onAction={onAdornmentAction}
-                            className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                            className={`block text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                         />
                     : personId ?
                         <LayoutRuntimePersonLinkSurface
@@ -132,11 +133,20 @@ function FamilyMemberCard({
                             adornment={null}
                             display={displayName}
                             onAction={onAdornmentAction}
-                            className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                            className={`block text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                         />
-                    :   <p className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>{displayName}</p>}
+                    :   <DrawerRelationshipOverflowText
+                            value={displayName}
+                            as="p"
+                            className={PRESENTATION_DATA_VALUE_COMPACT}
+                        />}
                     {metaLine ?
-                        <p className={`mt-0.5 line-clamp-2 ${PRESENTATION_SUPPORTING}`}>{metaLine}</p>
+                        <DrawerRelationshipOverflowText
+                            value={metaLine}
+                            as="p"
+                            lineClamp={3}
+                            className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}
+                        />
                     :   null}
                 </div>
             </div>

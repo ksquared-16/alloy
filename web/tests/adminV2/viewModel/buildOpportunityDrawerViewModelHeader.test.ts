@@ -13,8 +13,8 @@ const statusDefs: StatusDefinitionRow[] = [
         org_id: "org-1",
         industry_key: null,
         entity_type: "opportunities",
-        status_key: "new",
-        status_label: "New",
+        status_key: "open",
+        status_label: "Open",
         sort_order: 0,
         is_active: true,
         is_system: false,
@@ -25,8 +25,8 @@ const statusDefs: StatusDefinitionRow[] = [
         org_id: "org-1",
         industry_key: null,
         entity_type: "opportunities",
-        status_key: "tour_scheduled",
-        status_label: "Tour scheduled",
+        status_key: "closed",
+        status_label: "Closed",
         sort_order: 1,
         is_active: true,
         is_system: false,
@@ -38,33 +38,60 @@ describe("buildOpportunityStatusControlVm", () => {
     it("returns hidden for classic layout mode", () => {
         expect(
             buildOpportunityStatusControlVm({
-                record: { status_key: "new" },
+                record: { status_key: "open" },
                 statusDefs,
                 layoutMode: "classic",
             })
         ).toEqual({ renderAs: "hidden" });
     });
 
-    it("returns dropdown when multiple active status defs exist on workflow_v1", () => {
+    it("returns dropdown when multiple MVP case status defs exist on workflow_v1", () => {
         const control = buildOpportunityStatusControlVm({
-            record: { status_key: "new", _status_display: "New" },
+            record: { status_key: "open", _status_display: "Open" },
             statusDefs,
             layoutMode: "workflow_v1",
         });
         expect(control.renderAs).toBe("dropdown");
         if (control.renderAs === "dropdown") {
-            expect(control.status_key).toBe("new");
+            expect(control.status_key).toBe("open");
             expect(control.options).toHaveLength(2);
+            expect(control.options.map((o) => o.status_key)).toEqual(["open", "closed"]);
         }
     });
 
-    it("returns readonly pill when fewer than two active defs", () => {
+    it("returns readonly pill when fewer than two MVP case defs", () => {
         const control = buildOpportunityStatusControlVm({
-            record: { status_key: "new", _status_display: "New" },
+            record: { status_key: "open", _status_display: "Open" },
             statusDefs: [statusDefs[0]!],
             layoutMode: "workflow_v1",
         });
-        expect(control).toEqual({ renderAs: "readonly_pill", label: "New", status_key: "new" });
+        expect(control).toEqual({ renderAs: "readonly_pill", label: "Open", status_key: "open" });
+    });
+
+    it("excludes legacy pipeline keys from dropdown options", () => {
+        const control = buildOpportunityStatusControlVm({
+            record: { status_key: "new_inquiry", _status_display: "New Lead" },
+            statusDefs: [
+                ...statusDefs,
+                {
+                    id: "3",
+                    org_id: "org-1",
+                    industry_key: null,
+                    entity_type: "opportunities",
+                    status_key: "new_inquiry",
+                    status_label: "New Lead",
+                    sort_order: 2,
+                    is_active: true,
+                    is_system: false,
+                    metadata: null,
+                },
+            ],
+            layoutMode: "workflow_v1",
+        });
+        expect(control.renderAs).toBe("dropdown");
+        if (control.renderAs === "dropdown") {
+            expect(control.options.map((o) => o.status_key)).toEqual(["open", "closed"]);
+        }
     });
 });
 

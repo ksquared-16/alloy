@@ -6,7 +6,8 @@ import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolv
 import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
-import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { NEW_LEAD_STATUS_KEY, DEFAULT_LEAD_CASE_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { ENROLLMENT_INTAKE_PERSON_STATUS_KEY } from "@/lib/admin/person/enrollmentPersonDefaultStatus";
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
@@ -73,13 +74,12 @@ export async function executeCreateLeadAction(
         trim(input.context?.work_unit_id) ||
         trim(input.merged.work_unit_id) ||
         null;
-    let statusKeyForLead = NEW_LEAD_STATUS_KEY;
+    let statusKeyForLead = DEFAULT_LEAD_CASE_STATUS_KEY;
     if (departmentId) {
         const binding = await resolveLifecycleCreateLeadBinding(supabase, ctx.orgId, departmentId);
         if (!workUnitId && binding.work_unit_id) {
             workUnitId = binding.work_unit_id;
         }
-        statusKeyForLead = binding.status_key;
     }
     const locationId = trim(input.merged.location_id) || null;
 
@@ -89,6 +89,7 @@ export async function executeCreateLeadAction(
         last_name: lastName,
         email,
         phone,
+        default_status_key_on_create: ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
     });
     const personId = person?.id?.trim() || null;
     if (!personId) {

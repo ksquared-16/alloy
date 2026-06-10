@@ -3,6 +3,7 @@
 import DrawerHouseholdPersonLinkAvatar, {
     DRAWER_HOUSEHOLD_PERSON_LINK_ITEM,
 } from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
+import DrawerRelationshipOverflowText from "@/components/layout/DrawerRelationshipOverflowText";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import {
@@ -87,19 +88,28 @@ function HouseholdContactCard({
                             adornment={null}
                             display={contact.display_name}
                             onAction={onAdornmentAction}
-                            className={`block truncate text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                            className={`block text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                         />
-                    :   <p className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>
-                            {contact.display_name}
-                        </p>
+                    :   <DrawerRelationshipOverflowText
+                            value={contact.display_name}
+                            as="p"
+                            className={PRESENTATION_DATA_VALUE_COMPACT}
+                        />
                     }
                     {meta ?
-                        <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{meta}</p>
+                        <DrawerRelationshipOverflowText
+                            value={meta}
+                            as="p"
+                            className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}
+                        />
                     :   null}
                     {contact.phone || contact.email ?
-                        <p className={`mt-0.5 truncate ${PRESENTATION_SUPPORTING_COMPACT}`}>
-                            {[contact.phone, contact.email].filter(Boolean).join(" · ")}
-                        </p>
+                        <DrawerRelationshipOverflowText
+                            value={[contact.phone, contact.email].filter(Boolean).join(" · ")}
+                            as="p"
+                            lineClamp={3}
+                            className={`mt-0.5 ${PRESENTATION_SUPPORTING_COMPACT}`}
+                        />
                     :   null}
                 </div>
             </div>
@@ -126,7 +136,7 @@ export default function DrawerHouseholdContactCardList({
     }
 
     return (
-        <div className="space-y-2 px-2 pb-2" data-drawer-household-contact-list="true">
+        <div className="min-w-0 space-y-2" data-drawer-household-contact-list="true">
             <ul className="flex flex-col gap-2">
                 {contacts.map((contact) => (
                     <HouseholdContactCard
