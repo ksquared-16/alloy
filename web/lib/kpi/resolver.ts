@@ -44,13 +44,13 @@ function vmFromRow(metricKey: MetricKey, value: string, row: WorkspaceKpiPlaceme
 }
 
 function mapPipelineCellToMetricKey(orgKpis: KPIVm[], metricKey: MetricKey): KPIVm | null {
-    const order = [
-        "org.pipeline.active_in_motion",
-        "org.pipeline.pipeline_value_open",
-        "org.pipeline.closed_outcomes",
-    ] as const;
-    const idx = order.indexOf(metricKey as (typeof order)[number]);
-    if (idx < 0 || idx >= orgKpis.length) return null;
+    const legacyIndexByKey: Partial<Record<MetricKey, number>> = {
+        "org.pipeline.active_in_motion": 0,
+        "org.pipeline.pipeline_value_open": 2,
+        "org.pipeline.closed_outcomes": 3,
+    };
+    const idx = legacyIndexByKey[metricKey];
+    if (idx == null || idx < 0 || idx >= orgKpis.length) return null;
     const src = orgKpis[idx];
     if (!src) return null;
     return {

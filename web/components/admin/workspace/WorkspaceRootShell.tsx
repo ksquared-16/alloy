@@ -63,18 +63,19 @@ type Props = {
   lifecycleCardsPending?: boolean;
 };
 
-function buildStructureKpis(lifecycleCount: number): KPIVm[] {
-  return [{ id: "lifecycles", label: "Lifecycles", value: String(lifecycleCount), lane: "business" }];
-}
-
-function filterOperatorWorkspaceKpis(items: KPIVm[], lifecycleCount: number): KPIVm[] {
-  const filtered = items.filter((k) => {
+function filterOperatorWorkspaceKpis(items: KPIVm[]): KPIVm[] {
+  return items.filter((k) => {
     const label = String(k.label ?? "").trim().toLowerCase();
     const id = String(k.id ?? "").trim().toLowerCase();
-    return label !== "departments" && id !== "depts" && label !== "work units" && id !== "wu";
+    return (
+      label !== "departments" &&
+      id !== "depts" &&
+      label !== "work units" &&
+      id !== "wu" &&
+      label !== "lifecycles" &&
+      id !== "lifecycles"
+    );
   });
-  if (filtered.some((k) => k.id === "lifecycles")) return filtered;
-  return [...buildStructureKpis(lifecycleCount), ...filtered];
 }
 
 /**
@@ -91,16 +92,14 @@ export function WorkspaceRootShell({
   lifecycleCardsPending = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
-  const lifecycleCount = lifecycleCards.length;
 
   const kpis = useMemo(() => {
     if (workspaceKpiStrip !== undefined) {
-      return filterOperatorWorkspaceKpis(workspaceKpiStrip, lifecycleCount);
+      return filterOperatorWorkspaceKpis(workspaceKpiStrip);
     }
-    const structure = buildStructureKpis(lifecycleCount);
     const roll = orgOpportunityKpis?.length ? orgOpportunityKpis : [];
-    return filterOperatorWorkspaceKpis([...structure, ...roll], lifecycleCount);
-  }, [workspaceKpiStrip, orgOpportunityKpis, lifecycleCount]);
+    return filterOperatorWorkspaceKpis(roll);
+  }, [workspaceKpiStrip, orgOpportunityKpis]);
 
   return (
     <WorkspaceShellLayout
@@ -125,7 +124,7 @@ export function WorkspaceRootShell({
                   className="text-sm mt-2 max-w-3xl adminv2-ws-root-brief-subline"
                   style={{ lineHeight: 1.45 }}
                 >
-                  Command center for your configured lifecycles — open where work is waiting and stay in flow.
+                  Enrollment operations at a glance — track families, manage waitlists, and move children toward enrollment.
                 </p>
               </div>
             </div>

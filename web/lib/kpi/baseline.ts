@@ -6,8 +6,6 @@ import {
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 
 import {
-    workspacePipelineExactTotalInScope,
-    type WorkspaceKpiGrowthSnapshot,
     departmentNeedsAttentionSumSafe,
     departmentSumWorkUnitTotals,
     workUnitNeedsAttentionCount,
@@ -18,39 +16,12 @@ import type { WorkUnitKpiContext } from "@/lib/kpi/surfaceContext";
 import { resolveQueueGrainPresentation, resolveQueueCountUnit } from "@/lib/ui-v2/queueGrainPresentation";
 import { resolveDeptWorkUnitDisplayLabel } from "@/lib/workspace/workUnitShellDisplayTitle";
 
-function formatInt(n: number | null | undefined): string {
-    if (n == null || Number.isNaN(n)) return "—";
-    return String(Math.max(0, Math.floor(n)));
-}
-
-/** Baseline org workspace strip — exact pipeline lane totals, then structure, then org strip. */
+/** Baseline org workspace strip — enrollment lifecycle KPIs from existing growth rollup snapshots. */
 export function buildDefaultWorkspaceKpis(
-    metrics: WorkspaceRootMetrics | null,
+    _metrics: WorkspaceRootMetrics | null,
     growthSnapshots: WorkspaceGrowthDeptSnapshot[]
 ): KPIVm[] {
-    const mapped: WorkspaceKpiGrowthSnapshot[] = growthSnapshots.map((s) => ({
-        departmentKey: s.key,
-        kpis: s.lifecycleAnalytics,
-        pipelineExact: s.pipelineExact ?? undefined,
-    }));
-    const inScope = workspacePipelineExactTotalInScope(mapped);
-    const contextFirst: KPIVm[] =
-        inScope != null
-            ? [
-                  {
-                      id: "baseline.ctx.workspace.total_in_scope",
-                      label: "Inquiries (pipeline lane)",
-                      value: String(inScope),
-                      lane: "business",
-                  },
-              ]
-            : [];
-    const structure: KPIVm[] = [
-        { id: "depts", label: "Departments", value: formatInt(metrics?.departments), lane: "business" },
-        { id: "wu", label: "Work units", value: formatInt(metrics?.workUnits), lane: "business" },
-    ];
-    const roll = buildWorkspaceRootOrgOpportunityKpis(growthSnapshots);
-    return [...contextFirst, ...structure, ...roll];
+    return buildWorkspaceRootOrgOpportunityKpis(growthSnapshots);
 }
 
 export type DeptWorkUnitRow = { id: string; name: string | null; key: string | null };
