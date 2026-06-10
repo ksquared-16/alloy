@@ -313,9 +313,6 @@ export default function Drawer({
                                   ? {
                                         backgroundColor: "var(--vc-drawer-header-bg, #ffffff)",
                                         borderBottomColor: derived.border,
-                                        borderRightWidth: 3,
-                                        borderRightStyle: "solid",
-                                        borderRightColor: "var(--vc-header-rail-accent)",
                                     }
                                   : {
                                         backgroundColor: neutral.surface,
@@ -357,9 +354,6 @@ export default function Drawer({
                                   ? {
                                         backgroundColor: "var(--vc-drawer-header-bg, #ffffff)",
                                         borderBottomColor: derived.border,
-                                        borderRightWidth: 3,
-                                        borderRightStyle: "solid",
-                                        borderRightColor: "var(--vc-header-rail-accent)",
                                     }
                                   : {
                                         backgroundColor: neutral.surface,

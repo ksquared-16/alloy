@@ -287,6 +287,16 @@ describe("DrawerHouseholdContactCardList person links", () => {
     });
 });
 
+describe("drawer outer shell presentation", () => {
+    it("does not apply colored right rail on cleaning-v2 drawer header", () => {
+        const drawer = readFileSync(
+            join(process.cwd(), "components/admin/Drawer.tsx"),
+            "utf8",
+        );
+        expect(drawer).not.toContain("borderRightColor: \"var(--vc-header-rail-accent)\"");
+    });
+});
+
 describe("BOS drawer header consistency", () => {
     it("uses juniper Work with BOS on person and lead drawer headers", () => {
         const personHeader = readFileSync(

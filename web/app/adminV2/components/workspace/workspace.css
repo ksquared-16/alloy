@@ -12505,6 +12505,10 @@
   box-shadow: 0 12px 40px rgba(39, 63, 82, 0.08), 0 2px 8px rgba(39, 63, 82, 0.04) !important;
 }
 
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-drawer-composed-sticky-header="true"] {
+  border-right: none !important;
+}
+
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-primary-actions] {
   gap: 0.375rem 0.5rem;
 }
