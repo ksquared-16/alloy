@@ -74,19 +74,26 @@ describe("workUnitQueueLaneRevealState", () => {
         expect(workUnitAboveFoldQueueRowsLoading(model)).toBe(false);
     });
 
-    it("page content stays gated until first lane settles (no warm skeleton bypass)", () => {
+    it("page content stays gated until critical bundle is ready", () => {
         expect(
             workUnitPageContentReady({
                 shell_ready: true,
-                initial_lane_reveal_settled: false,
-                lane_reveal_settled: false,
+                critical_bundle_ready: false,
+                coordinated_reveal_completed: false,
             })
         ).toBe(false);
         expect(
             workUnitPageContentReady({
                 shell_ready: true,
-                initial_lane_reveal_settled: true,
-                lane_reveal_settled: false,
+                critical_bundle_ready: true,
+                coordinated_reveal_completed: false,
+            })
+        ).toBe(true);
+        expect(
+            workUnitPageContentReady({
+                shell_ready: true,
+                critical_bundle_ready: false,
+                coordinated_reveal_completed: true,
             })
         ).toBe(true);
     });

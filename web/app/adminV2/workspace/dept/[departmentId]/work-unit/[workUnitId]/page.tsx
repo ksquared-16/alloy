@@ -309,6 +309,7 @@ import {
     markWorkUnitRevealGateStart,
     resetWorkUnitRevealGatePerf,
     workUnitRevealActionsReady,
+    workUnitRevealKpiReady,
     workUnitRevealRowsReady,
     workUnitRevealShellReady,
     workUnitRevealSummariesReady,
@@ -526,7 +527,7 @@ function buildWorkUnitQueuesListRoute(workUnitId: string, selectedSiteId: string
         include_previews: "false",
         count_mode: "exact",
         limit: "3",
-        summary_mode: "all",
+        summary_mode: "initial",
     });
     const base = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
     return appendWorkspaceSiteToUrl(base, selectedSiteId);
@@ -1764,21 +1765,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
             await hydrateWorkUnitQueueRowActions();
         }
 
-        setWorkflowKpisLoading(true);
-        try {
-            const { kpis, partitions } = await fetchWorkflowAutomationWorkspacePanels({
-                department_id: departmentId,
-                work_unit_id: workUnitId,
-                init,
-            });
-            setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kpis });
-            if (partitions) setWorkflowPartitions(partitions);
-        } catch {
-            // non-fatal
-        } finally {
-            setWorkflowKpisLoading(false);
-        }
-
         const attn = wuBootstrapAttentionRef.current;
         if (attn?.execution_work_unit_id) {
             setNeedsAttentionWorkUnitId(attn.execution_work_unit_id);
@@ -2888,7 +2874,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             include_previews: "false",
             count_mode: "exact",
             limit: "3",
-            summary_mode: "all",
+            summary_mode: "initial",
         });
         const route = appendWorkspaceSiteToUrl(
             `/api/admin/work-units/${encodeURIComponent(wuId)}/queues?${qs.toString()}`,
@@ -3639,14 +3625,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         }
 
                         if (!cancelled) {
-                            scheduleAdminV2BackgroundWork(() => {
-                                if (b.kpi_placements) {
-                                    setWuPlacementRows(b.kpi_placements.items ?? []);
-                                    setWuScopeHasPlacements(b.kpi_placements.scope_has_placements === true);
-                                } else {
-                                    void loadWuKpiPlacements(wu);
-                                }
-                            }, { idleTimeoutMs: 1500, fallbackMs: 80 });
+                            if (b.kpi_placements) {
+                                setWuPlacementRows(b.kpi_placements.items ?? []);
+                                setWuScopeHasPlacements(b.kpi_placements.scope_has_placements === true);
+                            } else {
+                                void loadWuKpiPlacements(wu);
+                            }
                             requestWorkUnitDeferredSupplementRef.current();
                         }
                         const applyT1 = typeof performance !== "undefined" ? performance.now() : 0;
@@ -4238,9 +4222,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     ]);
 
     const [wuInitialLaneRevealDone, setWuInitialLaneRevealDone] = useState(false);
+    const [wuCoordinatedRevealDone, setWuCoordinatedRevealDone] = useState(false);
 
     useEffect(() => {
         setWuInitialLaneRevealDone(false);
+        setWuCoordinatedRevealDone(false);
     }, [departmentId, workUnitId]);
 
     useEffect(() => {
@@ -6117,6 +6103,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             summaries_ready,
             actions_ready,
             rows_ready,
+            kpi_ready: workUnitRevealKpiReady({
+                suppress_kpi_strip: suppressWorkUnitKpiStrip,
+                kpi_metrics_pending: workUnitKpiMetricsPending,
+            }),
         });
     }, [
         workUnit,
@@ -6132,6 +6122,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         workUnitLaneReveal.mayPaintRows,
         queueItems?.items?.length,
         queueRowActionsReady,
+        suppressWorkUnitKpiStrip,
+        workUnitKpiMetricsPending,
     ]);
 
     const workUnitAboveFoldPageReady = workUnitRevealGate.above_fold_ready;
@@ -6140,9 +6132,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const workUnitPageContentReady = resolveWorkUnitPageContentReady({
         shell_ready: workUnitShellReady,
-        initial_lane_reveal_settled: wuInitialLaneRevealDone,
-        lane_reveal_settled: workUnitLaneReveal.settled,
+        critical_bundle_ready: workUnitAboveFoldPageReady,
+        coordinated_reveal_completed: wuCoordinatedRevealDone,
     });
+
+    useEffect(() => {
+        if (!workUnitAboveFoldPageReady || wuCoordinatedRevealDone) return;
+        setWuCoordinatedRevealDone(true);
+    }, [workUnitAboveFoldPageReady, wuCoordinatedRevealDone]);
 
     const workUnitKpiStripPlaceholder = workUnitKpiStripShowsPlaceholder({
         kpi_metrics_pending: workUnitKpiMetricsPending,
@@ -6197,6 +6194,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
             });
         }
     }, [workUnitPageContentReady, departmentId, workUnitId, selectedQueueKey]);
+
+    useEffect(() => {
+        if (!workUnitAboveFoldPageReady || !departmentId || !workUnitId) return;
+        return scheduleAdminV2BackgroundWork(
+            () => {
+                void refreshWorkflowPanels();
+            },
+            { idleTimeoutMs: 1200, fallbackMs: 500 },
+        );
+    }, [workUnitAboveFoldPageReady, departmentId, workUnitId, refreshWorkflowPanels]);
 
     useEffect(() => {
         markWorkUnitRevealGatePhases(workUnitRevealGate, { departmentId, workUnitId });
@@ -6378,7 +6385,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 metadata: workUnit.metadata,
             },
             lifecycleSiblings: lifecycleSiblingWorkUnits,
-            cap: 6,
+            includeLifecycleSiblings: false,
+            cap: 2,
         });
         if (!targets.length) return;
         const sig = `${workUnitId}|${viewScopeFingerprint}|${selectedQueueKey ?? ""}|${targets.map((t) => `${t.workUnitId}:${t.pillKey}`).join(",")}`;
@@ -6432,7 +6440,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     });
                 });
             },
-            { idleTimeoutMs: 1200, fallbackMs: 350 }
+            { idleTimeoutMs: 5000, fallbackMs: 1200 }
         );
         return cancel;
     }, [

@@ -193,19 +193,19 @@ describe("AdminV2 route / queue reveal contract", () => {
         expect(workUnitQueueLaneRevealSettled(state)).toBe(true);
     });
 
-    it("warm work unit uses composed page only after lane settles", () => {
+    it("warm work unit uses composed page only after critical bundle is ready", () => {
         expect(
             adminV2WorkUnitRouteRevealMode({
                 shell_ready: true,
-                initial_lane_reveal_settled: false,
-                lane_reveal_state: "hidden_until_settled",
+                critical_bundle_ready: false,
+                coordinated_reveal_completed: false,
             })
         ).toBe("full_page_gate");
         expect(
             workUnitPageContentReady({
                 shell_ready: true,
-                initial_lane_reveal_settled: false,
-                lane_reveal_settled: false,
+                critical_bundle_ready: false,
+                coordinated_reveal_completed: false,
             })
         ).toBe(false);
     });

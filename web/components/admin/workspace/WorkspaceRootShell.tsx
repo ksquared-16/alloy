@@ -142,11 +142,13 @@ export function WorkspaceRootShell({
             {kpiStripPlaceholder && kpiQuietReserveOnly ? (
               <WorkspaceQuietKpiReserve id="workspace-kpi-quiet-reserve" />
             ) : (
-              <WorkspaceKpiOrientationCrossfade
-                kpis={kpis}
-                placeholderPending={kpiStripPlaceholder}
-                maxVisible={5}
-              />
+              <div className="adminv2-ws-dept-v2-kpi-measurement-strip">
+                <WorkspaceKpiOrientationCrossfade
+                  kpis={kpis}
+                  placeholderPending={kpiStripPlaceholder}
+                  maxVisible={5}
+                />
+              </div>
             )}
           </div>
 

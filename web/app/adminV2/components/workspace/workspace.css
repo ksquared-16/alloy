@@ -676,6 +676,25 @@
   position: relative;
 }
 
+.adminv2-ws-lifecycle-command-card--premium {
+  isolation: isolate;
+}
+
+.adminv2-ws-lifecycle-command-card-accent {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 4px;
+  border-radius: 1.35rem 1.35rem 0 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--d-pine) 88%, #ffffff) 0%,
+    color-mix(in srgb, var(--d-brand) 72%, #ffffff) 52%,
+    color-mix(in srgb, var(--d-pine) 55%, transparent) 100%
+  );
+  pointer-events: none;
+}
+
 .adminv2-ws-lifecycle-command-card::before {
   content: "";
   position: absolute;

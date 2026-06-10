@@ -14,6 +14,7 @@ export type WorkUnitRevealGateInput = {
     summaries_ready: boolean;
     actions_ready: boolean;
     rows_ready: boolean;
+    kpi_ready: boolean;
 };
 
 export type WorkUnitRevealGate = WorkUnitRevealGateInput & {
@@ -101,6 +102,7 @@ export function markWorkUnitRevealGatePhases(
     if (gate.rows_ready) logPhase("rows_ready", detail);
     if (gate.above_fold_ready && !aboveFoldReadyLogged) {
         aboveFoldReadyLogged = true;
+        alloyPerfSet("wu_reveal_above_fold_ready", performance.now());
         logPhase("above_fold_ready", {
             ...detail,
             reason_if_blocked: gate.reason_if_blocked,
@@ -114,11 +116,20 @@ export function computeWorkUnitRevealGate(input: WorkUnitRevealGateInput): WorkU
     if (!input.summaries_ready) reason_if_blocked.push("summaries");
     if (!input.actions_ready) reason_if_blocked.push("actions");
     if (!input.rows_ready) reason_if_blocked.push("rows");
+    if (!input.kpi_ready) reason_if_blocked.push("kpi");
     return {
         ...input,
         above_fold_ready: reason_if_blocked.length === 0,
         reason_if_blocked,
     };
+}
+
+export function workUnitRevealKpiReady(input: {
+    suppress_kpi_strip: boolean;
+    kpi_metrics_pending: boolean;
+}): boolean {
+    if (input.suppress_kpi_strip) return true;
+    return !input.kpi_metrics_pending;
 }
 
 export function workUnitRevealShellReady(input: WorkUnitRevealShellReadyInput): boolean {

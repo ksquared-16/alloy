@@ -92,9 +92,10 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                             });
                         }}
                     >
-                        <article className="adminv2-ws-lifecycle-command-card flex min-h-[18rem] flex-col overflow-hidden rounded-[1.35rem] border border-alloy-forge/12 bg-[linear-gradient(165deg,rgba(255,255,255,0.98)_0%,rgba(244,247,249,0.92)_48%,rgba(232,239,235,0.55)_100%)] shadow-[0_14px_40px_rgba(39,63,82,0.08)] transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-alloy-pine/30 hover:shadow-[0_20px_48px_rgba(39,63,82,0.12)]">
+                        <article className="adminv2-ws-lifecycle-command-card adminv2-ws-lifecycle-command-card--premium flex min-h-[18rem] flex-col overflow-hidden rounded-[1.35rem] border border-alloy-pine/25 bg-[linear-gradient(155deg,rgba(255,255,255,0.99)_0%,rgba(236,247,243,0.94)_42%,rgba(214,235,228,0.72)_100%)] shadow-[0_16px_44px_rgba(0,162,131,0.12)] transition-[transform,box-shadow,border-color] hover:-translate-y-0.5 hover:border-alloy-pine/45 hover:shadow-[0_22px_52px_rgba(0,162,131,0.18)]">
+                            <div className="adminv2-ws-lifecycle-command-card-accent" aria-hidden />
                             <div className="flex flex-1 flex-col px-6 pb-5 pt-6">
-                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-alloy-pine/80">
+                                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-alloy-pine">
                                     Lifecycle
                                 </div>
                                 <h3 className="mt-2 text-[1.65rem] font-semibold leading-snug tracking-tight text-alloy-midnight group-hover:text-alloy-pine">

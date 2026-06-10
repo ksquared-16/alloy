@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 
-import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 
 const WORKSPACE_ROOT_ACTIONS = [
@@ -38,7 +37,7 @@ export function WorkspaceRootActionsRail() {
                         <Link
                             key={action.id}
                             href={action.href}
-                            prefetch={shouldDisableAdminV2LinkPrefetch(action.href) ? false : undefined}
+                            prefetch={false}
                             className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
                         >
                             {action.label}

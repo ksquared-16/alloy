@@ -120,15 +120,17 @@ export function filterPrefetchableWorkUnitQueuePillKeys(
     );
 }
 
-/** Background warm targets: same-WU neighbors + lifecycle sibling primary lanes. */
+/** Background warm targets: same-WU neighbors; lifecycle siblings optional (Pass 3: defer siblings). */
 export function workUnitLanePrefetchTargets(params: {
     visiblePillKeys: readonly string[];
     selectedPillKey: string | null;
     workUnit: WorkUnitRowForPrefetch | null;
     lifecycleSiblings?: ReadonlyArray<WorkUnitRowForPrefetch> | null;
     cap?: number;
+    includeLifecycleSiblings?: boolean;
 }): WorkUnitLanePrefetchTarget[] {
     const cap = params.cap ?? 6;
+    const includeLifecycleSiblings = params.includeLifecycleSiblings ?? false;
     const wu = params.workUnit;
     if (!wu?.id?.trim()) return [];
 
@@ -150,6 +152,10 @@ export function workUnitLanePrefetchTargets(params: {
     for (const pillKey of neighborPills) {
         add(wu.id, pillKey, wu);
         if (out.length >= cap) return out;
+    }
+
+    if (!includeLifecycleSiblings) {
+        return out.slice(0, cap);
     }
 
     for (const sibling of params.lifecycleSiblings ?? []) {

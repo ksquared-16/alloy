@@ -89,6 +89,7 @@ describe("workUnitQueuePillPrefetch", () => {
                     metadata: { lifecycle_stage_key: "waitlist" },
                 },
             ],
+            includeLifecycleSiblings: true,
             cap: 4,
         });
         expect(targets.some((t) => t.workUnitId === "wu-1" && t.pillKey === "follow_up")).toBe(true);

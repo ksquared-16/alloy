@@ -23,10 +23,10 @@ describe("workUnitCoordinatedRevealRegression", () => {
         expect(block).toContain("!queue.rowsHeld");
     });
 
-    it("warm page reveal policy requires settled lane", () => {
+    it("warm page reveal policy requires critical bundle before first paint", () => {
         const policy = readSrc("lib/adminV2/workUnitPageRevealPolicy.ts");
         expect(policy).not.toContain("page_seeded_from_cache");
-        expect(policy).toContain("lane_reveal_settled");
+        expect(policy).toContain("critical_bundle_ready");
     });
 });
 
