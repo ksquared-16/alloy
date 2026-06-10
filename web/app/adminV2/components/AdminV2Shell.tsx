@@ -143,7 +143,9 @@ export default function AdminV2Shell({
         <WorkspaceSiteFilterProvider>
           <div
             className="flex h-screen w-full overflow-hidden"
-            style={{ backgroundColor: neutral.background }}
+            style={{
+              backgroundColor: bosRightRailCopilot ? "#ffffff" : neutral.background,
+            }}
             data-adminv2-app-shell="workspace-v2"
             data-adminv2-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
             {...(bosRightRailCopilot ? { "data-bos-right-rail-copilot": "true" } : {})}

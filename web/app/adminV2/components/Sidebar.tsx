@@ -21,10 +21,10 @@ import {
 } from "@/lib/admin/canonicalAdminRoutes";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
-import {
-    loadOperatorLifecycleLandingCards,
+import { loadOperatorLifecycleLandingCards,
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
+import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import { OPERATOR_INBOX_HREF, OPERATOR_TASKS_HREF } from "@/lib/admin/operatorWorkspaceCatalog";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
@@ -235,6 +235,20 @@ function SidebarNav({
                                     active={lifecycleEntryActive}
                                     className={`min-w-0 flex-1 ${EXPANDED_PRIMARY_LINK}`}
                                     title={lifecycle.label}
+                                    onMouseEnter={() =>
+                                        warmOperatorWorkUnitEntryFromHref(
+                                            lifecycle.entryHref,
+                                            null,
+                                            "sidebar_lifecycle_hover",
+                                        )
+                                    }
+                                    onFocus={() =>
+                                        warmOperatorWorkUnitEntryFromHref(
+                                            lifecycle.entryHref,
+                                            null,
+                                            "sidebar_lifecycle_focus",
+                                        )
+                                    }
                                 >
                                     <span className="inline-flex min-w-0 items-center gap-2">
                                         <Workflow size={16} strokeWidth={1.75} className="shrink-0" />
@@ -261,6 +275,20 @@ function SidebarNav({
                                                     highlightFromActiveOnly
                                                     className={EXPANDED_QUEUE_LINK}
                                                     title={entry.label}
+                                                    onMouseEnter={() =>
+                                                        warmOperatorWorkUnitEntryFromHref(
+                                                            entry.href,
+                                                            null,
+                                                            "sidebar_queue_hover",
+                                                        )
+                                                    }
+                                                    onFocus={() =>
+                                                        warmOperatorWorkUnitEntryFromHref(
+                                                            entry.href,
+                                                            null,
+                                                            "sidebar_queue_focus",
+                                                        )
+                                                    }
                                                 >
                                                     <span className="truncate">{entry.label}</span>
                                                 </AdminV2NavLink>

@@ -317,7 +317,7 @@ import {
     workUnitKpiStripShowsPlaceholder,
     workUnitPageContentReady as resolveWorkUnitPageContentReady,
 } from "@/lib/adminV2/workUnitPageRevealPolicy";
-import { WorkUnitPageLoadingGate } from "@/app/adminV2/components/workspace/WorkUnitPageLoadingGate";
+import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
 import { logAdminV2LegacyFanOut } from "@/lib/adminV2/runtime/adminV2LegacyFanOutDiagnostics";
 import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import {
@@ -6520,9 +6520,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
             {error && !workUnitShellReady ? (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error}</p>
             ) : !workUnitPageContentReady ? (
-                <WorkUnitPageLoadingGate
-                    workUnitTitle={wuName}
-                    departmentTitle={slugRoute ? undefined : deptName}
+                <WorkUnitWorkspaceColdShell
+                    workUnitTitle={slugRoute?.workUnitName ?? wuName}
+                    departmentTitle={deptName}
+                    departmentId={departmentId}
+                    reserveActionsRail
                 />
             ) : (
                 <>

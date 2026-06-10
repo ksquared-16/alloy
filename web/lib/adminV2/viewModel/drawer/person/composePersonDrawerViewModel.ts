@@ -5,6 +5,7 @@ import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import { fetchEffectiveStatusDefinitionsTagged } from "@/lib/admin/statusDefinitionsResolve";
 import { drawerFirstPaintDependenciesSettled } from "@/lib/adminV2/viewModel/drawer/drawerFirstPaint";
 import { buildPersonDrawerEntityPayloadForViewModel } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerEntityPayloadForViewModel";
+import { buildPersonDrawerStatusControlVm } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerStatusControlVm";
 import {
     buildPersonFirstViewportPlan,
     resolvePersonDrawerVmSurface,
@@ -16,6 +17,12 @@ import type {
     PersonDrawerViewModelResult,
 } from "@/lib/adminV2/viewModel/drawer/person/types";
 import type { PersonDrawerVmComposeDepth } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
+import { resolvePersonDrawerProfileFromRecordWithHint } from "@/lib/admin/person/personDrawerChildChrome";
+import {
+    filterPersonStatusDefinitionsForProfile,
+    PERSON_STATUS_PROFILE_GENERIC,
+    resolvePersonDrawerStatusProfile,
+} from "@/lib/admin/person/personStatusApplicability";
 
 export const PERSON_DRAWER_VM_COMPOSE_VERSION = "1.0.0";
 
@@ -165,6 +172,24 @@ export async function composePersonDrawerViewModel(
     const title = trimOrNull(record._person_name) ?? trimOrNull(record.full_name) ?? "Person";
     const statusLabel = trimOrNull(record._status_display);
 
+    const profileHint =
+        params.presentationEmphasis === "child_lifecycle" ?
+            { presentation_emphasis: "child_lifecycle" as const }
+        :   undefined;
+    const resolvedProfile = resolvePersonDrawerProfileFromRecordWithHint(record, {
+        open_source: params.openSource,
+        ...profileHint,
+    });
+    const statusProfile = resolvePersonDrawerStatusProfile(resolvedProfile, { childChrome: false });
+    const filteredStatusDefs =
+        statusProfile ?
+            filterPersonStatusDefinitionsForProfile(statusDefsPack.rows, statusProfile)
+        :   [];
+    const status =
+        statusProfile === PERSON_STATUS_PROFILE_GENERIC ?
+            buildPersonDrawerStatusControlVm({ record, statusDefs: filteredStatusDefs })
+        :   { renderAs: "hidden" as const };
+
     const viewModel: PersonDrawerViewModel = {
         generation: `person:${personId}:${plan.variant_key}:${PERSON_DRAWER_VM_COMPOSE_VERSION}`,
         structureSettled: true,
@@ -176,6 +201,7 @@ export async function composePersonDrawerViewModel(
             title,
             subtitle: null,
             status_label: statusLabel,
+            status,
         },
         record,
         layout: {

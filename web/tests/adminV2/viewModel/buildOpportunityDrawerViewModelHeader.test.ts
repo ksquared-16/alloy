@@ -64,7 +64,7 @@ describe("buildOpportunityStatusControlVm", () => {
             statusDefs: [statusDefs[0]!],
             layoutMode: "workflow_v1",
         });
-        expect(control).toEqual({ renderAs: "readonly_pill", label: "New" });
+        expect(control).toEqual({ renderAs: "readonly_pill", label: "New", status_key: "new" });
     });
 });
 

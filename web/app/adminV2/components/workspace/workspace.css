@@ -705,6 +705,14 @@
   }
 }
 
+.adminv2-drawer-panel--swap-hold {
+  transition: opacity 140ms ease-out, transform 140ms ease-out;
+}
+
+[data-drawer-vm-transition-hold="true"] [data-entity-drawer-scroll-body="true"] {
+  transition: opacity 120ms ease-out;
+}
+
 .adminv2-ws-lifecycle-command-metrics {
   border: 1px solid color-mix(in srgb, var(--d-border) 70%, transparent);
   border-radius: 14px;
@@ -12499,7 +12507,7 @@
 /* —— Admin V2 cleaning job record modal — premium minimal / cockpit (visual only) —— */
 
 /* Slightly wider modal shell vs. default max-w-5xl — uses horizontal space without touching Drawer TSX */
-[data-adminv2-record-modal-tone="cleaning-v2"][data-adminv2-record-modal="true"] {
+[data-adminv2-record-modal-tone="cleaning-v2"][data-adminv2-record-modal="true"]:not(.adminv2-drawer-modal-panel--bos-rail) {
   max-width: min(76rem, calc(100vw - 1.5rem));
   border-color: rgba(39, 63, 82, 0.12) !important;
   box-shadow: 0 12px 40px rgba(39, 63, 82, 0.08), 0 2px 8px rgba(39, 63, 82, 0.04) !important;

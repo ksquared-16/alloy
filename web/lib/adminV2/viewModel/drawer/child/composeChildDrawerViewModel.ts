@@ -13,7 +13,12 @@ import type {
     ChildDrawerViewModelResult,
 } from "@/lib/adminV2/viewModel/drawer/child/types";
 import { buildPersonDrawerEntityPayloadForViewModel } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerEntityPayloadForViewModel";
+import { buildPersonDrawerStatusControlVm } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerStatusControlVm";
 import type { PersonDrawerVmComposeDepth } from "@/lib/adminV2/viewModel/drawer/person/personDrawerVmComposeDepth";
+import {
+    filterPersonStatusDefinitionsForProfile,
+    PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
+} from "@/lib/admin/person/personStatusApplicability";
 
 export const CHILD_DRAWER_VM_COMPOSE_VERSION = "1.0.0";
 
@@ -155,6 +160,12 @@ export async function composeChildDrawerViewModel(
     }
 
     const title = trimOrNull(record._person_name) ?? trimOrNull(record.full_name) ?? "Child";
+    const statusLabel = trimOrNull(record._status_display);
+    const filteredStatusDefs = filterPersonStatusDefinitionsForProfile(
+        statusDefsPack.rows,
+        PERSON_STATUS_PROFILE_CHILD_LIFECYCLE
+    );
+    const status = buildPersonDrawerStatusControlVm({ record, statusDefs: filteredStatusDefs });
 
     const viewModel: ChildDrawerViewModel = {
         generation: `child:${personId}:${plan.variant_key}:${CHILD_DRAWER_VM_COMPOSE_VERSION}`,
@@ -166,7 +177,8 @@ export async function composeChildDrawerViewModel(
         header: {
             title,
             subtitle: null,
-            status_label: trimOrNull(record._status_display),
+            status_label: statusLabel,
+            status,
         },
         record,
         layout: {

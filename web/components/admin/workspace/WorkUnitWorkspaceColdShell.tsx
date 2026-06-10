@@ -8,7 +8,9 @@ import {
     WorkUnitOperationalLaneLoader,
     WorkspaceQuietKpiReserve,
 } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
+import { WorkUnitLifecycleStyleLoadingCard } from "@/components/admin/workspace/WorkUnitLifecycleStyleLoadingCard";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
+import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 
 const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
@@ -33,15 +35,20 @@ export function WorkUnitWorkspaceColdShell({
         departmentId != null && departmentId.trim()
             ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId.trim())}`
             : undefined;
+    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
 
     return (
         <WorkspaceChrome
             variant="bridge"
-            breadcrumbs={[
-                { href: WORKSPACE_BASE, label: "Workspace" },
-                deptCrumbHref ? { href: deptCrumbHref, label: departmentTitle } : { label: departmentTitle },
-                { label: workUnitTitle },
-            ]}
+            breadcrumbs={
+                bosRailCopilot ?
+                    []
+                :   [
+                        { href: WORKSPACE_BASE, label: "Workspace" },
+                        deptCrumbHref ? { href: deptCrumbHref, label: departmentTitle } : { label: departmentTitle },
+                        { label: workUnitTitle },
+                    ]
+            }
             title={workUnitTitle}
             subtitle=""
         >
@@ -67,6 +74,7 @@ export function WorkUnitWorkspaceColdShell({
                                 <WorkspaceQuietKpiReserve id="wu-cold-kpi-quiet-reserve" />
                             </div>
                         </div>
+                        <WorkUnitLifecycleStyleLoadingCard />
                         <WorkUnitOperationalLaneLoader />
                     </>
                 }

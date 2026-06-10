@@ -39,7 +39,12 @@ describe("child drawer VM route", () => {
                 entity: { type: "person", id: "child-1" },
                 surface: "child",
                 first_paint: { settled: true, viewport_slots: [], dependencies: [], data: {}, deferred: [], background: [] },
-                header: { title: "Mia", subtitle: null, status_label: "Active" },
+                header: {
+                    title: "Mia",
+                    subtitle: null,
+                    status_label: "Active",
+                    status: { renderAs: "hidden" },
+                },
                 record: { id: "child-1", _household_adult_links: [] },
                 layout: { variant_key: "child", operating_sections: ["child_summary", "household"] },
                 background_refresh: { allowed: ["status_values"] },

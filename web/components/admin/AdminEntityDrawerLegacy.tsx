@@ -224,6 +224,7 @@ import { dispatchActionPreflightBlocked } from "@/lib/admin/actions/actionPrefli
 import { useOpportunityDrawerActionPreflight } from "@/lib/admin/actions/useOpportunityDrawerActionPreflight";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
 import { flattenOpportunityRecordHeaderActionsForMenu } from "@/lib/admin/actions/flattenOpportunityRecordHeaderActionsForMenu";
+import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
 import { OpportunityChildLifecycleSummaryStrip } from "@/components/admin/opportunity/OpportunityChildLifecycleSummaryStrip";
 import type { OpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
@@ -8045,11 +8046,9 @@ export function AdminEntityDrawerLegacy() {
                                 opportunitySingular={opportunitySingular}
                                 queuePreviewSeed={drawer.opportunityQueuePreviewSeed ?? null}
                                 inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                                menuActions={opportunityRecordHeaderMenuActions}
-                                showRegistryActions={!!useOpportunityActionRegistryHeader}
+                                manageMenuItems={buildRecordManageMenuForEntity("lead", opportunitySingular)}
                                 canMutate={!!canMutate}
-                                actionLoadingKey={opportunityActionLoading}
-                                onActionSelect={(a) => void handleResolvedOpportunityHeaderAction(a)}
+                                onManageSelect={() => undefined}
                                 actionPreflightBlocked={opportunityDrawerActionPreflight.blocked}
                                 onDismissActionPreflightBlocked={opportunityDrawerActionPreflight.clearBlocked}
                             />
@@ -8093,11 +8092,9 @@ export function AdminEntityDrawerLegacy() {
                 opportunitySingular={opportunitySingular}
                 queuePreviewSeed={drawer.opportunityQueuePreviewSeed ?? null}
                 inquiryWorkflow={opportunityInquiryWorkflowDrawer}
-                menuActions={opportunityRecordHeaderMenuActions}
-                showRegistryActions={!!useOpportunityActionRegistryHeader}
+                manageMenuItems={buildRecordManageMenuForEntity("lead", opportunitySingular)}
                 canMutate={!!canMutate}
-                actionLoadingKey={opportunityActionLoading}
-                onActionSelect={(a) => void handleResolvedOpportunityHeaderAction(a)}
+                onManageSelect={() => undefined}
                 actionPreflightBlocked={null}
             />
         );
@@ -13698,6 +13695,7 @@ export function AdminEntityDrawerLegacy() {
                         personId={drawer.id}
                         overviewData={overviewData as Record<string, unknown>}
                         opportunitySingular="Child"
+                        manageEntityKind="child"
                         actionsSlot={drawerHeaderActions}
                     />
                 </div>

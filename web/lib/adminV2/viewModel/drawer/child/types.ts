@@ -1,4 +1,5 @@
 import type { DrawerFirstPaintContract, DrawerFirstPaintDependencyState } from "@/lib/adminV2/viewModel/drawer/firstPaintTypes";
+import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
 
 export type ChildDrawerFirstPaintViewportSlot =
     | "header"
@@ -31,6 +32,7 @@ export type ChildDrawerViewModel = {
         title: string;
         subtitle: string | null;
         status_label: string | null;
+        status: StatusControlVm;
     };
     record: Record<string, unknown>;
     layout: {

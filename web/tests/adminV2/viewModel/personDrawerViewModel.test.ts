@@ -30,7 +30,12 @@ function minimalPersonVm(overrides: Partial<PersonDrawerViewModel> = {}): Person
             deferred: [],
             background: [],
         },
-        header: { title: "Parent", subtitle: null, status_label: "Active" },
+        header: {
+            title: "Parent",
+            subtitle: null,
+            status_label: "Active",
+            status: { renderAs: "hidden" },
+        },
         record: { id: "p-1", _person_name: "Parent", _household_adult_links: [] },
         layout: { variant_key: "person_parent_operating_v1", operating_sections: ["parent_summary"] },
         background_refresh: { allowed: ["status_values"] },

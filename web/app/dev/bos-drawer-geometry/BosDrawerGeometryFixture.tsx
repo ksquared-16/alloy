@@ -13,13 +13,14 @@ import {
     computeBosDrawerRailOffsetPx,
 } from "@/lib/bos/bosOverlayGeometry";
 import { measureBosRailOverlayAnchorStyle } from "@/lib/bos/bosRailOverlayAnchor";
+import { measureAndApplyDrawerWorkspaceGeometry } from "@/lib/bos/drawerWorkspaceGeometry";
 import { collectBosDrawerGeometryReport, registerBosDrawerGeometryDiagnostics } from "@/lib/bos/bosDrawerGeometryReport";
 import "@/app/adminV2/adminV2.css";
 import "@/app/adminV2/components/workspace/workspace.css";
 
 /**
- * Dev fixture — reproduces workspace rail + BOS overlay + modal drawer at a fixed viewport
- * so geometry can be captured without an authenticated admin session.
+ * Dev fixture — workspace rail + BOS overlay + modal drawer at 1600×1000.
+ * Runs the same drawer geometry var writer as production (`measureAndApplyDrawerWorkspaceGeometry`).
  */
 export default function BosDrawerGeometryFixture() {
     const [hostEl, setHostEl] = useState<HTMLElement | null>(null);
@@ -48,6 +49,7 @@ export default function BosDrawerGeometryFixture() {
             document.documentElement.style.setProperty(BOS_DRAWER_RAIL_OFFSET_CSS_VAR, `${offset}px`);
             document.documentElement.style.setProperty(BOS_OVERLAY_WIDTH_CSS_VAR, `${width}px`);
             document.documentElement.style.setProperty(BOS_OVERLAY_GUTTER_CSS_VAR, `${gutter}px`);
+            measureAndApplyDrawerWorkspaceGeometry();
             setOverlayStyle({
                 ...measureBosRailOverlayAnchorStyle(hostEl),
                 zIndex: ADMINV2_COMMAND_SURFACE_Z,
@@ -71,7 +73,12 @@ export default function BosDrawerGeometryFixture() {
     }, [hostEl]);
 
     return (
-        <div className="min-h-screen bg-[#f4f6f9]" data-dev-bos-drawer-geometry-fixture="true">
+        <div
+            className="min-h-screen bg-[#f4f6f9]"
+            data-dev-bos-drawer-geometry-fixture="true"
+            data-adminv2-app-shell="workspace-v2"
+            data-adminv2-sidebar-collapsed="false"
+        >
             <aside
                 data-adminv2-sidebar="true"
                 className="adminv2-sidebar-shell fixed left-0 top-0 bottom-0 z-[100] w-[280px] border-r border-alloy-stone/20 bg-[#273f52]"
@@ -79,7 +86,7 @@ export default function BosDrawerGeometryFixture() {
             />
             <div className="min-h-screen p-4 pl-[296px]">
             <p className="mb-3 text-xs text-alloy-midnight/70">
-                Dev geometry fixture — report runs automatically; or call{" "}
+                Dev geometry fixture — uses production var writer; report runs automatically; or call{" "}
                 <code className="font-mono">__alloyReportBosDrawerGeometry()</code>
             </p>
             <div
@@ -167,7 +174,6 @@ export default function BosDrawerGeometryFixture() {
                 title="Sample Lead"
                 variant="adminV2"
                 presentation="modal"
-                panelClassName="max-w-7xl"
                 recordModalTone="cleaning-v2"
                 zIndexBackdrop={ADMINV2_DRAWER_BACKDROP_Z}
                 zIndexPanel={ADMINV2_DRAWER_PANEL_Z}

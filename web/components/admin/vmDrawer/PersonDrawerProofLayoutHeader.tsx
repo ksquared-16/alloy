@@ -13,6 +13,8 @@ import ChildDrawerCommandHeader from "@/components/layout/child/ChildDrawerComma
 import { PersonDrawerHeaderControls } from "@/components/admin/entity/PersonDrawerHeaderControls";
 import VmPersonStatusControl from "@/components/admin/vmDrawer/VmPersonStatusControl";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
+import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
+import type { PersonStatusProfileKey } from "@/lib/admin/person/personStatusApplicability";
 
 export type PersonDrawerProofLayoutHeaderProps = {
     title: string;
@@ -20,6 +22,9 @@ export type PersonDrawerProofLayoutHeaderProps = {
     record: Record<string, unknown>;
     entityLabel: string;
     statusLabel: string | null;
+    statusControl: StatusControlVm | null;
+    currentStatusKey: string;
+    statusProfile?: PersonStatusProfileKey | null;
     canMutate: boolean;
     tabs: readonly DrawerTabKey[];
     activeTab: DrawerTabKey;
@@ -39,6 +44,9 @@ export default function PersonDrawerProofLayoutHeader({
     record,
     entityLabel,
     statusLabel,
+    statusControl,
+    currentStatusKey,
+    statusProfile = null,
     canMutate,
     tabs,
     activeTab,
@@ -66,13 +74,20 @@ export default function PersonDrawerProofLayoutHeader({
                 overviewData={record}
                 opportunitySingular={entityLabel}
                 proofLayoutActions
-                showRegistryActions
-                menuActions={[]}
                 canMutate={canMutate}
-                actionsDisabledReason="Person drawer actions are not configured yet."
+                manageDisabledReason="Person manage actions are not configured yet."
             />
             <div className="shrink-0" data-drawer-vm-status-rail="true">
-                <VmPersonStatusControl statusLabel={statusLabel} entityLabel={`${entityLabel} status`} />
+                <VmPersonStatusControl
+                    personId={personId}
+                    entityLabel={entityLabel}
+                    statusLabel={statusLabel}
+                    currentStatusKey={currentStatusKey}
+                    statusControl={statusControl}
+                    canMutate={canMutate}
+                    statusProfile={statusProfile}
+                    childSurface={childCompositionActive}
+                />
             </div>
         </div>
     );

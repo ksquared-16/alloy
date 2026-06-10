@@ -31,7 +31,7 @@ function relabelResolvedActionsForActiveTour(
 }
 
 /**
- * Flatten all record_header slots for the Actions dropdown — matches legacy drawer menu exposure.
+ * Flatten registry record_header slots for the BOS command rail when copilot routing is enabled.
  */
 export function buildOpportunityDrawerHeaderMenuActions(
     resolved: ResolvedActionsBySlot | null | undefined,

@@ -64,14 +64,8 @@ export async function executeCreateLeadAction(
         return { ok: false, error: "Phone or email is required.", status: 400 };
     }
 
-    const verticalId = trim(input.merged.vertical_id) || (await resolveOrgDefaultVerticalId(supabase, ctx.orgId));
-    if (!verticalId) {
-        return {
-            ok: false,
-            error: "No vertical is configured for this organization. Set up a vertical before creating leads.",
-            status: 400,
-        };
-    }
+    const verticalId =
+        trim(input.merged.vertical_id) || (await resolveOrgDefaultVerticalId(supabase, ctx.orgId)) || null;
 
     const departmentId = trim(input.context?.department_id) || trim(input.merged.department_id) || null;
     let workUnitId =
@@ -117,7 +111,6 @@ export async function executeCreateLeadAction(
     const intakeNotes = trim(input.merged.intake_notes) || null;
     const oppPayload: Record<string, unknown> = {
         org_id: ctx.orgId,
-        vertical_id: verticalId,
         customer_id: customerId,
         primary_person_id: personId,
         primary_contact_id: null,
@@ -132,6 +125,7 @@ export async function executeCreateLeadAction(
             ...(intakeNotes ? { intake_notes: intakeNotes } : {}),
         },
     };
+    if (verticalId) oppPayload.vertical_id = verticalId;
     if (locationId) oppPayload.location_id = locationId;
 
     await normalizeOpportunityWritePayload(supabase, oppPayload, "executeAdminAction:create_lead");

@@ -21,7 +21,20 @@ export function minimalSettledChildDrawerViewModel(
             deferred: [],
             background: [],
         },
-        header: { title: "Sam Smith", subtitle: null, status_label: "Enrolled" },
+        header: {
+            title: "Sam Smith",
+            subtitle: null,
+            status_label: "Enrolled",
+            status: {
+                renderAs: "dropdown",
+                status_key: "active",
+                label: "Active",
+                options: [
+                    { status_key: "active", label: "Active", sort_order: 0 },
+                    { status_key: "future_start", label: "Future start", sort_order: 1 },
+                ],
+            },
+        },
         record: { id: "child-1", first_name: "Sam", last_name: "Smith" },
         layout: { variant_key: "child", operating_sections: ["child_summary", "household"] },
         background_refresh: { allowed: ["record_visibility"] },

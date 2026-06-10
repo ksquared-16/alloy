@@ -92,7 +92,7 @@ function buildFixtureVm(recordId: string): OpportunityDrawerViewModel {
             status_can_mutate: false,
             oper_trust_preview: null,
         },
-        actions: { header: [], header_menu: [] },
+        actions: { header: [], header_menu: [], manage_menu: [] },
         layout: {
             mode: "workflow_v1",
             tabs,

@@ -127,15 +127,16 @@ describe("drawerLinkedGraphNavigation", () => {
         expect(src).toContain("isPending={isPending}");
     });
 
-    it("VmPersonStatusControl marks unset status without fake label", () => {
+    it("VmPersonStatusControl delegates to drawer header status select", () => {
         const src = read("components/admin/vmDrawer/VmPersonStatusControl.tsx");
-        expect(src).toContain("data-vm-status-unset");
-        expect(src).not.toContain('"Active"');
+        expect(src).toContain("VmDrawerHeaderStatusSelect");
+        expect(src).toContain("entityKind=\"persons\"");
     });
 
-    it("PersonsDrawerVmRuntime uses VM header status only", () => {
+    it("PersonsDrawerVmRuntime passes VM header status control", () => {
         const src = read("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
         expect(src).toContain("displayVm?.header.status_label");
+        expect(src).toContain("displayVm?.header.status");
         expect(src).not.toContain("_status_display");
     });
 

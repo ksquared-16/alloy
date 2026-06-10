@@ -15,6 +15,7 @@ import {
     computeDrawerWorkspaceBounds,
     passesDrawerWorkspaceGutterRules,
 } from "@/lib/bos/drawerWorkspaceGeometry";
+import { DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 
 export type BosGeometryRect = {
     left: number;
@@ -25,6 +26,18 @@ export type BosGeometryRect = {
     height: number;
     centerX: number;
     centerY: number;
+};
+
+export type BosPaddingSnapshot = {
+    paddingTop: number;
+    paddingRight: number;
+    paddingBottom: number;
+    paddingLeft: number;
+    marginTop: number;
+    marginRight: number;
+    marginBottom: number;
+    marginLeft: number;
+    width: number | null;
 };
 
 export type BosDrawerGeometryReport = {
@@ -111,6 +124,31 @@ export type BosDrawerGeometryReport = {
         deltaPanelPx: number | null;
         deltaWorkspacePx: number | null;
     };
+    internalLayout: {
+        panelWidth: number | null;
+        scrollBodyWidth: number | null;
+        overviewGridWidth: number | null;
+        overviewCanvasWidth: number | null;
+        activeOverviewMode: "stacked" | "dashboard";
+        viewportLgActive: boolean;
+        containerWideEnough: boolean;
+        householdColWidth: number | null;
+        enrollmentColWidth: number | null;
+        rightRailColWidth: number | null;
+    } | null;
+    internalPadding: {
+        panel: BosPaddingSnapshot | null;
+        scrollBody: BosPaddingSnapshot | null;
+        entityDrawerScrollBody: BosPaddingSnapshot | null;
+        headerTitleRow: BosPaddingSnapshot | null;
+        headerTabsRow: BosPaddingSnapshot | null;
+        headerLifecycleRow: BosPaddingSnapshot | null;
+        overviewComposition: BosPaddingSnapshot | null;
+        overviewCanvas: BosPaddingSnapshot | null;
+        overviewShellGridGapPx: number | null;
+        overviewRightRailGapPx: number | null;
+        estimatedUsableContentWidthPx: number | null;
+    } | null;
     recommendations: {
         summary: string;
         cssVarUpdates: Record<string, string>;
@@ -205,10 +243,143 @@ function findDrawerBackdrop(): Element | null {
 function findDrawerContentArea(panel: Element | null): Element | null {
     if (!panel) return null;
     return (
+        panel.querySelector("[data-adminv2-record-modal-scroll]") ??
         panel.querySelector("[data-entity-drawer-scroll-body='true']") ??
         panel.querySelector("[data-adminv2-drawer-overlay-host='true']")?.parentElement ??
         panel
     );
+}
+
+const OVERVIEW_COMPOSITION_SELECTOR =
+    "[data-lead-overview-composition], [data-person-overview-composition], [data-child-overview-composition]";
+
+function countGridTemplateColumns(gridTemplateColumns: string): number {
+    if (!gridTemplateColumns || gridTemplateColumns === "none") return 0;
+    const repeatMatch = gridTemplateColumns.match(/^repeat\((\d+)/);
+    if (repeatMatch) return Number(repeatMatch[1]);
+    return gridTemplateColumns.split(/\s+/).filter(Boolean).length;
+}
+
+function inferOverviewLayoutMode(
+    canvasWidth: number | null,
+    gridTrackCount: number,
+): "stacked" | "dashboard" {
+    if (gridTrackCount >= 12) return "dashboard";
+    if (
+        canvasWidth != null
+        && canvasWidth >= DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX
+        && gridTrackCount > 1
+    ) {
+        return "dashboard";
+    }
+    return "stacked";
+}
+
+function snapshotPadding(el: Element | null | undefined): BosPaddingSnapshot | null {
+    if (!el || typeof getComputedStyle !== "function") return null;
+    const style = getComputedStyle(el);
+    const rect = snapshotRect(el);
+    return {
+        paddingTop: roundPx(parseFloat(style.paddingTop) || 0),
+        paddingRight: roundPx(parseFloat(style.paddingRight) || 0),
+        paddingBottom: roundPx(parseFloat(style.paddingBottom) || 0),
+        paddingLeft: roundPx(parseFloat(style.paddingLeft) || 0),
+        marginTop: roundPx(parseFloat(style.marginTop) || 0),
+        marginRight: roundPx(parseFloat(style.marginRight) || 0),
+        marginBottom: roundPx(parseFloat(style.marginBottom) || 0),
+        marginLeft: roundPx(parseFloat(style.marginLeft) || 0),
+        width: rect?.width ?? null,
+    };
+}
+
+function collectInternalPaddingReport(
+    drawerPanelEl: Element | null,
+    modalScrollEl: Element | null,
+): BosDrawerGeometryReport["internalPadding"] {
+    if (!drawerPanelEl) return null;
+
+    const overviewEl = drawerPanelEl.querySelector(OVERVIEW_COMPOSITION_SELECTOR);
+    const canvasEl =
+        overviewEl?.querySelector(".adminv2-drawer-overview-canvas") ?? overviewEl;
+    const gridEl = overviewEl?.querySelector(".adminv2-drawer-overview-shell-grid");
+    const railEl = overviewEl?.querySelector(".adminv2-drawer-overview-col-rail");
+    const entityScrollEl = drawerPanelEl.querySelector("[data-entity-drawer-scroll-body='true']");
+    const titleRowEl = drawerPanelEl.querySelector("[data-proof-layout-header-row='title-actions']");
+    const tabsRowEl = drawerPanelEl.querySelector("[data-proof-layout-header-row='tabs']");
+    const lifecycleRowEl = drawerPanelEl.querySelector("[data-proof-layout-header-row='lifecycle']");
+
+    const panelRect = snapshotRect(drawerPanelEl);
+    const scrollPadding = snapshotPadding(modalScrollEl);
+    const canvasPadding = snapshotPadding(canvasEl);
+    const gridGapPx =
+        gridEl ? roundPx(parseFloat(getComputedStyle(gridEl).gap.split(" ")[0] || "0")) : null;
+    const railGapPx =
+        railEl ? roundPx(parseFloat(getComputedStyle(railEl).gap.split(" ")[0] || "0")) : null;
+
+    const horizontalInset =
+        (scrollPadding?.paddingLeft ?? 0)
+        + (scrollPadding?.paddingRight ?? 0)
+        + (canvasPadding?.paddingLeft ?? 0)
+        + (canvasPadding?.paddingRight ?? 0);
+    const estimatedUsableContentWidthPx =
+        panelRect != null ? roundPx(panelRect.width - horizontalInset) : null;
+
+    return {
+        panel: snapshotPadding(drawerPanelEl),
+        scrollBody: scrollPadding,
+        entityDrawerScrollBody: snapshotPadding(entityScrollEl),
+        headerTitleRow: snapshotPadding(titleRowEl),
+        headerTabsRow: snapshotPadding(tabsRowEl),
+        headerLifecycleRow: snapshotPadding(lifecycleRowEl),
+        overviewComposition: snapshotPadding(overviewEl),
+        overviewCanvas: canvasPadding,
+        overviewShellGridGapPx: gridGapPx,
+        overviewRightRailGapPx: railGapPx,
+        estimatedUsableContentWidthPx,
+    };
+}
+
+function collectInternalLayoutReport(
+    drawerPanelEl: Element | null,
+    scrollBodyEl: Element | null,
+): BosDrawerGeometryReport["internalLayout"] {
+    if (!drawerPanelEl) return null;
+
+    const overviewEl = drawerPanelEl.querySelector(OVERVIEW_COMPOSITION_SELECTOR);
+    if (!overviewEl) return null;
+
+    const canvasEl =
+        overviewEl.querySelector(".adminv2-drawer-overview-canvas") ?? overviewEl;
+    const gridEl = overviewEl.querySelector(".adminv2-drawer-overview-shell-grid");
+    const leftColEl = overviewEl.querySelector(".adminv2-drawer-overview-col-left");
+    const mainColEl = overviewEl.querySelector(".adminv2-drawer-overview-col-main");
+    const railColEl = overviewEl.querySelector(".adminv2-drawer-overview-col-rail");
+
+    const panelRect = snapshotRect(drawerPanelEl);
+    const scrollRect = snapshotRect(scrollBodyEl);
+    const gridRect = snapshotRect(gridEl);
+    const canvasRect = snapshotRect(canvasEl);
+
+    const canvasWidth = canvasRect?.width ?? null;
+    const gridTrackCount =
+        gridEl ? countGridTemplateColumns(getComputedStyle(gridEl).gridTemplateColumns) : 0;
+    const containerWideEnough =
+        canvasWidth != null && canvasWidth >= DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX;
+    const viewportLgActive =
+        typeof window !== "undefined" && window.matchMedia("(min-width: 1024px)").matches;
+
+    return {
+        panelWidth: panelRect?.width ?? null,
+        scrollBodyWidth: scrollRect?.width ?? null,
+        overviewGridWidth: gridRect?.width ?? null,
+        overviewCanvasWidth: canvasWidth,
+        activeOverviewMode: inferOverviewLayoutMode(canvasWidth, gridTrackCount),
+        viewportLgActive,
+        containerWideEnough,
+        householdColWidth: snapshotRect(leftColEl)?.width ?? null,
+        enrollmentColWidth: snapshotRect(mainColEl)?.width ?? null,
+        rightRailColWidth: snapshotRect(railColEl)?.width ?? null,
+    };
 }
 
 function findLoader(): { el: Element | null; selector: string | null } {
@@ -311,10 +482,14 @@ export function collectBosDrawerGeometryReport(
     const drawerBackdrop = snapshotRect(drawerBackdropEl);
     const drawerPanel = snapshotRect(drawerPanelEl);
     const drawerContentVisibleArea = snapshotRect(drawerContentEl);
+    const internalLayout = collectInternalLayoutReport(drawerPanelEl, drawerContentEl);
+    const internalPadding = collectInternalPaddingReport(drawerPanelEl, drawerContentEl);
 
     const computedBounds = computeDrawerWorkspaceBounds({
         sidebarRight: sidebarRect?.right ?? 0,
         bosOverlayLeft: bosOverlay?.left ?? null,
+        bosOverlayWidth: bosOverlay?.width ?? null,
+        bosOverlayRight: bosOverlay?.right ?? null,
         viewportWidth: window.innerWidth,
         gutterPx,
     });
@@ -346,8 +521,12 @@ export function collectBosDrawerGeometryReport(
     const currentRailOffsetPx = parsePx(readCssVar(BOS_DRAWER_RAIL_OFFSET_CSS_VAR));
     const computedRightPx = panelComputed ? parsePx(panelComputed.right) : null;
 
+    const effectiveBosLeft =
+        computedBounds.effectiveBosOverlayLeft ?? computedBounds.bosOverlayLeft ?? bosOverlay?.left ?? null;
     const overlapPx =
-        drawerPanel && bosOverlay ? roundPx(drawerPanel.right - bosOverlay.left) : null;
+        drawerPanel && effectiveBosLeft != null ?
+            roundPx(drawerPanel.right - effectiveBosLeft)
+        :   null;
     const requiredShiftPx =
         overlapPx != null ? Math.max(0, overlapPx + gutterPx) : null;
     const currentRightOffsetPx = currentRailOffsetPx ?? computedRightPx;
@@ -356,7 +535,7 @@ export function collectBosDrawerGeometryReport(
             currentRightOffsetPx + requiredShiftPx
         :   null;
     const expectedMaxDrawerRight =
-        bosOverlay ? roundPx(bosOverlay.left - gutterPx) : null;
+        effectiveBosLeft != null ? roundPx(effectiveBosLeft - gutterPx) : null;
     const passesGutterRule =
         drawerPanel && expectedMaxDrawerRight != null ?
             drawerPanel.right <= expectedMaxDrawerRight
@@ -511,6 +690,8 @@ export function collectBosDrawerGeometryReport(
                     roundPx(loaderCenterX - drawerWorkspaceCenterX)
                 :   null,
         },
+        internalLayout,
+        internalPadding,
         recommendations: {
             summary: recommendationSummary,
             cssVarUpdates,
@@ -594,6 +775,34 @@ export function logBosDrawerGeometryReport(report: BosDrawerGeometryReport) {
 
     console.group("Loader placement");
     console.table(report.loader);
+    console.groupEnd();
+
+    console.group("Internal overview layout");
+    if (report.internalLayout) {
+        console.table(report.internalLayout);
+    } else {
+        console.log("No drawer overview composition found in open drawer.");
+    }
+    console.groupEnd();
+
+    console.group("Internal padding / gutters");
+    if (report.internalPadding) {
+        console.table({
+            estimatedUsableContentWidthPx: report.internalPadding.estimatedUsableContentWidthPx,
+            overviewShellGridGapPx: report.internalPadding.overviewShellGridGapPx,
+            overviewRightRailGapPx: report.internalPadding.overviewRightRailGapPx,
+        });
+        console.table({
+            scrollBody: report.internalPadding.scrollBody,
+            overviewCanvas: report.internalPadding.overviewCanvas,
+            headerTitleRow: report.internalPadding.headerTitleRow,
+            headerTabsRow: report.internalPadding.headerTabsRow,
+            headerLifecycleRow: report.internalPadding.headerLifecycleRow,
+            entityDrawerScrollBody: report.internalPadding.entityDrawerScrollBody,
+        });
+    } else {
+        console.log("No drawer panel open for padding audit.");
+    }
     console.groupEnd();
 
     console.group("Recommendations");

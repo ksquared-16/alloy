@@ -62,6 +62,7 @@ import { prefetchVisibleDepartmentAboveFoldBundles } from "@/lib/adminV2/prefetc
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { loadOperatorLifecycleLandingCards, invalidateOperatorLifecycleLandingCache } from "@/lib/admin/loadOperatorLifecycleLandingClient";
+import { warmDefaultOperatorLifecycleEntries } from "@/lib/admin/operatorWorkUnitEntryWarm";
 
 /** First paint: work-unit counts + rollup lines without per-dept growth KPI / pipeline calls. */
 function buildWorkspaceQuickRollup(
@@ -138,6 +139,16 @@ export default function AdminV2WorkspaceIndexPage() {
             cancelled = true;
         };
     }, [deptRefreshNonce]);
+
+    useEffect(() => {
+        if (lifecycleCardsPending || lifecycleCards.length === 0) return;
+        return scheduleAdminV2BackgroundWork(
+            () => {
+                warmDefaultOperatorLifecycleEntries(lifecycleCards, null, 1);
+            },
+            { idleTimeoutMs: 1400, fallbackMs: 500 },
+        );
+    }, [lifecycleCards, lifecycleCardsPending]);
 
     useEffect(() => {
         resetRouteShellTrace("workspace");

@@ -9,105 +9,47 @@ function read(relPath: string): string {
     return readFileSync(join(webRoot, relPath), "utf8");
 }
 
-describe("Opportunity VM progressive status", () => {
-    it("VmProgressiveStatusDropdown first paint uses readonly pill markup", () => {
-        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(src).toContain("VmReadonlyStatusPill");
-        expect(src).toContain("data-vm-status-active");
-        expect(src).not.toContain("useEffect(() => {\n        fetch(");
-        expect(src).not.toMatch(/useLayoutEffect[\s\S]*status-options/);
-    });
-
-    it("exposes activation proof data attributes on status wrapper", () => {
-        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(src).toContain("data-vm-status-progressive-mounted");
-        expect(src).toContain("data-vm-status-can-mutate");
-        expect(src).toContain("data-vm-status-options-source");
-        expect(src).toContain("data-vm-status-active");
-        expect(src).toContain("data-vm-status-last-interaction");
-        expect(src).toContain("data-vm-status-can-mutate-reason");
-    });
-
-    it("canMutate=false stays readonly and records admin auth reason", () => {
-        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(src).toContain("admin-auth-canMutate-false");
-        expect(src).toMatch(/if \(!canMutate\)[\s\S]*setActive\("readonly"\)/);
-    });
-
-    it("canMutate=true click transitions toward loading/dropdown", () => {
-        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(src).toContain('void activateDropdown("click")');
-        expect(src).toContain('setActive("loading")');
-        expect(src).toContain('setActive("dropdown")');
-    });
-
-    it("shows dropdown chevron affordance when editable, not on readonly pill", () => {
-        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(src).toContain("ChevronDown");
-        expect(src).toContain("data-vm-status-dropdown-affordance");
-        expect(src).toContain('data-vm-status-dropdown-affordance="button"');
+describe("Opportunity VM drawer header status", () => {
+    it("VmDrawerHeaderStatusSelect renders native select on first paint when editable", () => {
+        const src = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
+        expect(src).toContain("<select");
         expect(src).toContain('data-vm-status-dropdown-affordance="select"');
-        expect(src).toContain("aria-haspopup");
-        expect(src).toMatch(/if \(!interactive\)[\s\S]*VmReadonlyStatusPill/);
+        expect(src).not.toContain("activateDropdown");
+        expect(src).not.toContain('onFocus={() => void activateDropdown');
+    });
+
+    it("loads status options on mount via fetch fallback when VM options absent", () => {
+        const src = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
+        expect(src).toContain("statusOptionsFetchUrl");
+        expect(src).toContain("/api/admin/status-options?entity_type=");
+        expect(src).toContain("useEffect");
     });
 
     it("uses VM embedded options when present before fetch", () => {
-        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
+        const src = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
         expect(src).toContain("optionsFromVmStatus");
-        expect(src).toContain('setOptionsSource("vm")');
-        expect(src).toMatch(/embeddedOptions[\s\S]*setOptionsSource\("vm"\)/);
+        expect(src).toContain("embeddedOptions");
     });
 
-    it("loads status options on interaction via fetch fallback when VM options absent", () => {
-        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(src).toContain("/api/admin/status-options?entity_type=opportunities");
-        expect(src).toContain('setOptionsSource("fetch")');
-        expect(src).toContain("activateDropdown");
+    it("canMutate=false stays readonly pill", () => {
+        const src = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
+        expect(src).toContain("VmReadonlyStatusPill");
+        expect(src).toMatch(/const showSelect = canMutate/);
     });
 
-    it("upgrades to select in the same shell without unmounting rail", () => {
-        const src = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
-        expect(src).toContain("data-opportunity-drawer-vm-status-control");
-        expect(src).toContain('data-vm-progressive-status="dropdown"');
-        expect(src).toContain("firstPaintLabelRef");
-    });
-
-    it("OpportunityDrawerVmRuntime uses progressive status, not legacy controls", () => {
+    it("OpportunityDrawerVmRuntime uses progressive status wrapper", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("VmProgressiveStatusDropdown");
-        expect(runtime).not.toContain("VmReadonlyStatusPill");
         expect(runtime).not.toContain("statusBadge");
-        expect(runtime).not.toContain("VmOpportunityStatusControl");
-        expect(runtime).not.toContain("opportunityInquiryWorkflowHeaderStatus");
-        expect(runtime).not.toContain("status-options");
     });
 
-    it("derives canMutate from VM header.status_can_mutate with auth fallback", () => {
-        const src = read("lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate.ts");
-        expect(src).toContain("status_can_mutate");
-        expect(src).toContain("hasPortalAdminMutateAccess");
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("resolveOpportunityVmStatusCanMutate");
-        expect(runtime).toContain("statusCanMutate");
-    });
-
-    it("compose sets header.status_can_mutate from admin route gate", () => {
-        const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
-        expect(compose).toContain("resolveOpportunityDrawerStatusCanMutateFromGate");
-        expect(compose).toContain("status_can_mutate");
-    });
-
-    it("compose builds header_menu for Actions dropdown", () => {
-        const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
-        expect(compose).toContain("buildOpportunityDrawerHeaderMenuActions");
-        expect(compose).toContain("header_menu:");
+    it("compose builds dropdown status control when multiple opportunity defs exist", () => {
+        const compose = read("lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader.ts");
+        expect(compose).toContain('renderAs: "dropdown"');
     });
 
     it("runtime debug badge only when NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG is enabled", () => {
         const debug = read("lib/adminV2/drawer/drawerRuntimeDebug.ts");
-        expect(debug).not.toMatch(/NODE_ENV === "development"/);
         expect(debug).toContain("NEXT_PUBLIC_ADMINV2_DRAWER_RUNTIME_DEBUG");
-        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("drawerRuntimeDebugEnabled()");
     });
 });

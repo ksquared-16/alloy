@@ -21,7 +21,20 @@ export function minimalSettledPersonDrawerViewModel(
             deferred: [],
             background: [],
         },
-        header: { title: "Jane Doe", subtitle: null, status_label: "Active" },
+        header: {
+            title: "Jane Doe",
+            subtitle: null,
+            status_label: "Active",
+            status: {
+                renderAs: "dropdown",
+                status_key: "active",
+                label: "Active",
+                options: [
+                    { status_key: "active", label: "Active", sort_order: 0 },
+                    { status_key: "inactive", label: "Inactive", sort_order: 1 },
+                ],
+            },
+        },
         record: { id: "person-1", first_name: "Jane", last_name: "Doe" },
         layout: { variant_key: "parent", operating_sections: ["parent_summary", "household"] },
         background_refresh: { allowed: ["record_visibility"] },

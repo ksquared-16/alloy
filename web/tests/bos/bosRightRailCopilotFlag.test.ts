@@ -39,9 +39,10 @@ describe("bosRightRailCopilotFlag", () => {
         expect(offsetHook).toContain("data-adminv2-bos-rail-overlay");
         expect(offsetHook).toContain("BOS_RAIL_OVERLAY_GUTTER_PX");
         const drawer = read("components/admin/Drawer.tsx");
-        expect(drawer).toContain("adminv2-drawer-computed-left");
+        expect(drawer).toContain("DRAWER_COMPUTED_LEFT_CSS_VAR");
+        expect(drawer).toContain("measureAndApplyDrawerWorkspaceGeometry");
         expect(offsetHook).toContain("data-adminv2-sidebar");
-        expect(offsetHook).toContain("computeDrawerWorkspaceBounds");
+        expect(offsetHook).toContain("measureAndApplyDrawerWorkspaceGeometry");
     });
 
     it("workspace root uses Actions + BOS rail pattern", () => {

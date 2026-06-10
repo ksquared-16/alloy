@@ -53,6 +53,13 @@ import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawer
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
 import { shouldRouteDrawerActionsToCommandRail } from "@/lib/bos/bosRightRailCopilotFlag";
+import { DeleteLeadModal } from "@/components/admin/opportunity/DeleteLeadModal";
+import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
+import {
+    dispatchOpportunityQueueUpdated,
+    dispatchOpportunityQueueUpdatedBroadcast,
+} from "@/lib/admin/opportunityQueueRefreshEvent";
+import type { RecordManageMenuActionKey } from "@/lib/admin/recordManage/types";
 
 const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -145,6 +152,33 @@ export default function OpportunityDrawerVmRuntime() {
         registryHostExtensions,
         actionHost: headerActionHost,
     });
+
+    const [deleteLeadModalOpen, setDeleteLeadModalOpen] = useState(false);
+    const [manageBusyKey, setManageBusyKey] = useState<RecordManageMenuActionKey | null>(null);
+
+    const manageMenuItems = useMemo(
+        () => buildRecordManageMenuForEntity("lead", opportunitySingular),
+        [opportunitySingular]
+    );
+
+    const onManageSelect = useCallback((key: RecordManageMenuActionKey) => {
+        if (key === "delete_lead") {
+            setDeleteLeadModalOpen(true);
+            return;
+        }
+    }, []);
+
+    const onLeadDeleted = useCallback(() => {
+        const opportunityId = drawer.id?.trim();
+        setDeleteLeadModalOpen(false);
+        setManageBusyKey(null);
+        closeDrawer();
+        if (opportunityId) {
+            dispatchOpportunityQueueUpdated(opportunityId, "delete_lead");
+        } else {
+            dispatchOpportunityQueueUpdatedBroadcast("delete_lead");
+        }
+    }, [closeDrawer, drawer.id]);
 
     useEffect(() => {
         setDrawerTab("overview");
@@ -382,10 +416,9 @@ export default function OpportunityDrawerVmRuntime() {
                 opportunitySingular={opportunitySingular}
                 queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
                 inquiryWorkflow
-                menuActions={displayVm?.actions.header ?? []}
-                showRegistryActions={false}
+                manageMenuItems={manageMenuItems}
                 canMutate={statusCanMutate}
-                onActionSelect={onActionSelect}
+                onManageSelect={onManageSelect}
                 actionPreflightBlocked={actionPreflightBlocked}
                 onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}
@@ -395,8 +428,8 @@ export default function OpportunityDrawerVmRuntime() {
         committedVisible,
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
-        displayVm?.actions.header,
-        onActionSelect,
+        manageMenuItems,
+        onManageSelect,
         opportunitySingular,
         record,
         statusCanMutate,
@@ -443,18 +476,17 @@ export default function OpportunityDrawerVmRuntime() {
                     overviewData={record}
                     queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
                     inquiryWorkflow
-                    menuActions={displayVm.actions.header_menu}
-                    showRegistryActions
+                    manageMenuItems={manageMenuItems}
                     canMutate={statusCanMutate}
-                    actionLoadingKey={actionLoadingKey}
-                    onActionSelect={onActionSelect}
+                    manageBusyKey={manageBusyKey}
+                    onManageSelect={onManageSelect}
                     layout="modal-actions"
                     actionPreflightBlocked={actionPreflightBlocked}
                     onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                     registryActionFeedback={registryActionFeedback}
-                    actionsDisabledReason={
-                        actionLoadingKey ? "An action is running — wait for it to finish."
-                            : !statusCanMutate ? "You don't have permission to run actions on this record."
+                    manageDisabledReason={
+                        manageBusyKey ? "A manage action is running — wait for it to finish."
+                            : !statusCanMutate ? "You don't have permission to manage this record."
                                 : null
                     }
                 />
@@ -462,11 +494,12 @@ export default function OpportunityDrawerVmRuntime() {
         );
     }, [
         committedVisible,
-        actionLoadingKey,
         displayVm,
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
-        onActionSelect,
+        manageBusyKey,
+        manageMenuItems,
+        onManageSelect,
         record,
         statusCanMutate,
         actionPreflightBlocked,
@@ -576,8 +609,9 @@ export default function OpportunityDrawerVmRuntime() {
                 onTabSelect={onTabSelect}
                 lifecycleRail={lifecycleRail}
                 onClose={closeDrawer}
-                onActionSelect={onActionSelect}
-                actionLoadingKey={actionLoadingKey}
+                manageMenuItems={manageMenuItems}
+                onManageSelect={onManageSelect}
+                manageBusyKey={manageBusyKey}
                 actionPreflightBlocked={actionPreflightBlocked}
                 onDismissActionPreflightBlocked={clearActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}
@@ -604,8 +638,9 @@ export default function OpportunityDrawerVmRuntime() {
         onTabSelect,
         lifecycleRail,
         closeDrawer,
-        onActionSelect,
-        actionLoadingKey,
+        manageBusyKey,
+        manageMenuItems,
+        onManageSelect,
         actionPreflightBlocked,
         clearActionPreflightBlocked,
         registryActionFeedback,
@@ -733,8 +768,19 @@ export default function OpportunityDrawerVmRuntime() {
                         </>
                         : null}
             </EntityDrawerOperatingShell>
-            {registryModals ?
-                <VmDrawerActionModalsPortal>{registryModals}</VmDrawerActionModalsPortal>
+            {registryModals || deleteLeadModalOpen ?
+                <VmDrawerActionModalsPortal>
+                    {registryModals}
+                    {drawer.id ?
+                        <DeleteLeadModal
+                            open={deleteLeadModalOpen}
+                            opportunityId={drawer.id}
+                            leadSingular={opportunitySingular}
+                            onClose={() => setDeleteLeadModalOpen(false)}
+                            onDeleted={onLeadDeleted}
+                        />
+                    :   null}
+                </VmDrawerActionModalsPortal>
                 : null}
             <DrawerCommandRailActionsRegistrar registration={drawerCommandRailRegistration} />
         </>

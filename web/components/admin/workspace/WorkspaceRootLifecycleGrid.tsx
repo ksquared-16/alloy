@@ -9,6 +9,7 @@ import {
     useAdminV2NavigationTransition,
 } from "@/lib/adminV2/navigation";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import "@/app/adminV2/components/workspace/workspace.css";
 
@@ -66,6 +67,20 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                         prefetch={shouldDisableAdminV2LinkPrefetch(lifecycle.entryHref) ? false : undefined}
                         className="adminv2-ws-lifecycle-command-card-link group block no-underline text-inherit"
                         {...adminV2NavigationClickedItemProps(clickedKey)}
+                        onMouseEnter={() =>
+                            warmOperatorWorkUnitEntryFromHref(
+                                lifecycle.entryHref,
+                                null,
+                                "lifecycle_tile_hover",
+                            )
+                        }
+                        onFocus={() =>
+                            warmOperatorWorkUnitEntryFromHref(
+                                lifecycle.entryHref,
+                                null,
+                                "lifecycle_tile_focus",
+                            )
+                        }
                         onClick={(e) => {
                             if (isModifiedNavClick(e)) return;
                             e.preventDefault();

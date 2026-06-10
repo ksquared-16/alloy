@@ -4,6 +4,7 @@ import {
     inferLoaderAlignment,
     snapshotRect,
 } from "@/lib/bos/bosDrawerGeometryReport";
+import { DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 
 describe("bosDrawerGeometryReport", () => {
     it("snapshotRect rounds pixel values", () => {
@@ -35,6 +36,10 @@ describe("bosDrawerGeometryReport", () => {
         expect(inferLoaderAlignment(600, 800, 598, 550)).toBe("drawer-panel");
         expect(inferLoaderAlignment(550, 800, 600, 548)).toBe("drawer-workspace");
         expect(inferLoaderAlignment(null, 800, 600, 550)).toBe("none");
+    });
+
+    it("documents drawer overview dashboard threshold for diagnostics parity", () => {
+        expect(DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX).toBe(1040);
     });
 });
 

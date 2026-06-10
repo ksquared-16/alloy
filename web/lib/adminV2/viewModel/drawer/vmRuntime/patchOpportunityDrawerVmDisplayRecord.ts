@@ -65,6 +65,7 @@ export function patchOpportunityDrawerVmDisplayRecord(
     let actions = vm.actions;
     if (resolvedHeaderActions) {
         actions = {
+            ...vm.actions,
             header: resolvedHeaderActions.header ?? [],
             header_menu: buildOpportunityDrawerHeaderMenuActions(resolvedHeaderActions, hasActiveTour),
         };
@@ -74,6 +75,7 @@ export function patchOpportunityDrawerVmDisplayRecord(
             header: vm.actions.header,
         };
         actions = {
+            ...vm.actions,
             header: vm.actions.header,
             header_menu: buildOpportunityDrawerHeaderMenuActions(resolved, hasActiveTour),
         };

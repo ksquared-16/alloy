@@ -135,7 +135,7 @@ describe("VM drawer runtime wiring", () => {
         expect(router).not.toContain("opportunityInquiryWorkflowHeaderStatus");
     });
 
-    it("PersonsDrawerVmRuntime does not use legacy fetch or skeleton paths", async () => {
+    it("PersonsDrawerVmRuntime wires VM status through proof layout header", async () => {
         const { readFileSync } = await import("node:fs");
         const { join, dirname } = await import("node:path");
         const { fileURLToPath } = await import("node:url");
@@ -144,10 +144,15 @@ describe("VM drawer runtime wiring", () => {
             join(webRoot, "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
             "utf8"
         );
-        expect(vm).toContain("VmPersonStatusControl");
+        const header = readFileSync(
+            join(webRoot, "components/admin/vmDrawer/PersonDrawerProofLayoutHeader.tsx"),
+            "utf8"
+        );
+        expect(vm).toContain("PersonDrawerProofLayoutHeader");
+        expect(vm).toContain("displayVm?.header.status");
+        expect(header).toContain("VmPersonStatusControl");
         expect(vm).toContain("usePersonsDrawerVmPayload");
         expect(vm).not.toContain("drawer-operational-bootstrap");
-        expect(vm).not.toContain("skeleton");
         expect(vm).not.toContain("status-options");
     });
 

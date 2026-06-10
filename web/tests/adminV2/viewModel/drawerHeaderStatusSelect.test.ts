@@ -1,0 +1,132 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { buildPersonDrawerStatusControlVm } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerStatusControlVm";
+import {
+    buildPersonStatusApplicabilityMetadata,
+    PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
+    PERSON_STATUS_PROFILE_GENERIC,
+} from "@/lib/admin/person/personStatusApplicability";
+import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
+
+const webRoot = join(dirname(fileURLToPath(import.meta.url)), "../../../");
+
+function read(relPath: string): string {
+    return readFileSync(join(webRoot, relPath), "utf8");
+}
+
+function personStatusDef(
+    status_key: string,
+    status_label: string,
+    profile: "child_lifecycle" | "person_generic" | "both"
+): StatusDefinitionRow {
+    return {
+        id: status_key,
+        org_id: "org-1",
+        industry_key: null,
+        entity_type: "persons",
+        status_key,
+        status_label,
+        sort_order: 0,
+        is_active: true,
+        is_system: false,
+        metadata: buildPersonStatusApplicabilityMetadata(profile),
+    };
+}
+
+describe("buildPersonDrawerStatusControlVm", () => {
+    it("returns child lifecycle dropdown options from filtered persons status defs", () => {
+        const control = buildPersonDrawerStatusControlVm({
+            record: { status_key: "active", _status_display: "Active" },
+            statusDefs: [
+                personStatusDef("active", "Active", "both"),
+                personStatusDef("future_start", "Future start", "child_lifecycle"),
+                personStatusDef("withdrawn", "Withdrawn", "child_lifecycle"),
+            ],
+        });
+        expect(control.renderAs).toBe("dropdown");
+        if (control.renderAs === "dropdown") {
+            expect(control.options.map((o) => o.status_key)).toEqual(["active", "future_start", "withdrawn"]);
+        }
+    });
+
+    it("returns readonly pill when fewer than two defs are supplied", () => {
+        const control = buildPersonDrawerStatusControlVm({
+            record: { status_key: "active", _status_display: "Active" },
+            statusDefs: [personStatusDef("active", "Active", "both")],
+        });
+        expect(control.renderAs).toBe("readonly_pill");
+    });
+
+    it("returns hidden when no status and no defs", () => {
+        expect(
+            buildPersonDrawerStatusControlVm({
+                record: {},
+                statusDefs: [],
+            })
+        ).toEqual({ renderAs: "hidden" });
+    });
+});
+
+describe("drawer header status select wiring", () => {
+    it("Lead runtime uses first-click native select via VmDrawerHeaderStatusSelect", () => {
+        const progressive = read("components/admin/vmDrawer/VmProgressiveStatusDropdown.tsx");
+        expect(progressive).toContain("VmDrawerHeaderStatusSelect");
+        const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
+        expect(select).toContain('data-vm-progressive-status="dropdown"');
+        expect(select).toContain("<select");
+        expect(select).not.toContain("activateDropdown");
+        expect(select).not.toContain('void activateDropdown("click")');
+    });
+
+    it("Person/child runtime passes VM status control into VmPersonStatusControl", () => {
+        const header = read("components/admin/vmDrawer/PersonDrawerProofLayoutHeader.tsx");
+        expect(header).toContain("statusControl");
+        expect(header).toContain("currentStatusKey");
+        const personControl = read("components/admin/vmDrawer/VmPersonStatusControl.tsx");
+        expect(personControl).toContain("VmDrawerHeaderStatusSelect");
+        expect(personControl).toContain("entityKind=\"persons\"");
+    });
+
+    it("compose loads persons status defs with profile filtering", () => {
+        const personCompose = read("lib/adminV2/viewModel/drawer/person/composePersonDrawerViewModel.ts");
+        expect(personCompose).toContain("buildPersonDrawerStatusControlVm");
+        expect(personCompose).toContain("filterPersonStatusDefinitionsForProfile");
+        expect(personCompose).toContain("PERSON_STATUS_PROFILE_GENERIC");
+
+        const childCompose = read("lib/adminV2/viewModel/drawer/child/composeChildDrawerViewModel.ts");
+        expect(childCompose).toContain("PERSON_STATUS_PROFILE_CHILD_LIFECYCLE");
+        expect(childCompose).toContain("buildPersonDrawerStatusControlVm");
+    });
+
+    it("status PATCH persists immediately — not dirty form state", () => {
+        const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
+        expect(select).toContain('method: "PATCH"');
+        expect(select).toContain("admin-entity-saved");
+        expect(select).not.toContain("setFormData");
+    });
+
+    it("person status options API uses entity_type persons with status_profile", () => {
+        const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
+        expect(select).toContain("/api/admin/status-options?entity_type=");
+        expect(select).toContain("status_profile");
+        expect(select).toContain("opportunities");
+        expect(select).toContain("persons");
+    });
+
+    it("child enrollment status stays separate from child person status control", () => {
+        const childExecutive = read("components/admin/entity/PersonDrawerChildHeaderExecutive.tsx");
+        expect(childExecutive).toContain("personDrawerChildLeadPillLabel");
+        expect(childExecutive).not.toContain("onChange");
+        const select = read("components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx");
+        expect(select).not.toContain("opportunity_status");
+        expect(select).not.toContain("customer_members");
+    });
+});
+
+describe("status profile constants", () => {
+    it("child lifecycle profile is distinct from generic person profile", () => {
+        expect(PERSON_STATUS_PROFILE_CHILD_LIFECYCLE).not.toBe(PERSON_STATUS_PROFILE_GENERIC);
+    });
+});

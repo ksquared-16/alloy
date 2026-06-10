@@ -202,21 +202,229 @@ html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay
   z-index: 90;
 }
 
-/* Modal entity drawers — positioned via workspace-safe rectangle CSS vars */
+html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
+  width: var(--adminv2-bos-overlay-effective-width, var(--adminv2-bos-overlay-width)) !important;
+  max-width: var(--adminv2-bos-overlay-effective-width, var(--adminv2-bos-overlay-width)) !important;
+}
+
+/* Modal entity drawers — positioned via workspace-safe rectangle CSS vars (no viewport fallback) */
 html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
-  left: var(--adminv2-drawer-computed-left, 0px);
-  width: var(--adminv2-drawer-computed-width, 100%);
-  max-width: var(--adminv2-drawer-computed-width, 100%);
+  left: var(--adminv2-drawer-computed-left) !important;
+  width: var(--adminv2-drawer-computed-width) !important;
+  max-width: var(--adminv2-drawer-computed-width) !important;
   transform: none !important;
   right: auto !important;
 }
 
+html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail[data-adminv2-record-modal-tone="cleaning-v2"] {
+  max-width: var(--adminv2-drawer-computed-width) !important;
+}
+
 html[data-bos-right-rail-copilot="true"] .adminv2-drawer-sidebar-panel.adminv2-drawer-shell-inset {
-  left: var(--adminv2-drawer-computed-left, auto);
-  width: var(--adminv2-drawer-computed-width, min(100vw, 42rem));
-  max-width: var(--adminv2-drawer-computed-width, 42rem);
+  left: var(--adminv2-drawer-computed-left) !important;
+  width: var(--adminv2-drawer-computed-width) !important;
+  max-width: var(--adminv2-drawer-computed-width) !important;
   right: auto !important;
   transform: none !important;
+}
+
+/* Drawer overview — container-aware layout (drawer width, not viewport lg) */
+.adminv2-drawer-overview-canvas {
+  container-type: inline-size;
+  container-name: drawer-overview;
+}
+
+.adminv2-drawer-overview-shell-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.adminv2-drawer-overview-col-left,
+.adminv2-drawer-overview-col-main,
+.adminv2-drawer-overview-col-rail {
+  min-width: 0;
+}
+
+.adminv2-drawer-overview-col-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.adminv2-drawer-overview-lead-source-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.adminv2-drawer-enrollment-field-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+@container drawer-overview (min-width: 1040px) {
+  .adminv2-drawer-overview-shell-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .adminv2-drawer-overview-col-left {
+    grid-column: span 3;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .adminv2-drawer-overview-col-main {
+    grid-column: span 7;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .adminv2-drawer-overview-col-rail {
+    grid-column: span 2;
+    min-width: 11.5rem;
+  }
+
+  .adminv2-drawer-overview-lead-source-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+
+  .adminv2-drawer-enrollment-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* BOS rail drawer — never rely on viewport lg for overview shell (safety net) */
+html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+@container drawer-overview (min-width: 1040px) {
+  html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+/*
+ * BOS-rail drawer — internal density (outer panel geometry unchanged).
+ * Reclaims horizontal space by trimming nested padding/gutters while keeping ≥16px breathing room
+ * from the drawer panel edge to primary content.
+ */
+html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
+  /* Scroll body: default cleaning-v2 uses px-4/sm:px-5 — cap at 16px sides */
+  [data-adminv2-record-modal-scroll] {
+    padding-inline: 16px !important;
+    padding-top: 10px !important;
+  }
+
+  [data-entity-drawer-scroll-body="true"] {
+    gap: 0.375rem;
+  }
+
+  /* Header chrome — Proof shell + Lead command header */
+  [data-proof-layout-header-row="title-actions"] {
+    padding-inline: 16px !important;
+    gap: 0.75rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  [data-proof-layout-header-row="tabs"],
+  [data-proof-layout-header-row="lifecycle"],
+  [data-proof-layout-header-row="attention"] {
+    padding-inline: 16px !important;
+  }
+
+  [data-proof-layout-header-row="tabs"] {
+    padding-bottom: 0.25rem !important;
+  }
+
+  [data-proof-layout-header-row="lifecycle"] {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  [data-lead-drawer-command-header="true"] {
+    padding: 0.5rem 0.75rem !important;
+    gap: 0.625rem !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 1px 4px rgba(24, 39, 58, 0.05) !important;
+  }
+
+  [data-lead-drawer-command-avatar="true"] {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+  }
+
+  [data-proof-layout-header-controls="true"] {
+    padding-top: 0 !important;
+  }
+
+  /* Overview canvas — drop duplicate horizontal inset (scroll body owns side breathing room) */
+  .adminv2-drawer-overview-canvas {
+    padding-inline: 0 !important;
+    padding-block: 0.5rem !important;
+    gap: 0.625rem;
+  }
+
+  .adminv2-drawer-overview-shell-grid {
+    gap: 0.5rem !important;
+  }
+
+  .adminv2-drawer-overview-col-rail {
+    gap: 0.5rem !important;
+  }
+
+  .adminv2-drawer-overview-lead-source-grid {
+    gap: 0.75rem !important;
+  }
+
+  /* Layout runtime section stack inside overview slots */
+  [data-lead-overview-composition] [data-layout-surface],
+  [data-person-overview-composition] [data-layout-surface],
+  [data-child-overview-composition] [data-layout-surface] {
+    gap: 0.75rem !important;
+  }
+
+  /* Section / card interiors */
+  [data-drawer-overview-panel="true"] header {
+    padding-inline: 0.625rem !important;
+    padding-block: 0.375rem !important;
+  }
+
+  [data-drawer-overview-panel="true"] > div:not(header) {
+    padding-inline: 0.625rem !important;
+  }
+
+  [data-drawer-overview-panel-section="children_enrollment"] > div:not(header),
+  [data-drawer-overview-panel-section="program_enrollment"] > div:not(header) {
+    padding-inline: 0 !important;
+  }
+
+  [data-drawer-household-profile-section="true"] {
+    padding: 0.5rem !important;
+  }
+
+  [data-lead-enrollment-card-list="true"] ul {
+    padding: 0.375rem !important;
+    gap: 0.375rem !important;
+  }
+
+  [data-lead-enrollment-card-row="true"] {
+    padding-inline: 0.625rem !important;
+    padding-block: 0.5rem !important;
+  }
+
+  [data-drawer-overview-empty-state="true"] {
+    padding-inline: 0.75rem !important;
+    padding-block: 0.75rem !important;
+  }
 }
 
 /* Drawer loading — center inside panel, not viewport */
@@ -266,12 +474,24 @@ html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-w
 html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck,
 html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck,
 html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck {
-  background: #ffffff;
+  background: #ffffff !important;
 }
 
 html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
 html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
-  background: transparent;
+  background: transparent !important;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-paired-oper-panel,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-paired-oper-panel,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-paired-oper-panel {
+  background: #ffffff;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-qsec--summary,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--summary {
+  background: #ffffff;
 }
 
 /* BOS rail — tighter vertical rhythm; composer + preview stay visible */
@@ -294,7 +514,16 @@ html[data-bos-right-rail-copilot="true"] .bos-rail-header [data-command-surface-
 html[data-bos-right-rail-copilot="true"] .bos-rail-scroll {
   flex: 1 1 auto;
   min-height: 0;
+  overflow-y: hidden !important;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-starters="true"] {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 html[data-bos-right-rail-copilot="true"] .bos-rail-attention {
@@ -326,8 +555,13 @@ html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-composer="tr
   padding-bottom: 6px;
 }
 
+html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
+  flex-shrink: 1;
+  min-height: 0;
+}
+
 html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] > div {
-  max-height: min(22vh, 132px);
+  max-height: min(20vh, 120px);
 }
 
 @keyframes adminv2-ambient-orbit {

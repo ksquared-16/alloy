@@ -136,6 +136,9 @@ export function minimalSettledOpportunityDrawerViewModel(
                     workflow_id: null,
                 },
             ],
+            manage_menu: [
+                { kind: "action", key: "delete_lead", label: "Delete Lead", enabled: true },
+            ],
         },
         layout: {
             mode: "workflow_v1",

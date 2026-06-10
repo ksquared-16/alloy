@@ -20,7 +20,8 @@ export async function ensureCustomerForPersonNative(
     supabase: SupabaseClient,
     personId: string,
     params: {
-        vertical_id: string;
+        /** Optional — customers.vertical_id is nullable; omit when org has no vertical configured. */
+        vertical_id?: string | null;
         org_id: string | null;
         first_name?: string | null;
         last_name?: string | null;
@@ -70,7 +71,6 @@ export async function ensureCustomerForPersonNative(
     const payload: Record<string, unknown> = {
         name,
         status: "active",
-        vertical_id: params.vertical_id,
         metadata: {
             source: "book-v2-person-native",
             email: params.email ?? p.email ?? undefined,
@@ -78,6 +78,8 @@ export async function ensureCustomerForPersonNative(
         },
         org_id: orgId,
     };
+    const verticalId = params.vertical_id?.trim() || null;
+    if (verticalId) payload.vertical_id = verticalId;
 
     const { data: newCustomer, error: insErr } = await supabase.from("customers").insert(payload).select("id").single();
     if (insErr || !newCustomer) {

@@ -1,27 +1,27 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useMemo } from "react";
 
 import BosDrawerAssistCta from "@/components/admin/drawer/BosDrawerAssistCta";
 import { DrawerHeaderAttentionBlock } from "@/components/admin/drawer/DrawerHeaderAttentionBlock";
-import { OpportunityDrawerHeaderActionsMenu } from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsMenu";
-import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
-import { shouldRouteDrawerActionsToCommandRail } from "@/lib/bos/bosRightRailCopilotFlag";
+import { RecordDrawerManageMenu } from "@/components/admin/drawer/record/RecordDrawerManageMenu";
+import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
+import type { RecordManageEntityKind, RecordManageMenuActionKey } from "@/lib/admin/recordManage/types";
 
 type Props = {
     personId: string;
     overviewData: Record<string, unknown>;
     opportunitySingular?: string;
-    /** Save / registry actions rendered on the top row beside Work with BOS. */
+    manageEntityKind?: RecordManageEntityKind;
+    /** Save actions rendered on the top row beside Work with BOS. */
     actionsSlot?: ReactNode;
     /** Proof-layout header — actions row only (no attention block below). */
     proofLayoutActions?: boolean;
-    menuActions?: ResolvedActionForClient[];
-    showRegistryActions?: boolean;
     canMutate?: boolean;
-    actionLoadingKey?: string | null;
-    onActionSelect?: (action: ResolvedActionForClient) => void;
-    actionsDisabledReason?: string | null;
+    manageBusyKey?: RecordManageMenuActionKey | null;
+    onManageSelect?: (key: RecordManageMenuActionKey) => void;
+    manageDisabledReason?: string | null;
 };
 
 /** Person drawer title-rail — controls top-right; attention context below (full width, left-aligned). */
@@ -29,16 +29,19 @@ export function PersonDrawerHeaderControls({
     personId,
     overviewData,
     opportunitySingular = "Person",
+    manageEntityKind = "person",
     actionsSlot = null,
     proofLayoutActions = false,
-    menuActions = [],
-    showRegistryActions = false,
     canMutate = false,
-    actionLoadingKey = null,
-    onActionSelect,
-    actionsDisabledReason = null,
+    manageBusyKey = null,
+    onManageSelect,
+    manageDisabledReason = null,
 }: Props) {
-    const routeActionsToRail = shouldRouteDrawerActionsToCommandRail();
+    const manageMenuItems = useMemo(
+        () => buildRecordManageMenuForEntity(manageEntityKind, opportunitySingular),
+        [manageEntityKind, opportunitySingular]
+    );
+
     const actionsRow = (
         <div
             className="flex shrink-0 flex-nowrap items-center justify-end gap-2 overflow-visible"
@@ -53,16 +56,15 @@ export function PersonDrawerHeaderControls({
                 proofLayoutActions={proofLayoutActions}
                 actionVariant="juniper"
             />
-            {showRegistryActions && !routeActionsToRail ?
-                <OpportunityDrawerHeaderActionsMenu
-                    actions={menuActions}
-                    disabled={!canMutate || menuActions.length === 0}
-                    disabledReason={actionsDisabledReason}
-                    busyKey={actionLoadingKey}
-                    onSelect={onActionSelect ?? (() => undefined)}
-                    proofLayoutActions={proofLayoutActions}
-                />
-            :   actionsSlot}
+            <RecordDrawerManageMenu
+                items={manageMenuItems}
+                disabled={!canMutate || !!manageBusyKey}
+                disabledReason={manageDisabledReason}
+                busyKey={manageBusyKey}
+                onSelect={onManageSelect ?? (() => undefined)}
+                proofLayoutActions={proofLayoutActions}
+            />
+            {actionsSlot}
         </div>
     );
 

@@ -14,6 +14,7 @@ import Drawer, {
     ADMINV2_DRAWER_BACKDROP_Z,
     ADMINV2_DRAWER_PANEL_Z,
 } from "@/components/admin/Drawer";
+import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import {
     entityDrawerAccentColor,
     type EntityDrawerOperatingEntity,
@@ -63,6 +64,13 @@ export default function EntityDrawerOperatingShell({
 }: EntityDrawerOperatingShellProps) {
     const useComposedHeader = composedStickyHeader != null && composedStickyHeader !== false;
     const showSummaryStrip = summaryStrip != null && summaryStrip !== false;
+    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
+    const resolvedPanelClassName = [
+        bosRailCopilot ? undefined : (panelClassName ?? DEFAULT_PANEL_CLASS),
+        holdPriorPayload ? "adminv2-drawer-panel--swap-hold" : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
 
     return (
         <Drawer
@@ -76,7 +84,7 @@ export default function EntityDrawerOperatingShell({
             panelFooterChrome={panelFooterChrome}
             variant="adminV2"
             presentation="modal"
-            panelClassName={panelClassName}
+            panelClassName={resolvedPanelClassName || undefined}
             zIndexBackdrop={ADMINV2_DRAWER_BACKDROP_Z}
             zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={entityDrawerAccentColor(entity)}

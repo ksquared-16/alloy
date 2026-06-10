@@ -1,9 +1,16 @@
 "use client";
 
-import React, { type CSSProperties, isValidElement, useEffect, useState } from "react";
+import React, { type CSSProperties, isValidElement, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { shouldCloseAdminV2DrawerOnOutsideTarget } from "@/lib/adminV2/drawerOutsideClick";
 import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
+import {
+    DRAWER_AVAILABLE_RIGHT_CSS_VAR,
+    DRAWER_BACKDROP_LEFT_CSS_VAR,
+    DRAWER_COMPUTED_LEFT_CSS_VAR,
+    DRAWER_COMPUTED_WIDTH_CSS_VAR,
+    measureAndApplyDrawerWorkspaceGeometry,
+} from "@/lib/bos/drawerWorkspaceGeometry";
 import {
     LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
     LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW,
@@ -131,6 +138,15 @@ export default function Drawer({
         setPortalReady(true);
     }, []);
 
+    const isV2Early = variant === "adminV2";
+    const bosRailCopilotEarly = isBosRightRailCopilotEnabledClient();
+    const bosWorkspaceDrawerLayoutEarly = bosRailCopilotEarly && isV2Early;
+
+    useLayoutEffect(() => {
+        if (!isOpen || !bosWorkspaceDrawerLayoutEarly || !portalReady) return;
+        measureAndApplyDrawerWorkspaceGeometry();
+    }, [isOpen, bosWorkspaceDrawerLayoutEarly, portalReady]);
+
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden";
@@ -186,17 +202,17 @@ export default function Drawer({
     const bosWorkspaceDrawerLayout = bosRailCopilot && isV2;
     const workspaceDrawerPanelStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
         {
-            left: "var(--adminv2-drawer-computed-left, 0px)",
-            width: "var(--adminv2-drawer-computed-width, 100%)",
-            maxWidth: "var(--adminv2-drawer-computed-width, 100%)",
+            left: `var(${DRAWER_COMPUTED_LEFT_CSS_VAR})`,
+            width: `var(${DRAWER_COMPUTED_WIDTH_CSS_VAR})`,
+            maxWidth: `var(${DRAWER_COMPUTED_WIDTH_CSS_VAR})`,
             transform: "none",
             right: "auto",
         }
     :   undefined;
     const workspaceDrawerBackdropStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
         {
-            left: "var(--adminv2-drawer-available-left, 0px)",
-            right: "calc(100vw - var(--adminv2-drawer-available-right, 100vw))",
+            left: `var(${DRAWER_BACKDROP_LEFT_CSS_VAR})`,
+            right: `calc(100vw - var(${DRAWER_AVAILABLE_RIGHT_CSS_VAR}))`,
         }
     :   undefined;
     const cleaningRecordModalTone = isModal && recordModalTone === "cleaning-v2";
@@ -541,7 +557,7 @@ export default function Drawer({
                     data-adminv2-drawer="true"
                     data-adminv2-record-modal="true"
                     data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
-                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${bosModalDrawerLayout ? "adminv2-drawer-modal-panel--bos-rail" : "left-1/2 w-[min(calc(100vw-1.5rem),80rem)] -translate-x-1/2"} ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
+                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${bosModalDrawerLayout ? "adminv2-drawer-modal-panel--bos-rail" : "left-1/2 w-[min(calc(100vw-1.5rem),80rem)] -translate-x-1/2"} ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${bosModalDrawerLayout ? "" : (panelClassName ?? "max-w-5xl")}`}
                     style={
                         cleaningRecordModalTone && recordModalContextStyle
                             ? { ...recordModalContextStyle, ...panelStyle, zIndex: zIndexPanel }

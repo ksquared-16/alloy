@@ -11,7 +11,10 @@ import PersonConnectedChildrenCardList from "@/components/layout/person/PersonCo
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
 import {
     DRAWER_OVERVIEW_CANVAS_CLASS,
+    DRAWER_OVERVIEW_CONTAINER_CLASS,
+    DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX,
     DRAWER_OVERVIEW_PANEL_SURFACE,
+    DRAWER_OVERVIEW_SHELL_GRID_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import {
@@ -33,6 +36,13 @@ describe("drawerOverviewCompositionStandard", () => {
     it("uses white drawer overview canvas", () => {
         expect(LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS).toContain("bg-white");
         expect(DRAWER_OVERVIEW_CANVAS_CLASS).toContain("bg-white");
+    });
+
+    it("uses container-query overview shell classes instead of viewport lg grid", () => {
+        expect(DRAWER_OVERVIEW_CANVAS_CLASS).toContain(DRAWER_OVERVIEW_CONTAINER_CLASS);
+        expect(DRAWER_OVERVIEW_SHELL_GRID_CLASS).toBe("adminv2-drawer-overview-shell-grid");
+        expect(DRAWER_OVERVIEW_CANVAS_CLASS).not.toContain("lg:grid-cols-12");
+        expect(DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX).toBe(1040);
     });
 
     it("panel surface includes pine left accent", () => {

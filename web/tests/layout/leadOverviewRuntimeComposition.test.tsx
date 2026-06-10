@@ -21,10 +21,13 @@ describe("LeadOverviewRuntimeComposition", () => {
         expect(html).toContain('data-lead-overview-composition="true"');
         expect(html).toContain('data-lead-overview-slot="household_contact"');
         expect(html).toContain('data-lead-overview-slot="children_enrollment"');
-        expect(html).toContain('lg:col-span-7');
-        expect(html).toContain('lg:col-span-2');
+        expect(html).toContain("adminv2-drawer-overview-shell-grid");
+        expect(html).toContain("adminv2-drawer-overview-col-main");
+        expect(html).toContain("adminv2-drawer-overview-col-rail");
+        expect(html).not.toContain("lg:col-span-7");
+        expect(html).not.toContain("lg:grid-cols-12");
         expect(html).toContain('data-lead-overview-slot="right_rail"');
         expect(html).toContain('data-lead-overview-slot="lead_source"');
-        expect(html).toContain('data-lead-overview-composition-section="children_enrollment"');
+        expect(html).toContain('data-layout-runtime-section-key="children_enrollment"');
     });
 });

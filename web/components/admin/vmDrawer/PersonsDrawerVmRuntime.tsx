@@ -17,8 +17,9 @@ import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { personDisplayName } from "@/lib/adminFormatters";
 import { resolvePersonDrawerOperatingBackLink } from "@/lib/admin/person/personDrawerBackLink";
 import { findBackToLeadOpportunityInStack } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveBackToLeadOpportunity";
-import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerChildChrome";
+import { PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS, resolvePersonDrawerProfileFromRecordWithHint } from "@/lib/admin/person/personDrawerChildChrome";
 import { PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS } from "@/lib/admin/person/personDrawerParentChrome";
+import { resolvePersonDrawerStatusProfile } from "@/lib/admin/person/personStatusApplicability";
 import type { PersonDrawerVmChrome } from "@/lib/admin/person/resolvePersonDrawerVmOverviewSections";
 import {
     layoutVariantFromChildVm,
@@ -388,6 +389,20 @@ export default function PersonsDrawerVmRuntime() {
         return resolvePersonDrawerProofTitle(record, displayVm, chrome);
     }, [record, displayVm, chrome, entityLabel]);
 
+    const currentStatusKey = useMemo(
+        () => String(record?.status_key ?? "").trim(),
+        [record?.status_key]
+    );
+
+    const personStatusProfile = useMemo(() => {
+        if (!record) return null;
+        const profile = resolvePersonDrawerProfileFromRecordWithHint(record, {
+            presentation_emphasis:
+                isChildSurface ? PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS : undefined,
+        });
+        return resolvePersonDrawerStatusProfile(profile, { childChrome: isChildSurface });
+    }, [record, isChildSurface]);
+
     const composedProofHeader = useMemo(() => {
         if (!layoutCutoverHeader || !committedVisible || !personId || !record) return undefined;
         return (
@@ -397,6 +412,9 @@ export default function PersonsDrawerVmRuntime() {
                 record={record}
                 entityLabel={entityLabel}
                 statusLabel={displayVm?.header.status_label ?? null}
+                statusControl={displayVm?.header.status ?? null}
+                currentStatusKey={currentStatusKey}
+                statusProfile={personStatusProfile}
                 canMutate={!!canMutate}
                 tabs={tabs}
                 activeTab={drawerTab}
@@ -422,6 +440,9 @@ export default function PersonsDrawerVmRuntime() {
         proofTitle,
         entityLabel,
         displayVm?.header.status_label,
+        displayVm?.header.status,
+        currentStatusKey,
+        personStatusProfile,
         canMutate,
         tabs,
         drawerTab,

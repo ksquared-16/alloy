@@ -11,7 +11,14 @@ import {
 } from "@/lib/layout/runtime/leadOverviewComposition";
 import { resolveLeadOverviewRightRailSections } from "@/lib/layout/runtime/resolveLeadOverviewRightRailSections";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
-import { DRAWER_OVERVIEW_CANVAS_CLASS } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
+import {
+    DRAWER_OVERVIEW_CANVAS_CLASS,
+    DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS,
+    DRAWER_OVERVIEW_LEFT_COLUMN_CLASS,
+    DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
+    DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
+    DRAWER_OVERVIEW_SHELL_GRID_CLASS,
+} from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 type Props = {
@@ -109,7 +116,7 @@ export default function LeadOverviewRuntimeComposition({
         <LayoutRuntimeCompositionProvider value={hints}>
             <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-lead-overview-composition="true">
                 {/* Shell grid: household 3 / enrollment 7 / right rail 2 — see LEAD_OVERVIEW_SHELL_GRID */}
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
+                <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
                     {slots.household ?
                         <CompositionSlot
                             slotKey="household_contact"
@@ -119,7 +126,7 @@ export default function LeadOverviewRuntimeComposition({
                             entityId={entityId}
                             canMutate={canMutate}
                             onAdornmentAction={onAdornmentAction}
-                            className="min-w-0 lg:col-span-3"
+                            className={DRAWER_OVERVIEW_LEFT_COLUMN_CLASS}
                         />
                     :   null}
 
@@ -132,13 +139,13 @@ export default function LeadOverviewRuntimeComposition({
                             entityId={entityId}
                             canMutate={canMutate}
                             onAdornmentAction={onAdornmentAction}
-                            className="min-w-0 lg:col-span-7"
+                            className={DRAWER_OVERVIEW_MAIN_COLUMN_CLASS}
                         />
                     :   null}
 
                     {rightRailSections.length > 0 ?
                         <div
-                            className="flex min-w-0 flex-col gap-3 lg:col-span-2"
+                            className={DRAWER_OVERVIEW_RIGHT_RAIL_CLASS}
                             data-lead-overview-slot="right_rail"
                             data-lead-overview-right-rail-section-count={String(rightRailSections.length)}
                         >
@@ -158,7 +165,7 @@ export default function LeadOverviewRuntimeComposition({
                 </div>
 
                 {showLeadSource && slots.leadSource ?
-                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-5">
+                    <div className={DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS}>
                         <CompositionSlot
                             slotKey="lead_source"
                             sectionKeys={[slots.leadSource.key]}
