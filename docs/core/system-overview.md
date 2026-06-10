@@ -1,5 +1,20 @@
 # System overview
 
+## Platform doctrine (June 2026 freeze)
+
+Single sources of truth for onboarding — read before audits or hardening work:
+
+| Topic | Doc |
+|-------|-----|
+| Routing & URLs | `docs/system/routing-doctrine.md` |
+| Navigation | `docs/system/navigation-doctrine.md` |
+| Drawers | `docs/system/drawer-doctrine.md` |
+| Performance | `docs/system/platform-performance-doctrine.md` |
+| Legacy inventory | `docs/system/legacy-architecture-inventory.md` |
+| Repository snapshot | `docs/system/repository-state-2026-06.md` |
+
+**Operator hierarchy:** Organization → **Lifecycle** → **Work Unit** → **Record** (not department-first navigation).
+
 ## Purpose
 
 Orient engineers and AI agents to how Alloy is structured today: org-scoped multi-tenancy, canonical entities, the event → workflow → action path, and the rules that prevent identity and data-authority mistakes.
@@ -11,7 +26,7 @@ Orient engineers and AI agents to how Alloy is structured today: org-scoped mult
 - **Communications V1** (canonical threads/messages, entity-scoped UI, provider webhooks, backend dispatcher): **`docs/product/communications.md`**.
 - **Forms engine foundation** (definitions, versions, public links, submissions, admin + public APIs): **`docs/product/documents-and-forms.md`** — **Forms MVP productization shipped ~2026-05-28**; **Enrollment Packet Phase 1 + Phase 2 review MVP** shipped; DCP/UX hardening in **`docs/sprints/05_2026/later-phase/`**.
 - **Enrollment workspace (May 2026):** **`enrollment_pipeline` v2** — case vs child/candidate grain, OCM lifecycle SoT — **`docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`**, **`docs/system/workspace-system.md`**.
-- **AdminV2 workspace runtime (May 2026):** Reveal gates, WU operational bootstrap, route-owned queue selection, drawer pipeline — **engineering closeout shipped**; see **`docs/sprints/05_2026/completed/adminv2_performance_closeout.md`**, **`docs/system/workspace-system.md`**. Broad speed sprint **paused**.
+- **AdminV2 workspace runtime (June 2026):** Reveal gates, atomic work-unit reveal (Pass 3), WU operational bootstrap, route-owned queue selection, drawer VM pipeline — **locked baseline** in **`docs/system/platform-performance-doctrine.md`** and **`docs/system/adminv2-runtime-performance-doctrine.md`**. Platform snapshot: **`docs/system/repository-state-2026-06.md`**.
 - **BOS assistive groundwork (narrow, paused for expansion):** Orchestrator, Task Assist, Workflow Assist, needs-attention enrich — **human-in-the-loop**; see **`docs/product/bos-foundation.md`**. **Not** autonomous agents; **not** the primary execution roadmap right now.
 - **Human identity:** **`persons`** + **`customer_persons`** are the canonical model in code for CRM/booking writes; **`contacts`** remain for compatibility (messaging, documents, workflows, aged rows). Opportunity identity normalization is centralized in **`web/lib/opportunityIdentity.ts`**.
 - Side effects that matter for business state are **intended** to run through **events**, **workflows**, and **admin actions**; high-risk gaps and exceptions are tracked in **`docs/audits/event-integrity-audit.md`** (not assumed fully closed until that audit says so).
@@ -20,7 +35,7 @@ Orient engineers and AI agents to how Alloy is structured today: org-scoped mult
 
 - **Spine:** Org → entities (customers, opportunities, jobs, schedules, persons, …) → **immutable-ish events** (`workflow_events`) → **workflow runs** → **actions** → DB and outbound **effects** (messages, links, updates).
 - **Record truth:** Detailed entity payloads for admin/drawer often come from **resolver-backed** composition (e.g. jobs via RRS), not from raw queue list rows.
-- **Workspace:** Operational UX is organized by **departments** and **work units**; **queues** on work units are configured (e.g. `queue_definition` JSON) and loaded through **`QueueService`**, which returns **preview-shaped** rows.
+- **Workspace (June 2026 — lifecycle-first):** Operator UX is **Organization → Lifecycle → Work Unit → Record**. **`/workspace`** landing shows lifecycle command tiles; execution is **`/workspace/work-unit/:slug`** with configured **queues** (`queue_definition` JSON) loaded through **`QueueService`** as **preview-shaped** rows. **Departments** remain for ACL, metadata, and KPI rollup — not primary daily navigation. See **`docs/system/navigation-doctrine.md`**, **`docs/system/routing-doctrine.md`**, **`docs/system/workspace-system.md`**.
 - **Config:** JSON/config tables (status definitions, queue definitions, record layouts, etc.) **steer** presentation and allowed keys within **platform guardrails**; they do not replace authorization, workflow effects, or hard business invariants enforced in code.
 
 ## Principles (doctrine)
@@ -45,6 +60,11 @@ Aligned with platform intent; if code disagrees, fix code **or** update docs in 
 | Org-scoped admin context | `web/lib/admin/getAdminContext.ts` |
 | CRM scope + capabilities | `docs/system/roles-and-permissions.md`; `web/lib/admin/getAdminAccessContext.ts`, `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/accessScope.ts` |
 | Identity/linking helpers | `web/lib/bookingCustomerPersonLink.ts`, `web/lib/bookingPersonCustomerResolve.ts`, `web/lib/opportunityIdentity.ts` |
+| Routing / navigation doctrine | `docs/system/routing-doctrine.md`, `docs/system/navigation-doctrine.md` |
+| Drawer doctrine | `docs/system/drawer-doctrine.md` |
+| Performance doctrine | `docs/system/platform-performance-doctrine.md`, `docs/system/adminv2-runtime-performance-doctrine.md` |
+| Legacy inventory | `docs/system/legacy-architecture-inventory.md` |
+| Repository snapshot (June 2026) | `docs/system/repository-state-2026-06.md` |
 
 ## Guardrails
 

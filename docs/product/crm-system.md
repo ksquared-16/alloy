@@ -4,6 +4,19 @@
 
 Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **scheduling** as it shows up today (tours, enrollment lanes, and `schedules` tied to CRM/booking)—with correct identity anchors (**persons** / **customer_persons**). **Communications** in the lead loop are documented in **`docs/product/communications.md`**.
 
+## Lifecycle ownership (June 2026 freeze)
+
+| Layer | Source of truth | Owner |
+|-------|-----------------|-------|
+| **Lifecycle catalog** | Lifecycle Hub (`/admin/settings/lifecycle`) | Config — which lifecycles appear on `/workspace` and sidebar |
+| **Case lifecycle** | `opportunities.status_key` | Platform status definitions + drawer header controls |
+| **Child enrollment lifecycle** | `opportunity_customer_members.outcome_status_key` | Platform sub-status definitions; per-child SoT |
+| **Work unit** | `work_units` + `queue_definition` | Execution domain — lanes/pills, not lifecycle stages |
+| **Queue membership** | `QueueService` preview rows | Preview only — entity GET for authority |
+| **Drawer record state** | VM runtime + entity GET | Opportunity VM canonical; Person/Child transitional |
+
+Navigation: **Lifecycle → Work Unit → Record** — see **`docs/system/navigation-doctrine.md`**.
+
 ## Current state
 
 - **Case vs child lifecycle (May 2026):** **`opportunities`** = **household coordination case** (tours, comms, forms, follow-up). **`opportunity_customer_members.outcome_status_key`** = **per-child enrollment lifecycle SoT** (siblings may differ). **`opportunities.status_key`** remains in use for case-level pipeline filters and legacy lanes but **must not** be treated as authoritative for every child’s waitlist/enrollment state. Queue **grain** in `work_units.queue_definition` declares whether a lane lists **case** or **child/candidate** rows. Closeout: **`docs/sprints/05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`**.

@@ -2,11 +2,26 @@
 
 ## Purpose
 
-Document **Admin V2 workspace**: departments, work units, queues, and how operators navigate work — without confusing queue UI data for canonical records.
+Document the **operator workspace**: lifecycle-first navigation, work units, queues, and how operators execute work — without confusing queue UI data for canonical records.
+
+**Canonical hierarchy (June 2026):** Organization → **Lifecycle** → **Work Unit** → **Record**.  
+**Not** department-first daily navigation. See **`navigation-doctrine.md`**, **`routing-doctrine.md`**.
+
+## Ownership (June 2026 freeze)
+
+| Concern | Owner |
+|---------|--------|
+| **Lifecycle catalog** | Lifecycle Hub config + `loadOperatorLifecycleLandingCards` |
+| **Work unit execution** | `work_units.queue_definition`, operational bootstrap, slug routes |
+| **Queue lanes** | `QueueService` + route-owned selection (`workUnitQueueSelection.ts`) |
+| **Record detail** | Drawer VM + entity GET (not queue rows) |
+| **Status (case)** | `opportunities.status_key` + platform header controls |
+| **Status (child enrollment)** | `opportunity_customer_members.outcome_status_key` |
+| **Department scope** | ACL / metadata only — `user_access_profiles`, dept metadata |
 
 ## Workspace view site (operator context)
 
-Under `/adminV2/workspace/**`, operators may narrow lists and queue/bootstrap fetches to one **allowed site** (`locations.location_type = site`). This is **session view context**, not configuration and not a permission elevation.
+Under **`/workspace/**`** (rewrites to `app/adminV2/workspace/**`), operators may narrow lists and queue/bootstrap fetches to one **allowed site** (`locations.location_type = site`). This is **session view context**, not configuration and not a permission elevation.
 
 | Mechanism | Role |
 |-----------|------|
@@ -56,7 +71,9 @@ All authoritative reads must come from:
 
 - **Needs Attention:** A **resolver-backed operational overlay** (`needs_attention` **queue** + configurable **`metadata.opportunity_attention_rules.needs_attention_buckets`**). It **does not** replace pipeline stages; lenses may overlap **any** lifecycle stage. **Reason codes** are platform-owned; **visible bucket lenses** are metadata-owned (no global enrollment fallback — see **`docs/product/crm-system.md`**). On enrollment depts the queue usually lives **inside** `enrollment_pipeline`’s `queue_definition`, not on a separate work unit — see **`resolveDeptNeedsAttentionWorkUnit`** (`web/lib/workspace/resolveDeptNeedsAttentionWorkUnit.ts`).
 
-**AdminV2 dept runtime reference (2026-05-20):** `/adminV2/workspace/dept/[departmentId]` is the locked premium runtime pattern — single `operational-bootstrap`, shell-first nav, paired oper reveal, bundled KPI/actions. Replication target for work-unit; details in **`docs/sprints/05_2026/adminv2_performance_scope_lock.md`** Appendix.
+**Operator entry (canonical):** `/workspace` lifecycle landing → `/workspace/work-unit/:slug`. Slug host: `WorkUnitSlugRouteHost`. Internal dept UUID routes remain for compat/tests — not product nav.
+
+**Performance (June 2026):** Atomic above-fold reveal (Pass 3) — **`platform-performance-doctrine.md`**. Locked runtime rules: **`adminv2-runtime-performance-doctrine.md`**.
 
 **AdminV2 runtime contract (2026-05):** Composer-owned reveal for drawers and work-unit lanes — no section-local skeleton/pop-in. Code: `web/lib/adminV2/runtime/contract/`. **Locked performance doctrine (June 2026):** **`docs/system/adminv2-runtime-performance-doctrine.md`** (supersedes sprint-only **`docs/sprints/05_2026/completed/adminv2-runtime-contract.md`** for reveal/loading rules).
 
@@ -70,7 +87,7 @@ All authoritative reads must come from:
 
 **Operational attention** is not a separate workspace subsystem: it is a **resolver-backed filter and explainability overlay** on the same opportunity queues and entity payloads.
 
-- **Department (`/adminV2/workspace/dept/:id`):** The **left** paired lane is the **execution pipeline surface**: when a department work unit’s **`queue_definition`** uses **`pipeline_with_attention`** and defines a **`pipeline` UI section**, the UI renders **one row per pipeline `queue_key`** (order/labels/icons from the definition — see **`extractPipelineExecutionLanes`**). Otherwise it falls back to **one row per work unit** with summaries from the batch route. The **right** **Needs Attention** lane lists **configured buckets** from `metadata.opportunity_attention_rules.needs_attention_buckets` (with **work unit → department** precedence when the key exists on that layer; omitted key ⇒ empty lane / copy-only empty state), sorted by **`priority`** (then **`order`**). **Trust rule:** dept preview/bootstrap resolves the **execution work unit** via **`resolveDeptNeedsAttentionWorkUnit`**: standalone `work_units.key === needs_attention` **or** (enrollment canonical) **`enrollment_pipeline`** whose `queue_definition` defines a **`needs_attention`** queue. Lane counts then use **`buildWorkUnitScopedNeedsAttentionLaneBuckets`** on that work unit id (same resolver + **`NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP`** as `GET …/queues/{workUnitId}/needs_attention`). Response field **`bucket_count_scope`** tells clients whether numbers are execution-aligned (`work_unit_needs_attention_list_cap`) or org-preview fallback (`org_preview_cap_500`). Tiles use the same compact card grammar on both sides (neutral pipeline tone vs subtle attention accent).
+- **Department page (internal/compat — `/adminV2/workspace/dept/:id`):** The **left** paired lane is the **execution pipeline surface**: when a department work unit’s **`queue_definition`** uses **`pipeline_with_attention`** and defines a **`pipeline` UI section**, the UI renders **one row per pipeline `queue_key`** (order/labels/icons from the definition — see **`extractPipelineExecutionLanes`**). Otherwise it falls back to **one row per work unit** with summaries from the batch route. The **right** **Needs Attention** lane lists **configured buckets** from `metadata.opportunity_attention_rules.needs_attention_buckets` (with **work unit → department** precedence when the key exists on that layer; omitted key ⇒ empty lane / copy-only empty state), sorted by **`priority`** (then **`order`**). **Trust rule:** dept preview/bootstrap resolves the **execution work unit** via **`resolveDeptNeedsAttentionWorkUnit`**: standalone `work_units.key === needs_attention` **or** (enrollment canonical) **`enrollment_pipeline`** whose `queue_definition` defines a **`needs_attention`** queue. Lane counts then use **`buildWorkUnitScopedNeedsAttentionLaneBuckets`** on that work unit id (same resolver + **`NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP`** as `GET …/queues/{workUnitId}/needs_attention`). Response field **`bucket_count_scope`** tells clients whether numbers are execution-aligned (`work_unit_needs_attention_list_cap`) or org-preview fallback (`org_preview_cap_500`). Tiles use the same compact card grammar on both sides (neutral pipeline tone vs subtle attention accent).
 - **Work unit (`…/work-unit/:workUnitId`):** Needs Attention lists rows from `GET /api/admin/queues/.../needs_attention` with optional **`attention_bucket`** matching a configured bucket **`key`**. Chips/sub-tabs reflect enabled buckets from metadata (same precedence as lanes). **`QueueService.enrichOpportunityRows`** runs resolver attention for **every** opportunity queue list so rows carry **`_needs_attention`** / attention labels — **any** pipeline lane may show the subtle warning styling when the resolver marks the record. Queue rows remain preview-only (see **[Queue truth boundary](#queue-truth-boundary-critical-rule)**).
 - **Drawer:** Explainability lives on **`_operational_attention`** from entity GET — surfaced as a **compact header strip** (`OperationalAttentionHeaderStrip`), not a large Overview card.
 
@@ -152,7 +169,8 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 | Queue service | `web/lib/queues/QueueService.ts` |
 | Queue definition schema | `web/lib/config/queueDefinitionSchema.ts` |
 | Workspace types | `web/lib/workspace/types.ts` |
-| Department page example | `web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx` |
+| Work-unit slug route (canonical) | `web/app/adminV2/workspace/work-unit/[workUnitSlug]/page.tsx` |
+| Dept WU route (compat) | `web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx` |
 | WU queue selection | `web/lib/adminV2/workUnitQueueSelection.ts`, `web/lib/adminV2/workUnitQueuePillPrefetch.ts` |
 | Drawer queue navigator | `web/lib/admin/opportunityDrawerQueueNavigator.ts`, `web/lib/admin/opportunityDrawerAdjacentPrefetch.ts` |
 

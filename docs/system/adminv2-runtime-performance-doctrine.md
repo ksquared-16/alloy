@@ -1,8 +1,9 @@
 # AdminV2 runtime performance doctrine
 
 **Path:** `docs/system/adminv2-runtime-performance-doctrine.md`  
-**Status:** **Locked baseline** (June 2026). This is the desired runtime behavior for AdminV2 workspace, queue, and drawer surfaces.  
-**Supplements:** `docs/system/workspace-system.md`, `docs/system/record-system.md`, `docs/execution/operating-doctrine.md`  
+**Status:** **Locked baseline** (June 2026). Implementation detail for reveal/queue/drawer gates.  
+**Platform summary:** **`platform-performance-doctrine.md`** (Passes 1–3, sidecar deferral).  
+**Supplements:** `docs/system/workspace-system.md`, `docs/system/record-system.md`, `docs/system/drawer-doctrine.md`, `docs/execution/operating-doctrine.md`  
 **Historical context:** `docs/sprints/05_2026/adminv2_reveal_doctrine.md`, `docs/sprints/05_2026/completed/adminv2_performance_closeout.md`  
 **Sprint closeout:** `docs/sprints/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`  
 **Next phase (backend only):** `docs/sprints/06_2026/adminv2_backend_query_payload_optimization_phase.md`
@@ -37,7 +38,11 @@ Code anchors: `web/lib/adminV2/*RevealGate.ts`, `web/lib/admin/drawer/composedDr
 
 ## Route doctrine
 
-Surfaces: `/adminV2/workspace`, `/adminV2/workspace/dept/[departmentId]`, `/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]`.
+**Canonical operator URLs (browser):** `/workspace`, `/workspace/work-unit/:workUnitSlug`, `/workspace/work-unit/:workUnitSlug/:recordId` — see **`routing-doctrine.md`**.
+
+**Internal filesystem:** `app/adminV2/workspace/**` (rewrites serve canonical URLs).
+
+**Compat (not product nav):** `/adminV2/workspace/dept/[departmentId]`, `…/work-unit/[workUnitId]`.
 
 ### Allowed
 
