@@ -114,7 +114,7 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-command-surface-layer="rai
   -webkit-backdrop-filter: none;
   opacity: 1;
   border-radius: 12px;
-  border: 1px solid rgba(39, 63, 82, 0.1);
+  border: 1px solid rgba(39, 63, 82, 0.16);
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(39, 63, 82, 0.1);
 }
@@ -147,14 +147,14 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section {
   margin-bottom: 0;
-  border: 1px solid rgba(39, 63, 82, 0.14);
+  border: 1px solid rgba(39, 63, 82, 0.18);
   border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded {
-  border-color: rgba(39, 63, 82, 0.16);
+  border-color: rgba(39, 63, 82, 0.2);
   background: #ffffff;
 }
 
@@ -176,7 +176,7 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
   border-radius: 9px 9px 0 0;
-  border-bottom: 1px solid rgba(39, 63, 82, 0.1);
+  border-bottom: none;
   background: #ffffff;
 }
 

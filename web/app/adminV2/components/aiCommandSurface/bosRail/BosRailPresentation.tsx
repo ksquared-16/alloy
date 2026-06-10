@@ -254,9 +254,8 @@ export function BosRailComposer(props: {
             <div
                 className="rounded-xl border px-2.5 py-2.5"
                 style={{
-                    borderColor: derived.border,
+                    borderColor: neutral.border,
                     backgroundColor: neutral.surface,
-                    boxShadow: "0 1px 2px rgba(39, 63, 82, 0.04)",
                 }}
             >
                 <textarea

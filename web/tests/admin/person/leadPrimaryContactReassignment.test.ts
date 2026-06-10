@@ -166,4 +166,15 @@ describe("lead primary contact reassignment", () => {
         const patch = readFileSync(join(process.cwd(), "lib/admin/person/patchHouseholdPrimaryContact.ts"), "utf8");
         expect(patch).toContain("/household-primary-contact");
     });
+
+    it("person drawer UI wires make-primary confirmation and existing PATCH route", () => {
+        const section = readFileSync(
+            join(process.cwd(), "components/admin/entity/PersonDrawerHouseholdSection.tsx"),
+            "utf8"
+        );
+        expect(section).toContain("LeadHouseholdPrimaryContactConfirmModal");
+        expect(section).toContain("patchHouseholdPrimaryContact");
+        expect(section).toContain("Make primary contact");
+        expect(section).not.toContain('type="radio"');
+    });
 });
