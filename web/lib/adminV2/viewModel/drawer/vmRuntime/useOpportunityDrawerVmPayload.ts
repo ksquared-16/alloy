@@ -105,6 +105,16 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
             prefetchDrawerLayoutRuntimeBody({
                 apiPath: "/api/admin/layout-runtime/opportunity-drawer-body",
                 entityId: vm.entity.id,
+                queryParams: {
+                    departmentId:
+                        vm.workspace.department_id ??
+                        drawer.opportunityWorkspaceContext?.department_id ??
+                        null,
+                    workUnitId:
+                        vm.workspace.work_unit_id ??
+                        drawer.opportunityWorkspaceContext?.work_unit_id ??
+                        null,
+                },
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?
@@ -256,27 +266,29 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
 
     const reloadOpportunityDisplayVm = useCallback(async () => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        const id = drawer.id.trim();
-        invalidateDrawerViewModelCacheForEntity("opportunities", id, {
+        const expectedId = drawer.id.trim();
+        const reloadGen = ++fetchGenRef.current;
+        invalidateDrawerViewModelCacheForEntity("opportunities", expectedId, {
             departmentId: drawer.opportunityWorkspaceContext?.department_id ?? null,
             workUnitId: drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
         });
         invalidateDrawerLayoutRuntimeBodyCacheForEntity(
             "/api/admin/layout-runtime/opportunity-drawer-body",
-            id,
+            expectedId,
         );
         dispatchDrawerLayoutRuntimeBodyInvalidate({
             entityType: "opportunities",
-            entityId: id,
+            entityId: expectedId,
         });
         const result = await loadOpportunityDrawerViaViewModel(
-            id,
+            expectedId,
             drawer.opportunityWorkspaceContext ?? null,
             workspaceDataFetchInit(),
         );
-        if (result.ok && isOpportunityDrawerViewModelPreload(result.preload)) {
-            applyVm(result.preload.viewModel, "inquiry_child_reload");
-        }
+        if (reloadGen !== fetchGenRef.current) return;
+        if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
+        if (String(result.preload.viewModel.entity.id) !== expectedId) return;
+        applyVm(result.preload.viewModel, "inquiry_child_reload");
     }, [applyVm, drawer.id, drawer.opportunityWorkspaceContext, drawer.type]);
 
     useEffect(() => {

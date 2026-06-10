@@ -9,9 +9,11 @@ import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { enrichLayoutDocDrawerFieldEditable } from "@/lib/layout/runtime/enrichLayoutDocChildFieldsEditable";
 import {
     buildDrawerLayoutRuntimeBodyCacheKey,
+    fetchDrawerLayoutRuntimeBodyDeduped,
     invalidateDrawerLayoutRuntimeBodyCacheForEntity,
     peekDrawerLayoutRuntimeBodyCacheEntry,
     putDrawerLayoutRuntimeBodyCacheEntry,
+    serializeDrawerLayoutRuntimeBodyQueryParams,
 } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import { perfCache, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 import {
@@ -59,7 +61,7 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
     // Stable serialization so an inline `queryParams` object from the caller does
     // NOT re-trigger the fetch effect every render (that cancelled the in-flight
     // 5–6s request and looped, leaving the body stuck → blank).
-    const queryParamsKey = JSON.stringify(queryParams ?? {});
+    const queryParamsKey = serializeDrawerLayoutRuntimeBodyQueryParams(queryParams);
 
     const [phase, setPhase] = useState<DrawerLayoutRuntimeBodyPhase>("idle");
     const [doc, setDoc] = useState<LayoutDoc | null>(null);
@@ -168,56 +170,33 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
             perfDrawer("body_fetch_start", { entity_id: id, api_path: apiPath });
         }
 
-        // No false timeout flip: while the request is in flight we stay in the
-        // coordinated hold/loading state. Only a genuine failure (non-ok /
-        // incomplete body / rejection) moves to "fallback". This removes the
-        // `layout_fetch_timeout` flicker that appeared before the (slow) response.
-        const qs = new URLSearchParams();
-        qs.set(getPrimaryQueryKey(apiPath), id);
-        Object.entries(queryParams ?? {}).forEach(([key, value]) => {
-            if (value != null && String(value).trim()) qs.set(key, String(value).trim());
-        });
-
-        fetch(`${apiPath}?${qs.toString()}`)
-            .then(async (res) => {
+        fetchDrawerLayoutRuntimeBodyDeduped({
+            apiPath,
+            entityId: id,
+            queryParams,
+        })
+            .then((payload) => {
                 if (cancelled || gen !== fetchGenRef.current) return;
-                if (!res.ok) {
-                    const json = await res.json().catch(() => ({}));
-                    const reason = (json as { error?: string }).error ?? `http_${res.status}`;
-                    setLastError(reason);
-                    setPhase("fallback");
-                    return;
-                }
-                const json = (await res.json()) as {
-                    doc?: LayoutDoc;
-                    record?: ProofRuntimeRecord;
-                    layoutSource?: string;
-                    layoutKey?: string;
-                    layoutRecordId?: string | null;
-                    layoutVersion?: number | null;
-                    plan?: { layoutKey?: string };
-                };
-                if (!json.doc?.sections?.length || !json.record) {
+                if (!payload) {
                     setLastError("layout_body_incomplete");
                     setPhase("fallback");
                     return;
                 }
-                const enrichedDoc = enrichLayoutDocDrawerFieldEditable(json.doc);
+                const enrichedDoc = enrichLayoutDocDrawerFieldEditable(payload.doc);
                 setDoc(enrichedDoc);
-                setRecord(json.record);
-                setLayoutSource(json.layoutSource ?? null);
-                setLayoutKey(json.layoutKey ?? json.plan?.layoutKey ?? null);
-                setLayoutVersion(json.layoutVersion ?? null);
-                setLayoutRecordId(json.layoutRecordId ?? null);
+                setRecord(payload.record);
+                setLayoutSource(payload.layoutSource);
+                setLayoutKey(payload.layoutKey);
+                setLayoutVersion(payload.layoutVersion);
+                setLayoutRecordId(payload.layoutRecordId);
                 putDrawerLayoutRuntimeBodyCacheEntry(cacheKey, {
                     doc: enrichedDoc,
-                    record: json.record,
-                    layoutSource: json.layoutSource ?? null,
-                    layoutKey: json.layoutKey ?? json.plan?.layoutKey ?? null,
-                    layoutRecordId: json.layoutRecordId ?? null,
-                    layoutVersion: json.layoutVersion ?? null,
+                    record: payload.record,
+                    layoutSource: payload.layoutSource,
+                    layoutKey: payload.layoutKey,
+                    layoutRecordId: payload.layoutRecordId,
+                    layoutVersion: payload.layoutVersion,
                 });
-                // A successful body response clears any stale error from a prior attempt.
                 setLastError(null);
                 setPhase("ready");
                 readyIdRef.current = id;
@@ -269,11 +248,4 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         layoutVersion,
         lastError,
     };
-}
-
-function getPrimaryQueryKey(apiPath: string): string {
-    if (apiPath.includes("child-drawer-body")) return "personId";
-    if (apiPath.includes("child")) return "childId";
-    if (apiPath.includes("person")) return "personId";
-    return "opportunityId";
 }

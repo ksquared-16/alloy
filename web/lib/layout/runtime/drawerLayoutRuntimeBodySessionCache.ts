@@ -15,8 +15,11 @@ export type DrawerLayoutRuntimeBodyCacheEntry = {
     cachedAt: number;
 };
 
+export type DrawerLayoutRuntimeBodyPayload = Omit<DrawerLayoutRuntimeBodyCacheEntry, "cachedAt">;
+
 const DEFAULT_TTL_MS = 5 * 60 * 1000;
 const cache = new Map<string, DrawerLayoutRuntimeBodyCacheEntry>();
+const inflight = new Map<string, Promise<DrawerLayoutRuntimeBodyPayload | null>>();
 
 export function buildDrawerLayoutRuntimeBodyCacheKey(
     apiPath: string,
@@ -26,9 +29,15 @@ export function buildDrawerLayoutRuntimeBodyCacheKey(
     return `${apiPath}:${entityId.trim()}:${queryParamsKey}`;
 }
 
+export function serializeDrawerLayoutRuntimeBodyQueryParams(
+    queryParams?: Record<string, string | null | undefined>,
+): string {
+    return JSON.stringify(queryParams ?? {});
+}
+
 export function putDrawerLayoutRuntimeBodyCacheEntry(
     key: string,
-    entry: Omit<DrawerLayoutRuntimeBodyCacheEntry, "cachedAt">,
+    entry: DrawerLayoutRuntimeBodyPayload,
 ): void {
     cache.set(key, { ...entry, cachedAt: Date.now() });
 }
@@ -48,6 +57,7 @@ export function peekDrawerLayoutRuntimeBodyCacheEntry(
 
 export function clearDrawerLayoutRuntimeBodySessionCacheForTests(): void {
     cache.clear();
+    inflight.clear();
 }
 
 /** Drop cached layout body entries for one entity (all query-param variants). */
@@ -61,6 +71,105 @@ export function invalidateDrawerLayoutRuntimeBodyCacheForEntity(
     for (const key of [...cache.keys()]) {
         if (key.startsWith(needle)) cache.delete(key);
     }
+    for (const key of [...inflight.keys()]) {
+        if (key.startsWith(needle)) inflight.delete(key);
+    }
+}
+
+function getPrimaryQueryKey(apiPath: string): string {
+    if (apiPath.includes("child-drawer-body")) return "personId";
+    if (apiPath.includes("child")) return "childId";
+    if (apiPath.includes("person")) return "personId";
+    return "opportunityId";
+}
+
+function buildDrawerLayoutRuntimeBodyFetchUrl(
+    apiPath: string,
+    entityId: string,
+    queryParams?: Record<string, string | null | undefined>,
+): string {
+    const qs = new URLSearchParams();
+    qs.set(getPrimaryQueryKey(apiPath), entityId);
+    Object.entries(queryParams ?? {}).forEach(([key, value]) => {
+        if (value != null && String(value).trim()) qs.set(key, String(value).trim());
+    });
+    return `${apiPath}?${qs.toString()}`;
+}
+
+async function fetchDrawerLayoutRuntimeBodyNetwork(params: {
+    apiPath: string;
+    entityId: string;
+    queryParams?: Record<string, string | null | undefined>;
+}): Promise<DrawerLayoutRuntimeBodyPayload | null> {
+    const id = params.entityId.trim();
+    if (!id || typeof fetch !== "function") return null;
+
+    const res = await fetch(buildDrawerLayoutRuntimeBodyFetchUrl(params.apiPath, id, params.queryParams));
+    if (!res.ok) return null;
+
+    const json = (await res.json()) as {
+        doc?: LayoutDoc;
+        record?: ProofRuntimeRecord;
+        layoutSource?: string;
+        layoutKey?: string;
+        layoutRecordId?: string | null;
+        layoutVersion?: number | null;
+        plan?: { layoutKey?: string };
+    };
+    if (!json.doc?.sections?.length || !json.record) return null;
+
+    return {
+        doc: json.doc,
+        record: json.record,
+        layoutSource: json.layoutSource ?? null,
+        layoutKey: json.layoutKey ?? json.plan?.layoutKey ?? null,
+        layoutRecordId: json.layoutRecordId ?? null,
+        layoutVersion: json.layoutVersion ?? null,
+    };
+}
+
+/**
+ * Single in-flight request per cache key — prewarm and runtime hook share the same promise.
+ */
+export function fetchDrawerLayoutRuntimeBodyDeduped(params: {
+    apiPath: string;
+    entityId: string;
+    queryParams?: Record<string, string | null | undefined>;
+}): Promise<DrawerLayoutRuntimeBodyPayload | null> {
+    const id = params.entityId.trim();
+    if (!id) return Promise.resolve(null);
+
+    const queryParamsKey = serializeDrawerLayoutRuntimeBodyQueryParams(params.queryParams);
+    const cacheKey = buildDrawerLayoutRuntimeBodyCacheKey(params.apiPath, id, queryParamsKey);
+
+    const cached = peekDrawerLayoutRuntimeBodyCacheEntry(cacheKey);
+    if (cached) {
+        return Promise.resolve({
+            doc: cached.doc,
+            record: cached.record,
+            layoutSource: cached.layoutSource,
+            layoutKey: cached.layoutKey,
+            layoutRecordId: cached.layoutRecordId,
+            layoutVersion: cached.layoutVersion,
+        });
+    }
+
+    const existing = inflight.get(cacheKey);
+    if (existing) return existing;
+
+    const request = fetchDrawerLayoutRuntimeBodyNetwork(params)
+        .then((payload) => {
+            if (payload) {
+                putDrawerLayoutRuntimeBodyCacheEntry(cacheKey, payload);
+            }
+            return payload;
+        })
+        .finally(() => {
+            inflight.delete(cacheKey);
+        });
+
+    inflight.set(cacheKey, request);
+    return request;
 }
 
 /** Background warm for drawer body alongside VM prewarm — non-blocking. */
@@ -70,48 +179,10 @@ export function prefetchDrawerLayoutRuntimeBody(params: {
     queryParams?: Record<string, string | null | undefined>;
 }): void {
     if (typeof window === "undefined") return;
-    const id = params.entityId.trim();
-    if (!id) return;
-    const queryParamsKey = JSON.stringify(params.queryParams ?? {});
-    const cacheKey = buildDrawerLayoutRuntimeBodyCacheKey(params.apiPath, id, queryParamsKey);
-    if (peekDrawerLayoutRuntimeBodyCacheEntry(cacheKey)) return;
+    void fetchDrawerLayoutRuntimeBodyDeduped(params);
+}
 
-    const qs = new URLSearchParams();
-    const primaryKey = params.apiPath.includes("child-drawer-body")
-        ? "personId"
-        : params.apiPath.includes("child")
-          ? "childId"
-          : params.apiPath.includes("person")
-            ? "personId"
-            : "opportunityId";
-    qs.set(primaryKey, id);
-    Object.entries(params.queryParams ?? {}).forEach(([key, value]) => {
-        if (value != null && String(value).trim()) qs.set(key, String(value).trim());
-    });
-
-    void fetch(`${params.apiPath}?${qs.toString()}`)
-        .then(async (res) => {
-            if (!res.ok) return;
-            const json = (await res.json()) as {
-                doc?: LayoutDoc;
-                record?: ProofRuntimeRecord;
-                layoutSource?: string;
-                layoutKey?: string;
-                layoutRecordId?: string | null;
-                layoutVersion?: number | null;
-                plan?: { layoutKey?: string };
-            };
-            if (!json.doc?.sections?.length || !json.record) return;
-            putDrawerLayoutRuntimeBodyCacheEntry(cacheKey, {
-                doc: json.doc,
-                record: json.record,
-                layoutSource: json.layoutSource ?? null,
-                layoutKey: json.layoutKey ?? json.plan?.layoutKey ?? null,
-                layoutRecordId: json.layoutRecordId ?? null,
-                layoutVersion: json.layoutVersion ?? null,
-            });
-        })
-        .catch(() => {
-            /* best-effort warm */
-        });
+/** Test-only: expose in-flight map size. */
+export function drawerLayoutRuntimeBodyInflightCountForTests(): number {
+    return inflight.size;
 }
