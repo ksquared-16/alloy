@@ -3,6 +3,7 @@
 import { derived, neutral } from "@/styles/tokens/colors";
 
 const CMD = {
+    textBody: neutral.textPrimary,
     textSupporting: "rgba(39, 63, 82, 0.78)",
     textLabel: "rgba(39, 63, 82, 0.52)",
 } as const;

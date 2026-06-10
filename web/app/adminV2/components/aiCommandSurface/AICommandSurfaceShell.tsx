@@ -2322,13 +2322,11 @@ export default function AICommandSurfaceShell({
               Clear
             </button>
           </div>
-          {presentation !== "rail" ? (
-            <OperationalActiveRecordChip
-              label={globalAssistant?.currentContext?.label}
-              sourceSurface={globalAssistant?.currentContext?.source_surface}
-              variant="thread_header"
-            />
-          ) :   null}
+          <OperationalActiveRecordChip
+            label={globalAssistant?.currentContext?.label}
+            sourceSurface={globalAssistant?.currentContext?.source_surface}
+            variant="thread_header"
+          />
           {threadExpanded ? (
             <div
               ref={threadScrollRef}
