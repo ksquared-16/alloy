@@ -40,6 +40,7 @@ import {
     type StageWorkOutcomeResolution,
 } from "@/lib/lifecycle/stageWorkOutcomePickerClient";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 import {
     applyEntityLabelToMyTasksCopy,
     buildMyTasksPresentationLabels,
