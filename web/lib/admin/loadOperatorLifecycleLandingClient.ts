@@ -71,7 +71,7 @@ export async function loadOperatorLifecycleLandingCards(options?: {
     if (!options?.force && inflight) return inflight;
 
     inflight = (async () => {
-        const init = workspaceDataFetchInit();
+        const init = workspaceDataFetchInit() ?? { credentials: "include" as RequestCredentials };
         const [catalogRes, workUnitsRes, departmentsRes] = await Promise.all([
             fetch("/api/admin/lifecycle-catalog", init),
             fetch("/api/admin/work-units", init),

@@ -3138,9 +3138,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             }
 
+            const initialLocation =
+                initialLocationRef.current ?? readWorkUnitInitialLocationParams();
+            initialLocationRef.current = initialLocation;
+
         const qFromUrlEffective =
             routeQueueSelectionRef.current?.queueKey.trim() ??
-            initialLocationRef.current.queue.trim();
+            initialLocation.queue.trim();
 
             const startParallelPrimaryRowFetchFromCache = () => {
                 if (cancelled || parallelPrimaryRowStartedRef.current || userLaneTouchedRef.current) return;
@@ -3169,7 +3173,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                               queueKey: primaryKey,
                           })
                         : primaryKey;
-                const abForFetch = initialLocationRef.current.attentionBucket.trim();
+                const abForFetch = initialLocation.attentionBucket.trim();
                 const resolvedFetch = resolveWorkUnitFetchQueueKeyFromPill(
                     pillKey,
                     abForFetch,
@@ -3182,7 +3186,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     workUnitId,
                     pillKey,
                     attentionBucketKey: abForFetch,
-                    unmappedOnly: initialLocationRef.current.unmapped,
+                    unmappedOnly: initialLocation.unmapped,
                     queueDefinition: cachedWu.queue_definition,
                 });
                 if (cachedPrimary) {
@@ -3236,7 +3240,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     : primaryKey;
                 setSelectedQueueKeyTraced("bootstrapPrimaryLane", pillKey);
                 suppressQueueFetchEffectOnceRef.current = true;
-                const abForFetch = initialLocationRef.current.attentionBucket.trim();
+                const abForFetch = initialLocation.attentionBucket.trim();
                 void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
                     ...(primaryKey.trim().toLowerCase() === "needs_attention" && abForFetch
                         ? { attentionBucketOverride: abForFetch }
@@ -3246,7 +3250,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             };
 
             try {
-                const abInit = initialLocationRef.current.attentionBucket.trim();
+                const abInit = initialLocation.attentionBucket.trim();
                 try {
                     const bootstrapClientT0 =
                         typeof performance !== "undefined" ? performance.now() : 0;
