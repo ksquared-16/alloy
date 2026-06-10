@@ -9,6 +9,8 @@ import LifecycleActivationDeleteModal from "@/components/adminV2/settings/lifecy
 import LifecycleActivationDeleteStageModal from "@/components/adminV2/settings/lifecycle/LifecycleActivationDeleteStageModal";
 import LifecycleRenameModal from "@/components/adminV2/settings/lifecycle/LifecycleRenameModal";
 import LifecycleStageNav from "@/components/adminV2/settings/lifecycle/LifecycleStageNav";
+import LifecycleTrackNav from "@/components/adminV2/settings/lifecycle/LifecycleTrackNav";
+import LifecycleEnrollmentV2TemplateCard from "@/components/adminV2/settings/lifecycle/LifecycleEnrollmentV2TemplateCard";
 import LifecycleStageConfiguration from "@/components/adminV2/settings/lifecycle/LifecycleStageConfiguration";
 import type { LifecycleStageWorkspaceHandle } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
@@ -43,6 +45,13 @@ import type {
     LifecycleBuilderProcessRecord,
     LifecycleBuilderStageRecord,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    readProcessTracks,
+    splitRuleForStage,
+    stagesForTrack,
+} from "@/lib/businessProcesses/businessProcessConfigReader";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
+import { ENROLLMENT_TRACK_FAMILY_KEY } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import {
     collectAllOpportunityStatusRows,
     LIFECYCLE_ACTIVATION_STATUS_STAGES_PATH,
@@ -115,6 +124,8 @@ export default function LifecycleActivationBoard({
     const [activationOwned, setActivationOwned] = useState(false);
     const [processId, setProcessId] = useState(identity?.processId ?? "");
     const [builderStages, setBuilderStages] = useState<LifecycleBuilderStageRecord[]>([]);
+    const [processTracks, setProcessTracks] = useState<ProcessTracksV1 | null>(null);
+    const [activeTrackKey, setActiveTrackKey] = useState<string>(ENROLLMENT_TRACK_FAMILY_KEY);
     const [showAddStage, setShowAddStage] = useState(false);
     const [renameOpen, setRenameOpen] = useState(false);
     const [renaming, setRenaming] = useState(false);
@@ -860,17 +871,39 @@ export default function LifecycleActivationBoard({
         [runtimeDepartmentId, processId, stageKey, stageLabel, dispatchStatusDraft]
     );
 
+    const builderProcess = useMemo((): LifecycleBuilderProcessRecord | null => {
+        if (!processId || !builderStages.length) return null;
+        return {
+            id: processId,
+            key: "enrollment",
+            name: lifecycleName,
+            primary_entity: "opportunity",
+            sort_order: 0,
+            is_active: true,
+            ...(processTracks ? { tracks_v1: processTracks } : {}),
+            stages: builderStages,
+        };
+    }, [builderStages, lifecycleName, processId, processTracks]);
+
+    const navStages = useMemo(() => {
+        if (!processTracks || !builderProcess) return builderStages;
+        return stagesForTrack(builderProcess, activeTrackKey);
+    }, [activeTrackKey, builderProcess, builderStages, processTracks]);
+
+    const activeSplitRule = useMemo(() => {
+        if (!builderProcess || !stageKey) return null;
+        return splitRuleForStage(builderProcess, stageKey);
+    }, [builderProcess, stageKey]);
+
     const builderStageKeys = useMemo(() => {
-        const proc = builderStages.length
-            ? { id: processId, key: "", name: "", primary_entity: "opportunity" as const, sort_order: 0, is_active: true, stages: builderStages }
-            : null;
-        return proc ? stageKeysForProcess(proc) : [];
-    }, [builderStages, processId]);
+        return builderProcess ? stageKeysForProcess(builderProcess) : [];
+    }, [builderProcess]);
 
     const resetActivation = useCallback(() => {
         setDepartmentName("");
         setActivationOwned(false);
         setBuilderStages([]);
+        setProcessTracks(null);
         setShowAddStage(false);
         setProcessId("");
         setLifecycleName("");
@@ -938,6 +971,13 @@ export default function LifecycleActivationBoard({
             const process = bj.config?.processes?.find((p) => p.id === procId) ?? bj.active_process ?? null;
             const stagesList = process ? activeStagesForProcess(process) : [];
             setBuilderStages(stagesList);
+            const tracks = process ? readProcessTracks(process) : null;
+            setProcessTracks(tracks);
+            if (tracks?.tracks.length) {
+                setActiveTrackKey((prev) =>
+                    tracks.tracks.some((t) => t.key === prev) ? prev : tracks.tracks[0]!.key,
+                );
+            }
             if (process) {
                 setLifecycleName(process.name);
                 setLifecycleDescription(process.description?.trim() ?? "");
@@ -1445,21 +1485,52 @@ export default function LifecycleActivationBoard({
                         Preparing lifecycle workspace…
                     </p>
                 ) : (
-                    <LifecycleAddStageForm
-                        departmentId={runtimeDepartmentId}
-                        processId={processId}
-                        isFirstStage
-                        onCreated={onStageCreated}
-                    />
+                    <div className="space-y-4">
+                        <LifecycleEnrollmentV2TemplateCard
+                            departmentId={runtimeDepartmentId}
+                            processId={processId}
+                            onApplied={async () => {
+                                await hydrateFromSelection(runtimeDepartmentId, processId, catalogEntry, {
+                                    preserveStageSelection: false,
+                                });
+                            }}
+                        />
+                        <LifecycleAddStageForm
+                            departmentId={runtimeDepartmentId}
+                            processId={processId}
+                            isFirstStage
+                            onCreated={onStageCreated}
+                        />
+                    </div>
                 )
             ) : (
                 <>
+                    {processTracks ?
+                        <LifecycleTrackNav
+                            tracks={processTracks}
+                            activeTrackKey={activeTrackKey}
+                            onSelect={(trackKey) => {
+                                setActiveTrackKey(trackKey);
+                                const next = stagesForTrack(builderProcess!, trackKey)[0];
+                                if (next) void selectStage(next);
+                            }}
+                        />
+                    :   null}
+                    {activeSplitRule ?
+                        <p
+                            className="text-xs text-alloy-midnight/60"
+                            data-testid="lifecycle-split-rule-hint"
+                        >
+                            At {stageLabel || activeSplitRule.from_stage_key}, choose each child&apos;s path:{" "}
+                            {activeSplitRule.per_subject_outcomes.map((o) => o.label).join(" · ")}
+                        </p>
+                    :   null}
                     <div
                         className="flex flex-wrap items-center justify-between gap-2"
                         data-testid="lifecycle-stage-nav-row"
                     >
                         <LifecycleStageNav
-                            stages={builderStages}
+                            stages={navStages}
                             activeStageKey={stageKey}
                             onSelect={(s) => void selectStage(s)}
                             onAddStageClick={() => setShowAddStage((v) => !v)}

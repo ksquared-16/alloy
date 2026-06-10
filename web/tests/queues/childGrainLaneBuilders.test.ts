@@ -1,5 +1,8 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
 
+import { applyEnrollmentTemplateToProcess } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
+import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { placementCandidateQueueRowId } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { enrollmentOffersChildQueueRowId } from "@/lib/queues/childGrainEnrollmentQueue";
 import {
@@ -53,6 +56,30 @@ describe("childGrainLanesFeatureFlag", () => {
             expect(isChildGrainLaneBuildersEnabled("waitlist")).toBe(true);
         });
     });
+
+    it("auto-enables standard lanes when tracks_v1 configured without env", () => {
+        const process = applyEnrollmentTemplateToProcess({
+            id: "p1",
+            key: ENROLLMENT_PROCESS_KEY,
+            name: "Enrollment",
+            primary_entity: "opportunity",
+            sort_order: 0,
+            is_active: true,
+            stages: [],
+        });
+        const metadata = {
+            [LIFECYCLE_BUILDER_METADATA_KEY]: {
+                version: 1,
+                active_process_id: process.id,
+                processes: [process],
+            },
+        };
+        withEnvChildGrainLanes(undefined, () => {
+            expect(isChildGrainLaneBuildersEnabled("tours", metadata)).toBe(true);
+            expect(isChildGrainLaneBuildersEnabled("enrollment_completed", metadata)).toBe(true);
+            expect(isChildGrainLaneBuildersEnabled("new_leads", metadata)).toBe(false);
+        });
+    });
 });
 
 describe("ocmEnrollmentTrackQueueBuilder", () => {
@@ -62,7 +89,7 @@ describe("ocmEnrollmentTrackQueueBuilder", () => {
         });
         withEnvChildGrainLanes("tours", () => {
             const ctx = resolveOcmEnrollmentTrackLaneContext({ executableQueueKey: "tours" });
-            expect(ctx).toMatchObject({ stage: "tour", stageLabel: "Tour" });
+            expect(ctx).toMatchObject({ stageKey: "tour", stageLabel: "Tour" });
         });
     });
 
@@ -70,8 +97,9 @@ describe("ocmEnrollmentTrackQueueBuilder", () => {
         const lane = {
             enabled: true as const,
             queueKey: "tours",
-            stage: "tour" as const,
+            stageKey: "tour",
             stageLabel: "Tour",
+            dispositionKeys: ["tour_scheduled"],
         };
         const row = ocmBuilderTesting.buildOcmEnrollmentTrackQueueRow(
             {

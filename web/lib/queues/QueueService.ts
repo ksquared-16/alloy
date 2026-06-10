@@ -2821,7 +2821,7 @@ export async function getWorkUnitQueueSummaries(params: {
                                 count,
                                 preview: [],
                                 grain: "child",
-                                domain: ocmTrackLaneCtx.stage,
+                                domain: ocmTrackLaneCtx.stageKey,
                                 ...(laneRouting.countUnit ? { count_unit: laneRouting.countUnit } : {}),
                             },
                             normalized
@@ -2863,7 +2863,7 @@ export async function getWorkUnitQueueSummaries(params: {
                             count: ocmLoad.total,
                             preview: previewWithRowContext(ocmLoad.items as unknown[]),
                             grain: "child",
-                            domain: ocmTrackLaneCtx.stage,
+                            domain: ocmTrackLaneCtx.stageKey,
                             ...(laneRouting.countUnit ? { count_unit: laneRouting.countUnit } : {}),
                         },
                         normalized

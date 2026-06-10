@@ -3,21 +3,13 @@
  */
 
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
-import { ENROLLMENT_BUSINESS_PROCESS_V1_STAGE_KEYS } from "@/lib/lifecycle/defaultEnrollmentBusinessProcessV1Stages";
+import { ENROLLMENT_TEMPLATE_STAGE_KEYS } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import type {
     StageOperatingPlanV1,
     StageOutcomeRuleTargetV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
-const ENROLLMENT_DEFAULT_STAGE_KEYS = new Set([
-    "lead",
-    "qualification",
-    "tour",
-    "waitlist",
-    "enrollment",
-    "enrolled",
-    ...ENROLLMENT_BUSINESS_PROCESS_V1_STAGE_KEYS,
-]);
+const ENROLLMENT_DEFAULT_STAGE_KEYS = ENROLLMENT_TEMPLATE_STAGE_KEYS;
 
 function attention(reason: string): StageOutcomeRuleTargetV1[] {
     return [
@@ -219,6 +211,106 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 ],
             },
         ],
+        attention_rules: [],
+    },
+    decision: {
+        version: 1,
+        journey_segment: "family",
+        purpose: "Choose each child's enrollment path after the family tour.",
+        work_templates: [
+            {
+                template_key: "review_child_paths",
+                label: "Review each child's path",
+                required: true,
+                due_policy: { kind: "offset_days", days: 2 },
+                owner_strategy: "record_owner",
+            },
+        ],
+        outcomes: [
+            { outcome_key: "paths_chosen", label: "Child paths chosen", successful: true },
+            { outcome_key: "needs_follow_up", label: "Needs follow-up" },
+        ],
+        outcome_rules: [
+            {
+                rule_key: "paths_chosen_complete",
+                when_outcome_key: "paths_chosen",
+                targets: [{ kind: "mark_stage_work_complete" }],
+            },
+            {
+                rule_key: "follow_up_attention",
+                when_outcome_key: "needs_follow_up",
+                targets: attention("Decision follow-up required"),
+            },
+        ],
+        attention_rules: [],
+    },
+    closed: {
+        version: 1,
+        journey_segment: "family",
+        purpose: "Family enrollment case is closed.",
+        work_templates: [],
+        outcomes: [{ outcome_key: "acknowledged", label: "Acknowledged", successful: true }],
+        outcome_rules: [{ rule_key: "noop", when_outcome_key: "acknowledged", targets: [{ kind: "no_movement" }] }],
+        attention_rules: [],
+    },
+    enrolling: {
+        version: 1,
+        journey_segment: "child",
+        purpose: "Complete enrollment paperwork and confirm start.",
+        work_templates: [
+            {
+                template_key: "send_enrollment_packet",
+                label: "Send enrollment packet",
+                required: true,
+                due_policy: { kind: "offset_days", days: 1 },
+                owner_strategy: "record_owner",
+            },
+            {
+                template_key: "confirm_start_date",
+                label: "Confirm start date",
+                required: true,
+                due_policy: { kind: "offset_days", days: 3 },
+                owner_strategy: "record_owner",
+            },
+        ],
+        outcomes: [
+            { outcome_key: "enrollment_complete", label: "Enrollment complete", successful: true },
+            { outcome_key: "packet_pending", label: "Packet still pending" },
+            { outcome_key: "family_withdrew", label: "Family withdrew" },
+        ],
+        outcome_rules: [
+            {
+                rule_key: "complete_to_enrolled",
+                when_outcome_key: "enrollment_complete",
+                targets: [
+                    { kind: "update_child_enrollment_status", disposition_key: "enrolled" },
+                    { kind: "move_to_stage", stage_key: "enrolled" },
+                    { kind: "mark_stage_work_complete" },
+                ],
+            },
+            {
+                rule_key: "packet_attention",
+                when_outcome_key: "packet_pending",
+                targets: attention("Enrollment packet incomplete"),
+            },
+            {
+                rule_key: "withdrew",
+                when_outcome_key: "family_withdrew",
+                targets: [
+                    { kind: "update_child_enrollment_status", disposition_key: "family_withdrew" },
+                    { kind: "move_to_stage", stage_key: "closed_withdrawn" },
+                ],
+            },
+        ],
+        attention_rules: [],
+    },
+    closed_withdrawn: {
+        version: 1,
+        journey_segment: "child",
+        purpose: "Child enrollment track was withdrawn or closed.",
+        work_templates: [],
+        outcomes: [{ outcome_key: "acknowledged", label: "Acknowledged", successful: true }],
+        outcome_rules: [{ rule_key: "noop", when_outcome_key: "acknowledged", targets: [{ kind: "no_movement" }] }],
         attention_rules: [],
     },
     waitlist: {
@@ -607,65 +699,6 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
             },
         ],
         attention_rules: [],
-    },
-    enrolling: {
-        version: 1,
-        journey_segment: "child",
-        purpose: "Complete enrollment paperwork and confirm start.",
-        work_templates: [
-            {
-                template_key: "send_enrollment_packet",
-                label: "Send enrollment packet",
-                required: true,
-                due_policy: { kind: "offset_days", days: 1 },
-                owner_strategy: "record_owner",
-            },
-            {
-                template_key: "confirm_start_date",
-                label: "Confirm start date",
-                required: true,
-                due_policy: { kind: "offset_days", days: 3 },
-                owner_strategy: "record_owner",
-            },
-        ],
-        outcomes: [
-            { outcome_key: "start_scheduled", label: "Start date scheduled", successful: true },
-            { outcome_key: "packet_pending", label: "Packet still pending" },
-            { outcome_key: "family_withdrew", label: "Family withdrew" },
-        ],
-        outcome_rules: [
-            {
-                rule_key: "to_future_start",
-                when_outcome_key: "start_scheduled",
-                targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "start_date_scheduled" },
-                    { kind: "move_to_stage", stage_key: "future_start" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-            {
-                rule_key: "packet_attention",
-                when_outcome_key: "packet_pending",
-                targets: attention("Enrollment packet incomplete"),
-            },
-            {
-                rule_key: "withdrew",
-                when_outcome_key: "family_withdrew",
-                targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "family_withdrew" },
-                    { kind: "move_to_stage", stage_key: "withdrawn" },
-                    { kind: "mark_stage_work_complete" },
-                ],
-            },
-        ],
-        attention_rules: [
-            {
-                rule_key: "required_docs_overdue",
-                kind: "required_work_overdue",
-                threshold: 1,
-                targets: attention("Required enrollment work overdue"),
-            },
-        ],
     },
     future_start: {
         version: 1,

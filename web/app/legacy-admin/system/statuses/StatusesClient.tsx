@@ -26,6 +26,7 @@ import {
     personProfileFilterChipHref,
     personStatusDrawerPreviewNotes,
     STATUS_SETTINGS_SECTION_DESCRIPTIONS,
+    STATUS_SETTINGS_SECTION_TITLES,
     statusDrawerSourceTagsForEntityType,
     statusDrawerSourceTagsForOcmRow,
     statusDrawerSourceTagsForOpportunityRow,
@@ -70,14 +71,14 @@ const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
 };
 
 const FALLBACK_LABELS: Record<string, string> = {
-    opportunities: "Opportunities",
+    opportunities: "Lead Statuses",
     jobs: "Jobs",
     schedules: "Schedules",
     customers: "Customers",
-    opportunity_customer_members: "Opportunity Sub Statuses",
+    opportunity_customer_members: "Enrollment Statuses",
     vendors: "Vendors",
     service_plan_templates: "Plan templates",
-    persons: "People",
+    persons: "People Statuses",
     contacts: "Contacts",
     customer_members: "Customer members",
     locations: "Locations",
@@ -90,6 +91,8 @@ function entityTypeDisplayLabel(
     entityType: string,
     labels: Record<string, { singular: string | null; plural: string | null }> | null
 ): string {
+    const settingsTitle = STATUS_SETTINGS_SECTION_TITLES[entityType];
+    if (settingsTitle) return settingsTitle;
     const key = ENTITY_TYPE_TO_LABEL_KEY[entityType] ?? entityType;
     const entry = labels?.[key];
     const plural = entry?.plural ?? entry?.singular;
@@ -100,7 +103,7 @@ const STATUSES_DEFAULT_SUBTITLE =
     "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
 
 const STATUSES_ADMINV2_SUBTITLE =
-    "Manage status names and order by entity layer. Lead, Person, Child, and enrollment statuses use the same status_definitions table — each section below explains which drawer or queue it powers.";
+    "Manage status names and order by entity layer. Lead Statuses, Enrollment Statuses, and People Statuses use the same status_definitions table — each section explains which drawer or queue it powers.";
 
 /** Legacy extended hints — merged with STATUS_SETTINGS_SECTION_DESCRIPTIONS where present. */
 const STATUS_ENTITY_EXTENDED_HINTS: Partial<Record<string, string>> = {
@@ -406,7 +409,9 @@ export default function StatusesClient({
             data-status-settings-person-profile-chips="true"
         >
             <span className="text-xs font-medium text-[#59678b]">Filter by drawer profile:</span>
-            {(Object.keys(PERSON_PROFILE_CHIP_LABELS) as PersonProfileFilterParam[]).map((profile) => {
+            {(Object.keys(PERSON_PROFILE_CHIP_LABELS) as PersonProfileFilterParam[])
+                .filter((profile) => !adminV2Chrome || profile !== "child_lifecycle")
+                .map((profile) => {
                 const active = personProfileFilter === profile;
                 return (
                     <Link

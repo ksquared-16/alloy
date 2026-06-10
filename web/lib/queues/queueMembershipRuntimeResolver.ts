@@ -1,7 +1,8 @@
 /**
- * Phase C — resolve queue_membership_v1 for runtime routing (behind flag).
+ * Phase C — resolve queue_membership_v1 for runtime routing (metadata-driven).
  *
  * Prefer work unit metadata; fall back to builder stage blob; never throw on invalid data.
+ * Active when department has tracks_v1; legacy child-grain env path only without tracks.
  */
 
 import {
@@ -9,27 +10,21 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
     slugifyLifecycleKey,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import {
     lifecycleStageWorkUnitKey,
     primaryQueueKeyForLifecycleStage,
     stageKeyFromLifecycleWorkUnitMetadata,
 } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import { parseQueueMembershipV1, type QueueMembershipCountUnit, type QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import { resolveQueueMembershipForStage } from "@/lib/businessProcesses/resolveQueueMembership";
 import {
-    defaultQueueMembershipForEnrollmentStage,
-    parseQueueMembershipV1,
-    resolveQueueMembershipForStage,
-    type QueueMembershipCountUnit,
-    type QueueMembershipV1,
-} from "@/lib/lifecycle/queueMembershipV1";
+    enrollmentPipelineQueueKeyAliases,
+    enrollmentQueueMembershipLegacyFallback,
+} from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
 import { resolveEffectiveLocationScopeSource } from "@/lib/queues/queueMembershipLocationScope";
 import { QUEUE_MEMBERSHIP_METADATA_KEY } from "@/lib/lifecycle/seedEnrollmentQueueMembershipV1";
 import type { NormalizedQueueDefinitionDocument } from "@/lib/config/queueDefinitionV2Runtime";
-import {
-    enrollmentOperatorStageLabel,
-    resolveOcmEnrollmentTrackStageForQueueKey,
-    type OcmEnrollmentTrackStage,
-} from "@/lib/queues/ocmEnrollmentTrackStageKeys";
+import { buildChildTrackLaneFromMembership } from "@/lib/businessProcesses/resolveChildTrackLaneFromMembership";
 import {
     resolveOcmEnrollmentTrackLaneContext,
     type OcmEnrollmentTrackLaneContext,
@@ -60,15 +55,6 @@ export type OpportunityQueueLaneRouting = {
     locationScopeSource?: QueueMembershipV1["location_scope_source"];
 };
 
-const STAGE_PIPELINE_QUEUE_KEYS: Record<string, readonly string[]> = {
-    lead: ["leads", "new_leads", "new_inquiries", "lead", "new_lead"],
-    qualification: ["qualification"],
-    tour: ["tours", "tours_follow_up"],
-    waitlist: ["waitlist"],
-    enrollment: ["enrollment_offers"],
-    enrolled: ["enrollment_completed"],
-};
-
 function isRecord(value: unknown): value is Record<string, unknown> {
     return value != null && typeof value === "object" && !Array.isArray(value);
 }
@@ -83,30 +69,34 @@ function readMembershipFromContainer(container: unknown): {
     return { parsed: parseQueueMembershipV1(raw), hasExplicit: true };
 }
 
-function findEnrollmentStageRaw(
+function findBuilderStageContext(
     departmentMetadata: unknown,
     stageKey: string,
-): Record<string, unknown> | null {
-    if (!isRecord(departmentMetadata)) return null;
-    const builderRaw = departmentMetadata[LIFECYCLE_BUILDER_METADATA_KEY];
-    if (!isRecord(builderRaw) || !Array.isArray(builderRaw.processes)) return null;
+): { stageRaw: Record<string, unknown>; processKey: string; stageLabel: string } | null {
+    const builder = lifecycleBuilderFromDepartmentMetadata(departmentMetadata);
+    const activeId = builder.active_process_id;
+    const activeProcesses = builder.processes.filter((p) => p.is_active);
+    const searchOrder = activeId
+        ? [
+              activeProcesses.find((p) => p.id === activeId),
+              ...activeProcesses.filter((p) => p.id !== activeId),
+          ].filter((p): p is NonNullable<typeof p> => Boolean(p))
+        : activeProcesses;
 
-    for (const processRaw of builderRaw.processes) {
-        if (!isRecord(processRaw)) continue;
-        if (String(processRaw.key ?? "").trim() !== ENROLLMENT_PROCESS_KEY) continue;
-        if (processRaw.is_active === false) continue;
-        const stages = Array.isArray(processRaw.stages) ? processRaw.stages : [];
-        for (const stageRaw of stages) {
-            if (!isRecord(stageRaw)) continue;
-            if (String(stageRaw.key ?? "").trim() === stageKey.trim()) {
-                return stageRaw;
-            }
+    for (const process of searchOrder) {
+        for (const stage of process.stages) {
+            if (!stage.is_active || stage.key !== stageKey.trim()) continue;
+            return {
+                stageRaw: stage as unknown as Record<string, unknown>,
+                processKey: process.key,
+                stageLabel: (stage.label ?? stage.key).trim() || stage.key,
+            };
         }
     }
     return null;
 }
 
-/** Load membership for a work unit — WU metadata first, then builder stage, then enrollment defaults. */
+/** Load membership for a work unit — WU metadata first, then builder stage explicit config. */
 export function resolveQueueMembershipForWorkUnitRuntime(params: {
     workUnitMetadata: unknown;
     departmentMetadata: unknown;
@@ -116,20 +106,20 @@ export function resolveQueueMembershipForWorkUnitRuntime(params: {
 
     const stageKey = stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata);
     if (stageKey) {
-        const stageRaw = findEnrollmentStageRaw(params.departmentMetadata, stageKey);
-        if (stageRaw) {
-            const fromStage = resolveQueueMembershipForStage(stageRaw, stageKey);
+        const ctx = findBuilderStageContext(params.departmentMetadata, stageKey);
+        if (ctx) {
+            const fromStage = resolveQueueMembershipForStage(ctx.stageRaw, stageKey);
             if (fromStage) return fromStage;
+            return enrollmentQueueMembershipLegacyFallback(stageKey, ctx.processKey);
         }
-        return defaultQueueMembershipForEnrollmentStage(stageKey);
+        return enrollmentQueueMembershipLegacyFallback(stageKey, "");
     }
 
     const builder = lifecycleBuilderFromDepartmentMetadata(params.departmentMetadata);
-    const process = builder.processes.find((p) => p.key === ENROLLMENT_PROCESS_KEY && p.is_active);
-    if (!process) return null;
-    for (const stage of process.stages) {
-        const membership = stage.queue_membership_v1;
-        if (membership) return membership;
+    for (const process of builder.processes.filter((p) => p.is_active)) {
+        for (const stage of process.stages) {
+            if (stage.queue_membership_v1) return stage.queue_membership_v1;
+        }
     }
     return null;
 }
@@ -145,7 +135,7 @@ export function membershipAppliesToExecutableQueueKey(
     const explicitBuilderKey = membership.queue_builder_key?.trim();
     if (explicitBuilderKey && explicitBuilderKey === key) return true;
 
-    const aliases = STAGE_PIPELINE_QUEUE_KEYS[membership.stage_key] ?? [];
+    const aliases = enrollmentPipelineQueueKeyAliases(membership.lifecycle_key, membership.stage_key);
     if (aliases.includes(key)) return true;
 
     if (key === membership.stage_key) return true;
@@ -158,48 +148,30 @@ export function membershipAppliesToExecutableQueueKey(
     const slugKey = `lifecycle_${slugifyLifecycleKey(membership.stage_key)}`;
     if (key === slugKey) return true;
 
-    const ocmStage = resolveOcmEnrollmentTrackStageForQueueKey(key);
-    if (ocmStage) {
-        const membershipOcmStage = ocmEnrollmentTrackStageFromMembershipStageKey(membership.stage_key);
-        return membershipOcmStage === ocmStage && membership.subject_type === "child";
+    if (membership.subject_type === "child") {
+        const aliases = enrollmentPipelineQueueKeyAliases(membership.lifecycle_key, membership.stage_key);
+        if (aliases.includes(key)) return true;
     }
 
     return false;
 }
 
-export function ocmEnrollmentTrackStageFromMembershipStageKey(stageKey: string): OcmEnrollmentTrackStage | null {
-    const key = stageKey.trim();
-    if (key === "tour") return "tour";
-    if (key === "enrollment") return "enrolling";
-    if (key === "enrolled") return "enrolled";
-    return null;
+function buildOcmLaneFromMembership(
+    executableQueueKey: string,
+    membership: QueueMembershipV1,
+    stageLabel?: string | null,
+): OcmEnrollmentTrackLaneContext | null {
+    if (!membershipAppliesToExecutableQueueKey(membership, executableQueueKey)) return null;
+    return buildChildTrackLaneFromMembership({
+        executableQueueKey,
+        membership,
+        stageLabel,
+    });
 }
 
 function dispositionKeysForMembership(membership: QueueMembershipV1): string[] | undefined {
     const keys = membership.included_disposition_keys.map((k) => k.trim()).filter(Boolean);
     return keys.length ? keys : undefined;
-}
-
-function buildOcmLaneFromMembership(
-    executableQueueKey: string,
-    membership: QueueMembershipV1,
-): OcmEnrollmentTrackLaneContext | null {
-    if (membership.subject_type !== "child") return null;
-    if (!membershipAppliesToExecutableQueueKey(membership, executableQueueKey)) return null;
-
-    const stage = ocmEnrollmentTrackStageFromMembershipStageKey(membership.stage_key);
-    if (!stage) return null;
-
-    return {
-        enabled: true,
-        queueKey: executableQueueKey.trim(),
-        stage,
-        stageLabel: enrollmentOperatorStageLabel(stage),
-        dispositionKeys: dispositionKeysForMembership(membership),
-        countUnit: membership.count_unit,
-        membershipSource: "builder",
-        locationScopeSource: resolveEffectiveLocationScopeSource(membership),
-    };
 }
 
 function buildWaitlistLaneFromMembership(
@@ -261,9 +233,9 @@ function resolveChildGrainFlagLanes(params: {
 
 /**
  * Resolve opportunity lane routing with precedence:
- * 1. Builder flag + valid membership for queue key
- * 2. ALLOY_QUEUE_CHILD_GRAIN_LANES
- * 3. Legacy (case-grain compat paths)
+ * 1. tracks_v1 + valid queue_membership_v1 for queue key (builder)
+ * 2. Legacy child-grain env path (tenants without tracks_v1 only)
+ * 3. Legacy case-grain compat paths
  */
 export function resolveOpportunityQueueLaneRouting(params: {
     normalized: NormalizedQueueDefinitionDocument | null | undefined;
@@ -282,7 +254,7 @@ export function resolveOpportunityQueueLaneRouting(params: {
 
     if (!executableQueueKey) return empty;
 
-    if (isQueueMembershipFromBuilderEnabled()) {
+    if (isQueueMembershipFromBuilderEnabled(params.departmentMetadata)) {
         try {
             const membership = resolveQueueMembershipForWorkUnitRuntime({
                 workUnitMetadata: params.workUnitMetadata,
@@ -293,7 +265,18 @@ export function resolveOpportunityQueueLaneRouting(params: {
                 membershipAppliesToExecutableQueueKey(membership, executableQueueKey) &&
                 isBuilderMembershipLaneAllowed(membership)
             ) {
-                const ocmTrackLaneCtx = buildOcmLaneFromMembership(executableQueueKey, membership);
+                const stageLabel =
+                    stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata) ?
+                        findBuilderStageContext(
+                            params.departmentMetadata,
+                            stageKeyFromLifecycleWorkUnitMetadata(params.workUnitMetadata)!,
+                        )?.stageLabel ?? null
+                    :   null;
+                const ocmTrackLaneCtx = buildOcmLaneFromMembership(
+                    executableQueueKey,
+                    membership,
+                    stageLabel,
+                );
                 if (ocmTrackLaneCtx) {
                     return {
                         routingSource: "builder",
@@ -322,10 +305,23 @@ export function resolveOpportunityQueueLaneRouting(params: {
                         locationScopeSource: membership.location_scope_source ?? undefined,
                     };
                 }
+
+                if (membership.subject_type === "case") {
+                    return {
+                        routingSource: "builder",
+                        builderMembership: membership,
+                        ocmTrackLaneCtx: null,
+                        waitlistGrainCtx: null,
+                        enrollmentChildGrainCtx: null,
+                        countUnit: membership.count_unit,
+                        locationScopeSource: membership.location_scope_source ?? undefined,
+                    };
+                }
             }
         } catch {
-            // Never throw on invalid metadata — fall through to child-grain / legacy.
+            // Never throw on invalid metadata — fall through to legacy when tracks configured.
         }
+        return empty;
     }
 
     const childGrain = resolveChildGrainFlagLanes({

@@ -58,12 +58,19 @@ export type StatusOptionVm = {
     sort_order: number;
 };
 
+export type StatusMenuItemVm =
+    | { kind: "status"; status_key: string; label: string; sort_order: number }
+    | { kind: "separator"; label: string }
+    | { kind: "stage_heading"; stage_key: string; label: string };
+
 export type StatusControlVm =
     | {
           renderAs: "dropdown";
           status_key: string;
           label: string;
           options: StatusOptionVm[];
+          /** When set, drawer shows current-stage statuses first with stage jump groups. */
+          progressive_menu?: StatusMenuItemVm[];
       }
     | {
           renderAs: "readonly_pill";

@@ -3,7 +3,7 @@
  */
 
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
-import { defaultQueueMembershipForEnrollmentStage } from "@/lib/lifecycle/queueMembershipV1";
+import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import { defaultCountUnitForSubject } from "@/lib/lifecycle/queueMembershipUiLabels";
 import {
     parseQueueMembershipV1,
@@ -27,7 +27,7 @@ export function queueMembershipEditorDraftFromSaved(
     saved: QueueMembershipV1 | null | undefined,
     stageKey: string,
 ): QueueMembershipEditorDraft {
-    const fallback = defaultQueueMembershipForEnrollmentStage(stageKey);
+    const fallback = defaultEnrollmentQueueMembershipForStage(stageKey);
     const membership = saved ?? fallback;
     if (!membership) {
         return {

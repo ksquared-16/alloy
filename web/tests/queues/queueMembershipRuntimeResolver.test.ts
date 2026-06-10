@@ -1,8 +1,9 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { applyEnrollmentTemplateToProcess } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { lifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import { defaultQueueMembershipForEnrollmentStage } from "@/lib/lifecycle/queueMembershipV1";
+import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import { QUEUE_MEMBERSHIP_METADATA_KEY } from "@/lib/lifecycle/seedEnrollmentQueueMembershipV1";
 import { isQueueMembershipFromBuilderEnabled } from "@/lib/queues/queueMembershipFromBuilderFeatureFlag";
 import {
@@ -11,32 +12,61 @@ import {
     resolveQueueMembershipForWorkUnitRuntime,
 } from "@/lib/queues/queueMembershipRuntimeResolver";
 
-const ENROLLED_MEMBERSHIP = defaultQueueMembershipForEnrollmentStage("enrolled")!;
+const ENROLLED_MEMBERSHIP = defaultEnrollmentQueueMembershipForStage("enrolled")!;
 
-function withBuilderFlag(value: string | undefined) {
-    const prevBuilder = process.env.ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER;
-    const prevChild = process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES;
-    if (value === undefined) delete process.env.ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER;
-    else process.env.ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER = value;
-    delete process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES;
+function tracksDepartmentMetadata() {
+    const process = applyEnrollmentTemplateToProcess({
+        id: "p1",
+        key: ENROLLMENT_PROCESS_KEY,
+        name: "Enrollment",
+        primary_entity: "opportunity",
+        sort_order: 0,
+        is_active: true,
+        stages: [],
+    });
+    return {
+        [LIFECYCLE_BUILDER_METADATA_KEY]: {
+            version: 1,
+            active_process_id: process.id,
+            processes: [process],
+        },
+    };
+}
+
+function withEnvVars(vars: Record<string, string | undefined>) {
+    const prev: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(vars)) {
+        prev[key] = process.env[key];
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+    }
     return () => {
-        if (prevBuilder === undefined) delete process.env.ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER;
-        else process.env.ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER = prevBuilder;
-        if (prevChild === undefined) delete process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES;
-        else process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES = prevChild;
+        for (const [key, value] of Object.entries(prev)) {
+            if (value === undefined) delete process.env[key];
+            else process.env[key] = value;
+        }
     };
 }
 
 describe("queueMembershipFromBuilderFeatureFlag", () => {
-    it("is off by default", () => {
-        const restore = withBuilderFlag(undefined);
+    it("is off without tracks_v1 metadata", () => {
+        const restore = withEnvVars({
+            ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER: undefined,
+            ALLOY_QUEUE_CHILD_GRAIN_LANES: undefined,
+        });
         expect(isQueueMembershipFromBuilderEnabled()).toBe(false);
         restore();
     });
 
-    it("is on when ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1", () => {
-        const restore = withBuilderFlag("1");
-        expect(isQueueMembershipFromBuilderEnabled()).toBe(true);
+    it("is on when tracks_v1 configured without env", () => {
+        const restore = withEnvVars({ ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER: undefined });
+        expect(isQueueMembershipFromBuilderEnabled(tracksDepartmentMetadata())).toBe(true);
+        restore();
+    });
+
+    it("kill switch ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=0 disables tracks runtime", () => {
+        const restore = withEnvVars({ ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER: "0" });
+        expect(isQueueMembershipFromBuilderEnabled(tracksDepartmentMetadata())).toBe(false);
         restore();
     });
 });
@@ -57,10 +87,34 @@ describe("resolveQueueMembershipForWorkUnitRuntime", () => {
         expect(membership?.included_disposition_keys).toEqual(["custom_enrolled"]);
     });
 
-    it("falls back to enrollment defaults for stage key on WU", () => {
+    it("falls back to enrollment legacy defaults when builder has matching stage", () => {
         const membership = resolveQueueMembershipForWorkUnitRuntime({
             workUnitMetadata: { lifecycle_stage_key: "enrolled" },
-            departmentMetadata: {},
+            departmentMetadata: {
+                [LIFECYCLE_BUILDER_METADATA_KEY]: {
+                    version: 1,
+                    active_process_id: "p1",
+                    processes: [
+                        {
+                            id: "p1",
+                            key: ENROLLMENT_PROCESS_KEY,
+                            name: "Enrollment",
+                            primary_entity: "opportunity",
+                            sort_order: 0,
+                            is_active: true,
+                            stages: [
+                                {
+                                    id: "s1",
+                                    key: "enrolled",
+                                    label: "Enrolled",
+                                    sort_order: 0,
+                                    is_active: true,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
         });
         expect(membership).toEqual(ENROLLED_MEMBERSHIP);
     });
@@ -70,7 +124,10 @@ describe("resolveOpportunityQueueLaneRouting", () => {
     let restoreEnv: () => void;
 
     beforeEach(() => {
-        restoreEnv = withBuilderFlag(undefined);
+        restoreEnv = withEnvVars({
+            ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER: undefined,
+            ALLOY_QUEUE_CHILD_GRAIN_LANES: undefined,
+        });
     });
 
     afterEach(() => {
@@ -82,7 +139,7 @@ describe("resolveOpportunityQueueLaneRouting", () => {
         [QUEUE_MEMBERSHIP_METADATA_KEY]: ENROLLED_MEMBERSHIP,
     };
 
-    it("flag off uses child-grain flag path when set", () => {
+    it("without tracks uses child-grain env path when set", () => {
         process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES = "enrollment_completed";
         const routing = resolveOpportunityQueueLaneRouting({
             normalized: { isV2: true, queues: [] } as never,
@@ -95,7 +152,7 @@ describe("resolveOpportunityQueueLaneRouting", () => {
         expect(routing.builderMembership).toBeNull();
     });
 
-    it("flag off without child-grain stays legacy", () => {
+    it("without tracks and without child-grain env stays legacy", () => {
         const routing = resolveOpportunityQueueLaneRouting({
             normalized: { isV2: true, queues: [] } as never,
             executableQueueKey: "enrollment_completed",
@@ -106,14 +163,12 @@ describe("resolveOpportunityQueueLaneRouting", () => {
         expect(routing.ocmTrackLaneCtx).toBeNull();
     });
 
-    it("flag on + valid child config routes OCM builder with disposition keys", () => {
-        restoreEnv();
-        restoreEnv = withBuilderFlag("1");
+    it("tracks_v1 + valid child config routes OCM builder with disposition keys (no env)", () => {
         const routing = resolveOpportunityQueueLaneRouting({
             normalized: { isV2: true, queues: [] } as never,
             executableQueueKey: "enrollment_completed",
             workUnitMetadata: enrolledWuMetadata,
-            departmentMetadata: null,
+            departmentMetadata: tracksDepartmentMetadata(),
         });
         expect(routing.routingSource).toBe("builder");
         expect(routing.ocmTrackLaneCtx?.membershipSource).toBe("builder");
@@ -121,10 +176,8 @@ describe("resolveOpportunityQueueLaneRouting", () => {
         expect(routing.ocmTrackLaneCtx?.countUnit).toBe("enrollment_tracks");
     });
 
-    it("flag on + enrollment stage maps to enrolling OCM dispositions", () => {
-        restoreEnv();
-        restoreEnv = withBuilderFlag("1");
-        const enrollingMembership = defaultQueueMembershipForEnrollmentStage("enrollment")!;
+    it("tracks_v1 + enrollment stage maps to enrolling OCM dispositions", () => {
+        const enrollingMembership = defaultEnrollmentQueueMembershipForStage("enrollment")!;
         const routing = resolveOpportunityQueueLaneRouting({
             normalized: { isV2: true, queues: [] } as never,
             executableQueueKey: "enrollment_offers",
@@ -132,18 +185,16 @@ describe("resolveOpportunityQueueLaneRouting", () => {
                 lifecycle_stage_key: "enrollment",
                 [QUEUE_MEMBERSHIP_METADATA_KEY]: enrollingMembership,
             },
-            departmentMetadata: null,
+            departmentMetadata: tracksDepartmentMetadata(),
         });
         expect(routing.routingSource).toBe("builder");
-        expect(routing.ocmTrackLaneCtx?.stage).toBe("enrolling");
+        expect(routing.ocmTrackLaneCtx?.stageKey).toBe("enrollment");
         expect(routing.ocmTrackLaneCtx?.dispositionKeys).toEqual(
             enrollingMembership.included_disposition_keys,
         );
     });
 
-    it("flag on + invalid metadata falls back to child-grain or legacy", () => {
-        restoreEnv();
-        restoreEnv = withBuilderFlag("1");
+    it("tracks_v1 + invalid metadata stays legacy (not child-grain)", () => {
         process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES = "enrollment_completed";
         const routing = resolveOpportunityQueueLaneRouting({
             normalized: { isV2: true, queues: [] } as never,
@@ -152,15 +203,13 @@ describe("resolveOpportunityQueueLaneRouting", () => {
                 lifecycle_stage_key: "enrolled",
                 [QUEUE_MEMBERSHIP_METADATA_KEY]: { version: 2 },
             },
-            departmentMetadata: null,
+            departmentMetadata: tracksDepartmentMetadata(),
         });
-        expect(routing.routingSource).toBe("child_grain_flag");
-        expect(routing.ocmTrackLaneCtx?.membershipSource).toBe("child_grain_flag");
+        expect(routing.routingSource).toBe("legacy");
+        expect(routing.ocmTrackLaneCtx).toBeNull();
     });
 
-    it("flag on + missing metadata falls back when child-grain flag set", () => {
-        restoreEnv();
-        restoreEnv = withBuilderFlag("1");
+    it("without tracks + missing metadata falls back when child-grain env set", () => {
         process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES = "tours";
         const routing = resolveOpportunityQueueLaneRouting({
             normalized: { isV2: true, queues: [] } as never,
@@ -171,9 +220,7 @@ describe("resolveOpportunityQueueLaneRouting", () => {
         expect(routing.routingSource).toBe("child_grain_flag");
     });
 
-    it("builder flag wins over child-grain flag when valid config exists", () => {
-        restoreEnv();
-        restoreEnv = withBuilderFlag("1");
+    it("tracks_v1 wins over child-grain env when valid config exists", () => {
         process.env.ALLOY_QUEUE_CHILD_GRAIN_LANES = "enrollment_completed";
         const customMembership = {
             ...ENROLLED_MEMBERSHIP,
@@ -185,16 +232,14 @@ describe("resolveOpportunityQueueLaneRouting", () => {
             workUnitMetadata: {
                 [QUEUE_MEMBERSHIP_METADATA_KEY]: customMembership,
             },
-            departmentMetadata: null,
+            departmentMetadata: tracksDepartmentMetadata(),
         });
         expect(routing.routingSource).toBe("builder");
         expect(routing.ocmTrackLaneCtx?.dispositionKeys).toEqual(["enrolled", "bonus_track"]);
     });
 
-    it("flag on + valid candidate config routes waitlist with disposition keys", () => {
-        restoreEnv();
-        restoreEnv = withBuilderFlag("1");
-        const waitlistMembership = defaultQueueMembershipForEnrollmentStage("waitlist")!;
+    it("tracks_v1 + valid candidate config routes waitlist with disposition keys", () => {
+        const waitlistMembership = defaultEnrollmentQueueMembershipForStage("waitlist")!;
         const routing = resolveOpportunityQueueLaneRouting({
             normalized: {
                 isV2: true,
@@ -218,7 +263,7 @@ describe("resolveOpportunityQueueLaneRouting", () => {
                 lifecycle_stage_key: "waitlist",
                 [QUEUE_MEMBERSHIP_METADATA_KEY]: waitlistMembership,
             },
-            departmentMetadata: null,
+            departmentMetadata: tracksDepartmentMetadata(),
         });
         expect(routing.routingSource).toBe("builder");
         expect(routing.waitlistGrainCtx?.membershipSource).toBe("builder");
@@ -232,7 +277,7 @@ describe("resolveOpportunityQueueLaneRouting", () => {
 
 describe("membershipAppliesToExecutableQueueKey", () => {
     it("matches lifecycle_wu stage queue keys", () => {
-        const membership = defaultQueueMembershipForEnrollmentStage("tour")!;
+        const membership = defaultEnrollmentQueueMembershipForStage("tour")!;
         expect(membershipAppliesToExecutableQueueKey(membership, lifecycleStageWorkUnitKey("tour"))).toBe(
             true,
         );

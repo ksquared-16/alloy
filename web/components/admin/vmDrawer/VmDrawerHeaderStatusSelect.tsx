@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import VmReadonlyStatusPill from "@/components/admin/vmDrawer/VmReadonlyStatusPill";
-import type { StatusControlVm, StatusOptionVm } from "@/lib/adminV2/viewModel/drawer/types";
+import type { StatusControlVm, StatusMenuItemVm, StatusOptionVm } from "@/lib/adminV2/viewModel/drawer/types";
 import type { PersonStatusProfileKey } from "@/lib/admin/person/personStatusApplicability";
 import {
     mapStatusDropdownOptions,
@@ -55,6 +55,54 @@ function statusOptionsFetchUrl(entityKind: EntityKind, statusProfile?: PersonSta
         return `${base}&status_profile=${encodeURIComponent(statusProfile)}`;
     }
     return base;
+}
+
+function ProgressiveMenuRow({
+    item,
+    selectedKey,
+    onSelect,
+}: {
+    item: StatusMenuItemVm;
+    selectedKey: string;
+    onSelect: (statusKey: string) => void;
+}) {
+    if (item.kind === "separator") {
+        return (
+            <div
+                className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45"
+                role="presentation"
+                data-testid="status-menu-move-to-stage-separator"
+            >
+                {item.label}
+            </div>
+        );
+    }
+    if (item.kind === "stage_heading") {
+        return (
+            <div
+                className="px-3 pt-2 pb-0.5 text-[10px] font-semibold text-alloy-midnight/55"
+                role="presentation"
+                data-testid={`status-menu-stage-heading-${item.stage_key}`}
+            >
+                {item.label}
+            </div>
+        );
+    }
+    const selected = item.status_key === selectedKey;
+    return (
+        <button
+            type="button"
+            role="menuitem"
+            className={menuItemClass(selected)}
+            aria-current={selected ? "true" : undefined}
+            onClick={() => onSelect(item.status_key)}
+        >
+            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
+                {selected ? <Check className="h-3.5 w-3.5 text-alloy-juniper" /> : null}
+            </span>
+            <span className="truncate">{item.label}</span>
+        </button>
+    );
 }
 
 function menuItemClass(selected: boolean): string {
@@ -156,6 +204,7 @@ export default function VmDrawerHeaderStatusSelect({
         };
     }, [menuOpen]);
 
+    const progressiveMenu = statusControl?.renderAs === "dropdown" ? statusControl.progressive_menu : undefined;
     const editableOptions = options ?? [];
     const showMenu = canMutate && editableOptions.length >= 2;
     const showSkeleton = canMutate && optionsLoading && editableOptions.length < 2;
@@ -270,26 +319,38 @@ export default function VmDrawerHeaderStatusSelect({
                                 <span className="truncate">{resolvedLabel}</span>
                             </button>
                         :   null}
-                        {editableOptions.map((o) => {
-                            const selected = o.status_key === key;
-                            return (
-                                <button
-                                    key={o.status_key}
-                                    type="button"
-                                    role="menuitem"
-                                    className={menuItemClass(selected)}
-                                    aria-current={selected ? "true" : undefined}
-                                    onClick={() => void onStatusChange(o.status_key)}
-                                >
-                                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center" aria-hidden>
-                                        {selected ?
-                                            <Check className="h-3.5 w-3.5 text-alloy-juniper" />
-                                        :   null}
-                                    </span>
-                                    <span className="truncate">{o.label}</span>
-                                </button>
-                            );
-                        })}
+                        {progressiveMenu?.length
+                            ? progressiveMenu.map((item, idx) => (
+                                  <ProgressiveMenuRow
+                                      key={`${item.kind}-${idx}`}
+                                      item={item}
+                                      selectedKey={key}
+                                      onSelect={(statusKey) => void onStatusChange(statusKey)}
+                                  />
+                              ))
+                            : editableOptions.map((o) => {
+                                  const selected = o.status_key === key;
+                                  return (
+                                      <button
+                                          key={o.status_key}
+                                          type="button"
+                                          role="menuitem"
+                                          className={menuItemClass(selected)}
+                                          aria-current={selected ? "true" : undefined}
+                                          onClick={() => void onStatusChange(o.status_key)}
+                                      >
+                                          <span
+                                              className="flex h-3.5 w-3.5 shrink-0 items-center justify-center"
+                                              aria-hidden
+                                          >
+                                              {selected ?
+                                                  <Check className="h-3.5 w-3.5 text-alloy-juniper" />
+                                              :   null}
+                                          </span>
+                                          <span className="truncate">{o.label}</span>
+                                      </button>
+                                  );
+                              })}
                     </div>
                 :   null}
                 {fetchError ?

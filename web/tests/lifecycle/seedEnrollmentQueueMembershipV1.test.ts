@@ -6,7 +6,7 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { lifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
-import { defaultQueueMembershipForEnrollmentStage } from "@/lib/lifecycle/queueMembershipV1";
+import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import {
     applyEnrollmentQueueMembershipSeedToDepartmentMetadata,
     applyEnrollmentQueueMembershipSeedToWorkUnitMetadata,
@@ -87,7 +87,7 @@ describe("planEnrollmentQueueMembershipSeed", () => {
         ]);
 
         const tour = plan!.stage_actions.find((a) => a.stage_key === "tour");
-        expect(tour?.membership_after).toEqual(defaultQueueMembershipForEnrollmentStage("tour"));
+        expect(tour?.membership_after).toEqual(defaultEnrollmentQueueMembershipForStage("tour"));
 
         const enrolling = plan!.stage_actions.find((a) => a.stage_key === "enrollment");
         expect(enrolling?.membership_after?.included_disposition_keys).toEqual([
@@ -139,7 +139,7 @@ describe("planEnrollmentQueueMembershipSeed", () => {
         expect(tour?.membership_after).toEqual(explicit);
     });
 
-    it("skips unknown stage keys without defaults", () => {
+    it("seeds known enrollment stages and skips stages without defaults", () => {
         const stages = [stageRecord("enrolling", "Enrolling"), stageRecord("onboarding", "Onboarding")];
         const plan = planEnrollmentQueueMembershipSeed({
             departmentId: DEPT_ID,
@@ -147,10 +147,7 @@ describe("planEnrollmentQueueMembershipSeed", () => {
             workUnits: [],
         });
 
-        expect(plan!.stage_actions.map((a) => a.action)).toEqual([
-            "skipped_unknown_stage",
-            "skipped_no_default",
-        ]);
+        expect(plan!.stage_actions.map((a) => a.action)).toEqual(["seeded", "skipped_no_default"]);
     });
 
     it("denormalizes matching membership to work unit metadata", () => {
@@ -165,7 +162,7 @@ describe("planEnrollmentQueueMembershipSeed", () => {
         const wuAction = plan!.work_unit_actions[0];
         expect(wuAction.action).toBe("seeded");
         expect(wuAction.work_unit_id).toBe(wu.id);
-        expect(wuAction.membership_after).toEqual(defaultQueueMembershipForEnrollmentStage("enrolled"));
+        expect(wuAction.membership_after).toEqual(defaultEnrollmentQueueMembershipForStage("enrolled"));
     });
 
     it("preserves explicit work unit queue_membership_v1", () => {
@@ -211,12 +208,12 @@ describe("applyEnrollmentQueueMembershipSeed", () => {
         };
         const stage = builder.processes[0].stages[0];
         expect(stage[QUEUE_MEMBERSHIP_METADATA_KEY]).toEqual(
-            defaultQueueMembershipForEnrollmentStage("lead"),
+            defaultEnrollmentQueueMembershipForStage("lead"),
         );
 
         const parsed = parseLifecycleBuilderV1(applied[LIFECYCLE_BUILDER_METADATA_KEY]);
         expect(parsed?.processes[0]?.stages[0]?.queue_membership_v1).toEqual(
-            defaultQueueMembershipForEnrollmentStage("lead"),
+            defaultEnrollmentQueueMembershipForStage("lead"),
         );
     });
 
@@ -226,7 +223,7 @@ describe("applyEnrollmentQueueMembershipSeed", () => {
             entity_type: "opportunity",
             queues: [{ key: "lane", grain: "case", filters: [{ type: "status", values: ["new_inquiry"] }] }],
         };
-        const membership = defaultQueueMembershipForEnrollmentStage("waitlist")!;
+        const membership = defaultEnrollmentQueueMembershipForStage("waitlist")!;
         const before = workUnitRow("waitlist", {});
         before.queue_definition = queueDefinition as unknown as typeof before.queue_definition;
 

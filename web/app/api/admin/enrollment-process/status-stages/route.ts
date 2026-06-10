@@ -8,10 +8,10 @@ import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMe
 import { logAdminAudit } from "@/lib/adminAuth";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import {
-    ENROLLMENT_OPERATOR_STAGE_UNASSIGNED,
-    mergeEnrollmentOperatorStageMetadata,
-    parseEnrollmentOperatorStageFromMetadata,
-} from "@/lib/lifecycle/enrollmentOperatorStage";
+    mergeProcessStageMetadata,
+    parseProcessStageKeyFromStatusMetadata,
+    PROCESS_STAGE_UNASSIGNED,
+} from "@/lib/businessProcesses/processStageMetadata";
 import {
     assertValidEnrollmentStageStatusKeys,
     persistEnrollmentStageStatusAssignments,
@@ -145,7 +145,7 @@ export async function PATCH(request: NextRequest) {
     logAdminAudit({
         entity: "status_definitions",
         id: stage,
-        changed_fields: ["enrollment_operator_stage", ...changedIds],
+        changed_fields: ["process_stage_key", ...changedIds],
         actor_user_id: ctx.userId,
         role: ctx.role,
     });
@@ -205,8 +205,8 @@ async function resetStageMetadata(
             row.metadata !== null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
                 ? (row.metadata as Record<string, unknown>)
                 : {};
-        if (parseEnrollmentOperatorStageFromMetadata(meta) !== stage) continue;
-        const nextMeta = mergeEnrollmentOperatorStageMetadata(meta, null);
+        if (parseProcessStageKeyFromStatusMetadata(meta) !== stage) continue;
+        const nextMeta = mergeProcessStageMetadata(meta, null);
         const { error: upErr } = await supabase
             .from("status_definitions")
             .update({ metadata: normalizeStatusDefinitionMetadata(nextMeta) })
@@ -219,7 +219,7 @@ async function resetStageMetadata(
     logAdminAudit({
         entity: "status_definitions",
         id: stage,
-        changed_fields: ["reset_enrollment_operator_stage", ...changedIds],
+        changed_fields: ["reset_process_stage_key", ...changedIds],
         actor_user_id: ctx.userId,
         role: ctx.role,
     });

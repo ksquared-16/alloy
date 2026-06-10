@@ -23,7 +23,9 @@ import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActiva
 import { lifecycleRequirementEntityLabelsFromMap } from "@/lib/lifecycle/lifecycleRequirementEntityLabels";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
 import { loadQueueMembershipStatusOptions } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
-import { resolveQueueMembershipForStage } from "@/lib/lifecycle/queueMembershipV1";
+import { resolveQueueMembershipForStage } from "@/lib/businessProcesses/resolveQueueMembership";
+import { enrollmentQueueMembershipLegacyFallback } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
+import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
@@ -206,7 +208,9 @@ export async function buildLifecycleStageBootstrap(params: {
     const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
     const process = builder?.processes.find((p) => p.is_active) ?? null;
     const stageRecord = process?.stages.find((s) => s.key === builderStageKey && s.is_active) ?? null;
-    const queue_membership = resolveQueueMembershipForStage(stageRecord ?? {}, builderStageKey);
+    const queue_membership =
+        resolveQueueMembershipForStage(stageRecord ?? {}, builderStageKey) ??
+        enrollmentQueueMembershipLegacyFallback(builderStageKey, process?.key ?? "");
     const subjectForOptions = queue_membership?.subject_type ?? "case";
     const queue_membership_status_options = await loadQueueMembershipStatusOptions(
         supabase,
@@ -214,7 +218,11 @@ export async function buildLifecycleStageBootstrap(params: {
         subjectForOptions,
         builderStageKey,
     );
-    const stage_operating_plan = resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey);
+    const stage_operating_plan =
+        resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey) ??
+        (process?.key === "enrollment"
+            ? defaultStageOperatingPlanForEnrollmentStage(builderStageKey)
+            : null);
 
     return {
         department_id: departmentId,

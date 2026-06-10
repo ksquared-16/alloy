@@ -368,6 +368,14 @@ export async function composeOpportunityDrawerViewModel(
                 record,
                 statusDefs,
                 layoutMode: "workflow_v1",
+                configuredStages:
+                    lifecycle_rail?.stages.map((s, index) => ({
+                        id: s.key,
+                        key: s.key,
+                        label: s.label,
+                        sort_order: index,
+                        is_active: true,
+                    })) ?? null,
             }),
             status_can_mutate,
             oper_trust_preview,

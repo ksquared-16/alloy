@@ -6,7 +6,6 @@
  */
 
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
-import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 
 export const STAGE_OPERATING_PLAN_METADATA_KEY = "stage_operating_plan_v1" as const;
 
@@ -289,10 +288,11 @@ export function parseStageOperatingPlanV1(raw: unknown): StageOperatingPlanV1 | 
     return plan;
 }
 
+/** Resolve explicit stage_operating_plan_v1 from stage metadata only. */
 export function resolveStageOperatingPlanForStage(
     stageConfig: unknown,
-    fallbackStageKey: string,
-    lifecycleKey: string = ENROLLMENT_PROCESS_KEY,
+    _fallbackStageKey?: string,
+    _lifecycleKey: string = ENROLLMENT_PROCESS_KEY,
 ): StageOperatingPlanV1 | null {
     if (stageConfig != null && typeof stageConfig === "object" && !Array.isArray(stageConfig)) {
         const record = stageConfig as Record<string, unknown>;
@@ -300,8 +300,12 @@ export function resolveStageOperatingPlanForStage(
             const parsed = parseStageOperatingPlanV1(record[STAGE_OPERATING_PLAN_METADATA_KEY]);
             if (parsed) return parsed;
         }
+        if (record.stage_operating_plan_v1 !== undefined) {
+            const parsed = parseStageOperatingPlanV1(record.stage_operating_plan_v1);
+            if (parsed) return parsed;
+        }
     }
-    return defaultStageOperatingPlanForEnrollmentStage(fallbackStageKey, lifecycleKey);
+    return null;
 }
 
 export function outcomeRulesForKey(

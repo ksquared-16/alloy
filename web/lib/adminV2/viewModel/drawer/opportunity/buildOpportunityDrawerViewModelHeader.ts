@@ -2,6 +2,12 @@ import { resolveOpportunityStatusDisplay } from "@/lib/admin/drawer/opportunityS
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { OPPORTUNITY_CASE_STATUS_KEYS } from "@/lib/admin/statusReseed/statusMvpCatalog";
 import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
+import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import {
+    buildProgressiveEnrollmentStatusMenu,
+    isProgressiveEnrollmentStatusEnabled,
+    progressiveMenuToFlatOptions,
+} from "@/lib/lifecycle/progressiveEnrollmentStatusSelector";
 
 function trimOrNull(v: unknown): string | null {
     if (v == null) return null;
@@ -21,6 +27,7 @@ export function buildOpportunityStatusControlVm(params: {
     record: Record<string, unknown>;
     statusDefs: StatusDefinitionRow[];
     layoutMode: "classic" | "workflow_v1";
+    configuredStages?: LifecycleBuilderStageRecord[] | null;
 }): StatusControlVm {
     if (params.layoutMode !== "workflow_v1") {
         return { renderAs: "hidden" };
@@ -41,15 +48,30 @@ export function buildOpportunityStatusControlVm(params: {
             pipelineStageName,
         }) ?? statusKey ?? "—";
 
-    const options = activeDefs
-        .map((d) => ({
-            status_key: d.status_key,
-            label: trimOrNull(d.status_label) ?? d.status_key,
-            sort_order: d.sort_order ?? 0,
-        }))
-        .sort((a, b) =>
-            a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.label.localeCompare(b.label)
-        );
+    const stageRecords: LifecycleBuilderStageRecord[] =
+        params.configuredStages?.filter((s) => s.is_active !== false) ??
+        [];
+
+    const useProgressive = isProgressiveEnrollmentStatusEnabled(stageRecords);
+    const progressive_menu = useProgressive
+        ? buildProgressiveEnrollmentStatusMenu({
+              statusDefs: activeDefs,
+              currentStatusKey: statusKey ?? "",
+              configuredStages: stageRecords,
+          })
+        : undefined;
+
+    const options = useProgressive && progressive_menu?.length
+        ? progressiveMenuToFlatOptions(progressive_menu)
+        : activeDefs
+              .map((d) => ({
+                  status_key: d.status_key,
+                  label: trimOrNull(d.status_label) ?? d.status_key,
+                  sort_order: d.sort_order ?? 0,
+              }))
+              .sort((a, b) =>
+                  a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.label.localeCompare(b.label),
+              );
 
     if (options.length >= 2) {
         return {
@@ -57,6 +79,7 @@ export function buildOpportunityStatusControlVm(params: {
             status_key: statusKey ?? "",
             label,
             options,
+            ...(progressive_menu?.length ? { progressive_menu } : {}),
         };
     }
 

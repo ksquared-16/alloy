@@ -5,7 +5,7 @@ import {
     queueMembershipDraftToPersisted,
     queueMembershipEditorDraftFromSaved,
 } from "@/lib/lifecycle/queueMembershipEditorModel";
-import { defaultQueueMembershipForEnrollmentStage } from "@/lib/lifecycle/queueMembershipV1";
+import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import {
     QUEUE_MEMBERSHIP_SUBJECT_LABELS,
     defaultCountUnitForSubject,
@@ -13,10 +13,10 @@ import {
 
 describe("queueMembershipEditorModel", () => {
     it("hydrates draft from saved membership", () => {
-        const saved = defaultQueueMembershipForEnrollmentStage("tour")!;
+        const saved = defaultEnrollmentQueueMembershipForStage("tour")!;
         const draft = queueMembershipEditorDraftFromSaved(saved, "tour");
-        expect(draft.subject_type).toBe("child");
-        expect(draft.count_unit).toBe("enrollment_tracks");
+        expect(draft.subject_type).toBe("case");
+        expect(draft.count_unit).toBe("cases");
         expect(draft.included_keys.length).toBeGreaterThan(0);
     });
 
@@ -50,7 +50,7 @@ describe("queueMembershipEditorModel", () => {
     });
 
     it("detects dirty draft", () => {
-        const saved = defaultQueueMembershipForEnrollmentStage("waitlist")!;
+        const saved = defaultEnrollmentQueueMembershipForStage("waitlist")!;
         const draft = queueMembershipEditorDraftFromSaved(saved, "waitlist");
         expect(queueMembershipDraftDirty(saved, draft, "waitlist")).toBe(false);
         expect(
@@ -60,7 +60,7 @@ describe("queueMembershipEditorModel", () => {
 
     it("resets keys when subject changes", () => {
         const draft = queueMembershipEditorDraftFromSaved(
-            defaultQueueMembershipForEnrollmentStage("tour")!,
+            defaultEnrollmentQueueMembershipForStage("tour")!,
             "tour",
         );
         const next = applySubjectTypeChange(draft, "candidate");

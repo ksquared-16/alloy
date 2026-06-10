@@ -10,7 +10,8 @@ import {
     type LifecycleOperatorStage,
 } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { ENROLLMENT_PROCESS_DISPLAY_NAME } from "@/lib/lifecycle/businessProcessUiLabels";
-import { defaultEnrollmentBusinessProcessV1Stages } from "@/lib/lifecycle/defaultEnrollmentBusinessProcessV1Stages";
+import { parseProcessTracksV1 } from "@/lib/businessProcesses/parseProcessTracksV1";
+import type { ProcessTracksV1 } from "@/lib/businessProcesses/processConfigTypes";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import type { LifecyclePrimaryEntityKey } from "@/lib/lifecycle/lifecycleConfiguration";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
@@ -28,7 +29,9 @@ export type LifecycleBuilderStageRecord = {
     description?: string;
     sort_order: number;
     is_active: boolean;
-    /** Phase B — subject-grain queue membership metadata (optional until seeded). */
+    /** V2 — family_track | child_track when process uses tracks_v1. */
+    track_key?: string;
+    /** Phase B — subject-grain queue membership metadata (optional until configured). */
     queue_membership_v1?: QueueMembershipV1;
     /** Stage work plan + outcome rules (metadata only). */
     stage_operating_plan_v1?: StageOperatingPlanV1;
@@ -43,6 +46,8 @@ export type LifecycleBuilderProcessRecord = {
     primary_entity: LifecyclePrimaryEntityKey;
     sort_order: number;
     is_active: boolean;
+    /** Tracks and split rules — template-defined, stored as generic metadata. */
+    tracks_v1?: ProcessTracksV1;
     stages: LifecycleBuilderStageRecord[];
 };
 
@@ -65,14 +70,11 @@ export function slugifyLifecycleKey(raw: string): string {
     return KEY_REGEX.test(s) ? s : `stage_${s.slice(0, 40)}`;
 }
 
-function defaultEnrollmentStages(): LifecycleBuilderStageRecord[] {
-    return defaultEnrollmentBusinessProcessV1Stages();
-}
-
 export function emptyLifecycleBuilderV1(): LifecycleBuilderV1 {
     return { version: 1, active_process_id: null, processes: [] };
 }
 
+/** Empty enrollment process shell — operators apply V2 template or add stages in Settings. */
 export function defaultLifecycleBuilderV1(): LifecycleBuilderV1 {
     const processId = randomUUID();
     return {
@@ -86,7 +88,7 @@ export function defaultLifecycleBuilderV1(): LifecycleBuilderV1 {
                 primary_entity: "opportunity",
                 sort_order: 0,
                 is_active: true,
-                stages: defaultEnrollmentStages(),
+                stages: [],
             },
         ],
     };
@@ -117,6 +119,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             if (!sid || !skey || !label) continue;
             const queueMembership = parseQueueMembershipV1(sr.queue_membership_v1);
             const operatingPlan = parseStageOperatingPlanV1(sr.stage_operating_plan_v1);
+            const track_key = typeof sr.track_key === "string" ? sr.track_key.trim() : undefined;
             stages.push({
                 id: sid,
                 key: skey,
@@ -124,11 +127,13 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 description: typeof sr.description === "string" ? sr.description.trim() : undefined,
                 sort_order: typeof sr.sort_order === "number" ? sr.sort_order : stages.length,
                 is_active: sr.is_active !== false,
+                ...(track_key ? { track_key } : {}),
                 ...(queueMembership ? { queue_membership_v1: queueMembership } : {}),
                 ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
             });
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
+        const tracks_v1 = parseProcessTracksV1(row.tracks_v1) ?? undefined;
         processes.push({
             id,
             key,
@@ -136,6 +141,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             primary_entity: row.primary_entity === "opportunity" ? "opportunity" : "opportunity",
             sort_order: typeof row.sort_order === "number" ? row.sort_order : processes.length,
             is_active: row.is_active !== false,
+            ...(tracks_v1 ? { tracks_v1 } : {}),
             stages,
         });
     }
@@ -268,10 +274,11 @@ export function addStageToProcess(
     config: LifecycleBuilderV1,
     processId: string,
     label: string,
-    opts?: { description?: string }
+    opts?: { description?: string; track_key?: string }
 ): LifecycleBuilderV1 {
     const trimmed = label.trim() || "New stage";
     const description = opts?.description?.trim() || undefined;
+    const track_key = opts?.track_key?.trim() || undefined;
     const keyBase = slugifyLifecycleKey(trimmed);
     return {
         ...config,
@@ -289,7 +296,15 @@ export function addStageToProcess(
                 ...p,
                 stages: [
                     ...p.stages,
-                    { id: randomUUID(), key, label: trimmed, description, sort_order, is_active: true },
+                    {
+                        id: randomUUID(),
+                        key,
+                        label: trimmed,
+                        description,
+                        sort_order,
+                        is_active: true,
+                        ...(track_key ? { track_key } : {}),
+                    },
                 ],
             };
         }),

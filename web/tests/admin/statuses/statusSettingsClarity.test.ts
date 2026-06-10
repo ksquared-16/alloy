@@ -18,8 +18,8 @@ import { join } from "node:path";
 
 describe("statusSettingsClarity", () => {
     it("defines section descriptions for drawer-critical entity types", () => {
-        expect(STATUS_SETTINGS_SECTION_DESCRIPTIONS.opportunities).toContain("Lead/Opportunity drawer");
-        expect(STATUS_SETTINGS_SECTION_DESCRIPTIONS.persons).toContain("Person and Child drawer");
+        expect(STATUS_SETTINGS_SECTION_DESCRIPTIONS.opportunities).toContain("Lead drawer");
+        expect(STATUS_SETTINGS_SECTION_DESCRIPTIONS.persons).toContain("People drawer");
         expect(STATUS_SETTINGS_SECTION_DESCRIPTIONS.opportunity_customer_members).toContain(
             "enrollment"
         );

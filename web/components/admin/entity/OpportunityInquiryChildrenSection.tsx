@@ -66,6 +66,9 @@ import {
 } from "@/lib/fields/inquiryChildFieldRegistry";
 import ViewPersonDrawerIconButton from "@/components/admin/drawer/ViewPersonDrawerIconButton";
 import { inquiryChildRowMatchesSubjectFocus } from "@/lib/admin/drawer/resolveDrawerSubjectFocusPresentation";
+import { buildChildEnrollmentStatusControlVm } from "@/lib/adminV2/viewModel/drawer/opportunity/buildChildEnrollmentStatusControlVm";
+import type { LifecycleBuilderStageRecord } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { StatusMenuItemVm } from "@/lib/adminV2/viewModel/drawer/types";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 /** Literal Tailwind classes (must not be composed at runtime). DOB column compact; Desired Start wider. */
@@ -121,7 +124,12 @@ export type InquiryChildRow = {
 };
 
 type OptionItem = { item_key: string; label: string | null };
-type StatusRow = { status_key: string; status_label: string | null; sort_order?: number | null };
+type StatusRow = {
+    status_key: string;
+    status_label: string | null;
+    sort_order?: number | null;
+    metadata?: Record<string, unknown> | null;
+};
 
 type OcmLocalState = {
     location_id: string;
@@ -299,6 +307,7 @@ export default function OpportunityInquiryChildrenSection({
     shellReservedRowCount = 0,
     opportunityDisplayLocationKind,
     highlightSubjectIds = [],
+    configuredLifecycleStages = null,
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
@@ -319,6 +328,8 @@ export default function OpportunityInquiryChildrenSection({
     opportunityDisplayLocationKind?: "none" | "single" | "multiple" | null;
     /** Queue-row drawer subject ids — highlight matching inquiry child rows. */
     highlightSubjectIds?: string[];
+    /** Builder lifecycle stages for progressive child-track status selector. */
+    configuredLifecycleStages?: LifecycleBuilderStageRecord[] | null;
 }) {
     const rootCol = embeddedInPremiumSection ? "min-w-0 w-full" : "md:col-span-2";
     const emptyBox = embeddedInPremiumSection
@@ -471,7 +482,15 @@ export default function OpportunityInquiryChildrenSection({
                     );
                     setStatusItems(
                         (statusJson.statuses ?? [])
-                            .slice()
+                            .map((s) => ({
+                                status_key: s.status_key,
+                                status_label: s.status_label ?? null,
+                                sort_order: s.sort_order ?? null,
+                                metadata:
+                                    s.metadata != null && typeof s.metadata === "object" && !Array.isArray(s.metadata)
+                                        ? (s.metadata as Record<string, unknown>)
+                                        : null,
+                            }))
                             .sort((a, b) => Number(a.sort_order ?? 100) - Number(b.sort_order ?? 100))
                     );
                 }
@@ -520,6 +539,31 @@ export default function OpportunityInquiryChildrenSection({
     const roomLabel = labelForInquiryChildFieldKey(fieldDefs, "program_room_cohort_key", "Room");
     const scheduleLabel = labelForInquiryChildFieldKey(fieldDefs, "desired_schedule_type", "Schedule");
     const statusLabel = labelForInquiryChildFieldKey(fieldDefs, "outcome_status_key", "Status");
+
+    const childStatusMenuForRow = useCallback(
+        (currentStatusKey: string): StatusMenuItemVm[] | null => {
+            if (!configuredLifecycleStages?.length || !statusItems.length) return null;
+            const vm = buildChildEnrollmentStatusControlVm({
+                currentStatusKey,
+                statusDefs: statusItems.map((s) => ({
+                    id: s.status_key,
+                    org_id: null,
+                    industry_key: null,
+                    entity_type: INQUIRY_CHILD_ENTITY_TYPE,
+                    status_key: s.status_key,
+                    status_label: s.status_label,
+                    sort_order: Number(s.sort_order ?? 100),
+                    is_active: true,
+                    is_system: false,
+                    metadata: s.metadata ?? null,
+                })),
+                configuredStages: configuredLifecycleStages,
+            });
+            return vm.renderAs === "dropdown" ? (vm.progressive_menu ?? null) : null;
+        },
+        [configuredLifecycleStages, statusItems]
+    );
+
     const customDrawerDefs = useMemo(
         () =>
             fieldDefs.filter(
@@ -1528,13 +1572,48 @@ export default function OpportunityInquiryChildrenSection({
                                             }}
                                             className={`${fieldSelectStatus} ${outcomeSelectAttention}`}
                                             aria-label={`${statusLabel} for ${displayName}`}
+                                            data-child-enrollment-status-select="true"
                                         >
                                             <option value="">—</option>
-                                            {statusItems.map((s) => (
-                                                <option key={s.status_key} value={s.status_key}>
-                                                    {s.status_label ?? s.status_key}
-                                                </option>
-                                            ))}
+                                            {(() => {
+                                                const progressive = childStatusMenuForRow(st.outcome_status_key);
+                                                if (progressive?.length) {
+                                                    return progressive.map((item, idx) => {
+                                                        if (item.kind === "separator") {
+                                                            return (
+                                                                <option
+                                                                    key={`sep-${idx}`}
+                                                                    disabled
+                                                                    value={`__sep_${idx}`}
+                                                                >
+                                                                    {item.label}
+                                                                </option>
+                                                            );
+                                                        }
+                                                        if (item.kind === "stage_heading") {
+                                                            return (
+                                                                <option
+                                                                    key={`head-${item.stage_key}`}
+                                                                    disabled
+                                                                    value={`__head_${item.stage_key}`}
+                                                                >
+                                                                    {item.label}
+                                                                </option>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <option key={item.status_key} value={item.status_key}>
+                                                                {item.label}
+                                                            </option>
+                                                        );
+                                                    });
+                                                }
+                                                return statusItems.map((s) => (
+                                                    <option key={s.status_key} value={s.status_key}>
+                                                        {s.status_label ?? s.status_key}
+                                                    </option>
+                                                ));
+                                            })()}
                                         </select>
                                     ) : (
                                         <span className={`${readOnlyText} text-xs`}>{fallbackOutcome}</span>

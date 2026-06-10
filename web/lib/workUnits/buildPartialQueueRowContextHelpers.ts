@@ -21,6 +21,7 @@ export type PartialQueueRowContextQueueMeta = {
     subject_grain?: LifecycleSubjectType;
     count_unit?: QueueRowCountUnit;
     location_scope_source?: string | null;
+    included_disposition_keys?: readonly string[];
 };
 
 /**

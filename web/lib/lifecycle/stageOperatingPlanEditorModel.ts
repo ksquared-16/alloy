@@ -9,7 +9,6 @@ import type {
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
-import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 
 export type StageOperatingPlanEditorDraft = {
     purpose: string;
@@ -23,9 +22,10 @@ export type StageOperatingPlanEditorDraft = {
 
 export function stageOperatingPlanDraftFromSaved(
     saved: StageOperatingPlanV1 | null | undefined,
-    stageKey: string,
+    _stageKey?: string,
+    options?: { templateDefault?: StageOperatingPlanV1 | null },
 ): StageOperatingPlanEditorDraft {
-    const plan = saved ?? defaultStageOperatingPlanForEnrollmentStage(stageKey);
+    const plan = saved ?? options?.templateDefault ?? null;
     if (!plan) {
         return {
             purpose: "",

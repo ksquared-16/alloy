@@ -30,14 +30,21 @@ export const STATUS_DRAWER_SOURCE_TAG_LABELS: Record<StatusDrawerSourceTag, stri
     customer_roster: "Customer roster",
 };
 
+/** Operator-facing Settings → Statuses section titles (tenant labels may override via entity labels). */
+export const STATUS_SETTINGS_SECTION_TITLES: Record<string, string> = {
+    opportunities: "Lead Statuses",
+    opportunity_customer_members: "Enrollment Statuses",
+    persons: "People Statuses",
+};
+
 /** Section descriptions — what each Settings entity type controls. */
 export const STATUS_SETTINGS_SECTION_DESCRIPTIONS: Record<string, string> = {
     opportunities:
-        "Controls the Lead/Opportunity drawer status dropdown and case-level status.",
+        "Controls the Lead drawer status dropdown and family-track enrollment stages.",
     persons:
-        "Controls Person and Child drawer status dropdowns. Person and Child options are filtered by Applicability.",
+        "Controls People drawer status dropdowns. Options are filtered by Applicability profile.",
     opportunity_customer_members:
-        "Controls per-child enrollment status on a Lead. This affects enrollment queues and child enrollment context, not the Person/Child header status dropdown.",
+        "Controls per-child enrollment status on a Lead (child track). Drives Waitlist, Enrolling, and Enrolled queues.",
     customer_members:
         "Controls customer/member records where applicable. This is not the same as the Child drawer status.",
 };

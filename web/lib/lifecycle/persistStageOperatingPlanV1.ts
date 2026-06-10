@@ -9,7 +9,7 @@ import {
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
-import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+import { legacyEnrollmentOperatingPlanDefault } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
 import {
     STAGE_OPERATING_PLAN_METADATA_KEY,
     parseStageOperatingPlanV1,
@@ -26,16 +26,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
     return value != null && typeof value === "object" && !Array.isArray(value);
 }
 
-function findEnrollmentStageRaw(
+function findProcessStageRaw(
     metadata: Record<string, unknown>,
     stageKey: string,
-): Record<string, unknown> | null {
+): { stageRaw: Record<string, unknown>; processKey: string } | null {
     const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
     const process = builder ? activeLifecycleProcess(builder) : null;
-    if (!process || process.key !== ENROLLMENT_PROCESS_KEY) return null;
+    if (!process) return null;
     const stage = process.stages.find((s) => s.key === stageKey.trim() && s.is_active);
     if (!stage) return null;
-    return stage as unknown as Record<string, unknown>;
+    return { stageRaw: stage as unknown as Record<string, unknown>, processKey: process.key };
 }
 
 function applyPlanToBuilderStage(
@@ -69,6 +69,7 @@ function applyPlanToBuilderStage(
 function operatingPlanSeedDecision(
     stageKey: string,
     container: unknown,
+    processKey: string,
 ): { action: "seed" | "preserve" | "none"; plan: StageOperatingPlanV1 | null } {
     if (isRecord(container)) {
         const raw = container[STAGE_OPERATING_PLAN_METADATA_KEY];
@@ -78,8 +79,10 @@ function operatingPlanSeedDecision(
             return { action: "none", plan: null };
         }
     }
-    const defaultPlan = defaultStageOperatingPlanForEnrollmentStage(stageKey);
-    if (defaultPlan) return { action: "seed", plan: defaultPlan };
+    if (processKey.trim() === ENROLLMENT_PROCESS_KEY) {
+        const defaultPlan = legacyEnrollmentOperatingPlanDefault(stageKey);
+        if (defaultPlan) return { action: "seed", plan: defaultPlan };
+    }
     return { action: "none", plan: null };
 }
 
@@ -103,8 +106,12 @@ export async function persistStageOperatingPlanForLifecycleStageSave(
         metadata = applyPlanToBuilderStage(metadata, stageKey, plan);
         builderStageUpdated = true;
     } else {
-        const stageRaw = findEnrollmentStageRaw(params.metadata, stageKey);
-        const decision = operatingPlanSeedDecision(stageKey, stageRaw ?? {});
+        const stageCtx = findProcessStageRaw(params.metadata, stageKey);
+        const decision = operatingPlanSeedDecision(
+            stageKey,
+            stageCtx?.stageRaw ?? {},
+            stageCtx?.processKey ?? "",
+        );
         if (decision.action === "seed" && decision.plan) {
             plan = decision.plan;
             metadata = applyPlanToBuilderStage(metadata, stageKey, plan);
