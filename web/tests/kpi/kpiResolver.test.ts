@@ -151,6 +151,93 @@ describe("resolveKpisForWorkspace", () => {
         expect(warnings.some((w) => w.startsWith("surface_mismatch:"))).toBe(true);
         expect(items).toEqual([]);
     });
+
+    const enrollmentGrowthSnapshots: WorkspaceGrowthDeptSnapshot[] = [
+        {
+            id: "d1",
+            key: "enrollment",
+            pipelineExact: null,
+            lifecycleAnalytics: {
+                counts: {
+                    total: 20,
+                    intake: 4,
+                    qualification: 3,
+                    execution: 2,
+                    decision: 1,
+                    success: 2,
+                    failure: 1,
+                    unclassified: 0,
+                },
+                statusBreakdown: [
+                    { status_key: "enrolled", count: 2 },
+                    { status_key: "lost", count: 1 },
+                    { status_key: "tour_scheduled", count: 5 },
+                    { status_key: "waitlisted", count: 3 },
+                ],
+            },
+        },
+    ];
+
+    it("expands legacy pipeline placement keys to the full canonical enrollment KPI strip", () => {
+        const rows: WorkspaceKpiPlacementRow[] = [
+            placement({
+                surface: "workspace",
+                metric_key: "org.pipeline.active_in_motion",
+                display_order: 0,
+            }),
+            placement({
+                surface: "workspace",
+                metric_key: "org.pipeline.pipeline_value_open",
+                display_order: 1,
+            }),
+            placement({
+                surface: "workspace",
+                metric_key: "org.pipeline.closed_outcomes",
+                display_order: 2,
+            }),
+        ];
+        const { items, warnings } = resolveKpisForWorkspace({
+            placementRows: rows,
+            scopeHasPlacementRows: true,
+            metrics: { departments: 1, workUnits: 2 },
+            growthSnapshots: enrollmentGrowthSnapshots,
+        });
+        expect(warnings).toEqual([]);
+        expect(items.map((k) => [k.id, k.label, k.value])).toEqual([
+            ["org_enrollment_active_leads", "Active Leads", "17"],
+            ["org_enrollment_scheduled_tours", "Scheduled Tours", "5"],
+            ["org_enrollment_in_motion", "Enrollment Opportunities", "10"],
+            ["org_enrollment_waitlisted_families", "Waitlisted Families", "3"],
+        ]);
+    });
+
+    it("respects explicit modern enrollment placement keys without auto-filling", () => {
+        const rows: WorkspaceKpiPlacementRow[] = [
+            placement({
+                surface: "workspace",
+                metric_key: "org.enrollment.active_leads",
+                display_order: 0,
+            }),
+            placement({
+                surface: "workspace",
+                metric_key: "org.enrollment.scheduled_tours",
+                display_order: 1,
+            }),
+        ];
+        const { items, warnings } = resolveKpisForWorkspace({
+            placementRows: rows,
+            scopeHasPlacementRows: true,
+            metrics: { departments: 1, workUnits: 2 },
+            growthSnapshots: enrollmentGrowthSnapshots,
+        });
+        expect(warnings).toEqual([]);
+        expect(items).toHaveLength(2);
+        expect(items.map((k) => k.id)).toEqual([
+            "org.enrollment.active_leads",
+            "org.enrollment.scheduled_tours",
+        ]);
+        expect(items.map((k) => k.value)).toEqual(["17", "5"]);
+    });
 });
 
 describe("resolveKpisForDepartment", () => {

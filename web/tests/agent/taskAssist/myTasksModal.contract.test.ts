@@ -25,6 +25,11 @@ const queueBlock = join(
 );
 const adminV2Layout = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/layout.tsx");
 const rootAuthProvider = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/AdminV2RootAuthProvider.tsx");
+const sidebar = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/Sidebar.tsx");
+const sidebarModalItems = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../app/adminV2/components/SidebarModalNavItems.tsx"
+);
 
 describe("My tasks modal UX", () => {
     it("shell layout provides AdminAuthProvider for top-nav Tasks modal", () => {
@@ -36,11 +41,14 @@ describe("My tasks modal UX", () => {
         expect(readFileSync(panel, "utf8")).toContain("useAdminAuth");
     });
 
-    it("opens modal from top nav button not page navigation", () => {
-        expect(readFileSync(navBadge, "utf8")).toContain("<button");
-        expect(readFileSync(navBadge, "utf8")).not.toContain('href="/adminV2/tasks"');
+    it("opens modal from sidebar button not page navigation", () => {
+        expect(readFileSync(sidebarModalItems, "utf8")).toContain('type="button"');
+        expect(readFileSync(sidebarModalItems, "utf8")).toContain("dispatchAdminV2OpenTasksPanel");
+        expect(readFileSync(sidebar, "utf8")).toContain("SidebarTasksNavItem");
         expect(readFileSync(topNav, "utf8")).toContain("MyTasksModal");
         expect(readFileSync(topNav, "utf8")).toContain("setTasksModalOpen");
+        expect(readFileSync(navBadge, "utf8")).toContain("<button");
+        expect(readFileSync(navBadge, "utf8")).not.toContain('href="/adminV2/tasks"');
     });
 
     it("modal uses overlay pattern like quick message", () => {

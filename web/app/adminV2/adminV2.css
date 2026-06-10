@@ -2307,6 +2307,21 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   box-shadow: inset 3px 0 0 #00a283;
 }
 
+.adminv2-sidebar-nav-badge-anchor {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  pointer-events: none;
+}
+
+.adminv2-sidebar-nav-badge-anchor .adminv2-sidebar-nav-badge {
+  min-width: 0.95rem;
+  height: 0.95rem;
+  padding-inline: 0.2rem;
+  font-size: 8px;
+  line-height: 1;
+}
+
 .adminv2-sidebar-queue-list {
   border-color: rgba(255, 255, 255, 0.14) !important;
 }

@@ -133,8 +133,13 @@ export default function TopNavBar() {
       prefetchWorkspaceOperationalTasks("open");
       setTasksModalOpen(true);
     };
+    const onOpenInbox = () => setInboxModalOpen(true);
     window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
-    return () => window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
+    window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
+    return () => {
+      window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
+      window.removeEventListener("adminv2:open-inbox-modal", onOpenInbox);
+    };
   }, []);
 
   useEffect(() => {

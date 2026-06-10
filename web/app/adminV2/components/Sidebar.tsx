@@ -6,8 +6,6 @@ import {
     ChevronDown,
     ChevronRight,
     Home,
-    Inbox,
-    ListChecks,
     PanelLeftClose,
     PanelLeft,
     Settings,
@@ -25,15 +23,13 @@ import { loadOperatorLifecycleLandingCards,
     peekOperatorLifecycleLandingCards,
 } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
-import { OPERATOR_INBOX_HREF, OPERATOR_TASKS_HREF } from "@/lib/admin/operatorWorkspaceCatalog";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+import { SidebarInboxNavItem, SidebarTasksNavItem } from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
 const SETTINGS_HREF = CANONICAL_ADMIN_BASE;
-const TASKS_HREF = OPERATOR_TASKS_HREF;
-const INBOX_HREF = OPERATOR_INBOX_HREF;
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
 const EXPANDED_QUEUE_LINK = "adminv2-sidebar-queue-link";
@@ -54,7 +50,7 @@ function isAdminConfigPath(path: string): boolean {
     if (path === CANONICAL_OPERATOR_BASE || path.startsWith(`${CANONICAL_OPERATOR_BASE}/`)) {
         return false;
     }
-    if (path.startsWith(TASKS_HREF) || path.startsWith(INBOX_HREF)) return false;
+    if (path.startsWith("/admin/tasks") || path.startsWith("/admin/messages")) return false;
     if (path.startsWith(`${CANONICAL_ADMIN_BASE}/workspace`)) return false;
     return path === CANONICAL_ADMIN_BASE || path.startsWith(`${CANONICAL_ADMIN_BASE}/`);
 }
@@ -70,8 +66,6 @@ function SidebarNav({
     const path = useMemo(() => normalizeAdminPath(pathname), [pathname]);
     const workUnitSlug = parseWorkUnitSlug(path);
     const onSettings = isAdminConfigPath(path);
-    const onTasks = path.startsWith(TASKS_HREF);
-    const onInbox = path.startsWith(INBOX_HREF);
 
     const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>(
         () => peekOperatorLifecycleLandingCards() ?? [],
@@ -135,43 +129,9 @@ function SidebarNav({
         </AdminV2NavLink>
     );
 
-    const tasksLink = (
-        <AdminV2NavLink
-            href={TASKS_HREF}
-            title="Tasks"
-            aria-label="Tasks"
-            active={onTasks}
-            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
-        >
-            {collapsed ? (
-                <ListChecks size={20} strokeWidth={1.75} />
-            ) : (
-                <span className="inline-flex items-center gap-2">
-                    <ListChecks size={16} strokeWidth={1.75} />
-                    Tasks
-                </span>
-            )}
-        </AdminV2NavLink>
-    );
+    const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
-    const inboxLink = (
-        <AdminV2NavLink
-            href={INBOX_HREF}
-            title="Inbox"
-            aria-label="Inbox"
-            active={onInbox}
-            className={collapsed ? "adminv2-sidebar-rail-link" : EXPANDED_PRIMARY_LINK}
-        >
-            {collapsed ? (
-                <Inbox size={20} strokeWidth={1.75} />
-            ) : (
-                <span className="inline-flex items-center gap-2">
-                    <Inbox size={16} strokeWidth={1.75} />
-                    Inbox
-                </span>
-            )}
-        </AdminV2NavLink>
-    );
+    const inboxLink = <SidebarInboxNavItem collapsed={collapsed} />;
 
     const settingsLink = (
         <AdminV2NavLink
