@@ -12854,11 +12854,20 @@
 /*
  * Automations / workflow telemetry strip — same wrapper + rhythm on department (context-lower) and work-unit footer.
  */
-[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"],
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
   padding-top: 12px;
   border: none;
   border-top: 1px solid color-mix(in srgb, var(--d-brand) 15%, var(--d-border));
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
+  padding-top: 0;
+  border: none;
+  border-top: none;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
