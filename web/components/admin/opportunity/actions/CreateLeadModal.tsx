@@ -1,6 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import {
+    applyCreateLeadDefaultLocationToValues,
+    resolveCreateLeadDefaultLocation,
+} from "@/lib/admin/actions/resolveCreateLeadDefaultLocation";
 import type {
     ActionWorkspaceBosSuggestion,
     ActionWorkspaceGatherPhase,
@@ -67,6 +72,7 @@ export function CreateLeadModal(props: {
     onCreated?: (opportunityId: string) => void;
 }) {
     const { open, departmentId, title = WORKSPACE_TITLE, onClose, onSubmit, onCreated } = props;
+    const siteFilter = useWorkspaceSiteFilter();
 
     const [step, setStep] = useState<ActionWorkspaceStep>("gather");
     const [gatherPhase, setGatherPhase] = useState<ActionWorkspaceGatherPhase>("paste");
@@ -123,7 +129,15 @@ export function CreateLeadModal(props: {
         if (!open) return;
         reset();
         if (!departmentId) setError("Department context is required to create a lead.");
-    }, [open, departmentId, reset]);
+        const permittedSiteIds = (siteFilter?.bootstrap?.sites ?? []).map((s) => s.id);
+        const resolved = resolveCreateLeadDefaultLocation({
+            workspaceSiteId: siteFilter?.selectedSiteId ?? null,
+            permittedSiteIds,
+        });
+        if (resolved.location_id) {
+            setValues((prev) => applyCreateLeadDefaultLocationToValues(prev, resolved));
+        }
+    }, [open, departmentId, reset, siteFilter?.selectedSiteId, siteFilter?.bootstrap?.sites]);
 
     useEffect(() => {
         if (step !== "success" || !createdIdRef.current || handoffStartedRef.current) return;

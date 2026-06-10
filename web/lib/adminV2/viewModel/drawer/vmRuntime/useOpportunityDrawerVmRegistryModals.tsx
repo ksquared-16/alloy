@@ -25,6 +25,7 @@ import {
     resolveAddPersonActionKey,
     ADMINV2_OPEN_ADD_PERSON_MODAL,
 } from "@/lib/admin/actions/addPersonActionClient";
+import { refreshOpportunityDrawerAfterInquiryChildMutation } from "@/lib/admin/refreshOpportunityDrawerAfterInquiryChildMutation";
 import { submitAddInquiryChildFromDrawer } from "@/lib/admin/actions/submitAddInquiryChildFromDrawer";
 import { submitAddPersonFromDrawer } from "@/lib/admin/actions/submitAddPersonFromDrawer";
 import { mapRawInquiryChildrenToDrawerRows } from "@/lib/admin/drawer/inquiryChildrenDrawerRows";
@@ -65,6 +66,7 @@ type Params = {
     actionHost: OpportunityDrawerVmRegistryModalHost;
     workspaceWorkUnitId?: string | null;
     workspaceDepartmentId?: string | null;
+    reloadOpportunityDisplayVm?: () => Promise<void>;
 };
 
 function readStringField(record: Record<string, unknown> | null | undefined, key: string): string | null {
@@ -129,6 +131,7 @@ export function useOpportunityDrawerVmRegistryModals({
     actionHost,
     workspaceWorkUnitId = null,
     workspaceDepartmentId = null,
+    reloadOpportunityDisplayVm,
 }: Params): {
     modals: ReactNode;
     registryHostExtensions: Pick<
@@ -599,18 +602,29 @@ export function useOpportunityDrawerVmRegistryModals({
                             dob: row.dob,
                         }));
                         const mode = addInquiryChildState?.mode ?? "child";
-                        await submitAddInquiryChildFromDrawer({
+                        const actionKey = mode === "sibling" ? "add_sibling" : "add_child";
+                        const result = await submitAddInquiryChildFromDrawer({
                             opportunityId: oid,
                             customerId,
                             payload,
                             existingChildren,
                         });
                         setAddInquiryChildState(null);
-                        dispatchOpportunityDrawerScopedUpdate(
-                            oid,
-                            mode === "sibling" ? "add_sibling" : "add_child",
-                            ["header_actions", "activity"],
-                        );
+                        await refreshOpportunityDrawerAfterInquiryChildMutation({
+                            opportunityId: oid,
+                            workspaceContext:
+                                departmentId && workUnitId ?
+                                    { department_id: departmentId, work_unit_id: workUnitId }
+                                :   null,
+                            customerMemberId: result.customer_member_id,
+                            ocmId: result.ocm_id,
+                            patchRecord: actionHost.patchRecord,
+                            reloadDisplayVm: reloadOpportunityDisplayVm,
+                        });
+                        dispatchOpportunityDrawerScopedUpdate(oid, actionKey, [
+                            "header_actions",
+                            "activity",
+                        ]);
                     }}
                 />
             </>
@@ -631,8 +645,10 @@ export function useOpportunityDrawerVmRegistryModals({
         lifecycleStageKey,
         locationId,
         oid,
+        patchRecord,
         record,
         recordOwnerUserId,
+        reloadOpportunityDisplayVm,
         sendFormOpen,
         workUnitId,
     ]);

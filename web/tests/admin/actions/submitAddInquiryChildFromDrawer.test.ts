@@ -59,7 +59,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
             if (url === "/api/admin/customer-members" && init?.method === "POST") {
                 return {
                     ok: true,
-                    json: async () => ({ id: "cm-new" }),
+                    json: async () => ({ id: "cm-new", person_id: "person-new" }),
                 } as Response;
             }
             throw new Error(`unexpected fetch ${url}`);
@@ -81,6 +81,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
             fetchFn: fetchFn as typeof fetch,
         });
 
+        expect(result.person_id).toBe("person-new");
         expect(result.customer_member_id).toBe("cm-new");
         expect(result.ocm_id).toBe("ocm-1");
         expect(ensureOpportunityCustomerMemberLink).toHaveBeenCalledWith({
@@ -102,7 +103,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
     it("perserves stable program key and room unit id on OCM patch", async () => {
         const fetchFn = vi.fn(async () => ({
             ok: true,
-            json: async () => ({ id: "cm-new" }),
+            json: async () => ({ id: "cm-new", person_id: "person-new" }),
         })) as typeof fetch;
 
         await submitAddInquiryChildFromDrawer({
@@ -127,6 +128,26 @@ describe("submitAddInquiryChildFromDrawer", () => {
                 program_room_cohort_key: "22222222-2222-4222-8222-222222222222",
             })
         );
+    });
+
+    it("fails when customer-members POST omits person_id", async () => {
+        const fetchFn = vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ id: "cm-new" }),
+        })) as typeof fetch;
+
+        await expect(
+            submitAddInquiryChildFromDrawer({
+                opportunityId: "opp-1",
+                customerId: "cust-1",
+                payload: {
+                    first_name: "Sam",
+                    last_name: "Lee",
+                    age_group: "toddler",
+                },
+                fetchFn,
+            })
+        ).rejects.toThrow(/missing a linked person identity/);
     });
 
     it("blocks duplicate children on the inquiry", async () => {

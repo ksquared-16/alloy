@@ -5,6 +5,7 @@ import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
+import { useWorkUnitSlugRouteOptional } from "@/contexts/WorkUnitSlugRouteContext";
 import { logAdminV2RouterNavigation, scheduleWorkUnitLaneUrlSync } from "@/lib/adminV2/workUnitLaneQueryUrl";
 import { readWorkUnitInitialLocationParams } from "@/lib/adminV2/workUnitInitialLocation";
 import {
@@ -634,9 +635,10 @@ function isRowPreviewFieldEnabled(fields: QueueUiRowPreviewField[], f: QueueUiRo
 }
 
 export default function AdminV2OpportunityWorkUnitPage() {
+    const slugRoute = useWorkUnitSlugRouteOptional();
     const params = useParams();
-    const departmentId = workspaceRouteParam(params.departmentId);
-    const routeWorkUnitId = workspaceRouteParam(params.workUnitId);
+    const departmentId = slugRoute?.departmentId ?? workspaceRouteParam(params.departmentId);
+    const routeWorkUnitId = slugRoute?.workUnitId ?? workspaceRouteParam(params.workUnitId);
     const [activeWorkUnitId, setActiveWorkUnitId] = useState(routeWorkUnitId);
     const activeLifecycleSelectionRef = useRef<ActiveLifecycleWorkUnitSelection>({
         workUnitId: routeWorkUnitId,
@@ -653,7 +655,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitId = activeWorkUnitId;
     const router = useRouter();
     /** Frozen on work-unit mount — do not subscribe to Next search params (triggers RSC churn on query changes). */
-    const initialLocationRef = useRef(readWorkUnitInitialLocationParams());
+    const initialLocationRef = useRef<ReturnType<typeof readWorkUnitInitialLocationParams> | null>(null);
+    if (initialLocationRef.current === null) {
+        const loc = readWorkUnitInitialLocationParams();
+        const laneFromSlug = slugRoute?.initialQueueKey?.trim() ?? "";
+        initialLocationRef.current =
+            laneFromSlug && !loc.queue.trim()
+                ? { ...loc, queue: laneFromSlug }
+                : loc;
+    }
     const routeQueueSelectionRef = useRef<WorkUnitQueueSelection | null>(null);
     const explicitRouteQueueLockedRef = useRef(false);
     const legacyFilterStatusKeys = initialLocationRef.current.statusKeys;
@@ -1186,6 +1196,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         accessScopeFingerprint,
         workUnitId,
         queueSummaries,
+        queueDef,
+        workUnit,
+        selectedQueueKey,
+        queueItems,
+        queueItemsLoading,
+        queueItemsError,
         dept?.metadata,
     ]);
 

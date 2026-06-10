@@ -114,9 +114,26 @@ describe("applyCreateLeadChildParticipation", () => {
             from: vi.fn((table: string) => {
                 if (table === "customer_members") {
                     return {
+                        select: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnThis(),
+                        }),
                         insert: vi.fn().mockReturnValue({
                             select: vi.fn().mockReturnValue({
                                 single: vi.fn().mockResolvedValue({ data: { id: "cm-1" }, error: null }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "persons") {
+                    return {
+                        select: vi.fn().mockReturnValue({
+                            eq: vi.fn().mockReturnThis(),
+                            ilike: vi.fn().mockReturnThis(),
+                            limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                        }),
+                        insert: vi.fn().mockReturnValue({
+                            select: vi.fn().mockReturnValue({
+                                single: vi.fn().mockResolvedValue({ data: { id: "person-child" }, error: null }),
                             }),
                         }),
                     };

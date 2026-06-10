@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -138,9 +139,23 @@ export async function applyCreateLeadChildParticipation(
 
     const { identity, ocm } = parsed;
 
+    const firstName = identity.first_name ?? "";
+    const lastName = identity.last_name ?? "";
+    const childPerson = await findOrCreateChildPersonInOrg(supabase, {
+        orgId: params.orgId,
+        customerId: params.customerId,
+        firstName,
+        lastName,
+        dob: identity.dob,
+    });
+    if (!childPerson?.person_id) {
+        throw new Error("Could not create or resolve child person identity for lead.");
+    }
+
     const cmPayload: Record<string, unknown> = {
         org_id: params.orgId,
         customer_id: params.customerId,
+        person_id: childPerson.person_id,
         display_name: identity.display_name,
         first_name: identity.first_name,
         last_name: identity.last_name,

@@ -1,3 +1,4 @@
+import { assertAddInquiryChildCreationResult } from "@/lib/admin/actions/addInquiryChildActionContract";
 import { logAddChildDevTrace } from "@/lib/admin/actions/logAddChildDevTrace";
 import { ensureOpportunityCustomerMemberLink } from "@/lib/admin/drawer/inquiryChildFieldEdit";
 import type { InquiryChildOcmPatch } from "@/lib/admin/drawer/inquiryChildFieldEdit";
@@ -73,6 +74,7 @@ export type SubmitAddInquiryChildInput = {
 };
 
 export type SubmitAddInquiryChildResult = {
+    person_id: string;
     customer_member_id: string;
     ocm_id: string;
 };
@@ -115,6 +117,7 @@ export async function submitAddInquiryChildFromDrawer(
     });
     const cmJson = (await cmRes.json().catch(() => ({}))) as {
         id?: string;
+        person_id?: string | null;
         customer_id?: string;
         relationship?: string | null;
         is_active?: boolean;
@@ -124,9 +127,14 @@ export async function submitAddInquiryChildFromDrawer(
         throw new Error(cmJson.error ?? "Could not create child record.");
     }
     const customerMemberId = String(cmJson.id);
+    const personId = String(cmJson.person_id ?? "").trim();
+    if (!personId) {
+        throw new Error("Child was saved but is missing a linked person identity.");
+    }
     logAddChildDevTrace("[action.add_child:customer_member_created]", {
         opportunityId: input.opportunityId,
         customerMemberId,
+        personId,
         customer_id: cmJson.customer_id ?? input.customerId,
         relationship: cmJson.relationship ?? "child",
         is_active: cmJson.is_active ?? true,
@@ -159,5 +167,9 @@ export async function submitAddInquiryChildFromDrawer(
         await patchOpportunityCustomerMemberFromInquiryChild(ocmId, ocmPatch);
     }
 
-    return { customer_member_id: customerMemberId, ocm_id: ocmId };
+    return assertAddInquiryChildCreationResult({
+        person_id: personId,
+        customer_member_id: customerMemberId,
+        ocm_id: ocmId,
+    });
 }

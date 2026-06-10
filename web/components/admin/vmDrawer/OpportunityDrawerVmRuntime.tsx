@@ -133,6 +133,7 @@ export default function OpportunityDrawerVmRuntime() {
         actionHost: registryActionHost,
         workspaceWorkUnitId: displayVm?.workspace.work_unit_id ?? null,
         workspaceDepartmentId: displayVm?.workspace.department_id ?? null,
+        reloadOpportunityDisplayVm,
     });
 
     const { onActionSelect, actionLoadingKey } = useOpportunityDrawerVmHeaderActions({

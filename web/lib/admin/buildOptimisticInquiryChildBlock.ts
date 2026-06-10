@@ -15,7 +15,7 @@ export function buildOptimisticInquiryChildBlock(
         id: result.ocm_id,
         ocm_id: result.ocm_id,
         customer_member_id: result.customer_member_id,
-        person_id: null,
+        person_id: result.person_id,
         display_name,
         first_name: first,
         last_name: last,

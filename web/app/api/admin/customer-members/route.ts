@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { emitEvent } from "@/lib/emitEvent";
+import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 
 /** GET: list customer_members for org. Optional ?customer_id= filter. Admin + ops can read. */
 export async function GET(request: NextRequest) {
@@ -160,21 +161,48 @@ export async function POST(request: NextRequest) {
     }
 
     const status_key = typeof body.status_key === "string" && body.status_key.trim() ? body.status_key.trim() : null;
+    const relationship =
+        typeof body.relationship === "string" ? body.relationship.trim().toLowerCase() || null : null;
+    const first_name = typeof body.first_name === "string" ? body.first_name.trim() || null : null;
+    const last_name = typeof body.last_name === "string" ? body.last_name.trim() || null : null;
+    const dob = typeof body.dob === "string" && body.dob.trim() ? body.dob.trim().slice(0, 10) : null;
+
+    let person_id: string | null = null;
+    if (relationship === "child" && first_name && last_name) {
+        const childPerson = await findOrCreateChildPersonInOrg(supabase, {
+            orgId: ctx.orgId,
+            customerId: customer_id,
+            firstName: first_name,
+            lastName: last_name,
+            dob,
+        });
+        person_id = childPerson?.person_id ?? null;
+        if (!person_id) {
+            return NextResponse.json(
+                { error: "Could not create or resolve child person identity." },
+                { status: 500 },
+            );
+        }
+    }
+
     const { data: inserted, error: insertErr } = await supabase
         .from("customer_members")
         .insert({
             org_id: ctx.orgId,
             customer_id,
             display_name,
-            relationship: typeof body.relationship === "string" ? body.relationship.trim() || null : null,
-            first_name: typeof body.first_name === "string" ? body.first_name.trim() || null : null,
-            last_name: typeof body.last_name === "string" ? body.last_name.trim() || null : null,
-            dob: typeof body.dob === "string" && body.dob.trim() ? body.dob.trim() : null,
+            relationship,
+            first_name,
+            last_name,
+            dob,
+            person_id,
             is_active: body.is_active !== false,
             status_key,
             metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
         })
-        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at")
+        .select(
+            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at",
+        )
         .single();
 
     if (insertErr) {

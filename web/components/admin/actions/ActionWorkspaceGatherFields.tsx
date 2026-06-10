@@ -35,10 +35,24 @@ function inputType(field: ActionWorkspaceGatherField): string {
     return "text";
 }
 
-function sectionHint(key: string): string {
+function sectionHint(key: string, inheritedLocationLabel: string | null): string {
     if (key === "person") return "Parent or guardian contact details";
-    if (key === "child") return "Child and placement context";
-    return "Additional intake context";
+    if (key === "child") {
+        return inheritedLocationLabel
+            ? `Enrollment inherits location: ${inheritedLocationLabel}. Program and room options are filtered to this site.`
+            : "Child enrollment fields inherit the lead location when set.";
+    }
+    return "Set lead location once — child enrollment inherits it.";
+}
+
+function inheritedLeadLocationLabel(
+    values: Record<string, string>,
+    siteOptions: { value: string; label: string }[]
+): string | null {
+    const locationId = (values.location_id ?? values.child_location_id ?? "").trim();
+    if (!locationId) return null;
+    const hit = siteOptions.find((o) => o.value === locationId);
+    return hit?.label?.trim() || locationId;
 }
 
 /** BOS-assisted gather — Linear/Notion hierarchy, generous spacing. */
@@ -56,10 +70,19 @@ export function ActionWorkspaceGatherFields({
     const { optionsBySetKey } = useOptionSetSelectOptions(allFields.map((f) => f.option_set_key));
 
     const { locationKey, programKey } = useMemo(() => placementFieldKeysInValues(values), [values]);
+    const effectiveLocationValue = useMemo(() => {
+        const fromLead = (values.location_id ?? "").trim();
+        if (fromLead) return fromLead;
+        return locationKey ? (values[locationKey] ?? "").trim() : "";
+    }, [values, locationKey]);
     const cascade = useInquiryChildPlacementCascade({
-        locationValue: locationKey ? (values[locationKey] ?? "") : "",
+        locationValue: effectiveLocationValue,
         programValue: programKey ? (values[programKey] ?? "") : "",
     });
+    const inheritedLocationLabel = useMemo(
+        () => inheritedLeadLocationLabel(values, cascade.siteOptions),
+        [values, cascade.siteOptions]
+    );
 
     const handleDefaultSite = useCallback(
         (siteId: string) => {
@@ -116,10 +139,17 @@ export function ActionWorkspaceGatherFields({
                         <h3 className="text-base font-semibold tracking-tight text-alloy-midnight">
                             {activeSection.label}
                         </h3>
-                        <p className="mt-1 text-[13px] text-alloy-midnight/50">{sectionHint(activeSection.key)}</p>
+                        <p className="mt-1 text-[13px] text-alloy-midnight/50">
+                            {sectionHint(activeSection.key, inheritedLocationLabel)}
+                        </p>
                     </div>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-6 content-start">
-                        {activeSection.fields.map((field) => {
+                        {activeSection.fields
+                            .filter((field) => {
+                                if (field.payload_key !== "child_location_id") return true;
+                                return !(values.location_id ?? "").trim();
+                            })
+                            .map((field) => {
                             let selectOptions =
                                 field.option_set_key ? (optionsBySetKey[field.option_set_key] ?? []) : [];
                             let fieldDisabled = disabled;
