@@ -135,7 +135,7 @@ describe("queue navigator subject context", () => {
             work_unit_id: "wu-1",
             department_id: "dept-1",
             queue_key: "tours",
-            selection: { queueKey: "tours" },
+            selection: { queueKey: "tours", workUnitId: "wu-1", source: "dept_queue" },
             displayItems: [item],
             generation: 1,
         });

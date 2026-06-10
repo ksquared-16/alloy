@@ -78,7 +78,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
                 desired_schedule_type: "full_day",
                 desired_start_date: "2026-09-01",
             },
-            fetchFn: fetchFn as typeof fetch,
+            fetchFn: fetchFn as unknown as typeof fetch,
         });
 
         expect(result.person_id).toBe("person-new");
@@ -104,7 +104,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
         const fetchFn = vi.fn(async () => ({
             ok: true,
             json: async () => ({ id: "cm-new", person_id: "person-new" }),
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
 
         await submitAddInquiryChildFromDrawer({
             opportunityId: "opp-1",
@@ -134,7 +134,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
         const fetchFn = vi.fn(async () => ({
             ok: true,
             json: async () => ({ id: "cm-new" }),
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
 
         await expect(
             submitAddInquiryChildFromDrawer({
@@ -154,7 +154,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
         const fetchFn = vi.fn(async () => ({
             ok: true,
             json: async () => ({ id: "cm-new", person_id: "person-new" }),
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
 
         await submitAddInquiryChildFromDrawer({
             opportunityId: "opp-1",

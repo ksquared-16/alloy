@@ -16,8 +16,11 @@ import {
 describe("platformSurfacePerfBuffer", () => {
     beforeEach(() => {
         clearPlatformSurfacePerfBufferForTests();
-        vi.stubGlobal("sessionStorage", {
+        const sessionMock = {
             store: {} as Record<string, string>,
+            length: 0,
+            clear() {},
+            key() { return null; },
             getItem(key: string) {
                 return this.store[key] ?? null;
             },
@@ -27,7 +30,8 @@ describe("platformSurfacePerfBuffer", () => {
             removeItem(key: string) {
                 delete this.store[key];
             },
-        });
+        } as Storage;
+        vi.stubGlobal("sessionStorage", sessionMock);
     });
 
     afterEach(() => {

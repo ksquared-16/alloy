@@ -380,9 +380,12 @@ Match spacing and elevation with **drawer Actions menu** (`OpportunityDrawerHead
 ### Drawer status presentation rules
 
 1. Dropdown options = active `status_definitions` for the drawer’s entity type and profile filter.
-2. Legacy persisted keys outside the MVP set may appear once as `(legacy)` via `appendLegacyPersonStatusOption` until backfilled.
-3. Do not show enrollment (OCM) statuses in Person/Child header dropdowns.
-4. Do not add Settings shortcut links to drawer status controls.
+2. **Display copy uses labels, not keys** — drawer menus show `status_label` / profile-resolved labels (`resolvePersonStatusLabelForProfile`) via `mapStatusDropdownOptions`; raw `status_key` is persistence-only and appears in UI only when no label exists (legacy `(legacy)` suffix allowed once).
+3. Legacy persisted keys outside the MVP set may appear once as `(legacy)` via `appendLegacyPersonStatusOption` until backfilled.
+4. Do not show enrollment (OCM) statuses in Person/Child header dropdowns.
+5. Do not add Settings shortcut links to drawer status controls.
+
+**Locked modules:** `web/lib/admin/statusDropdownPresentation.ts`, `web/lib/adminV2/viewModel/drawer/person/buildPersonDrawerStatusControlVm.ts`, `web/app/api/admin/status-options/route.ts`, `web/components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx`.
 
 ---
 

@@ -29,6 +29,8 @@ function layoutBodyResult(overrides: Partial<UseDrawerLayoutRuntimeBodyResult>):
         record: null,
         layoutSource: "default",
         layoutKey: null,
+        layoutRecordId: null,
+        layoutVersion: null,
         lastError: null,
         ...overrides,
     };
@@ -250,7 +252,7 @@ describe("queue row layout binding", () => {
                     columns: [{ ...col, items: [...withoutChildren, ...scalarChildren] }],
                 }],
             }],
-        };
+        } as import("@/lib/layout/layoutV2").LayoutDoc;
         const item: QueuePreviewItemVm = {
             id: "opp-mitchell",
             title: "Mitchell Family",
@@ -300,7 +302,7 @@ describe("queue row layout binding", () => {
             source: "children",
             displayMode: "rows" as const,
             related: { entityType: "child" },
-            columns: [] as const,
+            columns: [],
             metadata: { zone: "body.children" },
         };
         const withoutChildren = col.items.filter(

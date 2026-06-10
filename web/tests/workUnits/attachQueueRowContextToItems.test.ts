@@ -6,6 +6,7 @@ import {
     isQueueRowContextWiringEnabled,
     queueRowContextMetaFromLane,
 } from "@/lib/workUnits/attachQueueRowContextToItems";
+import type { QueueRowContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 
 describe("attachQueueRowContextToItems", () => {
     const normalized = loadQueueDefinitionBundle(RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2).normalized;
@@ -48,7 +49,7 @@ describe("attachQueueRowContextToItems", () => {
         expect(out.id).toBe("opp-1");
         expect(out.name).toBe("Smith Household");
         expect(out._status_display).toBe("Tour scheduled");
-        const ctx = out._queue_row_context!;
+        const ctx = out._queue_row_context as QueueRowContext;
         expect(ctx.row_subject.subject_type).toBe("case");
         expect(ctx.row_stage).toBe("Tours");
     });

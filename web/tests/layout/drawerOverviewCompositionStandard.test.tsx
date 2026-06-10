@@ -238,7 +238,7 @@ describe("PersonConnectedChildrenCardList person links", () => {
     it("renders child avatar link affordance on connected child rows", () => {
         const html = renderToStaticMarkup(
             <PersonConnectedChildrenCardList
-                item={{ id: "connected-children", kind: "collection", refKey: "connected_children", columns: [] }}
+                item={{ id: "connected-children", kind: "related_list", refKey: "connected_children", columns: [] }}
                 columns={[
                     { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
                 ]}

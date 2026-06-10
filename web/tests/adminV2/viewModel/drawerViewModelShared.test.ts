@@ -40,10 +40,9 @@ describe("drawerViewModelPreloadTypes", () => {
             isDrawerViewModelPreload({
                 openPath: "view_model",
                 viewModel: { id: "x" },
-                primaryEntity: { id: "x" },
-            })
+            } as Parameters<typeof isDrawerViewModelPreload>[0])
         ).toBe(true);
-        expect(isDrawerViewModelPreload({ openPath: "legacy", primaryEntity: {} })).toBe(false);
+        expect(isDrawerViewModelPreload({ openPath: "legacy" } as Parameters<typeof isDrawerViewModelPreload>[0])).toBe(false);
     });
 });
 

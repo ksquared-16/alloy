@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { NextRequest } from "next/server";
 
 const composeChildDrawerViewModel = vi.fn();
 
@@ -54,7 +55,7 @@ describe("child drawer VM route", () => {
 
         const { GET } = await import("@/app/api/admin/view-models/drawer/child/[id]/route");
         const res = await GET(
-            new Request("http://localhost/api/admin/view-models/drawer/child/child-1?compose_depth=first_paint"),
+            new Request("http://localhost/api/admin/view-models/drawer/child/child-1?compose_depth=first_paint") as unknown as NextRequest,
             { params: Promise.resolve({ id: "child-1" }) }
         );
         expect(res.status).toBe(200);

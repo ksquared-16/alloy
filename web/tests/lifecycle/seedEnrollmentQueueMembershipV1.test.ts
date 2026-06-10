@@ -228,7 +228,7 @@ describe("applyEnrollmentQueueMembershipSeed", () => {
         };
         const membership = defaultQueueMembershipForEnrollmentStage("waitlist")!;
         const before = workUnitRow("waitlist", {});
-        before.queue_definition = queueDefinition;
+        before.queue_definition = queueDefinition as unknown as typeof before.queue_definition;
 
         const nextMetadata = applyEnrollmentQueueMembershipSeedToWorkUnitMetadata(
             before.metadata,

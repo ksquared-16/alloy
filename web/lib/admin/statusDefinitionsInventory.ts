@@ -102,7 +102,7 @@ async function fetchDistinctStatusKeyCounts(
 
         const rows = data ?? [];
         for (const row of rows) {
-            const sk = String((row as Record<string, unknown>)[column] ?? "").trim();
+            const sk = String((row as unknown as Record<string, unknown>)[column] ?? "").trim();
             if (!sk) continue;
             counts.set(sk, (counts.get(sk) ?? 0) + 1);
         }

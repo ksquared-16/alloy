@@ -16,8 +16,12 @@ describe("resolveOpportunityVmStatusLabel", () => {
         const vm = minimalSettledOpportunityDrawerViewModel({
             entity: { type: "opportunity", id: "opp-1" },
             header: {
-                status: { renderAs: "readonly_pill", label: "Tour scheduled" },
-            },
+            title: "Opp",
+            subtitle: null,
+            status: { renderAs: "readonly_pill", label: "Tour scheduled" },
+            status_can_mutate: false,
+            oper_trust_preview: null,
+        },
         });
         expect(
             resolveOpportunityVmStatusLabel({
@@ -31,7 +35,7 @@ describe("resolveOpportunityVmStatusLabel", () => {
     it("falls back to queue seed when VM not yet applied for target id", () => {
         const vm = minimalSettledOpportunityDrawerViewModel({
             entity: { type: "opportunity", id: "opp-other" },
-            header: { status: { renderAs: "readonly_pill", label: "Other" } },
+            header: { title: "Opp", subtitle: null, status: { renderAs: "readonly_pill", label: "Other" }, status_can_mutate: false, oper_trust_preview: null },
         });
         expect(
             resolveOpportunityVmStatusLabel({
@@ -45,7 +49,7 @@ describe("resolveOpportunityVmStatusLabel", () => {
     it("returns null when hidden and no seed", () => {
         const vm = minimalSettledOpportunityDrawerViewModel({
             entity: { type: "opportunity", id: "opp-1" },
-            header: { status: { renderAs: "hidden" } },
+            header: { title: "Opp", subtitle: null, status: { renderAs: "hidden" }, status_can_mutate: false, oper_trust_preview: null },
         });
         expect(
             resolveOpportunityVmStatusLabel({

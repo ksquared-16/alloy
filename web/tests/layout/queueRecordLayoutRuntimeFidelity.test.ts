@@ -46,7 +46,7 @@ function layoutWithChildDobAndTour(): QueueRecordLayoutConfigV3 {
 
     const tourCol = createColumnFromScope({ type: "main_record" }, "Tour");
     const tourBlock = createFieldGroupBlock();
-    tourBlock.fields = [
+    (tourBlock as { fields: unknown[] }).fields = [
         {
             id: nextQueueRecordFieldId("tour"),
             fieldKey: "opportunity.tour_date",
@@ -149,6 +149,18 @@ describe("queue record layout runtime fidelity", () => {
             quickActions: [],
             semanticCrmCompact: {
                 primaryIdentity: "James Family",
+                childName: null,
+                stageLabel: null,
+                statusLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                programContext: null,
                 childrenLines: [{ primary: "Bronny James", personId: "child-bronny", secondary: null }],
             },
             layoutRuntimeEnrichment: {

@@ -41,7 +41,7 @@ describe("drawerLinkedGraphNavigation", () => {
         const ws = { work_unit_id: "wu-1", department_id: "dept-1" };
         const rowKey = drawerLinkPendingKeyForInquiryChildRow({
             opportunityRecord: { id: "opp-1" },
-            row: { id: "ic-1", person_id: "child-1" },
+            row: { person_id: "child-1", customer_member_id: "cm-1" },
             opportunityId: "opp-1",
             opportunityWorkspaceContext: ws,
         });
@@ -50,9 +50,8 @@ describe("drawerLinkedGraphNavigation", () => {
             opportunityId: "opp-1",
             opportunityWorkspaceContext: ws,
             openSeed: {
+                personId: "child-1",
                 opportunity_id: "opp-1",
-                inquiry_child_row_id: "ic-1",
-                person_id: "child-1",
             },
         });
         expect(rowKey).toBeTruthy();

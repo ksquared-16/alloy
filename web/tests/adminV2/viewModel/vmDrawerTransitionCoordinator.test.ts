@@ -76,7 +76,7 @@ describe("vmDrawerTransitionCoordinator", () => {
             type: "persons",
             id: "child-1",
             openSource: "opportunity_inquiry_child",
-            personDrawerOpenSeed: { presentation_emphasis: "child_lifecycle" },
+            personDrawerOpenSeed: { personId: "child-1", presentation_emphasis: "child_lifecycle" },
         });
         expect(state.openSource).toBe("opportunity_inquiry_child");
         expect(state.personDrawerOpenSeed?.presentation_emphasis).toBe("child_lifecycle");

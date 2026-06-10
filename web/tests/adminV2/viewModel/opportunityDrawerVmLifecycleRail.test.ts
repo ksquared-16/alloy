@@ -58,6 +58,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 department_id: "dept-1",
                 work_unit_id: "wu-1",
                 queue_definition: def,
+                lifecycle_rail: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -88,6 +89,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 department_id: "dept-1",
                 work_unit_id: "wu-1",
                 queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
+                lifecycle_rail: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -116,6 +118,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 department_id: "dept-1",
                 work_unit_id: "wu-1",
                 queue_definition: customDef,
+                lifecycle_rail: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -135,6 +138,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 department_id: "dept-1",
                 work_unit_id: "wu-1",
                 queue_definition: def,
+                lifecycle_rail: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -155,6 +159,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 department_id: "dept-1",
                 work_unit_id: "wu-1",
                 queue_definition: null,
+                lifecycle_rail: null,
             },
         });
         expect(
@@ -209,6 +214,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 department_id: "dept-1",
                 work_unit_id: "wu-1",
                 queue_definition: { version: 1, entity_type: "job", queues: [] },
+                lifecycle_rail: null,
             },
         });
         const model = buildOpportunityVmLifecycleRailModel({

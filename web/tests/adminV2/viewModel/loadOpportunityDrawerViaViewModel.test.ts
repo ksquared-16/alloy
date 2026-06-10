@@ -28,6 +28,7 @@ function settledVm() {
             title: "Opp",
             subtitle: null,
             status: { renderAs: "readonly_pill", label: "New" },
+            status_can_mutate: false,
             oper_trust_preview: null,
         },
     });

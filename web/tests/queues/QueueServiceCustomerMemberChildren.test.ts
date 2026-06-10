@@ -15,6 +15,7 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
             opportunityId: "opp-1",
             ocmByMemberId: new Map(),
             optionLabelLookup: new Map<string, string>(),
+            locationProgramCategories: [] as const,
         };
     }
 
@@ -62,10 +63,13 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
                         opportunity_id: "opp-1",
                         customer_member_id: "cm-1",
                         desired_program_type: "toddler",
+                        location_id: null,
+                        desired_program_category_id: null,
                     },
                 ],
             ]),
             optionLabelLookup: lookup,
+            locationProgramCategories: [] as const,
         };
         const lines = buildCrmCompactStructuredLinesFromCustomerMembers(
             [

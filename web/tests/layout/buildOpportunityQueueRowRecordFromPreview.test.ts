@@ -414,7 +414,7 @@ describe("buildOpportunityQueueRowRecordFromPreview person link ids", () => {
                     status_label: "Contact Attempted",
                 },
             },
-        } as QueuePreviewItemVm & { _queue_row_context: Record<string, unknown> };
+        } as unknown as QueuePreviewItemVm & { _queue_row_context: Record<string, unknown> };
 
         const record = buildOpportunityQueueRowRecordFromPreview(item);
         expect(record.name).toBe("Mitchell Household");

@@ -8,8 +8,11 @@ import {
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 
 const minimalDoc: LayoutDoc = {
+    formatVersion: 1,
+    surface: "drawer",
+    entityType: "opportunities",
     metadata: {},
-    sections: [{ key: "main", label: "Main", rows: [{ columns: [{ items: [] }] }] }],
+    sections: [{ id: "main", key: "main", title: "Main", rows: [{ id: "row-1", columns: [{ id: "col-1", width: 12, items: [] }] }] }],
 };
 
 describe("drawerLayoutRuntimeBodySessionCache", () => {

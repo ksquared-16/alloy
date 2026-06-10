@@ -19,7 +19,7 @@ describe("bosDrawerGeometryReport", () => {
                     height: 50,
                 }) as DOMRect,
         };
-        expect(snapshotRect(el)).toEqual({
+        expect(snapshotRect(el as unknown as Element)).toEqual({
             left: 10,
             right: 111,
             top: 0,

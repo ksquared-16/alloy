@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import {
     DEFAULT_LEAD_ENROLLMENT_GRID_CELL_ROLES,
@@ -16,10 +17,10 @@ describe("enrollmentGridPresentation", () => {
         expect(item.metadata?.[ENROLLMENT_GRID_CELL_ROLES_METADATA_KEY]).toEqual(
             DEFAULT_LEAD_ENROLLMENT_GRID_CELL_ROLES,
         );
-        const nameCol = (item as { columns: { refKey: string; renderHint?: string; adornment?: unknown }[] }).columns.find(
+        const nameCol = (item as { columns: { refKey: string; label: string; renderHint?: string; adornment?: unknown }[] }).columns.find(
             (c) => c.refKey === "child.name",
         )!;
-        expect(readEnrollmentGridCellRole(item, nameCol)).toBe("primary_link");
+        expect(readEnrollmentGridCellRole(item as LayoutItem, nameCol as LayoutCollectionColumn)).toBe("primary_link");
     });
 
     it("treats aliased enrollment columns as editable when save adapter exists", () => {

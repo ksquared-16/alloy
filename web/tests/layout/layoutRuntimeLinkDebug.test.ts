@@ -73,6 +73,7 @@ describe("layoutRuntimeLinkDebug", () => {
             routeMethod: "test-route",
             componentName: "Test",
             rowKey: "row-1",
+            childRowSummary: null,
         });
         setActiveLayoutRuntimeLinkDebugKey(debugKey);
         reportLayoutRuntimeLinkDebugProgress("clicked", null, debugKey);

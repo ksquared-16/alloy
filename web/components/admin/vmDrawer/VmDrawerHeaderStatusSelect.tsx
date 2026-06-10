@@ -5,15 +5,12 @@ import { Check, ChevronDown } from "lucide-react";
 import VmReadonlyStatusPill from "@/components/admin/vmDrawer/VmReadonlyStatusPill";
 import type { StatusControlVm, StatusOptionVm } from "@/lib/adminV2/viewModel/drawer/types";
 import type { PersonStatusProfileKey } from "@/lib/admin/person/personStatusApplicability";
+import {
+    mapStatusDropdownOptions,
+    type StatusDropdownOptionRow,
+} from "@/lib/admin/statusDropdownPresentation";
 
-type StatusDefRow = {
-    value?: string;
-    status_key?: string;
-    label?: string;
-    status_label?: string | null;
-    sort_order?: number;
-    is_active?: boolean;
-};
+type StatusDefRow = StatusDropdownOptionRow;
 
 type EntityKind = "opportunities" | "persons";
 
@@ -49,20 +46,7 @@ function optionsFromVmStatus(status: StatusControlVm | null | undefined): Status
 }
 
 function mapFetchedOptions(rows: StatusDefRow[]): StatusOptionVm[] {
-    return rows
-        .filter((r) => r.is_active !== false)
-        .map((r) => {
-            const status_key = (r.status_key ?? r.value ?? "").trim();
-            const label = (r.status_label ?? r.label ?? status_key).trim() || status_key;
-            return {
-                status_key,
-                label,
-                sort_order: r.sort_order ?? 0,
-            };
-        })
-        .sort((a, b) =>
-            a.sort_order !== b.sort_order ? a.sort_order - b.sort_order : a.label.localeCompare(b.label)
-        );
+    return mapStatusDropdownOptions(rows);
 }
 
 function statusOptionsFetchUrl(entityKind: EntityKind, statusProfile?: PersonStatusProfileKey | null): string {

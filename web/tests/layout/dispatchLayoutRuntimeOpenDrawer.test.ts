@@ -10,7 +10,7 @@ const item: LayoutItem = {
 
 const childAdornment: LayoutFieldAdornment = {
     position: "left",
-    icon: "user",
+    icon: "person",
     action: { type: "open_drawer", entity: "child", idPath: "child.id" },
 };
 
@@ -45,7 +45,7 @@ describe("dispatchLayoutRuntimeOpenDrawer", () => {
             item: { ...item, refKey: "person.primary_contact_name" },
             adornment: {
                 position: "left",
-                icon: "user",
+                icon: "person",
                 action: { type: "open_drawer", entity: "person", idPath: "opportunity.primary_person_id" },
             },
             anchorRecord: { id: "opp-1", "opportunity.primary_person_id": "" },

@@ -119,9 +119,9 @@ describe("field catalog cleanup (user-facing labels)", () => {
 
 describe("widget catalog cleanup (global, categorized)", () => {
     it("returns ONE global catalog on every surface (widgets don't disappear)", () => {
-        expect(catalogWidgetsForEntityType("opportunities")).toBe(GLOBAL_WIDGET_CATALOG);
-        expect(catalogWidgetsForEntityType("placement_candidate")).toBe(GLOBAL_WIDGET_CATALOG);
-        expect(catalogWidgetsForEntityType("person")).toBe(GLOBAL_WIDGET_CATALOG);
+        expect(catalogWidgetsForEntityType()).toBe(GLOBAL_WIDGET_CATALOG);
+        expect(catalogWidgetsForEntityType()).toBe(GLOBAL_WIDGET_CATALOG);
+        expect(catalogWidgetsForEntityType()).toBe(GLOBAL_WIDGET_CATALOG);
     });
     it("every widget has a friendly label, category, and description (no raw keys exposed)", () => {
         for (const w of GLOBAL_WIDGET_CATALOG) {

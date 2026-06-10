@@ -178,13 +178,13 @@ describe("waitlist field & widget catalog (Goals 4/5)", () => {
         expect(new Set(keys).size).toBe(keys.length);
     });
     it("returns waitlist widgets including a placeable Waitlist Adjustment", () => {
-        const widgets = catalogWidgetsForEntityType("placement_candidate").map((w) => w.widgetKey);
+        const widgets = catalogWidgetsForEntityType().map((w) => w.widgetKey);
         for (const w of ["waitlist_position", "waitlist_tier", "waitlist_override", "waitlist_adjustment", "capacity_recommendation"]) {
             expect(widgets).toContain(w);
         }
     });
     it("widgets are a single global catalog on every surface (relevance-flagged, not hidden)", () => {
-        const widgets = catalogWidgetsForEntityType("opportunities");
+        const widgets = catalogWidgetsForEntityType();
         const keys = widgets.map((w) => w.widgetKey);
         expect(keys).toContain("tasks");
         // global catalog still lists waitlist widgets, but flagged queue-relevant
