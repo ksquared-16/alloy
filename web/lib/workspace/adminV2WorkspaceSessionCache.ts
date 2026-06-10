@@ -180,6 +180,11 @@ export function writeWorkspaceRootCache(
 
 export type WritableDepartmentPageSnapshot = Omit<CachedDepartmentPage, "v" | "savedAtMs">;
 
+/**
+ * Read department page session cache.
+ * Pass `workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId)` so
+ * `workUnitSummaries` match the active workspace site filter.
+ */
 export function readDepartmentPageCache(
     orgId: string | null,
     departmentId: string,
@@ -236,6 +241,11 @@ export function writeWorkUnitPageCache(
     }
 }
 
+/**
+ * Write department page session cache.
+ * Pass `workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId)` so
+ * `workUnitSummaries` are not shared across site selections.
+ */
 export function writeDepartmentPageCache(
     orgId: string | null,
     principalUserId: string | null,

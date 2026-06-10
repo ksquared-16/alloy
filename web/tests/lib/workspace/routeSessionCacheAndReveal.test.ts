@@ -63,6 +63,7 @@ import {
     peekFreshQueueRowCache,
     QUEUE_ROW_CLIENT_CACHE_TTL_MS,
 } from "@/lib/workspace/queueRowClientCache";
+import { workspaceViewCacheFingerprint } from "@/lib/adminV2/workspaceSiteFilterClient";
 
 // ---------------------------------------------------------------------------
 // sessionStorage mock
@@ -305,6 +306,14 @@ describe("dept warm cache", () => {
         expect(readDepartmentPageCache(ORG, DEPT_ID, USER, "fp-different")).toBeNull();
         // Correct
         expect(readDepartmentPageCache(ORG, DEPT_ID, USER, FP)).not.toBeNull();
+    });
+
+    it("department cache fingerprint includes workspace site when site selected", () => {
+        const siteFp = workspaceViewCacheFingerprint(FP, "site-a");
+        writeDepartmentPageCache(ORG, USER, siteFp, baseSnap);
+
+        expect(readDepartmentPageCache(ORG, DEPT_ID, USER, siteFp)).not.toBeNull();
+        expect(readDepartmentPageCache(ORG, DEPT_ID, USER, FP)).toBeNull();
     });
 
     it("attentionBuckets is undefined in cache when not written — backward compatible", () => {

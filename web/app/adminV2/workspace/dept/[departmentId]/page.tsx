@@ -16,7 +16,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { getEntityLabel, useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
-import { appendWorkspaceSiteToPath, appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
+import {
+    appendWorkspaceSiteToPath,
+    appendWorkspaceSiteToUrl,
+    workspaceViewCacheFingerprint,
+} from "@/lib/adminV2/workspaceSiteFilterClient";
 import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
 import {
@@ -342,6 +346,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
+    const viewScopeFingerprint = workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId);
     const { labels: entityLabels } = useEntityLabels();
     const departmentId = workspaceRouteParam(params.departmentId);
 
@@ -452,7 +457,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptScopeHasPlacements(false);
 
         if (!departmentId || !orgId) return;
-        const hit = readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint);
+        const hit = readDepartmentPageCache(orgId, departmentId, principalUserId, viewScopeFingerprint);
         if (!hit || hit.dept.id !== departmentId) return;
         seededDeptShellRef.current = true;
         setDept(hit.dept);
@@ -492,7 +497,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             department_id: departmentId,
             client_cache_hit: true,
         });
-    }, [departmentId, orgId, principalUserId, accessScopeFingerprint, selectedSiteId]);
+    }, [departmentId, orgId, principalUserId, viewScopeFingerprint, selectedSiteId]);
 
     const setGlobalAssistantWorkspaceScope = globalAssistant?.setWorkspaceScope;
     useEffect(() => {
@@ -604,7 +609,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         const init = workspaceDataFetchInit() ?? {};
         const cacheHit =
             orgId && departmentId
-                ? readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint)
+                ? readDepartmentPageCache(orgId, departmentId, principalUserId, viewScopeFingerprint)
                 : null;
         const cacheWuList =
             cacheHit && cacheHit.dept.id === departmentId ? (cacheHit.workUnits ?? []) : [];
@@ -819,7 +824,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 });
 
                 if (orgId && deptCommit) {
-                    writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                    writeDepartmentPageCache(orgId, principalUserId, viewScopeFingerprint, {
                         dept: deptCommit,
                         workUnits: wuCommit,
                         workUnitSummaries: nextSummaries,
@@ -872,10 +877,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     orgId,
                                     departmentId,
                                     principalUserId,
-                                    accessScopeFingerprint
+                                    viewScopeFingerprint
                                 );
                                 if (existing && existing.dept.id === departmentId) {
-                                    writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                                    writeDepartmentPageCache(orgId, principalUserId, viewScopeFingerprint, {
                                         dept: existing.dept,
                                         workUnits: existing.workUnits,
                                         workUnitSummaries: existing.workUnitSummaries,
@@ -1080,7 +1085,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             setEnrollmentDeptActionsSettled(true);
                         }
                         if (orgId && deptCommit) {
-                            writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                            writeDepartmentPageCache(orgId, principalUserId, viewScopeFingerprint, {
                                 dept: deptCommit,
                                 workUnits: wuCommit,
                                 workUnitSummaries: kpiSummaries,
@@ -1224,7 +1229,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 }
 
                 if (orgId && deptCommit) {
-                    writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                    writeDepartmentPageCache(orgId, principalUserId, viewScopeFingerprint, {
                         dept: deptCommit,
                         workUnits: wuCommit,
                         workUnitSummaries: {},
@@ -1280,7 +1285,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, orgId, principalUserId, accessScopeFingerprint, selectedSiteId]);
+    }, [departmentId, orgId, principalUserId, viewScopeFingerprint, selectedSiteId]);
 
     /** Full cold shell only until department identity exists — revisit/cache keeps bridge chrome (shell-first). */
     const departmentPageBlockingLoad = useMemo(() => {

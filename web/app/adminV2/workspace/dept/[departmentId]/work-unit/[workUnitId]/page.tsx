@@ -192,6 +192,7 @@ import {
     logLifecycleSiblingHydrationDev,
     mergeLifecycleSiblingHydrationBlock,
     toLifecycleSiblingListRows,
+    workUnitSummariesFromDepartmentQueueSummariesResponse,
 } from "@/lib/lifecycle/lifecycleWorkUnitSiblingHydration";
 import {
     buildWorkUnitHref,
@@ -220,7 +221,10 @@ import {
     resolveScheduleTourOpportunityIdFromQueueItem,
 } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
 import { openTourScheduleModalForOpportunity } from "@/lib/tours/actions/tourBookingActionClient";
-import { readDepartmentPageCache } from "@/lib/workspace/adminV2WorkspaceSessionCache";
+import {
+    readDepartmentPageCache,
+    writeDepartmentPageCache,
+} from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { buildDefaultWorkUnitKpis } from "@/lib/kpi/baseline";
 import { workUnitContextFromParts } from "@/lib/kpi/surfaceContext";
 import { normalizeQueueDefinitionDocument, tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
@@ -1030,7 +1034,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const stable = readLifecycleSiblingListStable({
                 orgId,
                 departmentId,
-                accessScopeFingerprint,
+                accessScopeFingerprint: viewScopeFingerprint,
             });
             if (stable) {
                 setLifecycleSiblingWorkUnits(stable.siblings);
@@ -1042,7 +1046,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setLifecycleSiblingWorkUnits(null);
         setLifecycleSiblingsHydrationComplete(false);
         setLifecycleSiblingTotalsById({});
-    }, [departmentId, workUnitId, orgId, accessScopeFingerprint]);
+    }, [departmentId, workUnitId, orgId, viewScopeFingerprint]);
 
     useEffect(() => {
         if (!builderOwnedLifecycleShell || !departmentId) {
@@ -1080,14 +1084,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     toLifecycleSiblingListRows(j.items ?? [])
                 );
                 if (!cancelled && siblings.length) {
-                    const cache = readDepartmentPageCache(
-                        orgId,
-                        departmentId,
-                        principalUserId,
-                        accessScopeFingerprint
-                    );
-                    const totals = lifecycleSiblingTotalsFromDeptSummaries(cache?.workUnitSummaries);
-                    setLifecycleSiblingTotalsById(totals);
                     setLifecycleSiblingWorkUnits(siblings);
                     setLifecycleSiblingsHydrationComplete(true);
                     logLifecycleSiblingHydrationDev("client_fetch_end", {
@@ -1108,19 +1104,99 @@ export default function AdminV2OpportunityWorkUnitPage() {
         builderOwnedLifecycleShell,
         departmentId,
         orgId,
-        principalUserId,
-        accessScopeFingerprint,
         workUnitId,
         lifecycleSiblingsHydrationComplete,
+    ]);
+
+    useEffect(() => {
+        if (!builderOwnedLifecycleShell || !departmentId || !orgId || !siteSelectionReady) {
+            return;
+        }
+        let cancelled = false;
+        setLifecycleSiblingTotalsById({});
+
+        const init = workspaceDataFetchInit();
+        const summariesRoute = appendWorkspaceSiteToUrl(
+            `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
+            selectedSiteId
+        );
+        logLifecycleSiblingHydrationDev("summaries_fetch_start", {
+            source: "client_fetch",
+            department_id: departmentId,
+            selected_site_id: selectedSiteId,
+            view_scope_fingerprint: viewScopeFingerprint,
+        });
+
+        void dedupeAdminFetch(summariesRoute, init ?? {})
+            .then(async (res) => {
+                if (cancelled) return;
+                if (!res.ok) {
+                    logLifecycleSiblingHydrationDev("summaries_fetch_error", {
+                        department_id: departmentId,
+                        status: res.status,
+                    });
+                    return;
+                }
+                const j = (await res.json().catch(() => ({}))) as {
+                    work_units?: Array<{
+                        id?: string;
+                        error?: string;
+                        work_unit_scope_total?: number | null;
+                        queues?: Array<{ key?: string; count?: number; counts_deferred?: boolean }>;
+                    }>;
+                };
+                const summaries = workUnitSummariesFromDepartmentQueueSummariesResponse(j.work_units ?? []);
+                const totals = lifecycleSiblingTotalsFromDeptSummaries(summaries);
+                if (cancelled) return;
+                setLifecycleSiblingTotalsById(totals);
+
+                const cache = readDepartmentPageCache(
+                    orgId,
+                    departmentId,
+                    principalUserId,
+                    viewScopeFingerprint
+                );
+                if (cache?.dept?.id === departmentId) {
+                    writeDepartmentPageCache(orgId, principalUserId, viewScopeFingerprint, {
+                        dept: cache.dept,
+                        workUnits: cache.workUnits,
+                        workUnitSummaries: summaries,
+                        summariesComplete: true,
+                        attentionBuckets: cache.attentionBuckets ?? null,
+                        attentionPreviewTotal: cache.attentionPreviewTotal ?? null,
+                        kpiPlacementRows: cache.kpiPlacementRows ?? null,
+                        kpiScopeHasPlacements: cache.kpiScopeHasPlacements ?? false,
+                    });
+                }
+
+                logLifecycleSiblingHydrationDev("summaries_fetch_end", {
+                    source: "client_fetch",
+                    department_id: departmentId,
+                    work_unit_ids: Object.keys(totals),
+                    totals,
+                });
+            })
+            .catch(() => {
+                /* non-fatal */
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        builderOwnedLifecycleShell,
+        departmentId,
+        orgId,
+        principalUserId,
+        viewScopeFingerprint,
+        selectedSiteId,
+        siteSelectionReady,
     ]);
 
     const lifecycleSiblingWorkUnitsForHeader = useMemo(() => {
         if (!lifecycleSiblingWorkUnits?.length) return null;
         const totals: Record<string, number | null | undefined> = { ...lifecycleSiblingTotalsById };
-        const cache = readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint);
-        for (const [id, n] of Object.entries(lifecycleSiblingTotalsFromDeptSummaries(cache?.workUnitSummaries))) {
-            if (totals[id] == null) totals[id] = n;
-        }
+        const cache = readDepartmentPageCache(orgId, departmentId, principalUserId, viewScopeFingerprint);
         const deptOrder = cache?.workUnits?.length
             ? deptOrderedLifecycleSiblingSource(
                   cache.workUnits as Array<{
@@ -1195,7 +1271,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         orgId,
         departmentId,
         principalUserId,
-        accessScopeFingerprint,
+        viewScopeFingerprint,
         workUnitId,
         queueSummaries,
         queueDef,
@@ -1219,7 +1295,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         markLifecycleSiblingListStable({
             orgId,
             departmentId,
-            accessScopeFingerprint,
+            accessScopeFingerprint: viewScopeFingerprint,
             siblings,
             totalsByWorkUnitId: lifecycleSiblingTotalsById,
         });
@@ -1231,7 +1307,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         lifecycleSiblingTotalsById,
         orgId,
         departmentId,
-        accessScopeFingerprint,
+        viewScopeFingerprint,
     ]);
 
     const lifecycleHeaderSections = useMemo(() => {
@@ -2564,7 +2640,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         markLifecycleSiblingListStable({
                             orgId,
                             departmentId,
-                            accessScopeFingerprint,
+                            accessScopeFingerprint: viewScopeFingerprint,
                             siblings: lifecycleSiblingWorkUnits,
                             totalsByWorkUnitId: lifecycleSiblingTotalsById,
                         });
