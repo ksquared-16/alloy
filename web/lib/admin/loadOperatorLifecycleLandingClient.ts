@@ -19,6 +19,10 @@ type DepartmentsResponse = { items?: OperatorLifecycleDepartmentRow[]; error?: s
 let inflight: Promise<OperatorLifecycleLandingCard[]> | null = null;
 let cachedCards: OperatorLifecycleLandingCard[] | null = null;
 
+export function peekOperatorLifecycleLandingCards(): OperatorLifecycleLandingCard[] | null {
+    return cachedCards;
+}
+
 export function invalidateOperatorLifecycleLandingCache(): void {
     inflight = null;
     cachedCards = null;

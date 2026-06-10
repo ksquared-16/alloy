@@ -3,7 +3,9 @@
 import { useCallback, useState } from "react";
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
+import DrawerHouseholdChildLinkAvatar from "@/components/layout/DrawerHouseholdChildLinkAvatar";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
+import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import LayoutRuntimeFieldInput from "@/components/layout/LayoutRuntimeFieldInput";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
@@ -104,6 +106,9 @@ export default function LeadEnrollmentCardList({
                         };
                         const statusDisplay =
                             statusColumn ? formatLayoutRuntimeRepeaterColumnDisplay(row, statusColumn) : null;
+                        const childDisplayName = formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol);
+                        const childId = String(row["child.id"] ?? row.id ?? "").trim();
+                        const childPhotoUrl = String(row["child.photo_url"] ?? row.photo_url ?? row.image_url ?? "").trim() || null;
 
                         return (
                             <li
@@ -114,19 +119,36 @@ export default function LeadEnrollmentCardList({
                                 data-enrollment-row-editing={isEditing ? "true" : "false"}
                             >
                                 <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex min-w-0 items-start justify-between gap-2">
-                                            <LayoutRuntimeChildLinkSurface
-                                                componentName="LeadEnrollmentCardList"
-                                                surface="drawer"
-                                                item={nameSynthetic}
+                                    <div className="flex min-w-0 flex-1 items-start gap-2.5">
+                                        {!isEditing ?
+                                            <DrawerHouseholdChildLinkAvatar
+                                                childId={childId}
+                                                displayName={childDisplayName}
+                                                initials={personDrawerHouseholdInitials(childDisplayName)}
+                                                photoUrl={childPhotoUrl}
                                                 rowRecord={row}
-                                                anchorRecord={anchorRecord}
-                                                adornment={nameCol.adornment}
-                                                display={formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol)}
-                                                onAction={onAdornmentAction}
-                                                className={`block min-w-0 truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                                                onAdornmentAction={onAdornmentAction}
+                                                componentName="LeadEnrollmentCardList"
                                             />
+                                        :   null}
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex min-w-0 items-start justify-between gap-2">
+                                                {childId ?
+                                                    <LayoutRuntimeChildLinkSurface
+                                                        componentName="LeadEnrollmentCardList"
+                                                        surface="drawer"
+                                                        item={nameSynthetic}
+                                                        rowRecord={row}
+                                                        anchorRecord={anchorRecord}
+                                                        adornment={null}
+                                                        display={childDisplayName}
+                                                        onAction={onAdornmentAction}
+                                                        className={`block min-w-0 truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                                                    />
+                                                :   <p className={`min-w-0 truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>
+                                                        {childDisplayName}
+                                                    </p>
+                                                }
                                             {!isEditing && statusDisplay && statusDisplay !== "—" ?
                                                 <span className="shrink-0 rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">
                                                     {statusDisplay}
@@ -136,6 +158,7 @@ export default function LeadEnrollmentCardList({
                                         {!isEditing && metaColumns.length > 0 ?
                                             <LeadEnrollmentCardMetaLines row={row} metaColumns={metaColumns} />
                                         :   null}
+                                        </div>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1.5">
                                         {showEdit ?

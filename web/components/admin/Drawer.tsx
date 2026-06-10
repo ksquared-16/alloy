@@ -4,6 +4,10 @@ import React, { type CSSProperties, isValidElement, useEffect, useState } from "
 import { createPortal } from "react-dom";
 import { shouldCloseAdminV2DrawerOnOutsideTarget } from "@/lib/adminV2/drawerOutsideClick";
 import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
+import {
+    LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
+    LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 /**
@@ -179,11 +183,24 @@ export default function Drawer({
     const isV2 = variant === "adminV2";
     const isModal = isV2 && presentation === "modal";
     const bosRailCopilot = isBosRightRailCopilotEnabledClient();
-    const bosSidebarDrawerInset =
-        bosRailCopilot && isV2 && !isModal ?
-            { right: "var(--adminv2-workspace-command-rail-offset, 0px)" as const }
-        :   undefined;
+    const bosWorkspaceDrawerLayout = bosRailCopilot && isV2;
+    const workspaceDrawerPanelStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
+        {
+            left: "var(--adminv2-drawer-computed-left, 0px)",
+            width: "var(--adminv2-drawer-computed-width, 100%)",
+            maxWidth: "var(--adminv2-drawer-computed-width, 100%)",
+            transform: "none",
+            right: "auto",
+        }
+    :   undefined;
+    const workspaceDrawerBackdropStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
+        {
+            left: "var(--adminv2-drawer-available-left, 0px)",
+            right: "calc(100vw - var(--adminv2-drawer-available-right, 100vw))",
+        }
+    :   undefined;
     const cleaningRecordModalTone = isModal && recordModalTone === "cleaning-v2";
+    const bosModalDrawerLayout = bosWorkspaceDrawerLayout && isModal;
     const leftAccent = accentColor ?? (isV2 ? palette.midnightForge : undefined);
 
     const panelStyle: CSSProperties = isModal
@@ -191,31 +208,16 @@ export default function Drawer({
               zIndex: zIndexPanel,
               backgroundColor: neutral.surface,
               color: neutral.textPrimary,
-              borderTopColor: derived.border,
-              borderRightColor: derived.border,
-              borderBottomColor: derived.border,
-              borderLeftColor: cleaningRecordModalTone && recordModalContextStyle
-                  ? "var(--vc-record-rim)"
-                  : derived.border,
-              boxShadow: cleaningRecordModalTone
-                  ? "0 12px 40px rgba(39, 63, 82, 0.1), 0 2px 8px rgba(39, 63, 82, 0.04)"
-                  : derived.cardShadow,
-              ...(cleaningRecordModalTone && recordModalContextStyle
-                  ? {
-                        borderLeftWidth: 3,
-                        borderLeftStyle: "solid",
-                    }
-                  : {}),
+              borderTopColor: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
+              borderRightColor: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
+              borderBottomColor: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
+              borderLeftColor: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
+              boxShadow: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW : derived.cardShadow,
+              ...(workspaceDrawerPanelStyle ?? {}),
           }
         : {
               zIndex: zIndexPanel,
-              ...(bosSidebarDrawerInset ?? {}),
-              ...(bosSidebarDrawerInset ?
-                  {
-                      width: `min(42rem, calc(100vw - var(--adminv2-workspace-command-rail-offset, 0px) - var(--adminv2-bos-overlay-gutter, 24px)))`,
-                      maxWidth: `min(42rem, calc(100vw - var(--adminv2-workspace-command-rail-offset, 0px) - var(--adminv2-bos-overlay-gutter, 24px)))`,
-                  }
-              :   {}),
+              ...(workspaceDrawerPanelStyle ?? {}),
               ...(isV2
                   ? {
                         backgroundColor: neutral.surface,
@@ -236,7 +238,7 @@ export default function Drawer({
         isModal && isV2
             ? cleaningRecordModalTone
                 ? {
-                      backgroundColor: neutral.background,
+                      backgroundColor: "#ffffff",
                       color: neutral.textPrimary,
                   }
                 : {
@@ -244,7 +246,7 @@ export default function Drawer({
                       color: neutral.textPrimary,
                   }
             : isV2
-              ? { backgroundColor: neutral.background, color: neutral.textPrimary }
+              ? { backgroundColor: "#ffffff", color: neutral.textPrimary }
               : undefined;
 
     const hasHeaderTitleRight = headerTitleRight != null && headerTitleRight !== false;
@@ -528,8 +530,13 @@ export default function Drawer({
         isModal ? (
             <>
                 <div
-                    className="adminv2-drawer-backdrop-hit adminv2-drawer-modal-dim fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 pointer-events-auto"
-                    style={{ zIndex: zIndexBackdrop }}
+                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-modal-dim pointer-events-auto fixed bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ${
+                        bosWorkspaceDrawerLayout ? "top-0 bottom-0" : "inset-0"
+                    }`}
+                    style={{
+                        zIndex: zIndexBackdrop,
+                        ...(workspaceDrawerBackdropStyle ?? {}),
+                    }}
                     aria-hidden
                     onMouseDown={closeOnBackdropMouseDown}
                 />
@@ -540,7 +547,7 @@ export default function Drawer({
                     data-adminv2-drawer="true"
                     data-adminv2-record-modal="true"
                     data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
-                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed left-1/2 flex w-[min(calc(100vw-1.5rem),80rem)] max-h-[min(920px,100%)] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
+                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${bosModalDrawerLayout ? "adminv2-drawer-modal-panel--bos-rail" : "left-1/2 w-[min(calc(100vw-1.5rem),80rem)] -translate-x-1/2"} ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
                     style={
                         cleaningRecordModalTone && recordModalContextStyle
                             ? { ...recordModalContextStyle, ...panelStyle, zIndex: zIndexPanel }
@@ -554,9 +561,12 @@ export default function Drawer({
             <>
                 <div
                     className={`adminv2-drawer-backdrop-hit adminv2-drawer-sidebar-dim pointer-events-auto fixed bg-black/50 ${
-                        bosSidebarDrawerInset ? "left-0 top-0 bottom-0" : "inset-0"
+                        bosWorkspaceDrawerLayout ? "top-0 bottom-0" : "inset-0"
                     }`}
-                    style={{ zIndex: zIndexBackdrop, ...(bosSidebarDrawerInset ?? {}) }}
+                    style={{
+                        zIndex: zIndexBackdrop,
+                        ...(workspaceDrawerBackdropStyle ?? {}),
+                    }}
                     aria-hidden
                     onMouseDown={closeOnBackdropMouseDown}
                 />
@@ -565,7 +575,7 @@ export default function Drawer({
                     aria-modal="true"
                     aria-labelledby="admin-drawer-title"
                     data-adminv2-drawer={isV2 ? "true" : undefined}
-                    className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${bosSidebarDrawerInset ? "" : "right-0"} ${isV2 ? "adminv2-drawer-shell-inset border-solid" : "inset-y-0"} ${panelClassName ?? ""} ${
+                    className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed flex flex-col border shadow-xl ${bosWorkspaceDrawerLayout ? "left-auto" : "left-auto right-0 w-[min(100vw,42rem)] max-w-2xl"} ${isV2 ? "adminv2-drawer-shell-inset border-solid" : "inset-y-0"} ${panelClassName ?? ""} ${
                         isV2 ? "" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
                     }`}
                     style={panelStyle}

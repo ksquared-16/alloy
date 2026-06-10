@@ -19,6 +19,7 @@ import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/vi
 import { putDrawerViewModelCacheEntry, invalidateDrawerViewModelCacheForEntity } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
 import { peekOpportunityDrawerDisplayVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerPayloadPeekSeed";
 import { logDrawerVmRuntime } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmRuntimeLog";
+import { tracePlatformDrawerVm } from "@/lib/perf/platformSurfacePerfTrace";
 import {
     ADMINV2_OPPORTUNITY_DRAWER_RECORD_PATCH,
     isTourSurfaceActionKey,
@@ -108,6 +109,11 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
                 opportunity_id: vm.entity.id,
                 reason,
                 generation: vm.generation,
+                payload_apply_ms: payloadApplyMs,
+            });
+            tracePlatformDrawerVm("drawer_reveal", {
+                opportunity_id: vm.entity.id,
+                reason,
                 payload_apply_ms: payloadApplyMs,
             });
             logDrawerVmRuntime("swap_committed", {

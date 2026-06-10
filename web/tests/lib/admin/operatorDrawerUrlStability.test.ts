@@ -29,8 +29,10 @@ describe("operator drawer URL stability", () => {
     it("WorkUnitSlugRouteHost syncs drawer URLs without remounting on recordId changes", () => {
         const host = read("components/admin/workspace/WorkUnitSlugRouteHost.tsx");
         expect(host).toContain("syncOperatorWorkUnitUrlInBrowser");
+        expect(host).toContain("peekWorkUnitSlugRouteCache");
         expect(host).toMatch(/\}, \[workUnitSlug\]\);/);
         expect(host).toContain("routeRecordIdFromPath");
+        expect(host).not.toContain("fetchQueueItems");
     });
 
     it("recordId-only path changes are detected for canonical and rewrite aliases", () => {

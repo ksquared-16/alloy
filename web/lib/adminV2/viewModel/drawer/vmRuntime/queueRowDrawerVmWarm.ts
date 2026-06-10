@@ -2,6 +2,7 @@ import type { OpportunityDrawerIntentContext } from "@/lib/admin/opportunityDraw
 import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
 import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import { logDrawerVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/drawer/drawerVmRuntimeDiagnostics";
+import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
 
 export const QUEUE_ROW_VM_WARM_CAP = 5;
 const QUEUE_ROW_WARM_OPEN_SOURCE = "queue_row_vm_warm";
@@ -25,6 +26,11 @@ export function warmQueueRowOpportunityVm(
         reason,
         work_unit_id: ws.work_unit_id,
         department_id: ws.department_id,
+    });
+    tracePlatformPrefetch("queue_row_vm_warm_start", {
+        opportunity_id: id,
+        reason,
+        work_unit_id: ws.work_unit_id,
     });
 
     void prepareDrawerViewModelDeduped({

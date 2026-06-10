@@ -2,6 +2,7 @@
 
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
+import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
 import { AdminVerticalProvider } from "@/contexts/AdminVerticalContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
@@ -95,6 +96,7 @@ export default function AdminV2WorkspaceClientProviders({
                 <WorkspaceSiteFilterPersistenceScopeBridge />
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <AdminDrawerProvider>
+                    <DrawerCommandRailActionsProvider>
                     <AdminV2ClickDebugInstaller />
                     <div
                       className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 overflow-auto px-4 py-3 sm:px-5"
@@ -106,6 +108,7 @@ export default function AdminV2WorkspaceClientProviders({
                     <ContextualRecordOpenListener />
                     <GlobalRecordSearchOpenListener />
                     <AdminEntityDrawer />
+                    </DrawerCommandRailActionsProvider>
                   </AdminDrawerProvider>
                 </div>
               </WorkspaceOrgProvider>

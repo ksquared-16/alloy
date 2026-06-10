@@ -116,7 +116,7 @@ function FamilyMemberCard({
                             item={CHILD_LINK_ITEM}
                             rowRecord={row}
                             anchorRecord={anchorRecord}
-                            adornment={CHILD_LINK_ITEM.adornment}
+                            adornment={null}
                             display={displayName}
                             onAction={onAdornmentAction}
                             className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
@@ -129,7 +129,7 @@ function FamilyMemberCard({
                             personId={personId}
                             rowRecord={row}
                             anchorRecord={anchorRecord}
-                            adornment={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM.adornment}
+                            adornment={null}
                             display={displayName}
                             onAction={onAdornmentAction}
                             className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}

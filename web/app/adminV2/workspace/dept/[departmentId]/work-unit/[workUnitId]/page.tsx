@@ -284,6 +284,7 @@ import {
     opportunityDrawerNavigatorMatchesWorkUnitSelection,
 } from "@/lib/admin/opportunityDrawerQueueNavigator";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
+import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
 import { markDrawerRowClickStart } from "@/lib/perf/adminV2DrawerPerf";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfaceGate";
@@ -6329,8 +6330,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             },
             { idleTimeoutMs: 500, fallbackMs: 150 }
         );
-    }, [workUnitAboveFoldPageReady, workUnitId, hydrateDeferredQueueSummaryCounts]);
+    }, [workUnitAboveFoldPageReady, departmentId, workUnitId, hydrateDeferredQueueSummaryCounts]);
 
+    const visibleDrawerPrefetchSigRef = useRef("");
     useEffect(() => {
         if (!workUnitAboveFoldPageReady || !departmentId || !workUnitId) return;
         const raw = (queueItems?.items ?? []) as Array<{ id?: string; opportunity_id?: string }>;
@@ -6342,6 +6344,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (ids.length >= 5) break;
         }
         if (ids.length === 0) return;
+        const sig = `${workUnitId}|${departmentId}|${ids.join(",")}`;
+        if (visibleDrawerPrefetchSigRef.current === sig) return;
+        visibleDrawerPrefetchSigRef.current = sig;
+        tracePlatformPrefetch("wu_visible_drawer_prefetch", {
+            work_unit_id: workUnitId,
+            record_count: ids.length,
+        });
         prefetchVisibleWorkUnitDrawerPrimary(ids, {
             work_unit_id: workUnitId,
             department_id: departmentId,
@@ -6494,10 +6503,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     return (
         <WorkspaceChrome
             variant="bridge"
-            breadcrumbs={workUnitRoutePipeline.shell.breadcrumbs.map((b) => ({
-                ...b,
-                href: b.href ? appendWorkspaceSiteToPath(b.href, selectedSiteId) : undefined,
-            }))}
+            breadcrumbs={[]}
             title={workUnitRoutePipeline.shell.title}
             subtitle={workUnitRoutePipeline.shell.subtitle ?? ""}
             data-route-shell-ready={workUnitAboveFoldPageReady ? "true" : "false"}

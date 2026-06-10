@@ -7,11 +7,17 @@ import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptySta
 import DrawerHouseholdPersonLinkAvatar from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
 import DrawerHouseholdProfileSection from "@/components/layout/DrawerHouseholdProfileSection";
 import DrawerHouseholdContactCardList from "@/components/layout/DrawerHouseholdContactCardList";
+import PersonConnectedChildrenCardList from "@/components/layout/person/PersonConnectedChildrenCardList";
+import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
 import {
     DRAWER_OVERVIEW_CANVAS_CLASS,
     DRAWER_OVERVIEW_PANEL_SURFACE,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
+import {
+    LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
+    LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW,
+} from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildProofOpportunityRecord } from "@/lib/layout/runtime/buildProofOpportunityRecord";
 import { resolveLeadDrawerHouseholdProfile } from "@/lib/layout/runtime/resolveDrawerHouseholdProfile";
@@ -31,6 +37,11 @@ describe("drawerOverviewCompositionStandard", () => {
 
     it("panel surface includes pine left accent", () => {
         expect(DRAWER_OVERVIEW_PANEL_SURFACE).toContain("border-l-alloy-juniper");
+    });
+
+    it("uses neutral outer drawer shell tokens", () => {
+        expect(LAYOUT_RUNTIME_DRAWER_OUTER_BORDER).toContain("39, 63, 82");
+        expect(LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW).toContain("rgba");
     });
 });
 
@@ -200,6 +211,53 @@ describe("DrawerHouseholdProfileSection person links", () => {
         expect(html).toContain('data-drawer-household-primary-contact="true"');
         expect(html).toContain('data-drawer-household-person-link-avatar="true"');
         expect(html).toContain('data-layout-runtime-person-link="true"');
+    });
+});
+
+describe("PersonConnectedChildrenCardList person links", () => {
+    it("renders child avatar link affordance on connected child rows", () => {
+        const html = renderToStaticMarkup(
+            <PersonConnectedChildrenCardList
+                item={{ id: "connected-children", kind: "collection", refKey: "connected_children", columns: [] }}
+                columns={[
+                    { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
+                ]}
+                rows={[
+                    {
+                        id: "child-1",
+                        "child.id": "child-1",
+                        "child.name": "Harper Hayes",
+                    },
+                ]}
+                anchorRecord={{ id: "person-1" }}
+                onAdornmentAction={() => {}}
+            />,
+        );
+        expect(html).toContain('data-drawer-household-child-link-avatar="true"');
+        expect(html).toContain('aria-label="Open Harper Hayes"');
+    });
+});
+
+describe("PersonDrawerIdentityAvatar", () => {
+    it("accepts imageUrl for future profile photo readiness", () => {
+        const html = renderToStaticMarkup(
+            <PersonDrawerIdentityAvatar
+                displayName="Jamie Johnson"
+                initials="JJ"
+                imageUrl="https://example.com/jamie.jpg"
+            />,
+        );
+        expect(html).toContain('data-person-drawer-avatar="photo"');
+        expect(html).toContain("https://example.com/jamie.jpg");
+    });
+
+    it("uses neutral initials fallback styling when no photo is present", () => {
+        const html = renderToStaticMarkup(
+            <PersonDrawerIdentityAvatar displayName="Jamie Johnson" initials="JJ" />,
+        );
+        expect(html).toContain('data-person-drawer-avatar="initials"');
+        expect(html).toContain("border-alloy-stone/18");
+        expect(html).not.toContain("border-alloy-blue");
     });
 });
 

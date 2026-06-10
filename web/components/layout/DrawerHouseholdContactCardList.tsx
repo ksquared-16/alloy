@@ -84,7 +84,7 @@ function HouseholdContactCard({
                             personId={contact.person_id}
                             rowRecord={rowRecord}
                             anchorRecord={anchorRecord}
-                            adornment={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM.adornment}
+                            adornment={null}
                             display={contact.display_name}
                             onAction={onAdornmentAction}
                             className={`block truncate text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}

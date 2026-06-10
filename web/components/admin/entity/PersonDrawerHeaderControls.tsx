@@ -6,6 +6,7 @@ import BosDrawerAssistCta from "@/components/admin/drawer/BosDrawerAssistCta";
 import { DrawerHeaderAttentionBlock } from "@/components/admin/drawer/DrawerHeaderAttentionBlock";
 import { OpportunityDrawerHeaderActionsMenu } from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsMenu";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { shouldRouteDrawerActionsToCommandRail } from "@/lib/bos/bosRightRailCopilotFlag";
 
 type Props = {
     personId: string;
@@ -37,6 +38,7 @@ export function PersonDrawerHeaderControls({
     onActionSelect,
     actionsDisabledReason = null,
 }: Props) {
+    const routeActionsToRail = shouldRouteDrawerActionsToCommandRail();
     const actionsRow = (
         <div
             className="flex shrink-0 flex-nowrap items-center justify-end gap-2 overflow-visible"
@@ -51,7 +53,7 @@ export function PersonDrawerHeaderControls({
                 proofLayoutActions={proofLayoutActions}
                 actionVariant="juniper"
             />
-            {showRegistryActions ?
+            {showRegistryActions && !routeActionsToRail ?
                 <OpportunityDrawerHeaderActionsMenu
                     actions={menuActions}
                     disabled={!canMutate || menuActions.length === 0}

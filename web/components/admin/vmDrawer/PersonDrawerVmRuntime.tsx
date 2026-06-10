@@ -81,7 +81,7 @@ export default function PersonDrawerVmRuntime() {
                     <p className="text-sm text-alloy-ember">{error}</p>
                 :   null}
                 {showColdShell ?
-                    <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
+                    <div className="adminv2-drawer-vm-cold-loading" data-drawer-vm-runtime-cold-loading="true">
                         <p className="text-sm font-medium text-alloy-midnight/75">Loading person…</p>
                     </div>
                 :   displayVm && record && layoutVariant ?

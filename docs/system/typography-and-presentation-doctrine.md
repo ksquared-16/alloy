@@ -117,11 +117,14 @@ Lead, Person, and Child drawers share composition chrome via:
 
 All drawer overview compositions (Lead, Person, Child) use a **pure white canvas**. Depth comes from section panels — not a gray or blue page fill.
 
-| Token | Value |
-|-------|--------|
+| Token / surface | Value |
+|-----------------|--------|
 | `LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS` | `bg-white` |
 | `DRAWER_OVERVIEW_CANVAS_CLASS` | white canvas + spacing |
+| Modal scroll body (`cleaning-v2`) | `#ffffff` — no `#f6f8fc` body veil |
 | Panel surfaces | `bg-white` with pine left accent |
+
+**Outer drawer shell:** uniform neutral rim (`LAYOUT_RUNTIME_DRAWER_OUTER_BORDER` = `rgba(39, 63, 82, 0.12)`) + soft shadow (`LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW`). No bluish-gray modal outline or tinted left-rail rim on entity drawers.
 
 Emerald/juniper accents (header gradients, icon badges, status pills) should read clearly against white.
 
@@ -173,15 +176,34 @@ Relationship cards preserve drawer navigation affordances:
 
 | Direction | Affordance |
 |-----------|------------|
-| Opportunity → Person | Profile avatar button + name link on household/contact cards |
-| Person → Child | Child name link on connected-children cards |
-| Child → Person | Profile avatar button + name link on family member cards |
-| Child → Child (sibling) | Profile avatar button + name link |
+| Opportunity → Person | Profile avatar button + optional name link on household/contact cards |
+| Person → Child | Child avatar button + optional name link on connected-children / enrollment cards |
+| Child → Person | Profile avatar button + optional name link on family member cards |
+| Child → Child (sibling) | Child avatar button + optional name link |
 
-- Avatar is the primary click target (`DrawerHouseholdPersonLinkAvatar`, `DrawerHouseholdChildLinkAvatar`)
-- Name may also link when `person_id` / `child_id` is present
-- Contacts without a valid id render a static, non-clickable avatar
-- Lists are layout-driven (`household_contacts` widget gates relationship list presence)
+**Drawer vs queue link doctrine:**
+
+| Surface | Primary link affordance |
+|---------|------------------------|
+| **Drawer relationship cards** | Profile/avatar button (`DrawerHouseholdPersonLinkAvatar`, `DrawerHouseholdChildLinkAvatar`) wrapping `PersonDrawerIdentityAvatar` |
+| **Queue record rows** | Compact link icons acceptable — dense operational previews |
+
+- Avatar is the **primary** click target in drawers; name may also link when `person_id` / `child_id` is present.
+- Do **not** render queue-style adornment link icons on drawer relationship name links when an avatar is shown (`adornment={null}` on name `LayoutRuntime*LinkSurface`).
+- Contacts without a valid id render a static, non-clickable avatar.
+- Lists are layout-driven (`household_contacts` widget gates relationship list presence).
+
+### Avatar / profile image readiness (locked)
+
+Shared component: `PersonDrawerIdentityAvatar`.
+
+| Source | Priority |
+|--------|----------|
+| `photoUrl` / `imageUrl` | Render circular photo when present |
+| Initials fallback | Default until upload exists |
+| Entity icon fallback | Reserved for future entity-type badges |
+
+Future profile upload should pass `image_url` into the same avatar slot — no parallel avatar implementations in drawer relationship cards.
 
 ### Drawer overview presentation standard (June 2026)
 
@@ -296,6 +318,8 @@ Any new operational surface (action workspace cards, BOS summaries, global searc
 | Drawer overview panel shell | `web/components/layout/DrawerOverviewPanelShell.tsx` |
 | Drawer household profile | `web/components/layout/DrawerHouseholdProfileSection.tsx` |
 | Drawer person/child link avatars | `web/components/layout/DrawerHouseholdPersonLinkAvatar.tsx`, `DrawerHouseholdChildLinkAvatar.tsx` |
+| Shared drawer identity avatar | `web/components/admin/entity/PersonDrawerIdentityAvatar.tsx` |
+| Drawer outer shell tokens | `LAYOUT_RUNTIME_DRAWER_OUTER_BORDER`, `LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW` in `layoutRuntimeSurfaceStyles.ts` |
 | Drawer premium empty state | `web/components/layout/DrawerOverviewEmptyState.tsx` |
 | Drawer overview tokens | `web/lib/layout/runtime/drawerOverviewCompositionStandard.ts` |
 | Drawer section icons | `web/lib/layout/runtime/drawerOverviewSectionPresentation.ts` |

@@ -109,7 +109,7 @@ function PrimaryContactProfileCard({
                                     personId={personId}
                                     rowRecord={rowRecord}
                                     anchorRecord={anchorRecord}
-                                    adornment={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM.adornment}
+                                    adornment={null}
                                     display={name}
                                     onAction={onAdornmentAction}
                                     className={`block truncate text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}

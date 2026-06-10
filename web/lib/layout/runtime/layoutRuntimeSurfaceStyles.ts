@@ -53,6 +53,12 @@ export const LAYOUT_RUNTIME_BODY_SECTION_HEADER =
 /** White drawer overview canvas — depth comes from section panels, not gray fill. */
 export const LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS = "bg-white";
 
+/** Neutral outer drawer shell rim — Lead/Person/Child modal presentation. */
+export const LAYOUT_RUNTIME_DRAWER_OUTER_BORDER = "rgba(39, 63, 82, 0.12)";
+
+export const LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW =
+    "0 12px 40px rgba(39, 63, 82, 0.08), 0 2px 8px rgba(39, 63, 82, 0.04)";
+
 /** Operational enrollment roster inside primary workspace section. */
 export const LAYOUT_RUNTIME_ENROLLMENT_GRID_WRAP = "min-w-0 bg-white";
 

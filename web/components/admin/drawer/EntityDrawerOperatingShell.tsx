@@ -91,11 +91,7 @@ export default function EntityDrawerOperatingShell({
                 {...runtimeShellDataAttributes}
             >
                 <div
-                    className={
-                        showSummaryStrip ?
-                            "flex min-h-0 flex-col gap-2 bg-[rgb(250,251,252)]"
-                        :   "flex min-h-0 flex-col bg-white"
-                    }
+                    className="flex min-h-0 flex-col gap-2 bg-white"
                     data-entity-drawer-scroll-body="true"
                 >
                     {showSummaryStrip ?

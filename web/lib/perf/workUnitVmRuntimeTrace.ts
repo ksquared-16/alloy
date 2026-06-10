@@ -4,6 +4,7 @@
  */
 
 import { alloyPerfGet, alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import { tracePlatformQueueHydrate } from "@/lib/perf/platformSurfacePerfTrace";
 import { logWorkUnitVmRuntimeDiagnostic } from "@/lib/adminV2/viewModel/workUnit/workUnitVmRuntimeDiagnostics";
 
 export type WorkUnitVmScenario = "cold_open" | "warm_open" | "pill_switch";
@@ -106,6 +107,7 @@ export function markWorkUnitVmQueueReady(extra?: Record<string, unknown>): void 
         since_navigation_ms: rel("wu_vm_queue_ready"),
         ...extra,
     });
+    tracePlatformQueueHydrate("wu_queue_ready", extra ?? {});
 }
 
 export function markWorkUnitVmKpiReady(extra?: Record<string, unknown>): void {

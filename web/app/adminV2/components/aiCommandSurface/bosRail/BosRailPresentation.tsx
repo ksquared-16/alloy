@@ -264,7 +264,7 @@ export function BosRailComposer(props: {
                     value={props.value}
                     onChange={(e) => props.onChange(e.target.value)}
                     placeholder="Ask BOS anything..."
-                    className="w-full resize-none bg-transparent outline-none text-[13px] leading-relaxed min-h-[64px] max-h-[120px] py-0.5"
+                    className="w-full resize-none bg-transparent outline-none text-[13px] leading-relaxed min-h-[68px] max-h-[120px] py-0.5"
                     rows={3}
                     style={{ color: neutral.textPrimary }}
                     aria-label="AI assistant input"

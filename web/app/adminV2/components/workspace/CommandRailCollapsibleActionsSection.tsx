@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, type ReactNode } from "react";
+import { Zap } from "lucide-react";
 
 import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import {
@@ -52,7 +53,8 @@ export function CommandRailCollapsibleActionsSection({ actionCount, children, lo
                 onClick={toggle}
                 data-command-rail-actions-toggle="true"
             >
-                <span className="adminv2-ws-command-rail-actions-trigger-label">
+                <span className="adminv2-ws-command-rail-actions-trigger-label inline-flex items-center gap-1.5">
+                    <Zap className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden strokeWidth={2.2} />
                     Actions{countLabel}
                 </span>
                 <span className="adminv2-ws-command-rail-actions-trigger-chevron" aria-hidden>

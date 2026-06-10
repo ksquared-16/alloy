@@ -2,9 +2,11 @@
 
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
+import DrawerHouseholdChildLinkAvatar from "@/components/layout/DrawerHouseholdChildLinkAvatar";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import LayoutRuntimeEnrollmentLeadLink from "@/components/layout/LayoutRuntimeEnrollmentLeadLink";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
+import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import {
     formatLayoutRuntimeRepeaterColumnDisplay,
     formatPersonConnectedChildMetaLine,
@@ -64,6 +66,9 @@ export default function PersonConnectedChildrenCardList({
                         const opportunityId = String(row["child.opportunity_id"] ?? "").trim();
                         const opportunityName = String(row["child.opportunity_name"] ?? "").trim();
                         const enrollmentStatus = String(row["child.enrollment_status"] ?? "").trim();
+                        const childDisplayName = formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol);
+                        const childId = String(row["child.id"] ?? row.id ?? "").trim();
+                        const childPhotoUrl = String(row["child.photo_url"] ?? row.photo_url ?? row.image_url ?? "").trim() || null;
 
                         return (
                             <li
@@ -71,38 +76,54 @@ export default function PersonConnectedChildrenCardList({
                                 className="rounded-lg border border-alloy-stone/12 bg-white px-3 py-2 shadow-[0_1px_2px_rgba(24,39,58,0.03)] transition-shadow hover:shadow-[0_2px_6px_rgba(24,39,58,0.06)]"
                                 data-person-connected-child-card-row="true"
                             >
-                                <div className="min-w-0">
-                                    <LayoutRuntimeChildLinkSurface
-                                        componentName="PersonConnectedChildrenCardList"
-                                        surface="drawer"
-                                        item={nameSynthetic}
+                                <div className="flex items-start gap-2.5">
+                                    <DrawerHouseholdChildLinkAvatar
+                                        childId={childId}
+                                        displayName={childDisplayName}
+                                        initials={personDrawerHouseholdInitials(childDisplayName)}
+                                        photoUrl={childPhotoUrl}
                                         rowRecord={row}
-                                        anchorRecord={anchorRecord}
-                                        adornment={nameCol.adornment}
-                                        display={formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol)}
-                                        onAction={onAdornmentAction}
-                                        className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                                        onAdornmentAction={onAdornmentAction}
+                                        componentName="PersonConnectedChildrenCardList"
                                     />
-                                    {metaColumns.length > 0 && metaLine ?
-                                        <p
-                                            className={`mt-0.5 line-clamp-2 ${PRESENTATION_SUPPORTING}`}
-                                            data-person-connected-child-meta-line="true"
-                                        >
-                                            {metaLine}
-                                        </p>
-                                    :   null}
-                                    {enrollmentStatus && !metaLine.includes(enrollmentStatus) ?
-                                        <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{enrollmentStatus}</p>
-                                    :   null}
-                                    {opportunityId ?
-                                        <div className="mt-1.5">
-                                            <LayoutRuntimeEnrollmentLeadLink
-                                                opportunityId={opportunityId}
-                                                label="Open Family Lead"
-                                                detail={opportunityName || null}
+                                    <div className="min-w-0 flex-1">
+                                        {childId ?
+                                            <LayoutRuntimeChildLinkSurface
+                                                componentName="PersonConnectedChildrenCardList"
+                                                surface="drawer"
+                                                item={nameSynthetic}
+                                                rowRecord={row}
+                                                anchorRecord={anchorRecord}
+                                                adornment={null}
+                                                display={childDisplayName}
+                                                onAction={onAdornmentAction}
+                                                className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                                             />
-                                        </div>
-                                    :   null}
+                                        :   <p className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>
+                                                {childDisplayName}
+                                            </p>
+                                        }
+                                        {metaColumns.length > 0 && metaLine ?
+                                            <p
+                                                className={`mt-0.5 line-clamp-2 ${PRESENTATION_SUPPORTING}`}
+                                                data-person-connected-child-meta-line="true"
+                                            >
+                                                {metaLine}
+                                            </p>
+                                        :   null}
+                                        {enrollmentStatus && !metaLine.includes(enrollmentStatus) ?
+                                            <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{enrollmentStatus}</p>
+                                        :   null}
+                                        {opportunityId ?
+                                            <div className="mt-1.5">
+                                                <LayoutRuntimeEnrollmentLeadLink
+                                                    opportunityId={opportunityId}
+                                                    label="Open Family Lead"
+                                                    detail={opportunityName || null}
+                                                />
+                                            </div>
+                                        :   null}
+                                    </div>
                                 </div>
                             </li>
                         );

@@ -39,7 +39,9 @@ describe("bosRightRailCopilotFlag", () => {
         expect(offsetHook).toContain("data-adminv2-bos-rail-overlay");
         expect(offsetHook).toContain("BOS_RAIL_OVERLAY_GUTTER_PX");
         const drawer = read("components/admin/Drawer.tsx");
-        expect(drawer).toContain("adminv2-workspace-command-rail-offset");
+        expect(drawer).toContain("adminv2-drawer-computed-left");
+        expect(offsetHook).toContain("data-adminv2-sidebar");
+        expect(offsetHook).toContain("computeDrawerWorkspaceBounds");
     });
 
     it("workspace root uses Actions + BOS rail pattern", () => {

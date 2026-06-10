@@ -55,6 +55,7 @@ function RelatedPersonCard({
                     personId={member.person_id}
                     displayName={member.display_name}
                     initials={member.initials}
+                    photoUrl={member.photo_url}
                     rowRecord={rowRecord}
                     onAdornmentAction={onAdornmentAction}
                     componentName="PersonRelatedPeopleGroupsWidget"
@@ -68,7 +69,7 @@ function RelatedPersonCard({
                             personId={member.person_id}
                             rowRecord={rowRecord}
                             anchorRecord={anchorRecord}
-                            adornment={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM.adornment}
+                            adornment={null}
                             display={member.display_name}
                             onAction={onAdornmentAction}
                             className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}

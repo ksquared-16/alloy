@@ -196,16 +196,10 @@ export function workspaceTileContextStyle(hints: VisualContextResolveHints): CSS
 }
 
 export function recordSurfaceContextStyle(hints: VisualContextResolveHints): CSSProperties {
-    const resolved = resolveVisualContext(hints);
     const merged = mergeOperationalVisualTokens({ ...hints, layer: "record" });
-    let strength = Math.min(1, LAYER_STRENGTH.record + laneKeyToVisualBias(hints.laneKey) * 0.12);
-    if (resolved.alloyFamily === "amber" && resolved.amberEmphasis === "strong") {
-        strength = Math.min(1, strength * 1.08);
-    }
 
-    /** Record modal: Bend Pine–led chrome — precise, not themed; semantic resolver unchanged above. */
     const pine = palette.bendPine;
-    const rim = `color-mix(in srgb, ${pine} ${Math.round(26 + 18 * strength)}%, ${neutral.surface})`;
+    const rim = "rgba(39, 63, 82, 0.12)";
     const labelForRecord = `color-mix(in srgb, ${pine} 38%, ${palette.midnightForge})`;
     const headerRailRecord = `color-mix(in srgb, ${pine} 52%, #ffffff)`;
     const tabUnderline = `color-mix(in srgb, ${pine} 55%, transparent)`;
@@ -217,7 +211,7 @@ export function recordSurfaceContextStyle(hints: VisualContextResolveHints): CSS
         ["--vc-label-accent" as string]: labelForRecord,
         ["--vc-header-rail-accent" as string]: headerRailRecord,
         ["--vc-drawer-header-bg" as string]: "#ffffff",
-        ["--vc-drawer-body-veil" as string]: neutral.background,
+        ["--vc-drawer-body-veil" as string]: "#ffffff",
         ["--vc-record-tab-underline" as string]: tabUnderline,
     };
 }

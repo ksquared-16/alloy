@@ -38,6 +38,7 @@ import {
 import AdminV2CommandRailBosHostFooter from "./AdminV2CommandRailBosHostFooter";
 import { CommandRailBosMount } from "./CommandRailBosMount";
 import { useBosRightRailCopilotDocumentFlag } from "./useBosRightRailCopilotDocumentFlag";
+import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 
 /**
@@ -63,14 +64,9 @@ function getDepartmentName(key: DepartmentKey): string {
  */
 const DEBUG_EXAGGERATE_WORKSPACE_AMBIENT = false;
 
-/** Production ambient — cool near-white slab + restrained slate/indigo wash (ambient dots stay very subtle separately). */
+/** Production ambient — white workspace canvas (cards retain borders/hierarchy). */
 const workspaceContentAmbientStyleProduction: CSSProperties = {
-  backgroundColor: "#f6f9fb",
-  backgroundImage: `
-    linear-gradient(180deg, rgba(36, 59, 86, 0.022) 0%, transparent 30%),
-    linear-gradient(180deg, transparent 74%, rgba(39, 63, 82, 0.03) 100%),
-    linear-gradient(135deg, rgba(33, 56, 88, 0.014) 0%, transparent 42%)
-  `,
+  backgroundColor: "#ffffff",
 };
 
 /** Debug ambient — larger blooms + stronger field wash/depth, same vocabulary hues, no layout change */
@@ -142,6 +138,7 @@ export default function AdminV2Shell({
     return (
       <GlobalAssistantProvider>
         <CommandRailBosMount>
+        <BosDrawerGeometryDiagnostics />
         <AskBosHandoffListener />
         <WorkspaceSiteFilterProvider>
           <div
@@ -161,9 +158,9 @@ export default function AdminV2Shell({
                 className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
                 style={workspaceContentAmbientStyle}
               >
-                {isWorkspaceV2Route || isSettingsRoute || isWorkflowsRoute || isFormsRoute ? (
-                  <WorkspaceAmbientLayer />
-                ) : null}
+                {isWorkspaceV2Route || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
+                  bosRightRailCopilot ? null : <WorkspaceAmbientLayer />
+                :   null}
                 <div
                   className={
                     bosRightRailCopilot ?

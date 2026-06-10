@@ -10,6 +10,7 @@ import { WorkspaceRootLifecycleGrid } from "@/components/admin/workspace/Workspa
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceRootActionsRail } from "@/app/adminV2/components/workspace/WorkspaceRootActionsRail";
+import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 
 const companyRootStyle: CSSProperties = {
   backgroundColor: "transparent",
@@ -112,9 +113,14 @@ export function WorkspaceRootShell({
       showRail
       railContent={<WorkspaceRootActionsRail />}
       containLead={
-        <nav className="adminv2-ws-inline-breadcrumb text-alloy-midnight/60 flex flex-wrap items-center gap-0.5 pb-1" aria-label="Breadcrumb">
-          <span className="text-alloy-midnight/80 font-medium">Workspace</span>
-        </nav>
+        isBosRightRailCopilotEnabledClient() ? null : (
+            <nav
+                className="adminv2-ws-inline-breadcrumb text-alloy-midnight/60 flex flex-wrap items-center gap-0.5 pb-1"
+                aria-label="Breadcrumb"
+            >
+                <span className="text-alloy-midnight/80 font-medium">Workspace</span>
+            </nav>
+        )
       }
       primaryColumn={
         <>

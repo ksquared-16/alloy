@@ -40,6 +40,8 @@ import { shouldUseChildOverviewComposition } from "@/lib/layout/runtime/childOve
 import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawerLayoutDocShellZones";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import { useBosPersonDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
+import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
+import { shouldRouteDrawerActionsToCommandRail } from "@/lib/bos/bosRightRailCopilotFlag";
 
 const PERSON_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -433,6 +435,18 @@ export default function PersonsDrawerVmRuntime() {
         childCompositionActive,
     ]);
 
+    const drawerCommandRailRegistration = useMemo(() => {
+        if (!shouldRouteDrawerActionsToCommandRail()) return null;
+        if (!drawerOpen || !committedVisible) return null;
+        return {
+            actions: [],
+            actionCount: 0,
+            canMutate: !!canMutate,
+            onActionSelect: () => undefined,
+            disabledReason: "Person drawer actions are not configured yet.",
+        };
+    }, [canMutate, committedVisible, drawerOpen]);
+
     return (
         <>
             {showRuntimeOpeningOverlay ?
@@ -464,7 +478,7 @@ export default function PersonsDrawerVmRuntime() {
                         <p className="text-sm text-alloy-ember">{error}</p>
                     :   null}
                     {showColdShell ?
-                        <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
+                        <div className="adminv2-drawer-vm-cold-loading" data-drawer-vm-runtime-cold-loading="true">
                             <p className="text-sm font-medium text-alloy-midnight/75">
                                 Loading {entityLabel.toLowerCase()}…
                             </p>
@@ -498,6 +512,7 @@ export default function PersonsDrawerVmRuntime() {
                     :   null}
                 </div>
             </EntityDrawerOperatingShell>
+            <DrawerCommandRailActionsRegistrar registration={drawerCommandRailRegistration} />
         </>
     );
 }

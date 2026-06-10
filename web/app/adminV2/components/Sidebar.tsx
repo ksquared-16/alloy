@@ -21,7 +21,10 @@ import {
 } from "@/lib/admin/canonicalAdminRoutes";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
-import { loadOperatorLifecycleLandingCards } from "@/lib/admin/loadOperatorLifecycleLandingClient";
+import {
+    loadOperatorLifecycleLandingCards,
+    peekOperatorLifecycleLandingCards,
+} from "@/lib/admin/loadOperatorLifecycleLandingClient";
 import { OPERATOR_INBOX_HREF, OPERATOR_TASKS_HREF } from "@/lib/admin/operatorWorkspaceCatalog";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
@@ -70,13 +73,19 @@ function SidebarNav({
     const onTasks = path.startsWith(TASKS_HREF);
     const onInbox = path.startsWith(INBOX_HREF);
 
-    const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>([]);
-    const [lifecycleLoading, setLifecycleLoading] = useState(true);
+    const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>(
+        () => peekOperatorLifecycleLandingCards() ?? [],
+    );
+    const [lifecycleLoading, setLifecycleLoading] = useState(
+        () => peekOperatorLifecycleLandingCards() == null,
+    );
     const [expandedLifecycleIds, setExpandedLifecycleIds] = useState<Set<string>>(() => new Set());
 
     useEffect(() => {
         let cancelled = false;
-        setLifecycleLoading(true);
+        if (!peekOperatorLifecycleLandingCards()) {
+            setLifecycleLoading(true);
+        }
         void loadOperatorLifecycleLandingCards()
             .then((cards) => {
                 if (cancelled) return;
@@ -269,6 +278,7 @@ function SidebarNav({
 
     return (
         <aside
+            data-adminv2-sidebar="true"
             className="adminv2-sidebar-shell relative z-[100] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
             style={{
                 width: railWidth,
@@ -354,6 +364,7 @@ export default function Sidebar(props: { collapsed: boolean; onToggle: () => voi
         <Suspense
             fallback={
                 <aside
+                    data-adminv2-sidebar="true"
                     className="adminv2-sidebar-shell relative z-[100] flex flex-shrink-0 flex-col border-r"
                     style={{ width: railWidth, backgroundColor: palette.midnightForge, borderColor: derived.topBarDivider }}
                     aria-hidden

@@ -51,6 +51,8 @@ import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDra
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
+import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
+import { shouldRouteDrawerActionsToCommandRail } from "@/lib/bos/bosRightRailCopilotFlag";
 
 const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -472,6 +474,31 @@ export default function OpportunityDrawerVmRuntime() {
         registryActionFeedback,
     ]);
 
+    const drawerCommandRailRegistration = useMemo(() => {
+        if (!shouldRouteDrawerActionsToCommandRail()) return null;
+        if (!committedVisible || !displayVm || !drawer.id || !record) return null;
+        const actions = displayVm.actions.header_menu;
+        return {
+            actions,
+            actionCount: actions.length,
+            canMutate: statusCanMutate,
+            actionLoadingKey,
+            onActionSelect,
+            disabledReason:
+                actionLoadingKey ? "An action is running — wait for it to finish."
+                : !statusCanMutate ? "You don't have permission to run actions on this record."
+                :   null,
+        };
+    }, [
+        actionLoadingKey,
+        committedVisible,
+        displayVm,
+        drawer.id,
+        onActionSelect,
+        record,
+        statusCanMutate,
+    ]);
+
     const tabs = useMemo((): DrawerTabKey[] => {
         const fromVm = displayVm?.layout.tabs;
         if (fromVm && fromVm.length > 0) return fromVm;
@@ -635,7 +662,7 @@ export default function OpportunityDrawerVmRuntime() {
                     <p className="text-sm text-alloy-ember">{error}</p>
                     : null}
                 {showColdShell ?
-                    <div className="py-12 text-center" data-drawer-vm-runtime-cold-loading="true">
+                    <div className="adminv2-drawer-vm-cold-loading" data-drawer-vm-runtime-cold-loading="true">
                         <p className="text-sm font-medium text-alloy-midnight/75">Loading opportunity…</p>
                     </div>
                     : committedVisible && displayVm && record ?
@@ -709,6 +736,7 @@ export default function OpportunityDrawerVmRuntime() {
             {registryModals ?
                 <VmDrawerActionModalsPortal>{registryModals}</VmDrawerActionModalsPortal>
                 : null}
+            <DrawerCommandRailActionsRegistrar registration={drawerCommandRailRegistration} />
         </>
     );
 }

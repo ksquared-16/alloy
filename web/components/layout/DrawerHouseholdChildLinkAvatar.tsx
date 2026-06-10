@@ -21,6 +21,8 @@ type Props = {
     childId: string | null | undefined;
     displayName: string;
     initials: string;
+    photoUrl?: string | null;
+    imageUrl?: string | null;
     rowRecord?: ProofRuntimeRecord;
     onAdornmentAction?: AdornmentActionHandler;
     componentName: string;
@@ -31,6 +33,8 @@ export default function DrawerHouseholdChildLinkAvatar({
     childId,
     displayName,
     initials,
+    photoUrl,
+    imageUrl,
     rowRecord,
     onAdornmentAction,
     componentName,
@@ -38,7 +42,13 @@ export default function DrawerHouseholdChildLinkAvatar({
     const resolvedChildId = String(childId ?? "").trim();
     const linkable = Boolean(resolvedChildId && onAdornmentAction);
     const avatar = (
-        <PersonDrawerIdentityAvatar displayName={displayName} initials={initials} size="sm" />
+        <PersonDrawerIdentityAvatar
+            displayName={displayName}
+            initials={initials}
+            photoUrl={photoUrl}
+            imageUrl={imageUrl}
+            size="sm"
+        />
     );
 
     if (!linkable) {

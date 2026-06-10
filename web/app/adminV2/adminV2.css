@@ -133,7 +133,7 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] 
 }
 
 html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-recent-operational-activity-strip="true"] {
-  background-color: #f6f8fc !important;
+  background-color: #ffffff !important;
 }
 
 html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-starters="true"] .bos-rail-starter-card {
@@ -200,6 +200,134 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] 
 
 html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
   z-index: 90;
+}
+
+/* Modal entity drawers — positioned via workspace-safe rectangle CSS vars */
+html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
+  left: var(--adminv2-drawer-computed-left, 0px);
+  width: var(--adminv2-drawer-computed-width, 100%);
+  max-width: var(--adminv2-drawer-computed-width, 100%);
+  transform: none !important;
+  right: auto !important;
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-drawer-sidebar-panel.adminv2-drawer-shell-inset {
+  left: var(--adminv2-drawer-computed-left, auto);
+  width: var(--adminv2-drawer-computed-width, min(100vw, 42rem));
+  max-width: var(--adminv2-drawer-computed-width, 42rem);
+  right: auto !important;
+  transform: none !important;
+}
+
+/* Drawer loading — center inside panel, not viewport */
+.adminv2-drawer-vm-cold-loading {
+  display: flex;
+  min-height: min(280px, 45vh);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* Compact inline workspace breadcrumbs (bridge routes) */
+.adminv2-ws-inline-breadcrumb {
+  font-size: 11px;
+  line-height: 1.25;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.adminv2-ws-inline-breadcrumb a,
+.adminv2-ws-inline-breadcrumb span {
+  padding: 0 2px;
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-inline-breadcrumb {
+  margin-bottom: 2px;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack {
+  gap: 3px;
+  padding: 6px 12px 4px;
+}
+
+/* V3 — white workspace canvas; cards keep borders */
+html[data-bos-right-rail-copilot="true"] .adminv2-workspace-scroll-surface {
+  background-color: #ffffff;
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-root {
+  --ws-dept-surface-solid: #ffffff;
+  --ws-dept-surface-raised: #ffffff;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck {
+  background: #ffffff;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
+html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
+  background: transparent;
+}
+
+/* BOS rail — tighter vertical rhythm; composer + preview stay visible */
+html[data-bos-right-rail-copilot="true"] [data-command-surface-presentation="rail"] > div {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+html[data-bos-right-rail-copilot="true"] .bos-rail-header {
+  padding: 6px 12px 6px;
+  flex-shrink: 0;
+}
+
+html[data-bos-right-rail-copilot="true"] .bos-rail-header [data-command-surface-rail-context="true"] {
+  margin-top: 6px;
+}
+
+html[data-bos-right-rail-copilot="true"] .bos-rail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+html[data-bos-right-rail-copilot="true"] .bos-rail-attention {
+  margin-bottom: 6px;
+  padding: 8px 10px;
+}
+
+html[data-bos-right-rail-copilot="true"] .bos-rail-starters {
+  padding-bottom: 4px;
+}
+
+html[data-bos-right-rail-copilot="true"] .bos-rail-starter-card {
+  padding: 7px 10px;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-starters="true"] .flex-col {
+  gap: 4px;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-conversation-preview="true"] {
+  flex-shrink: 0;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-composer="true"] {
+  flex-shrink: 0;
+  padding-top: 2px;
+  padding-bottom: 6px;
+}
+
+html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] > div {
+  max-height: min(22vh, 132px);
 }
 
 @keyframes adminv2-ambient-orbit {

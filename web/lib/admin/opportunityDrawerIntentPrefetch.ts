@@ -9,6 +9,7 @@ import { prefetchOpportunityDrawerFull } from "@/lib/admin/opportunityDrawerFull
 import { prefetchOpportunityDrawerPrimary } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import { warmVisibleQueueRowOpportunityVms } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
+import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
@@ -102,8 +103,15 @@ export function prefetchVisibleWorkUnitDrawerPrimary(
         record_ids: unique,
         cap: VISIBLE_DRAWER_PREFETCH_CAP,
     });
+    if (opportunityDrawerHardCutoverEnabled()) {
+        tracePlatformPrefetch("wu_visible_rows_vm_warm", {
+            record_ids: unique,
+            work_unit_id: workspaceContext?.work_unit_id ?? null,
+        });
+        warmVisibleQueueRowOpportunityVms(unique, workspaceContext ?? undefined);
+        return;
+    }
     for (const id of unique) {
         prefetchOpportunityDrawerOnRowIntent(id, workspaceContext ?? undefined);
     }
-    warmVisibleQueueRowOpportunityVms(unique, workspaceContext ?? undefined);
 }
