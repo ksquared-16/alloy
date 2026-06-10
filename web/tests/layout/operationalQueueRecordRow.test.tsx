@@ -300,6 +300,46 @@ describe("OperationalQueueRecordRow", () => {
         expect(html).toContain('data-layout-runtime-adornment-entity="person"');
     });
 
+    it("renders tasks and attention widget headers with section spacing structure", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        const item: QueuePreviewItemVm = {
+            id: "opp-widget-headers",
+            title: "Widget Header Family",
+            quickActions: [],
+            semanticCrmCompact: {
+                primaryIdentity: "Widget Header Family",
+                childName: null,
+                contactDisplayName: "Pat Header",
+                contactPersonId: "person-header",
+                contactPhoneDisplay: null,
+                contactEmail: null,
+                programContext: null,
+                statusLabel: "New",
+                stageLabel: null,
+                nextStep: null,
+                lastActivity: null,
+                commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
+                tourContext: null,
+                locationContext: null,
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item, doc);
+        const vm = buildOperationalQueueRecordViewModelFromLayout(doc, record);
+        const html = renderToStaticMarkup(
+            <OperationalQueueRecordRow vm={vm} record={record} onRowAction={() => {}} />,
+        );
+        expect(html).toContain("queue-record-widget--tasks");
+        expect(html).toContain("queue-record-widget--attention");
+        expect(html).toContain("queue-record-widget__body");
+        expect(html).toContain("No open tasks");
+        expect(html).toContain("No attention items");
+    });
+
     it("renders fixed action rail when lifecycle actions are empty", () => {
         const doc = buildLeadQueueDefaultDoc();
         const item: QueuePreviewItemVm = {

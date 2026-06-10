@@ -77,6 +77,17 @@ describe("LeadOperatingAttentionSummaryCard", () => {
 });
 
 describe("QueueRecordAttentionWidget", () => {
+    it("renders widget header and empty state when attention summary is missing", () => {
+        const html = renderToStaticMarkup(
+            <QueueRecordAttentionWidget record={{ id: "opp-empty-attention" } as never} />,
+        );
+        expect(html).toContain("queue-record-widget--attention");
+        expect(html).toContain("queue-record-widget__label");
+        expect(html).toContain("Attention");
+        expect(html).toContain("queue-record-widget__empty");
+        expect(html).toContain("No attention items");
+    });
+
     it("renders More guidance from queue row preview enrichment", () => {
         const rec = buildOperationalRecommendationV1(buildTestOperationalRecommendationInput());
         const preview = projectOperationalRecommendationQueuePreview(rec);

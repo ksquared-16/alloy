@@ -7863,7 +7863,7 @@
 [data-ws-surface="department"] .operational-queue-row-shell > .operational-queue-row__action-rail {
   grid-column: 2;
   grid-row: 1;
-  align-self: center;
+  align-self: start;
   justify-self: stretch;
 }
 
@@ -8322,15 +8322,30 @@
   color: color-mix(in srgb, var(--d-fg, #273f52) 40%, transparent);
 }
 
-/* Queue row compact widgets — drawer widget pattern at row scale */
+/* Queue row compact widgets — sectioned surfaces at row scale */
+[data-ws-surface="work_unit"] .operational-queue-row-shell,
+[data-ws-surface="department"] .operational-queue-row-shell {
+  --queue-widget-stack-gap: 12px;
+}
+
 [data-ws-surface="work_unit"] .queue-record-widget,
 [data-ws-surface="department"] .queue-record-widget {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   max-width: 100%;
   pointer-events: auto;
+}
+
+[data-ws-surface="work_unit"] .operational-queue-row__column .queue-record-widget,
+[data-ws-surface="department"] .operational-queue-row__column .queue-record-widget {
+  margin-top: var(--queue-widget-stack-gap, 12px);
+}
+
+[data-ws-surface="work_unit"] .operational-queue-row__column > .queue-record-widget:first-child,
+[data-ws-surface="department"] .operational-queue-row__column > .queue-record-widget:first-child {
+  margin-top: 0;
 }
 
 [data-ws-surface="work_unit"] .queue-record-widget__label,
@@ -8343,9 +8358,20 @@
   color: color-mix(in srgb, var(--d-fg, #273f52) 46%, transparent);
 }
 
+[data-ws-surface="work_unit"] .queue-record-widget__body,
+[data-ws-surface="department"] .queue-record-widget__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 22px;
+  width: 100%;
+  min-width: 0;
+}
+
 [data-ws-surface="work_unit"] .queue-record-widget__empty,
 [data-ws-surface="department"] .queue-record-widget__empty {
   font-size: 10.5px;
+  line-height: 1.25;
   color: color-mix(in srgb, var(--d-fg, #273f52) 48%, transparent);
 }
 
@@ -9993,12 +10019,12 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 3px;
   width: 100%;
   max-width: 168px;
   flex-shrink: 0;
-  align-self: center;
+  align-self: start;
   z-index: 2;
   pointer-events: auto;
 }

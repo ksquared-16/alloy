@@ -56,7 +56,21 @@ export default function QueueRecordAttentionWidget({ record, title = "Attention"
         [showMoreGuidance],
     );
 
-    if (!summaryLine) return null;
+    if (!summaryLine) {
+        return (
+            <div
+                className="queue-record-widget queue-record-widget--attention queue-record-widget--empty"
+                data-queue-attention-widget="true"
+                data-queue-row-interactive="true"
+                onClick={stopRowOpen}
+            >
+                <div className="queue-record-widget__label">{title}</div>
+                <div className="queue-record-widget__body">
+                    <span className="queue-record-widget__empty">No attention items</span>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div
@@ -66,6 +80,7 @@ export default function QueueRecordAttentionWidget({ record, title = "Attention"
             onClick={stopRowOpen}
         >
             <div className="queue-record-widget__label">{title}</div>
+            <div className="queue-record-widget__body">
             <div className="queue-record-widget__attention-card">
                 <div className="queue-record-widget__attention-summary">
                     <TriangleAlert className="queue-record-widget__attention-icon" aria-hidden />
@@ -86,6 +101,7 @@ export default function QueueRecordAttentionWidget({ record, title = "Attention"
                         More guidance
                     </button>
                 :   null}
+            </div>
             </div>
             {open && anchorEl ?
                 <QueueRecordAttentionPopover

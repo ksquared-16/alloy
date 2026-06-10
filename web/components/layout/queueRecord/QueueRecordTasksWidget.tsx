@@ -65,7 +65,9 @@ export default function QueueRecordTasksWidget({ record, title = "Tasks", maxVis
                 onClick={stopRowOpen}
             >
                 <div className="queue-record-widget__label">{title}</div>
-                <span className="queue-record-widget__empty">No open tasks</span>
+                <div className="queue-record-widget__body">
+                    <span className="queue-record-widget__empty">No open tasks</span>
+                </div>
             </div>
         );
     }
@@ -79,6 +81,7 @@ export default function QueueRecordTasksWidget({ record, title = "Tasks", maxVis
             onClick={stopRowOpen}
         >
             <div className="queue-record-widget__label">{title}</div>
+            <div className="queue-record-widget__body">
             <div className="queue-record-widget__task-list">
                 {visibleTasks.map((task) => {
                     const chipStyle = layoutRuntimeTaskChipStyle(task);
@@ -123,6 +126,7 @@ export default function QueueRecordTasksWidget({ record, title = "Tasks", maxVis
                         +{overflowCount} more
                     </span>
                 :   null}
+            </div>
             </div>
             {activeTask && anchorEl ?
                 <LayoutRuntimeTaskDetailPopover task={activeTask} anchorEl={anchorEl} onClose={closePopover} />
