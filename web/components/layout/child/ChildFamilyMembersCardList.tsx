@@ -1,6 +1,7 @@
 "use client";
 
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
+import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
@@ -86,14 +87,17 @@ function FamilyMemberCard({
             data-child-family-member-kind={memberKind(row)}
         >
             <div className="flex items-start gap-2.5">
-                <PersonDrawerIdentityAvatar displayName={displayName} size="sm" />
+                <PersonDrawerIdentityAvatar
+                    displayName={displayName}
+                    initials={personDrawerHouseholdInitials(displayName)}
+                    size="sm"
+                />
                 <div className="min-w-0 flex-1">
                     {sibling && childId ?
                         <LayoutRuntimeChildLinkSurface
                             componentName="ChildFamilyMembersCardList"
                             surface="drawer"
                             item={CHILD_LINK_ITEM}
-                            childPersonId={childId}
                             rowRecord={row}
                             anchorRecord={anchorRecord}
                             adornment={CHILD_LINK_ITEM.adornment}
