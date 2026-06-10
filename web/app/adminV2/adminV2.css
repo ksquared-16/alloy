@@ -17,9 +17,10 @@
 /* BOS right-rail copilot — docked in workspace Actions column (NEXT_PUBLIC_BOS_RIGHT_RAIL_COPILOT=1) */
 html[data-bos-right-rail-copilot="true"] {
   --adminv2-drawer-inset-bottom: 1rem;
+  --adminv2-drawer-outer-margin: 24px;
   --ws-shell-bottom-safe: 16px;
   --adminv2-workspace-scroll-pad-y: 24px;
-  --adminv2-bos-overlay-gutter: 24px;
+  --adminv2-bos-overlay-gutter: 16px;
   --adminv2-bos-overlay-width: 0px;
   --adminv2-workspace-rail-height: calc(
     100vh - var(--adminv2-drawer-inset-top) - var(--ws-rail-sticky-top, 10px) -
@@ -207,6 +208,48 @@ html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay
   max-width: var(--adminv2-bos-overlay-effective-width, var(--adminv2-bos-overlay-width)) !important;
 }
 
+/* BOS Action Workspace — suppress persistent rail (modal is the BOS experience) */
+html[data-adminv2-action-workspace-open="true"] [data-adminv2-bos-rail-overlay="true"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* BOS-rail drawer — modal framing (outer margin) + unified workspace edge toward BOS */
+html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset {
+  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
+  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
+}
+
+/* BOS-rail record drawer — backdrop band matches modal framing (not full viewport height) */
+html[data-bos-right-rail-copilot="true"] .adminv2-drawer-workspace-backdrop-band {
+  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
+  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
+}
+
+/*
+ * Record drawer open — light white-tint page dim behind drawer only.
+ * Ends at --adminv2-drawer-backdrop-right (not BOS gutter); no blur wash in the seam.
+ */
+html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-dim,
+html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-sidebar-dim {
+  background: rgba(248, 250, 252, 0.56);
+  backdrop-filter: none;
+}
+
+html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-workspace-loading-overlay {
+  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
+  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
+  background: rgba(248, 250, 252, 0.52);
+}
+
+html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-workspace-ambient-field {
+  opacity: 0.32;
+}
+
 /* Modal entity drawers — positioned via workspace-safe rectangle CSS vars (no viewport fallback) */
 html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
   left: var(--adminv2-drawer-computed-left) !important;
@@ -214,6 +257,24 @@ html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
   max-width: var(--adminv2-drawer-computed-width) !important;
   transform: none !important;
   right: auto !important;
+  border: 1px solid rgba(39, 63, 82, 0.1) !important;
+  box-shadow:
+    0 12px 40px rgba(39, 63, 82, 0.08),
+    0 2px 8px rgba(39, 63, 82, 0.04),
+    1px 0 0 rgba(39, 63, 82, 0.1);
+}
+
+/* Drawer + BOS — one workspace surface; seam on BOS rail */
+html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-panel--bos-rail {
+  border: 1px solid rgba(39, 63, 82, 0.1) !important;
+  box-shadow:
+    0 12px 40px rgba(39, 63, 82, 0.06),
+    0 2px 8px rgba(39, 63, 82, 0.03);
+}
+
+html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
+  border-left: 1px solid rgba(39, 63, 82, 0.1) !important;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.55);
 }
 
 html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail[data-adminv2-record-modal-tone="cleaning-v2"] {
@@ -503,7 +564,7 @@ html[data-bos-right-rail-copilot="true"] [data-command-surface-presentation="rai
 }
 
 html[data-bos-right-rail-copilot="true"] .bos-rail-header {
-  padding: 6px 12px 6px;
+  padding: 6px 8px 6px;
   flex-shrink: 0;
 }
 
@@ -528,7 +589,7 @@ html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-starters="tr
 
 html[data-bos-right-rail-copilot="true"] .bos-rail-attention {
   margin-bottom: 6px;
-  padding: 8px 10px;
+  padding: 8px 8px;
 }
 
 html[data-bos-right-rail-copilot="true"] .bos-rail-starters {
@@ -536,7 +597,7 @@ html[data-bos-right-rail-copilot="true"] .bos-rail-starters {
 }
 
 html[data-bos-right-rail-copilot="true"] .bos-rail-starter-card {
-  padding: 7px 10px;
+  padding: 7px 8px;
 }
 
 html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-starters="true"] .flex-col {

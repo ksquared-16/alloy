@@ -19,7 +19,7 @@ export function BosRailHeader(props: { contextDisplayLine: string | null; status
     const chips = parseBosRailContextChips(props.contextDisplayLine);
 
     return (
-        <div className="bos-rail-header px-3 pb-2.5 pt-2" data-command-surface-rail-header="true">
+        <div className="bos-rail-header px-2 pb-2.5 pt-2" data-command-surface-rail-header="true">
             <div className="flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2">
                     <BosGenieLampIcon size="md" />
@@ -89,7 +89,7 @@ export function BosRailAttentionSection(props: {
     if (props.attention) {
         return (
             <div
-                className="bos-rail-attention mx-3 mb-2.5 rounded-lg border px-3 py-2.5"
+                className="bos-rail-attention mx-2 mb-2.5 rounded-lg border px-2.5 py-2.5"
                 style={{
                     borderColor: "rgba(188, 67, 0, 0.22)",
                     backgroundColor: "rgba(188, 67, 0, 0.06)",
@@ -132,7 +132,7 @@ export function BosRailAttentionSection(props: {
 
     return (
         <div
-            className="bos-rail-attention mx-3 mb-2.5 rounded-lg border px-3 py-2"
+            className="bos-rail-attention mx-2 mb-2.5 rounded-lg border px-2.5 py-2"
             style={{
                 borderColor: derived.border,
                 backgroundColor: "rgba(246, 248, 252, 0.9)",
@@ -155,7 +155,7 @@ export function BosRailStarterCards(props: {
     onPick: (prompt: string) => void;
 }) {
     return (
-        <div className="bos-rail-starters px-3 pb-2" data-command-surface-rail-starters="true">
+        <div className="bos-rail-starters px-2 pb-2" data-command-surface-rail-starters="true">
             <p className="mb-2 text-[11px] font-medium" style={{ color: CMD.textSupporting }}>
                 Here are some ways I can help
             </p>
@@ -164,7 +164,7 @@ export function BosRailStarterCards(props: {
                     <button
                         key={suggestion.prompt}
                         type="button"
-                        className="bos-rail-starter-card group flex items-center gap-2.5 rounded-lg border px-3 py-2.5 text-left transition-colors hover:border-[rgba(0,162,131,0.35)] hover:shadow-sm"
+                        className="bos-rail-starter-card group flex items-center gap-2.5 rounded-lg border px-2.5 py-2.5 text-left transition-colors hover:border-[rgba(0,162,131,0.35)] hover:shadow-sm"
                         style={{
                             borderColor: derived.border,
                             backgroundColor: neutral.surface,
@@ -211,7 +211,7 @@ export function BosRailConversationPreview(props: {
 }) {
     return (
         <div
-            className="bos-rail-conversation px-3 py-2"
+            className="bos-rail-conversation px-2 py-2"
             data-command-surface-rail-conversation-preview="true"
         >
             <div className="flex items-center justify-between gap-2">
@@ -250,9 +250,9 @@ export function BosRailComposer(props: {
     inputRef: RefObject<HTMLTextAreaElement | null>;
 }) {
     return (
-        <div className="bos-rail-composer shrink-0 px-3 pb-2 pt-1" data-command-surface-rail-composer="true">
+        <div className="bos-rail-composer shrink-0 px-2 pb-2 pt-1" data-command-surface-rail-composer="true">
             <div
-                className="rounded-xl border px-3 py-2.5"
+                className="rounded-xl border px-2.5 py-2.5"
                 style={{
                     borderColor: derived.border,
                     backgroundColor: neutral.surface,

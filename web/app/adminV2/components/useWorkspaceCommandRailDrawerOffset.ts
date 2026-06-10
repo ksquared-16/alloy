@@ -11,6 +11,7 @@ import {
 } from "@/lib/bos/bosOverlayGeometry";
 import {
     clearDrawerWorkspaceGeometryVars,
+    isDrawerGeometryProbeActive,
     measureAndApplyDrawerWorkspaceGeometry,
 } from "@/lib/bos/drawerWorkspaceGeometry";
 
@@ -35,6 +36,9 @@ export function useWorkspaceCommandRailDrawerOffset(enabled: boolean, pathname: 
 
         const measure = () => {
             const root = document.documentElement;
+            if (isDrawerGeometryProbeActive(root)) {
+                return;
+            }
             const gutter = BOS_RAIL_OVERLAY_GUTTER_PX;
             const overlay = document.querySelector(BOS_OVERLAY_SELECTOR);
             const col = document.querySelector(COMMAND_COLUMN_SELECTOR);
@@ -93,6 +97,8 @@ export function useWorkspaceCommandRailDrawerOffset(enabled: boolean, pathname: 
                     "data-adminv2-bos-rail-overlay",
                     "data-adminv2-sidebar-collapsed",
                     "data-opportunity-drawer-opening-overlay",
+                    "data-adminv2-action-workspace-open",
+                    "data-adminv2-bos-rail-overlay-drawer",
                     "class",
                     "style",
                 ],

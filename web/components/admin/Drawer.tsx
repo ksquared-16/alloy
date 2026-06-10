@@ -7,8 +7,10 @@ import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilo
 import {
     DRAWER_AVAILABLE_RIGHT_CSS_VAR,
     DRAWER_BACKDROP_LEFT_CSS_VAR,
+    DRAWER_BACKDROP_RIGHT_CSS_VAR,
     DRAWER_COMPUTED_LEFT_CSS_VAR,
     DRAWER_COMPUTED_WIDTH_CSS_VAR,
+    isDrawerGeometryProbeActive,
     measureAndApplyDrawerWorkspaceGeometry,
 } from "@/lib/bos/drawerWorkspaceGeometry";
 import {
@@ -144,6 +146,7 @@ export default function Drawer({
 
     useLayoutEffect(() => {
         if (!isOpen || !bosWorkspaceDrawerLayoutEarly || !portalReady) return;
+        if (isDrawerGeometryProbeActive()) return;
         measureAndApplyDrawerWorkspaceGeometry();
     }, [isOpen, bosWorkspaceDrawerLayoutEarly, portalReady]);
 
@@ -212,7 +215,7 @@ export default function Drawer({
     const workspaceDrawerBackdropStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
         {
             left: `var(${DRAWER_BACKDROP_LEFT_CSS_VAR})`,
-            right: `calc(100vw - var(${DRAWER_AVAILABLE_RIGHT_CSS_VAR}))`,
+            right: `calc(100vw - var(${DRAWER_BACKDROP_RIGHT_CSS_VAR}))`,
         }
     :   undefined;
     const cleaningRecordModalTone = isModal && recordModalTone === "cleaning-v2";
@@ -540,8 +543,10 @@ export default function Drawer({
         isModal ? (
             <>
                 <div
-                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-modal-dim pointer-events-auto fixed bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ${
-                        bosWorkspaceDrawerLayout ? "top-0 bottom-0" : "inset-0"
+                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-modal-dim pointer-events-auto fixed transition-opacity duration-200 ${
+                        bosWorkspaceDrawerLayout ?
+                            "adminv2-drawer-workspace-backdrop-band"
+                        :   "inset-0 bg-black/40 backdrop-blur-[2px]"
                     }`}
                     style={{
                         zIndex: zIndexBackdrop,
@@ -570,8 +575,10 @@ export default function Drawer({
         ) : (
             <>
                 <div
-                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-sidebar-dim pointer-events-auto fixed bg-black/50 ${
-                        bosWorkspaceDrawerLayout ? "top-0 bottom-0" : "inset-0"
+                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-sidebar-dim pointer-events-auto fixed ${
+                        bosWorkspaceDrawerLayout ?
+                            "adminv2-drawer-workspace-backdrop-band"
+                        :   "inset-0 bg-black/50"
                     }`}
                     style={{
                         zIndex: zIndexBackdrop,

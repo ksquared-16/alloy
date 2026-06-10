@@ -3,8 +3,14 @@ import { BOS_RAIL_OVERLAY_GUTTER_PX } from "@/lib/bos/bosOverlayGeometry";
 /** Clearance between drawer left edge and sidebar right edge. */
 export const DRAWER_WORKSPACE_LEFT_CLEARANCE_PX = 16;
 
-/** Target drawer width in BOS copilot mode (60rem). */
-export const DRAWER_WORKSPACE_MAX_WIDTH_PX = 960;
+/** Modal framing — visible click-away margin on each side of the drawer within the safe band. */
+export const DRAWER_WORKSPACE_OUTER_MARGIN_PX = 24;
+
+/** Upper bound for BOS-rail drawer width — band may be narrower; does not force 960px cap. */
+export const DRAWER_WORKSPACE_MAX_WIDTH_PX = 1280;
+
+/** When probe diagnostics are active, auto-measure must not overwrite manual width. */
+export const DRAWER_GEOMETRY_PROBE_ATTR = "data-adminv2-drawer-geometry-probe";
 
 /** Minimum drawer width before BOS shrink / layout degradation. */
 export const DRAWER_WORKSPACE_MIN_USABLE_WIDTH_PX = 880;
@@ -17,6 +23,9 @@ export const DRAWER_WORKSPACE_INNER_PADDING_PX = 0;
 
 /** Backdrop left edge (sidebar.right — does not include drawer clearance). */
 export const DRAWER_BACKDROP_LEFT_CSS_VAR = "--adminv2-drawer-backdrop-left";
+
+/** Backdrop right edge — ends at drawer frame (not BOS gutter) for unified workspace surface. */
+export const DRAWER_BACKDROP_RIGHT_CSS_VAR = "--adminv2-drawer-backdrop-right";
 
 /** Drawer band start (sidebar.right + 16). */
 export const DRAWER_AVAILABLE_LEFT_CSS_VAR = "--adminv2-drawer-available-left";
@@ -41,6 +50,8 @@ export type DrawerWorkspaceBounds = {
     computedDrawerLeft: number;
     computedDrawerRight: number;
     computedDrawerWidth: number;
+    /** Right edge of dimmed backdrop (drawer right + outer margin). */
+    computedBackdropRight: number;
 };
 
 export type ComputeDrawerWorkspaceBoundsParams = {
@@ -54,6 +65,7 @@ export type ComputeDrawerWorkspaceBoundsParams = {
     preferredDrawerWidthPx?: number;
     minDrawerWidthPx?: number;
     minBosWidthPx?: number;
+    outerMarginPx?: number;
 };
 
 type BandLayout = {
@@ -70,13 +82,17 @@ function layoutDrawerInBand(
     bosLeft: number,
     gutter: number,
     leftClearance: number,
-    preferredDrawerWidth: number
+    preferredDrawerWidth: number,
+    outerMargin: number
 ): BandLayout {
     const availableLeft = sidebarRight + leftClearance;
     const availableRight = bosLeft - gutter;
     const availableWidth = Math.max(0, availableRight - availableLeft);
-    const computedDrawerWidth = Math.min(preferredDrawerWidth, availableWidth);
-    const computedDrawerLeft = availableLeft + Math.max(0, (availableWidth - computedDrawerWidth) / 2);
+    const innerLeft = availableLeft + outerMargin;
+    const innerRight = availableRight - outerMargin;
+    const innerWidth = Math.max(0, innerRight - innerLeft);
+    const computedDrawerWidth = Math.min(preferredDrawerWidth, innerWidth);
+    const computedDrawerLeft = innerLeft + Math.max(0, (innerWidth - computedDrawerWidth) / 2);
     const computedDrawerRight = computedDrawerLeft + computedDrawerWidth;
     return {
         availableLeft,
@@ -92,9 +108,10 @@ function layoutDrawerInBand(
  * V3 contract — single source of truth for drawer bounds in BOS copilot mode.
  *
  * availableLeft = sidebar.right + 16
- * availableRight = bos.left - gutter
- * drawerWidth = min(960, availableWidth)
- * drawerLeft = availableLeft + max(0, (availableWidth - drawerWidth) / 2)
+ * availableRight = bos.left - gutter (16px default)
+ * innerWidth = availableWidth - 2 * outerMargin
+ * drawerWidth = min(DRAWER_WORKSPACE_MAX_WIDTH_PX, innerWidth)
+ * drawerLeft = innerLeft + max(0, (innerWidth - drawerWidth) / 2)
  *
  * Shrinks BOS toward 280px min when drawer would fall below 880px usable width.
  */
@@ -104,6 +121,7 @@ export function computeDrawerWorkspaceBounds(params: ComputeDrawerWorkspaceBound
     const preferredDrawerWidth = params.preferredDrawerWidthPx ?? DRAWER_WORKSPACE_MAX_WIDTH_PX;
     const minDrawerWidth = params.minDrawerWidthPx ?? DRAWER_WORKSPACE_MIN_USABLE_WIDTH_PX;
     const minBosWidth = params.minBosWidthPx ?? BOS_MIN_USABLE_WIDTH_PX;
+    const outerMargin = params.outerMarginPx ?? DRAWER_WORKSPACE_OUTER_MARGIN_PX;
     const sidebarRight = Math.round(params.sidebarRight);
 
     const naturalBosLeft =
@@ -129,7 +147,8 @@ export function computeDrawerWorkspaceBounds(params: ComputeDrawerWorkspaceBound
             availableRight + gutter,
             gutter,
             leftClearance,
-            preferredDrawerWidth
+            preferredDrawerWidth,
+            outerMargin
         );
     return {
         sidebarRight,
@@ -143,6 +162,7 @@ export function computeDrawerWorkspaceBounds(params: ComputeDrawerWorkspaceBound
         computedDrawerLeft: Math.round(band.computedDrawerLeft),
         computedDrawerRight: Math.round(band.computedDrawerRight),
         computedDrawerWidth: Math.round(band.computedDrawerWidth),
+        computedBackdropRight: Math.round(band.computedDrawerRight + outerMargin),
     };
     }
 
@@ -151,7 +171,8 @@ export function computeDrawerWorkspaceBounds(params: ComputeDrawerWorkspaceBound
         bosLeft,
         gutter,
         leftClearance,
-        preferredDrawerWidth
+        preferredDrawerWidth,
+        outerMargin
     );
 
     if (
@@ -170,7 +191,8 @@ export function computeDrawerWorkspaceBounds(params: ComputeDrawerWorkspaceBound
                 bosLeft,
                 gutter,
                 leftClearance,
-                preferredDrawerWidth
+                preferredDrawerWidth,
+                outerMargin
             );
         }
     }
@@ -187,6 +209,7 @@ export function computeDrawerWorkspaceBounds(params: ComputeDrawerWorkspaceBound
         computedDrawerLeft: Math.round(band.computedDrawerLeft),
         computedDrawerRight: Math.round(band.computedDrawerRight),
         computedDrawerWidth: Math.round(band.computedDrawerWidth),
+        computedBackdropRight: Math.round(band.computedDrawerRight + outerMargin),
     };
 }
 
@@ -218,6 +241,21 @@ export function isDrawerWorkspaceGeometryActive(): boolean {
     );
 }
 
+export function isDrawerGeometryProbeActive(root: HTMLElement = document.documentElement): boolean {
+    return root.getAttribute(DRAWER_GEOMETRY_PROBE_ATTR) === "true";
+}
+
+export function setDrawerGeometryProbeActive(
+    active: boolean,
+    root: HTMLElement = document.documentElement,
+): void {
+    if (active) {
+        root.setAttribute(DRAWER_GEOMETRY_PROBE_ATTR, "true");
+    } else {
+        root.removeAttribute(DRAWER_GEOMETRY_PROBE_ATTR);
+    }
+}
+
 function readSidebarCollapsed(): boolean {
     const shell = document.querySelector("[data-adminv2-app-shell='workspace-v2']");
     return shell?.getAttribute("data-adminv2-sidebar-collapsed") === "true";
@@ -247,6 +285,7 @@ export function clearDrawerWorkspaceGeometryVars(root: HTMLElement) {
     root.style.removeProperty(DRAWER_COMPUTED_LEFT_CSS_VAR);
     root.style.removeProperty(DRAWER_COMPUTED_WIDTH_CSS_VAR);
     root.style.removeProperty(DRAWER_COMPUTED_RIGHT_CSS_VAR);
+    root.style.removeProperty(DRAWER_BACKDROP_RIGHT_CSS_VAR);
     root.style.removeProperty(BOS_OVERLAY_EFFECTIVE_WIDTH_CSS_VAR);
 }
 
@@ -258,6 +297,7 @@ export function applyDrawerWorkspaceGeometryVars(root: HTMLElement, bounds: Draw
     root.style.setProperty(DRAWER_COMPUTED_LEFT_CSS_VAR, `${bounds.computedDrawerLeft}px`);
     root.style.setProperty(DRAWER_COMPUTED_WIDTH_CSS_VAR, `${bounds.computedDrawerWidth}px`);
     root.style.setProperty(DRAWER_COMPUTED_RIGHT_CSS_VAR, `${bounds.computedDrawerRight}px`);
+    root.style.setProperty(DRAWER_BACKDROP_RIGHT_CSS_VAR, `${bounds.computedBackdropRight}px`);
 
     if (
         bounds.effectiveBosOverlayWidth != null &&
@@ -278,6 +318,10 @@ export function applyDrawerWorkspaceGeometryVars(root: HTMLElement, bounds: Draw
  * Measure DOM + apply CSS vars. Returns bounds or null when BOS copilot geometry is inactive.
  */
 export function measureAndApplyDrawerWorkspaceGeometry(root: HTMLElement = document.documentElement): DrawerWorkspaceBounds | null {
+    if (isDrawerGeometryProbeActive(root)) {
+        return null;
+    }
+
     if (!isDrawerWorkspaceGeometryActive()) {
         clearDrawerWorkspaceGeometryVars(root);
         return null;

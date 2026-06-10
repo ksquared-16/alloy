@@ -13,9 +13,14 @@ import {
     DRAWER_COMPUTED_RIGHT_CSS_VAR,
     DRAWER_COMPUTED_WIDTH_CSS_VAR,
     computeDrawerWorkspaceBounds,
+    measureAndApplyDrawerWorkspaceGeometry,
     passesDrawerWorkspaceGutterRules,
+    setDrawerGeometryProbeActive,
+    type DrawerWorkspaceBounds,
 } from "@/lib/bos/drawerWorkspaceGeometry";
 import { DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
+
+const DRAWER_GEOMETRY_PROBE_HOLD_MS = 500;
 
 export type BosGeometryRect = {
     left: number;
@@ -816,6 +821,186 @@ export function logBosDrawerGeometryReport(report: BosDrawerGeometryReport) {
 
 export const BOS_DRAWER_GEOMETRY_AUTO_REPORT_KEY = "alloy:bos-drawer-geometry-auto";
 
+export type DrawerPanelAuditEntry = {
+    index: number;
+    selector: string;
+    className: string;
+    inlineStyle: string;
+    dataAttributes: Record<string, string>;
+    visible: boolean;
+    rect: BosGeometryRect | null;
+    computedPosition: string | null;
+    computedLeft: string | null;
+    computedRight: string | null;
+    computedWidth: string | null;
+    computedMaxWidth: string | null;
+    computedTransform: string | null;
+    computedZIndex: string | null;
+    inlineWidth: string | null;
+    inlineMaxWidth: string | null;
+    inlineLeft: string | null;
+    inlineTransform: string | null;
+    hasBosRailClass: boolean;
+    isDrawerTsxModalPanel: boolean;
+};
+
+export type DrawerPanelOwnershipAudit = {
+    capturedAt: string;
+    panelCount: number;
+    visiblePanelIndex: number | null;
+    panels: DrawerPanelAuditEntry[];
+    htmlInlineCssVars: {
+        computedLeft: string | null;
+        computedWidth: string | null;
+        computedRight: string | null;
+        availableWidth: string | null;
+        bosOverlayEffectiveWidth: string | null;
+        bosOverlayWidth: string | null;
+    };
+    widthVarResolvesOnPanel: boolean;
+    widthVarValuePx: number | null;
+    computedMatchesCssVar: boolean | null;
+};
+
+/** Live-route drawer panel ownership audit — which element owns width/position. */
+export function auditDrawerPanelOwnership(): DrawerPanelOwnershipAudit {
+    const panels = Array.from(document.querySelectorAll(".adminv2-drawer-modal-panel"));
+    const root = document.documentElement;
+    const cssVarWidth = readCssVar(DRAWER_COMPUTED_WIDTH_CSS_VAR);
+    const cssVarWidthPx = parsePx(cssVarWidth);
+
+    const entries: DrawerPanelAuditEntry[] = panels.map((el, index) => {
+        const node = el as HTMLElement;
+        const rect = snapshotRect(el);
+        const cs = getComputedStyle(el);
+        const visible = rect != null && rect.width > 0 && rect.height > 0;
+        const dataAttributes: Record<string, string> = {};
+        for (const attr of [
+            "data-adminv2-drawer",
+            "data-adminv2-record-modal",
+            "data-adminv2-record-modal-tone",
+            "data-drawer-runtime",
+        ]) {
+            const v = node.getAttribute(attr);
+            if (v != null) dataAttributes[attr] = v;
+        }
+        return {
+            index,
+            selector: ".adminv2-drawer-modal-panel",
+            className: node.className,
+            inlineStyle: node.style.cssText,
+            dataAttributes,
+            visible,
+            rect,
+            computedPosition: cs.position,
+            computedLeft: cs.left,
+            computedRight: cs.right,
+            computedWidth: cs.width,
+            computedMaxWidth: cs.maxWidth,
+            computedTransform: cs.transform,
+            computedZIndex: cs.zIndex,
+            inlineWidth: node.style.width || null,
+            inlineMaxWidth: node.style.maxWidth || null,
+            inlineLeft: node.style.left || null,
+            inlineTransform: node.style.transform || null,
+            hasBosRailClass: node.classList.contains("adminv2-drawer-modal-panel--bos-rail"),
+            isDrawerTsxModalPanel:
+                node.getAttribute("data-adminv2-record-modal") === "true"
+                && node.getAttribute("data-adminv2-drawer") === "true",
+        };
+    });
+
+    const visiblePanelIndex = entries.findIndex((e) => e.visible);
+    const visibleEntry = visiblePanelIndex >= 0 ? entries[visiblePanelIndex] : null;
+    const computedWidthPx = visibleEntry ? parsePx(visibleEntry.computedWidth ?? undefined) : null;
+
+    return {
+        capturedAt: new Date().toISOString(),
+        panelCount: panels.length,
+        visiblePanelIndex: visiblePanelIndex >= 0 ? visiblePanelIndex : null,
+        panels: entries,
+        htmlInlineCssVars: {
+            computedLeft: readCssVar(DRAWER_COMPUTED_LEFT_CSS_VAR),
+            computedWidth: cssVarWidth,
+            computedRight: readCssVar(DRAWER_COMPUTED_RIGHT_CSS_VAR),
+            availableWidth: readCssVar(DRAWER_AVAILABLE_WIDTH_CSS_VAR),
+            bosOverlayEffectiveWidth: readCssVar("--adminv2-bos-overlay-effective-width"),
+            bosOverlayWidth: readCssVar(BOS_OVERLAY_WIDTH_CSS_VAR),
+        },
+        widthVarResolvesOnPanel:
+            visibleEntry?.inlineWidth?.includes("var(--adminv2-drawer-computed-width)") ?? false,
+        widthVarValuePx: cssVarWidthPx,
+        computedMatchesCssVar:
+            cssVarWidthPx != null && computedWidthPx != null ?
+                Math.abs(cssVarWidthPx - computedWidthPx) <= 2
+            :   null,
+    };
+}
+
+export type DrawerWidthProbeResult = {
+    probeWidthPx: number;
+    before: BosGeometryRect | null;
+    after: BosGeometryRect | null;
+    beforeComputedWidth: string | null;
+    afterComputedWidth: string | null;
+    cssVarAfter: string | null;
+    visibleWidthChanged: boolean;
+    deltaWidthPx: number | null;
+};
+
+function forceDrawerPanelLayout(panel: HTMLElement | null): void {
+    if (!panel) return;
+    void panel.offsetWidth;
+    void panel.getBoundingClientRect();
+}
+
+/**
+ * Diagnostic probe — forces `--adminv2-drawer-computed-width` on `<html>` and reports whether
+ * the visible `.adminv2-drawer-modal-panel` width changes. Pauses auto-measure for 500ms.
+ */
+export async function probeDrawerPanelWidth(probeWidthPx: number): Promise<DrawerWidthProbeResult> {
+    const panel = pickFirstVisible(".adminv2-drawer-modal-panel") as HTMLElement | null;
+    const before = snapshotRect(panel);
+    const beforeComputedWidth = panel ? getComputedStyle(panel).width : null;
+
+    const root = document.documentElement;
+    setDrawerGeometryProbeActive(true, root);
+    root.style.setProperty(DRAWER_COMPUTED_WIDTH_CSS_VAR, `${probeWidthPx}px`);
+    if (before) {
+        root.style.setProperty(DRAWER_COMPUTED_LEFT_CSS_VAR, `${before.left}px`);
+    }
+
+    forceDrawerPanelLayout(panel);
+
+    await new Promise<void>((resolve) => {
+        window.setTimeout(resolve, DRAWER_GEOMETRY_PROBE_HOLD_MS);
+    });
+
+    const after = snapshotRect(panel);
+    const afterComputedWidth = panel ? getComputedStyle(panel).width : null;
+    const cssVarAfter = readCssVar(DRAWER_COMPUTED_WIDTH_CSS_VAR);
+    const afterWidthPx = after?.width ?? null;
+    const beforeWidthPx = before?.width ?? null;
+
+    return {
+        probeWidthPx,
+        before,
+        after,
+        beforeComputedWidth,
+        afterComputedWidth,
+        cssVarAfter,
+        visibleWidthChanged:
+            beforeWidthPx != null && afterWidthPx != null && beforeWidthPx !== afterWidthPx,
+        deltaWidthPx:
+            beforeWidthPx != null && afterWidthPx != null ? afterWidthPx - beforeWidthPx : null,
+    };
+}
+
+export function restoreDrawerGeometryFromMeasurement(): DrawerWorkspaceBounds | null {
+    setDrawerGeometryProbeActive(false);
+    return measureAndApplyDrawerWorkspaceGeometry();
+}
+
 export function registerBosDrawerGeometryDiagnostics() {
     if (typeof window === "undefined") return;
 
@@ -830,12 +1015,49 @@ export function registerBosDrawerGeometryDiagnostics() {
         __alloyReportBosDrawerGeometry?: typeof report;
         __alloyClearBosDrawerGeometryHighlights?: typeof clearBosDrawerGeometryHighlights;
         __alloyBosDrawerGeometryLastReport?: BosDrawerGeometryReport;
+        __alloyAuditDrawerPanel?: typeof auditDrawerPanelOwnership;
+        __alloyProbeDrawerWidth?: typeof probeDrawerPanelWidth;
+        __alloyRestoreDrawerGeometry?: typeof restoreDrawerGeometryFromMeasurement;
     };
 
     w.__alloyReportBosDrawerGeometry = report;
     w.__alloyClearBosDrawerGeometryHighlights = clearBosDrawerGeometryHighlights;
+    w.__alloyAuditDrawerPanel = () => {
+        const audit = auditDrawerPanelOwnership();
+        console.group("Drawer panel ownership audit");
+        console.table(audit.htmlInlineCssVars);
+        console.table(audit.panels);
+        console.log("visiblePanelIndex:", audit.visiblePanelIndex);
+        console.log("widthVarResolvesOnPanel:", audit.widthVarResolvesOnPanel);
+        console.log("computedMatchesCssVar:", audit.computedMatchesCssVar);
+        console.groupEnd();
+        return audit;
+    };
+    w.__alloyProbeDrawerWidth = (px: number) => {
+        const run = async () => {
+            const result = await probeDrawerPanelWidth(px);
+            console.group(`Drawer width probe @ ${px}px`);
+            console.table({
+                beforeWidth: result.before?.width,
+                afterWidth: result.after?.width,
+                deltaWidthPx: result.deltaWidthPx,
+                visibleWidthChanged: result.visibleWidthChanged,
+                cssVarAfter: result.cssVarAfter,
+                beforeComputedWidth: result.beforeComputedWidth,
+                afterComputedWidth: result.afterComputedWidth,
+            });
+            console.groupEnd();
+            return result;
+        };
+        return run();
+    };
+    w.__alloyRestoreDrawerGeometry = () => {
+        const bounds = restoreDrawerGeometryFromMeasurement();
+        console.info("[alloy] Restored drawer geometry from live measurement", bounds);
+        return bounds;
+    };
 
     console.info(
-        "[alloy] BOS drawer geometry diagnostics ready — run __alloyReportBosDrawerGeometry({ highlight: true }) with drawer + BOS visible."
+        "[alloy] BOS drawer geometry diagnostics ready — __alloyReportBosDrawerGeometry(), __alloyAuditDrawerPanel(), __alloyProbeDrawerWidth(700), __alloyRestoreDrawerGeometry()"
     );
 }

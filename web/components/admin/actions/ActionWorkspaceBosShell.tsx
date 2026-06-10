@@ -1,7 +1,9 @@
 "use client";
 
 import { Sparkles, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
+import { measureActionWorkspacePanelLayout } from "@/lib/bos/bosRailPresentationFlags";
+import { useActionWorkspaceOpenDocumentFlag } from "@/lib/bos/useActionWorkspaceOpenDocumentFlag";
 import type { ActionWorkspaceStep } from "@/lib/admin/actions/actionWorkspaceTypes";
 import { ACTION_WORKSPACE_LAYER_Z } from "@/lib/admin/actions/actionWorkspaceLayer";
 import { ACTION_WORKSPACE_VIEWPORT_INSET } from "@/lib/admin/actions/actionWorkspaceBosTheme";
@@ -53,14 +55,38 @@ export function ActionWorkspaceBosShell({
     presentation = "overlay",
     "data-testid": dataTestId = "action-workspace-bos",
 }: Props) {
+    const embedded = presentation === "embedded";
+    useActionWorkspaceOpenDocumentFlag(open, presentation);
+
+    const [panelLayout, setPanelLayout] = useState<{ left: number; width: number } | null>(null);
+
+    useLayoutEffect(() => {
+        if (!open || embedded) {
+            setPanelLayout(null);
+            return;
+        }
+
+        const measure = () => {
+            setPanelLayout(measureActionWorkspacePanelLayout(window.innerWidth));
+        };
+
+        measure();
+        window.addEventListener("resize", measure);
+        const t = window.setTimeout(measure, 0);
+
+        return () => {
+            window.removeEventListener("resize", measure);
+            window.clearTimeout(t);
+        };
+    }, [open, embedded]);
+
     if (!open) return null;
 
-    const embedded = presentation === "embedded";
     const tagline = description?.trim() || BOS_SHELL_TERRITORY_TAGLINE;
 
     const overlayClass = embedded ?
         "relative flex w-full items-center justify-center"
-    :   "fixed inset-x-0 top-0 flex items-center justify-center overflow-hidden px-4";
+    :   "fixed inset-x-0 top-0 overflow-hidden";
 
     const overlayStyle = embedded ?
         undefined
@@ -82,7 +108,7 @@ export function ActionWorkspaceBosShell({
     const panelHeight = embedded ? BOS_WORKSPACE_EMBEDDED_HEIGHT : BOS_WORKSPACE_PANEL_HEIGHT;
 
     const panelStyle = {
-        width: BOS_WORKSPACE_WIDTH,
+        width: "100%",
         height: panelHeight,
         maxHeight: "100%",
         borderRadius: BOS_WORKSPACE_RADIUS,
@@ -112,7 +138,18 @@ export function ActionWorkspaceBosShell({
 
             <div
                 className="relative shrink-0"
-                style={{ width: BOS_WORKSPACE_WIDTH, maxHeight: "100%" }}
+                style={
+                    embedded ?
+                        { width: BOS_WORKSPACE_WIDTH, maxHeight: "100%" }
+                    :   {
+                            width: panelLayout ? `${panelLayout.width}px` : BOS_WORKSPACE_WIDTH,
+                            maxWidth: panelLayout ? `${panelLayout.width}px` : BOS_WORKSPACE_WIDTH,
+                            maxHeight: "100%",
+                            ...(panelLayout ?
+                                { marginLeft: `${panelLayout.left}px`, marginRight: "auto" }
+                            :   {}),
+                        }
+                }
                 onClick={(e) => e.stopPropagation()}
             >
                 <div
