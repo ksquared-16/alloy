@@ -23,14 +23,19 @@ function SegmentSeparator() {
 
 /** Structured enrollment card metadata for two-line drawer presentation. */
 export default function LeadEnrollmentCardMetaLines({ row, metaColumns }: Props) {
-    const { birthLine, segments } = buildLeadEnrollmentCardMetaPresentation(row, metaColumns);
-    if (!birthLine && segments.length === 0) return null;
+    const { birthLine, startLocationLine, segments } = buildLeadEnrollmentCardMetaPresentation(row, metaColumns);
+    if (!birthLine && !startLocationLine && segments.length === 0) return null;
 
     return (
-        <div className="mt-1.5 space-y-1" data-lead-enrollment-card-meta-lines="true">
+        <div className="mt-1.5 space-y-0.5" data-lead-enrollment-card-meta-lines="true">
             {birthLine ?
                 <p className={PRESENTATION_SUPPORTING} data-lead-enrollment-card-birth-line="true">
                     {birthLine}
+                </p>
+            :   null}
+            {startLocationLine ?
+                <p className={PRESENTATION_SUPPORTING} data-lead-enrollment-card-start-location-line="true">
+                    {startLocationLine}
                 </p>
             :   null}
             {segments.length > 0 ?

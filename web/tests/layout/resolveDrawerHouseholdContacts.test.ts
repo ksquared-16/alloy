@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from "vitest";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import { layoutSectionIncludesWidget } from "@/lib/layout/runtime/layoutSectionIncludesWidget";
 import {
     DRAWER_HOUSEHOLD_CONTACTS_MAX_VISIBLE,
     resolveOpportunityDrawerHouseholdContacts,
@@ -136,12 +137,10 @@ describe("resolvePersonDrawerHouseholdContacts", () => {
 });
 
 describe("lead drawer default doc (household contacts widget)", () => {
-    it("includes household_contacts widget in household section", () => {
+    it("does not include household_contacts widget until configured in layout", () => {
         const leadDoc = buildLeadDrawerDefaultDoc();
         const household = leadDoc.sections.find((s) => s.key === "household_contact");
-        const widgetKeys =
-            household?.rows.flatMap((row) => row.columns.flatMap((col) => col.items.map((item) => item.refKey))) ??
-            [];
-        expect(widgetKeys).toContain("household_contacts");
+        expect(household).toBeTruthy();
+        expect(layoutSectionIncludesWidget(household!, "household_contacts")).toBe(false);
     });
 });

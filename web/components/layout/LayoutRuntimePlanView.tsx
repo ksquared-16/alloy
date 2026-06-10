@@ -74,6 +74,7 @@ import LayoutRuntimeNotesCommunicationWidget, {
 } from "@/components/layout/LayoutRuntimeNotesCommunicationWidget";
 import LayoutRuntimeDocumentsOverviewWidget from "@/components/layout/LayoutRuntimeDocumentsOverviewWidget";
 import DrawerOverviewPanelShell from "@/components/layout/DrawerOverviewPanelShell";
+import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import DrawerHouseholdProfileSection from "@/components/layout/DrawerHouseholdProfileSection";
 import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
 import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
@@ -110,6 +111,7 @@ import {
     resolveDrawerOverviewSectionEyebrow,
 } from "@/lib/layout/runtime/drawerOverviewSectionPresentation";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
+import { layoutSectionIncludesWidget } from "@/lib/layout/runtime/layoutSectionIncludesWidget";
 import {
     scrollToLeadEnrollmentSection,
     summarizeLeadDrawerEnrollmentHealth,
@@ -117,7 +119,6 @@ import {
 import {
     LAYOUT_RUNTIME_BODY_SECTION_HEADER,
     LAYOUT_RUNTIME_BODY_SECTION_SURFACE,
-    LAYOUT_RUNTIME_SUMMARY_WIDGET_MINIMIZED,
     LAYOUT_RUNTIME_FIELD_READ_SURFACE,
     LAYOUT_RUNTIME_FIELD_SURFACE,
     LAYOUT_RUNTIME_GROUP_READ_SURFACE,
@@ -745,24 +746,21 @@ function WidgetChrome({
         const railClass =
             accentRail === "attention" ? "bg-alloy-ember/80"
             : accentRail === "work" ? "bg-alloy-juniper/70"
-            : minimized ? "bg-alloy-stone/25"
-            : "bg-alloy-stone/35";
-        const surfaceClass = minimized ? LAYOUT_RUNTIME_SUMMARY_WIDGET_MINIMIZED : LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE;
+            :   "bg-alloy-stone/35";
+        const surfaceClass = LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE;
         return (
             <div
                 className={surfaceClass}
                 data-layout-runtime-summary-widget="true"
                 {...(minimized ? { "data-layout-runtime-summary-widget-minimized": "true" } : {})}
             >
-                <div className={minimized ? `${LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER} py-0.5` : LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER}>
+                <div className={LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER}>
                     <span className={`h-1 w-1 shrink-0 rounded-full ${railClass}`} aria-hidden />
-                    <span
-                        className={`truncate font-semibold uppercase tracking-[0.08em] ${minimized ? "text-[8px] text-alloy-midnight/35" : "text-[9px] text-alloy-midnight/50"}`}
-                    >
+                    <span className="truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/50">
                         {title}
                     </span>
                 </div>
-                <div className={`${LAYOUT_RUNTIME_SUMMARY_WIDGET_BODY} overflow-hidden ${minimized ? "py-1" : ""}`}>{children}</div>
+                <div className={`${LAYOUT_RUNTIME_SUMMARY_WIDGET_BODY} overflow-hidden`}>{children}</div>
             </div>
         );
     }
@@ -824,8 +822,15 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
         return <FutureModulePlaceholder title={title} />;
     }
 
-    const empty = <span className="text-[11px] text-alloy-midnight/40">No {title.toLowerCase()} yet</span>;
-    const emptyQuiet = <span className="text-[10px] text-alloy-midnight/35">—</span>;
+    const empty = (
+        <DrawerOverviewEmptyState
+            message={`No ${title.toLowerCase()} yet`}
+            compact
+        />
+    );
+    const emptyQuiet = (
+        <DrawerOverviewEmptyState message={`No ${title.toLowerCase()} yet`} compact />
+    );
 
     if (widgetKey === "tasks") {
         if (operatingCards && compact) {
@@ -898,7 +903,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 >
                     {visible ?
                         <LeadOperatingAttentionSummaryCard record={record} />
-                    :   <p className="text-[11px] text-alloy-midnight/45">No attention needed</p>}
+                    :   <DrawerOverviewEmptyState message="No attention needed" compact />}
                 </LeadOperatingSummaryCard>
             );
         }
@@ -1164,11 +1169,17 @@ function SectionView({
         && operatorSurfaces
         && (section.key === "household_contact" || section.key === "household_relationships");
 
+    const showHouseholdContactsList =
+        useHouseholdProfile
+        && section.key === "household_contact"
+        && layoutSectionIncludesWidget(section, "household_contacts");
+
     const body = useHouseholdProfile ?
         <DrawerHouseholdProfileSection
             record={record}
             variant={section.key === "household_contact" ? "lead" : "person"}
             onAdornmentAction={onAdornmentAction}
+            showContactsList={showHouseholdContactsList}
         />
     :   (
             <LayoutRuntimeSectionContext.Provider value={sectionContext}>

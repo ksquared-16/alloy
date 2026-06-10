@@ -113,6 +113,76 @@ Lead, Person, and Child drawers share composition chrome via:
 - `web/components/layout/DrawerOverviewPanelShell.tsx`
 - Entity `*OverviewRuntimeComposition` modules
 
+### White canvas rule (locked)
+
+All drawer overview compositions (Lead, Person, Child) use a **pure white canvas**. Depth comes from section panels — not a gray or blue page fill.
+
+| Token | Value |
+|-------|--------|
+| `LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS` | `bg-white` |
+| `DRAWER_OVERVIEW_CANVAS_CLASS` | white canvas + spacing |
+| Panel surfaces | `bg-white` with pine left accent |
+
+Emerald/juniper accents (header gradients, icon badges, status pills) should read clearly against white.
+
+### Section chrome rule (locked)
+
+Every major overview section uses **`DrawerOverviewPanelShell`** — one visual system:
+
+| Element | Treatment |
+|---------|-----------|
+| **Panel shell** | Pine left accent (`border-l-alloy-juniper/70`), white surface, subtle shadow |
+| **Header band** | Soft emerald gradient (`from-emerald-50/70`), icon badge, uppercase eyebrow, semibold title |
+| **Centerpiece sections** | Enrollment / connected children / program — stronger radius + shadow |
+| **Card rhythm** | Rounded inner cards, stone border, light shadow, `gap-2` stack |
+| **Right rail** | Same panel shell as main grid (Activity, Documents, Notes) |
+
+No flat sections. No drawer-type-specific chrome forks unless documented here.
+
+### Empty state rule (locked)
+
+> **Empty ≠ disabled.** Active sections keep full chrome when empty.
+
+| Rule | Implementation |
+|------|----------------|
+| Section chrome | Header, icon badge, border, accent, shadow, and title stay at full strength |
+| Empty body only | `DrawerOverviewEmptyState` — dashed inner panel, tier-6 message + soft hint |
+| Summary strip widgets | Tasks, Tour/Event, Attention use full-strength card chrome; body copy is muted only |
+| Right-rail visibility | Activity, Notes, Documents render in composition shell when empty (`DRAWER_OVERVIEW_PREMIUM_EMPTY_SECTIONS`) |
+| Copy examples | Tasks: "No open tasks" · Tour/Event: "No recent notes or events" · Activity: "No activity yet" |
+| Unavailable modules | Schedule/Attendance may hide or mark unavailable — not the same as empty active sections |
+
+### Enrollment hierarchy rule (locked)
+
+Child enrollment rows use a **four-line read hierarchy** (not a database export):
+
+| Line | Content | Tier |
+|------|---------|------|
+| 1 | Child name (linked when configured) | 3 compact |
+| 2 | Born {date} • {age} | 5 supporting |
+| 3 | Start {date} • {location} | 5 supporting |
+| 4 | Program • Schedule • Classroom • Status | 3 compact values; status may also appear as pill |
+
+Primary information wins: name, age, start date, location. Secondary fields share line 4.
+
+**Implementation:** `LeadEnrollmentCardMetaLines`, `buildLeadEnrollmentCardMetaPresentation`.
+
+### Relationship navigation rule (locked)
+
+Relationship cards preserve drawer navigation affordances:
+
+| Direction | Affordance |
+|-----------|------------|
+| Opportunity → Person | Profile avatar button + name link on household/contact cards |
+| Person → Child | Child name link on connected-children cards |
+| Child → Person | Profile avatar button + name link on family member cards |
+| Child → Child (sibling) | Profile avatar button + name link |
+
+- Avatar is the primary click target (`DrawerHouseholdPersonLinkAvatar`, `DrawerHouseholdChildLinkAvatar`)
+- Name may also link when `person_id` / `child_id` is present
+- Contacts without a valid id render a static, non-clickable avatar
+- Lists are layout-driven (`household_contacts` widget gates relationship list presence)
+
 ### Drawer overview presentation standard (June 2026)
 
 | Element | Treatment |
@@ -122,7 +192,7 @@ Lead, Person, and Child drawers share composition chrome via:
 | **Section header** | Soft pine-tinted gradient band (`from-emerald-50/70`), icon badge, uppercase eyebrow, semibold title |
 | **Centerpiece sections** | Enrollment / connected children / program — slightly stronger radius and shadow |
 | **Card rhythm** | Rounded inner cards with stone border + light shadow; consistent `gap-2` stack |
-| **Enrollment metadata** | Child name as tier-3 value; birth on supporting line; labeled segments on second line with darker values and muted placeholders |
+| **Enrollment metadata** | Four-line hierarchy — name, birth/age, start/location, program details |
 | **Empty states** | Tier 6 tokens only — never confused with business data |
 | **Right rail** | Same panel shell as main grid (Activity, Documents, Notes) |
 
@@ -225,6 +295,7 @@ Any new operational surface (action workspace cards, BOS summaries, global searc
 | Drawer field renderer | `web/components/layout/LayoutRuntimePlanView.tsx` |
 | Drawer overview panel shell | `web/components/layout/DrawerOverviewPanelShell.tsx` |
 | Drawer household profile | `web/components/layout/DrawerHouseholdProfileSection.tsx` |
+| Drawer person/child link avatars | `web/components/layout/DrawerHouseholdPersonLinkAvatar.tsx`, `DrawerHouseholdChildLinkAvatar.tsx` |
 | Drawer premium empty state | `web/components/layout/DrawerOverviewEmptyState.tsx` |
 | Drawer overview tokens | `web/lib/layout/runtime/drawerOverviewCompositionStandard.ts` |
 | Drawer section icons | `web/lib/layout/runtime/drawerOverviewSectionPresentation.ts` |

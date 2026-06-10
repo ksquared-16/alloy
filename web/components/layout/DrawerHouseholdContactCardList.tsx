@@ -1,9 +1,10 @@
 "use client";
 
-import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
+import DrawerHouseholdPersonLinkAvatar, {
+    DRAWER_HOUSEHOLD_PERSON_LINK_ITEM,
+} from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
-import type { LayoutItem } from "@/lib/layout/layoutV2";
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
     PRESENTATION_EMPTY_STATE,
@@ -21,13 +22,6 @@ type Props = {
     emptyMessage?: string;
     highlightPersonId?: string | null;
     showPrimaryBadge?: boolean;
-};
-
-const PERSON_LINK_ITEM: LayoutItem = {
-    id: "drawer-household-contact-link",
-    kind: "field",
-    refKey: "person.primary_contact_name",
-    adornment: { position: "left", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "person.id" } },
 };
 
 function metaLine(contact: DrawerHouseholdContactRow, showPrimaryBadge: boolean): string {
@@ -73,24 +67,27 @@ function HouseholdContactCard({
             {...(isHighlighted ? { "data-drawer-household-contact-current": "true" } : {})}
         >
             <div className="flex items-start gap-2.5">
-                <PersonDrawerIdentityAvatar
+                <DrawerHouseholdPersonLinkAvatar
+                    personId={contact.person_id}
                     displayName={contact.display_name}
                     initials={contact.initials}
-                    size="sm"
+                    rowRecord={rowRecord}
+                    onAdornmentAction={onAdornmentAction}
+                    componentName="DrawerHouseholdContactCardList"
                 />
                 <div className="min-w-0 flex-1">
                     {contact.person_id ?
                         <LayoutRuntimePersonLinkSurface
                             componentName="DrawerHouseholdContactCardList"
                             surface="drawer"
-                            item={PERSON_LINK_ITEM}
+                            item={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM}
                             personId={contact.person_id}
                             rowRecord={rowRecord}
                             anchorRecord={anchorRecord}
-                            adornment={PERSON_LINK_ITEM.adornment}
+                            adornment={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM.adornment}
                             display={contact.display_name}
                             onAction={onAdornmentAction}
-                            className={`block truncate text-left hover:text-[#0d9488] ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                            className={`block truncate text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                         />
                     :   <p className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>
                             {contact.display_name}

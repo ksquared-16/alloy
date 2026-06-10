@@ -4,6 +4,9 @@ import { join } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 import DrawerOverviewPanelShell from "@/components/layout/DrawerOverviewPanelShell";
 import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
+import DrawerHouseholdPersonLinkAvatar from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
+import DrawerHouseholdProfileSection from "@/components/layout/DrawerHouseholdProfileSection";
+import DrawerHouseholdContactCardList from "@/components/layout/DrawerHouseholdContactCardList";
 import {
     DRAWER_OVERVIEW_CANVAS_CLASS,
     DRAWER_OVERVIEW_PANEL_SURFACE,
@@ -12,6 +15,7 @@ import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layo
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildProofOpportunityRecord } from "@/lib/layout/runtime/buildProofOpportunityRecord";
 import { resolveLeadDrawerHouseholdProfile } from "@/lib/layout/runtime/resolveDrawerHouseholdProfile";
+import { layoutSectionIncludesWidget } from "@/lib/layout/runtime/layoutSectionIncludesWidget";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
 import {
     drawerOverviewSectionIsCenterpiece,
@@ -99,6 +103,130 @@ describe("resolveLeadDrawerHouseholdProfile", () => {
         expect(profile.location).toBe("North Campus");
         expect(profile.primaryName).toBe("Jimmy Patterson");
     });
+
+    it("resolves primaryPersonId from opportunity primary person fields", () => {
+        const profile = resolveLeadDrawerHouseholdProfile({
+            id: "opp-1",
+            customer_id: "cust-1",
+            primary_person_id: "person-jimmy",
+            "person.primary_contact_name": "Jimmy Patterson",
+        });
+        expect(profile.primaryPersonId).toBe("person-jimmy");
+    });
+});
+
+describe("layoutSectionIncludesWidget", () => {
+    it("detects household_contacts widget placeholder in a section", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const household = doc.sections.find((s) => s.key === "household_contact");
+        expect(household).toBeTruthy();
+        expect(layoutSectionIncludesWidget(household!, "household_contacts")).toBe(false);
+
+        const withWidget = {
+            ...household!,
+            rows: [
+                ...household!.rows,
+                {
+                    id: "household-contacts-row",
+                    columns: [
+                        {
+                            id: "household-contacts-col",
+                            width: 12,
+                            items: [
+                                {
+                                    id: "household-contacts-widget",
+                                    kind: "widget_placeholder" as const,
+                                    refKey: "household_contacts",
+                                    label: "Household contacts",
+                                    widget: { widgetKey: "opportunities.household_contacts", displayMode: "list" },
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        };
+        expect(layoutSectionIncludesWidget(withWidget, "household_contacts")).toBe(true);
+    });
+});
+
+describe("DrawerHouseholdPersonLinkAvatar", () => {
+    it("renders a person-link button when person_id is present", () => {
+        const html = renderToStaticMarkup(
+            <DrawerHouseholdPersonLinkAvatar
+                personId="person-1"
+                displayName="Jamie Johnson"
+                initials="JJ"
+                rowRecord={{ id: "person-1", "person.id": "person-1" }}
+                onAdornmentAction={() => {}}
+                componentName="Test"
+            />,
+        );
+        expect(html).toContain('data-drawer-household-person-link-avatar="true"');
+        expect(html).toContain('data-layout-runtime-person-link="true"');
+        expect(html).toContain('aria-label="Open Jamie Johnson"');
+    });
+
+    it("renders a non-link avatar when person_id is missing", () => {
+        const html = renderToStaticMarkup(
+            <DrawerHouseholdPersonLinkAvatar
+                personId={null}
+                displayName="Unknown Contact"
+                initials="UC"
+                componentName="Test"
+            />,
+        );
+        expect(html).toContain('data-drawer-household-person-link-avatar="static"');
+        expect(html).toContain('data-drawer-household-person-link-disabled="true"');
+        expect(html).not.toContain('data-layout-runtime-person-link="true"');
+    });
+});
+
+describe("DrawerHouseholdProfileSection person links", () => {
+    it("renders primary contact avatar and name links when person_id is present", () => {
+        const html = renderToStaticMarkup(
+            <DrawerHouseholdProfileSection
+                record={{
+                    id: "opp-1",
+                    last_name: "Patterson",
+                    primary_person_id: "person-jimmy",
+                    "person.primary_contact_name": "Jimmy Patterson",
+                    "person.primary_email": "jimmy@patterson.com",
+                }}
+                variant="lead"
+                onAdornmentAction={() => {}}
+            />,
+        );
+        expect(html).toContain('data-drawer-household-primary-contact="true"');
+        expect(html).toContain('data-drawer-household-person-link-avatar="true"');
+        expect(html).toContain('data-layout-runtime-person-link="true"');
+    });
+});
+
+describe("DrawerHouseholdContactCardList person links", () => {
+    it("renders avatar link affordance on each linked contact row", () => {
+        const html = renderToStaticMarkup(
+            <DrawerHouseholdContactCardList
+                contacts={[
+                    {
+                        person_id: "person-guardian",
+                        display_name: "Alex Johnson",
+                        initials: "AJ",
+                        role_label: "Guardian",
+                        role_type: "guardian",
+                        is_primary: false,
+                        phone: "555-333-4444",
+                        email: null,
+                    },
+                ]}
+                anchorRecord={{ id: "opp-1" }}
+                onAdornmentAction={() => {}}
+            />,
+        );
+        expect(html).toContain('data-drawer-household-contact-card="true"');
+        expect(html).toContain('data-drawer-household-person-link-avatar="true"');
+        expect(html).toContain('aria-label="Open Alex Johnson"');
+    });
 });
 
 describe("BOS drawer header consistency", () => {
@@ -140,8 +268,9 @@ describe("buildLeadEnrollmentCardMetaPresentation", () => {
         );
 
         expect(presentation.birthLine).toBe("Born Jan 1, 2026 · 5m");
+        expect(presentation.startLocationLine).toBe("Start Aug 8, 2026 • North Campus");
         expect(presentation.segments.find((s) => s.refKey === "child.program")?.display).toBe("Infant Full Day");
         expect(presentation.segments.find((s) => s.refKey === "child.schedule")?.isPlaceholder).toBe(true);
-        expect(presentation.segments.find((s) => s.refKey === "child.desired_start_date")?.prefixLabel).toBe("Start");
+        expect(presentation.segments.find((s) => s.refKey === "child.location")).toBeUndefined();
     });
 });

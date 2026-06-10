@@ -43,7 +43,12 @@ export function resolveLeadDrawerHouseholdProfile(record: ProofRuntimeRecord): D
         status: pickLine(record["opportunity.status_key"], record.status_key, record.status),
         primaryPersonId:
             resolveLeadSummaryPrimaryPersonId(record)
-            || pickLine(record["person.id"], record.person_id, record.primary_person_id),
+            || pickLine(
+                record["opportunity.primary_person_id"],
+                record["person.id"],
+                record.person_id,
+                record.primary_person_id,
+            ),
         primaryName: pickLine(record["person.primary_contact_name"], record.primary_contact_name),
         primaryRole: pickLine(record["person.household_role"], record["person.relationship"], "Primary contact"),
         primaryEmail: pickLine(record["person.primary_email"], record.primary_email),

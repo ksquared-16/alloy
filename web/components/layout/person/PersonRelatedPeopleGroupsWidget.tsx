@@ -1,9 +1,10 @@
 "use client";
 
-import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
+import DrawerHouseholdPersonLinkAvatar, {
+    DRAWER_HOUSEHOLD_PERSON_LINK_ITEM,
+} from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
-import type { LayoutItem } from "@/lib/layout/layoutV2";
 import {
     resolvePersonOverviewRelatedPeopleGroups,
     type PersonOverviewRelatedPeopleGroup,
@@ -20,13 +21,6 @@ import {
 type Props = {
     record: ProofRuntimeRecord;
     onAdornmentAction?: AdornmentActionHandler;
-};
-
-const PERSON_LINK_ITEM: LayoutItem = {
-    id: "person-related-people-link",
-    kind: "field",
-    refKey: "person.primary_contact_name",
-    adornment: { position: "left", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "person.id" } },
 };
 
 function RelatedPersonCard({
@@ -57,22 +51,24 @@ function RelatedPersonCard({
             data-person-related-people-card="true"
         >
             <div className="flex items-start gap-2.5">
-                <PersonDrawerIdentityAvatar
+                <DrawerHouseholdPersonLinkAvatar
+                    personId={member.person_id}
                     displayName={member.display_name}
                     initials={member.initials}
-                    photoUrl={member.photo_url}
-                    size="sm"
+                    rowRecord={rowRecord}
+                    onAdornmentAction={onAdornmentAction}
+                    componentName="PersonRelatedPeopleGroupsWidget"
                 />
                 <div className="min-w-0 flex-1">
                     {member.person_id ?
                         <LayoutRuntimePersonLinkSurface
                             componentName="PersonRelatedPeopleGroupsWidget"
                             surface="drawer"
-                            item={PERSON_LINK_ITEM}
+                            item={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM}
                             personId={member.person_id}
                             rowRecord={rowRecord}
                             anchorRecord={anchorRecord}
-                            adornment={PERSON_LINK_ITEM.adornment}
+                            adornment={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM.adornment}
                             display={member.display_name}
                             onAction={onAdornmentAction}
                             className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}

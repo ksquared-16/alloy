@@ -3,6 +3,11 @@
 import { GraduationCap } from "lucide-react";
 import LeadOperatingSummaryCard from "@/components/layout/lead/LeadOperatingSummaryCard";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import {
+    PRESENTATION_DATA_VALUE_COMPACT,
+    PRESENTATION_EMPTY_STATE,
+    PRESENTATION_SUPPORTING,
+} from "@/lib/presentation/presentationTypography";
 
 function pickLine(...values: unknown[]): string | null {
     for (const value of values) {
@@ -29,15 +34,15 @@ export default function ChildProgramEnrollmentSummaryCard({ record }: Props) {
         record.outcome_status_label,
     );
     if (!program && !status) {
-        return <p className="text-[11px] text-alloy-midnight/45">No program linked</p>;
+        return <p className={PRESENTATION_EMPTY_STATE}>No program linked</p>;
     }
     return (
         <div className="flex min-h-0 flex-col gap-0.5" data-child-program-enrollment-summary-card="true">
             {program ?
-                <p className="line-clamp-2 text-[11px] font-medium leading-snug text-alloy-midnight/80">{program}</p>
+                <p className={`line-clamp-2 ${PRESENTATION_DATA_VALUE_COMPACT}`}>{program}</p>
             :   null}
             {status ?
-                <p className="text-[10px] text-alloy-midnight/45">{status}</p>
+                <p className={PRESENTATION_SUPPORTING}>{status}</p>
             :   null}
         </div>
     );

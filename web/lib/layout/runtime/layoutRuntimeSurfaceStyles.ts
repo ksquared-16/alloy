@@ -78,13 +78,12 @@ export const LAYOUT_RUNTIME_COMPOSITION_SECTION_HEADER =
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_SURFACE = LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE;
 
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_HEADER =
-    "flex flex-col gap-0.5 border-b border-alloy-stone/10 bg-white px-3 py-2";
+    "flex flex-col gap-0.5 border-b border-alloy-stone/10 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3 py-2";
 
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY = "px-0 pb-0 pt-0";
 
-/** Summary widget — minimized when empty (Tour/Event with no data). */
-export const LAYOUT_RUNTIME_SUMMARY_WIDGET_MINIMIZED =
-    "flex min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/10 bg-white/80 opacity-80";
+/** Summary widget — empty state uses same chrome strength; body copy is muted only. */
+export const LAYOUT_RUNTIME_SUMMARY_WIDGET_MINIMIZED = LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE;
 
 /** Needs-attention accent — left rail only (Child Information, Attention widget). */
 export const LAYOUT_RUNTIME_ATTENTION_RAIL = "border-l-[3px] border-l-alloy-ember/75";

@@ -120,7 +120,7 @@ export function resolveLeadSummaryLastTouch(record: ProofRuntimeRecord): LeadSum
         ?? {
             kind: "empty",
             title: "Last Touch",
-            primaryLine: "No recent note or touch",
+            primaryLine: "No recent notes or events",
             secondaryLine: null,
             emptyHint: "Log a note or send a message",
         }

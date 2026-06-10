@@ -1,11 +1,14 @@
 "use client";
 
-import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
-import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
+import DrawerHouseholdChildLinkAvatar from "@/components/layout/DrawerHouseholdChildLinkAvatar";
+import DrawerHouseholdPersonLinkAvatar, {
+    DRAWER_HOUSEHOLD_PERSON_LINK_ITEM,
+} from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePersonLinkSurface";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
+import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
@@ -22,13 +25,6 @@ type Props = {
     anchorRecord: ProofRuntimeRecord;
     overflowFooter?: React.ReactNode;
     onAdornmentAction?: AdornmentActionHandler;
-};
-
-const PERSON_LINK_ITEM: LayoutItem = {
-    id: "child-family-person-link",
-    kind: "field",
-    refKey: "person.primary_contact_name",
-    adornment: { position: "left", icon: "person", action: { type: "open_drawer", entity: "person", idPath: "person.id" } },
 };
 
 const CHILD_LINK_ITEM: LayoutItem = {
@@ -94,11 +90,24 @@ function FamilyMemberCard({
             data-child-family-member-kind={memberKind(row)}
         >
             <div className="flex items-start gap-2.5">
-                <PersonDrawerIdentityAvatar
-                    displayName={displayName}
-                    initials={personDrawerHouseholdInitials(displayName)}
-                    size="sm"
-                />
+                {sibling ?
+                    <DrawerHouseholdChildLinkAvatar
+                        childId={childId}
+                        displayName={displayName}
+                        initials={personDrawerHouseholdInitials(displayName)}
+                        rowRecord={row}
+                        onAdornmentAction={onAdornmentAction}
+                        componentName="ChildFamilyMembersCardList"
+                    />
+                :   <DrawerHouseholdPersonLinkAvatar
+                        personId={personId}
+                        displayName={displayName}
+                        initials={personDrawerHouseholdInitials(displayName)}
+                        rowRecord={row}
+                        onAdornmentAction={onAdornmentAction}
+                        componentName="ChildFamilyMembersCardList"
+                    />
+                }
                 <div className="min-w-0 flex-1">
                     {sibling && childId ?
                         <LayoutRuntimeChildLinkSurface
@@ -116,11 +125,11 @@ function FamilyMemberCard({
                         <LayoutRuntimePersonLinkSurface
                             componentName="ChildFamilyMembersCardList"
                             surface="drawer"
-                            item={PERSON_LINK_ITEM}
+                            item={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM}
                             personId={personId}
                             rowRecord={row}
                             anchorRecord={anchorRecord}
-                            adornment={PERSON_LINK_ITEM.adornment}
+                            adornment={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM.adornment}
                             display={displayName}
                             onAction={onAdornmentAction}
                             className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}

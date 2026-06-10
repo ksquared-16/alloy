@@ -29,6 +29,11 @@ export type LeadEnrollmentCardMetaSegment = {
     prefixLabel?: string;
 };
 
+function columnMatchesRefKey(refKey: string, needles: string[]): boolean {
+    const normalized = refKey.toLowerCase();
+    return needles.some((needle) => normalized.includes(needle));
+}
+
 function enrollmentSegmentPrefixLabel(refKey: string, label: string): string | undefined {
     const normalized = refKey.toLowerCase();
     if (normalized.includes("program")) return undefined;
@@ -40,13 +45,23 @@ function enrollmentSegmentPrefixLabel(refKey: string, label: string): string | u
     return undefined;
 }
 
-/** Structured enrollment card metadata for two-line drawer presentation. */
+/** Structured enrollment card metadata — multi-line drawer presentation. */
 export function buildLeadEnrollmentCardMetaPresentation(
     row: ProofRuntimeRecord,
     metaColumns: LayoutCollectionColumn[],
-): { birthLine: string | null; segments: LeadEnrollmentCardMetaSegment[] } {
-    const dobColumn = metaColumns.find((col) => col.refKey.toLowerCase().includes("dob"));
-    const detailColumns = metaColumns.filter((col) => col !== dobColumn);
+): {
+    birthLine: string | null;
+    startLocationLine: string | null;
+    segments: LeadEnrollmentCardMetaSegment[];
+} {
+    const dobColumn = metaColumns.find((col) => columnMatchesRefKey(col.refKey, ["dob", "dob_age"]));
+    const startColumn = metaColumns.find((col) =>
+        columnMatchesRefKey(col.refKey, ["desired_start", "start_date"]),
+    );
+    const locationColumn = metaColumns.find((col) => columnMatchesRefKey(col.refKey, ["location"]));
+    const detailColumns = metaColumns.filter(
+        (col) => col !== dobColumn && col !== startColumn && col !== locationColumn,
+    );
 
     let birthLine: string | null = null;
     if (dobColumn) {
@@ -55,6 +70,18 @@ export function buildLeadEnrollmentCardMetaPresentation(
             birthLine = dobDisplay.toLowerCase().startsWith("born ") ? dobDisplay : `Born ${dobDisplay}`;
         }
     }
+
+    const startDisplay = startColumn ? formatLayoutRuntimeRepeaterColumnDisplay(row, startColumn) : "—";
+    const locationDisplay = locationColumn ? formatLayoutRuntimeRepeaterColumnDisplay(row, locationColumn) : "—";
+    const startLocationParts = [
+        startDisplay !== "—" ?
+            startDisplay.toLowerCase().startsWith("start ") ?
+                startDisplay
+            :   `Start ${startDisplay}`
+        :   null,
+        locationDisplay !== "—" ? locationDisplay : null,
+    ].filter(Boolean);
+    const startLocationLine = startLocationParts.length > 0 ? startLocationParts.join(" • ") : null;
 
     const segments = detailColumns.map((col) => {
         const display = formatLayoutRuntimeRepeaterColumnDisplay(row, col);
@@ -68,7 +95,7 @@ export function buildLeadEnrollmentCardMetaPresentation(
         };
     });
 
-    return { birthLine, segments };
+    return { birthLine, startLocationLine, segments };
 }
 
 /** Labeled enrollment meta segments — value when present, otherwise `{label} —`. */
