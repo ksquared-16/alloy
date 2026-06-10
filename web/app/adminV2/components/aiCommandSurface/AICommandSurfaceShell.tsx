@@ -39,7 +39,9 @@ import {
 import { operationalContextSwitchNoticeText } from "@/lib/adminV2/bos/operationalContextSwitchNotice";
 import { fetchAdminV2Sidecar } from "@/lib/adminV2/adminV2SidecarSession";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
+import { useEntityLabelsOptional } from "@/contexts/EntityLabelsContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
+import { resolveBosCommandSurfaceContextLabel } from "@/lib/adminV2/bos/bosCommandSurfaceContextPresentation";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
   buildTaskAssistCommandBootstrap,
@@ -109,6 +111,10 @@ import { buildCommandSurfaceRoutingNotice } from "@/lib/adminV2/aiCommandSurface
 import {
   CAPABILITY_GATE_CHECKING_LABEL,
   COMMAND_SURFACE_SEARCHING_NOTICE,
+  COMMAND_SURFACE_RAIL_PANEL_MIN_HEIGHT_PX,
+  COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS,
+  COMMAND_SURFACE_RAIL_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX,
+  COMMAND_SURFACE_RAIL_THREAD_SCROLL_MIN_HEIGHT_PX,
   COMMAND_SURFACE_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX,
   COMMAND_SURFACE_THREAD_SCROLL_MIN_HEIGHT_PX,
   resolveCommandSurfaceThreadStatusLabel,
@@ -325,22 +331,82 @@ async function loadCurrentJobOverviewConfig(): Promise<unknown> {
   return data.layout?.config ?? {};
 }
 
+export type AICommandSurfacePresentation = "bottom" | "rail";
+
+function CommandRailBosStarterSuggestions(props: { onPick: (text: string) => void }) {
+  return (
+    <div
+      className="flex min-h-[120px] flex-col gap-1.5 px-2.5 py-2"
+      data-command-surface-rail-starters="true"
+    >
+      <p className="text-[11px] leading-snug" style={{ color: CMD.textSupporting }}>
+        Try asking…
+      </p>
+      <div className="flex flex-col gap-1">
+        {COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS.map((suggestion) => (
+          <button
+            key={suggestion}
+            type="button"
+            className="rounded-lg border px-2.5 py-1.5 text-left text-[12px] leading-snug transition-colors"
+            style={{
+              borderColor: derived.border,
+              backgroundColor: neutral.surface,
+              color: CMD.textBody,
+            }}
+            onClick={() => props.onPick(suggestion)}
+          >
+            {suggestion}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function SurfaceCard(props: {
   children: ReactNode;
   expanded: boolean;
+  presentation?: AICommandSurfacePresentation;
   rootRef?: RefObject<HTMLElement | null>;
 }) {
-  const { children, expanded, rootRef } = props;
+  const { children, expanded, presentation = "bottom", rootRef } = props;
   const [portalReady, setPortalReady] = useState(false);
   useEffect(() => {
     setPortalReady(true);
   }, []);
+
+  if (presentation === "rail") {
+    return (
+      <footer
+        ref={rootRef}
+        data-adminv2-ai-command-surface
+        data-adminv2-command-surface-layer="rail"
+        data-command-surface-presentation="rail"
+        role="contentinfo"
+        aria-label="Orchestrator assistant"
+        className="pointer-events-auto relative flex w-full min-h-0 flex-col shrink-0"
+        style={{
+          minHeight: `${COMMAND_SURFACE_RAIL_PANEL_MIN_HEIGHT_PX}px`,
+          paddingTop: 6,
+          paddingBottom: 12,
+          backgroundColor: neutral.surface,
+          background: neutral.surface,
+          borderTop: `2px solid ${derived.adminV2AiBarPineBorder}`,
+          borderRadius: "12px 12px 0 0",
+          boxShadow: `0 -4px 20px rgba(39, 63, 82, 0.1), 0 -1px 0 ${derived.border}`,
+        }}
+      >
+        <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
+      </footer>
+    );
+  }
 
   const footer = (
     <footer
       ref={rootRef}
       data-adminv2-ai-command-surface
       data-adminv2-command-surface-layer="global"
+      data-command-surface-presentation="bottom"
       role="contentinfo"
       aria-label="Orchestrator assistant"
       className="pointer-events-auto fixed inset-x-0 bottom-2 flex w-full justify-center px-4"
@@ -601,11 +667,17 @@ function AdvancedDrawer(props: {
   );
 }
 
-export default function AICommandSurfaceShell() {
+export default function AICommandSurfaceShell({
+  presentation = "bottom",
+}: {
+  presentation?: AICommandSurfacePresentation;
+}) {
   const shellRootRef = useRef<HTMLElement | null>(null);
   const adminDrawer = useAdminDrawerOptional();
 
   const globalAssistant = useGlobalAssistantOptional();
+  const { labels: entityLabelMap } = useEntityLabelsOptional();
+  const opportunitySingular = entityLabelMap.opportunities?.singular ?? "Lead";
   const siteFilter = useWorkspaceSiteFilter();
   const selectedSiteId = siteFilter?.selectedSiteId ?? null;
   const taskAssistUiEnabled = isTaskAssistV1UiEnabled();
@@ -2087,8 +2159,69 @@ export default function AICommandSurfaceShell() {
     [proposeWorkflowAssistBody]
   );
 
+  const threadScrollMaxClass =
+    presentation === "rail" ? "max-h-[min(28vh,200px)]" : "max-h-[min(52vh,440px)]";
+  const threadPanelMinHeightCollapsedPx =
+    presentation === "rail"
+      ? COMMAND_SURFACE_RAIL_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX
+      : COMMAND_SURFACE_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX;
+  const threadScrollMinHeightPx =
+    presentation === "rail"
+      ? COMMAND_SURFACE_RAIL_THREAD_SCROLL_MIN_HEIGHT_PX
+      : COMMAND_SURFACE_THREAD_SCROLL_MIN_HEIGHT_PX;
+
+  const pickStarterSuggestion = useCallback((text: string) => {
+    setCommandText(text);
+    inputRef.current?.focus();
+  }, []);
+
+  const bosContextDisplayLine = useMemo(
+    () =>
+      resolveBosCommandSurfaceContextLabel({
+        currentContext: globalAssistant?.currentContext ?? null,
+        workspaceScope: globalAssistant?.workspaceScope ?? null,
+        surfaceOperationalLabel: globalAssistant?.surfaceOperationalLabel ?? null,
+        opportunitySingular,
+      }),
+    [
+      globalAssistant?.currentContext,
+      globalAssistant?.workspaceScope,
+      globalAssistant?.surfaceOperationalLabel,
+      opportunitySingular,
+    ]
+  );
+
   return (
-    <SurfaceCard expanded={surfaceExpanded} rootRef={shellRootRef}>
+    <SurfaceCard expanded={surfaceExpanded} presentation={presentation} rootRef={shellRootRef}>
+      {presentation === "rail" ? (
+        <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-1 pt-1">
+          <span
+            className="text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: CMD.textLabel }}
+            data-command-surface-rail-title="true"
+          >
+            BOS
+          </span>
+          {threadStatusLabel ?
+            <span
+              className="shrink-0 text-[10px] font-medium tabular-nums"
+              style={{ color: CMD.textSupporting }}
+              data-command-surface-thread-status="true"
+              aria-live="polite"
+            >
+              {threadStatusLabel}
+            </span>
+          :   null}
+        </div>
+      ) :   null}
+      {presentation === "rail" ? (
+        <OperationalActiveRecordChip
+          label={globalAssistant?.currentContext?.label}
+          sourceSurface={globalAssistant?.currentContext?.source_surface}
+          displayLine={bosContextDisplayLine}
+          variant="collapsed_rail"
+        />
+      ) :   null}
       {hasThread ? (
         <div
           className="rounded-t-xl border border-b-0 overflow-hidden"
@@ -2098,7 +2231,7 @@ export default function AICommandSurfaceShell() {
             minHeight:
               threadExpanded ?
                 undefined
-              : `${COMMAND_SURFACE_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX}px`,
+              : `${threadPanelMinHeightCollapsedPx}px`,
           }}
           data-command-surface-thread-panel="true"
         >
@@ -2145,16 +2278,18 @@ export default function AICommandSurfaceShell() {
               Clear
             </button>
           </div>
-          <OperationalActiveRecordChip
-            label={globalAssistant?.currentContext?.label}
-            sourceSurface={globalAssistant?.currentContext?.source_surface}
-            variant="thread_header"
-          />
+          {presentation !== "rail" ? (
+            <OperationalActiveRecordChip
+              label={globalAssistant?.currentContext?.label}
+              sourceSurface={globalAssistant?.currentContext?.source_surface}
+              variant="thread_header"
+            />
+          ) :   null}
           {threadExpanded ? (
             <div
               ref={threadScrollRef}
-              className="max-h-[min(52vh,440px)] overflow-y-auto rounded-b-none"
-              style={{ minHeight: `${COMMAND_SURFACE_THREAD_SCROLL_MIN_HEIGHT_PX}px` }}
+              className={`${threadScrollMaxClass} overflow-y-auto rounded-b-none`}
+              style={{ minHeight: `${threadScrollMinHeightPx}px` }}
             >
               {shouldShowInlineThreadBusyIndicator({ busy, turns: thread.turns }) ?
                 <div
@@ -2195,6 +2330,8 @@ export default function AICommandSurfaceShell() {
             </div>
           ) : null}
         </div>
+      ) : presentation === "rail" ? (
+        <CommandRailBosStarterSuggestions onPick={pickStarterSuggestion} />
       ) : (
         <OperationalActiveRecordChip
           label={globalAssistant?.currentContext?.label}
@@ -2203,14 +2340,21 @@ export default function AICommandSurfaceShell() {
         />
       )}
 
-      <div className={`flex items-end gap-2 ${hasThread ? "mt-0" : "mt-2"}`}>
+      <div
+        className={`flex shrink-0 items-end gap-2 ${hasThread || presentation === "rail" ? "mt-0" : "mt-2"}`}
+      >
         <div
-          className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${hasThread ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]" : "rounded-2xl px-3.5 py-2.5"
-            }`}
+          className={`flex-1 min-w-0 border-2 bg-white ${
+            presentation === "rail" ? "min-h-[56px] px-3 py-2.5" : "px-3 py-2"
+          } ${
+            hasThread || presentation === "rail"
+              ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]"
+              : "rounded-2xl px-3.5 py-2.5"
+          }`}
           style={{
             borderColor: derived.adminV2AiInputPineRing,
             boxShadow:
-              hasThread
+              hasThread || presentation === "rail"
                 ? `inset 0 1px 0 rgba(255,255,255,0.95)`
                 : `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
           }}
@@ -2220,8 +2364,12 @@ export default function AICommandSurfaceShell() {
             value={commandText}
             onChange={(e) => setCommandText(e.target.value)}
             placeholder="Talk to Bos"
-            className="w-full resize-none bg-transparent outline-none text-sm leading-snug"
-            rows={1}
+            className={
+              presentation === "rail"
+                ? "w-full resize-none bg-transparent outline-none text-sm leading-snug min-h-[52px] max-h-[80px] py-0.5"
+                : "w-full resize-none bg-transparent outline-none text-sm leading-snug"
+            }
+            rows={presentation === "rail" ? 2 : 1}
             style={{ color: neutral.textPrimary }}
             aria-label="AI assistant input"
             data-command-surface-input="true"

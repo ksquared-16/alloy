@@ -2,6 +2,10 @@ import {
     parseWorkspaceSiteIdFromSearchParams,
     WORKSPACE_SITE_QUERY_PARAM,
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
+import {
+    isCanonicalWorkspacePath,
+    normalizeToCanonicalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
 
 export { WORKSPACE_SITE_QUERY_PARAM };
 
@@ -88,21 +92,13 @@ export function clearWorkspaceSiteSession(scope: WorkspaceSiteFilterPersistenceS
     writeWorkspaceSiteSession(scope, null);
 }
 
-/** Normalize legacy `/admin/v2` paths to `/adminV2`. */
+/** Normalize transitional paths to canonical `/admin/...` for workspace site filter matching. */
 export function normalizeAdminV2Path(pathname: string): string {
-    if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
-        if (pathname === "/admin/v2") return "/adminV2/workspace";
-        return `/adminV2${pathname.slice("/admin/v2".length)}`;
-    }
-    if (pathname === "/adminv2" || pathname.startsWith("/adminv2/")) {
-        return `/adminV2${pathname.slice("/adminv2".length)}`;
-    }
-    return pathname;
+    return normalizeToCanonicalAdminPath(pathname);
 }
 
 export function isWorkspaceAreaPath(pathname: string): boolean {
-    const p = normalizeAdminV2Path(pathname);
-    return p === "/adminV2/workspace" || p.startsWith("/adminV2/workspace/");
+    return isCanonicalWorkspacePath(pathname);
 }
 
 export function readWorkspaceSiteFromLocationSearch(search: string): string | null {

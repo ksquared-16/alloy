@@ -10,6 +10,12 @@ import {
 } from "@/lib/layout/runtime/resolvePersonOverviewRelatedPeopleGroups";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import type { PersonDrawerHouseholdMember } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
+import {
+    PRESENTATION_DATA_VALUE_COMPACT,
+    PRESENTATION_EMPTY_STATE,
+    PRESENTATION_LABEL,
+    PRESENTATION_SUPPORTING,
+} from "@/lib/presentation/presentationTypography";
 
 type Props = {
     record: ProofRuntimeRecord;
@@ -69,14 +75,14 @@ function RelatedPersonCard({
                             adornment={PERSON_LINK_ITEM.adornment}
                             display={member.display_name}
                             onAction={onAdornmentAction}
-                            className="block truncate text-[13px] font-semibold leading-snug text-alloy-midnight hover:text-[#0d9488]"
+                            className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                         />
-                    :   <p className="truncate text-[13px] font-semibold leading-snug text-alloy-midnight/90">
+                    :   <p className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>
                             {member.display_name}
                         </p>
                     }
                     {metaLine ?
-                        <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/50">{metaLine}</p>
+                        <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{metaLine}</p>
                     :   null}
                 </div>
             </div>
@@ -95,7 +101,7 @@ function RelatedPeopleGroupBlock({
 }) {
     return (
         <div className="space-y-2" data-person-related-people-group={group.key}>
-            <h4 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+            <h4 className={PRESENTATION_LABEL}>
                 {group.title}
             </h4>
             <ul className="flex flex-col gap-2">
@@ -116,7 +122,7 @@ function RelatedPeopleGroupBlock({
 export default function PersonRelatedPeopleGroupsWidget({ record, onAdornmentAction }: Props) {
     const groups = resolvePersonOverviewRelatedPeopleGroups(record);
     if (groups.length === 0) {
-        return <p className="text-[12px] text-alloy-midnight/45">No related people linked yet.</p>;
+        return <p className={PRESENTATION_EMPTY_STATE}>No related people linked yet.</p>;
     }
 
     return (

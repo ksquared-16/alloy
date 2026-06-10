@@ -73,6 +73,7 @@ import LayoutRuntimeNotesCommunicationWidget, {
     layoutRuntimeNotesWidgetHasContent,
 } from "@/components/layout/LayoutRuntimeNotesCommunicationWidget";
 import LayoutRuntimeDocumentsOverviewWidget from "@/components/layout/LayoutRuntimeDocumentsOverviewWidget";
+import DrawerOverviewPanelShell from "@/components/layout/DrawerOverviewPanelShell";
 import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
 import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
 import { logChildLinkInstrumentationMounted } from "@/lib/layout/runtime/childLinkBrowserTrace";
@@ -99,6 +100,14 @@ import { resolveLeadSummaryLastTouch } from "@/lib/layout/runtime/resolveLeadSum
 import { resolveLeadActivityPreview } from "@/lib/layout/runtime/resolveLeadActivityPreview";
 import { resolvePersonActivityPreview } from "@/lib/layout/runtime/resolvePersonActivityPreview";
 import { resolveChildActivityPreview } from "@/lib/layout/runtime/resolveChildActivityPreview";
+import {
+    DRAWER_OVERVIEW_PANEL_BODY_CLASS,
+    DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS,
+} from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
+import {
+    drawerOverviewSectionIsCenterpiece,
+    resolveDrawerOverviewSectionEyebrow,
+} from "@/lib/layout/runtime/drawerOverviewSectionPresentation";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
 import {
     scrollToLeadEnrollmentSection,
@@ -107,12 +116,6 @@ import {
 import {
     LAYOUT_RUNTIME_BODY_SECTION_HEADER,
     LAYOUT_RUNTIME_BODY_SECTION_SURFACE,
-    LAYOUT_RUNTIME_COMPOSITION_SECTION_EYEBROW,
-    LAYOUT_RUNTIME_COMPOSITION_SECTION_HEADER,
-    LAYOUT_RUNTIME_COMPOSITION_SECTION_TITLE,
-    LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY,
-    LAYOUT_RUNTIME_COMPOSITION_SECTION_BODY,
-    LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE,
     LAYOUT_RUNTIME_SUMMARY_WIDGET_MINIMIZED,
     LAYOUT_RUNTIME_FIELD_READ_SURFACE,
     LAYOUT_RUNTIME_FIELD_SURFACE,
@@ -1176,47 +1179,44 @@ function SectionView({
     const useCompositionSurface = composition.compositionSectionSurface === true && operatorSurfaces;
     const isEnrollmentSection = section.key === "children_enrollment";
 
+    if (useCompositionSurface) {
+        const sectionEyebrow =
+            LEAD_COMPOSITION_SECTION_EYEBROWS[section.key]
+            ?? PERSON_COMPOSITION_SECTION_EYEBROWS[section.key]
+            ?? CHILD_COMPOSITION_SECTION_EYEBROWS[section.key]
+            ?? resolveDrawerOverviewSectionEyebrow(section.key);
+        const bodyClassName =
+            isEnrollmentSection
+            || section.key === "connected_children"
+            || section.key === "program_enrollment"
+            || section.key === "family_relationships" ?
+                DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS
+            :   DRAWER_OVERVIEW_PANEL_BODY_CLASS;
+
+        return (
+            <DrawerOverviewPanelShell
+                sectionKey={section.key}
+                eyebrow={sectionEyebrow}
+                title={section.title}
+                variant={drawerOverviewSectionIsCenterpiece(section.key) ? "centerpiece" : "default"}
+                bodyClassName={bodyClassName}
+            >
+                {body}
+            </DrawerOverviewPanelShell>
+        );
+    }
+
     let surfaceClass = LAYOUT_RUNTIME_SECTION_SURFACE;
     let headerClass = LAYOUT_RUNTIME_SECTION_HEADER;
     let bodyPadding = "gap-3 p-3";
 
-    if (useCompositionSurface) {
-        surfaceClass = LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE;
-        headerClass = LAYOUT_RUNTIME_COMPOSITION_SECTION_HEADER;
-        bodyPadding = isEnrollmentSection ? LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_BODY : LAYOUT_RUNTIME_COMPOSITION_SECTION_BODY;
-    } else if (operatorSurfaces) {
+    if (operatorSurfaces) {
         const isPrimaryWorkspace = isEnrollmentSection;
         surfaceClass =
             isPrimaryWorkspace ? LAYOUT_RUNTIME_PRIMARY_WORKSPACE_SECTION : LAYOUT_RUNTIME_BODY_SECTION_SURFACE;
         headerClass =
             isPrimaryWorkspace ? LAYOUT_RUNTIME_PRIMARY_WORKSPACE_HEADER : LAYOUT_RUNTIME_BODY_SECTION_HEADER;
         bodyPadding = isPrimaryWorkspace ? "" : "gap-2.5 p-3 sm:p-3.5";
-    }
-
-    const sectionEyebrow =
-        useCompositionSurface ?
-            (LEAD_COMPOSITION_SECTION_EYEBROWS[section.key]
-                ?? PERSON_COMPOSITION_SECTION_EYEBROWS[section.key]
-                ?? CHILD_COMPOSITION_SECTION_EYEBROWS[section.key])
-        :   null;
-
-    const compositionPanelShellSection =
-        (composition.leadOverviewComposition === true
-            && (section.key === "household_contact" || section.key === "children_enrollment"))
-        || (composition.personOverviewComposition === true
-            && (section.key === "household_relationships" || section.key === "connected_children"))
-        || (composition.childOverviewComposition === true
-            && (section.key === "family_relationships" || section.key === "program_enrollment"));
-
-    if (compositionPanelShellSection) {
-        return (
-            <div
-                className="flex min-w-0 flex-col gap-2"
-                data-drawer-overview-composition-section={section.key}
-            >
-                {body}
-            </div>
-        );
     }
 
     return (
@@ -1226,20 +1226,9 @@ function SectionView({
             {...(isEnrollmentSection ?
                 { "data-layout-runtime-primary-workspace-section": "true" }
             :   {})}
-            {...(useCompositionSurface ?
-                {
-                    "data-lead-overview-composition-section": section.key,
-                    "data-person-overview-composition-section": section.key,
-                }
-            :   {})}
         >
             <div className={headerClass}>
-                {sectionEyebrow ?
-                    <span className={LAYOUT_RUNTIME_COMPOSITION_SECTION_EYEBROW}>{sectionEyebrow}</span>
-                :   null}
-                <div className={useCompositionSurface ? LAYOUT_RUNTIME_COMPOSITION_SECTION_TITLE : "text-inherit"}>
-                    {section.title}
-                </div>
+                <div className="text-inherit">{section.title}</div>
             </div>
             <div className={`flex flex-col ${bodyPadding}`}>{body}</div>
         </div>

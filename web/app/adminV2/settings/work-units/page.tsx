@@ -1,4 +1,4 @@
-import WorkUnitsClient from "@/app/admin/system/work-units/WorkUnitsClient";
+import WorkUnitsClient from "@/app/legacy-admin/system/work-units/WorkUnitsClient";
 import WorkUnitsLifecycleCrossLink from "@/components/adminV2/settings/WorkUnitsLifecycleCrossLink";
 
 export const dynamic = "force-dynamic";

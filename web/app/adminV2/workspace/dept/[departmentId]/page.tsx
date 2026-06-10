@@ -1,5 +1,7 @@
 "use client";
 
+import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
+
 import {
     useCallback,
     useEffect,
@@ -143,7 +145,7 @@ import {
     getDeptOperNavClickAckSnapshot,
 } from "@/lib/adminV2/navigation";
 
-const WORKSPACE_BASE = "/adminV2/workspace";
+const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
 
 /** Locked before oper region reveal — may upgrade wu_summaries → pipeline_lanes until first reveal (PERF-B-01). */
 type DeptThroughputPresentation = "pipeline_lanes" | "wu_summaries" | "empty";

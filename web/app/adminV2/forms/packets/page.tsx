@@ -3,7 +3,7 @@ import { getAdminAuth } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import PacketSessionsHubClient, {
     type PacketSessionListRow,
-} from "@/app/admin/forms/PacketSessionsHubClient";
+} from "@/app/legacy-admin/forms/PacketSessionsHubClient";
 
 export const dynamic = "force-dynamic";
 

@@ -10,6 +10,8 @@ const CMD = {
 type Props = {
     label: string | null | undefined;
     sourceSurface?: string | null;
+    /** When set, shown as the full operator-facing line (e.g. Lead — Jane Doe). */
+    displayLine?: string | null;
     /** Embedded in thread panel header (border-b). */
     variant?: "thread_header" | "collapsed_rail";
 };
@@ -21,9 +23,11 @@ type Props = {
 export default function OperationalActiveRecordChip({
     label,
     sourceSurface,
+    displayLine,
     variant = "thread_header",
 }: Props) {
     const trimmed = label?.trim() ?? "";
+    const formattedLine = displayLine?.trim() ?? "";
     const surfaceHint =
         sourceSurface === "opportunity_drawer" ?
             "Drawer"
@@ -34,9 +38,10 @@ export default function OperationalActiveRecordChip({
         :   null;
 
     if (variant === "collapsed_rail") {
+        const line = formattedLine || trimmed;
         return (
             <div
-                className="mb-2 min-h-[26px] rounded-xl border px-3 py-1.5 text-[10px]"
+                className="mx-2 mb-2 min-h-[28px] shrink-0 rounded-xl border px-3 py-1.5 text-[11px]"
                 style={{
                     borderColor: derived.border,
                     color: CMD.textSupporting,
@@ -44,20 +49,26 @@ export default function OperationalActiveRecordChip({
                 }}
                 data-command-surface-active-record-row="true"
             >
-                {trimmed ?
+                {line ?
                     <span
-                        className="block truncate"
+                        className="block truncate font-medium leading-snug"
                         data-command-surface-active-record-chip="true"
-                        aria-label={`Active record: ${trimmed}`}
-                        title={trimmed}
+                        aria-label={`BOS context: ${line}`}
+                        title={line}
+                        style={{ color: CMD.textBody }}
                     >
-                        <span className="font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
-                            Active record ·{" "}
-                        </span>
-                        {trimmed}
-                        {surfaceHint ?
-                            <span className="text-alloy-midnight/45"> · {surfaceHint}</span>
-                        :   null}
+                        {formattedLine ?
+                            line
+                        :   <>
+                                <span className="font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
+                                    Active record ·{" "}
+                                </span>
+                                {trimmed}
+                                {surfaceHint ?
+                                    <span className="text-alloy-midnight/45"> · {surfaceHint}</span>
+                                :   null}
+                            </>
+                        }
                     </span>
                 :   <span className="text-alloy-midnight/40" aria-hidden="true">
                         &nbsp;

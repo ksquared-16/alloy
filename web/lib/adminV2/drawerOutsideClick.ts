@@ -9,6 +9,9 @@ export const ADMINV2_DRAWER_OUTSIDE_CLICK_IGNORE_SELECTORS = [
     '[data-opportunity-header-actions-menu-portal="true"]',
     '[data-adminv2-quick-message-modal="true"]',
     '[data-opportunity-drawer-action-overlay="true"]',
+    "[data-adminv2-workspace-command-rail]",
+    "[data-adminv2-command-rail-bos-host]",
+    "[data-adminv2-bos-rail-overlay]",
 ] as const;
 
 /**

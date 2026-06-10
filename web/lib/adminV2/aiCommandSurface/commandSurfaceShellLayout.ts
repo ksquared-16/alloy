@@ -12,6 +12,21 @@ export const COMMAND_SURFACE_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX = 72;
 /** Expanded thread scroll region minimum (pairs with max-h in shell). */
 export const COMMAND_SURFACE_THREAD_SCROLL_MIN_HEIGHT_PX = 48;
 
+/** Right-rail copilot panel — visible chat chrome, not input-only. */
+export const COMMAND_SURFACE_RAIL_PANEL_MIN_HEIGHT_PX = 248;
+
+/** Rail collapsed thread preview body minimum. */
+export const COMMAND_SURFACE_RAIL_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX = 120;
+
+/** Rail expanded thread scroll region minimum. */
+export const COMMAND_SURFACE_RAIL_THREAD_SCROLL_MIN_HEIGHT_PX = 120;
+
+export const COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS = [
+    "Summarize this queue",
+    "What needs attention?",
+    "Draft follow-up",
+] as const;
+
 /** Operator-facing search notice (Card 18 — one line, replaces stacked routing+search). */
 export const COMMAND_SURFACE_SEARCHING_NOTICE = "Searching records…";
 

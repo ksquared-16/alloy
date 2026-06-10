@@ -1,4 +1,4 @@
-import FormsHubClient from "@/app/admin/forms/FormsHubClient";
+import FormsHubClient from "@/app/legacy-admin/forms/FormsHubClient";
 
 export const dynamic = "force-dynamic";
 

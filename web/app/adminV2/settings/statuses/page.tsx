@@ -1,4 +1,4 @@
-import StatusesClient from "@/app/admin/system/statuses/StatusesClient";
+import StatusesClient from "@/app/legacy-admin/system/statuses/StatusesClient";
 import LifecycleSettingsCrossLinkBanner from "@/components/adminV2/settings/LifecycleSettingsCrossLinkBanner";
 
 export const dynamic = "force-dynamic";

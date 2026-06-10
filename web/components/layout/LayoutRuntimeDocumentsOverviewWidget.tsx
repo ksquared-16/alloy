@@ -3,6 +3,11 @@
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
+import {
+    PRESENTATION_DATA_VALUE,
+    PRESENTATION_EMPTY_STATE,
+    PRESENTATION_SUPPORTING,
+} from "@/lib/presentation/presentationTypography";
 
 function readDocuments(record: ProofRuntimeRecord): unknown[] {
     const overview =
@@ -52,11 +57,11 @@ export default function LayoutRuntimeDocumentsOverviewWidget({
 
     return (
         <div className="space-y-2" data-layout-runtime-documents-widget="true">
-            <p className="text-[12px] font-medium text-alloy-midnight/80">{summaryLabel}</p>
+            <p className={PRESENTATION_DATA_VALUE}>{summaryLabel}</p>
             {previewNames.length > 0 ?
                 <ul className="flex flex-col gap-1">
                     {previewNames.map((name) => (
-                        <li key={name} className="truncate text-[11px] text-alloy-midnight/60">
+                        <li key={name} className={`truncate ${PRESENTATION_SUPPORTING}`}>
                             {name}
                         </li>
                     ))}

@@ -1,6 +1,24 @@
 /** Marker package for realistic staging childcare CRM seed (this sprint). */
 export const STAGING_REALISTIC_CHILDCARE_SEED_PACKAGE = "staging_realistic_childcare_seed_v1";
 
+/** One-family validation gate — isolated from bulk 135-family reseed. */
+export const DEMO_ONE_FAMILY_GATE_PACKAGE = "demo_one_family_gate_v1";
+
+export function demoSeedOneFamilyMetadata(args: {
+    seedKey: string;
+    runId: string;
+    familyKey: string;
+}): Record<string, unknown> {
+    return {
+        is_demo_data: true,
+        seed_source: "demo_one_family_gate",
+        demo_seed_package: DEMO_ONE_FAMILY_GATE_PACKAGE,
+        seed_key: args.seedKey,
+        demo_seed_run_id: args.runId,
+        demo_seed_family_key: args.familyKey,
+    };
+}
+
 export const STAGING_DEMO_SEED_SOURCE = "staging_demo_reset";
 
 /** Known historical demo packages removed by `resetStagingDemoData` for a clean staging org. */

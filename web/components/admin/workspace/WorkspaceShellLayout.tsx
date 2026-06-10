@@ -3,6 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 
 import "@/app/adminV2/components/workspace/workspace.css";
+import { WorkspaceCommandRailShell } from "@/app/adminV2/components/workspace/WorkspaceCommandRailShell";
 
 export type WorkspaceShellSurface = "company" | "department" | "work_unit";
 
@@ -65,13 +66,9 @@ export function WorkspaceShellLayout({
               className="adminv2-ws-dept-v2-command-column adminv2-ws-shell-command-column"
               data-adminv2-workspace-command-column
             >
-              <aside
-                className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
-                data-adminv2-workspace-command-rail
-                aria-label={railAriaLabel}
-              >
+              <WorkspaceCommandRailShell ariaLabel={railAriaLabel}>
                 {railContent}
-              </aside>
+              </WorkspaceCommandRailShell>
             </div>
           ) : null}
         </div>

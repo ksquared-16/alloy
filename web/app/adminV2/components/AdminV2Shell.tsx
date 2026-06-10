@@ -28,6 +28,17 @@ import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 import WorkspaceAmbientLayer from "./WorkspaceAmbientLayer";
 import { AdminV2NavigationTransitionRibbon } from "@/components/admin/workspace/AdminV2NavigationTransitionRibbon";
+import {
+    isCanonicalAiActivityPath,
+    isCanonicalFormsPath,
+    isCanonicalSettingsPath,
+    isCanonicalWorkflowsPath,
+    isCanonicalWorkspacePath,
+} from "@/lib/admin/canonicalAdminRoutes";
+import AdminV2CommandRailBosHostFooter from "./AdminV2CommandRailBosHostFooter";
+import { CommandRailBosMount } from "./CommandRailBosMount";
+import { useBosRightRailCopilotDocumentFlag } from "./useBosRightRailCopilotDocumentFlag";
+import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 
 /**
  * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
@@ -83,25 +94,11 @@ export default function AdminV2Shell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isWorkspaceV2Route =
-    pathname === "/adminV2/workspace" ||
-    pathname.startsWith("/adminV2/workspace/") ||
-    pathname === "/admin/v2" ||
-    pathname === "/admin/v2/workspace" ||
-    pathname.startsWith("/admin/v2/workspace/");
-  const isAiActivityRoute = pathname === "/adminV2/ai-activity" || pathname === "/admin/v2/ai-activity";
-  const isSettingsRoute =
-    pathname === "/adminV2/settings" ||
-    pathname.startsWith("/adminV2/settings/") ||
-    pathname === "/admin/v2/settings" ||
-    pathname.startsWith("/admin/v2/settings/");
-  const isWorkflowsRoute =
-    pathname === "/adminV2/workflows" ||
-    pathname.startsWith("/adminV2/workflows/") ||
-    pathname === "/admin/v2/workflows" ||
-    pathname.startsWith("/admin/v2/workflows/");
-  const isFormsRoute =
-    pathname === "/adminV2/forms" || pathname.startsWith("/adminV2/forms/");
+  const isWorkspaceV2Route = isCanonicalWorkspacePath(pathname);
+  const isAiActivityRoute = isCanonicalAiActivityPath(pathname);
+  const isSettingsRoute = isCanonicalSettingsPath(pathname);
+  const isWorkflowsRoute = isCanonicalWorkflowsPath(pathname);
+  const isFormsRoute = isCanonicalFormsPath(pathname);
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readAdminV2SidebarCollapsed() ?? true);
   const toggleSidebarCollapsed = useCallback(() => {
@@ -138,10 +135,13 @@ export default function AdminV2Shell({
       : { level: "department" as const, key: selectedDepartmentKey };
 
   const showRecordsExpandable = zoomLevel === "department" && selectedDepartmentKey != null;
+  const bosRightRailCopilot = useBosRightRailCopilotDocumentFlag();
+  useWorkspaceCommandRailDrawerOffset(bosRightRailCopilot, pathname);
 
   if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
     return (
       <GlobalAssistantProvider>
+        <CommandRailBosMount>
         <AskBosHandoffListener />
         <WorkspaceSiteFilterProvider>
           <div
@@ -149,6 +149,7 @@ export default function AdminV2Shell({
             style={{ backgroundColor: neutral.background }}
             data-adminv2-app-shell="workspace-v2"
             data-adminv2-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
+            {...(bosRightRailCopilot ? { "data-bos-right-rail-copilot": "true" } : {})}
           >
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />
             <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
@@ -163,26 +164,38 @@ export default function AdminV2Shell({
                 {isWorkspaceV2Route || isSettingsRoute || isWorkflowsRoute || isFormsRoute ? (
                   <WorkspaceAmbientLayer />
                 ) : null}
-                <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[96px]">
+                <div
+                  className={
+                    bosRightRailCopilot ?
+                      "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate"
+                    : "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[96px]"
+                  }
+                >
                   <AdminV2NavigationTransitionRibbon />
-                  {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ? (
-                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
-                  ) : (
-                    children
-                  )}
+                  {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
+                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                      {children}
+                      {bosRightRailCopilot && (isAiActivityRoute || isWorkflowsRoute) ?
+                        <AdminV2CommandRailBosHostFooter />
+                      :   null}
+                    </main>
+                  : children}
                 </div>
-                <div className="absolute bottom-2 left-0 right-0 z-20 flex flex-col">
-                  <div className="flex w-full justify-center px-4">
-                    <div className="w-full" style={{ maxWidth: COMMAND_SURFACE_MAX_W_PX }}>
-                      <RecentAiActionsStrip />
+                {!bosRightRailCopilot ?
+                  <div className="absolute bottom-2 left-0 right-0 z-20 flex flex-col">
+                    <div className="flex w-full justify-center px-4">
+                      <div className="w-full" style={{ maxWidth: COMMAND_SURFACE_MAX_W_PX }}>
+                        <RecentAiActionsStrip />
+                      </div>
                     </div>
+                    {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
                   </div>
-                  {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
-                </div>
+                :   null}
               </div>
             </div>
           </div>
         </WorkspaceSiteFilterProvider>
+        </CommandRailBosMount>
       </GlobalAssistantProvider>
     );
   }

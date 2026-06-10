@@ -1,3 +1,4 @@
+import { isCanonicalDrawerHostPath } from "@/lib/admin/canonicalAdminRoutes";
 import type { AdminDrawerState } from "@/contexts/AdminDrawerContext";
 import { isVmBackedDrawerEntityType } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import { isChildDrawerVmOpen } from "@/lib/adminV2/viewModel/drawer/child/childDrawerFirstViewportContract";
@@ -7,10 +8,8 @@ import { personDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/p
 
 export type VmDrawerRuntimeRoute = "opportunity" | "person" | "child" | "legacy";
 
-function isAdminV2DrawerSurface(pathname: string | null | undefined): boolean {
-    return (
-        pathname?.startsWith("/adminV2") === true || pathname?.startsWith("/admin/workspace") === true
-    );
+export function isAdminV2DrawerSurface(pathname: string | null | undefined): boolean {
+    return isCanonicalDrawerHostPath(pathname);
 }
 
 export function resolveVmDrawerRuntimeRoute(

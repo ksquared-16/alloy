@@ -1,4 +1,4 @@
-import OptionSetsClient from "@/app/admin/system/option-sets/OptionSetsClient";
+import OptionSetsClient from "@/app/legacy-admin/system/option-sets/OptionSetsClient";
 
 export const dynamic = "force-dynamic";
 

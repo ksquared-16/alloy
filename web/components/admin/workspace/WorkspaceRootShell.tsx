@@ -1,5 +1,7 @@
 "use client";
 
+import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
+
 import type { CSSProperties } from "react";
 import { useMemo } from "react";
 import Link from "next/link";
@@ -15,7 +17,7 @@ import {
 } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 
-const WORKSPACE_BASE = "/adminV2/workspace";
+const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
 
 const companyRootStyle: CSSProperties = {
   backgroundColor: "transparent",

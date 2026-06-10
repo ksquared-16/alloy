@@ -15,6 +15,7 @@ import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/co
 import { WorkspaceOrgProvider } from "@/contexts/WorkspaceOrgContext";
 import WorkspaceSiteFilterPersistenceScopeBridge from "@/app/adminV2/workspace/WorkspaceSiteFilterPersistenceScopeBridge";
 import type { CSSProperties, ReactNode } from "react";
+import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 
 interface AdminV2WorkspaceClientProvidersProps {
   children: ReactNode;
@@ -66,9 +67,11 @@ export default function AdminV2WorkspaceClientProviders({
     ? (initialEntityLabels as EntityLabelsMap)
     : undefined;
 
+  const bosRailCopilot = isBosRightRailCopilotEnabledClient();
   const workspaceScrollStyle = {
     "--ws-rail-sticky-top": "10px",
-    "--ws-shell-bottom-safe": "120px",
+    "--ws-shell-bottom-safe": bosRailCopilot ? "16px" : "120px",
+    ...(bosRailCopilot ? { "--adminv2-workspace-scroll-pad-y": "24px" } : {}),
   } as CSSProperties;
 
   return (

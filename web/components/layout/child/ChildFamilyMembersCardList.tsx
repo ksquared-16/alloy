@@ -7,6 +7,13 @@ import LayoutRuntimePersonLinkSurface from "@/components/layout/LayoutRuntimePer
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import {
+    PRESENTATION_DATA_VALUE_COMPACT,
+    PRESENTATION_EMPTY_STATE,
+    PRESENTATION_EMPTY_STATE_SOFT,
+    PRESENTATION_LABEL,
+    PRESENTATION_SUPPORTING,
+} from "@/lib/presentation/presentationTypography";
 
 type Props = {
     item: LayoutItem;
@@ -103,7 +110,7 @@ function FamilyMemberCard({
                             adornment={CHILD_LINK_ITEM.adornment}
                             display={displayName}
                             onAction={onAdornmentAction}
-                            className="block truncate text-[13px] font-semibold leading-snug text-alloy-midnight hover:text-[#0d9488]"
+                            className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                         />
                     : personId ?
                         <LayoutRuntimePersonLinkSurface
@@ -116,11 +123,11 @@ function FamilyMemberCard({
                             adornment={PERSON_LINK_ITEM.adornment}
                             display={displayName}
                             onAction={onAdornmentAction}
-                            className="block truncate text-[13px] font-semibold leading-snug text-alloy-midnight hover:text-[#0d9488]"
+                            className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                         />
-                    :   <p className="truncate text-[13px] font-semibold leading-snug text-alloy-midnight/90">{displayName}</p>}
+                    :   <p className={`truncate ${PRESENTATION_DATA_VALUE_COMPACT}`}>{displayName}</p>}
                     {metaLine ?
-                        <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/50">{metaLine}</p>
+                        <p className={`mt-0.5 line-clamp-2 ${PRESENTATION_SUPPORTING}`}>{metaLine}</p>
                     :   null}
                 </div>
             </div>
@@ -138,11 +145,11 @@ export default function ChildFamilyMembersCardList({
     if (rows.length === 0) {
         return (
             <div
-                className="px-4 py-5 text-[12px] leading-relaxed text-alloy-midnight/50"
+                className={`px-4 py-5 ${PRESENTATION_EMPTY_STATE}`}
                 data-child-family-empty="true"
             >
                 <p>No linked family members yet.</p>
-                <p className="mt-1 text-[11px] text-alloy-midnight/40">
+                <p className={`mt-1 ${PRESENTATION_EMPTY_STATE_SOFT}`}>
                     Add parents, guardians, and emergency contacts on the household record, or open the Family Lead to
                     manage enrollment contacts.
                 </p>
@@ -167,7 +174,7 @@ export default function ChildFamilyMembersCardList({
                     if (!members?.length) return null;
                     return (
                         <section key={kind} data-child-family-group={kind}>
-                            <h4 className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">
+                            <h4 className={`mb-1.5 px-1 ${PRESENTATION_LABEL}`}>
                                 {groupLabel(kind)}
                             </h4>
                             <ul className="flex flex-col gap-2">

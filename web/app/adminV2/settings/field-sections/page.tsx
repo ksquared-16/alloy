@@ -1,4 +1,4 @@
-import FieldSectionsClient from "@/app/admin/system/field-sections/FieldSectionsClient";
+import FieldSectionsClient from "@/app/legacy-admin/system/field-sections/FieldSectionsClient";
 import { SETTINGS_FIELD_SECTIONS_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
 
 export const dynamic = "force-dynamic";

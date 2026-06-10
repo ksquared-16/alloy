@@ -11,7 +11,7 @@ import {
 } from "@/lib/layout/runtime/leadOverviewComposition";
 import { resolveLeadOverviewRightRailSections } from "@/lib/layout/runtime/resolveLeadOverviewRightRailSections";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
-import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
+import { DRAWER_OVERVIEW_CANVAS_CLASS } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 type Props = {
@@ -107,7 +107,7 @@ export default function LeadOverviewRuntimeComposition({
 
     return (
         <LayoutRuntimeCompositionProvider value={hints}>
-            <div className={`space-y-3 rounded-lg p-3 ${LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS}`} data-lead-overview-composition="true">
+            <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-lead-overview-composition="true">
                 {/* Shell grid: household 3 / enrollment 7 / right rail 2 — see LEAD_OVERVIEW_SHELL_GRID */}
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
                     {slots.household ?

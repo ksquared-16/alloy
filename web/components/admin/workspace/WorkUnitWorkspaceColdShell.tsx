@@ -1,5 +1,7 @@
 "use client";
 
+import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
+
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import {
@@ -9,7 +11,7 @@ import {
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 
-const WORKSPACE_BASE = "/adminV2/workspace";
+const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
 
 type Props = {
     workUnitTitle?: string;

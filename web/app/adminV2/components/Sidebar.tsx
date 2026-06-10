@@ -14,6 +14,11 @@ import {
     Settings,
 } from "lucide-react";
 import { neutral, palette, derived } from "@/styles/tokens/colors";
+import {
+    CANONICAL_ADMIN_BASE,
+    CANONICAL_ADMIN_WORKSPACE,
+    normalizeToCanonicalAdminPath,
+} from "@/lib/admin/canonicalAdminRoutes";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
 import {
@@ -34,10 +39,10 @@ import {
     workspaceNavChildHref,
 } from "@/lib/adminV2/navigation/buildWorkspaceNavDeptChildren";
 
-const WORKSPACE = "/adminV2/workspace";
-const WORKFLOWS_HREF = "/adminV2/workflows";
-const FORMS_HREF = "/adminV2/forms";
-const SETTINGS_HREF = "/adminV2/settings";
+const WORKSPACE = CANONICAL_ADMIN_WORKSPACE;
+const WORKFLOWS_HREF = `${CANONICAL_ADMIN_BASE}/workflows`;
+const FORMS_HREF = `${CANONICAL_ADMIN_BASE}/forms`;
+const SETTINGS_HREF = `${CANONICAL_ADMIN_BASE}/settings`;
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
 
@@ -45,18 +50,14 @@ const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded
 const EXPANDED_QUEUE_LINK = "adminv2-sidebar-queue-link";
 
 function normalizeAdminPath(pathname: string): string {
-    if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
-        if (pathname === "/admin/v2") return "/adminV2/workspace";
-        return `/adminV2${pathname.slice("/admin/v2".length)}`;
-    }
-    if (pathname === "/adminv2" || pathname.startsWith("/adminv2/")) {
-        return `/adminV2${pathname.slice("/adminv2".length)}`;
-    }
-    return pathname;
+    return normalizeToCanonicalAdminPath(pathname);
 }
 
 function parseWorkspaceRoute(path: string): { departmentId: string | null; workUnitId: string | null } {
-    const m = /^\/adminV2\/workspace\/dept\/([^/]+)(?:\/work-unit\/([^/]+))?\/?$/.exec(path);
+    const normalized = normalizeToCanonicalAdminPath(path);
+    const m = new RegExp(
+        `^${CANONICAL_ADMIN_WORKSPACE.replace(/\//g, "\\/")}/dept/([^/]+)(?:/work-unit/([^/]+))?/?$`,
+    ).exec(normalized);
     if (!m) return { departmentId: null, workUnitId: null };
     return { departmentId: m[1] ?? null, workUnitId: m[2] ?? null };
 }

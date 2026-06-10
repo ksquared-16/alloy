@@ -10,6 +10,11 @@ import {
 } from "@/lib/layout/runtime/formatLayoutRuntimeRepeaterColumnDisplay";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import {
+    PRESENTATION_DATA_VALUE_COMPACT,
+    PRESENTATION_EMPTY_STATE,
+    PRESENTATION_SUPPORTING,
+} from "@/lib/presentation/presentationTypography";
 
 type Props = {
     item: LayoutItem;
@@ -42,7 +47,7 @@ export default function PersonConnectedChildrenCardList({
             data-layout-runtime-connected-children-read-mode="card-list"
         >
             {rows.length === 0 ?
-                <div className="px-4 py-5 text-[12px] leading-snug text-alloy-midnight/40">No children linked yet.</div>
+                <div className={`px-4 py-5 ${PRESENTATION_EMPTY_STATE}`}>No children linked yet.</div>
             :   <ul className="flex flex-col gap-2 p-2">
                     {rows.map((row, index) => {
                         const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);
@@ -74,18 +79,18 @@ export default function PersonConnectedChildrenCardList({
                                         adornment={nameCol.adornment}
                                         display={formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol)}
                                         onAction={onAdornmentAction}
-                                        className="block truncate text-[13px] font-semibold leading-snug text-alloy-midnight hover:text-[#0d9488]"
+                                        className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                                     />
                                     {metaColumns.length > 0 && metaLine ?
                                         <p
-                                            className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/50"
+                                            className={`mt-0.5 line-clamp-2 ${PRESENTATION_SUPPORTING}`}
                                             data-person-connected-child-meta-line="true"
                                         >
                                             {metaLine}
                                         </p>
                                     :   null}
                                     {enrollmentStatus && !metaLine.includes(enrollmentStatus) ?
-                                        <p className="mt-0.5 text-[11px] text-alloy-midnight/45">{enrollmentStatus}</p>
+                                        <p className={`mt-0.5 ${PRESENTATION_SUPPORTING}`}>{enrollmentStatus}</p>
                                     :   null}
                                     {opportunityId ?
                                         <div className="mt-1.5">

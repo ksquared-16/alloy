@@ -1,5 +1,7 @@
 "use client";
 
+import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
+
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
@@ -362,6 +364,7 @@ import {
     computeUnmappedOverflowCount,
     computeWorkUnitLifecycleCoverage,
     findAllRecordsQueueKey,
+    workUnitScopeTotalFromSummaries,
     isRowUnmappedForThroughput,
     queueHasStatusFilters,
     reorderSectionsWithAllRecordsFirst,
@@ -407,7 +410,7 @@ import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgram
 import { readOpportunityIdFromQueueRow } from "@/lib/orchestration/placement/placementWaitlistCandidateRowProjection";
 import { parseQueueRowGrainContext } from "@/lib/queues/queueRowGrainContext";
 
-const WORKSPACE_BASE = "/adminV2/workspace";
+const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
 
 /** Synthetic queue keys in the pill strip — map to `queue=needs_attention` + `attention_bucket`. */
 const ATTENTION_BUCKET_PILL_PREFIX = "__attention_bucket:";
@@ -1126,14 +1129,47 @@ export default function AdminV2OpportunityWorkUnitPage() {
             deptOrder,
             deptNameById
         );
-        const scopeTotal = queueSummaries?.reduce((sum, q) => {
-            if (q.counts_deferred || typeof q.count !== "number") return sum;
-            return sum + q.count;
-        }, 0);
-        const currentTotal =
-            scopeTotal != null && Number.isFinite(scopeTotal) && scopeTotal > 0
-                ? scopeTotal
-                : null;
+        let currentTotal: number | null = null;
+        if (queueSummaries?.length && queueDef) {
+            const activeSummary =
+                findQueueSummaryForSelection(queueSummaries, workUnit, selectedQueueKey) ?? queueSummaries[0];
+            if (
+                queueItems != null &&
+                !queueItemsLoading &&
+                !queueItemsError &&
+                activeSummary &&
+                queueItems.queue.key === activeSummary.key &&
+                (queueItems.offset ?? 0) === 0
+            ) {
+                const rowCount = (queueItems.items ?? []).filter((r) => {
+                    if (r == null || typeof r !== "object") return false;
+                    const id = (r as { id?: unknown }).id;
+                    return typeof id === "string" && id.trim().length > 0;
+                }).length;
+                if (rowCount === 0) {
+                    currentTotal =
+                        queueItems.total_omitted !== true && typeof queueItems.total === "number"
+                            ? Math.max(0, Math.floor(queueItems.total))
+                            : 0;
+                } else if (queueItems.total_omitted !== true && typeof queueItems.total === "number") {
+                    currentTotal = Math.max(0, Math.floor(queueItems.total));
+                } else if (
+                    activeSummary.counts_deferred !== true &&
+                    typeof activeSummary.count === "number"
+                ) {
+                    currentTotal = Math.max(0, Math.floor(activeSummary.count));
+                }
+            } else if (
+                activeSummary &&
+                activeSummary.counts_deferred !== true &&
+                typeof activeSummary.count === "number"
+            ) {
+                currentTotal = Math.max(0, Math.floor(activeSummary.count));
+            } else {
+                const scopeMeta = workUnitScopeTotalFromSummaries(queueDef, queueSummaries);
+                currentTotal = scopeMeta.total;
+            }
+        }
         // P1 — re-sort the lifecycle pills by canonical /settings/lifecycle stage order
         // (sync-independent of work_units.sort_order), so /work-units matches /dept and settings.
         const stageOrderedSiblings = sortByLifecycleStageOrder(

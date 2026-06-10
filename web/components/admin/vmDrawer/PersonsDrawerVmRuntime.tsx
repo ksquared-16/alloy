@@ -39,6 +39,7 @@ import { shouldUsePersonOverviewComposition } from "@/lib/layout/runtime/personO
 import { shouldUseChildOverviewComposition } from "@/lib/layout/runtime/childOverviewComposition";
 import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawerLayoutDocShellZones";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
+import { useBosPersonDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 
 const PERSON_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -102,6 +103,17 @@ export default function PersonsDrawerVmRuntime() {
 
     const record = displayVm?.record ?? null;
     const personId = String(displayVm?.entity.id ?? drawer.id ?? "").trim();
+
+    const personDrawerDisplayName = useMemo(() => {
+        if (!record) return displayVm?.header.title ?? null;
+        return resolvePersonDrawerProofTitle(record, displayVm, chrome);
+    }, [chrome, displayVm, record]);
+
+    useBosPersonDrawerContextSeed({
+        drawerId: drawer.type === "persons" ? drawer.id : null,
+        displayName: personDrawerDisplayName,
+        isChild: isChildSurface || chrome === "child",
+    });
 
     const vmMatchesRender = useMemo(
         () =>

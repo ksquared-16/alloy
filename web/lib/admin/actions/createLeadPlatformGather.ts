@@ -16,15 +16,6 @@ export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = 
     { payload_key: "child_last_name", field_label: "Child last name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
     { payload_key: "child_date_of_birth", field_label: "Date of birth", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
     {
-        payload_key: "child_location_id",
-        field_label: "School / location",
-        section: "child",
-        section_label: "Child",
-        tier: "optional",
-        value_kind: "select",
-        placement_select: "site",
-    },
-    {
         payload_key: "child_program",
         field_label: "Program interest",
         section: "child",
@@ -52,6 +43,15 @@ export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = 
         option_set_key: "childcare_schedule_type",
     },
     { payload_key: "child_desired_start_date", field_label: "Desired start date", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
+    {
+        payload_key: "location_id",
+        field_label: "School / location",
+        section: "context",
+        section_label: "Context",
+        tier: "optional",
+        value_kind: "select",
+        placement_select: "site",
+    },
     { payload_key: "source", field_label: "Source", section: "context", section_label: "Context", tier: "optional", value_kind: "text" },
     { payload_key: "intake_notes", field_label: "Intake notes", section: "context", section_label: "Context", tier: "optional", value_kind: "text", multiline: true },
 ] as const;
@@ -159,10 +159,6 @@ export function mapCreateLeadGatherToExecutePayload(values: Record<string, strin
     for (const field of CREATE_LEAD_GATHER_FIELDS) {
         const v = (values[field.payload_key] ?? "").trim();
         if (v) out[field.payload_key] = v;
-    }
-    if (out.child_location_id) {
-        out.location_id = out.child_location_id;
-        delete out.child_location_id;
     }
     return out;
 }

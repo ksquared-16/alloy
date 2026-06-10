@@ -11,7 +11,7 @@ import {
 } from "@/lib/layout/runtime/personOverviewComposition";
 import { resolvePersonOverviewRightRailSections } from "@/lib/layout/runtime/resolvePersonOverviewRightRailSections";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
-import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
+import { DRAWER_OVERVIEW_CANVAS_CLASS } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 type Props = {
@@ -103,7 +103,7 @@ export default function PersonOverviewRuntimeComposition({
     return (
         <LayoutRuntimeCompositionProvider value={hints}>
             <div
-                className={`space-y-3 rounded-lg p-3 ${LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS}`}
+                className={DRAWER_OVERVIEW_CANVAS_CLASS}
                 data-person-overview-composition="true"
             >
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">

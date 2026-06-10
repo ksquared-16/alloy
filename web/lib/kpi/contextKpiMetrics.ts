@@ -160,16 +160,25 @@ export function workUnitSelectedTabCount(params: {
     }
 
     const vmLen = filterVmItemIds(queueItems.items ?? []);
-    const reconcileListEmptyVsTab =
+    const listMatchesActiveTab =
         !queueItemsLoading &&
+        !queueItemsError &&
         queueItems.queue.key === activeQueue.key &&
-        (queueItems.offset ?? 0) === 0 &&
-        vmLen === 0 &&
-        queueItems.total_omitted === true &&
-        typeof tabCount === "number" &&
-        tabCount > 0;
+        (queueItems.offset ?? 0) === 0;
 
-    if (reconcileListEmptyVsTab) return 0;
+    if (listMatchesActiveTab) {
+        if (vmLen === 0) {
+            if (queueItems.total_omitted !== true && typeof queueItems.total === "number") {
+                return Math.max(0, Math.floor(queueItems.total));
+            }
+            return 0;
+        }
+        if (typeof queueItems.total === "number" && queueItems.total_omitted !== true) {
+            return Math.max(0, Math.floor(queueItems.total));
+        }
+        return vmLen;
+    }
+
     if (queueItems.total_omitted === true && typeof tabCount === "number") return tabCount;
     if (typeof queueItems.total === "number") return queueItems.total;
     if (typeof tabCount === "number") return tabCount;

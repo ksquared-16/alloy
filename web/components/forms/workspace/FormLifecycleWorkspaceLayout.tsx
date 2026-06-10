@@ -31,7 +31,7 @@ import { FORMS_MODULE_ROUTES } from "@/lib/forms/formsModuleNav";
 import { FORMS_TECHNICAL_DISCLOSURE } from "@/lib/forms/review/formsReviewTechnicalDisclosure";
 import { readStoredOperationalIntent } from "@/lib/forms/operationalIntentTemplates";
 import type { FormLifecycleRecordCreationGate } from "@/lib/forms/lifecycle/isFormLifecycleReadyForRecordCreation";
-import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
+import FormSchemaWorkspace from "@/app/legacy-admin/forms/FormSchemaWorkspace";
 import { FormOutcomeConfigPanel } from "@/components/forms/admin/FormOutcomeConfigPanel";
 import { FormExistingRecordSendPanel } from "@/components/forms/admin/FormExistingRecordSendPanel";
 import { FormIntakeRuntimeOrchestrationPanel } from "@/components/forms/admin/FormIntakeRuntimeOrchestrationPanel";

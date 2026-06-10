@@ -113,6 +113,23 @@ Lead, Person, and Child drawers share composition chrome via:
 - `web/components/layout/DrawerOverviewPanelShell.tsx`
 - Entity `*OverviewRuntimeComposition` modules
 
+### Drawer overview presentation standard (June 2026)
+
+| Element | Treatment |
+|---------|-----------|
+| **Overview canvas** | White (`LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS` / `DRAWER_OVERVIEW_CANVAS_CLASS`) — depth from panels, not gray fill |
+| **Section panel** | Pine left accent (`border-l-alloy-juniper/70`), white surface, subtle shadow |
+| **Section header** | Soft pine-tinted gradient band (`from-emerald-50/70`), icon badge, uppercase eyebrow, semibold title |
+| **Centerpiece sections** | Enrollment / connected children / program — slightly stronger radius and shadow |
+| **Card rhythm** | Rounded inner cards with stone border + light shadow; consistent `gap-2` stack |
+| **Enrollment metadata** | Child name as tier-3 value; birth on supporting line; labeled segments on second line with darker values and muted placeholders |
+| **Empty states** | Tier 6 tokens only — never confused with business data |
+| **Right rail** | Same panel shell as main grid (Activity, Documents, Notes) |
+
+**Do not** use ad hoc opacity classes on drawer overview surfaces — import from `web/lib/presentation/presentationTypography.ts`.
+
+**Related:** `docs/system/drawer-operating-model-v1.md` (behavior); this doc (presentation).
+
 ### Drawer hierarchy audit (June 2026)
 
 | Surface | Before | After |
@@ -194,11 +211,15 @@ Any new operational surface (action workspace cards, BOS summaries, global searc
 | Queue field date resolve | `web/lib/layout/runtime/queueRecordScopedResolve.ts` |
 | Queue typography tier map | `web/lib/layout/runtime/queueRecordFieldTypography.ts` |
 | Drawer field renderer | `web/components/layout/LayoutRuntimePlanView.tsx` |
+| Drawer overview panel shell | `web/components/layout/DrawerOverviewPanelShell.tsx` |
+| Drawer overview tokens | `web/lib/layout/runtime/drawerOverviewCompositionStandard.ts` |
+| Drawer section icons | `web/lib/layout/runtime/drawerOverviewSectionPresentation.ts` |
+| Enrollment card metadata | `web/components/layout/lead/LeadEnrollmentCardMetaLines.tsx` |
 | Queue row CSS | `web/app/adminV2/components/workspace/workspace.css` |
 | Activity timestamps | `web/lib/admin/activityTimelineFormat.ts` |
 | Task due (queue mini-card) | `web/components/layout/queueRecord/LayoutRuntimeTaskDetailPopover.tsx` |
 
-**Tests:** `web/tests/presentation/presentationTypography.test.ts`, `web/tests/presentation/presentationDateFormat.test.ts`, `web/tests/admin/formatQueueRecordDateDisplay.test.ts`, `web/tests/admin/activityTimelineFormat.test.ts`
+**Tests:** `web/tests/presentation/presentationTypography.test.ts`, `web/tests/presentation/presentationDateFormat.test.ts`, `web/tests/layout/drawerOverviewCompositionStandard.test.ts`, `web/tests/admin/formatQueueRecordDateDisplay.test.ts`, `web/tests/admin/activityTimelineFormat.test.ts`
 
 ---
 

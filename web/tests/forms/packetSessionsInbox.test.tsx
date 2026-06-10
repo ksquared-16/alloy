@@ -1,8 +1,8 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import PacketSessionsHubClient from "@/app/admin/forms/PacketSessionsHubClient";
-import type { PacketSessionListRow } from "@/app/admin/forms/PacketSessionsHubClient";
+import PacketSessionsHubClient from "@/app/legacy-admin/forms/PacketSessionsHubClient";
+import type { PacketSessionListRow } from "@/app/legacy-admin/forms/PacketSessionsHubClient";
 
 vi.mock("@/contexts/AdminViewerTimezoneContext", () => ({
     useAdminViewerTimezone: () => "UTC",

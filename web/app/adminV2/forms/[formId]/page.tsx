@@ -1,4 +1,4 @@
-import FormDetailClient from "@/app/admin/forms/[formId]/FormDetailClient";
+import FormDetailClient from "@/app/legacy-admin/forms/[formId]/FormDetailClient";
 
 export const dynamic = "force-dynamic";
 

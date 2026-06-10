@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useCallback, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import CustomerPersonRolesClient from "@/app/admin/system/customer-person-roles/CustomerPersonRolesClient";
-import PersonRelationshipTypesClient from "@/app/admin/system/person-relationship-types/PersonRelationshipTypesClient";
+import CustomerPersonRolesClient from "@/app/legacy-admin/system/customer-person-roles/CustomerPersonRolesClient";
+import PersonRelationshipTypesClient from "@/app/legacy-admin/system/person-relationship-types/PersonRelationshipTypesClient";
 import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
 

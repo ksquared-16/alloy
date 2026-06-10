@@ -16,6 +16,17 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: webRoot,
   },
+  async redirects() {
+    return [
+      /** Phase H1: transitional public routes → canonical `/admin`. */
+      { source: "/adminV2", destination: "/admin", permanent: false },
+      { source: "/adminV2/:path*", destination: "/admin/:path*", permanent: false },
+      { source: "/admin/v2", destination: "/admin", permanent: false },
+      { source: "/admin/v2/:path*", destination: "/admin/:path*", permanent: false },
+      { source: "/adminv2", destination: "/admin", permanent: false },
+      { source: "/adminv2/:path*", destination: "/admin/:path*", permanent: false },
+    ];
+  },
   async rewrites() {
     return [
       /** Drawer VM routes live under /api/admin/view-models (not /api/admin/v2) — Turbopack dev mis-resolves nested v2 API segments. */
@@ -23,12 +34,12 @@ const nextConfig: NextConfig = {
         source: "/api/admin/v2/view-models/:path*",
         destination: "/api/admin/view-models/:path*",
       },
-      /** UI V2 lives under `app/adminV2/`; serve it under `/admin/v2` so middleware’s `/admin/*` allowlist applies (no separate /adminV2 rules needed). */
-      { source: "/admin/v2", destination: "/adminV2/workspace" },
-      { source: "/admin/v2/:path*", destination: "/adminV2/:path*" },
-      /** Allow lowercase bookmarks in case-sensitive deploys. */
-      { source: "/adminv2", destination: "/adminV2/workspace" },
-      { source: "/adminv2/:path*", destination: "/adminV2/:path*" },
+      /**
+       * Canonical `/admin` serves the AdminV2 app tree (`app/adminV2/`).
+       * Legacy implementation is physical at `app/legacy-admin/` → `/legacy-admin/*`.
+       */
+      { source: "/admin", destination: "/adminV2/workspace" },
+      { source: "/admin/:path*", destination: "/adminV2/:path*" },
     ];
   },
 };

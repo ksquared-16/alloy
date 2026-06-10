@@ -55,6 +55,7 @@
         "demo:seed:medication-form": "tsx --tsconfig tsconfig.json scripts/seedMedicationAuthorizationDemoForOrg.ts",
         "demo:seed:scopes": "tsx scripts/seedRealisticChildcareDemoData.ts --scopes-only",
         "demo:seed:patch-metadata": "tsx scripts/seedRealisticChildcareDemoData.ts --patch-metadata",
+        "demo:delete:one-family": "tsx scripts/deleteDemoSeedFamily.ts",
         "dev:layout:publish-lead-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishLeadDrawerV2ForOrg.ts",
         "dev:layout:publish-lead-drawer-v2:execute": "tsx --tsconfig tsconfig.json scripts/publishLeadDrawerV2ForOrg.ts --execute",
         "dev:layout:verify-lead-drawer-v2": "tsx --tsconfig tsconfig.json scripts/publishLeadDrawerV2ForOrg.ts --verify-only",

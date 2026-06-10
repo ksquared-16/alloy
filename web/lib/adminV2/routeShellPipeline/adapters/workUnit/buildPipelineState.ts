@@ -1,3 +1,4 @@
+import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
 import type { RoutePipelineState } from "@/lib/adminV2/routeShellPipeline/types";
 import type { WorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import { workUnitAboveFoldAtomicPaintReady } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
@@ -19,7 +20,7 @@ export type BuildWorkUnitRoutePipelineInput = {
     work_unit_above_fold: WorkUnitAboveFoldRenderModel;
 };
 
-const WORKSPACE_BASE = "/adminV2/workspace";
+const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
 
 export function buildWorkUnitRoutePipelineState(input: BuildWorkUnitRoutePipelineInput): RoutePipelineState {
     const base = input.workspace_base_path ?? WORKSPACE_BASE;

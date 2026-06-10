@@ -7,9 +7,9 @@ import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChil
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import LayoutRuntimeFieldInput from "@/components/layout/LayoutRuntimeFieldInput";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
+import LeadEnrollmentCardMetaLines from "@/components/layout/lead/LeadEnrollmentCardMetaLines";
 import {
     formatLayoutRuntimeRepeaterColumnDisplay,
-    formatLeadEnrollmentCardMetaLine,
 } from "@/lib/layout/runtime/formatLayoutRuntimeRepeaterColumnDisplay";
 import { layoutRuntimeFieldIsEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
@@ -19,6 +19,11 @@ import {
 import { layoutRuntimeEnrollmentPlacementDependentValueReader } from "@/lib/layout/runtime/resolveLayoutRuntimeEnrollmentPlacementContext";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import {
+    PRESENTATION_DATA_VALUE_COMPACT,
+    PRESENTATION_EMPTY_STATE,
+    PRESENTATION_LABEL,
+} from "@/lib/presentation/presentationTypography";
 
 type Props = {
     item: LayoutItem;
@@ -74,7 +79,7 @@ export default function LeadEnrollmentCardList({
     return (
         <div className="min-w-0" data-lead-enrollment-card-list="true" data-layout-runtime-enrollment-read-mode="card-list">
             {rows.length === 0 ?
-                <div className="px-4 py-5 text-[12px] text-alloy-midnight/40">No children linked yet.</div>
+                <div className={`px-4 py-5 ${PRESENTATION_EMPTY_STATE}`}>No children linked yet.</div>
             :   <ul className="flex flex-col gap-2 p-2">
                     {rows.map((row, index) => {
                         const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);
@@ -87,7 +92,6 @@ export default function LeadEnrollmentCardList({
                             refKey: nameCol.refKey,
                             adornment: nameCol.adornment,
                         };
-                        const metaLine = formatLeadEnrollmentCardMetaLine(row, metaColumns);
 
                         return (
                             <li
@@ -108,15 +112,10 @@ export default function LeadEnrollmentCardList({
                                             adornment={nameCol.adornment}
                                             display={formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol)}
                                             onAction={onAdornmentAction}
-                                            className="block truncate text-[13px] font-semibold leading-snug text-alloy-midnight hover:text-alloy-juniper"
+                                            className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
                                         />
                                         {!isEditing && metaColumns.length > 0 ?
-                                            <p
-                                                className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/50"
-                                                data-lead-enrollment-card-meta-line="true"
-                                            >
-                                                {metaLine}
-                                            </p>
+                                            <LeadEnrollmentCardMetaLines row={row} metaColumns={metaColumns} />
                                         :   null}
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1.5">
@@ -138,7 +137,7 @@ export default function LeadEnrollmentCardList({
                                             .filter((col) => col !== nameColumn && enrollmentGridColumnIsEditable(col))
                                             .map((col) => (
                                                 <label key={col.refKey} className="flex min-w-0 flex-col gap-0.5">
-                                                    <span className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                                    <span className={PRESENTATION_LABEL}>
                                                         {col.label}
                                                     </span>
                                                     <LayoutRuntimeFieldInput

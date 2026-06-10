@@ -6,6 +6,7 @@
  */
 
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
+import { PRESENTATION_EMPTY_STATE } from "@/lib/presentation/presentationTypography";
 
 /** Twelve-column shell: left 3 / main 7 / right rail 2. */
 export const DRAWER_OVERVIEW_SHELL_GRID = {
@@ -35,7 +36,13 @@ export const DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS =
     "[&_[data-layout-runtime-summary-row]]:items-stretch [&_[data-layout-runtime-summary-widget]]:min-h-[4.25rem]";
 
 /** Standard empty-state copy tone for overview widgets and relationship lists. */
-export const DRAWER_OVERVIEW_EMPTY_STATE_CLASS = "text-[12px] leading-snug text-alloy-midnight/40";
+export const DRAWER_OVERVIEW_EMPTY_STATE_CLASS = PRESENTATION_EMPTY_STATE;
+
+/** Default section body padding inside premium panel shell. */
+export const DRAWER_OVERVIEW_PANEL_BODY_CLASS = "px-3 pb-3 pt-2";
+
+/** Enrollment / roster sections — card list bleeds to panel edges. */
+export const DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS = "px-0 pb-0 pt-0";
 
 /** Premium drawer overview panel — pine accent + soft header (Lead reference styling). */
 export const DRAWER_OVERVIEW_PANEL_SURFACE =

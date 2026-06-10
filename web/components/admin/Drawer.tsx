@@ -3,6 +3,7 @@
 import React, { type CSSProperties, isValidElement, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { shouldCloseAdminV2DrawerOnOutsideTarget } from "@/lib/adminV2/drawerOutsideClick";
+import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 /**
@@ -177,6 +178,11 @@ export default function Drawer({
 
     const isV2 = variant === "adminV2";
     const isModal = isV2 && presentation === "modal";
+    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
+    const bosSidebarDrawerInset =
+        bosRailCopilot && isV2 && !isModal ?
+            { right: "var(--adminv2-workspace-command-rail-offset, 0px)" as const }
+        :   undefined;
     const cleaningRecordModalTone = isModal && recordModalTone === "cleaning-v2";
     const leftAccent = accentColor ?? (isV2 ? palette.midnightForge : undefined);
 
@@ -203,6 +209,7 @@ export default function Drawer({
           }
         : {
               zIndex: zIndexPanel,
+              ...(bosSidebarDrawerInset ?? {}),
               ...(isV2
                   ? {
                         backgroundColor: neutral.surface,
@@ -540,8 +547,10 @@ export default function Drawer({
         ) : (
             <>
                 <div
-                    className="adminv2-drawer-backdrop-hit adminv2-drawer-sidebar-dim fixed inset-0 bg-black/50 pointer-events-auto"
-                    style={{ zIndex: zIndexBackdrop }}
+                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-sidebar-dim pointer-events-auto fixed bg-black/50 ${
+                        bosSidebarDrawerInset ? "left-0 top-0 bottom-0" : "inset-0"
+                    }`}
+                    style={{ zIndex: zIndexBackdrop, ...(bosSidebarDrawerInset ?? {}) }}
                     aria-hidden
                     onMouseDown={closeOnBackdropMouseDown}
                 />
@@ -550,7 +559,7 @@ export default function Drawer({
                     aria-modal="true"
                     aria-labelledby="admin-drawer-title"
                     data-adminv2-drawer={isV2 ? "true" : undefined}
-                    className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed right-0 left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${isV2 ? "adminv2-drawer-shell-inset border-solid" : "inset-y-0"} ${panelClassName ?? ""} ${
+                    className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${bosSidebarDrawerInset ? "" : "right-0"} ${isV2 ? "adminv2-drawer-shell-inset border-solid" : "inset-y-0"} ${panelClassName ?? ""} ${
                         isV2 ? "" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
                     }`}
                     style={panelStyle}

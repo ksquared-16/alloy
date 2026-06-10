@@ -50,8 +50,8 @@ export const LAYOUT_RUNTIME_BODY_SECTION_SURFACE =
 export const LAYOUT_RUNTIME_BODY_SECTION_HEADER =
     "border-b border-alloy-stone/10 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/55";
 
-/** Very light drawer overview canvas behind section cards. */
-export const LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS = "bg-[rgb(250,251,252)]";
+/** White drawer overview canvas — depth comes from section panels, not gray fill. */
+export const LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS = "bg-white";
 
 /** Operational enrollment roster inside primary workspace section. */
 export const LAYOUT_RUNTIME_ENROLLMENT_GRID_WRAP = "min-w-0 bg-white";
@@ -72,7 +72,7 @@ export const LAYOUT_RUNTIME_COMPOSITION_SECTION_TITLE =
     "text-[13px] font-semibold tracking-tight text-alloy-midnight";
 
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_HEADER =
-    "flex flex-col gap-0.5 border-b border-alloy-stone/10 bg-white px-3 py-2";
+    "flex flex-col gap-0.5 border-b border-alloy-stone/10 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3 py-2";
 
 /** Primary enrollment centerpiece — same composition card chrome as household/activity. */
 export const LAYOUT_RUNTIME_COMPOSITION_ENROLLMENT_SURFACE = LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE;

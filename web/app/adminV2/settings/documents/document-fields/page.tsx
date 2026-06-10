@@ -1,4 +1,4 @@
-import DocumentFieldsClient from "@/app/admin/system/document-fields/DocumentFieldsClient";
+import DocumentFieldsClient from "@/app/legacy-admin/system/document-fields/DocumentFieldsClient";
 
 export const dynamic = "force-dynamic";
 

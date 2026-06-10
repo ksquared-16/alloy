@@ -20,17 +20,70 @@ export function formatLayoutRuntimeRepeaterColumnDisplay(
     return formatLayoutRuntimeOperatorDateIfRefKey(col.refKey, raw, col.renderHint);
 }
 
+export type LeadEnrollmentCardMetaSegment = {
+    refKey: string;
+    label: string;
+    display: string;
+    isPlaceholder: boolean;
+    /** Short inline label prefix when value is present (e.g. "Start"). */
+    prefixLabel?: string;
+};
+
+function enrollmentSegmentPrefixLabel(refKey: string, label: string): string | undefined {
+    const normalized = refKey.toLowerCase();
+    if (normalized.includes("program")) return undefined;
+    if (normalized.includes("desired_start") || label.toLowerCase().includes("start")) return "Start";
+    if (normalized.includes("schedule")) return undefined;
+    if (normalized.includes("room") || label.toLowerCase().includes("classroom")) return undefined;
+    if (normalized.includes("location")) return undefined;
+    if (normalized.includes("status")) return undefined;
+    return undefined;
+}
+
+/** Structured enrollment card metadata for two-line drawer presentation. */
+export function buildLeadEnrollmentCardMetaPresentation(
+    row: ProofRuntimeRecord,
+    metaColumns: LayoutCollectionColumn[],
+): { birthLine: string | null; segments: LeadEnrollmentCardMetaSegment[] } {
+    const dobColumn = metaColumns.find((col) => col.refKey.toLowerCase().includes("dob"));
+    const detailColumns = metaColumns.filter((col) => col !== dobColumn);
+
+    let birthLine: string | null = null;
+    if (dobColumn) {
+        const dobDisplay = formatLayoutRuntimeRepeaterColumnDisplay(row, dobColumn);
+        if (dobDisplay !== "—") {
+            birthLine = dobDisplay.toLowerCase().startsWith("born ") ? dobDisplay : `Born ${dobDisplay}`;
+        }
+    }
+
+    const segments = detailColumns.map((col) => {
+        const display = formatLayoutRuntimeRepeaterColumnDisplay(row, col);
+        const isPlaceholder = display === "—";
+        return {
+            refKey: col.refKey,
+            label: col.label,
+            display,
+            isPlaceholder,
+            prefixLabel: isPlaceholder ? undefined : enrollmentSegmentPrefixLabel(col.refKey, col.label),
+        };
+    });
+
+    return { birthLine, segments };
+}
+
 /** Labeled enrollment meta segments — value when present, otherwise `{label} —`. */
 export function formatLeadEnrollmentCardMetaLine(
     row: ProofRuntimeRecord,
     metaColumns: LayoutCollectionColumn[],
 ): string {
-    return metaColumns
-        .map((col) => {
-            const display = formatLayoutRuntimeRepeaterColumnDisplay(row, col);
-            return display !== "—" ? display : `${col.label} —`;
-        })
-        .join(" · ");
+    const { birthLine, segments } = buildLeadEnrollmentCardMetaPresentation(row, metaColumns);
+    const parts = [
+        birthLine,
+        ...segments.map((segment) =>
+            segment.isPlaceholder ? `${segment.label} —` : segment.display,
+        ),
+    ].filter(Boolean);
+    return parts.join(" · ");
 }
 
 /** Connected children card meta — omit empty segments (no `{label} —` noise). */

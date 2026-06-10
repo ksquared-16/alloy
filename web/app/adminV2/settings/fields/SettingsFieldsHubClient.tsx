@@ -3,8 +3,8 @@
 import { useCallback, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import EntityFieldsClient from "@/components/admin/EntityFieldsClient";
-import PersonFieldsClient from "@/app/admin/system/person-fields/PersonFieldsClient";
-import LocationFieldsClient from "@/app/admin/system/location-fields/LocationFieldsClient";
+import PersonFieldsClient from "@/app/legacy-admin/system/person-fields/PersonFieldsClient";
+import LocationFieldsClient from "@/app/legacy-admin/system/location-fields/LocationFieldsClient";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";

@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import PacketDefinitionsHubClient from "@/app/admin/forms/PacketDefinitionsHubClient";
+import PacketDefinitionsHubClient from "@/app/legacy-admin/forms/PacketDefinitionsHubClient";
 
 export const dynamic = "force-dynamic";
 

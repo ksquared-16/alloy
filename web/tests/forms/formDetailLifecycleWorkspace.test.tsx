@@ -8,7 +8,7 @@ vi.mock("@/contexts/AdminAuthContext", () => ({
     useAdminAuth: () => ({ canMutate: true }),
 }));
 
-vi.mock("@/app/admin/forms/FormSchemaWorkspace", () => ({
+vi.mock("@/app/legacy-admin/forms/FormSchemaWorkspace", () => ({
     default: () => <div data-testid="form-schema-workspace-mock">Schema workspace</div>,
 }));
 

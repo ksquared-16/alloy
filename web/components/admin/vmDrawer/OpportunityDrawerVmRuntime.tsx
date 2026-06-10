@@ -50,6 +50,7 @@ import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/commun
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";
+import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 
 const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -83,6 +84,13 @@ export default function OpportunityDrawerVmRuntime() {
     );
 
     const record = displayVm?.above_fold.record ?? null;
+
+    useBosOpportunityDrawerContextSeed({
+        drawerId: drawer.type === "opportunities" ? drawer.id : null,
+        overviewData: record as Record<string, unknown> | null,
+        queuePreviewSeed: drawer.opportunityQueuePreviewSeed ?? null,
+        opportunitySingular,
+    });
 
     const { feedback: registryActionFeedback, showSuccess, showError, clearFeedback: clearRegistryActionFeedback } =
         useOpportunityDrawerRegistryActionFeedback(drawer.id);

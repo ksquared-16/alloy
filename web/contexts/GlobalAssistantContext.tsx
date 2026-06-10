@@ -56,6 +56,9 @@ type GlobalAssistantContextValue = {
     commandSurfaceMode: CommandSurfaceMode;
     setCommandSurfaceMode: (mode: CommandSurfaceMode) => void;
     currentContext: GlobalAssistantEntityContext | null;
+    /** Drawer/page display line for command surface chip (e.g. Person — Jane Doe). */
+    surfaceOperationalLabel: string | null;
+    setSurfaceOperationalLabel: (label: string | null) => void;
     /** Department / work-unit page scope for Workflow Assist create drafts. */
     workspaceScope: GlobalAssistantWorkspaceScope | null;
     setWorkspaceScope: (scope: GlobalAssistantWorkspaceScope | null) => void;
@@ -102,6 +105,7 @@ function workspaceScopeEqual(
 export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
     const [commandSurfaceMode, setCommandSurfaceMode] = useState<CommandSurfaceMode>("job_overview");
     const [currentContext, setCurrentContext] = useState<GlobalAssistantEntityContext | null>(null);
+    const [surfaceOperationalLabel, setSurfaceOperationalLabelState] = useState<string | null>(null);
     const [workspaceScope, setWorkspaceScopeState] = useState<GlobalAssistantWorkspaceScope | null>(null);
 
     const [commandSurfaceThread, setCommandSurfaceThreadState] = useState<CommandSurfaceThreadState>(() =>
@@ -178,6 +182,11 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
         setCurrentContext((prev) => (entityOperationalContextEqual(prev, context) ? prev : context));
     }, []);
 
+    const setSurfaceOperationalLabel = useCallback((label: string | null) => {
+        const next = label?.trim() || null;
+        setSurfaceOperationalLabelState((prev) => (prev === next ? prev : next));
+    }, []);
+
     const setWorkspaceScope = useCallback((scope: GlobalAssistantWorkspaceScope | null) => {
         setWorkspaceScopeState((prev) => (workspaceScopeEqual(prev, scope) ? prev : scope));
     }, []);
@@ -196,6 +205,8 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
             commandSurfaceMode,
             setCommandSurfaceMode,
             currentContext,
+            surfaceOperationalLabel,
+            setSurfaceOperationalLabel,
             workspaceScope,
             setWorkspaceScope,
             focusCommandBar,
@@ -215,6 +226,8 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
         [
             commandSurfaceMode,
             currentContext,
+            surfaceOperationalLabel,
+            setSurfaceOperationalLabel,
             workspaceScope,
             setWorkspaceScope,
             focusCommandBar,

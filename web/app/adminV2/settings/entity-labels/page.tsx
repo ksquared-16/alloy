@@ -1,4 +1,4 @@
-import EntityLabelsClient from "@/app/admin/system/entity-labels/EntityLabelsClient";
+import EntityLabelsClient from "@/app/legacy-admin/system/entity-labels/EntityLabelsClient";
 
 export const dynamic = "force-dynamic";
 

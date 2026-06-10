@@ -1,4 +1,4 @@
-import FormSubmissionsClient from "@/app/admin/forms/[formId]/submissions/FormSubmissionsClient";
+import FormSubmissionsClient from "@/app/legacy-admin/forms/[formId]/submissions/FormSubmissionsClient";
 
 export const dynamic = "force-dynamic";
 

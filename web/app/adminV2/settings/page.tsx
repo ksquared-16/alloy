@@ -74,79 +74,79 @@ export default function AdminV2SettingsIndexPage() {
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)] lg:items-start">
                 <div className="space-y-7">
                     <SettingsGroup label="Organization">
-                        <SettingsLink href="/adminV2/settings/departments" title="Departments" mode="editable">
+                        <SettingsLink href="/admin/settings/departments" title="Departments" mode="editable">
                             Teams, sites, and structure.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/locations" title="Locations & hierarchy" mode="editable">
+                        <SettingsLink href="/admin/settings/locations" title="Locations & hierarchy" mode="editable">
                             Physical sites and classroom or room structure.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/users-roles" title="Users & access" mode="editable">
+                        <SettingsLink href="/admin/settings/users-roles" title="Users & access" mode="editable">
                             Staff, roles, and data access.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/communications" title="Communications" mode="editable">
+                        <SettingsLink href="/admin/settings/communications" title="Communications" mode="editable">
                             Email and messaging setup.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/kpis" title="Workspace metrics" mode="editable">
+                        <SettingsLink href="/admin/settings/kpis" title="Workspace metrics" mode="editable">
                             Dashboard KPI tiles.
                         </SettingsLink>
                     </SettingsGroup>
 
                     <SettingsGroup label="Enrollment Operations">
-                        <SettingsLink href="/adminV2/settings/lifecycle" title="Lifecycle" mode="editable" emphasis>
+                        <SettingsLink href="/admin/settings/lifecycle" title="Lifecycle" mode="editable" emphasis>
                             Configure processes, stages, requirements, statuses, queues, actions, and forms.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/work-units" title="Work Units & Queues" mode="partial">
+                        <SettingsLink href="/admin/settings/work-units" title="Work Units & Queues" mode="partial">
                             Pipeline lanes and queue layout in the workspace.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/statuses" title="Statuses" mode="editable">
+                        <SettingsLink href="/admin/settings/statuses" title="Statuses" mode="editable">
                             Display names and order for inquiry statuses.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/placement-priority" title="Waitlist ranking" mode="editable">
+                        <SettingsLink href="/admin/settings/placement-priority" title="Waitlist ranking" mode="editable">
                             Priority factors and order for waitlisted children.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/attention-sla-rules" title="Attention & SLA" mode="editable">
+                        <SettingsLink href="/admin/settings/attention-sla-rules" title="Attention & SLA" mode="editable">
                             Needs-attention buckets and timing thresholds.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/tours/availability" title="Tour availability" mode="editable">
+                        <SettingsLink href="/admin/settings/tours/availability" title="Tour availability" mode="editable">
                             Bookable tour windows.
                         </SettingsLink>
                     </SettingsGroup>
 
                     <SettingsGroup label="Record Setup">
-                        <SettingsLink href="/adminV2/settings/layouts" title="Record Layouts" mode="editable">
+                        <SettingsLink href="/admin/settings/layouts" title="Record Layouts" mode="editable">
                             Drawer sections and how fields appear.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/fields" title="Fields" mode="editable">
+                        <SettingsLink href="/admin/settings/fields" title="Fields" mode="editable">
                             Field labels, visibility, and help text.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/entity-labels" title="Record labels" mode="editable">
+                        <SettingsLink href="/admin/settings/entity-labels" title="Record labels" mode="editable">
                             Family, inquiry, and other record names.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/relationships" title="Relationships" mode="partial">
+                        <SettingsLink href="/admin/settings/relationships" title="Relationships" mode="partial">
                             Person and customer relationship types.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/option-sets" title="Option lists" mode="editable">
+                        <SettingsLink href="/admin/settings/option-sets" title="Option lists" mode="editable">
                             Dropdown values for fields.
                         </SettingsLink>
                     </SettingsGroup>
 
                     <SettingsGroup label="Actions & Automation">
-                        <SettingsLink href="/adminV2/settings/actions" title="Action Buttons" mode="editable">
+                        <SettingsLink href="/admin/settings/actions" title="Action Buttons" mode="editable">
                             Where enrollment buttons appear in the drawer and workspace.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/workflows" title="Automations" mode="editable">
+                        <SettingsLink href="/admin/workflows" title="Automations" mode="editable">
                             Workflows, triggers, and automated status changes.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/config-proposals" title="Configuration proposals" mode="partial">
+                        <SettingsLink href="/admin/settings/config-proposals" title="Configuration proposals" mode="partial">
                             Review proposed layout changes.
                         </SettingsLink>
                     </SettingsGroup>
 
                     <SettingsGroup label="Documents & Forms">
-                        <SettingsLink href="/adminV2/forms" title="Forms & Packets" mode="related_hub">
+                        <SettingsLink href="/admin/forms" title="Forms & Packets" mode="related_hub">
                             Form definitions and enrollment packets.
                         </SettingsLink>
-                        <SettingsLink href="/adminV2/settings/documents/document-fields" title="Document fields" mode="partial">
+                        <SettingsLink href="/admin/settings/documents/document-fields" title="Document fields" mode="partial">
                             Fields used on enrollment documents.
                         </SettingsLink>
                     </SettingsGroup>
@@ -162,10 +162,10 @@ export default function AdminV2SettingsIndexPage() {
                         </p>
                     </div>
                     <div className="space-y-2">
-                        <DiagnosticLink href="/adminV2/settings/status-transition-rules" title="Workflow automation rules">
+                        <DiagnosticLink href="/admin/settings/status-transition-rules" title="Workflow automation rules">
                             When workflows may update status (read-only reference).
                         </DiagnosticLink>
-                        <DiagnosticLink href="/adminV2/settings/field-sections" title="Field grouping (advanced)">
+                        <DiagnosticLink href="/admin/settings/field-sections" title="Field grouping (advanced)">
                             Bulk catalog section names — drawer composition uses Record Layouts.
                         </DiagnosticLink>
                     </div>

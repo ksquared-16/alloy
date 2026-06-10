@@ -1,4 +1,4 @@
-import DepartmentsClient from "@/app/admin/system/departments/DepartmentsClient";
+import DepartmentsClient from "@/app/legacy-admin/system/departments/DepartmentsClient";
 
 export const dynamic = "force-dynamic";
 
