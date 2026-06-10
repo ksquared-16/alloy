@@ -30,6 +30,11 @@ describe("work unit right rail actions", () => {
         expect(placement).toMatchObject({ surface: "work_unit", slot: "primary" });
     });
 
+    it("lifecycle matrix workspace_root maps to workspace surface primary slot", () => {
+        const placement = lifecyclePlacementById("workspace_root");
+        expect(placement).toMatchObject({ surface: "workspace", slot: "primary" });
+    });
+
     it("lifecycle-wide placement is visible on any builder stage", () => {
         const cfg = buildLifecycleActionConditionConfig("lifecycle", []);
         expect(lifecycleBuilderPlacementVisibleOnStage(cfg, "tour")).toBe(true);

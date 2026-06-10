@@ -35,7 +35,7 @@ type Props = {
 };
 
 const WHERE_OPTIONS = SETTINGS_SURFACE_OPTIONS.filter((o) =>
-    ["queue_row", "record_header", "record_section", "right_rail"].includes(o.value)
+    ["queue_row", "record_header", "record_section", "right_rail", "workspace"].includes(o.value)
 );
 
 export default function ActionPlacementGuidedEditor({ open, mode, seed, onClose, onSaved, canMutate }: Props) {

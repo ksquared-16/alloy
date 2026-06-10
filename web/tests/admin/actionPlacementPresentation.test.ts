@@ -11,12 +11,14 @@ describe("actionPlacementPresentation", () => {
     it("includes workspace surfaces in Settings editable list", () => {
         expect(OPERATOR_EDITABLE_ACTION_SURFACES).toContain("right_rail");
         expect(OPERATOR_EDITABLE_ACTION_SURFACES).toContain("queue_row");
+        expect(OPERATOR_EDITABLE_ACTION_SURFACES).toContain("workspace");
     });
 
     it("labels record section and workspace surfaces for operators", () => {
         expect(settingsSurfaceLabel("record_section")).toBe("Record section");
         expect(settingsSurfaceLabel("right_rail")).toContain("Workspace");
         expect(settingsSurfaceLabel("queue_row")).toBe("Workspace queue row");
+        expect(settingsSurfaceLabel("workspace")).toBe("Workspace root");
     });
 
     it("requires section key only for record section", () => {

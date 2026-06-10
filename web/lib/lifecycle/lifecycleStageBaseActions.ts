@@ -42,6 +42,7 @@ export const LIFECYCLE_ACTION_PLACEMENTS: readonly LifecycleActionPlacementOptio
     { id: "queue_row", label: "Work Unit Queue Row", surface: "queue_row", slot: "row_inline" },
     { id: "work_unit_rail", label: "Work Unit Right Rail", surface: "work_unit", slot: "primary" },
     { id: "department_rail", label: "Department Right Rail", surface: "department", slot: "primary" },
+    { id: "workspace_root", label: "Workspace root", surface: "workspace", slot: "primary" },
     { id: "overflow", label: "Overflow Menu", surface: "record_header", slot: "overflow" },
 ] as const;
 
@@ -51,6 +52,7 @@ export const LIFECYCLE_ACTIVATION_ACTION_PLACEMENTS: readonly LifecycleActionPla
     { id: "queue_row", label: "Work Unit Queue row", surface: "queue_row", slot: "row_inline" },
     { id: "work_unit_rail", label: "Work Unit right rail", surface: "work_unit", slot: "primary" },
     { id: "department_rail", label: "Department right rail", surface: "department", slot: "primary" },
+    { id: "workspace_root", label: "Workspace root", surface: "workspace", slot: "primary" },
 ] as const;
 
 /** Base actions for activation, including create-record with configured primary label. */

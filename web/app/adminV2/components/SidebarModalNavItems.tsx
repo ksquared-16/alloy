@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { Bell, ClipboardList, Inbox, ListChecks } from "lucide-react";
+import { ClipboardList, Inbox, ListChecks } from "lucide-react";
 
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
@@ -15,9 +15,6 @@ import {
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
-
-/** Placeholder until notification center modal/API ships — see docs/product/communications.md § Not in V1. */
-export const ADMIN_V2_NOTIFICATIONS_HREF = "/adminV2/operations" as const;
 
 function formatSidebarBadgeCount(count: number, collapsed: boolean): string {
     if (count <= 0) return "0";
@@ -186,23 +183,6 @@ export function SidebarFormsNavItem({ collapsed }: { collapsed: boolean }) {
             label="Forms"
             active={active}
             icon={<ClipboardList size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
-        />
-    );
-}
-
-/** TODO: wire notification count + modal when notification center ships. */
-export function SidebarNotificationsNavItem({ collapsed }: { collapsed: boolean }) {
-    const pathname = usePathname();
-    const active = normalizeToCanonicalAdminPath(pathname) === ADMIN_V2_NOTIFICATIONS_HREF;
-
-    return (
-        <SidebarRouteNavItem
-            collapsed={collapsed}
-            href={ADMIN_V2_NOTIFICATIONS_HREF}
-            title="Notifications — activity feed coming soon"
-            label="Notifications"
-            active={active}
-            icon={<Bell size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
         />
     );
 }

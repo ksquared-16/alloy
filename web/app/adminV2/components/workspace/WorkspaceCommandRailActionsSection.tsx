@@ -7,7 +7,7 @@ import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/w
 import type { ActionsVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 
-type Surface = "department" | "work_unit";
+type Surface = "department" | "work_unit" | "company";
 
 type Props = {
     model: ActionsVm;
@@ -56,7 +56,7 @@ export function WorkspaceCommandRailActionsSection({
                         model={model}
                         onAction={onAction}
                         title={title}
-                        surface={surface}
+                        surface={surface === "company" ? "company" : surface}
                         suppressSectionTitles
                     />
                 }

@@ -15,7 +15,7 @@ describe("sidebar modal navigation", () => {
         expect(items).toContain("SidebarTasksNavItem");
         expect(items).toContain("SidebarInboxNavItem");
         expect(items).toContain("SidebarFormsNavItem");
-        expect(items).toContain("SidebarNotificationsNavItem");
+        expect(items).not.toContain("SidebarNotificationsNavItem");
         expect(items).toContain("dispatchAdminV2OpenTasksPanel");
         expect(items).toContain("dispatchAdminV2OpenInboxModal");
         expect(items).toContain("ADMIN_FORMS_HREF");
@@ -27,11 +27,26 @@ describe("sidebar modal navigation", () => {
         expect(read("app/adminV2/components/TopNavBar.tsx")).toContain("adminv2:open-tasks-panel");
     });
 
-    it("sidebar lists Forms and Notifications route destinations", () => {
+    it("notifications live in the top header between locations and profile", () => {
+        const topNav = read("app/adminV2/components/TopNavBar.tsx");
+        const sidebar = read("app/adminV2/components/Sidebar.tsx");
+        const headerControls = topNav.slice(topNav.indexOf('<div className="flex shrink-0 items-center gap-3">'));
+        expect(topNav).toContain("TopNavNotificationsLink");
+        expect(headerControls).toContain("WorkspaceSiteFilterStrip");
+        expect(headerControls).toContain("AdminV2ProfileMenu");
+        expect(headerControls.indexOf("TopNavNotificationsLink")).toBeGreaterThan(
+            headerControls.indexOf("WorkspaceSiteFilterStrip")
+        );
+        expect(headerControls.indexOf("TopNavNotificationsLink")).toBeLessThan(
+            headerControls.indexOf("AdminV2ProfileMenu")
+        );
+        expect(sidebar).not.toContain("SidebarNotificationsNavItem");
+        expect(read("lib/adminV2/adminV2NavConstants.ts")).toContain("ADMIN_V2_NOTIFICATIONS_HREF");
+    });
+
+    it("sidebar lists Forms route destination", () => {
         const sidebar = read("app/adminV2/components/Sidebar.tsx");
         expect(sidebar).toContain("SidebarFormsNavItem");
-        expect(sidebar).toContain("SidebarNotificationsNavItem");
         expect(read("app/adminV2/components/SidebarModalNavItems.tsx")).toContain('href={ADMIN_FORMS_HREF}');
-        expect(read("app/adminV2/components/SidebarModalNavItems.tsx")).toContain("ADMIN_V2_NOTIFICATIONS_HREF");
     });
 });

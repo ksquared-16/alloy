@@ -101,6 +101,8 @@ export function WorkspaceRootShell({
     return filterOperatorWorkspaceKpis(roll);
   }, [workspaceKpiStrip, orgOpportunityKpis]);
 
+  const defaultDepartmentId = lifecycleCards[0]?.departmentId ?? null;
+
   return (
     <WorkspaceShellLayout
       surface="company"
@@ -108,8 +110,7 @@ export function WorkspaceRootShell({
       style={companyRootStyle}
       workspaceRootShell
       railAriaLabel="Decisions and actions"
-      showRail
-      railContent={<WorkspaceRootActionsRail />}
+      railContent={<WorkspaceRootActionsRail defaultDepartmentId={defaultDepartmentId} />}
       containLead={null}
       primaryColumn={
         <>

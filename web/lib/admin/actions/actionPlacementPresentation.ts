@@ -15,14 +15,8 @@ export const SETTINGS_EDITABLE_SURFACES: readonly ActionSurface[] = [
     "record_section",
     "right_rail",
     "queue_row",
+    "workspace",
 ] as const;
-
-/**
- * `workspace` exists in schema/API but AdminV2 does not resolve `surface=workspace` yet.
- * Use right_rail (side panel) or queue_row (queue) for workspace UX until root wiring lands.
- */
-export const WORKSPACE_ROOT_SURFACE_DEFERRED_NOTE =
-    "The workspace root surface is not wired in the UI yet. Use Workspace (side panel) or Workspace (queue row) for department and queue screens.";
 
 export type SettingsSurfaceOption = {
     value: ActionSurface;
@@ -48,13 +42,19 @@ export const SETTINGS_SURFACE_OPTIONS: readonly SettingsSurfaceOption[] = [
     {
         value: "right_rail",
         label: "Workspace (side panel)",
-        description: "Department or work-unit workspace side panel on /adminV2/workspace.",
+        description: "Department or work-unit workspace side panel on /workspace/dept and /workspace/work-unit routes.",
         requiresSectionKey: false,
     },
     {
         value: "queue_row",
         label: "Workspace queue row",
         description: "Inline actions on a queue row in the workspace pipeline.",
+        requiresSectionKey: false,
+    },
+    {
+        value: "workspace",
+        label: "Workspace root",
+        description: "Operator workspace landing (/workspace) actions rail.",
         requiresSectionKey: false,
     },
 ] as const;
@@ -80,6 +80,7 @@ const PREFERRED_SLOTS_BY_SURFACE: Partial<Record<ActionSurface, readonly ActionS
     record_section: ["primary", "secondary", "overflow"],
     queue_row: ["row_inline", "overflow"],
     right_rail: ["right_rail", "primary", "overflow"],
+    workspace: ["primary", "right_rail", "secondary", "overflow"],
 };
 
 export function settingsSurfaceOption(surface: string): SettingsSurfaceOption | undefined {

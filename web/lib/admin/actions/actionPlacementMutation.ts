@@ -31,6 +31,7 @@ export const OPERATOR_EDITABLE_ACTION_SURFACES: readonly ActionSurface[] = [
     "record_section",
     "right_rail",
     "queue_row",
+    "workspace",
 ] as const;
 
 export type ActionPlacementPatchInput = {

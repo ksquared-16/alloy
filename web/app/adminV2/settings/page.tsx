@@ -52,7 +52,7 @@ export default function AdminV2SettingsIndexPage() {
                     </SettingsGroup>
 
                     <SettingsGroup label="Enrollment Operations">
-                        <SettingsLink href="/admin/settings/lifecycle" title="Business Processes" mode="editable" emphasis>
+                        <SettingsLink href="/admin/settings/lifecycle" title="Business Processes" mode="editable">
                             Configure processes, stages, requirements, statuses, queues, actions, and forms.
                         </SettingsLink>
                         <SettingsLink href="/admin/settings/work-units" title="Work Units & Queues" mode="partial">

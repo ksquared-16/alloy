@@ -7,7 +7,6 @@ import {
 import {
     RECORD_TYPE_HELP,
     SETTINGS_SURFACE_OPTIONS,
-    WORKSPACE_ROOT_SURFACE_DEFERRED_NOTE,
     settingsSlotsForSurface,
     settingsSurfaceDescription,
     surfaceRequiresSectionKey,
@@ -25,7 +24,6 @@ type Props = {
     orderIndex: number;
     onOrderIndexChange: (v: number) => void;
     disabled?: boolean;
-    showWorkspaceNote?: boolean;
 };
 
 function FieldHint({ children }: { children: ReactNode }) {
@@ -44,7 +42,6 @@ export default function ActionPlacementFormFields({
     orderIndex,
     onOrderIndexChange,
     disabled = false,
-    showWorkspaceNote = true,
 }: Props) {
     const slotOptions = settingsSlotsForSurface(surface);
     const needsSection = surfaceRequiresSectionKey(surface);
@@ -85,12 +82,6 @@ export default function ActionPlacementFormFields({
                 </select>
                 {settingsSurfaceDescription(surface) ? <FieldHint>{settingsSurfaceDescription(surface)}</FieldHint> : null}
             </label>
-
-            {showWorkspaceNote && (surface === "right_rail" || surface === "queue_row") ? (
-                <p className="sm:col-span-2 rounded-md border border-alloy-forge/10 bg-alloy-stone/[0.03] px-2 py-1.5 text-[10px] text-alloy-midnight/55">
-                    {WORKSPACE_ROOT_SURFACE_DEFERRED_NOTE}
-                </p>
-            ) : null}
 
             <label className="block text-xs">
                 <span className="mb-0.5 block font-medium text-alloy-midnight/70">Position (slot)</span>

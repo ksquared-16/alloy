@@ -49,11 +49,12 @@ describe("operator nav route audit", () => {
         expect(sidebar).not.toMatch(/href:\s*"\/adminV2\/workspace/);
     });
 
-    it("workspace root actions rail avoids /adminV2 product hrefs", () => {
+    it("workspace root actions rail avoids hardcoded legacy hrefs", () => {
         const rail = read("app/adminV2/components/workspace/WorkspaceRootActionsRail.tsx");
         const hrefs = hrefLiterals(rail);
         expect(hrefs.some((h) => h.startsWith("/adminV2"))).toBe(false);
-        expect(hrefs).toContain("/admin/forms");
+        expect(hrefs.some((h) => h.startsWith("/legacy-admin"))).toBe(false);
+        expect(hrefs.some((h) => h.startsWith("/admin/forms"))).toBe(false);
     });
 
     it("workspace nav child builder emits operator work-unit hrefs", () => {

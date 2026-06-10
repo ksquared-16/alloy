@@ -89,13 +89,14 @@ describe("platform performance pass 3 — atomic reveal + critical path diet", (
         expect(shouldDisableAdminV2LinkPrefetch("/legacy-admin/system/work-units")).toBe(true);
     });
 
-    it("workspace root actions rail uses command-rail primary buttons and disables legacy prefetch", () => {
+    it("workspace root actions rail resolves configured business-process actions", () => {
         const rail = read("app/adminV2/components/workspace/WorkspaceRootActionsRail.tsx");
-        expect(rail).toContain("WorkspaceActionRailButton");
-        expect(rail).toContain('tier="primary"');
-        expect(rail).toContain("prefetch: false");
-        expect(rail).toContain("/legacy-admin/opportunities");
-        expect(rail).toContain("ADMIN_FORMS_HREF");
+        expect(rail).toContain("fetchWorkspaceRootResolvedActions");
+        expect(rail).toContain("WorkspaceCommandRailActionsSection");
+        expect(rail).toContain('surface="company"');
+        expect(rail).toContain("mergeEnrollmentRightRailActions");
+        expect(rail).not.toContain("/legacy-admin/opportunities");
+        expect(rail).not.toContain("ADMIN_FORMS_HREF");
     });
 
     it("work-unit page gates WorkUnitWorkspace on critical bundle", () => {
