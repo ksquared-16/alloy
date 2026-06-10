@@ -14,8 +14,8 @@
   height: auto;
 }
 
-/* BOS right-rail copilot — docked in workspace Actions column (NEXT_PUBLIC_BOS_RIGHT_RAIL_COPILOT=1) */
-html[data-bos-right-rail-copilot="true"] {
+/* AdminV2 workspace shell — BOS docked in workspace Actions column (canonical) */
+html[data-adminv2-workspace-shell="v2"] {
   --adminv2-drawer-inset-bottom: 1rem;
   --adminv2-drawer-outer-margin: 24px;
   --ws-shell-bottom-safe: 16px;
@@ -31,7 +31,7 @@ html[data-bos-right-rail-copilot="true"] {
 /* Drawer inset applied inline in Drawer.tsx when flag is on — avoids Tailwind inset-0 / right-0 override */
 
 @media (min-width: 1001px) {
-  html[data-bos-right-rail-copilot="true"] [data-adminv2-workspace-command-column] {
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-workspace-command-column] {
     position: sticky;
     top: var(--ws-rail-sticky-top, 10px);
     z-index: 90;
@@ -43,20 +43,20 @@ html[data-bos-right-rail-copilot="true"] {
     isolation: isolate;
   }
 
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column] {
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column] {
     overflow: hidden;
     height: var(--adminv2-workspace-rail-height);
     max-height: var(--adminv2-workspace-rail-height);
     align-self: start;
   }
 
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos {
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos {
     flex: 1 1 auto;
     height: 100%;
     max-height: 100%;
@@ -66,7 +66,7 @@ html[data-bos-right-rail-copilot="true"] {
   }
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-with-bos {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -74,14 +74,14 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-with-bos {
   flex: 1;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions {
   flex: 0 0 auto;
   max-height: min(38vh, 280px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-bos-host {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-bos-host {
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
@@ -98,7 +98,7 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-bos-host {
   height: 100%;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-command-surface-layer="rail"] {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-command-surface-layer="rail"] {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
@@ -125,7 +125,7 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-command-surface-layer="ra
   background-color: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-adminv2-command-surface-layer="rail"] {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-adminv2-command-surface-layer="rail"] {
   background: #ffffff !important;
   background-color: #ffffff !important;
   backdrop-filter: none !important;
@@ -133,19 +133,19 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] 
   opacity: 1 !important;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-recent-operational-activity-strip="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-recent-operational-activity-strip="true"] {
   background-color: #ffffff !important;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-starters="true"] .bos-rail-starter-card {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-starters="true"] .bos-rail-starter-card {
   background-color: #ffffff !important;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-with-bos {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
   gap: 10px;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section {
   margin-bottom: 0;
   border: 1px solid rgba(39, 63, 82, 0.14);
   border-radius: 10px;
@@ -153,12 +153,12 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-sectio
   box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section--expanded {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded {
   border-color: rgba(39, 63, 82, 0.16);
   background: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -174,28 +174,28 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigge
   transition: background-color 120ms ease;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
   border-radius: 9px 9px 0 0;
   border-bottom: 1px solid rgba(39, 63, 82, 0.1);
   background: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger:hover {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger:hover {
   background: rgba(39, 63, 82, 0.04);
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger-chevron {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger-chevron {
   font-size: 11px;
   line-height: 1;
   color: rgba(39, 63, 82, 0.45);
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-body {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-body {
   padding: 8px 8px 10px;
   background: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
   background-color: #ffffff !important;
 }
 
@@ -219,13 +219,13 @@ html[data-adminv2-action-workspace-open="true"] [data-adminv2-bos-rail-overlay="
 }
 
 /* BOS-rail drawer — modal framing (outer margin) + unified workspace edge toward BOS */
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset {
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset {
   top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
   bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
 }
 
 /* BOS-rail record drawer — backdrop band matches modal framing (not full viewport height) */
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-workspace-backdrop-band {
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-backdrop-band {
   top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
   bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
 }
@@ -234,24 +234,24 @@ html[data-bos-right-rail-copilot="true"] .adminv2-drawer-workspace-backdrop-band
  * Record drawer open — light white-tint page dim behind drawer only.
  * Ends at --adminv2-drawer-backdrop-right (not BOS gutter); no blur wash in the seam.
  */
-html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-dim,
-html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-sidebar-dim {
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-dim,
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-sidebar-dim {
   background: rgba(248, 250, 252, 0.56);
   backdrop-filter: none;
 }
 
-html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-workspace-loading-overlay {
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-workspace-loading-overlay {
   top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
   bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
   background: rgba(248, 250, 252, 0.52);
 }
 
-html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-workspace-ambient-field {
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-workspace-ambient-field {
   opacity: 0.32;
 }
 
 /* Modal entity drawers — positioned via workspace-safe rectangle CSS vars (no viewport fallback) */
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail {
   left: var(--adminv2-drawer-computed-left) !important;
   width: var(--adminv2-drawer-computed-width) !important;
   max-width: var(--adminv2-drawer-computed-width) !important;
@@ -265,23 +265,23 @@ html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
 }
 
 /* Drawer + BOS — one workspace surface; seam on BOS rail */
-html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-panel--bos-rail {
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-panel--bos-rail {
   border: 1px solid rgba(39, 63, 82, 0.1) !important;
   box-shadow:
     0 12px 40px rgba(39, 63, 82, 0.06),
     0 2px 8px rgba(39, 63, 82, 0.03);
 }
 
-html[data-bos-right-rail-copilot="true"][data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
   border-left: 1px solid rgba(39, 63, 82, 0.1) !important;
   box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.55);
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail[data-adminv2-record-modal-tone="cleaning-v2"] {
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail[data-adminv2-record-modal-tone="cleaning-v2"] {
   max-width: var(--adminv2-drawer-computed-width) !important;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-sidebar-panel.adminv2-drawer-shell-inset {
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-drawer-shell-inset {
   left: var(--adminv2-drawer-computed-left) !important;
   width: var(--adminv2-drawer-computed-width) !important;
   max-width: var(--adminv2-drawer-computed-width) !important;
@@ -360,13 +360,13 @@ html[data-bos-right-rail-copilot="true"] .adminv2-drawer-sidebar-panel.adminv2-d
 }
 
 /* BOS rail drawer — never rely on viewport lg for overview shell (safety net) */
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
   grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
 }
 
 @container drawer-overview (min-width: 1040px) {
-  html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
+  html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
     grid-template-columns: repeat(12, minmax(0, 1fr));
     gap: 1rem;
   }
@@ -377,7 +377,7 @@ html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail .
  * Reclaims horizontal space by trimming nested padding/gutters while keeping ≥16px breathing room
  * from the drawer panel edge to primary content.
  */
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail {
   /* Scroll body: default cleaning-v2 uses px-4/sm:px-5 — cap at 16px sides */
   [data-adminv2-record-modal-scroll] {
     padding-inline: 16px !important;
@@ -510,69 +510,69 @@ html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
   padding: 0 2px;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-inline-breadcrumb {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-inline-breadcrumb {
   margin-bottom: 2px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack {
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack {
   gap: 3px;
   padding: 6px 12px 4px;
 }
 
 /* V3 — white workspace canvas; cards keep borders */
-html[data-bos-right-rail-copilot="true"] .adminv2-workspace-scroll-surface {
+html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface {
   background-color: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-root {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-root {
   --ws-dept-surface-solid: #ffffff;
   --ws-dept-surface-raised: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck {
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck {
   background: #ffffff !important;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
   background: transparent !important;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-paired-oper-panel,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-paired-oper-panel,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-paired-oper-panel {
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-paired-oper-panel {
   background: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-qsec--summary,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--summary {
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-qsec--summary,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--summary {
   background: #ffffff;
 }
 
 /* BOS rail — tighter vertical rhythm; composer + preview stay visible */
-html[data-bos-right-rail-copilot="true"] [data-command-surface-presentation="rail"] > div {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-presentation="rail"] > div {
   display: flex;
   flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-header {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-header {
   padding: 6px 8px 6px;
   flex-shrink: 0;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-header [data-command-surface-rail-context="true"] {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-header [data-command-surface-rail-context="true"] {
   margin-top: 6px;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-scroll {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-scroll {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: hidden !important;
@@ -580,48 +580,48 @@ html[data-bos-right-rail-copilot="true"] .bos-rail-scroll {
   flex-direction: column;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-starters="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-starters="true"] {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-attention {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-attention {
   margin-bottom: 6px;
   padding: 8px 8px;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-starters {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-starters {
   padding-bottom: 4px;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-starter-card {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-starter-card {
   padding: 7px 8px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-starters="true"] .flex-col {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-starters="true"] .flex-col {
   gap: 4px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-conversation-preview="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-conversation-preview="true"] {
   flex-shrink: 0;
   padding-top: 2px;
   padding-bottom: 2px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-composer="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-composer="true"] {
   flex-shrink: 0;
   padding-top: 2px;
   padding-bottom: 6px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
   flex-shrink: 1;
   min-height: 0;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] > div {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] > div {
   max-height: min(20vh, 120px);
 }
 

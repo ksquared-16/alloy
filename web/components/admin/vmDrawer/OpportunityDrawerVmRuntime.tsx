@@ -52,7 +52,6 @@ import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolv
 import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
-import { shouldRouteDrawerActionsToCommandRail } from "@/lib/bos/bosRightRailCopilotFlag";
 import { DeleteLeadModal } from "@/components/admin/opportunity/DeleteLeadModal";
 import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
 import {
@@ -508,7 +507,6 @@ export default function OpportunityDrawerVmRuntime() {
     ]);
 
     const drawerCommandRailRegistration = useMemo(() => {
-        if (!shouldRouteDrawerActionsToCommandRail()) return null;
         if (!committedVisible || !displayVm || !drawer.id || !record) return null;
         const actions = displayVm.actions.header_menu;
         return {

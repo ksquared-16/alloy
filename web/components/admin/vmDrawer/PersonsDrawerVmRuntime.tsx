@@ -42,7 +42,6 @@ import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawer
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import { useBosPersonDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
-import { shouldRouteDrawerActionsToCommandRail } from "@/lib/bos/bosRightRailCopilotFlag";
 
 const PERSON_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
     overview: "Overview",
@@ -457,7 +456,6 @@ export default function PersonsDrawerVmRuntime() {
     ]);
 
     const drawerCommandRailRegistration = useMemo(() => {
-        if (!shouldRouteDrawerActionsToCommandRail()) return null;
         if (!drawerOpen || !committedVisible) return null;
         return {
             actions: [],

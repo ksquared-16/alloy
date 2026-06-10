@@ -27,12 +27,12 @@ export default function BosDrawerGeometryFixture() {
     const [overlayStyle, setOverlayStyle] = useState<Record<string, string | number>>({ visibility: "hidden" });
 
     useEffect(() => {
-        document.documentElement.setAttribute("data-bos-right-rail-copilot", "true");
+        document.documentElement.setAttribute("data-adminv2-workspace-shell", "v2");
         document.documentElement.setAttribute("data-adminv2-bos-rail-overlay-drawer", "true");
         registerBosDrawerGeometryDiagnostics();
 
         return () => {
-            document.documentElement.removeAttribute("data-bos-right-rail-copilot");
+            document.documentElement.removeAttribute("data-adminv2-workspace-shell");
             document.documentElement.removeAttribute("data-adminv2-bos-rail-overlay-drawer");
         };
     }, []);

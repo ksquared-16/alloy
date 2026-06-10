@@ -3,7 +3,6 @@
 import React, { type CSSProperties, isValidElement, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { shouldCloseAdminV2DrawerOnOutsideTarget } from "@/lib/adminV2/drawerOutsideClick";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import {
     DRAWER_AVAILABLE_RIGHT_CSS_VAR,
     DRAWER_BACKDROP_LEFT_CSS_VAR,
@@ -141,8 +140,7 @@ export default function Drawer({
     }, []);
 
     const isV2Early = variant === "adminV2";
-    const bosRailCopilotEarly = isBosRightRailCopilotEnabledClient();
-    const bosWorkspaceDrawerLayoutEarly = bosRailCopilotEarly && isV2Early;
+    const bosWorkspaceDrawerLayoutEarly = isV2Early;
 
     useLayoutEffect(() => {
         if (!isOpen || !bosWorkspaceDrawerLayoutEarly || !portalReady) return;
@@ -201,8 +199,7 @@ export default function Drawer({
 
     const isV2 = variant === "adminV2";
     const isModal = isV2 && presentation === "modal";
-    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
-    const bosWorkspaceDrawerLayout = bosRailCopilot && isV2;
+    const bosWorkspaceDrawerLayout = isV2;
     const workspaceDrawerPanelStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
         {
             left: `var(${DRAWER_COMPUTED_LEFT_CSS_VAR})`,

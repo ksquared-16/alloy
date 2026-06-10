@@ -14,7 +14,6 @@ import Drawer, {
     ADMINV2_DRAWER_BACKDROP_Z,
     ADMINV2_DRAWER_PANEL_Z,
 } from "@/components/admin/Drawer";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import {
     entityDrawerAccentColor,
     type EntityDrawerOperatingEntity,
@@ -43,8 +42,6 @@ export type EntityDrawerOperatingShellProps = {
     summaryStrip?: ReactNode;
 };
 
-const DEFAULT_PANEL_CLASS = "max-w-7xl";
-
 export default function EntityDrawerOperatingShell({
     entity,
     isOpen,
@@ -56,7 +53,7 @@ export default function EntityDrawerOperatingShell({
     headerTitleCenter,
     headerTitleRight,
     panelFooterChrome,
-    panelClassName = DEFAULT_PANEL_CLASS,
+    panelClassName,
     runtimeDataAttribute,
     runtimeShellDataAttributes,
     holdPriorPayload = false,
@@ -64,9 +61,8 @@ export default function EntityDrawerOperatingShell({
 }: EntityDrawerOperatingShellProps) {
     const useComposedHeader = composedStickyHeader != null && composedStickyHeader !== false;
     const showSummaryStrip = summaryStrip != null && summaryStrip !== false;
-    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
     const resolvedPanelClassName = [
-        bosRailCopilot ? undefined : (panelClassName ?? DEFAULT_PANEL_CLASS),
+        panelClassName,
         holdPriorPayload ? "adminv2-drawer-panel--swap-hold" : "",
     ]
         .filter(Boolean)

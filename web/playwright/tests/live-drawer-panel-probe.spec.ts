@@ -111,7 +111,7 @@ test.describe("Live drawer panel CSS var probe", () => {
             modalPanels: document.querySelectorAll(".adminv2-drawer-modal-panel").length,
             sidebarPanels: document.querySelectorAll(".adminv2-drawer-sidebar-panel").length,
             drawerNodes: document.querySelectorAll("[data-adminv2-drawer='true']").length,
-            bosCopilotFlag: document.documentElement.getAttribute("data-bos-right-rail-copilot"),
+            workspaceShellFlag: document.documentElement.getAttribute("data-adminv2-workspace-shell"),
             openingOverlay: document.querySelector("[data-opportunity-drawer-opening-overlay]")
                 ? true
                 : false,
@@ -121,7 +121,7 @@ test.describe("Live drawer panel CSS var probe", () => {
         console.log("preProbeDom:", JSON.stringify(preProbeDom));
 
         await page.waitForFunction(
-            () => document.documentElement.getAttribute("data-bos-right-rail-copilot") === "true",
+            () => document.documentElement.getAttribute("data-adminv2-workspace-shell") === "v2",
             null,
             { timeout: 60_000 }
         );
@@ -152,7 +152,7 @@ test.describe("Live drawer panel CSS var probe", () => {
                 const computed = getComputedStyle(el);
                 const computedVal = computed.getPropertyValue(prop);
 
-                const htmlCopilot = document.documentElement.getAttribute("data-bos-right-rail-copilot");
+                const workspaceShell = document.documentElement.getAttribute("data-adminv2-workspace-shell");
                 const hasBosRail = el.classList.contains("adminv2-drawer-modal-panel--bos-rail");
 
                 let matchedRule: string | null = null;
@@ -224,10 +224,10 @@ test.describe("Live drawer panel CSS var probe", () => {
                     computed: computedVal,
                     matchedAuthorRule: matchedRule,
                     expectedBosRailRule:
-                        htmlCopilot === "true" && hasBosRail ?
-                            `html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail { ${prop}: var(--adminv2-drawer-computed-width) !important }`
+                        workspaceShell === "v2" && hasBosRail ?
+                            `html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail { ${prop}: var(--adminv2-drawer-computed-width) !important }`
                         :   null,
-                    htmlDataBosCopilot: htmlCopilot,
+                    htmlWorkspaceShell: workspaceShell,
                     hasBosRailClass: hasBosRail,
                     cssVarOnHtmlInline: htmlInlineVar || null,
                     cssVarOnHtmlComputed: htmlComputedVar || null,

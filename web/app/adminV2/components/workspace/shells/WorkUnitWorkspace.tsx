@@ -20,7 +20,6 @@ import { WorkUnitAboveFoldActionsRail } from "@/app/adminV2/components/workspace
 import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 
 type Props = {
   model: WorkUnitWorkspaceModel;
@@ -89,8 +88,6 @@ export default function WorkUnitWorkspace({
   const statusLine = li?.laneStatusLine?.trim() ?? "";
   const recLine = li?.recommendedActionLine?.trim() ?? "";
   const hasLaneStrip = Boolean(statusLine || recLine);
-  const bosRailCopilot = isBosRightRailCopilotEnabledClient();
-
   const primaryQueue = useMemo(
     () => ({
       ...model.primaryQueue,
@@ -107,7 +104,7 @@ export default function WorkUnitWorkspace({
       rootClassName="adminv2-ws-work-unit adminv2-ws-wu-v2"
       style={wuShellStyle}
       railAriaLabel="Decisions and actions"
-      showRail={aboveFold.actions_rail.visible || bosRailCopilot}
+      showRail
       railContent={
         <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />
       }

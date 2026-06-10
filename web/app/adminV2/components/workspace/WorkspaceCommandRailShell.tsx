@@ -5,7 +5,6 @@ import type { ReactNode } from "react";
 import { useCommandRailBosHostRef } from "@/app/adminV2/components/CommandRailBosMount";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 import { DrawerRegistryActionsRail } from "@/app/adminV2/components/workspace/DrawerRegistryActionsRail";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import { useDrawerCommandRailActionsOptional } from "@/contexts/DrawerCommandRailActionsContext";
 
 type Props = {
@@ -15,7 +14,7 @@ type Props = {
 };
 
 /**
- * Workspace right command column — actions scroll region with optional BOS dock host at bottom.
+ * Workspace right command column — actions scroll region with BOS dock host at bottom.
  */
 export function WorkspaceCommandRailShell({
     children,
@@ -23,11 +22,10 @@ export function WorkspaceCommandRailShell({
     className = "adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell",
 }: Props) {
     const bosHostRef = useCommandRailBosHostRef();
-    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
     const drawerRailActions = useDrawerCommandRailActionsOptional()?.registration;
 
     const actionsContent =
-        bosRailCopilot && drawerRailActions ?
+        drawerRailActions ?
             <CommandRailCollapsibleActionsSection
                 actionCount={drawerRailActions.actionCount}
                 loading={false}
@@ -47,18 +45,6 @@ export function WorkspaceCommandRailShell({
                 </section>
             </CommandRailCollapsibleActionsSection>
         :   children;
-
-    if (!bosRailCopilot) {
-        return (
-            <aside
-                className={className}
-                data-adminv2-workspace-command-rail
-                aria-label={ariaLabel}
-            >
-                {children}
-            </aside>
-        );
-    }
 
     return (
         <aside

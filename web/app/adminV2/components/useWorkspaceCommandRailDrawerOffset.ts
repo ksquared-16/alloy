@@ -23,17 +23,8 @@ const SIDEBAR_SELECTOR = "[data-adminv2-sidebar=\"true\"]";
  * Positions entity drawers inside the workspace-safe rectangle (sidebar → BOS gutter).
  * Sets BOS overlay + drawer geometry CSS variables on `<html>`.
  */
-export function useWorkspaceCommandRailDrawerOffset(enabled: boolean, pathname: string) {
+export function useWorkspaceCommandRailDrawerOffset(pathname: string) {
     useLayoutEffect(() => {
-        if (!enabled) {
-            const root = document.documentElement;
-            root.style.removeProperty(BOS_DRAWER_RAIL_OFFSET_CSS_VAR);
-            root.style.removeProperty(BOS_OVERLAY_WIDTH_CSS_VAR);
-            root.style.removeProperty(BOS_OVERLAY_GUTTER_CSS_VAR);
-            clearDrawerWorkspaceGeometryVars(root);
-            return;
-        }
-
         const measure = () => {
             const root = document.documentElement;
             if (isDrawerGeometryProbeActive(root)) {
@@ -130,5 +121,5 @@ export function useWorkspaceCommandRailDrawerOffset(enabled: boolean, pathname: 
             root.style.removeProperty(BOS_OVERLAY_GUTTER_CSS_VAR);
             clearDrawerWorkspaceGeometryVars(root);
         };
-    }, [enabled, pathname]);
+    }, [pathname]);
 }

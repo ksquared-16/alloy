@@ -77,6 +77,19 @@ Product posture: **operational narrator**, **guided reviewer**, **workflow copil
 | **Insight** | Deterministic suggestion + optional enrich | **No apply** (copy-only enrich) or **no persist** | Needs Attention suggestion, attention enrich |
 | **Orchestration** | Route, clarify, entity search | **None** | Orchestrator (`routeCommandSurface`) |
 
+## AdminV2 workspace shell (canonical)
+
+The **BOS right rail** is part of the canonical AdminV2 workspace shell — not an optional rollout flag.
+
+| Surface | Behavior |
+|---------|----------|
+| **Workspace routes** | BOS is docked in the workspace Actions column via `CommandRailBosMount`; drawer geometry uses the BOS-aware safe band. |
+| **Record drawers** | Modal framing, backdrop, and BOS gutter rules apply by default on AdminV2 entity drawers. |
+| **Action Workspace** | Suppresses the persistent BOS rail (`data-adminv2-action-workspace-open`) — modal BOS is the experience. |
+| **Non-workspace AdminV2** | Settings, forms, AI activity, and workflows use `AdminV2CommandRailBosHostFooter` when no workspace command column exists. |
+
+`data-adminv2-workspace-shell="v2"` on `<html>` scopes portaled drawer/BOS CSS for workspace routes.
+
 ## BOS capability map (shipped)
 
 | `capability_key` | Role | Route / module family | Apply path |

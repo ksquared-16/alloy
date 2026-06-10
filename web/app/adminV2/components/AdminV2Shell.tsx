@@ -27,7 +27,6 @@ import SystemCanvas from "./canvas/SystemCanvas";
 import RecordsExpandable from "./records/RecordsExpandable";
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
-import WorkspaceAmbientLayer from "./WorkspaceAmbientLayer";
 import { AdminV2NavigationTransitionRibbon } from "@/components/admin/workspace/AdminV2NavigationTransitionRibbon";
 import {
     isCanonicalAiActivityPath,
@@ -38,7 +37,7 @@ import {
 } from "@/lib/admin/canonicalAdminRoutes";
 import AdminV2CommandRailBosHostFooter from "./AdminV2CommandRailBosHostFooter";
 import { CommandRailBosMount } from "./CommandRailBosMount";
-import { useBosRightRailCopilotDocumentFlag } from "./useBosRightRailCopilotDocumentFlag";
+import { useAdminV2WorkspaceShellDocumentFlag } from "./useAdminV2WorkspaceShellDocumentFlag";
 import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 
@@ -137,8 +136,8 @@ export default function AdminV2Shell({
       : { level: "department" as const, key: selectedDepartmentKey };
 
   const showRecordsExpandable = zoomLevel === "department" && selectedDepartmentKey != null;
-  const bosRightRailCopilot = useBosRightRailCopilotDocumentFlag();
-  useWorkspaceCommandRailDrawerOffset(bosRightRailCopilot, pathname);
+  useAdminV2WorkspaceShellDocumentFlag();
+  useWorkspaceCommandRailDrawerOffset(pathname);
 
   if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
     return (
@@ -150,11 +149,11 @@ export default function AdminV2Shell({
           <div
             className="flex h-screen w-full overflow-hidden"
             style={{
-              backgroundColor: bosRightRailCopilot ? "#ffffff" : neutral.background,
+              backgroundColor: "#ffffff",
             }}
             data-adminv2-app-shell="workspace-v2"
+            data-adminv2-workspace-shell="v2"
             data-adminv2-sidebar-collapsed={sidebarCollapsed ? "true" : "false"}
-            {...(bosRightRailCopilot ? { "data-bos-right-rail-copilot": "true" } : {})}
           >
             <Sidebar collapsed={sidebarCollapsed} onToggle={toggleSidebarCollapsed} />
             <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
@@ -166,36 +165,17 @@ export default function AdminV2Shell({
                 className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
                 style={workspaceContentAmbientStyle}
               >
-                {isWorkspaceV2Route || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
-                  bosRightRailCopilot ? null : <WorkspaceAmbientLayer />
-                :   null}
-                <div
-                  className={
-                    bosRightRailCopilot ?
-                      "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate"
-                    : "relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[96px]"
-                  }
-                >
+                <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
                   <AdminV2NavigationTransitionRibbon />
                   {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
                     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                       {children}
-                      {bosRightRailCopilot && (isAiActivityRoute || isWorkflowsRoute) ?
+                      {isAiActivityRoute || isWorkflowsRoute ?
                         <AdminV2CommandRailBosHostFooter />
                       :   null}
                     </main>
                   : children}
                 </div>
-                {!bosRightRailCopilot ?
-                  <div className="absolute bottom-2 left-0 right-0 z-20 flex flex-col">
-                    <div className="flex w-full justify-center px-4">
-                      <div className="w-full" style={{ maxWidth: COMMAND_SURFACE_MAX_W_PX }}>
-                        <RecentAiActionsStrip />
-                      </div>
-                    </div>
-                    {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
-                  </div>
-                :   null}
               </div>
             </div>
           </div>

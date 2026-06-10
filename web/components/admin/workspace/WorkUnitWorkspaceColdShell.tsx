@@ -1,7 +1,5 @@
 "use client";
 
-import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
-
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import {
@@ -10,10 +8,7 @@ import {
 } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import { WorkUnitLifecycleStyleLoadingCard } from "@/components/admin/workspace/WorkUnitLifecycleStyleLoadingCard";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
-
-const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
 
 type Props = {
     workUnitTitle?: string;
@@ -31,24 +26,10 @@ export function WorkUnitWorkspaceColdShell({
     departmentId,
     reserveActionsRail = false,
 }: Props) {
-    const deptCrumbHref =
-        departmentId != null && departmentId.trim()
-            ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId.trim())}`
-            : undefined;
-    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
-
     return (
         <WorkspaceChrome
             variant="bridge"
-            breadcrumbs={
-                bosRailCopilot ?
-                    []
-                :   [
-                        { href: WORKSPACE_BASE, label: "Workspace" },
-                        deptCrumbHref ? { href: deptCrumbHref, label: departmentTitle } : { label: departmentTitle },
-                        { label: workUnitTitle },
-                    ]
-            }
+            breadcrumbs={[]}
             title={workUnitTitle}
             subtitle=""
         >
