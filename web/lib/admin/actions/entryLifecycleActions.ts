@@ -11,6 +11,7 @@ import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLea
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
+import { buildHouseholdLeadDisplayName } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
 
 export type EntryLifecycleActionError = { ok: false; error: string; status: number };
 
@@ -94,6 +95,11 @@ export async function executeCreateLeadAction(
         return { ok: false, error: "Could not create or resolve person.", status: 400 };
     }
 
+    const householdDisplayName = buildHouseholdLeadDisplayName({
+        firstName,
+        lastName,
+        fallback: email || phone || "New lead",
+    });
     const { customer_id: customerId } = await ensureCustomerForPersonNative(supabase, personId, {
         org_id: ctx.orgId,
         vertical_id: verticalId,
@@ -101,13 +107,14 @@ export async function executeCreateLeadAction(
         last_name: lastName,
         email,
         phone,
+        household_name: householdDisplayName,
     });
     if (!customerId?.trim()) {
         return { ok: false, error: "Could not create household for this lead.", status: 400 };
     }
     await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: ctx.orgId });
 
-    const displayName = [firstName, lastName].filter(Boolean).join(" ").trim() || email || phone || "New lead";
+    const displayName = householdDisplayName;
     const intakeNotes = trim(input.merged.intake_notes) || null;
     const oppPayload: Record<string, unknown> = {
         org_id: ctx.orgId,

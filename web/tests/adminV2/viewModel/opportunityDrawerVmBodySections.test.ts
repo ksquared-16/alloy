@@ -38,7 +38,7 @@ describe("Opportunity VM drawer body — production parity sections", () => {
             },
             "Lead"
         );
-        expect(title).toBe("Lead — Smith");
+        expect(title).toBe("Smith Family");
         expect(title).not.toMatch(/Family inquiry/i);
     });
 

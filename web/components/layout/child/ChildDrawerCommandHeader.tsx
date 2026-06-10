@@ -50,11 +50,11 @@ export default function ChildDrawerCommandHeader({
                 data-proof-layout-header-row="title-actions"
             >
                 <div
-                    className="flex min-w-0 flex-1 items-start gap-4 rounded-2xl border border-alloy-stone/14 bg-gradient-to-br from-white via-white to-alloy-blue/[0.03] px-4 py-3.5 shadow-[0_3px_12px_rgba(24,39,58,0.06)] ring-1 ring-alloy-blue/[0.08]"
+                    className="flex min-w-0 flex-1 items-start gap-4 rounded-2xl border border-alloy-stone/14 bg-gradient-to-br from-white via-white to-[#0d9488]/[0.04] px-4 py-3.5 shadow-[0_3px_12px_rgba(24,39,58,0.06)] ring-1 ring-[#0d9488]/[0.08]"
                     data-child-drawer-command-header="true"
                 >
                     <div
-                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-alloy-blue/20 bg-gradient-to-br from-alloy-blue/[0.1] to-white text-alloy-blue shadow-[0_1px_4px_rgba(0,69,140,0.1)]"
+                        className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-[#0d9488]/25 bg-gradient-to-br from-[#0d9488]/[0.14] to-white text-[#0d9488] shadow-[0_1px_4px_rgba(13,148,136,0.12)]"
                         data-child-drawer-command-avatar="true"
                     >
                         <Baby className="h-5 w-5" aria-hidden />
@@ -64,7 +64,7 @@ export default function ChildDrawerCommandHeader({
                             <button
                                 type="button"
                                 onClick={backLink.onClick}
-                                className="mb-1 text-[11px] font-medium text-alloy-blue/70 hover:text-alloy-blue hover:underline"
+                                className="mb-1 text-[11px] font-medium text-[#0d9488]/70 hover:text-[#0d9488] hover:underline"
                                 data-child-drawer-command-back-link="true"
                             >
                                 ← {backLink.label}

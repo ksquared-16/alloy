@@ -27,6 +27,8 @@ export async function ensureCustomerForPersonNative(
         last_name?: string | null;
         email?: string | null;
         phone?: string | null;
+        /** Household-oriented customer name (e.g. `{LastName} Family`). */
+        household_name?: string | null;
     }
 ): Promise<{ customer_id: string }> {
     const trimmed = personId.trim();
@@ -63,7 +65,8 @@ export async function ensureCustomerForPersonNative(
     }
 
     const name =
-        [params.first_name ?? p.first_name, params.last_name ?? p.last_name].filter(Boolean).join(" ").trim()
+        (params.household_name ?? "").trim()
+        || [params.first_name ?? p.first_name, params.last_name ?? p.last_name].filter(Boolean).join(" ").trim()
         || (params.email ?? p.email)
         || (params.phone ?? p.phone)
         || "New Customer";

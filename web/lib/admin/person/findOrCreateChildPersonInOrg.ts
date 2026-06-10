@@ -125,6 +125,22 @@ async function findPersonIdByOrgChildIdentity(
     return null;
 }
 
+async function syncChildPersonDateOfBirthIfMissing(
+    supabase: MinimalSupabase,
+    personId: string,
+    dob: string | null,
+): Promise<void> {
+    if (!dob) return;
+    const { data: row } = await supabase
+        .from("persons")
+        .select("date_of_birth")
+        .eq("id", personId)
+        .maybeSingle();
+    const existing = normalizeDob((row as { date_of_birth?: string | null } | null)?.date_of_birth);
+    if (existing) return;
+    await supabase.from("persons").update({ date_of_birth: dob }).eq("id", personId);
+}
+
 /**
  * Resolve or create a durable child `persons` row for household/opportunity flows.
  */
@@ -146,6 +162,7 @@ export async function findOrCreateChildPersonInOrg(
         dob,
     });
     if (fromHousehold) {
+        await syncChildPersonDateOfBirthIfMissing(supabase, fromHousehold, dob);
         return { person_id: fromHousehold, created: false, source: "household_member" };
     }
 
@@ -156,6 +173,7 @@ export async function findOrCreateChildPersonInOrg(
         dob,
     });
     if (fromOrg) {
+        await syncChildPersonDateOfBirthIfMissing(supabase, fromOrg, dob);
         return { person_id: fromOrg, created: false, source: "org_identity" };
     }
 

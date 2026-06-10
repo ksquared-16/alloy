@@ -586,6 +586,7 @@ export function useOpportunityDrawerVmRegistryModals({
                 <AddInquiryChildModal
                     open={!!addInquiryChildState}
                     mode={addInquiryChildState?.mode ?? "child"}
+                    defaultLocationId={locationId}
                     onClose={() => setAddInquiryChildState(null)}
                     onSubmit={async (payload) => {
                         if (!oid) throw new Error("Open an opportunity record before adding a child.");
@@ -607,6 +608,7 @@ export function useOpportunityDrawerVmRegistryModals({
                             opportunityId: oid,
                             customerId,
                             payload,
+                            opportunityLocationId: locationId,
                             existingChildren,
                         });
                         setAddInquiryChildState(null);

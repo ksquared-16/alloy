@@ -2,6 +2,8 @@
  * Child drawer command header context — enrollment/care meta lines.
  */
 
+import { formatLayoutRuntimeOperatorDate } from "@/lib/layout/runtime/formatLayoutRuntimeOperatorDate";
+
 function pickLine(...values: unknown[]): string | null {
     for (const value of values) {
         if (value == null) continue;
@@ -20,9 +22,10 @@ export type ChildDrawerCommandHeaderMeta = {
 export function resolveChildDrawerCommandHeaderMeta(
     record: Record<string, unknown>,
 ): ChildDrawerCommandHeaderMeta {
-    const dob = pickLine(record["child.date_of_birth"], record.date_of_birth);
+    const dobRaw = pickLine(record["child.date_of_birth"], record.date_of_birth);
+    const dobFormatted = dobRaw ? formatLayoutRuntimeOperatorDate(dobRaw) || dobRaw : null;
     const age = pickLine(record["child.age_band"], record.age_band, record.age);
-    const ageDobParts = [age, dob ? `DOB ${dob}` : null].filter(Boolean);
+    const ageDobParts = [age, dobFormatted ? `DOB ${dobFormatted}` : null].filter(Boolean);
 
     const household = pickLine(
         record["customer.household_name"],
@@ -40,6 +43,7 @@ export function resolveChildDrawerCommandHeaderMeta(
 
     const program = pickLine(
         record["inquiry_child.program"],
+        record["child.program"],
         record["inquiry_child.desired_program_type"],
         record.program_label,
     );

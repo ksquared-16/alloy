@@ -150,6 +150,34 @@ describe("submitAddInquiryChildFromDrawer", () => {
         ).rejects.toThrow(/missing a linked person identity/);
     });
 
+    it("inherits opportunity location when child payload omits location_id", async () => {
+        const fetchFn = vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ id: "cm-new", person_id: "person-new" }),
+        })) as typeof fetch;
+
+        await submitAddInquiryChildFromDrawer({
+            opportunityId: "opp-1",
+            customerId: "cust-1",
+            opportunityLocationId: "11111111-1111-4111-8111-111111111111",
+            payload: {
+                first_name: "Sam",
+                last_name: "Lee",
+                age_group: "toddler",
+                program: "preschool",
+            },
+            fetchFn,
+        });
+
+        expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledWith(
+            "ocm-1",
+            expect.objectContaining({
+                desired_program_type: "preschool",
+                location_id: "11111111-1111-4111-8111-111111111111",
+            }),
+        );
+    });
+
     it("blocks duplicate children on the inquiry", async () => {
         await expect(
             submitAddInquiryChildFromDrawer({

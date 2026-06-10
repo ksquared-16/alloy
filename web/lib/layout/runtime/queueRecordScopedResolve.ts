@@ -7,7 +7,7 @@ import { evaluateLayoutCondition } from "@/lib/layout/runtime/evaluateLayoutCond
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
-import { formatQueueRecordDateDisplay } from "@/lib/adminFormatters";
+import { formatDisplayDate, formatQueueRecordDateDisplay } from "@/lib/adminFormatters";
 import { stripParentheticalAgeFromChildDisplayName } from "@/lib/layout/runtime/splitQueuePreviewChildPrimaryLabel";
 import type {
     QueueRecordFieldConfig,
@@ -52,12 +52,21 @@ export function isQueueRecordDateFieldKey(fieldKey: string): boolean {
         || (/date/.test(rk) && !/update/.test(rk));
 }
 
+/** DOB / birth-date fields always include year — never compact `Jan 1` without year. */
+export function isQueueRecordDobFieldKey(fieldKey: string): boolean {
+    const rk = fieldKey.toLowerCase();
+    return /date_of_birth|\.dob$/.test(rk);
+}
+
 function shouldFormatQueueRecordDateField(field: QueueRecordFieldConfig): boolean {
     return field.display === "date" || isQueueRecordDateFieldKey(field.fieldKey);
 }
 
 function formatQueueRecordFieldValue(rawDisplay: string, field: QueueRecordFieldConfig): string {
     if (!shouldFormatQueueRecordDateField(field)) return rawDisplay;
+    if (isQueueRecordDobFieldKey(field.fieldKey)) {
+        return formatDisplayDate(rawDisplay) || rawDisplay;
+    }
     const formatted = formatQueueRecordDateDisplay(rawDisplay) || rawDisplay;
     // Queue rows: date values omit time segment in the field column (time stays in popover/title when needed).
     return formatted.split(" · ")[0]?.trim() || formatted;

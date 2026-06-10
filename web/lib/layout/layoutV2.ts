@@ -107,6 +107,7 @@ export const LAYOUT_ADORNMENT_ICONS = [
     "child",
     "opportunity",
     "calendar",
+    "birthday",
     "task",
     "message",
     "document",

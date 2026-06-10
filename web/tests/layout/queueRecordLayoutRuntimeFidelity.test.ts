@@ -136,6 +136,37 @@ describe("queue record layout runtime fidelity", () => {
         expect(bindings.some((b) => b.fieldKey === "child.age_band")).toBe(false);
     });
 
+    it("hydrates child.date_of_birth from household_children enrichment", () => {
+        const doc = buildLeadQueueDefaultDoc();
+        const config = layoutWithChildDobAndTour();
+        const docWithLayout = {
+            ...doc,
+            metadata: { ...(doc.metadata ?? {}), queue_record_layout: config },
+        };
+        const item: QueuePreviewItemVm = {
+            id: "opp-household-child",
+            title: "James Family",
+            quickActions: [],
+            semanticCrmCompact: {
+                primaryIdentity: "James Family",
+                childrenLines: [{ primary: "Bronny James", personId: "child-bronny", secondary: null }],
+            },
+            layoutRuntimeEnrichment: {
+                householdChildren: [
+                    {
+                        display_name: "Bronny James",
+                        person_id: "child-bronny",
+                        customer_member_id: "cm-bronny",
+                        dob: "2026-01-01",
+                    },
+                ],
+            },
+        };
+        const record = buildOpportunityQueueRowRecordFromPreview(item, docWithLayout);
+        const childRow = (record.children as Record<string, unknown>[])?.[0] as Record<string, unknown>;
+        expect(childRow["child.date_of_birth"]).toBe("2026-01-01");
+    });
+
     it("renders configured child.date_of_birth — not substituted age_band", () => {
         const doc = buildLeadQueueDefaultDoc();
         const config = layoutWithChildDobAndTour();

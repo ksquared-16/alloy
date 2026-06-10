@@ -512,7 +512,7 @@ describe("Parent/child known-empty readiness stability", () => {
             },
             "Lead"
         );
-        expect(title).toBe("Lead — Rivera");
+        expect(title).toBe("Rivera Family");
         expect(title).not.toContain("Priya");
         expect(title).not.toBe("Enrollment — Lead");
     });

@@ -15,6 +15,8 @@ import { ActionModalOverlayShell } from "@/components/admin/opportunity/actions/
 export type AddInquiryChildModalProps = {
     open: boolean;
     mode: "child" | "sibling";
+    /** Lead location inherited for child enrollment cascade when form omits location_id. */
+    defaultLocationId?: string | null;
     onClose: () => void;
     onSubmit: (payload: AddInquiryChildSubmitPayload) => Promise<void> | void;
 };
@@ -33,14 +35,24 @@ function mapValuesToPayload(values: Record<string, string>): AddInquiryChildSubm
     };
 }
 
-function buildInitialValues(fields: EntityCreateFormField[]): Record<string, string> {
+function buildInitialValues(
+    fields: EntityCreateFormField[],
+    defaultLocationId?: string | null,
+): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const field of fields) out[field.field_key] = "";
+    const inheritedLocation = (defaultLocationId ?? "").trim();
+    for (const field of fields) {
+        if (field.field_key === "location_id" && inheritedLocation) {
+            out[field.field_key] = inheritedLocation;
+        } else {
+            out[field.field_key] = "";
+        }
+    }
     return out;
 }
 
 export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
-    const { open, mode, onClose, onSubmit } = props;
+    const { open, mode, defaultLocationId, onClose, onSubmit } = props;
     const [identityFields, setIdentityFields] = useState<EntityCreateFormField[]>(CHILD_IDENTITY_CREATE_FORM_FALLBACK);
     const [participationFields, setParticipationFields] = useState<EntityCreateFormField[]>([]);
     const [fieldsLoading, setFieldsLoading] = useState(false);
@@ -81,13 +93,18 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                 );
                 setIdentityFields(identity);
                 setParticipationFields(participation);
-                setValues(buildInitialValues([...identity, ...participation]));
+                setValues(buildInitialValues([...identity, ...participation], defaultLocationId));
             } catch (e) {
                 if (!cancelled) {
                     setFieldsError((e as Error).message);
                     setIdentityFields(CHILD_IDENTITY_CREATE_FORM_FALLBACK);
                     setParticipationFields(mergeInquiryChildCreateFormFields([]));
-                    setValues(buildInitialValues([...CHILD_IDENTITY_CREATE_FORM_FALLBACK, ...mergeInquiryChildCreateFormFields([])]));
+                    setValues(
+                        buildInitialValues(
+                            [...CHILD_IDENTITY_CREATE_FORM_FALLBACK, ...mergeInquiryChildCreateFormFields([])],
+                            defaultLocationId,
+                        ),
+                    );
                 }
             } finally {
                 if (!cancelled) setFieldsLoading(false);
@@ -96,7 +113,7 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
         return () => {
             cancelled = true;
         };
-    }, [open, mode]);
+    }, [open, mode, defaultLocationId]);
 
     const payload = useMemo(() => mapValuesToPayload(values), [values]);
 
@@ -144,6 +161,7 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                                 values={values}
                                 onChange={onFieldChange}
                                 disabled={submitting}
+                                inheritedLocationId={defaultLocationId}
                             />
                         </div>
                     :   null}
@@ -157,6 +175,7 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                                 values={values}
                                 onChange={onFieldChange}
                                 disabled={submitting}
+                                inheritedLocationId={defaultLocationId}
                             />
                         </div>
                     :   null}

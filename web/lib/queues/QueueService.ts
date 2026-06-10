@@ -835,6 +835,36 @@ function mergeInquiryChildrenIntoMemberStructuredLines(
     });
 }
 
+function canonicalChildDobForMember(
+    member: CustomerMemberChildInput,
+    childDobByPersonId: Map<string, string>,
+    personById: Map<string, { date_of_birth?: string | null }>,
+): string | null {
+    const pid = String(member.person_id ?? "").trim();
+    const memberDob = String(member.dob ?? "").trim();
+    const personDob = pid
+        ? (childDobByPersonId.get(pid) ?? String(personById.get(pid)?.date_of_birth ?? "").trim())
+        : "";
+    return personDob || memberDob || null;
+}
+
+function buildHouseholdChildrenForQueueRow(
+    members: CustomerMemberChildInput[],
+    childDobByPersonId: Map<string, string>,
+    personById: Map<string, { date_of_birth?: string | null }>,
+): Record<string, unknown>[] {
+    return members.map((m) => ({
+        id: m.id ?? null,
+        customer_member_id: m.id ?? null,
+        person_id: m.person_id ?? null,
+        display_name: m.display_name ?? null,
+        first_name: m.first_name ?? null,
+        last_name: m.last_name ?? null,
+        dob: canonicalChildDobForMember(m, childDobByPersonId, personById),
+        linked_on_inquiry: false,
+    }));
+}
+
 function buildCrmCompactStructuredLinesFromCustomerMembers(
     members: CustomerMemberChildInput[],
     childDobByPersonId: Map<string, string>,
@@ -852,9 +882,7 @@ function buildCrmCompactStructuredLinesFromCustomerMembers(
         if (!base) continue;
         const pid = String(m.person_id ?? "").trim();
         const memberDob = String(m.dob ?? "").trim();
-        const canonicalDob = pid
-            ? (childDobByPersonId.get(pid) ?? String(personById.get(pid)?.date_of_birth ?? "").trim())
-            : "";
+        const canonicalDob = canonicalChildDobForMember(m, childDobByPersonId, personById) ?? "";
         const age = resolveChildAgeDisplayLabel({
             person_id: pid || null,
             person_date_of_birth: canonicalDob || null,
@@ -1712,6 +1740,15 @@ async function enrichOpportunityRows(params: {
             _primary_child_person_id: relatedDrawerPersonIds.childPersonId,
             _child_display_name: childDisplay,
             _crm_compact_children: crmCompactChildrenStructured,
+            ...(activeMemberChildren.length > 0
+                ? {
+                      _household_children: buildHouseholdChildrenForQueueRow(
+                          activeMemberChildren,
+                          childDobByPersonId,
+                          personById,
+                      ),
+                  }
+                : {}),
             ...(inquiryChildren.length > 0 ? { _inquiry_children: inquiryChildren } : {}),
             _requested_program: programsDisplay ?? programCombined,
             _desired_start_date: desiredStart,
