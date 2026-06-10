@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import DrawerHouseholdContactCardList from "@/components/layout/DrawerHouseholdContactCardList";
+import LeadHouseholdContactsWidget from "@/components/layout/lead/LeadHouseholdContactsWidget";
 import DrawerHouseholdPersonLinkAvatar, {
     DRAWER_HOUSEHOLD_PERSON_LINK_ITEM,
 } from "@/components/layout/DrawerHouseholdPersonLinkAvatar";
@@ -14,7 +14,6 @@ import {
     resolveLeadDrawerHouseholdProfile,
     resolvePersonDrawerHouseholdProfile,
 } from "@/lib/layout/runtime/resolveDrawerHouseholdProfile";
-import { resolveOpportunityDrawerHouseholdContacts } from "@/lib/layout/runtime/resolveDrawerHouseholdContacts";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE,
@@ -31,6 +30,7 @@ type Props = {
     onAdornmentAction?: AdornmentActionHandler;
     /** When true, household_contacts widget is configured in layout — render relationship list. */
     showContactsList?: boolean;
+    canMutate?: boolean;
 };
 
 function ContactChannelRow({
@@ -256,11 +256,10 @@ export default function DrawerHouseholdProfileSection({
     variant,
     onAdornmentAction,
     showContactsList = false,
+    canMutate = false,
 }: Props) {
     const profile =
         variant === "lead" ? resolveLeadDrawerHouseholdProfile(record) : resolvePersonDrawerHouseholdProfile(record);
-
-    const leadContacts = variant === "lead" ? resolveOpportunityDrawerHouseholdContacts(record) : null;
 
     const initials = personDrawerHouseholdInitials(profile.primaryName ?? profile.householdName ?? "Household");
 
@@ -303,16 +302,13 @@ export default function DrawerHouseholdProfileSection({
                         />
                     </div>
                 :   null}
-                {showContactsList && leadContacts ?
+                {showContactsList ?
                     <div className="space-y-1.5 px-1">
                         <p className={PRESENTATION_LABEL}>Household contacts</p>
-                        <DrawerHouseholdContactCardList
-                            contacts={leadContacts.visible}
-                            overflowCount={leadContacts.overflowCount}
-                            anchorRecord={record}
+                        <LeadHouseholdContactsWidget
+                            record={record}
                             onAdornmentAction={onAdornmentAction}
-                            emptyMessage="No household contacts linked yet."
-                            showPrimaryBadge
+                            canMutate={canMutate}
                         />
                     </div>
                 :   null}

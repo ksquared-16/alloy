@@ -3,22 +3,17 @@
 import { Calendar, Check, ExternalLink, Mail } from "lucide-react";
 
 import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
-import type { BosRecommendation } from "@/lib/admin/actions/createLeadBosGuidance";
-
-type SuggestedAction = {
-    id: string;
-    label: string;
-    icon: "calendar" | "mail" | "open";
-    disabled?: boolean;
-    status?: string;
-    onClick?: () => void;
-};
+import {
+    bosRecommendationReadinessLabel,
+    type BosRecommendation,
+    type BosRecommendationSuccessAction,
+} from "@/lib/admin/actions/bosRecommendationTypes";
 
 type Props = {
     title: string;
     detail?: string;
     householdLabel?: string | null;
-    suggestedActions?: SuggestedAction[];
+    suggestedActions?: BosRecommendationSuccessAction[];
     bosRecommendations?: BosRecommendation[];
 };
 
@@ -28,16 +23,10 @@ const ICONS = {
     open: ExternalLink,
 } as const;
 
-const RECOMMENDATION_MARK: Record<BosRecommendation["tone"], string> = {
-    positive: "✓",
-    recommended: "✓",
-    warning: "⚠",
-};
-
-const RECOMMENDATION_STYLE: Record<BosRecommendation["tone"], string> = {
-    positive: "text-[#007A63]",
-    recommended: "text-[#007A63]",
-    warning: "text-amber-700",
+const READINESS_STYLE: Record<BosRecommendation["readiness"], string> = {
+    ready: "text-[#007A63] bg-[#00A283]/10",
+    blocked: "text-amber-800 bg-amber-50",
+    coming_soon: "text-alloy-midnight/55 bg-alloy-stone/10",
 };
 
 export function ActionWorkspaceSuccessState({
@@ -87,22 +76,33 @@ export function ActionWorkspaceSuccessState({
                         </span>
                     </div>
                     <p className="mb-2 text-[11px] font-medium text-alloy-midnight/45">
-                        Recommended next steps and Required Information
+                        Next steps and Required Information
                     </p>
                     <ul className="space-y-2">
                         {bosRecommendations.map((rec) => (
                             <li
-                                key={rec.id}
-                                className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-3 py-2"
-                                data-testid={`action-workspace-bos-recommendation-${rec.id}`}
+                                key={rec.key}
+                                className="rounded-lg bg-white/70 px-3 py-2.5"
+                                data-testid={`action-workspace-bos-recommendation-${rec.key}`}
                             >
-                                <span className="text-sm font-medium text-alloy-midnight/85">
-                                    <span className={`mr-1.5 ${RECOMMENDATION_STYLE[rec.tone]}`} aria-hidden>
-                                        {RECOMMENDATION_MARK[rec.tone]}
+                                <div className="flex items-start justify-between gap-3">
+                                    <span className="text-sm font-medium text-alloy-midnight/85">{rec.title}</span>
+                                    <span
+                                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${READINESS_STYLE[rec.readiness]}`}
+                                    >
+                                        {bosRecommendationReadinessLabel(rec.readiness)}
                                     </span>
-                                    {rec.label}
-                                </span>
-                                <span className="shrink-0 text-[11px] text-alloy-midnight/45">{rec.detail}</span>
+                                </div>
+                                <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/55">{rec.reason}</p>
+                                {rec.blockingRequirements && rec.blockingRequirements.length > 0 ?
+                                    <ul className="mt-1.5 space-y-0.5 text-[10px] text-amber-900/80">
+                                        {rec.blockingRequirements.map((req) => (
+                                            <li key={req} data-testid={`action-workspace-bos-blocking-${rec.key}-${req}`}>
+                                                • {req}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                :   null}
                             </li>
                         ))}
                     </ul>

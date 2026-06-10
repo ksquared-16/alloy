@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
+import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
 import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
@@ -181,8 +182,13 @@ export function OpportunityTourScheduleActionModal(props: OpportunityTourSchedul
                 onClick={(e) => e.stopPropagation()}
             >
                 {showSlotChrome && slotPhase === "bootstrapping" ? (
-                    <div className="px-5 py-10 text-center text-sm text-alloy-midnight/70" aria-busy="true">
-                        Checking existing tour bookings…
+                    <div className="px-5 py-6" aria-busy="true">
+                        <BosExecutionLoader
+                            variant="panel"
+                            title="Checking tour bookings…"
+                            subtitle="Verifying existing reservations before scheduling."
+                            data-testid="schedule-tour-bootstrap-loader"
+                        />
                     </div>
                 ) : null}
 

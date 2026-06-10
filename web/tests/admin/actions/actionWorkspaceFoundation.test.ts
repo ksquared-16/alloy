@@ -93,12 +93,32 @@ describe("action workspace foundation", () => {
         const loader = read("components/admin/actions/BosExecutionLoader.tsx");
         const execute = read("components/admin/actions/ActionWorkspaceExecuteState.tsx");
         expect(loader).toContain("BosExecutionLoader");
+        expect(loader).toContain("BosExecutionLoaderVariant");
+        expect(loader).toContain('"inline"');
+        expect(loader).toContain('"panel"');
+        expect(loader).toContain('"fullscreen"');
+        expect(loader).toContain('"drawer"');
         expect(loader).toContain("data-bos-execution-loader");
         expect(loader).toContain("ActionWorkspaceBosNeuralPulse");
         expect(loader).toContain("Create Lead");
         expect(loader).toContain("Schedule Tour");
+        expect(loader).toContain("BOS_EXECUTION_LOADER_PHASES_SEND_WELCOME");
+        expect(loader).toContain("BOS_EXECUTION_LOADER_DEFAULT_TITLE");
         expect(loader).not.toContain("animate-spin");
         expect(execute).toContain("BosExecutionLoader");
+        expect(execute).toContain('variant="fullscreen"');
+    });
+
+    it("action execution modals use BosExecutionLoader instead of generic spinners", () => {
+        const addChild = read("components/admin/opportunity/actions/AddInquiryChildModal.tsx");
+        const scheduleTour = read("components/admin/opportunity/actions/ScheduleTourActionFormModal.tsx");
+        const drawerOpening = read("components/admin/OpportunityDrawerOpeningOverlay.tsx");
+        expect(addChild).toContain("BosExecutionLoader");
+        expect(addChild).toContain("BOS_EXECUTION_LOADER_PHASES_ADD_CHILD");
+        expect(scheduleTour).toContain("BosExecutionLoader");
+        expect(scheduleTour).toContain("BOS_EXECUTION_LOADER_PHASES_SCHEDULE_TOUR");
+        expect(drawerOpening).toContain("BosExecutionLoader");
+        expect(drawerOpening).not.toContain("animate-spin");
     });
 
     it("BOS action workspace uses genie lamp not sparkle icons", () => {
@@ -134,7 +154,8 @@ describe("action workspace foundation", () => {
         expect(modal).toContain("gatherPhase");
         expect(modal).toContain("Create Lead");
         expect(modal).toContain("Review details");
-        expect(modal).toContain("resolveCreateLeadSuccessActions");
+        expect(modal).toContain("resolveCreateLeadPostCreateRecommendations");
+        expect(modal).toContain("mapBosRecommendationsToSuccessActions");
         expect(modal).toContain("Tell BOS about the family");
         expect(modal).toContain("onCreated");
         expect(modal).toContain("ActionWorkspaceBosGuidancePanel");
@@ -146,6 +167,20 @@ describe("action workspace foundation", () => {
         const review = read("components/admin/actions/ActionWorkspaceReviewSummary.tsx");
         expect(review).not.toContain("onChange");
         expect(review).toContain("Read-only summary");
+    });
+
+    it("workspace and work-unit actions share command-rail button component", () => {
+        const actionsBlock = read("app/adminV2/components/workspace/blocks/ActionsBlock.tsx");
+        const railButton = read("app/adminV2/components/workspace/WorkspaceActionRailButton.tsx");
+        const railSection = read("app/adminV2/components/workspace/WorkspaceCommandRailActionsSection.tsx");
+        const deptPage = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        const wuRail = read("app/adminV2/components/workspace/WorkUnitAboveFoldActionsRail.tsx");
+        expect(actionsBlock).toContain("WorkspaceActionRailButton");
+        expect(railButton).toContain("workspaceActionRailButtonClass");
+        expect(railSection).toContain("WorkspaceCommandRailActionsSection");
+        expect(railSection).toContain("suppressSectionTitles");
+        expect(deptPage).toContain("WorkspaceCommandRailActionsSection");
+        expect(wuRail).toContain("WorkspaceCommandRailActionsSection");
     });
 });
 
@@ -183,35 +218,44 @@ describe("create lead BOS guidance", () => {
         expect(guidance.advisoryItems).toContain("source");
     });
 
-    it("gates schedule tour when child/program/location are missing", async () => {
-        const { resolveCreateLeadBosRecommendations, resolveCreateLeadSuccessActions } = await import(
-            "@/lib/admin/actions/createLeadBosGuidance"
+    it("structures post-create recommendations with readiness and blocking requirements", async () => {
+        const { resolveCreateLeadPostCreateRecommendations } = await import(
+            "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations"
         );
-        const sparse = resolveCreateLeadBosRecommendations({
+        const { mapBosRecommendationsToSuccessActions } = await import(
+            "@/lib/admin/actions/mapBosRecommendationsToSuccessActions"
+        );
+        const sparse = resolveCreateLeadPostCreateRecommendations({
             first_name: "Jordan",
             last_name: "Lee",
             child_date_of_birth: "",
         });
-        const scheduleSparse = sparse.find((r) => r.id === "schedule-tour");
-        expect(scheduleSparse?.detail).toBe("Needs child/program info");
-        expect(scheduleSparse?.tone).toBe("warning");
-        expect(sparse.some((r) => r.label === "Child DOB" && r.detail === "Required Information")).toBe(true);
+        const scheduleSparse = sparse.find((r) => r.key === "schedule-tour");
+        expect(scheduleSparse?.reason).toBe("Needs child/program info");
+        expect(scheduleSparse?.readiness).toBe("blocked");
+        expect(scheduleSparse?.blockingRequirements).toContain("Child name");
+        expect(
+            sparse.some(
+                (r) => r.key === "required-info:child_date_of_birth" && r.reason.includes("Required Information")
+            )
+        ).toBe(true);
 
-        const actions = resolveCreateLeadSuccessActions({
-            first_name: "Jordan",
-            last_name: "Lee",
-        });
+        const actions = mapBosRecommendationsToSuccessActions(sparse, { onOpenLead: () => {} });
         expect(actions.find((a) => a.id === "schedule-tour")?.disabled).toBe(true);
         expect(actions.find((a) => a.id === "send-welcome")?.status).toBe("Template ready soon");
+        expect(actions.find((a) => a.id === "open-lead")?.disabled).toBeFalsy();
 
-        const ready = resolveCreateLeadBosRecommendations({
+        const ready = resolveCreateLeadPostCreateRecommendations({
             first_name: "Jordan",
             last_name: "Lee",
             child_first_name: "Sam",
             child_program: "prog-1",
             location_id: "loc-1",
+            child_desired_start_date: "2026-09-01",
         });
-        expect(ready.find((r) => r.id === "schedule-tour")?.detail).toBe("Available after opening lead");
+        expect(ready.find((r) => r.key === "schedule-tour")?.readiness).toBe("ready");
+        expect(ready.find((r) => r.key === "schedule-tour")?.reason).toBe("Available after opening lead");
+        expect(ready.find((r) => r.key === "send-welcome")?.readiness).toBe("coming_soon");
     });
 
     it("formats household label with Family naming", async () => {

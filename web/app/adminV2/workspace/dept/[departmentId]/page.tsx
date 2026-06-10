@@ -31,7 +31,8 @@ import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
-import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
+import { WorkspaceCommandRailActionsSection } from "@/app/adminV2/components/workspace/WorkspaceCommandRailActionsSection";
+import { countActionsVm } from "@/lib/bos/countActionsVm";
 import { useAdminDrawer, useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
@@ -1637,6 +1638,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
         });
     }, [reserveDeptActionsRail, enrollmentDeptRightRail]);
 
+    const enrollmentDepartmentActionCount = useMemo(() => {
+        if (!enrollmentDepartmentRailModel) return null;
+        return countActionsVm(enrollmentDepartmentRailModel, "department");
+    }, [enrollmentDepartmentRailModel]);
+
     const enrollmentRightRailByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();
         for (const a of enrollmentDeptRightRail ?? []) m.set(a.key, a);
@@ -2032,11 +2038,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     }
                     railSlot={
                         reserveDeptActionsRail && enrollmentDepartmentRailModel ? (
-                            <ActionsBlock
+                            <WorkspaceCommandRailActionsSection
                                 model={enrollmentDepartmentRailModel}
                                 onAction={onEnrollmentDeptRailAction}
-                                title="Actions"
                                 surface="department"
+                                actionCount={enrollmentDepartmentActionCount}
+                                title="Actions"
+                                slotTestId="dept-above-fold-actions-rail"
                             />
                         ) : null
                     }

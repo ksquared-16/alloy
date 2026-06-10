@@ -23,13 +23,25 @@ type Props = {
     emptyMessage?: string;
     highlightPersonId?: string | null;
     showPrimaryBadge?: boolean;
+    /** When set, non-primary adults show a make-primary action (lead drawer). */
+    canMutatePrimaryContact?: boolean;
+    onMakePrimaryContact?: (contact: DrawerHouseholdContactRow) => void;
+    makePrimarySavingPersonId?: string | null;
 };
 
-function metaLine(contact: DrawerHouseholdContactRow, showPrimaryBadge: boolean): string {
-    const parts = [
-        contact.role_label,
-        showPrimaryBadge && contact.is_primary ? "Primary contact" : null,
-    ].filter(Boolean);
+function PrimaryContactBadge() {
+    return (
+        <span
+            className="inline-flex shrink-0 items-center rounded-full border border-alloy-juniper/25 bg-alloy-juniper/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/75"
+            data-drawer-household-primary-contact-badge="true"
+        >
+            Primary contact
+        </span>
+    );
+}
+
+function metaLine(contact: DrawerHouseholdContactRow): string {
+    const parts = [contact.role_label].filter(Boolean);
     return [...new Set(parts)].join(" · ");
 }
 
@@ -39,12 +51,18 @@ function HouseholdContactCard({
     onAdornmentAction,
     highlightPersonId,
     showPrimaryBadge,
+    canMutatePrimaryContact,
+    onMakePrimaryContact,
+    makePrimarySavingPersonId,
 }: {
     contact: DrawerHouseholdContactRow;
     anchorRecord: ProofRuntimeRecord;
     onAdornmentAction?: AdornmentActionHandler;
     highlightPersonId?: string | null;
     showPrimaryBadge: boolean;
+    canMutatePrimaryContact: boolean;
+    onMakePrimaryContact?: (contact: DrawerHouseholdContactRow) => void;
+    makePrimarySavingPersonId?: string | null;
 }) {
     const rowRecord: ProofRuntimeRecord = {
         id: contact.person_id,
@@ -54,8 +72,14 @@ function HouseholdContactCard({
         "person.primary_phone": contact.phone ?? "",
         "person.primary_email": contact.email ?? "",
     };
-    const meta = metaLine(contact, showPrimaryBadge);
+    const meta = metaLine(contact);
     const isHighlighted = highlightPersonId != null && contact.person_id === highlightPersonId;
+    const showMakePrimary =
+        canMutatePrimaryContact
+        && !contact.is_primary
+        && Boolean(contact.person_id)
+        && Boolean(onMakePrimaryContact);
+    const isSavingPrimary = makePrimarySavingPersonId === contact.person_id;
 
     return (
         <li
@@ -65,6 +89,7 @@ function HouseholdContactCard({
                 :   "border-alloy-stone/12"
             }`}
             data-drawer-household-contact-card="true"
+            {...(contact.is_primary ? { "data-drawer-household-primary-contact": "true" } : {})}
             {...(isHighlighted ? { "data-drawer-household-contact-current": "true" } : {})}
         >
             <div className="flex items-start gap-2.5">
@@ -77,25 +102,30 @@ function HouseholdContactCard({
                     componentName="DrawerHouseholdContactCardList"
                 />
                 <div className="min-w-0 flex-1">
-                    {contact.person_id ?
-                        <LayoutRuntimePersonLinkSurface
-                            componentName="DrawerHouseholdContactCardList"
-                            surface="drawer"
-                            item={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM}
-                            personId={contact.person_id}
-                            rowRecord={rowRecord}
-                            anchorRecord={anchorRecord}
-                            adornment={null}
-                            display={contact.display_name}
-                            onAction={onAdornmentAction}
-                            className={`block text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
-                        />
-                    :   <DrawerRelationshipOverflowText
-                            value={contact.display_name}
-                            as="p"
-                            className={PRESENTATION_DATA_VALUE_COMPACT}
-                        />
-                    }
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        {contact.person_id ?
+                            <LayoutRuntimePersonLinkSurface
+                                componentName="DrawerHouseholdContactCardList"
+                                surface="drawer"
+                                item={DRAWER_HOUSEHOLD_PERSON_LINK_ITEM}
+                                personId={contact.person_id}
+                                rowRecord={rowRecord}
+                                anchorRecord={anchorRecord}
+                                adornment={null}
+                                display={contact.display_name}
+                                onAction={onAdornmentAction}
+                                className={`block text-left hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                            />
+                        :   <DrawerRelationshipOverflowText
+                                value={contact.display_name}
+                                as="p"
+                                className={PRESENTATION_DATA_VALUE_COMPACT}
+                            />
+                        }
+                        {showPrimaryBadge && contact.is_primary ?
+                            <PrimaryContactBadge />
+                        :   null}
+                    </div>
                     {meta ?
                         <DrawerRelationshipOverflowText
                             value={meta}
@@ -110,6 +140,17 @@ function HouseholdContactCard({
                             lineClamp={3}
                             className={`mt-0.5 ${PRESENTATION_SUPPORTING_COMPACT}`}
                         />
+                    :   null}
+                    {showMakePrimary ?
+                        <button
+                            type="button"
+                            onClick={() => onMakePrimaryContact?.(contact)}
+                            disabled={isSavingPrimary}
+                            className="mt-1.5 text-left text-[11px] font-medium text-alloy-blue hover:underline disabled:opacity-50"
+                            data-drawer-household-make-primary-contact="true"
+                        >
+                            {isSavingPrimary ? "Saving…" : "Make primary contact"}
+                        </button>
                     :   null}
                 </div>
             </div>
@@ -126,6 +167,9 @@ export default function DrawerHouseholdContactCardList({
     emptyMessage = "No additional household contacts linked yet.",
     highlightPersonId = null,
     showPrimaryBadge = true,
+    canMutatePrimaryContact = false,
+    onMakePrimaryContact,
+    makePrimarySavingPersonId = null,
 }: Props) {
     if (contacts.length === 0) {
         return (
@@ -146,6 +190,9 @@ export default function DrawerHouseholdContactCardList({
                         onAdornmentAction={onAdornmentAction}
                         highlightPersonId={highlightPersonId}
                         showPrimaryBadge={showPrimaryBadge}
+                        canMutatePrimaryContact={canMutatePrimaryContact}
+                        onMakePrimaryContact={onMakePrimaryContact}
+                        makePrimarySavingPersonId={makePrimarySavingPersonId}
                     />
                 ))}
             </ul>

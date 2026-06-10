@@ -18,7 +18,8 @@ Make Create Lead feel like BOS prepared the lead and the operator approves it �
 | **Flow** | Gather (paste → suggestions → form) is review/edit; optional **Review details** read-only preview; primary CTA **Create Lead** skips forced summary |
 | **Step rail** | Labels: Gather → Review/Edit → Create → Continue |
 | **Execution loader** | `BosExecutionLoader` — canonical neural pulse + phased progress (reuse for future BOS actions) |
-| **Success** | Truthful recommendations: Schedule Tour gated on child/program/location; Send Welcome marked “Template ready soon”; missing fields as Required Information follow-ups |
+| **Success** | Structured `BosRecommendation` (readiness, blockingRequirements, actionKey); Schedule Tour gated on child/program/location/start date; Send Welcome `coming_soon`; Required Information follow-ups |
+| **Action rails** | `WorkspaceActionRailButton` + `WorkspaceCommandRailActionsSection` align department and work-unit Actions panels |
 | **Backend** | Unchanged — still `onSubmit` → existing execute path |
 
 ---

@@ -15,8 +15,10 @@ import { neutral, palette, derived } from "@/styles/tokens/colors";
 import {
     CANONICAL_ADMIN_BASE,
     CANONICAL_OPERATOR_BASE,
+    isCanonicalFormsPath,
     normalizeToCanonicalAdminPath,
 } from "@/lib/admin/canonicalAdminRoutes";
+import { ADMIN_V2_NOTIFICATIONS_HREF } from "@/app/adminV2/components/SidebarModalNavItems";
 import { parseOperatorWorkUnitPath } from "@/lib/admin/canonicalOperatorRoutes";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { loadOperatorLifecycleLandingCards,
@@ -25,7 +27,12 @@ import { loadOperatorLifecycleLandingCards,
 import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
-import { SidebarInboxNavItem, SidebarTasksNavItem } from "@/app/adminV2/components/SidebarModalNavItems";
+import {
+    SidebarFormsNavItem,
+    SidebarInboxNavItem,
+    SidebarNotificationsNavItem,
+    SidebarTasksNavItem,
+} from "@/app/adminV2/components/SidebarModalNavItems";
 import { appendWorkspaceSiteToPath, readStickyWorkspaceSiteIdForNavigation } from "@/lib/adminV2/workspaceSiteFilterClient";
 
 const WORKSPACE = CANONICAL_OPERATOR_BASE;
@@ -51,6 +58,8 @@ function isAdminConfigPath(path: string): boolean {
         return false;
     }
     if (path.startsWith("/admin/tasks") || path.startsWith("/admin/messages")) return false;
+    if (isCanonicalFormsPath(path)) return false;
+    if (path === ADMIN_V2_NOTIFICATIONS_HREF) return false;
     if (path.startsWith(`${CANONICAL_ADMIN_BASE}/workspace`)) return false;
     return path === CANONICAL_ADMIN_BASE || path.startsWith(`${CANONICAL_ADMIN_BASE}/`);
 }
@@ -132,6 +141,10 @@ function SidebarNav({
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
     const inboxLink = <SidebarInboxNavItem collapsed={collapsed} />;
+
+    const formsLink = <SidebarFormsNavItem collapsed={collapsed} />;
+
+    const notificationsLink = <SidebarNotificationsNavItem collapsed={collapsed} />;
 
     const settingsLink = (
         <AdminV2NavLink
@@ -323,6 +336,8 @@ function SidebarNav({
                         {homeLink}
                         {tasksLink}
                         {inboxLink}
+                        {formsLink}
+                        {notificationsLink}
                     </div>
                     <div className="min-h-0 flex-1" aria-hidden />
                     <div className="adminv2-sidebar-footer flex shrink-0 flex-col items-stretch gap-1 border-t pt-1">
@@ -335,6 +350,8 @@ function SidebarNav({
                         {homeLink}
                         {tasksLink}
                         {inboxLink}
+                        {formsLink}
+                        {notificationsLink}
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto">{lifecycleNavExpanded}</div>
                     <div className="adminv2-sidebar-footer shrink-0 border-t pt-2">

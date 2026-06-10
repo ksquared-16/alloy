@@ -24,9 +24,9 @@ import {
 import {
     formatCreateLeadHouseholdLabel,
     resolveCreateLeadBosGuidance,
-    resolveCreateLeadBosRecommendations,
-    resolveCreateLeadSuccessActions,
 } from "@/lib/admin/actions/createLeadBosGuidance";
+import { mapBosRecommendationsToSuccessActions } from "@/lib/admin/actions/mapBosRecommendationsToSuccessActions";
+import { resolveCreateLeadPostCreateRecommendations } from "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
 import { ActionWorkspaceBosGuidancePanel } from "@/components/admin/actions/ActionWorkspaceBosGuidancePanel";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
@@ -80,10 +80,6 @@ export function CreateLeadModal(props: {
     const [values, setValues] = useState<Record<string, string>>(emptyCreateLeadGatherValues());
     const [pasteText, setPasteText] = useState("");
     const [suggestions, setSuggestions] = useState<ActionWorkspaceBosSuggestion[]>([]);
-    const [lastAppliedSuggestions, setLastAppliedSuggestions] = useState<ActionWorkspaceBosSuggestion[]>([]);
-    const [appliedFromBos, setAppliedFromBos] = useState(false);
-    const [valuesEditedAfterApply, setValuesEditedAfterApply] = useState(false);
-    const [suggestionsEdited, setSuggestionsEdited] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -102,8 +98,18 @@ export function CreateLeadModal(props: {
     const validation = useMemo(() => validateCreateLeadPlatformMinimum(values), [values]);
     const bosGuidance = useMemo(() => resolveCreateLeadBosGuidance(values), [values]);
     const householdLabel = useMemo(() => formatCreateLeadHouseholdLabel(values), [values]);
-    const bosRecommendations = useMemo(() => resolveCreateLeadBosRecommendations(values), [values]);
-    const successActions = useMemo(() => resolveCreateLeadSuccessActions(values), [values]);
+    const bosRecommendations = useMemo(() => resolveCreateLeadPostCreateRecommendations(values), [values]);
+    const successActions = useMemo(
+        () =>
+            mapBosRecommendationsToSuccessActions(bosRecommendations, {
+                onOpenLead: () => {
+                    const opportunityId = createdIdRef.current;
+                    if (!opportunityId) return;
+                    handoffToCreatedLead(opportunityId);
+                },
+            }),
+        [bosRecommendations, handoffToCreatedLead]
+    );
 
     const reset = useCallback(() => {
         setStep("gather");
@@ -111,10 +117,6 @@ export function CreateLeadModal(props: {
         setValues(emptyCreateLeadGatherValues());
         setPasteText("");
         setSuggestions([]);
-        setLastAppliedSuggestions([]);
-        setAppliedFromBos(false);
-        setValuesEditedAfterApply(false);
-        setSuggestionsEdited(false);
         setAnalyzing(false);
         setAnalyzeError(null);
         setError(null);
@@ -152,7 +154,6 @@ export function CreateLeadModal(props: {
     }, [step, handoffToCreatedLead]);
 
     const setFieldValue = useCallback((payloadKey: string, next: string) => {
-        setValuesEditedAfterApply(true);
         setValues((prev) => ({ ...prev, [payloadKey]: next }));
     }, []);
 
@@ -170,7 +171,6 @@ export function CreateLeadModal(props: {
                 setGatherPhase("paste");
                 return;
             }
-            setSuggestionsEdited(false);
             setSuggestions(
                 mapped.map((s) => ({
                     id: suggestionId(s.payload_key, s.suggested_value),
@@ -198,9 +198,6 @@ export function CreateLeadModal(props: {
             for (const s of selected) next[s.payload_key] = s.suggested_value;
             return next;
         });
-        setLastAppliedSuggestions(selected);
-        setAppliedFromBos(true);
-        setValuesEditedAfterApply(false);
         setSuggestions([]);
         setGatherPhase("details");
     }, [suggestions]);
@@ -358,7 +355,6 @@ export function CreateLeadModal(props: {
                                 setGatherPhase("paste");
                             }}
                             onSuggestionValueChange={(id, value) => {
-                                setSuggestionsEdited(true);
                                 setSuggestions((prev) =>
                                     prev.map((s) => (s.id === id ? { ...s, suggested_value: value } : s))
                                 );
@@ -402,7 +398,10 @@ export function CreateLeadModal(props: {
             </ActionWorkspaceStepContent>
 
             <ActionWorkspaceStepContent step="execute" activeStep={step}>
-                <ActionWorkspaceExecuteState title="Creating Lead…" detail="Saving person, household, and lead record." />
+                <ActionWorkspaceExecuteState
+                    title="Creating Lead…"
+                    subtitle="Saving person, household, and lead record."
+                />
             </ActionWorkspaceStepContent>
 
             <ActionWorkspaceStepContent step="success" activeStep={step}>
@@ -411,18 +410,7 @@ export function CreateLeadModal(props: {
                     detail={successDetail ?? "Preparing your workspace…"}
                     householdLabel={householdLabel}
                     bosRecommendations={bosRecommendations}
-                    suggestedActions={successActions.map((action) =>
-                        action.id === "open-lead" ?
-                            {
-                                ...action,
-                                onClick: () => {
-                                    const opportunityId = createdIdRef.current;
-                                    if (!opportunityId) return;
-                                    handoffToCreatedLead(opportunityId);
-                                },
-                            }
-                        :   action
-                    )}
+                    suggestedActions={successActions}
                 />
             </ActionWorkspaceStepContent>
 

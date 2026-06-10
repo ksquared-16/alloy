@@ -1,5 +1,7 @@
 "use client";
 
+import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
+
 /** External first-paint gate — drawer modal does not mount until bootstrap + primary are ready. */
 export default function OpportunityDrawerOpeningOverlay(props: {
     onCancel: () => void;
@@ -7,7 +9,7 @@ export default function OpportunityDrawerOpeningOverlay(props: {
     recordLabel?: string;
 }) {
     const { onCancel, errorMessage, recordLabel = "record" } = props;
-    const openingCopy = `Opening ${recordLabel}…`;
+    const openingTitle = `Opening ${recordLabel}…`;
 
     return (
         <div
@@ -34,13 +36,12 @@ export default function OpportunityDrawerOpeningOverlay(props: {
                         </button>
                     </>
                 ) : (
-                    <>
-                        <div
-                            className="h-5 w-5 animate-spin rounded-full border-2 border-alloy-stone/25 border-t-alloy-pine"
-                            aria-hidden
-                        />
-                        <p className="text-center text-sm font-medium text-alloy-midnight/85">{openingCopy}</p>
-                    </>
+                    <BosExecutionLoader
+                        variant="drawer"
+                        title={openingTitle}
+                        subtitle="Preparing inquiry workspace…"
+                        data-testid="opportunity-drawer-opening-loader"
+                    />
                 )}
             </div>
         </div>

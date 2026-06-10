@@ -165,6 +165,10 @@ type LayoutRuntimeHostContextValue = {
 
 const LayoutRuntimeHostContext = createContext<LayoutRuntimeHostContextValue>({});
 
+export function useLayoutRuntimeHostContext(): LayoutRuntimeHostContextValue {
+    return useContext(LayoutRuntimeHostContext);
+}
+
 function isLayoutRuntimeChildrenRepeater(item: LayoutItem): boolean {
     const keys = [item.source, item.refKey].filter(Boolean).map(String);
     return keys.some((key) => CHILDREN_REPEATER_KEYS.has(key));
@@ -812,6 +816,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     const variant = useContext(LayoutRuntimeVariantContext);
     const composition = useLayoutRuntimeCompositionHints();
     const onAdornmentAction = useContext(AdornmentActionContext);
+    const host = useContext(LayoutRuntimeHostContext);
     const { onSelectDrawerTab, activityTabKey } = useLayoutRuntimeDrawerHost();
     const widgetKey = resolveLayoutRuntimeWidgetKey(item);
     const title = operatorLabel(item, variant) || "Details";
@@ -862,7 +867,13 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     }
 
     if (widgetKey === "household_contacts" && composition.leadOverviewComposition) {
-        return <LeadHouseholdContactsWidget record={record} onAdornmentAction={onAdornmentAction} />;
+        return (
+            <LeadHouseholdContactsWidget
+                record={record}
+                onAdornmentAction={onAdornmentAction}
+                canMutate={host.canMutate}
+            />
+        );
     }
 
     if (widgetKey === "related_people" && composition.personOverviewComposition) {
@@ -1148,6 +1159,7 @@ function SectionView({
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const composition = useLayoutRuntimeCompositionHints();
     const onAdornmentAction = useContext(AdornmentActionContext);
+    const host = useContext(LayoutRuntimeHostContext);
     const sectionContext = {
         sectionPresentation,
         sectionKey: section.key,
@@ -1185,6 +1197,7 @@ function SectionView({
             variant={section.key === "household_contact" ? "lead" : "person"}
             onAdornmentAction={onAdornmentAction}
             showContactsList={showHouseholdContactsList}
+            canMutate={host.canMutate}
         />
     :   (
             <LayoutRuntimeSectionContext.Provider value={sectionContext}>

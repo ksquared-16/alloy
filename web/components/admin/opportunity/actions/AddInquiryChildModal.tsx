@@ -9,6 +9,10 @@ import {
     mergeInquiryChildCreateFormFields,
     type EntityCreateFormField,
 } from "@/lib/admin/actions/entityCreateFormFieldLoader";
+import {
+    BOS_EXECUTION_LOADER_PHASES_ADD_CHILD,
+    BosExecutionLoader,
+} from "@/components/admin/actions/BosExecutionLoader";
 import ConfiguredCreateFormFields from "@/components/admin/opportunity/actions/ConfiguredCreateFormFields";
 import { ActionModalOverlayShell } from "@/components/admin/opportunity/actions/ActionModalOverlayShell";
 
@@ -145,13 +149,22 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                 </div>
 
                 <div className="space-y-4 px-5 py-4">
-                    {fieldsLoading ?
+                    {submitting ?
+                        <BosExecutionLoader
+                            variant="panel"
+                            title={mode === "sibling" ? "Adding sibling…" : "Adding child…"}
+                            subtitle="Saving child record and inquiry participation."
+                            steps={BOS_EXECUTION_LOADER_PHASES_ADD_CHILD}
+                            data-testid="add-inquiry-child-execute-loader"
+                        />
+                    : null}
+                    {!submitting && fieldsLoading ?
                         <p className="text-sm text-alloy-midnight/60">Loading configured fields…</p>
                     :   null}
                     {fieldsError ?
                         <p className="text-sm text-alloy-midnight/55">{fieldsError}</p>
                     :   null}
-                    {identityFields.length > 0 ?
+                    {!submitting && identityFields.length > 0 ?
                         <div>
                             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                 Child identity
@@ -165,7 +178,7 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                             />
                         </div>
                     :   null}
-                    {participationFields.length > 0 ?
+                    {!submitting && participationFields.length > 0 ?
                         <div>
                             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                 Inquiry participation

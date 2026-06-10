@@ -1,4 +1,8 @@
 import React, { useMemo, useState } from "react";
+import {
+    BOS_EXECUTION_LOADER_PHASES_SCHEDULE_TOUR,
+    BosExecutionLoader,
+} from "@/components/admin/actions/BosExecutionLoader";
 import { ActionModalStatusMessage } from "@/components/admin/opportunity/actions/ActionModalStatusMessage";
 
 export type ScheduleTourActionFormModalProps = {
@@ -66,7 +70,16 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
                 </div>
 
                 <div className="space-y-4 px-5 py-4">
-                    {successMessage ?
+                    {submitting ?
+                        <BosExecutionLoader
+                            variant="panel"
+                            title="Scheduling tour…"
+                            subtitle="Reserving the slot and starting follow-up workflow."
+                            steps={BOS_EXECUTION_LOADER_PHASES_SCHEDULE_TOUR}
+                            data-testid="schedule-tour-execute-loader"
+                        />
+                    : null}
+                    {!submitting && successMessage ?
                         <>
                             <ActionModalStatusMessage type="success" message={successMessage} />
                             <p className="text-xs text-alloy-midnight/65">
@@ -82,7 +95,8 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
                                 </button>
                             </div>
                         </>
-                    :   <>
+                    : !submitting ?
+                    <>
                     <div className="grid grid-cols-1 gap-3">
                         <label className="text-sm">
                             <div className="mb-1 font-medium text-alloy-midnight">Tour date</div>
@@ -142,7 +156,7 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
                         </button>
                     </div>
                     </>
-                    }
+                    :   null}
                 </div>
         </div>
     );
