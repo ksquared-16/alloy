@@ -107,6 +107,7 @@ export function childOverviewCompositionHints(): import("@/lib/layout/runtime/la
         familyPrimaryColumnsOnly: true,
         summaryStripCompactRow: true,
         childOperatingSummaryCards: true,
+        childFamilyCardList: true,
     };
 }
 

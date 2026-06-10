@@ -6,9 +6,10 @@ import type { PersonActivityPreviewEntry } from "@/lib/layout/runtime/resolvePer
 
 type Props = {
     entries: PersonActivityPreviewEntry[];
+    onViewAll?: () => void;
 };
 
 /** Person activity preview — reuses Lead activity card chrome with person resolver entries. */
-export default function PersonActivityPreview({ entries }: Props) {
-    return <LeadActivityPreview entries={entries as LeadActivityPreviewEntry[]} />;
+export default function PersonActivityPreview({ entries, onViewAll }: Props) {
+    return <LeadActivityPreview entries={entries as LeadActivityPreviewEntry[]} onViewAll={onViewAll} />;
 }

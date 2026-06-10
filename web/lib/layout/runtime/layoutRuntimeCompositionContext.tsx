@@ -36,6 +36,8 @@ export type LayoutRuntimeCompositionHints = {
     connectedChildrenMaxVisibleRows?: number | null;
     /** Prefer layout metadata primary column refs for person connected children. */
     connectedChildrenPrimaryColumnsOnly?: boolean;
+    /** Patch 20 — child family card list instead of table in child workspace. */
+    childFamilyCardList?: boolean;
     /** Patch 20 — child overview composition active. */
     childOverviewComposition?: boolean;
     /** Patch 20 — child enrollment/care summary cards in strip. */
