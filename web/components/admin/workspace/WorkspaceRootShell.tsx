@@ -1,10 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useMemo } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import { WorkspaceKpiOrientationCrossfade } from "@/components/admin/workspace/WorkspaceKpiOrientationCrossfade";
-import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import { WorkspaceRootLifecycleGrid } from "@/components/admin/workspace/WorkspaceRootLifecycleGrid";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
@@ -63,43 +60,17 @@ type Props = {
   lifecycleCardsPending?: boolean;
 };
 
-function filterOperatorWorkspaceKpis(items: KPIVm[]): KPIVm[] {
-  return items.filter((k) => {
-    const label = String(k.label ?? "").trim().toLowerCase();
-    const id = String(k.id ?? "").trim().toLowerCase();
-    return (
-      label !== "departments" &&
-      id !== "depts" &&
-      label !== "work units" &&
-      id !== "wu" &&
-      label !== "lifecycles" &&
-      id !== "lifecycles"
-    );
-  });
-}
-
 /**
- * Operator workspace root — lifecycle tiles, KPI strip, orientation rail.
+ * Operator workspace root — lifecycle tiles and orientation rail.
+ * KPI strip hidden until the model is trustworthy; aggregation continues in page.tsx.
  */
 export function WorkspaceRootShell({
   orgName,
-  orgOpportunityKpis,
-  workspaceKpiStrip,
-  kpiStripPlaceholder = false,
   workspaceRollupRefined = false,
-  kpiQuietReserveOnly = false,
   lifecycleCards = [],
   lifecycleCardsPending = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
-
-  const kpis = useMemo(() => {
-    if (workspaceKpiStrip !== undefined) {
-      return filterOperatorWorkspaceKpis(workspaceKpiStrip);
-    }
-    const roll = orgOpportunityKpis?.length ? orgOpportunityKpis : [];
-    return filterOperatorWorkspaceKpis(roll);
-  }, [workspaceKpiStrip, orgOpportunityKpis]);
 
   const defaultDepartmentId = lifecycleCards[0]?.departmentId ?? null;
 
@@ -129,17 +100,6 @@ export function WorkspaceRootShell({
                 </p>
               </div>
             </div>
-            {kpiStripPlaceholder && kpiQuietReserveOnly ? (
-              <WorkspaceQuietKpiReserve id="workspace-kpi-quiet-reserve" />
-            ) : (
-              <div className="adminv2-ws-dept-v2-kpi-measurement-strip">
-                <WorkspaceKpiOrientationCrossfade
-                  kpis={kpis}
-                  placeholderPending={kpiStripPlaceholder}
-                  maxVisible={5}
-                />
-              </div>
-            )}
           </div>
 
           <section
