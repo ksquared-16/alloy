@@ -23,9 +23,9 @@ describe("Settings index IA cleanup", () => {
 
     it("lifecycle tile lives under Enrollment operations with read-only mode", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain('title="Lifecycle"');
+        expect(page).toContain('title="Business Processes"');
         expect(page).toContain("/adminV2/settings/lifecycle");
-        expect(page).toMatch(/title="Lifecycle"[\s\S]*mode="editable"/);
+        expect(page).toMatch(/title="Business Processes"[\s\S]*mode="editable"/);
         expect(page).toContain("settingsSurfacePrefix");
     });
 

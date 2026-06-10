@@ -8,6 +8,14 @@ import {
     useState,
     type ReactNode,
 } from "react";
+import {
+    BUSINESS_PROCESS_SAVE_STAGE,
+    BUSINESS_PROCESS_SECTION_EXPECTED_WORK,
+    BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY,
+    BUSINESS_PROCESS_SECTION_WHO_BELONGS,
+    BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY,
+    BUSINESS_PROCESS_STAGE_HEADER,
+} from "@/lib/lifecycle/businessProcessUiLabels";
 import LifecycleStatusesCard from "@/components/adminV2/settings/lifecycle/LifecycleStatusesCard";
 import type { LifecycleStatusesSaveState } from "@/lib/lifecycle/lifecycleStatusesCardState";
 import LifecycleStageFieldRequirementsEditor, {
@@ -16,6 +24,12 @@ import LifecycleStageFieldRequirementsEditor, {
 import LifecycleStageWorkUnitCard, {
     type LifecycleStageWorkUnitCardHandle,
 } from "@/components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard";
+import LifecycleStageQueueMembershipEditor, {
+    type LifecycleStageQueueMembershipEditorHandle,
+} from "@/components/adminV2/settings/lifecycle/LifecycleStageQueueMembershipEditor";
+import LifecycleStageOperatingPlanEditor, {
+    type LifecycleStageOperatingPlanEditorHandle,
+} from "@/components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor";
 import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import type { EnrollmentPipelineWorkUnitSnapshot } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
@@ -26,7 +40,7 @@ import type { LifecycleStageWorkUnitIdentityUiState } from "@/components/adminV2
 
 export type LifecycleStageSaveUiState = "idle" | "unsaved" | "saving" | "saved" | "error";
 
-type SectionId = "statuses" | "required" | "actions" | "queue" | "ready_check";
+type SectionId = "membership" | "work_plan" | "statuses" | "required" | "actions" | "queue" | "ready_check";
 
 function countFieldRules(rules: LifecycleStageFieldRules | undefined): number {
     if (!rules) return 0;
@@ -124,7 +138,7 @@ function SaveBar({
                 onClick={() => void onSaveStage()}
                 data-testid={compact ? "lifecycle-stage-save-sticky" : "lifecycle-stage-save"}
             >
-                {effectiveSaveState === "saving" ? "Saving…" : "Save stage"}
+                {effectiveSaveState === "saving" ? "Saving…" : BUSINESS_PROCESS_SAVE_STAGE}
             </button>
         </div>
     );
@@ -134,6 +148,10 @@ export type LifecycleStageWorkspaceHandle = {
     getFieldDraftRules: () => LifecycleStageFieldRulesStored | null;
     isFieldDirty: () => boolean;
     getQueueDisplayName: () => string | null;
+    getQueueMembershipDraft: () => import("@/lib/lifecycle/queueMembershipV1").QueueMembershipV1 | null;
+    isQueueMembershipDirty: () => boolean;
+    getStageOperatingPlanDraft: () => import("@/lib/lifecycle/stageOperatingPlanV1").StageOperatingPlanV1 | null;
+    isStageOperatingPlanDirty: () => boolean;
 };
 
 export default function LifecycleStageWorkspace({
@@ -195,8 +213,12 @@ export default function LifecycleStageWorkspace({
 }) {
     const fieldReqRef = useRef<LifecycleStageFieldRequirementsEditorHandle | null>(null);
     const workUnitRef = useRef<LifecycleStageWorkUnitCardHandle | null>(null);
+    const membershipRef = useRef<LifecycleStageQueueMembershipEditorHandle | null>(null);
+    const operatingPlanRef = useRef<LifecycleStageOperatingPlanEditorHandle | null>(null);
     const [fieldDirty, setFieldDirty] = useState(false);
     const [queueNameDirty, setQueueNameDirty] = useState(false);
+    const [membershipDirty, setMembershipDirty] = useState(false);
+    const [operatingPlanDirty, setOperatingPlanDirty] = useState(false);
 
     const savedKeySet = useMemo(() => new Set(savedStatusKeys), [savedStatusKeys]);
     const statusesDirty = useMemo(() => {
@@ -213,7 +235,7 @@ export default function LifecycleStageWorkspace({
     const queueConfigured =
         Boolean(pipeline?.id) && workUnitIdentityState === "synced" && !workUnitNeedsSync;
 
-    const isDirty = fieldDirty || statusesDirty || queueNameDirty;
+    const isDirty = fieldDirty || statusesDirty || queueNameDirty || membershipDirty || operatingPlanDirty;
 
     useEffect(() => {
         onDirtyChange?.(isDirty);
@@ -223,6 +245,10 @@ export default function LifecycleStageWorkspace({
         getFieldDraftRules: () => fieldReqRef.current?.getDraftRules() ?? null,
         isFieldDirty: () => fieldReqRef.current?.isDirty() ?? false,
         getQueueDisplayName: () => workUnitRef.current?.getDisplayName() ?? null,
+        getQueueMembershipDraft: () => membershipRef.current?.getDraftMembership() ?? null,
+        isQueueMembershipDirty: () => membershipRef.current?.isDirty() ?? false,
+        getStageOperatingPlanDraft: () => operatingPlanRef.current?.getDraftPlan() ?? null,
+        isStageOperatingPlanDirty: () => operatingPlanRef.current?.isDirty() ?? false,
     }));
 
     const effectiveSaveState: LifecycleStageSaveUiState =
@@ -261,6 +287,9 @@ export default function LifecycleStageWorkspace({
                     : "No actions enabled"}
             </li>
             <li>{queueConfigured ? "Queue view configured" : "Queue view not published"}</li>
+            {bootstrap?.stage_operating_plan?.work_templates.length ? (
+                <li>{bootstrap.stage_operating_plan.work_templates.length} work item(s)</li>
+            ) : null}
         </ul>
     );
 
@@ -286,7 +315,7 @@ export default function LifecycleStageWorkspace({
                 <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                         <p className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                            {lifecycleName}
+                            {lifecycleName} · {BUSINESS_PROCESS_STAGE_HEADER}
                         </p>
                         <h3 className="text-sm font-semibold text-alloy-midnight">{stageLabel || stageKey}</h3>
                         {summaryLine}
@@ -307,6 +336,42 @@ export default function LifecycleStageWorkspace({
             ) : null}
 
             <div className="space-y-1.5">
+                <StageSection
+                    id="membership"
+                    title={BUSINESS_PROCESS_SECTION_WHO_BELONGS}
+                    summary={BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY}
+                >
+                    {stageKey.trim() ? (
+                        <LifecycleStageQueueMembershipEditor
+                            ref={membershipRef}
+                            departmentId={departmentId}
+                            stageKey={stageKey}
+                            savedMembership={bootstrap?.queue_membership ?? null}
+                            statusOptions={bootstrap?.queue_membership_status_options ?? []}
+                            onDirtyChange={setMembershipDirty}
+                        />
+                    ) : (
+                        <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>
+                    )}
+                </StageSection>
+
+                <StageSection
+                    id="work_plan"
+                    title={BUSINESS_PROCESS_SECTION_EXPECTED_WORK}
+                    summary={BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY}
+                >
+                    {stageKey.trim() ? (
+                        <LifecycleStageOperatingPlanEditor
+                            ref={operatingPlanRef}
+                            stageKey={stageKey}
+                            savedPlan={bootstrap?.stage_operating_plan ?? null}
+                            onDirtyChange={setOperatingPlanDirty}
+                        />
+                    ) : (
+                        <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>
+                    )}
+                </StageSection>
+
                 <StageSection
                     id="statuses"
                     title="Statuses"

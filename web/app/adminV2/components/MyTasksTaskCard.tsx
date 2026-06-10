@@ -13,13 +13,15 @@ import {
 } from "@/lib/agent/taskAssist/taskAssistOperationalUrgency";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import OperationalWorkAssigneeSelect from "@/components/admin/opportunity/OperationalWorkAssigneeSelect";
+import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
 import { operationalWorkAssigneeDetailLabel } from "@/lib/admin/operationalWork/operationalWorkAssigneePresentation";
+import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { minOperationalWorkDatetimeLocalValue } from "@/lib/admin/operationalWork/operationalWorkDateTimeLocal";
 import type { EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 
 import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
 
-export type MyTasksTaskCardMode = "view" | "edit" | "reschedule";
+export type MyTasksTaskCardMode = "view" | "edit" | "reschedule" | "outcome";
 
 export type MyTasksTaskCardProps = {
     task: MyTasksTaskRow;
@@ -44,6 +46,9 @@ export type MyTasksTaskCardProps = {
     onSaveReschedule: () => void;
     onCancelForm: () => void;
     onOpenRecord: () => void;
+    outcomeWorkTitle?: string;
+    outcomeOptions?: StageCompletionOutcomeV1[];
+    onSelectOutcome?: (outcomeKey: string) => void;
 };
 
 const ACTION_BTN =
@@ -80,6 +85,9 @@ export default function MyTasksTaskCard({
     onSaveReschedule,
     onCancelForm,
     onOpenRecord,
+    outcomeWorkTitle,
+    outcomeOptions,
+    onSelectOutcome,
 }: MyTasksTaskCardProps) {
     const { userId } = useAdminAuth();
     const badge = operationalTaskUrgencyBadge(task);
@@ -93,6 +101,24 @@ export default function MyTasksTaskCard({
         assigneeLabel: task.assignee_label,
         currentUserId: userId,
     });
+
+    if (mode === "outcome" && outcomeOptions?.length) {
+        return (
+            <li
+                className="rounded-xl border border-alloy-stone/18 bg-white p-3.5 shadow-sm ring-1 ring-alloy-stone/[0.06]"
+                data-adminv2-task-row={task.id}
+                data-adminv2-task-mode="outcome"
+            >
+                <StageWorkOutcomePicker
+                    workTitle={outcomeWorkTitle ?? displayTitle}
+                    outcomes={outcomeOptions}
+                    busy={busy}
+                    onSelect={(key) => onSelectOutcome?.(key)}
+                    onCancel={onCancelForm}
+                />
+            </li>
+        );
+    }
 
     if (mode === "edit") {
         return (

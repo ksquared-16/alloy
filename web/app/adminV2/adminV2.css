@@ -2286,6 +2286,7 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   min-height: 40px;
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.82);
+  overflow: visible;
   transition:
     background-color 120ms ease,
     color 120ms ease,
@@ -2307,19 +2308,80 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [
   box-shadow: inset 3px 0 0 #00a283;
 }
 
-.adminv2-sidebar-nav-badge-anchor {
+.adminv2-sidebar-rail-link > .adminv2-sidebar-nav-badge-anchor {
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 3px;
+  right: 3px;
   pointer-events: none;
+  z-index: 1;
 }
 
-.adminv2-sidebar-nav-badge-anchor .adminv2-sidebar-nav-badge {
-  min-width: 0.95rem;
-  height: 0.95rem;
-  padding-inline: 0.2rem;
-  font-size: 8px;
+/* Collapsed rail: nudge icon away from the badge corner. */
+.adminv2-sidebar-rail-icon-with-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-5px, 4px);
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  height: 1rem;
+  padding-inline: 0.22rem;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 700;
   line-height: 1;
+  letter-spacing: -0.02em;
+  box-shadow: 0 0 0 2px #273f52;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--alert {
+  background-color: rgba(251, 191, 36, 0.96);
+  color: #273f52;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--neutral {
+  background-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--inbox {
+  background-color: rgba(0, 162, 131, 0.96);
+  color: #fff;
+}
+
+/* Expanded sidebar: badge sits after label, not over icon. */
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding-inline: 0.3rem;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--alert {
+  background-color: rgba(251, 191, 36, 0.95);
+  color: #273f52;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--neutral {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--inbox {
+  background-color: rgba(0, 162, 131, 0.95);
+  color: #fff;
 }
 
 .adminv2-sidebar-queue-list {

@@ -34,7 +34,12 @@ import {
     setCachedWorkspaceOperationalTasks,
 } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
-import type { MyTasksTaskRow } from "@/lib/agent/taskAssist/myTasksTaskTypes";
+import {
+    completeStageWorkWithSelectedOutcome,
+    fetchStageWorkOutcomeResolution,
+    type StageWorkOutcomeResolution,
+} from "@/lib/lifecycle/stageWorkOutcomePickerClient";
+import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     applyEntityLabelToMyTasksCopy,
     buildMyTasksPresentationLabels,
@@ -137,6 +142,9 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
     const [newAssignedToUserId, setNewAssignedToUserId] = useState<string | null>(null);
     const [editAssignedToUserId, setEditAssignedToUserId] = useState<string | null>(null);
     const [createBusy, setCreateBusy] = useState(false);
+    const [outcomeTaskId, setOutcomeTaskId] = useState<string | null>(null);
+    const [outcomeContext, setOutcomeContext] = useState<StageWorkOutcomeResolution | null>(null);
+    const [outcomeOptions, setOutcomeOptions] = useState<StageCompletionOutcomeV1[]>([]);
 
     const resetCreateForm = useCallback(() => {
         setNewTitle("");
@@ -227,6 +235,9 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
     const clearForms = useCallback(() => {
         setEditingId(null);
         setRescheduleId(null);
+        setOutcomeTaskId(null);
+        setOutcomeContext(null);
+        setOutcomeOptions([]);
         setEditTitle("");
         setEditDue("");
         setEditNotes("");
@@ -270,6 +281,64 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
             }
         },
         [clearForms, dispatchRefresh, load]
+    );
+
+    const onCompleteTask = useCallback(
+        async (task: MyTasksTaskRow) => {
+            setActionId(task.id);
+            setError(null);
+            try {
+                const resolution = await fetchStageWorkOutcomeResolution({ taskId: task.id });
+                if (
+                    resolution.requires_outcome_picker &&
+                    resolution.outcomes?.length &&
+                    resolution.department_id &&
+                    resolution.stage_key &&
+                    resolution.work_id &&
+                    resolution.subject
+                ) {
+                    setOutcomeTaskId(task.id);
+                    setOutcomeContext(resolution);
+                    setOutcomeOptions(resolution.outcomes);
+                    return;
+                }
+                await onPatchStatus(task.id, "completed");
+            } catch (e: unknown) {
+                setError(formatTaskAssistClientError((e as Error).message));
+            } finally {
+                setActionId(null);
+            }
+        },
+        [onPatchStatus],
+    );
+
+    const onSelectOutcome = useCallback(
+        async (outcomeKey: string) => {
+            if (!outcomeContext?.department_id || !outcomeContext.stage_key || !outcomeContext.work_id || !outcomeContext.subject) {
+                return;
+            }
+            const workId = outcomeContext.work_id;
+            setActionId(workId);
+            setError(null);
+            try {
+                const result = await completeStageWorkWithSelectedOutcome({
+                    departmentId: outcomeContext.department_id,
+                    stageKey: outcomeContext.stage_key,
+                    workId: outcomeContext.work_id,
+                    outcomeKey,
+                    subject: outcomeContext.subject,
+                });
+                if (!result.ok) throw new Error(result.error ?? "Failed to complete work");
+                clearForms();
+                await load();
+                dispatchRefresh();
+            } catch (e: unknown) {
+                setError(formatTaskAssistClientError((e as Error).message));
+            } finally {
+                setActionId(null);
+            }
+        },
+        [clearForms, dispatchRefresh, load, outcomeContext],
     );
 
     const startEdit = useCallback(
@@ -498,6 +567,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                             const mode =
                                 editingId === t.id ? "edit"
                                 : rescheduleId === t.id ? "reschedule"
+                                : outcomeTaskId === t.id ? "outcome"
                                 : "view";
                             return (
                                 <MyTasksTaskCard
@@ -520,7 +590,7 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                                     onEditDueChange={setEditDue}
                                     onEditNotesChange={setEditNotes}
                                     onEditAssignedToUserIdChange={setEditAssignedToUserId}
-                                    onComplete={() => void onPatchStatus(t.id, "completed")}
+                                    onComplete={() => void onCompleteTask(t)}
                                     onDismiss={() => void onPatchStatus(t.id, "canceled")}
                                     onStartEdit={() => startEdit(t)}
                                     onStartReschedule={() => startReschedule(t)}
@@ -528,6 +598,9 @@ export default function MyTasksPanel({ compact = false, onClose, onFilterCountCh
                                     onSaveReschedule={() => void saveReschedule()}
                                     onCancelForm={clearForms}
                                     onOpenRecord={() => onOpenRecord(t)}
+                                    outcomeWorkTitle={outcomeContext?.work_title ?? t.title}
+                                    outcomeOptions={outcomeTaskId === t.id ? outcomeOptions : undefined}
+                                    onSelectOutcome={(key) => void onSelectOutcome(key)}
                                 />
                             );
                         })}

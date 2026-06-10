@@ -18,6 +18,8 @@ describe("sidebar modal navigation", () => {
         expect(items).toContain("dispatchAdminV2OpenInboxModal");
         expect(items).toContain("data-adminv2-operational-tasks-badge");
         expect(items).toContain("data-adminv2-inbox-unread-badge");
+        expect(items).toContain("formatSidebarBadgeCount");
+        expect(read("app/adminV2/adminV2.css")).toContain("adminv2-sidebar-rail-icon-with-badge");
         expect(read("app/adminV2/components/TopNavBar.tsx")).toContain("adminv2:open-inbox-modal");
         expect(read("app/adminV2/components/TopNavBar.tsx")).toContain("adminv2:open-tasks-panel");
     });

@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import { BOS_PASTE_CANVAS_MIN_HEIGHT } from "@/lib/admin/actions/bosWorkspaceShell";
 
 type Props = {
@@ -66,7 +66,7 @@ export function ActionWorkspacePasteCanvas({
                     className="inline-flex items-center gap-2 rounded-xl bg-[#00A283] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.15)_inset,0_4px_14px_rgba(0,162,131,0.28)] transition-all hover:bg-[#009676] disabled:opacity-50"
                     data-testid="action-workspace-analyze-button"
                 >
-                    <Sparkles className="h-4 w-4" strokeWidth={2.2} aria-hidden />
+                    <BosGenieLampIcon size="sm" color="#ffffff" />
                     {analyzing ? "Analyzing…" : "Analyze with BOS"}
                 </button>
             </div>

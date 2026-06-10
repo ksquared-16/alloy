@@ -18,7 +18,7 @@ describe("Lifecycle hub", () => {
     it("Settings index includes Lifecycle hero tile", () => {
         const page = read("app/adminV2/settings/page.tsx");
         expect(page).toContain("Enrollment Operations");
-        expect(page).toContain('title="Lifecycle"');
+        expect(page).toContain('title="Business Processes"');
         expect(page).toContain("/adminV2/settings/lifecycle");
         expect(page).toContain('emphasis');
         expect(page).not.toContain('title="Enrollment Process"');

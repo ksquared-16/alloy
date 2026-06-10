@@ -1,7 +1,8 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
 import type { ReactNode } from "react";
+
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 
 type Props = {
     title?: string;
@@ -32,7 +33,7 @@ export function ActionWorkspaceBosBanner({
                 }
                 aria-hidden
             >
-                <Sparkles className={compact ? "h-4 w-4" : "h-5 w-5"} strokeWidth={2.2} />
+                <BosGenieLampIcon size={compact ? "sm" : "md"} />
             </div>
             <div className="min-w-0 flex-1">
                 <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-alloy-midnight/45">

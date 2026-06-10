@@ -8,6 +8,7 @@ import { setActionWorkspaceOpenDocumentFlag } from "@/lib/bos/bosRailPresentatio
 export function useActionWorkspaceOpenDocumentFlag(open: boolean, presentation: "overlay" | "embedded" = "overlay") {
     useEffect(() => {
         if (!open || presentation === "embedded") {
+            setActionWorkspaceOpenDocumentFlag(false);
             return;
         }
 

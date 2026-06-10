@@ -8,6 +8,7 @@ import {
     assertCommunicationsSendAllowed,
 } from "@/lib/communications/communicationPermissions";
 import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
+import { associateOutboundCommunicationToContactAttempt } from "@/lib/lifecycle/associateOutboundCommunicationToContactAttempt";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -140,6 +141,29 @@ export async function POST(request: NextRequest) {
         );
     }
 
+    let contact_attempt_association: { associated: boolean; task_id?: string; outcome_key?: string } | undefined;
+    if (
+        primaryEntityType === "opportunities" &&
+        (channel === "email" || channel === "sms") &&
+        ctx.userId
+    ) {
+        const assoc = await associateOutboundCommunicationToContactAttempt({
+            supabase,
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+            opportunityId: entityId,
+            channel,
+            communicationMessageId: exec.communication_message_id,
+        });
+        if (assoc.associated) {
+            contact_attempt_association = {
+                associated: true,
+                task_id: assoc.task_id,
+                outcome_key: assoc.outcome_key,
+            };
+        }
+    }
+
     return NextResponse.json({
         ok: true,
         communication_message_id: exec.communication_message_id,
@@ -147,5 +171,6 @@ export async function POST(request: NextRequest) {
         channel: exec.channel,
         permission_note: sendAuth.ok ? COMMUNICATIONS_SEND_PERMISSION_KEY : undefined,
         process_trigger_attempted_note: exec.process_trigger_attempted_note,
+        contact_attempt_association,
     });
 }

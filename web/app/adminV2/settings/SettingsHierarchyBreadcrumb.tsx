@@ -117,7 +117,7 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     if (tail === "/lifecycle" || tail.startsWith("/lifecycle/")) {
-        base.push({ label: "Lifecycle", href: null });
+        base.push({ label: "Business Processes", href: null });
         return base;
     }
 

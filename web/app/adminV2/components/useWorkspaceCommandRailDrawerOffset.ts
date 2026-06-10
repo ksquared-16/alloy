@@ -9,6 +9,7 @@ import {
     BOS_RAIL_OVERLAY_GUTTER_PX,
     computeBosDrawerRailOffsetPx,
 } from "@/lib/bos/bosOverlayGeometry";
+import { isActionWorkspaceOpen } from "@/lib/bos/bosRailPresentationFlags";
 import {
     clearDrawerWorkspaceGeometryVars,
     isDrawerGeometryProbeActive,
@@ -28,6 +29,9 @@ export function useWorkspaceCommandRailDrawerOffset(pathname: string) {
         const measure = () => {
             const root = document.documentElement;
             if (isDrawerGeometryProbeActive(root)) {
+                return;
+            }
+            if (isActionWorkspaceOpen()) {
                 return;
             }
             const gutter = BOS_RAIL_OVERLAY_GUTTER_PX;

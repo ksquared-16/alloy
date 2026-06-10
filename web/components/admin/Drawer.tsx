@@ -3,6 +3,7 @@
 import React, { type CSSProperties, isValidElement, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { shouldCloseAdminV2DrawerOnOutsideTarget } from "@/lib/adminV2/drawerOutsideClick";
+import { BOS_ACTION_WORKSPACE_OPEN_ATTR } from "@/lib/bos/bosRailPresentationFlags";
 import {
     DRAWER_AVAILABLE_RIGHT_CSS_VAR,
     DRAWER_BACKDROP_LEFT_CSS_VAR,
@@ -147,6 +148,19 @@ export default function Drawer({
         if (isDrawerGeometryProbeActive()) return;
         measureAndApplyDrawerWorkspaceGeometry();
     }, [isOpen, bosWorkspaceDrawerLayoutEarly, portalReady]);
+
+    useEffect(() => {
+        if (!isOpen || !bosWorkspaceDrawerLayoutEarly) return;
+        const root = document.documentElement;
+        const remeasure = () => {
+            if (isDrawerGeometryProbeActive()) return;
+            if (root.getAttribute(BOS_ACTION_WORKSPACE_OPEN_ATTR) === "true") return;
+            measureAndApplyDrawerWorkspaceGeometry(root);
+        };
+        const mo = new MutationObserver(remeasure);
+        mo.observe(root, { attributes: true, attributeFilter: [BOS_ACTION_WORKSPACE_OPEN_ATTR] });
+        return () => mo.disconnect();
+    }, [isOpen, bosWorkspaceDrawerLayoutEarly]);
 
     useEffect(() => {
         if (isOpen) {

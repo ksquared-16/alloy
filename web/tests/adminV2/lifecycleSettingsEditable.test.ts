@@ -9,10 +9,10 @@ function read(rel: string): string {
 }
 
 describe("editable lifecycle settings", () => {
-    it("settings index uses Lifecycle title and editable mode", () => {
+    it("settings index uses Business Processes title and editable mode", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain('title="Lifecycle"');
-        expect(page).toMatch(/title="Lifecycle"[\s\S]*mode="editable"/);
+        expect(page).toContain('title="Business Processes"');
+        expect(page).toMatch(/title="Business Processes"[\s\S]*mode="editable"/);
         expect(page).not.toContain("Lifecycle stages & requirements");
     });
 

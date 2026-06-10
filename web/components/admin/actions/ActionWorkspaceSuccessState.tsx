@@ -1,6 +1,8 @@
 "use client";
 
-import { Calendar, Check, ExternalLink, Mail, Sparkles } from "lucide-react";
+import { Calendar, Check, ExternalLink, Mail } from "lucide-react";
+
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import type { BosRecommendation } from "@/lib/admin/actions/createLeadBosGuidance";
 
 type SuggestedAction = {
@@ -8,6 +10,7 @@ type SuggestedAction = {
     label: string;
     icon: "calendar" | "mail" | "open";
     disabled?: boolean;
+    status?: string;
     onClick?: () => void;
 };
 
@@ -55,7 +58,7 @@ export function ActionWorkspaceSuccessState({
                     className="absolute inset-2 rounded-full border border-[#00A283]/25 bg-[#00A283]/[0.06]"
                     aria-hidden
                 />
-                <Sparkles className="relative h-9 w-9 text-[#00A283]" strokeWidth={1.75} aria-hidden />
+                <BosGenieLampIcon size="xl" className="relative" />
             </div>
             <div>
                 <p className="text-xl font-semibold text-alloy-midnight">{title}</p>
@@ -83,7 +86,9 @@ export function ActionWorkspaceSuccessState({
                             BOS Recommendations
                         </span>
                     </div>
-                    <p className="mb-2 text-[11px] font-medium text-alloy-midnight/45">Recommended next step</p>
+                    <p className="mb-2 text-[11px] font-medium text-alloy-midnight/45">
+                        Recommended next steps and Required Information
+                    </p>
                     <ul className="space-y-2">
                         {bosRecommendations.map((rec) => (
                             <li
@@ -112,22 +117,31 @@ export function ActionWorkspaceSuccessState({
                     {suggestedActions.map((action) => {
                         const Icon = ICONS[action.icon];
                         return (
-                            <button
-                                key={action.id}
-                                type="button"
-                                disabled={action.disabled}
-                                onClick={action.onClick}
-                                title={action.disabled ? "Available after opening lead" : undefined}
-                                className={
-                                    action.icon === "open" ?
-                                        "inline-flex items-center gap-1.5 rounded-lg border border-[#00A283]/30 bg-[#00A283] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
-                                    :   "inline-flex items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-3.5 py-2 text-sm font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/5 disabled:cursor-not-allowed disabled:opacity-45"
-                                }
-                                data-testid={`action-workspace-success-action-${action.id}`}
-                            >
-                                <Icon className="h-4 w-4" strokeWidth={2} aria-hidden />
-                                {action.label}
-                            </button>
+                            <div key={action.id} className="flex flex-col items-center gap-0.5">
+                                <button
+                                    type="button"
+                                    disabled={action.disabled}
+                                    onClick={action.onClick}
+                                    title={action.status ?? undefined}
+                                    className={
+                                        action.icon === "open" ?
+                                            "inline-flex items-center gap-1.5 rounded-lg border border-[#00A283]/30 bg-[#00A283] px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+                                        :   "inline-flex items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-3.5 py-2 text-sm font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/5 disabled:cursor-not-allowed disabled:opacity-45"
+                                    }
+                                    data-testid={`action-workspace-success-action-${action.id}`}
+                                >
+                                    <Icon className="h-4 w-4" strokeWidth={2} aria-hidden />
+                                    {action.label}
+                                </button>
+                                {action.status ?
+                                    <span
+                                        className="max-w-[11rem] text-center text-[10px] font-medium text-alloy-midnight/45"
+                                        data-testid={`action-workspace-success-action-status-${action.id}`}
+                                    >
+                                        {action.status}
+                                    </span>
+                                :   null}
+                            </div>
                         );
                     })}
                 </div>

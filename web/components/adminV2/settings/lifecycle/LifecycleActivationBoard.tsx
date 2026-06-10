@@ -710,6 +710,11 @@ export default function LifecycleActivationBoard({
         const queueName =
             handle?.getQueueDisplayName()?.trim() || defaultWorkUnitQueueNameForStageKey(sk);
 
+        const queueMembership =
+            handle?.isQueueMembershipDirty() ? handle.getQueueMembershipDraft() : null;
+        const stageOperatingPlan =
+            handle?.isStageOperatingPlanDirty() ? handle.getStageOperatingPlanDraft() : null;
+
         const contractBody = {
             department_id: runtimeDepartmentId,
             process_id: processId,
@@ -717,6 +722,8 @@ export default function LifecycleActivationBoard({
             selected_status_keys: selectedKeys,
             work_unit_name: queueName,
             ...(fieldRules ? { field_rules: fieldRules } : {}),
+            ...(queueMembership ? { queue_membership_v1: queueMembership } : {}),
+            ...(stageOperatingPlan ? { stage_operating_plan_v1: stageOperatingPlan } : {}),
         };
 
         try {
@@ -767,6 +774,12 @@ export default function LifecycleActivationBoard({
                         has_department_override: true,
                     },
                 });
+            }
+            if (queueMembership) {
+                patchStageBootstrap({ queue_membership: queueMembership });
+            }
+            if (stageOperatingPlan) {
+                patchStageBootstrap({ stage_operating_plan: stageOperatingPlan });
             }
             setStatusKeys(keys);
             setStatusDisplayLabels(labels);

@@ -13,6 +13,13 @@ import {
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
 
+function formatSidebarBadgeCount(count: number, collapsed: boolean): string {
+    if (count <= 0) return "0";
+    if (collapsed && count > 9) return "9+";
+    if (count > 99) return "99+";
+    return String(count);
+}
+
 function SidebarModalNavButton({
     collapsed,
     title,
@@ -41,7 +48,7 @@ function SidebarModalNavButton({
         >
             {collapsed ?
                 <>
-                    {icon}
+                    <span className="adminv2-sidebar-rail-icon-with-badge">{icon}</span>
                     {badge ? <span className="adminv2-sidebar-nav-badge-anchor">{badge}</span> : null}
                 </>
             :   <span className="inline-flex w-full items-center gap-2">
@@ -67,17 +74,17 @@ export function SidebarTasksNavItem({ collapsed }: { collapsed: boolean }) {
     const badge =
         alertCount > 0 ?
             <span
-                className="adminv2-sidebar-nav-badge inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-amber-400/95 px-1 text-[9px] font-bold text-alloy-midnight"
+                className="adminv2-sidebar-nav-badge adminv2-sidebar-nav-badge--alert"
                 data-adminv2-operational-tasks-badge="true"
             >
-                {alertCount > 99 ? "99+" : alertCount}
+                {formatSidebarBadgeCount(alertCount, collapsed)}
             </span>
         : open > 0 ?
             <span
-                className="adminv2-sidebar-nav-badge inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-white/20 px-1 text-[9px] font-bold text-white"
+                className="adminv2-sidebar-nav-badge adminv2-sidebar-nav-badge--neutral"
                 data-adminv2-operational-tasks-open-count="true"
             >
-                {open > 99 ? "99+" : open}
+                {formatSidebarBadgeCount(open, collapsed)}
             </span>
         :   null;
 
@@ -110,11 +117,8 @@ export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
             icon={<Inbox size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
             badge={
                 unread > 0 ?
-                    <span
-                        className="adminv2-sidebar-nav-badge inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-[#00A283]/95 px-1 text-[9px] font-bold text-white"
-                        data-adminv2-inbox-unread-badge="true"
-                    >
-                        {unread > 99 ? "99+" : unread}
+                    <span className="adminv2-sidebar-nav-badge adminv2-sidebar-nav-badge--inbox" data-adminv2-inbox-unread-badge="true">
+                        {formatSidebarBadgeCount(unread, collapsed)}
                     </span>
                 :   null
             }

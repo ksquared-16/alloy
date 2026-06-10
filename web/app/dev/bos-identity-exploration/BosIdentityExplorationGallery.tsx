@@ -1,7 +1,9 @@
 "use client";
 
 import type { CSSProperties, ReactNode } from "react";
-import { Check, Sparkles } from "lucide-react";
+import { Check } from "lucide-react";
+
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import { FINDINGS_FULL, SOURCE_INQUIRY } from "../action-workspace-v2-mockups/fixtures";
 import { BosContourMark } from "./BosContourMark";
 import { BOS_IDENTITY_THEMES, type BosIdentityVariant } from "./bosIdentityThemes";
@@ -154,11 +156,7 @@ function BosMark({ variant, size = "md" }: { variant: BosIdentityVariant; size?:
                 border: `1px solid ${variant === "pine-first" ? "rgba(0,162,131,0.3)" : "rgba(0,162,131,0.4)"}`,
             }}
         >
-            <Sparkles
-                className={size === "sm" ? "h-2.5 w-2.5" : "h-3.5 w-3.5"}
-                style={{ color: variant === "pine-first" ? GOLD : JUNIPER }}
-                strokeWidth={2.2}
-            />
+            <BosGenieLampIcon size="xs" color={variant === "pine-first" ? GOLD : JUNIPER} />
         </div>
     );
 }

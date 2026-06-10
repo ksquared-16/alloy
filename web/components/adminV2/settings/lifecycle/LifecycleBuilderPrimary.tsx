@@ -41,7 +41,7 @@ export default function LifecycleBuilderPrimary() {
         try {
             const res = await fetch("/api/admin/lifecycle-catalog", lifecycleCatalogFetchInit());
             const j = (await res.json().catch(() => ({}))) as { items?: LifecycleCatalogEntry[]; error?: string };
-            if (!res.ok) throw new Error(j.error ?? "Failed to load Lifecycles");
+            if (!res.ok) throw new Error(j.error ?? "Failed to load processes");
             const items = j.items ?? [];
             setCatalog(items);
             return items;

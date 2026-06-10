@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 
 type Props = {
     pasteText: string;
@@ -39,7 +39,7 @@ export function ActionIntakePastePanel({
             {!compact ?
                 <div>
                     <div className="flex items-center gap-2 text-sm font-semibold text-alloy-midnight">
-                        <Sparkles className="h-4 w-4 text-alloy-blue" strokeWidth={2.2} aria-hidden />
+                        <BosGenieLampIcon size="sm" />
                         Paste lead details
                     </div>
                     <p className="mt-1 text-[12px] leading-relaxed text-alloy-midnight/60">
@@ -69,7 +69,7 @@ export function ActionIntakePastePanel({
                     className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-blue/30 bg-alloy-blue px-3 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
                     data-testid="action-intake-parse-button"
                 >
-                    <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+                    <BosGenieLampIcon size="xs" color="#ffffff" />
                     {parsing ? "Parsing…" : "Parse with BOS"}
                 </button>
                 <span className="text-[11px] text-alloy-midnight/50">

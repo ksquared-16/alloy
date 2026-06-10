@@ -1,6 +1,8 @@
 "use client";
 
-import { Sparkles, X } from "lucide-react";
+import { X } from "lucide-react";
+
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import { measureActionWorkspacePanelLayout } from "@/lib/bos/bosRailPresentationFlags";
 import { useActionWorkspaceOpenDocumentFlag } from "@/lib/bos/useActionWorkspaceOpenDocumentFlag";
@@ -187,7 +189,7 @@ export function ActionWorkspaceBosShell({
                                         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00A283]/20 text-[#7EEBD4]"
                                         aria-hidden
                                     >
-                                        <Sparkles className="h-5 w-5" strokeWidth={2.2} />
+                                        <BosGenieLampIcon size="md" />
                                     </span>
                                     <div className="min-w-0">
                                         <h2 className="text-xl font-bold tracking-tight text-white">

@@ -115,7 +115,7 @@ describe("Lifecycle Builder activation consolidation", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         expect(board).toContain("Delete lifecycle");
         expect(read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx")).toContain(
-            "Create Lifecycle"
+            "Create Process"
         );
     });
 });

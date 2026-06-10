@@ -9,10 +9,14 @@ import {
     LIFECYCLE_STAGE_ORDER,
     type LifecycleOperatorStage,
 } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { ENROLLMENT_PROCESS_DISPLAY_NAME } from "@/lib/lifecycle/businessProcessUiLabels";
+import { defaultEnrollmentBusinessProcessV1Stages } from "@/lib/lifecycle/defaultEnrollmentBusinessProcessV1Stages";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import type { LifecyclePrimaryEntityKey } from "@/lib/lifecycle/lifecycleConfiguration";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 export const LIFECYCLE_BUILDER_METADATA_KEY = "lifecycle_builder_v1" as const;
 
@@ -26,6 +30,8 @@ export type LifecycleBuilderStageRecord = {
     is_active: boolean;
     /** Phase B — subject-grain queue membership metadata (optional until seeded). */
     queue_membership_v1?: QueueMembershipV1;
+    /** Stage work plan + outcome rules (metadata only). */
+    stage_operating_plan_v1?: StageOperatingPlanV1;
 };
 
 export type LifecycleBuilderProcessRecord = {
@@ -60,13 +66,7 @@ export function slugifyLifecycleKey(raw: string): string {
 }
 
 function defaultEnrollmentStages(): LifecycleBuilderStageRecord[] {
-    return LIFECYCLE_STAGE_ORDER.map((key, index) => ({
-        id: randomUUID(),
-        key,
-        label: LIFECYCLE_STAGE_LABELS[key],
-        sort_order: index,
-        is_active: true,
-    }));
+    return defaultEnrollmentBusinessProcessV1Stages();
 }
 
 export function emptyLifecycleBuilderV1(): LifecycleBuilderV1 {
@@ -82,7 +82,7 @@ export function defaultLifecycleBuilderV1(): LifecycleBuilderV1 {
             {
                 id: processId,
                 key: ENROLLMENT_PROCESS_KEY,
-                name: "Enrollment",
+                name: ENROLLMENT_PROCESS_DISPLAY_NAME,
                 primary_entity: "opportunity",
                 sort_order: 0,
                 is_active: true,
@@ -116,6 +116,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             const label = typeof sr.label === "string" ? sr.label.trim() : "";
             if (!sid || !skey || !label) continue;
             const queueMembership = parseQueueMembershipV1(sr.queue_membership_v1);
+            const operatingPlan = parseStageOperatingPlanV1(sr.stage_operating_plan_v1);
             stages.push({
                 id: sid,
                 key: skey,
@@ -124,6 +125,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 sort_order: typeof sr.sort_order === "number" ? sr.sort_order : stages.length,
                 is_active: sr.is_active !== false,
                 ...(queueMembership ? { queue_membership_v1: queueMembership } : {}),
+                ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
             });
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));

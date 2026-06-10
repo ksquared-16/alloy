@@ -21,11 +21,11 @@ import {
     mapCreateLeadGatherToExecutePayload,
     validateCreateLeadPlatformMinimum,
 } from "@/lib/admin/actions/createLeadPlatformGather";
-import { canFastPathCreateLead } from "@/lib/admin/actions/actionWorkspaceGatherFlow";
 import {
     formatCreateLeadHouseholdLabel,
     resolveCreateLeadBosGuidance,
     resolveCreateLeadBosRecommendations,
+    resolveCreateLeadSuccessActions,
 } from "@/lib/admin/actions/createLeadBosGuidance";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
 import { ActionWorkspaceBosGuidancePanel } from "@/components/admin/actions/ActionWorkspaceBosGuidancePanel";
@@ -37,6 +37,7 @@ import { ActionWorkspaceReviewSummary } from "@/components/admin/actions/ActionW
 import { ActionWorkspaceExecuteState } from "@/components/admin/actions/ActionWorkspaceExecuteState";
 import { ActionWorkspaceSuccessState } from "@/components/admin/actions/ActionWorkspaceSuccessState";
 import { ActionWorkspaceStepContent } from "@/components/admin/actions/ActionWorkspaceStepContent";
+import { queueActionWorkspaceLeadHandoff } from "@/lib/bos/actionWorkspaceDrawerHandoff";
 
 export type CreateLeadFormPayload = {
     first_name: string;
@@ -90,22 +91,19 @@ export function CreateLeadModal(props: {
     const createdIdRef = useRef<string | null>(null);
     const handoffStartedRef = useRef(false);
 
+    const handoffToCreatedLead = useCallback(
+        (opportunityId: string) => {
+            queueActionWorkspaceLeadHandoff(opportunityId, (id) => onCreated?.(id), onClose);
+        },
+        [onClose, onCreated],
+    );
+
     const sections = useMemo(() => gatherSections(), []);
     const validation = useMemo(() => validateCreateLeadPlatformMinimum(values), [values]);
     const bosGuidance = useMemo(() => resolveCreateLeadBosGuidance(values), [values]);
     const householdLabel = useMemo(() => formatCreateLeadHouseholdLabel(values), [values]);
     const bosRecommendations = useMemo(() => resolveCreateLeadBosRecommendations(values), [values]);
-    const fastPath = useMemo(
-        () =>
-            canFastPathCreateLead({
-                gatherPhase,
-                values,
-                appliedFromBos,
-                valuesEditedAfterApply: valuesEditedAfterApply || suggestionsEdited,
-                lastAppliedSuggestions,
-            }),
-        [gatherPhase, values, appliedFromBos, valuesEditedAfterApply, suggestionsEdited, lastAppliedSuggestions]
-    );
+    const successActions = useMemo(() => resolveCreateLeadSuccessActions(values), [values]);
 
     const reset = useCallback(() => {
         setStep("gather");
@@ -145,14 +143,13 @@ export function CreateLeadModal(props: {
         const opportunityId = createdIdRef.current;
         const openTimer = window.setTimeout(() => setSuccessDetail("Opening Lead…"), 600);
         const handoffTimer = window.setTimeout(() => {
-            onCreated?.(opportunityId);
-            onClose();
+            handoffToCreatedLead(opportunityId);
         }, SUCCESS_OPEN_DELAY_MS);
         return () => {
             window.clearTimeout(openTimer);
             window.clearTimeout(handoffTimer);
         };
-    }, [step, onCreated, onClose]);
+    }, [step, handoffToCreatedLead]);
 
     const setFieldValue = useCallback((payloadKey: string, next: string) => {
         setValuesEditedAfterApply(true);
@@ -228,7 +225,8 @@ export function CreateLeadModal(props: {
             setSuccessDetail(null);
             setStep("success");
         } catch (e) {
-            setStep("review");
+            setStep("gather");
+            setGatherPhase("details");
             setError(e instanceof Error ? e.message : "Create lead failed");
         }
     }, [departmentId, onSubmit, values]);
@@ -270,43 +268,27 @@ export function CreateLeadModal(props: {
                 >
                     Back
                 </button>
-                {fastPath ?
-                    <>
-                        <button
-                            type="button"
-                            disabled={!validation.ok || !departmentId}
-                            onClick={() => {
-                                setError(null);
-                                setStep("review");
-                            }}
-                            className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/5 disabled:opacity-50"
-                            data-testid="create-lead-review-button"
-                        >
-                            Review first
-                        </button>
-                        <button
-                            type="button"
-                            disabled={!validation.ok || !departmentId}
-                            onClick={() => void runExecute()}
-                            className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                            data-testid="create-lead-fast-create-button"
-                        >
-                            Create lead
-                        </button>
-                    </>
-                :   <button
-                        type="button"
-                        disabled={!validation.ok || !departmentId}
-                        onClick={() => {
-                            setError(null);
-                            setStep("review");
-                        }}
-                        className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                        data-testid="create-lead-review-button"
-                    >
-                        Review lead
-                    </button>
-                }
+                <button
+                    type="button"
+                    disabled={!validation.ok}
+                    onClick={() => {
+                        setError(null);
+                        setStep("review");
+                    }}
+                    className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/5 disabled:opacity-50"
+                    data-testid="create-lead-review-details-button"
+                >
+                    Review details
+                </button>
+                <button
+                    type="button"
+                    disabled={!validation.ok || !departmentId}
+                    onClick={() => void runExecute()}
+                    className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                    data-testid="create-lead-create-button"
+                >
+                    Create Lead
+                </button>
             </>
         : step === "review" ?
             <>
@@ -325,9 +307,9 @@ export function CreateLeadModal(props: {
                     type="button"
                     onClick={() => void runExecute()}
                     className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-                    data-testid="create-lead-confirm-button"
+                    data-testid="create-lead-create-button"
                 >
-                    Confirm & create lead
+                    Create Lead
                 </button>
             </>
         :   null;
@@ -429,31 +411,18 @@ export function CreateLeadModal(props: {
                     detail={successDetail ?? "Preparing your workspace…"}
                     householdLabel={householdLabel}
                     bosRecommendations={bosRecommendations}
-                    suggestedActions={[
-                        {
-                            id: "schedule-tour",
-                            label: "Schedule Tour",
-                            icon: "calendar",
-                            disabled: true,
-                        },
-                        {
-                            id: "send-welcome",
-                            label: "Send Welcome Email",
-                            icon: "mail",
-                            disabled: true,
-                        },
-                        {
-                            id: "open-lead",
-                            label: "Open Lead",
-                            icon: "open",
-                            onClick: () => {
-                                const opportunityId = createdIdRef.current;
-                                if (!opportunityId) return;
-                                onCreated?.(opportunityId);
-                                onClose();
-                            },
-                        },
-                    ]}
+                    suggestedActions={successActions.map((action) =>
+                        action.id === "open-lead" ?
+                            {
+                                ...action,
+                                onClick: () => {
+                                    const opportunityId = createdIdRef.current;
+                                    if (!opportunityId) return;
+                                    handoffToCreatedLead(opportunityId);
+                                },
+                            }
+                        :   action
+                    )}
                 />
             </ActionWorkspaceStepContent>
 

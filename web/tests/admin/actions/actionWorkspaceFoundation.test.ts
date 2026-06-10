@@ -84,7 +84,32 @@ describe("action workspace foundation", () => {
         expect(rail).toContain("action-workspace-step-${step.key}");
         expect(rail).toContain("ACTION_WORKSPACE_STEPS");
         expect(types).toContain('key: "gather"');
+        expect(types).toContain('label: "Review/Edit"');
+        expect(types).toContain('label: "Create"');
         expect(types).toContain('key: "success"');
+    });
+
+    it("canonical BOS execution loader is reusable and documented", () => {
+        const loader = read("components/admin/actions/BosExecutionLoader.tsx");
+        const execute = read("components/admin/actions/ActionWorkspaceExecuteState.tsx");
+        expect(loader).toContain("BosExecutionLoader");
+        expect(loader).toContain("data-bos-execution-loader");
+        expect(loader).toContain("ActionWorkspaceBosNeuralPulse");
+        expect(loader).toContain("Create Lead");
+        expect(loader).toContain("Schedule Tour");
+        expect(loader).not.toContain("animate-spin");
+        expect(execute).toContain("BosExecutionLoader");
+    });
+
+    it("BOS action workspace uses genie lamp not sparkle icons", () => {
+        const shell = read("components/admin/actions/ActionWorkspaceBosShell.tsx");
+        const banner = read("components/admin/actions/ActionWorkspaceBosBanner.tsx");
+        const success = read("components/admin/actions/ActionWorkspaceSuccessState.tsx");
+        expect(shell).toContain("BosGenieLampIcon");
+        expect(banner).toContain("BosGenieLampIcon");
+        expect(success).toContain("BosGenieLampIcon");
+        expect(shell).not.toContain("Sparkles");
+        expect(banner).not.toContain("Sparkles");
     });
 
     it("BOS suggestions require explicit apply with inline edit", () => {
@@ -107,7 +132,9 @@ describe("action workspace foundation", () => {
         expect(modal).not.toContain("fetchActionIntakeSpec");
         expect(modal).toContain("validateCreateLeadPlatformMinimum");
         expect(modal).toContain("gatherPhase");
-        expect(modal).toContain("canFastPathCreateLead");
+        expect(modal).toContain("Create Lead");
+        expect(modal).toContain("Review details");
+        expect(modal).toContain("resolveCreateLeadSuccessActions");
         expect(modal).toContain("Tell BOS about the family");
         expect(modal).toContain("onCreated");
         expect(modal).toContain("ActionWorkspaceBosGuidancePanel");
@@ -156,15 +183,45 @@ describe("create lead BOS guidance", () => {
         expect(guidance.advisoryItems).toContain("source");
     });
 
-    it("builds presentation-only BOS success recommendations", async () => {
-        const { resolveCreateLeadBosRecommendations } = await import("@/lib/admin/actions/createLeadBosGuidance");
-        const recs = resolveCreateLeadBosRecommendations({
+    it("gates schedule tour when child/program/location are missing", async () => {
+        const { resolveCreateLeadBosRecommendations, resolveCreateLeadSuccessActions } = await import(
+            "@/lib/admin/actions/createLeadBosGuidance"
+        );
+        const sparse = resolveCreateLeadBosRecommendations({
             first_name: "Jordan",
             last_name: "Lee",
             child_date_of_birth: "",
         });
-        expect(recs.some((r) => r.label === "Schedule Tour")).toBe(true);
-        expect(recs.some((r) => r.label === "Missing Child DOB")).toBe(true);
+        const scheduleSparse = sparse.find((r) => r.id === "schedule-tour");
+        expect(scheduleSparse?.detail).toBe("Needs child/program info");
+        expect(scheduleSparse?.tone).toBe("warning");
+        expect(sparse.some((r) => r.label === "Child DOB" && r.detail === "Required Information")).toBe(true);
+
+        const actions = resolveCreateLeadSuccessActions({
+            first_name: "Jordan",
+            last_name: "Lee",
+        });
+        expect(actions.find((a) => a.id === "schedule-tour")?.disabled).toBe(true);
+        expect(actions.find((a) => a.id === "send-welcome")?.status).toBe("Template ready soon");
+
+        const ready = resolveCreateLeadBosRecommendations({
+            first_name: "Jordan",
+            last_name: "Lee",
+            child_first_name: "Sam",
+            child_program: "prog-1",
+            location_id: "loc-1",
+        });
+        expect(ready.find((r) => r.id === "schedule-tour")?.detail).toBe("Available after opening lead");
+    });
+
+    it("formats household label with Family naming", async () => {
+        const { formatCreateLeadHouseholdLabel } = await import("@/lib/admin/actions/createLeadBosGuidance");
+        expect(
+            formatCreateLeadHouseholdLabel({
+                first_name: "Lebron",
+                last_name: "James",
+            })
+        ).toBe("James Family");
     });
 });
 

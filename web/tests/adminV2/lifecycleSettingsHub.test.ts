@@ -17,16 +17,16 @@ describe("lifecycle Settings IA", () => {
     it("Settings index includes lifecycle tile under Enrollment operations", () => {
         const page = read("app/adminV2/settings/page.tsx");
         expect(page).toContain("Enrollment Operations");
-        expect(page).toContain('title="Lifecycle"');
-        expect(page).toContain("/adminV2/settings/lifecycle");
+        expect(page).toContain('title="Business Processes"');
+        expect(page).toContain("/admin/settings/lifecycle");
         expect(page).toContain('emphasis');
     });
 
     it("lifecycle hub page renders with operator title and test id", () => {
         const page = read("app/adminV2/settings/lifecycle/page.tsx");
-        expect(page).toContain(">Lifecycle</h1>");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
         expect(page).toContain("settings-lifecycle-page");
-        expect(page).toContain("LifecycleHubClient");
+        expect(page).toContain("LifecycleSettingsShell");
     });
 
     it("primary hub uses stage-first navigation and field requirements editor", () => {

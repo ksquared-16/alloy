@@ -23,11 +23,14 @@ describe("lifecycleBuilderConfig", () => {
         expect(lifecycleBuilderFromDepartmentMetadata({})).toEqual(emptyLifecycleBuilderV1());
     });
 
-    it("seeds default enrollment lifecycle with six stages (demo helper only)", () => {
+    it("seeds default enrollment process with thirteen V1 stages", () => {
         const config = defaultLifecycleBuilderV1();
         const process = config.processes[0]!;
-        expect(process.name).toBe("Enrollment");
-        expect(stageKeysForProcess(process)).toHaveLength(6);
+        expect(process.name).toBe("Enrollment Process");
+        expect(stageKeysForProcess(process)).toHaveLength(13);
+        expect(stageKeysForProcess(process)[0]).toBe("new_lead");
+        expect(stageKeysForProcess(process)).toContain("decision_pending");
+        expect(stageKeysForProcess(process)).toContain("withdrawn");
     });
 
     it("createLifecycleProcess adds a new process with no stages", () => {
@@ -66,6 +69,6 @@ describe("lifecycleBuilderConfig", () => {
     it("round-trips through parseLifecycleBuilderV1", () => {
         const config = defaultLifecycleBuilderV1();
         const parsed = parseLifecycleBuilderV1(config);
-        expect(parsed?.processes[0]?.stages.length).toBe(6);
+        expect(parsed?.processes[0]?.stages.length).toBe(13);
     });
 });

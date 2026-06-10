@@ -29,7 +29,7 @@ describe("lifecycle configuration correction", () => {
     it("lifecycle hub is canonical at /lifecycle", () => {
         expect(read("app/adminV2/settings/lifecycle/page.tsx")).toContain("LifecycleHubClient");
         expect(read("app/adminV2/settings/enrollment-process/page.tsx")).toContain("redirect");
-        expect(read("app/adminV2/settings/page.tsx")).toContain('title="Lifecycle"');
+        expect(read("app/adminV2/settings/page.tsx")).toContain('title="Business Processes"');
         expect(read("app/adminV2/settings/page.tsx")).not.toContain('title="Enrollment Process"');
     });
 

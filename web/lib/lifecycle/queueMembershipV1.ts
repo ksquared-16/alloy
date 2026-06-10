@@ -5,6 +5,7 @@
  */
 
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { ENROLLMENT_BUSINESS_PROCESS_V1_STAGE_KEYS } from "@/lib/lifecycle/defaultEnrollmentBusinessProcessV1Stages";
 
 export type QueueMembershipSubjectType = "case" | "child" | "candidate";
 
@@ -63,6 +64,7 @@ const ENROLLMENT_DEFAULT_STAGE_KEYS = new Set([
     "waitlist",
     "enrollment",
     "enrolled",
+    ...ENROLLMENT_BUSINESS_PROCESS_V1_STAGE_KEYS,
 ]);
 
 function trimNonEmptyString(value: unknown): string | null {
@@ -223,6 +225,70 @@ const ENROLLMENT_STAGE_DEFAULTS: Record<string, EnrollmentDefaultSpec> = {
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
         included_disposition_keys: ["enrolled"],
+    },
+    new_lead: {
+        subject_type: "case",
+        count_unit: "cases",
+        included_disposition_keys: [],
+        included_status_keys: ["new_inquiry"],
+    },
+    contacting: {
+        subject_type: "case",
+        count_unit: "cases",
+        included_disposition_keys: ["needs_contact", "contact_attempted"],
+        included_status_keys: ["open", "contact_attempted"],
+    },
+    tour_scheduled: {
+        subject_type: "child",
+        count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
+        included_disposition_keys: ["tour_requested", "tour_scheduled"],
+    },
+    tour_completed: {
+        subject_type: "child",
+        count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
+        included_disposition_keys: ["tour_completed"],
+    },
+    decision_pending: {
+        subject_type: "child",
+        count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
+        included_disposition_keys: ["decision_pending"],
+    },
+    closed_lost: {
+        subject_type: "case",
+        count_unit: "cases",
+        included_disposition_keys: [],
+        included_status_keys: ["closed", "lost"],
+    },
+    offered_spot: {
+        subject_type: "child",
+        count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
+        included_disposition_keys: ["offer_pending"],
+    },
+    enrolling: {
+        subject_type: "child",
+        count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
+        included_disposition_keys: [
+            "offer_pending",
+            "registration_pending",
+            "paperwork_pending",
+        ],
+    },
+    future_start: {
+        subject_type: "child",
+        count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
+        included_disposition_keys: ["start_date_scheduled"],
+    },
+    withdrawn: {
+        subject_type: "child",
+        count_unit: "enrollment_tracks",
+        location_scope_source: "ocm_site",
+        included_disposition_keys: ["family_withdrew", "withdrawn"],
     },
 };
 

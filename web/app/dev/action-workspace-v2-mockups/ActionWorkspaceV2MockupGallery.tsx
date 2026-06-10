@@ -1,6 +1,6 @@
 "use client";
 
-import { Sparkles } from "lucide-react";
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import {
     FINDINGS_COLLAPSED,
     FINDINGS_FULL,
@@ -45,7 +45,7 @@ export default function ActionWorkspaceV2MockupGallery() {
                     rightChildren={
                         <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-alloy-gold/35 bg-alloy-gold/[0.04] px-6 text-center">
                             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-alloy-gold/20 text-alloy-gold-dark">
-                                <Sparkles className="h-6 w-6" strokeWidth={2} aria-hidden />
+                                <BosGenieLampIcon size="base" />
                             </div>
                             <p className="max-w-sm text-[14px] font-medium text-alloy-midnight">
                                 Paste an inquiry on the left, then analyze.

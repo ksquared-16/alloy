@@ -1,6 +1,8 @@
 "use client";
 
-import { Sparkles, X } from "lucide-react";
+import { X } from "lucide-react";
+
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import type { ReactNode } from "react";
 import type { ActionWorkspaceStep } from "@/lib/admin/actions/actionWorkspaceTypes";
 import { ACTION_WORKSPACE_LAYER_Z } from "@/lib/admin/actions/actionWorkspaceLayer";
@@ -123,7 +125,7 @@ export function ActionWorkspaceBosCloudShell({
                                         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00A283]/20 text-[#7EEBD4] shadow-[0_0_24px_rgba(0,162,131,0.18)]"
                                         aria-hidden
                                     >
-                                        <Sparkles className="h-5 w-5" strokeWidth={2.2} />
+                                        <BosGenieLampIcon size="md" />
                                     </span>
                                     <div className="min-w-0">
                                         <h2 className="text-xl font-bold tracking-tight text-white">

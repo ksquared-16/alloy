@@ -29,9 +29,9 @@ describe("lifecycle builder final UX and action save", () => {
         expect(shell).toContain("LifecycleActivationClient");
     });
 
-    it("Create Lifecycle uses standard secondary button not dashed oversized", () => {
+    it("Create Process uses standard secondary button not dashed oversized", () => {
         const select = read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx");
-        expect(select).toContain("Create Lifecycle");
+        expect(select).toContain("Create Process");
         expect(select).not.toContain("+ New Lifecycle");
         expect(select).not.toContain("border-dashed");
         expect(select).toContain("border-alloy-forge/20");

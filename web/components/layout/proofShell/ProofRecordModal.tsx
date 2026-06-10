@@ -12,7 +12,9 @@
  */
 
 import { useState, type ReactNode } from "react";
-import { MoreHorizontal, Sparkles, X } from "lucide-react";
+import { MoreHorizontal, X } from "lucide-react";
+
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import ProofRecordModalHeaderShell, {
     PROOF_DRAWER_TABS,
     type ProofDrawerTab,
@@ -70,7 +72,7 @@ export default function ProofRecordModal({
     const actionsControl = (
         <>
             <button type="button" disabled title="Work with BOS (simulated)" className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,69,140,0.35)] bg-[#f5f8ff] px-2 py-1 text-xs font-medium text-[#00458C] disabled:opacity-90">
-                <Sparkles className="h-3.5 w-3.5" aria-hidden /> Work with BOS
+                <BosGenieLampIcon size="xs" /> Work with BOS
             </button>
             <button type="button" disabled title="Actions (simulated)" className="inline-flex items-center gap-1 rounded-md border border-[rgba(0,0,0,0.14)] bg-white px-2 py-1 text-xs font-medium text-[rgba(39,63,82,0.75)] disabled:opacity-90">
                 <MoreHorizontal className="h-3.5 w-3.5" aria-hidden /> Actions
