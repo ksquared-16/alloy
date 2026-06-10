@@ -129,7 +129,7 @@ export default function OpportunityDrawerProofLayoutHeader({
                 onActionSelect={onActionSelect}
                 layout="modal-actions"
                 proofLayoutActions
-                bosActionVariant={leadCompositionActive ? "juniper" : "default"}
+                bosActionVariant="juniper"
                 actionPreflightBlocked={actionPreflightBlocked}
                 onDismissActionPreflightBlocked={onDismissActionPreflightBlocked}
                 registryActionFeedback={registryActionFeedback}

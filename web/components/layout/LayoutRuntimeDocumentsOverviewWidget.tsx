@@ -3,9 +3,9 @@
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
+import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import {
     PRESENTATION_DATA_VALUE,
-    PRESENTATION_EMPTY_STATE,
     PRESENTATION_SUPPORTING,
 } from "@/lib/presentation/presentationTypography";
 
@@ -22,6 +22,7 @@ type Props = {
     record: ProofRuntimeRecord;
     title?: string;
     documentsTabKey?: DrawerTabKey;
+    showEmptyState?: boolean;
 };
 
 /** Layout-owned documents overview — compact summary with optional tab navigation. */
@@ -29,12 +30,32 @@ export default function LayoutRuntimeDocumentsOverviewWidget({
     record,
     title = "Documents",
     documentsTabKey = "documents",
+    showEmptyState = false,
 }: Props) {
     const { onSelectDrawerTab } = useLayoutRuntimeDrawerHost();
     const docs = readDocuments(record);
 
     if (docs.length === 0) {
-        return null;
+        if (!showEmptyState) return null;
+        return (
+            <DrawerOverviewEmptyState
+                message="No documents yet"
+                hint="Uploaded files and requirements will appear here."
+                action={
+                    onSelectDrawerTab ?
+                        <button
+                            type="button"
+                            onClick={() => onSelectDrawerTab(documentsTabKey)}
+                            className="text-[11px] font-semibold text-alloy-blue hover:underline"
+                            data-layout-runtime-documents-view-all="true"
+                        >
+                            View all {title.toLowerCase()}
+                        </button>
+                    :   null
+                }
+                compact
+            />
+        );
     }
 
     const missing = docs.filter((d) => {

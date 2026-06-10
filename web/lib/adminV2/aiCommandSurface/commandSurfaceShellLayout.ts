@@ -21,11 +21,58 @@ export const COMMAND_SURFACE_RAIL_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX = 120;
 /** Rail expanded thread scroll region minimum. */
 export const COMMAND_SURFACE_RAIL_THREAD_SCROLL_MIN_HEIGHT_PX = 120;
 
-export const COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS = [
-    "Summarize this queue",
-    "What needs attention?",
-    "Draft follow-up",
-] as const;
+export type BosRailStarterIconKey = "summarize" | "missing" | "draft";
+
+export type CommandSurfaceRailStarterSuggestion = {
+    title: string;
+    description: string;
+    prompt: string;
+    icon: BosRailStarterIconKey;
+};
+
+export const COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRailStarterSuggestion[] = [
+    {
+        title: "Summarize this lead",
+        description: "Get a quick overview of details and history",
+        prompt: "Summarize this lead",
+        icon: "summarize",
+    },
+    {
+        title: "Identify missing information",
+        description: "See what's needed to move forward",
+        prompt: "What information is missing?",
+        icon: "missing",
+    },
+    {
+        title: "Draft follow-up",
+        description: "Create a personalized follow-up message",
+        prompt: "Draft follow-up",
+        icon: "draft",
+    },
+];
+
+/** Context-aware first starter title (presentation only — prompts unchanged). */
+export function resolveCommandSurfaceRailStarterSuggestions(args: {
+    hasWorkUnitScope: boolean;
+    hasOpportunityContext: boolean;
+    opportunitySingular: string;
+}): readonly CommandSurfaceRailStarterSuggestion[] {
+    const leadLabel =
+        args.opportunitySingular === "Inquiry" || args.opportunitySingular === "Opportunity" ?
+            "Lead"
+        :   args.opportunitySingular;
+
+    const summarizeTitle =
+        args.hasWorkUnitScope && !args.hasOpportunityContext ? "Summarize this queue"
+        : args.hasOpportunityContext ? `Summarize this ${leadLabel.toLowerCase()}`
+        : "Summarize this queue";
+
+    return [
+        { ...COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS[0], title: summarizeTitle },
+        COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS[1],
+        COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS[2],
+    ];
+}
 
 /** Operator-facing search notice (Card 18 — one line, replaces stacked routing+search). */
 export const COMMAND_SURFACE_SEARCHING_NOTICE = "Searching records…";

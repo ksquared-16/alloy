@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Sparkles, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import type { QueueItemQuickActionVm } from "@/lib/ui-v2/workspace-types";
 import {
     partitionQueueRowActions,
@@ -70,7 +71,7 @@ export default function QueueRowActionRail({
                     inquiryWorkflow
                     proofLayoutActions
                     disabled={pending}
-                    leadingIcon={<Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} />}
+                    leadingIcon={<BosGenieLampIcon size="sm" />}
                     className="operational-queue-row__drawer-action-btn operational-queue-row__bos-btn shrink-0"
                     data-queue-row-bos-button="true"
                     data-record-drawer-header-action="true"

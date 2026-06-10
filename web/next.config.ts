@@ -25,6 +25,8 @@ const nextConfig: NextConfig = {
       { source: "/admin/v2/:path*", destination: "/admin/:path*", permanent: false },
       { source: "/adminv2", destination: "/admin", permanent: false },
       { source: "/adminv2/:path*", destination: "/admin/:path*", permanent: false },
+      /** Phase G: settings hub alias → admin config landing (subpaths keep /admin/settings/...). */
+      { source: "/admin/settings", destination: "/admin", permanent: false },
     ];
   },
   async rewrites() {
@@ -35,10 +37,19 @@ const nextConfig: NextConfig = {
         destination: "/api/admin/view-models/:path*",
       },
       /**
-       * Canonical `/admin` serves the AdminV2 app tree (`app/adminV2/`).
+       * Phase G: canonical operator workspace at `/workspace` (browser URL; serves AdminV2 tree).
+       */
+      { source: "/workspace", destination: "/adminV2/workspace" },
+      { source: "/workspace/work-unit/:workUnitSlug", destination: "/adminV2/workspace/work-unit/:workUnitSlug" },
+      {
+        source: "/workspace/work-unit/:workUnitSlug/:recordId",
+        destination: "/adminV2/workspace/work-unit/:workUnitSlug/:recordId",
+      },
+      /**
+       * Canonical `/admin` serves AdminV2 config landing; `/admin/*` rewrites to `app/adminV2/*`.
        * Legacy implementation is physical at `app/legacy-admin/` → `/legacy-admin/*`.
        */
-      { source: "/admin", destination: "/adminV2/workspace" },
+      { source: "/admin", destination: "/adminV2/settings" },
       { source: "/admin/:path*", destination: "/adminV2/:path*" },
     ];
   },

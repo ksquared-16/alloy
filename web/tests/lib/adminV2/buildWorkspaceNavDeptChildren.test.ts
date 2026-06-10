@@ -88,27 +88,47 @@ describe("buildWorkspaceNavDeptChildren", () => {
         expect(children[0]?.kind).toBe("work_unit");
     });
 
-    it("builds work-unit queue href consistent with dept oper console", () => {
+    it("builds operator slug href for configured pipeline lanes", () => {
         const child = {
             rowKey: "wu-pipe:new_inquiry",
             label: "New Inquiry",
             workUnitId: "wu-pipe",
+            workUnitKey: "enrollment_pipeline",
             queueKey: "new_inquiry",
             kind: "configured_queue" as const,
         };
-        expect(workspaceNavChildHref("/adminV2/workspace", "dept-1", child)).toBe(
-            "/adminV2/workspace/dept/dept-1/work-unit/wu-pipe?queue=new_inquiry"
-        );
-        expect(workspaceDeptQueueNavHref("/adminV2/workspace", "dept-1", "wu-pipe", "new_inquiry")).toBe(
-            "/adminV2/workspace/dept/dept-1/work-unit/wu-pipe?queue=new_inquiry"
+        expect(workspaceNavChildHref("/workspace", "dept-1", child)).toBe(
+            "/workspace/work-unit/new-inquiry"
         );
     });
 
-    it("marks configured queue child active from queue search param", () => {
+    it("marks configured queue child active from slug route", () => {
+        const child = {
+            rowKey: "wu-pipe:new_leads",
+            label: "New Leads",
+            workUnitId: "wu-pipe",
+            workUnitKey: "enrollment_pipeline",
+            queueKey: "new_leads",
+            kind: "configured_queue" as const,
+        };
+        expect(
+            isWorkspaceNavChildActive({
+                departmentId: null,
+                workUnitId: null,
+                workUnitSlug: "new-leads",
+                activeQueueKey: null,
+                child,
+                deptId: "dept-enrollment",
+            })
+        ).toBe(true);
+    });
+
+    it("marks configured queue child active from legacy queue search param", () => {
         const child = {
             rowKey: "wu-pipe:new_inquiry",
             label: "New Inquiry",
             workUnitId: "wu-pipe",
+            workUnitKey: "enrollment_pipeline",
             queueKey: "new_inquiry",
             kind: "configured_queue" as const,
         };
@@ -116,6 +136,7 @@ describe("buildWorkspaceNavDeptChildren", () => {
             isWorkspaceNavChildActive({
                 departmentId: "dept-1",
                 workUnitId: "wu-pipe",
+                workUnitSlug: null,
                 activeQueueKey: "new_inquiry",
                 child,
                 deptId: "dept-1",
@@ -125,6 +146,7 @@ describe("buildWorkspaceNavDeptChildren", () => {
             isWorkspaceNavChildActive({
                 departmentId: "dept-1",
                 workUnitId: "wu-pipe",
+                workUnitSlug: null,
                 activeQueueKey: "enrolling",
                 child,
                 deptId: "dept-1",

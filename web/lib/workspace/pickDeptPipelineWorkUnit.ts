@@ -1,4 +1,5 @@
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
 
 export type DeptPipelineWorkUnitPick = {
@@ -39,7 +40,8 @@ export function pickDeptPipelineWorkUnit(
         const bundle = tryLoadWorkUnitQueueDefinitionBundle(w.queue_definition);
         if (!bundle) continue;
         const def = bundle.def;
-        if (def.ui?.layout !== "pipeline_with_attention") continue;
+        const ui = getQueueUiConfig(def);
+        if (ui.layout !== "pipeline_with_attention") continue;
         const lanes = extractPipelineExecutionLanes(def);
         if (!lanes.length) continue;
         return {

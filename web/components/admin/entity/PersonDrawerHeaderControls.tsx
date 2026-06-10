@@ -49,6 +49,7 @@ export function PersonDrawerHeaderControls({
                 opportunitySingular={opportunitySingular}
                 inquiryWorkflow={false}
                 proofLayoutActions={proofLayoutActions}
+                actionVariant="juniper"
             />
             {showRegistryActions ?
                 <OpportunityDrawerHeaderActionsMenu

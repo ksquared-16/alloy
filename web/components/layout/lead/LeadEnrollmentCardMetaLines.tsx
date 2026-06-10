@@ -21,18 +21,23 @@ function SegmentSeparator() {
     return <span className="px-0.5 text-alloy-midnight/22" aria-hidden>·</span>;
 }
 
-/** Structured enrollment metadata — birth line + labeled detail segments. */
+/** Structured enrollment card metadata for two-line drawer presentation. */
 export default function LeadEnrollmentCardMetaLines({ row, metaColumns }: Props) {
     const { birthLine, segments } = buildLeadEnrollmentCardMetaPresentation(row, metaColumns);
     if (!birthLine && segments.length === 0) return null;
 
     return (
-        <div className="mt-1 space-y-1" data-lead-enrollment-card-meta-lines="true">
+        <div className="mt-1.5 space-y-1" data-lead-enrollment-card-meta-lines="true">
             {birthLine ?
-                <p className={PRESENTATION_SUPPORTING}>{birthLine}</p>
+                <p className={PRESENTATION_SUPPORTING} data-lead-enrollment-card-birth-line="true">
+                    {birthLine}
+                </p>
             :   null}
             {segments.length > 0 ?
-                <p className="flex flex-wrap items-center gap-y-0.5 leading-snug">
+                <div
+                    className="flex flex-wrap items-center gap-y-0.5 leading-snug"
+                    data-lead-enrollment-card-detail-line="true"
+                >
                     {segments.map((segment, index) => (
                         <span key={segment.refKey} className="inline-flex max-w-full items-center">
                             {index > 0 ? <SegmentSeparator /> : null}
@@ -40,6 +45,10 @@ export default function LeadEnrollmentCardMetaLines({ row, metaColumns }: Props)
                                 <span className={`inline-flex items-baseline gap-1 ${PRESENTATION_LABEL_INLINE}`}>
                                     <span>{segment.label}</span>
                                     <span className={PRESENTATION_VALUE_PLACEHOLDER}>—</span>
+                                </span>
+                            :   segment.refKey.toLowerCase().includes("status") ?
+                                <span className="inline-flex items-center rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">
+                                    {segment.display}
                                 </span>
                             :   <span className={`inline-flex items-baseline gap-1 ${PRESENTATION_DATA_VALUE_COMPACT}`}>
                                     {segment.prefixLabel ?
@@ -50,7 +59,7 @@ export default function LeadEnrollmentCardMetaLines({ row, metaColumns }: Props)
                             }
                         </span>
                     ))}
-                </p>
+                </div>
             :   null}
         </div>
     );

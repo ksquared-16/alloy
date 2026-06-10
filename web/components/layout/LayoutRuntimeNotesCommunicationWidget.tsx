@@ -1,7 +1,12 @@
 "use client";
 
+import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import { formatLayoutRuntimeOperatorDate } from "@/lib/layout/runtime/formatLayoutRuntimeOperatorDate";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import {
+    PRESENTATION_LABEL,
+    PRESENTATION_SUPPORTING,
+} from "@/lib/presentation/presentationTypography";
 
 function pickLine(...values: unknown[]): string | null {
     for (const value of values) {
@@ -43,10 +48,11 @@ export function layoutRuntimeCommunicationWidgetHasContent(record: ProofRuntimeR
 type Props = {
     record: ProofRuntimeRecord;
     widgetKey: "notes" | "recent_communication";
+    showEmptyState?: boolean;
 };
 
-/** Layout-owned notes / communication widgets — collapse when empty in composition mode. */
-export default function LayoutRuntimeNotesCommunicationWidget({ record, widgetKey }: Props) {
+/** Layout-owned notes / communication widgets — premium empty state when configured. */
+export default function LayoutRuntimeNotesCommunicationWidget({ record, widgetKey, showEmptyState = false }: Props) {
     const overview =
         record._overview_data && typeof record._overview_data === "object"
             ? (record._overview_data as Record<string, unknown>)
@@ -73,21 +79,30 @@ export default function LayoutRuntimeNotesCommunicationWidget({ record, widgetKe
             }
         }
 
-        if (noteLines.length === 0) return null;
+        if (noteLines.length === 0) {
+            if (!showEmptyState) return null;
+            return (
+                <DrawerOverviewEmptyState
+                    message="No notes yet"
+                    hint="Follow-up notes and internal context will appear here."
+                    compact
+                />
+            );
+        }
 
         return (
             <ul className="flex flex-col gap-2" data-layout-runtime-notes-widget="true">
                 {noteLines.map((line, index) => (
                     <li key={index} className="rounded-md border border-alloy-stone/10 bg-white px-2.5 py-2">
                         <div className="flex items-baseline justify-between gap-2">
-                            <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            <span className={PRESENTATION_LABEL}>
                                 {line.title}
                             </span>
                             {line.at ?
-                                <span className="shrink-0 text-[10px] text-alloy-midnight/40">{line.at}</span>
+                                <span className={`shrink-0 ${PRESENTATION_SUPPORTING}`}>{line.at}</span>
                             :   null}
                         </div>
-                        <p className="mt-0.5 line-clamp-3 text-[11px] leading-snug text-alloy-midnight/75">{line.body}</p>
+                        <p className="mt-0.5 line-clamp-3 text-[11px] font-medium leading-snug text-alloy-midnight/82">{line.body}</p>
                     </li>
                 ))}
             </ul>
@@ -95,7 +110,16 @@ export default function LayoutRuntimeNotesCommunicationWidget({ record, widgetKe
     }
 
     const rawComm = record.recent_communication ?? overview.recent_communication;
-    if (!Array.isArray(rawComm) || rawComm.length === 0) return null;
+    if (!Array.isArray(rawComm) || rawComm.length === 0) {
+        if (!showEmptyState) return null;
+        return (
+            <DrawerOverviewEmptyState
+                message="No recent communication"
+                hint="Messages and outreach will appear here."
+                compact
+            />
+        );
+    }
 
     return (
         <ul className="flex flex-col gap-2" data-layout-runtime-communication-widget="true">

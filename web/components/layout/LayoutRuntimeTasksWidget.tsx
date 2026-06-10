@@ -1,14 +1,12 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import LayoutRuntimeTaskDetailPopover, {
     formatQueueTaskDueShort,
 } from "@/components/layout/queueRecord/LayoutRuntimeTaskDetailPopover";
-import {
-    INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS,
-    INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS,
-} from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 import type { InquirySummaryTaskPreviewRow } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
+import { INQUIRY_RIGHT_COLUMN_TASKS_BODY_CLASS } from "@/lib/admin/drawer/opportunityInquiryRightColumnGeometry";
 import { mapLayoutRuntimeTasksFromVm } from "@/lib/layout/runtime/mapLayoutRuntimeTasksFromVm";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
@@ -120,9 +118,7 @@ export default function LayoutRuntimeTasksWidget({ record, title = "Tasks", comp
                             </button>
                         );
                     })
-                :   <span className={INQUIRY_RIGHT_COLUMN_EMPTY_ROW_CLASS} data-inquiry-summary-task-preview-empty="true">
-                        No open tasks
-                    </span>
+                :   <DrawerOverviewEmptyState message="No open tasks" hint="Tasks assigned to this record will appear here." compact />
                 }
                 {overflowCount > 0 ?
                     <div className="text-[10px] font-medium text-alloy-midnight/45" data-layout-runtime-tasks-overflow="true">

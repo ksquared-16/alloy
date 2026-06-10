@@ -6152,6 +6152,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 department_title: deptName,
                 work_unit_title: wuName,
                 department_key: dept?.key ?? undefined,
+                operator_slug_route: Boolean(slugRoute),
                 shell_identity_ready: workUnitShellReady,
                 oper_lane_loading: workUnitOperLaneLoading,
                 kpi_placeholder: workUnitKpiStripPlaceholder,
@@ -6165,6 +6166,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             deptName,
             wuName,
             dept?.key,
+            slugRoute,
             workUnitShellReady,
             workUnitOperLaneLoading,
             workUnitKpiStripPlaceholder,
@@ -6508,7 +6510,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             {error && !workUnitShellReady ? (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error}</p>
             ) : !workUnitPageContentReady ? (
-                <WorkUnitPageLoadingGate workUnitTitle={wuName} departmentTitle={deptName} />
+                <WorkUnitPageLoadingGate
+                    workUnitTitle={wuName}
+                    departmentTitle={slugRoute ? undefined : deptName}
+                />
             ) : (
                 <>
                     {actionSurfaceError ? (

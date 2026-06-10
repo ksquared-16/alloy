@@ -39,12 +39,13 @@ describe("workspaceRevealGate", () => {
         ).toBe(true);
     });
 
-    it("department_tiles_ready allows settled empty org", () => {
+    it("department_tiles_ready allows lifecycle landing without departments", () => {
         expect(
             workspaceRevealDepartmentTilesReady({
                 bootstrap_loading: false,
                 has_departments: false,
-                fetch_settled_empty: true,
+                fetch_settled_empty: false,
+                operator_lifecycle_landing: true,
             })
         ).toBe(true);
     });

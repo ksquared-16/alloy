@@ -74,6 +74,7 @@ import LayoutRuntimeNotesCommunicationWidget, {
 } from "@/components/layout/LayoutRuntimeNotesCommunicationWidget";
 import LayoutRuntimeDocumentsOverviewWidget from "@/components/layout/LayoutRuntimeDocumentsOverviewWidget";
 import DrawerOverviewPanelShell from "@/components/layout/DrawerOverviewPanelShell";
+import DrawerHouseholdProfileSection from "@/components/layout/DrawerHouseholdProfileSection";
 import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
 import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
 import { logChildLinkInstrumentationMounted } from "@/lib/layout/runtime/childLinkBrowserTrace";
@@ -942,8 +943,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 <LeadOperatingSummaryCard
                     title={cardTitle}
                     icon={<MessageSquare className="h-3.5 w-3.5" aria-hidden />}
-                    accent={hasContent ? "neutral" : "muted"}
-                    minimized={!hasContent}
+                    accent={hasContent ? "neutral" : "work"}
                     widgetKey="last_touch"
                 >
                     <LeadLastTouchSummaryCard touch={lastTouch} />
@@ -951,7 +951,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             );
         }
         return (
-            <WidgetChrome title={cardTitle} minimized={!hasContent}>
+            <WidgetChrome title={cardTitle}>
                 <LeadLastTouchSummaryCard touch={lastTouch} />
             </WidgetChrome>
         );
@@ -1001,7 +1001,6 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             : composition.personOverviewComposition ?
                 resolvePersonActivityPreview(record)
             :   resolveLeadActivityPreview(record);
-        if (composition.compositionSectionSurface && entries.length === 0) return null;
         const viewAll =
             onSelectDrawerTab && activityTabKey ?
                 () => onSelectDrawerTab(activityTabKey)
@@ -1011,7 +1010,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 <PersonActivityPreview entries={entries} onViewAll={viewAll} />
             :   <LeadActivityPreview entries={entries} onViewAll={viewAll} />;
         const activityMarkup = (
-            <div className="min-w-0 break-words" data-layout-runtime-activity-widget="true">
+            <div className="min-w-0 break-words px-1" data-layout-runtime-activity-widget="true">
                 {preview}
             </div>
         );
@@ -1025,10 +1024,9 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             || (record._overview_data
                 && typeof record._overview_data === "object"
                 && Array.isArray((record._overview_data as Record<string, unknown>).documents));
-        if (!hasContent) {
-            return composition.compositionSectionSurface ? null : <WidgetChrome title={title}>{empty}</WidgetChrome>;
-        }
-        const markup = <LayoutRuntimeDocumentsOverviewWidget record={record} title={title} />;
+        const markup = (
+            <LayoutRuntimeDocumentsOverviewWidget record={record} title={title} showEmptyState={!hasContent} />
+        );
         return composition.compositionSectionSurface ? markup : <WidgetChrome title={title}>{markup}</WidgetChrome>;
     }
 
@@ -1037,13 +1035,11 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             widgetKey === "notes"
                 ? layoutRuntimeNotesWidgetHasContent(record)
                 : layoutRuntimeCommunicationWidgetHasContent(record);
-        if (!hasContent) {
-            return composition.compositionSectionSurface ? null : <WidgetChrome title={title}>{empty}</WidgetChrome>;
-        }
         const markup = (
             <LayoutRuntimeNotesCommunicationWidget
                 record={record}
                 widgetKey={widgetKey === "notes" ? "notes" : "recent_communication"}
+                showEmptyState={!hasContent}
             />
         );
         return composition.compositionSectionSurface ? markup : <WidgetChrome title={title}>{markup}</WidgetChrome>;
@@ -1141,10 +1137,13 @@ function SectionView({
     const variant = useContext(LayoutRuntimeVariantContext);
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const composition = useLayoutRuntimeCompositionHints();
+    const onAdornmentAction = useContext(AdornmentActionContext);
     const sectionContext = {
         sectionPresentation,
         sectionKey: section.key,
-        stackRows: composition.compositionSectionSurface === true && section.key === "household_contact",
+        stackRows:
+            composition.compositionSectionSurface === true
+            && (section.key === "household_contact" || section.key === "household_relationships"),
     };
     if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
 
@@ -1160,13 +1159,24 @@ function SectionView({
         return null;
     }
 
-    const body = (
-        <LayoutRuntimeSectionContext.Provider value={sectionContext}>
-            {section.rows.map((row) => (
-                <RowView key={row.id} record={record} row={row} anchorEntity={anchorEntity} />
-            ))}
-        </LayoutRuntimeSectionContext.Provider>
-    );
+    const useHouseholdProfile =
+        composition.compositionSectionSurface === true
+        && operatorSurfaces
+        && (section.key === "household_contact" || section.key === "household_relationships");
+
+    const body = useHouseholdProfile ?
+        <DrawerHouseholdProfileSection
+            record={record}
+            variant={section.key === "household_contact" ? "lead" : "person"}
+            onAdornmentAction={onAdornmentAction}
+        />
+    :   (
+            <LayoutRuntimeSectionContext.Provider value={sectionContext}>
+                {section.rows.map((row) => (
+                    <RowView key={row.id} record={record} row={row} anchorEntity={anchorEntity} />
+                ))}
+            </LayoutRuntimeSectionContext.Provider>
+        );
 
     if (sectionPresentation === "summary_strip") {
         return (

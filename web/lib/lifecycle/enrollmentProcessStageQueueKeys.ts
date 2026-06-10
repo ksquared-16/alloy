@@ -14,3 +14,16 @@ export const ENROLLMENT_STAGE_QUEUE_KEYS: Record<LifecycleOperatorStage, readonl
     enrollment: ["enrollment_offers"],
     enrolled: ["enrollment_completed"],
 };
+
+/** Reverse map — pipeline queue key (`new_leads`) → builder operator stage (`lead`). */
+export function operatorStageKeysForPipelineQueueKey(queueKey: string): LifecycleOperatorStage[] {
+    const normalized = queueKey.trim().toLowerCase();
+    if (!normalized) return [];
+    const out: LifecycleOperatorStage[] = [];
+    for (const stage of Object.keys(ENROLLMENT_STAGE_QUEUE_KEYS) as LifecycleOperatorStage[]) {
+        if (ENROLLMENT_STAGE_QUEUE_KEYS[stage].some((key) => key.toLowerCase() === normalized)) {
+            out.push(stage);
+        }
+    }
+    return out;
+}

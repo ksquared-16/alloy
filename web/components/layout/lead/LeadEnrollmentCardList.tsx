@@ -8,6 +8,7 @@ import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDra
 import LayoutRuntimeFieldInput from "@/components/layout/LayoutRuntimeFieldInput";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import LeadEnrollmentCardMetaLines from "@/components/layout/lead/LeadEnrollmentCardMetaLines";
+import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import {
     formatLayoutRuntimeRepeaterColumnDisplay,
 } from "@/lib/layout/runtime/formatLayoutRuntimeRepeaterColumnDisplay";
@@ -21,7 +22,6 @@ import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRun
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
-    PRESENTATION_EMPTY_STATE,
     PRESENTATION_LABEL,
 } from "@/lib/presentation/presentationTypography";
 
@@ -61,7 +61,11 @@ export default function LeadEnrollmentCardList({
     }, []);
 
     const nameColumn = columns.find((c) => readEnrollmentGridCellRole(item, c) === "primary_link") ?? columns[0];
-    const metaColumns = columns.filter((c) => c !== nameColumn);
+    const statusColumn = columns.find((c) => {
+        const key = c.refKey.toLowerCase();
+        return key.includes("status") || c.renderHint === "status";
+    });
+    const metaColumns = columns.filter((c) => c !== nameColumn && c !== statusColumn);
 
     const rowCanEdit = (rowKey: string, row: ProofRuntimeRecord, index: number) => {
         if (canMutate === false || !edit) return false;
@@ -79,7 +83,13 @@ export default function LeadEnrollmentCardList({
     return (
         <div className="min-w-0" data-lead-enrollment-card-list="true" data-layout-runtime-enrollment-read-mode="card-list">
             {rows.length === 0 ?
-                <div className={`px-4 py-5 ${PRESENTATION_EMPTY_STATE}`}>No children linked yet.</div>
+                <div className="p-2">
+                    <DrawerOverviewEmptyState
+                        message="No children linked yet."
+                        hint="Add a child to capture program interest and enrollment details."
+                        compact
+                    />
+                </div>
             :   <ul className="flex flex-col gap-2 p-2">
                     {rows.map((row, index) => {
                         const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);
@@ -92,28 +102,37 @@ export default function LeadEnrollmentCardList({
                             refKey: nameCol.refKey,
                             adornment: nameCol.adornment,
                         };
+                        const statusDisplay =
+                            statusColumn ? formatLayoutRuntimeRepeaterColumnDisplay(row, statusColumn) : null;
 
                         return (
                             <li
                                 key={rowKey}
-                                className="group rounded-lg border border-alloy-stone/12 bg-white px-3 py-2 shadow-[0_1px_2px_rgba(24,39,58,0.03)] transition-shadow hover:shadow-[0_2px_6px_rgba(24,39,58,0.06)]"
+                                className="group rounded-lg border border-alloy-stone/12 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(24,39,58,0.03)] transition-shadow hover:shadow-[0_2px_6px_rgba(24,39,58,0.06)]"
                                 data-lead-enrollment-card-row="true"
                                 data-layout-runtime-enrollment-row="true"
                                 data-enrollment-row-editing={isEditing ? "true" : "false"}
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="min-w-0 flex-1">
-                                        <LayoutRuntimeChildLinkSurface
-                                            componentName="LeadEnrollmentCardList"
-                                            surface="drawer"
-                                            item={nameSynthetic}
-                                            rowRecord={row}
-                                            anchorRecord={anchorRecord}
-                                            adornment={nameCol.adornment}
-                                            display={formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol)}
-                                            onAction={onAdornmentAction}
-                                            className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
-                                        />
+                                        <div className="flex min-w-0 items-start justify-between gap-2">
+                                            <LayoutRuntimeChildLinkSurface
+                                                componentName="LeadEnrollmentCardList"
+                                                surface="drawer"
+                                                item={nameSynthetic}
+                                                rowRecord={row}
+                                                anchorRecord={anchorRecord}
+                                                adornment={nameCol.adornment}
+                                                display={formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol)}
+                                                onAction={onAdornmentAction}
+                                                className={`block min-w-0 truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
+                                            />
+                                            {!isEditing && statusDisplay && statusDisplay !== "—" ?
+                                                <span className="shrink-0 rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">
+                                                    {statusDisplay}
+                                                </span>
+                                            :   null}
+                                        </div>
                                         {!isEditing && metaColumns.length > 0 ?
                                             <LeadEnrollmentCardMetaLines row={row} metaColumns={metaColumns} />
                                         :   null}

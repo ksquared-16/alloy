@@ -60,6 +60,8 @@ import {
 } from "@/lib/adminV2/workspaceRevealGate";
 import { prefetchVisibleDepartmentAboveFoldBundles } from "@/lib/adminV2/prefetchAdminV2AboveFold";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
+import { loadOperatorLifecycleLandingCards, invalidateOperatorLifecycleLandingCache } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 
 /** First paint: work-unit counts + rollup lines without per-dept growth KPI / pipeline calls. */
 function buildWorkspaceQuickRollup(
@@ -99,8 +101,8 @@ function buildWorkspaceQuickRollup(
 }
 
 /**
- * Organization workspace — top of hierarchy: workspace → department → work unit → record/drawer.
- * Departments load from GET /api/admin/departments (real org rows; no redirect).
+ * Operator workspace landing — lifecycle-first entry (/workspace).
+ * Department fetches may still run for KPI background rollup; tiles are lifecycle catalog driven.
  */
 export default function AdminV2WorkspaceIndexPage() {
     const { orgName: orgNameFromContext, orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
@@ -119,6 +121,23 @@ export default function AdminV2WorkspaceIndexPage() {
     const [deptRefreshNonce, setDeptRefreshNonce] = useState(0);
     const [tilePipelineTrace, setTilePipelineTrace] = useState<WorkspaceTilePipelineTrace | null>(null);
     const [workspaceIdAudit, setWorkspaceIdAudit] = useState<LifecycleDepartmentIdAudit | null>(null);
+    const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>([]);
+    const [lifecycleCardsPending, setLifecycleCardsPending] = useState(true);
+
+    useEffect(() => {
+        let cancelled = false;
+        setLifecycleCardsPending(true);
+        void loadOperatorLifecycleLandingCards()
+            .then((cards) => {
+                if (!cancelled) setLifecycleCards(cards);
+            })
+            .finally(() => {
+                if (!cancelled) setLifecycleCardsPending(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [deptRefreshNonce]);
 
     useEffect(() => {
         resetRouteShellTrace("workspace");
@@ -132,6 +151,7 @@ export default function AdminV2WorkspaceIndexPage() {
             hydratedCacheRef.current = false;
             setWorkspaceCachePrimed(false);
             invalidateAdminV2WorkspaceSessionCache(orgId, principalUserId, accessScopeFingerprint);
+            invalidateOperatorLifecycleLandingCache();
             bustWorkspaceDepartmentsFetchDedupe();
             setDeptRefreshNonce((n) => n + 1);
         };
@@ -440,11 +460,13 @@ export default function AdminV2WorkspaceIndexPage() {
             bootstrap_loading: loading && !cachePrimed,
             has_departments: departments.length > 0,
             fetch_settled_empty: fetchSettledEmpty,
+            operator_lifecycle_landing: true,
         });
         const tile_counts_ready = workspaceRevealTileCountsReady({
             has_departments: departments.length > 0,
             quick_rollup_applied: metrics !== null || cachePrimed,
             fetch_settled_empty: fetchSettledEmpty,
+            operator_lifecycle_landing: true,
         });
         return computeWorkspaceRevealGate({
             shell_ready,
@@ -492,21 +514,10 @@ export default function AdminV2WorkspaceIndexPage() {
         };
     }, [metrics, departments.length]);
 
-    if (error && departments.length === 0 && !loading) {
+    if (error && !loading && !workspaceCachePrimed) {
         return (
             <div className="max-w-3xl">
                 <p className="text-sm text-alloy-ember">{error}</p>
-            </div>
-        );
-    }
-
-    if (fetchSettledEmpty && !loading && departments.length === 0) {
-        return (
-            <div className="max-w-3xl space-y-2">
-                <p className="text-sm text-alloy-midnight/80">No active departments found for your organization.</p>
-                <p className="text-sm text-alloy-midnight/60">
-                    Add departments under Organization, then return here.
-                </p>
             </div>
         );
     }
@@ -530,6 +541,8 @@ export default function AdminV2WorkspaceIndexPage() {
                 workspaceRollupRefined={workspaceRollupRefined}
                 departmentsPending={false}
                 deptTileStatsPending={false}
+                lifecycleCards={lifecycleCards}
+                lifecycleCardsPending={lifecycleCardsPending}
             />
             {isLifecycleDebugUiEnabled() ? (
                 <>

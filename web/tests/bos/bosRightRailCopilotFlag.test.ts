@@ -30,14 +30,23 @@ describe("bosRightRailCopilotFlag", () => {
         );
     });
 
-    it("drawer sidebar offsets from measured workspace command column", () => {
+    it("drawer sidebar offsets from BOS overlay width + gutter", () => {
         const css = read("app/adminV2/adminV2.css");
         expect(css).toContain("--adminv2-workspace-command-rail-offset");
-        expect(read("app/adminV2/components/useWorkspaceCommandRailDrawerOffset.ts")).toContain(
-            "data-adminv2-workspace-command-column"
-        );
+        expect(css).toContain("--adminv2-bos-overlay-width");
+        expect(css).toContain("--adminv2-bos-overlay-gutter");
+        const offsetHook = read("app/adminV2/components/useWorkspaceCommandRailDrawerOffset.ts");
+        expect(offsetHook).toContain("data-adminv2-bos-rail-overlay");
+        expect(offsetHook).toContain("BOS_RAIL_OVERLAY_GUTTER_PX");
         const drawer = read("components/admin/Drawer.tsx");
         expect(drawer).toContain("adminv2-workspace-command-rail-offset");
+    });
+
+    it("workspace root uses Actions + BOS rail pattern", () => {
+        expect(read("components/admin/workspace/WorkspaceRootShell.tsx")).toContain("WorkspaceRootActionsRail");
+        expect(read("app/adminV2/components/workspace/WorkspaceRootActionsRail.tsx")).toContain(
+            "CommandRailCollapsibleActionsSection"
+        );
     });
 
     it("AICommandSurfaceShell supports rail presentation in command rail mount", () => {

@@ -106,8 +106,11 @@ export function workspaceRevealDepartmentTilesReady(input: {
     bootstrap_loading: boolean;
     has_departments: boolean;
     fetch_settled_empty: boolean;
+    /** Phase G: static lifecycle landing tiles — no department fetch required. */
+    operator_lifecycle_landing?: boolean;
 }): boolean {
     if (input.bootstrap_loading) return false;
+    if (input.operator_lifecycle_landing) return true;
     return input.has_departments || input.fetch_settled_empty;
 }
 
@@ -115,7 +118,9 @@ export function workspaceRevealTileCountsReady(input: {
     has_departments: boolean;
     quick_rollup_applied: boolean;
     fetch_settled_empty: boolean;
+    operator_lifecycle_landing?: boolean;
 }): boolean {
+    if (input.operator_lifecycle_landing) return true;
     if (input.fetch_settled_empty && !input.has_departments) return true;
     return input.has_departments && input.quick_rollup_applied;
 }

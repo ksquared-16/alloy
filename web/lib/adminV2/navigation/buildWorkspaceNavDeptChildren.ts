@@ -1,3 +1,5 @@
+import { operatorWorkUnitHrefFromKey } from "@/lib/admin/canonicalOperatorRoutes";
+import { workUnitKeyToRouteSlug, workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { tryLoadWorkUnitQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
 import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
 import { pickDeptPipelineWorkUnit } from "@/lib/workspace/pickDeptPipelineWorkUnit";
@@ -8,6 +10,7 @@ export type WorkspaceNavTreeChild = {
     rowKey: string;
     label: string;
     workUnitId: string;
+    workUnitKey: string | null;
     /** When set, navigates to the work-unit route with `?queue=` (same as dept oper console). */
     queueKey: string | null;
     kind: "configured_queue" | "work_unit";
@@ -57,6 +60,7 @@ export function buildWorkspaceNavDeptChildren(
                     rowKey: `${pipelineWu.id}:${lane.key}`,
                     label: lane.label,
                     workUnitId: pipelineWu.id,
+                    workUnitKey: pipelineWu.key ?? null,
                     queueKey: lane.key,
                     kind: "configured_queue" as const,
                 }));
@@ -71,9 +75,22 @@ export function buildWorkspaceNavDeptChildren(
             rowKey: wu.id,
             label: workUnitNavLabel(wu),
             workUnitId: wu.id,
+            workUnitKey: (wu.key ?? "").trim() || null,
             queueKey: null,
             kind: "work_unit" as const,
         }));
+}
+
+function operatorNavSlugForChild(child: WorkspaceNavTreeChild): string | null {
+    if (child.queueKey) return workUnitKeyToRouteSlug(child.queueKey);
+    if (child.workUnitKey) return workUnitKeyToRouteSlug(child.workUnitKey);
+    return null;
+}
+
+export function workspaceNavChildOperatorHref(child: WorkspaceNavTreeChild): string | null {
+    if (child.queueKey) return operatorWorkUnitHrefFromKey(child.queueKey);
+    if (child.workUnitKey) return operatorWorkUnitHrefFromKey(child.workUnitKey);
+    return null;
 }
 
 export function workspaceNavChildHref(
@@ -81,6 +98,8 @@ export function workspaceNavChildHref(
     departmentId: string,
     child: WorkspaceNavTreeChild
 ): string {
+    const operatorHref = workspaceNavChildOperatorHref(child);
+    if (operatorHref) return operatorHref;
     const base = `${workspaceBase}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(child.workUnitId)}`;
     if (!child.queueKey) return base;
     return `${base}?queue=${encodeURIComponent(child.queueKey)}`;
@@ -97,6 +116,7 @@ export function workspaceDeptQueueNavHref(
         rowKey: queueKey ? `${workUnitId}:${queueKey}` : workUnitId,
         label: "",
         workUnitId,
+        workUnitKey: null,
         queueKey,
         kind: queueKey ? "configured_queue" : "work_unit",
     });
@@ -105,11 +125,16 @@ export function workspaceDeptQueueNavHref(
 export function isWorkspaceNavChildActive(args: {
     departmentId: string | null;
     workUnitId: string | null;
+    workUnitSlug: string | null;
     activeQueueKey: string | null;
     child: WorkspaceNavTreeChild;
     deptId: string;
 }): boolean {
-    const { departmentId, workUnitId, activeQueueKey, child, deptId } = args;
+    const { departmentId, workUnitId, workUnitSlug, activeQueueKey, child, deptId } = args;
+    const childSlug = operatorNavSlugForChild(child);
+    if (workUnitSlug && childSlug) {
+        return workUnitRouteSlugsEquivalent(workUnitSlug, childSlug);
+    }
     if (departmentId !== deptId || workUnitId !== child.workUnitId) return false;
     if (child.queueKey) return activeQueueKey === child.queueKey;
     return !activeQueueKey;

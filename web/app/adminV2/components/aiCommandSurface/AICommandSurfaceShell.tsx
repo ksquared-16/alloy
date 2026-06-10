@@ -26,6 +26,13 @@ import {
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import OperationalActiveRecordChip from "@/app/adminV2/components/bos/OperationalActiveRecordChip";
 import {
+  BosRailAttentionSection,
+  BosRailComposer,
+  BosRailConversationPreview,
+  BosRailHeader,
+  BosRailStarterCards,
+} from "@/app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation";
+import {
   JobLayoutOperationalProposalCard,
   type JobLayoutCardUiState,
 } from "@/app/adminV2/components/aiCommandSurface/JobLayoutOperationalProposalCard";
@@ -111,8 +118,7 @@ import { buildCommandSurfaceRoutingNotice } from "@/lib/adminV2/aiCommandSurface
 import {
   CAPABILITY_GATE_CHECKING_LABEL,
   COMMAND_SURFACE_SEARCHING_NOTICE,
-  COMMAND_SURFACE_RAIL_PANEL_MIN_HEIGHT_PX,
-  COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS,
+  resolveCommandSurfaceRailStarterSuggestions,
   COMMAND_SURFACE_RAIL_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX,
   COMMAND_SURFACE_RAIL_THREAD_SCROLL_MIN_HEIGHT_PX,
   COMMAND_SURFACE_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX,
@@ -121,6 +127,7 @@ import {
   shouldAppendCommandSurfaceRoutingNotice,
   shouldShowInlineThreadBusyIndicator,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
+import { resolveBosRailAttentionPresentation } from "@/lib/bos/bosRailAttentionPresentation";
 import { resolveBosPolicyDenial } from "@/lib/adminV2/bos/bosGovernanceCopy";
 import type { BosExecutionReceiptPresentation } from "@/lib/adminV2/bos/bosExecutionReceipt";
 import {
@@ -333,36 +340,6 @@ async function loadCurrentJobOverviewConfig(): Promise<unknown> {
 
 export type AICommandSurfacePresentation = "bottom" | "rail";
 
-function CommandRailBosStarterSuggestions(props: { onPick: (text: string) => void }) {
-  return (
-    <div
-      className="flex min-h-[120px] flex-col gap-1.5 px-2.5 py-2"
-      data-command-surface-rail-starters="true"
-    >
-      <p className="text-[11px] leading-snug" style={{ color: CMD.textSupporting }}>
-        Try asking…
-      </p>
-      <div className="flex flex-col gap-1">
-        {COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS.map((suggestion) => (
-          <button
-            key={suggestion}
-            type="button"
-            className="rounded-lg border px-2.5 py-1.5 text-left text-[12px] leading-snug transition-colors"
-            style={{
-              borderColor: derived.border,
-              backgroundColor: neutral.surface,
-              color: CMD.textBody,
-            }}
-            onClick={() => props.onPick(suggestion)}
-          >
-            {suggestion}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 function SurfaceCard(props: {
   children: ReactNode;
   expanded: boolean;
@@ -384,16 +361,10 @@ function SurfaceCard(props: {
         data-command-surface-presentation="rail"
         role="contentinfo"
         aria-label="Orchestrator assistant"
-        className="pointer-events-auto relative flex w-full min-h-0 flex-col shrink-0"
+        className="pointer-events-auto relative flex h-full w-full min-h-0 flex-1 flex-col"
         style={{
-          minHeight: `${COMMAND_SURFACE_RAIL_PANEL_MIN_HEIGHT_PX}px`,
-          paddingTop: 6,
-          paddingBottom: 12,
           backgroundColor: neutral.surface,
           background: neutral.surface,
-          borderTop: `2px solid ${derived.adminV2AiBarPineBorder}`,
-          borderRadius: "12px 12px 0 0",
-          boxShadow: `0 -4px 20px rgba(39, 63, 82, 0.1), 0 -1px 0 ${derived.border}`,
         }}
       >
         <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col">{children}</div>
@@ -2191,38 +2162,110 @@ export default function AICommandSurfaceShell({
     ]
   );
 
+  const bosRailStarterSuggestions = useMemo(
+    () =>
+      resolveCommandSurfaceRailStarterSuggestions({
+        hasWorkUnitScope: Boolean(globalAssistant?.workspaceScope?.work_unit_id?.trim()),
+        hasOpportunityContext: globalAssistant?.currentContext?.entity_type === "opportunities",
+        opportunitySingular,
+      }),
+    [globalAssistant?.workspaceScope?.work_unit_id, globalAssistant?.currentContext, opportunitySingular]
+  );
+
+  const bosRailAttention = useMemo(
+    () =>
+      adminDrawer ?
+        resolveBosRailAttentionPresentation({
+          drawer: adminDrawer.drawerVmRender,
+          currentContext: globalAssistant?.currentContext ?? null,
+        })
+      :   null,
+    [adminDrawer, globalAssistant?.currentContext]
+  );
+
+  const onBosRailAttentionCta = useCallback(() => {
+    const prompt = bosRailAttention?.ctaPrompt ?? "What needs attention?";
+    pickStarterSuggestion(prompt);
+  }, [bosRailAttention?.ctaPrompt, pickStarterSuggestion]);
+
   return (
     <SurfaceCard expanded={surfaceExpanded} presentation={presentation} rootRef={shellRootRef}>
-      {presentation === "rail" ? (
-        <div className="flex shrink-0 items-center justify-between gap-2 px-3 pb-1 pt-1">
-          <span
-            className="text-[11px] font-bold uppercase tracking-wider"
-            style={{ color: CMD.textLabel }}
-            data-command-surface-rail-title="true"
-          >
-            BOS
-          </span>
-          {threadStatusLabel ?
-            <span
-              className="shrink-0 text-[10px] font-medium tabular-nums"
-              style={{ color: CMD.textSupporting }}
-              data-command-surface-thread-status="true"
-              aria-live="polite"
-            >
-              {threadStatusLabel}
-            </span>
-          :   null}
-        </div>
-      ) :   null}
-      {presentation === "rail" ? (
-        <OperationalActiveRecordChip
-          label={globalAssistant?.currentContext?.label}
-          sourceSurface={globalAssistant?.currentContext?.source_surface}
-          displayLine={bosContextDisplayLine}
-          variant="collapsed_rail"
-        />
-      ) :   null}
-      {hasThread ? (
+      {presentation === "rail" ?
+        <>
+          <BosRailHeader contextDisplayLine={bosContextDisplayLine} statusLabel={threadStatusLabel} />
+          <div className="bos-rail-scroll flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain">
+            <BosRailAttentionSection attention={bosRailAttention} onCta={onBosRailAttentionCta} />
+            {hasThread ? null : (
+              <BosRailStarterCards suggestions={bosRailStarterSuggestions} onPick={pickStarterSuggestion} />
+            )}
+            {hasThread ?
+              <div
+                className="mx-3 mb-2 overflow-hidden rounded-lg border"
+                style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
+                data-command-surface-thread-panel="true"
+              >
+                {threadExpanded ?
+                  <div
+                    ref={threadScrollRef}
+                    className={`${threadScrollMaxClass} overflow-y-auto`}
+                    style={{ minHeight: `${threadScrollMinHeightPx}px` }}
+                  >
+                    {shouldShowInlineThreadBusyIndicator({ busy, turns: thread.turns }) ?
+                      <div
+                        className="px-3 py-2 text-[11px]"
+                        style={{ color: CMD.textSupporting }}
+                        data-command-surface-inline-busy="true"
+                        aria-hidden
+                      >
+                        {threadStatusLabel ?? "Processing…"}
+                      </div>
+                    :   null}
+                    <CommandSurfaceThread
+                      turns={thread.turns}
+                      busy={busy}
+                      activeOperationalEntityId={activeOperationalEntityId}
+                      onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
+                      onConfirmCandidate={confirmTaskAssistTarget}
+                      onConfirmFuzzySuggestion={(_turnId, candidate, intent) => confirmTaskAssistTarget("", candidate, intent)}
+                      onClarificationChip={onClarificationChip}
+                      onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
+                      onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
+                      renderJobLayoutCardActions={renderJobLayoutCardActions}
+                      workflowAssistMutation={workflowAssistMutationsAllowed ? workflowAssistMutation : undefined}
+                      workflowAssistMutationBlockedReason={workflowAssistMutationBlockedReasonShell}
+                      workflowAssistMutationsAllowed={workflowAssistMutationsAllowed}
+                      workflowAssistCapabilitiesPending={workflowAssistCapabilitiesPending}
+                      onReviewConfigProposal={onReviewConfigProposal}
+                      onWorkflowAssistProposeEdit={onWorkflowAssistProposeEdit}
+                      debugReviewNavigation={debugReviewNavigation}
+                      onConfirmConfigFieldSetup={(command, payload) =>
+                        void confirmConfigLayoutFieldSetup(command, payload)
+                      }
+                      onApproveConfigProposal={(proposalId) => void approveAndApplyConfigProposal(proposalId)}
+                      configAssistCanApproveAndApply={configAssistCanApproveAndApply}
+                      configAssistCapabilitiesPending={configAssistCapabilitiesPending}
+                      onExecutionReceipt={appendExecutionReceipt}
+                    />
+                  </div>
+                :   null}
+              </div>
+            :   null}
+          </div>
+          <BosRailConversationPreview
+            preview={threadPreview}
+            hasThread={hasThread}
+            onExpandThread={() => setThreadExpanded(true)}
+          />
+          <BosRailComposer
+            value={commandText}
+            busy={busy}
+            onChange={setCommandText}
+            onSubmit={() => void handleSubmit()}
+            inputRef={inputRef}
+          />
+        </>
+      :   null}
+      {presentation !== "rail" && hasThread ? (
         <div
           className="rounded-t-xl border border-b-0 overflow-hidden"
           style={{
@@ -2330,73 +2373,64 @@ export default function AICommandSurfaceShell({
             </div>
           ) : null}
         </div>
-      ) : presentation === "rail" ? (
-        <CommandRailBosStarterSuggestions onPick={pickStarterSuggestion} />
-      ) : (
+      ) : presentation !== "rail" ?
         <OperationalActiveRecordChip
           label={globalAssistant?.currentContext?.label}
           sourceSurface={globalAssistant?.currentContext?.source_surface}
           variant="collapsed_rail"
         />
-      )}
+      :   null}
 
-      <div
-        className={`flex shrink-0 items-end gap-2 ${hasThread || presentation === "rail" ? "mt-0" : "mt-2"}`}
-      >
+      {presentation !== "rail" ?
         <div
-          className={`flex-1 min-w-0 border-2 bg-white ${
-            presentation === "rail" ? "min-h-[56px] px-3 py-2.5" : "px-3 py-2"
-          } ${
-            hasThread || presentation === "rail"
-              ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]"
-              : "rounded-2xl px-3.5 py-2.5"
-          }`}
-          style={{
-            borderColor: derived.adminV2AiInputPineRing,
-            boxShadow:
-              hasThread || presentation === "rail"
-                ? `inset 0 1px 0 rgba(255,255,255,0.95)`
-                : `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
-          }}
-        >
-          <textarea
-            ref={inputRef}
-            value={commandText}
-            onChange={(e) => setCommandText(e.target.value)}
-            placeholder="Talk to Bos"
-            className={
-              presentation === "rail"
-                ? "w-full resize-none bg-transparent outline-none text-sm leading-snug min-h-[52px] max-h-[80px] py-0.5"
-                : "w-full resize-none bg-transparent outline-none text-sm leading-snug"
-            }
-            rows={presentation === "rail" ? 2 : 1}
-            style={{ color: neutral.textPrimary }}
-            aria-label="AI assistant input"
-            data-command-surface-input="true"
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (!busy) void handleSubmit();
-              }
-            }}
-          />
-        </div>
-        <button
-          type="button"
-          data-command-surface-submit="true"
-          disabled={busy || !commandText.trim()}
-          onClick={() => void handleSubmit()}
-          className="shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: brand.secondary,
-            color: neutral.surface,
-            letterSpacing: "0.12em",
-            boxShadow: `0 2px 8px rgba(0, 162, 131, 0.35)`,
-          }}
-        >
-          {busy ? "Processing…" : "Ask"}
-        </button>
-      </div>
+            className={`flex shrink-0 items-end gap-2 ${hasThread ? "mt-0" : "mt-2"}`}
+          >
+            <div
+              className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${
+                hasThread ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(39,63,82,0.08)]" : "rounded-2xl px-3.5 py-2.5"
+              }`}
+              style={{
+                borderColor: hasThread ? derived.border : derived.adminV2AiInputPineRing,
+                boxShadow: hasThread ?
+                  `inset 0 1px 0 rgba(255,255,255,0.95)`
+                :   `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
+              }}
+            >
+              <textarea
+                ref={inputRef}
+                value={commandText}
+                onChange={(e) => setCommandText(e.target.value)}
+                placeholder="Talk to Bos"
+                className="w-full resize-none bg-transparent outline-none text-sm leading-snug"
+                rows={1}
+                style={{ color: neutral.textPrimary }}
+                aria-label="AI assistant input"
+                data-command-surface-input="true"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!busy) void handleSubmit();
+                  }
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              data-command-surface-submit="true"
+              disabled={busy || !commandText.trim()}
+              onClick={() => void handleSubmit()}
+              className="shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: brand.secondary,
+                color: neutral.surface,
+                letterSpacing: "0.12em",
+                boxShadow: `0 2px 8px rgba(0, 162, 131, 0.35)`,
+              }}
+            >
+              {busy ? "Processing…" : "Ask"}
+            </button>
+          </div>
+      :   null}
     </SurfaceCard>
   );
 }

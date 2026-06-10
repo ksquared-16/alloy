@@ -210,6 +210,12 @@ export default function Drawer({
         : {
               zIndex: zIndexPanel,
               ...(bosSidebarDrawerInset ?? {}),
+              ...(bosSidebarDrawerInset ?
+                  {
+                      width: `min(42rem, calc(100vw - var(--adminv2-workspace-command-rail-offset, 0px) - var(--adminv2-bos-overlay-gutter, 24px)))`,
+                      maxWidth: `min(42rem, calc(100vw - var(--adminv2-workspace-command-rail-offset, 0px) - var(--adminv2-bos-overlay-gutter, 24px)))`,
+                  }
+              :   {}),
               ...(isV2
                   ? {
                         backgroundColor: neutral.surface,

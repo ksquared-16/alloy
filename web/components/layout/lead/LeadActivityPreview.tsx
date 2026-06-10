@@ -1,9 +1,9 @@
 "use client";
 
 import { Activity, Calendar, CheckSquare2, MessageSquare, StickyNote } from "lucide-react";
+import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import type { LeadActivityPreviewEntry } from "@/lib/layout/runtime/resolveLeadActivityPreview";
 import {
-    PRESENTATION_EMPTY_STATE_SOFT,
     PRESENTATION_LABEL,
     PRESENTATION_SUPPORTING,
 } from "@/lib/presentation/presentationTypography";
@@ -33,12 +33,24 @@ function EntryIcon({ kind }: { kind: LeadActivityPreviewEntry["kind"] }) {
 export default function LeadActivityPreview({ entries, onViewAll }: Props) {
     if (entries.length === 0) {
         return (
-            <div
-                className="rounded-md border border-dashed border-alloy-stone/15 bg-alloy-stone/[0.02] px-3 py-4 text-center"
-                data-lead-activity-preview="true"
-                data-lead-activity-preview-empty="true"
-            >
-                <p className={PRESENTATION_EMPTY_STATE_SOFT}>No recent activity yet</p>
+            <div data-lead-activity-preview="true" data-lead-activity-preview-empty="true">
+                <DrawerOverviewEmptyState
+                    message="No activity yet"
+                    hint="The first note, message, or action will appear here."
+                    action={
+                        onViewAll ?
+                            <button
+                                type="button"
+                                onClick={onViewAll}
+                                className="text-[11px] font-semibold text-alloy-blue hover:underline"
+                                data-lead-activity-preview-view-all="true"
+                            >
+                                View all activity
+                            </button>
+                        :   null
+                    }
+                    compact
+                />
             </div>
         );
     }

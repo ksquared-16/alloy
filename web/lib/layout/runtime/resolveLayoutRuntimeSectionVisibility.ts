@@ -3,13 +3,14 @@
  */
 
 import type { LayoutSection } from "@/lib/layout/layoutV2";
-import { LEAD_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/leadOverviewComposition";
+import { CHILD_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/childOverviewComposition";
 import {
     leadActivitySectionHasVisibleContent,
     leadLeadSourceSectionHasVisibleContent,
     leadNotesCommunicationSectionHasVisibleContent,
 } from "@/lib/layout/runtime/leadOverviewSectionContent";
 import { PERSON_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/personOverviewComposition";
+import { LEAD_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/leadOverviewComposition";
 import {
     personActivitySectionHasVisibleContent,
     personDocumentsSectionHasVisibleContent,
@@ -24,6 +25,17 @@ export type LayoutRuntimeSectionVisibilityContext = {
     /** Summary strip sections never collapse via this path. */
     sectionPresentation?: "default" | "summary_strip";
 };
+
+const DRAWER_OVERVIEW_PREMIUM_EMPTY_SECTIONS = new Set<string>([
+    LEAD_OVERVIEW_SECTION_KEYS.activity,
+    LEAD_OVERVIEW_SECTION_KEYS.notes,
+    PERSON_OVERVIEW_SECTION_KEYS.activity,
+    PERSON_OVERVIEW_SECTION_KEYS.notes,
+    PERSON_OVERVIEW_SECTION_KEYS.documents,
+    CHILD_OVERVIEW_SECTION_KEYS.activity,
+    CHILD_OVERVIEW_SECTION_KEYS.notes,
+    CHILD_OVERVIEW_SECTION_KEYS.documents,
+]);
 
 function sectionHasKnownContent(sectionKey: string, record: ProofRuntimeRecord): boolean {
     switch (sectionKey) {
@@ -62,6 +74,10 @@ export function shouldRenderLayoutRuntimeSection(
         if (section.key === PERSON_OVERVIEW_SECTION_KEYS.notes) {
             return personNotesCommunicationSectionHasVisibleContent(record);
         }
+        return true;
+    }
+
+    if (meta.collapseWhenEmpty && DRAWER_OVERVIEW_PREMIUM_EMPTY_SECTIONS.has(section.key)) {
         return true;
     }
 

@@ -1,23 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { usePathname } from "next/navigation";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
+import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
-import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
 import InboxModal from "@/app/adminV2/components/InboxModal";
-import InboxNavLink from "@/app/adminV2/components/InboxNavLink";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import {
     ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
     type QuickMessageLaunchSeed,
 } from "@/lib/adminV2/quickMessageLaunch";
-import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
-import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -30,8 +28,14 @@ function normalizeAdminPath(pathname: string): string {
   return pathname;
 }
 
-const HEADER_UTILITY_BTN =
-  "inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-[15px] font-medium leading-none";
+function isWorkspaceOperatorPath(normalizedPath: string): boolean {
+  return (
+    normalizedPath.startsWith("/adminV2/workspace") ||
+    normalizedPath.startsWith("/adminV2/forms") ||
+    normalizedPath === "/workspace" ||
+    normalizedPath.startsWith("/workspace/")
+  );
+}
 
 /** Fixed-width reserve so location chrome does not jump when bootstrap revalidates. */
 function WorkspaceSiteFilterLocationReserve() {
@@ -47,8 +51,7 @@ function WorkspaceSiteFilterLocationReserve() {
 
 function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }) {
   const wf = useWorkspaceSiteFilter();
-  const showSiteFilter =
-    normalizedPath.startsWith("/adminV2/workspace") || normalizedPath.startsWith("/adminV2/forms");
+  const showSiteFilter = isWorkspaceOperatorPath(normalizedPath);
   if (!showSiteFilter) return null;
 
   const bootstrap = wf?.displayBootstrap ?? wf?.bootstrap ?? null;
@@ -149,22 +152,7 @@ export default function TopNavBar() {
     return cancelDefer;
   }, []);
 
-  const openTasksModal = useCallback(() => {
-    prefetchWorkspaceOperationalTasks("open");
-    setTasksModalOpen(true);
-  }, []);
-
-  const openInboxModal = useCallback(() => {
-    setInboxModalOpen(true);
-  }, []);
-
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
-  const isMessaging = normalizedPath === "/adminV2/messages";
-
-  const utilityBtnStyle = (active: boolean) =>
-    active
-      ? { backgroundColor: "rgba(255,255,255,0.16)", color: neutral.surface, opacity: 1 }
-      : { opacity: 0.82, color: neutral.surface };
 
   return (
     <header
@@ -177,19 +165,6 @@ export default function TopNavBar() {
     >
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <GlobalSearchBox />
-        <div className="hidden items-center gap-2 shrink-0 md:flex" aria-label="Quick actions">
-          <OperationalTasksNavBadge
-            tabStyle={utilityBtnStyle}
-            buttonClassName={HEADER_UTILITY_BTN}
-            onOpenModal={openTasksModal}
-          />
-          <InboxNavLink
-            active={isMessaging || inboxModalOpen}
-            tabStyle={utilityBtnStyle}
-            buttonClassName={HEADER_UTILITY_BTN}
-            onOpenModal={openInboxModal}
-          />
-        </div>
       </div>
 
       <div className="flex shrink-0 items-center gap-3">

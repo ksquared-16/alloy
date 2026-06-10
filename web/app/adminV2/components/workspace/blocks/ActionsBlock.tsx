@@ -12,6 +12,8 @@ type Props = {
   onAction: WorkspaceActionHandler;
   title?: string;
   surface?: "default" | "department" | "company" | "work_unit" | "record";
+  /** Hide inner section titles when wrapped by collapsible command-rail header */
+  suppressSectionTitles?: boolean;
 };
 
 function actionButtonClass(a: PrimaryActionVm) {
@@ -74,10 +76,12 @@ function OperationalActionsCard({
   actions,
   onAction,
   panelClassName,
+  suppressSectionTitle = false,
 }: {
   actions: PrimaryActionVm[];
   onAction: WorkspaceActionHandler;
   panelClassName?: string;
+  suppressSectionTitle?: boolean;
 }) {
   if (actions.length === 0) return null;
 
@@ -91,7 +95,7 @@ function OperationalActionsCard({
         .join(" ")}
       aria-label="Operational actions"
     >
-      <h3 className="adminv2-ws-actions-rail-title">Operational actions</h3>
+      {suppressSectionTitle ? null : <h3 className="adminv2-ws-actions-rail-title">Operational actions</h3>}
       <ul className="adminv2-ws-command-row-list adminv2-ws-command-row-list--operational">
         {actions.map((a) => (
           <li key={a.id}>
@@ -118,10 +122,12 @@ function AISuggestionsSection({
   actions,
   onAction,
   sectionClassName,
+  suppressSectionTitle = false,
 }: {
   actions: PrimaryActionVm[];
   onAction: WorkspaceActionHandler;
   sectionClassName?: string;
+  suppressSectionTitle?: boolean;
 }) {
   if (actions.length === 0) return null;
 
@@ -134,7 +140,9 @@ function AISuggestionsSection({
         .join(" ")}
       aria-label={sectionTitle}
     >
-      <h3 className="adminv2-ws-command-section-title adminv2-ws-command-section-title--ai">{sectionTitle}</h3>
+      {suppressSectionTitle ? null : (
+        <h3 className="adminv2-ws-command-section-title adminv2-ws-command-section-title--ai">{sectionTitle}</h3>
+      )}
       <ul className="adminv2-ws-command-row-list adminv2-ws-command-row-list--ai-suggestions">
         {actions.map((a) => (
           <li key={a.id}>
@@ -167,6 +175,7 @@ function PrimaryActionsPanel({
   onAction,
   panelClassName,
   maxSolidButtons = PRIMARY_SOLID_CAP,
+  suppressSectionTitle = false,
 }: {
   sectionTitle: string;
   actions: PrimaryActionVm[];
@@ -174,6 +183,7 @@ function PrimaryActionsPanel({
   panelClassName?: string;
   /** Cap for solid primary styling; department/work_unit right rails pass all actions here. */
   maxSolidButtons?: number;
+  suppressSectionTitle?: boolean;
 }) {
   const solidUsed = { n: 0 };
   return (
@@ -183,7 +193,7 @@ function PrimaryActionsPanel({
         .join(" ")}
       aria-label={sectionTitle}
     >
-      <h3 className="adminv2-ws-actions-rail-title">{sectionTitle}</h3>
+      {suppressSectionTitle ? null : <h3 className="adminv2-ws-actions-rail-title">{sectionTitle}</h3>}
       <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column">
         {actions.map((a) => (
           <button
@@ -201,7 +211,13 @@ function PrimaryActionsPanel({
   );
 }
 
-export default function ActionsBlock({ model, onAction, title = "Actions", surface = "default" }: Props) {
+export default function ActionsBlock({
+  model,
+  onAction,
+  title = "Actions",
+  surface = "default",
+  suppressSectionTitles = false,
+}: Props) {
   if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     const sysFull = model.systemActions ?? [];
     /** Department / work_unit right rails: show every registry-configured system action in the primary band. */
@@ -286,6 +302,7 @@ export default function ActionsBlock({ model, onAction, title = "Actions", surfa
               onAction={onAction}
               maxSolidButtons={maxSolidForPrimary}
               panelClassName={surface === "record" ? "adminv2-ws-actions-rail--record-primary-tier" : undefined}
+              suppressSectionTitle={suppressSectionTitles}
             />
           ) : null}
           {operationalN > 0 ? (
@@ -293,10 +310,16 @@ export default function ActionsBlock({ model, onAction, title = "Actions", surfa
               actions={operationalActions}
               onAction={onAction}
               panelClassName={recordOpClass}
+              suppressSectionTitle={suppressSectionTitles}
             />
           ) : null}
           {smartN > 0 ? (
-            <AISuggestionsSection actions={smart ?? []} onAction={onAction} sectionClassName={recordAiClass} />
+            <AISuggestionsSection
+              actions={smart ?? []}
+              onAction={onAction}
+              sectionClassName={recordAiClass}
+              suppressSectionTitle={suppressSectionTitles}
+            />
           ) : null}
           {moreN > 0 ? <MoreActionsSection items={moreItems} onAction={onAction} /> : null}
         </div>
@@ -306,7 +329,7 @@ export default function ActionsBlock({ model, onAction, title = "Actions", surfa
     return (
       <div className="adminv2-ws-dept-command-actions-stack">
         <div className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel">
-          <div className="adminv2-ws-actions-rail-title">{title}</div>
+          {suppressSectionTitles ? null : <div className="adminv2-ws-actions-rail-title">{title}</div>}
           <div className="adminv2-ws-actions-rail-list">
             {model.primaries.map((a) => (
               <button

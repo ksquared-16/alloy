@@ -1,6 +1,7 @@
 "use client";
 
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
+import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import LayoutRuntimeEnrollmentLeadLink from "@/components/layout/LayoutRuntimeEnrollmentLeadLink";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
@@ -12,7 +13,6 @@ import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRun
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
-    PRESENTATION_EMPTY_STATE,
     PRESENTATION_SUPPORTING,
 } from "@/lib/presentation/presentationTypography";
 
@@ -47,7 +47,9 @@ export default function PersonConnectedChildrenCardList({
             data-layout-runtime-connected-children-read-mode="card-list"
         >
             {rows.length === 0 ?
-                <div className={`px-4 py-5 ${PRESENTATION_EMPTY_STATE}`}>No children linked yet.</div>
+                <div className="p-2">
+                    <DrawerOverviewEmptyState message="No children linked yet." compact />
+                </div>
             :   <ul className="flex flex-col gap-2 p-2">
                     {rows.map((row, index) => {
                         const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);

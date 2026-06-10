@@ -55,14 +55,14 @@ describe("layout section collapse metadata", () => {
     const doc = buildLeadDrawerDefaultDoc();
     const slots = partitionLeadOverviewBodySections(doc);
 
-    it("collapses empty notes and activity sections by default", () => {
+    it("keeps empty activity and notes sections visible in composition shell", () => {
         const emptyRecord = buildProofOpportunityRecord({
             follow_up_notes: "",
             recent_communication: [],
             notes: [],
         });
-        expect(shouldRenderLayoutRuntimeSection(slots.notes!, emptyRecord, { compositionShell: true })).toBe(false);
-        expect(shouldRenderLayoutRuntimeSection(slots.activity!, emptyRecord, { compositionShell: true })).toBe(false);
+        expect(shouldRenderLayoutRuntimeSection(slots.notes!, emptyRecord, { compositionShell: true })).toBe(true);
+        expect(shouldRenderLayoutRuntimeSection(slots.activity!, emptyRecord, { compositionShell: true })).toBe(true);
     });
 
     it("shows populated right-rail sections sorted by priority", () => {

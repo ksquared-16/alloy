@@ -87,6 +87,34 @@ describe("work-unit route shell", () => {
         expect(ready.shell.breadcrumbs.map((b) => b.label)).toEqual(["Workspace", "Dept", "WU"]);
     });
 
+    it("operator slug route hides department breadcrumb", () => {
+        const aboveFold = buildWorkUnitAboveFoldPlaceholder({ reserve_actions_rail: true });
+        const operator = buildWorkUnitRoutePipelineState({
+            department_id: "d1",
+            work_unit_id: "wu-1",
+            department_title: "Enrollment",
+            work_unit_title: "New Leads",
+            operator_slug_route: true,
+            shell_identity_ready: true,
+            oper_lane_loading: false,
+            kpi_placeholder: false,
+            primary_loaded: true,
+            full_complete: true,
+            work_unit_above_fold: aboveFold,
+        });
+        expect(operator.shell.breadcrumbs.map((b) => b.label)).toEqual(["Workspace", "New Leads"]);
+        expect(operator.shell.breadcrumbs.some((b) => b.label === "Enrollment")).toBe(false);
+    });
+
+    it("slug layout keeps work-unit host mounted across record segment", () => {
+        const layout = read("app/adminV2/workspace/work-unit/[workUnitSlug]/layout.tsx");
+        const page = read("app/adminV2/workspace/work-unit/[workUnitSlug]/page.tsx");
+        const recordPage = read("app/adminV2/workspace/work-unit/[workUnitSlug]/[recordId]/page.tsx");
+        expect(layout).toContain("WorkUnitSlugRouteHost");
+        expect(page).toMatch(/return null/);
+        expect(recordPage).toMatch(/return null/);
+    });
+
     it("page has single WorkspaceChrome owner (no WorkUnitWorkspaceColdShell early return)", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).not.toMatch(/if \(workUnitPageBlockingLoad\)[\s\S]{0,120}WorkUnitWorkspaceColdShell/);
@@ -110,6 +138,6 @@ describe("work-unit route shell", () => {
     it("workspace page uses single WorkspaceRootShell (no cold shell swap)", () => {
         const page = read("app/adminV2/workspace/page.tsx");
         expect(page).not.toContain("WorkspaceRootColdShell");
-        expect(page).toContain("departmentsPending={loading && departments.length === 0}");
+        expect(page).toContain("lifecycleCardsPending={lifecycleCardsPending}");
     });
 });

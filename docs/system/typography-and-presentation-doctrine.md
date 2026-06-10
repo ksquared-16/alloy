@@ -128,6 +128,18 @@ Lead, Person, and Child drawers share composition chrome via:
 
 **Do not** use ad hoc opacity classes on drawer overview surfaces — import from `web/lib/presentation/presentationTypography.ts`.
 
+### Empty section presentation (June 2026)
+
+> Empty sections keep full section chrome. Empty content is muted, but the section itself should never look disabled unless the feature is truly unavailable.
+
+| Rule | Implementation |
+|------|----------------|
+| Active empty sections | Keep panel header, icon badge, border, accent, shadow, and title at full strength |
+| Empty body only | Use `DrawerOverviewEmptyState` — dashed inner panel, tier-6 message + soft hint |
+| Right-rail visibility | Activity, Notes, Documents render in composition shell even when empty (`DRAWER_OVERVIEW_PREMIUM_EMPTY_SECTIONS`) |
+| Summary strip cards | `LeadOperatingSummaryCard` never reduces card/header opacity when empty — only inner copy is muted |
+| Unavailable modules | Schedule/Attendance and future modules may hide or mark unavailable — not the same treatment as empty active sections |
+
 **Related:** `docs/system/drawer-operating-model-v1.md` (behavior); this doc (presentation).
 
 ### Drawer hierarchy audit (June 2026)
@@ -212,6 +224,8 @@ Any new operational surface (action workspace cards, BOS summaries, global searc
 | Queue typography tier map | `web/lib/layout/runtime/queueRecordFieldTypography.ts` |
 | Drawer field renderer | `web/components/layout/LayoutRuntimePlanView.tsx` |
 | Drawer overview panel shell | `web/components/layout/DrawerOverviewPanelShell.tsx` |
+| Drawer household profile | `web/components/layout/DrawerHouseholdProfileSection.tsx` |
+| Drawer premium empty state | `web/components/layout/DrawerOverviewEmptyState.tsx` |
 | Drawer overview tokens | `web/lib/layout/runtime/drawerOverviewCompositionStandard.ts` |
 | Drawer section icons | `web/lib/layout/runtime/drawerOverviewSectionPresentation.ts` |
 | Enrollment card metadata | `web/components/layout/lead/LeadEnrollmentCardMetaLines.tsx` |

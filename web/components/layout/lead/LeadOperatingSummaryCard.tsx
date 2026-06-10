@@ -32,25 +32,21 @@ export default function LeadOperatingSummaryCard({
     const railAccent = ACCENT_RAIL[accent];
     return (
         <div
-            className={`flex h-full min-h-[4.25rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/12 border-l-[3px] ${railAccent} ${minimized ? "bg-alloy-stone/[0.02] opacity-75" : "bg-white shadow-[0_1px_4px_rgba(24,39,58,0.05)]"}`}
+            className={`flex h-full min-h-[4.25rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/12 border-l-[3px] ${railAccent} bg-white shadow-[0_1px_4px_rgba(24,39,58,0.05)]`}
             data-lead-operating-summary-card="true"
             data-layout-runtime-summary-widget="true"
             {...(widgetKey ? { "data-lead-operating-summary-card-key": widgetKey } : {})}
             {...(minimized ? { "data-lead-operating-summary-card-minimized": "true" } : {})}
         >
-            <div className={`flex items-center gap-2 border-b border-alloy-stone/8 ${minimized ? "px-2 py-1" : "px-2.5 py-1.5"}`}>
-                <div
-                    className={`flex shrink-0 items-center justify-center rounded-lg border border-alloy-stone/10 ${minimized ? "bg-alloy-stone/[0.03] text-alloy-midnight/40" : "bg-alloy-juniper/[0.08] text-alloy-juniper/80"} ${minimized ? "h-5 w-5" : "h-6 w-6"}`}
-                >
+            <div className="flex items-center gap-2 border-b border-alloy-stone/8 px-2.5 py-1.5">
+                <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-alloy-stone/10 bg-alloy-juniper/[0.08] text-alloy-juniper/80">
                     {icon}
                 </div>
-                <span
-                    className={`truncate font-semibold uppercase tracking-[0.07em] ${minimized ? "text-[8px] text-alloy-midnight/35" : "text-[10px] text-alloy-midnight/55"}`}
-                >
+                <span className="truncate text-[10px] font-semibold uppercase tracking-[0.07em] text-alloy-midnight/55">
                     {title}
                 </span>
             </div>
-            <div className={`flex min-h-0 flex-1 flex-col ${minimized ? "px-2 py-1" : "px-2.5 py-2"}`}>{children}</div>
+            <div className="flex min-h-0 flex-1 flex-col px-2.5 py-2">{children}</div>
         </div>
     );
 }

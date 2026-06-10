@@ -19,6 +19,8 @@ html[data-bos-right-rail-copilot="true"] {
   --adminv2-drawer-inset-bottom: 1rem;
   --ws-shell-bottom-safe: 16px;
   --adminv2-workspace-scroll-pad-y: 24px;
+  --adminv2-bos-overlay-gutter: 24px;
+  --adminv2-bos-overlay-width: 0px;
   --adminv2-workspace-rail-height: calc(
     100vh - var(--adminv2-drawer-inset-top) - var(--ws-rail-sticky-top, 10px) -
       var(--adminv2-workspace-scroll-pad-y, 24px)
@@ -72,16 +74,18 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-with-bos {
 }
 
 html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions {
-  flex: 1 1 auto;
-  min-height: 0;
+  flex: 0 0 auto;
+  max-height: min(38vh, 280px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
 html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-bos-host {
-  flex-shrink: 0;
+  flex: 1 1 auto;
   width: 100%;
-  min-height: 248px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .adminv2-ws-command-rail-bos-dock {
@@ -89,17 +93,16 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-bos-host {
   flex-direction: column;
   width: 100%;
   min-height: 0;
-}
-
-.adminv2-ws-command-rail-bos-dock [data-recent-operational-activity-strip="true"] {
-  margin-bottom: 4px;
-  max-height: 72px;
-  overflow-y: auto;
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  height: 100%;
 }
 
 html[data-bos-right-rail-copilot="true"] [data-adminv2-command-surface-layer="rail"] {
-  min-height: 248px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .adminv2-bos-rail-overlay {
@@ -109,11 +112,10 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-command-surface-layer="ra
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   opacity: 1;
-  border-radius: 12px 12px 0 0;
+  border-radius: 12px;
+  border: 1px solid rgba(39, 63, 82, 0.1);
   overflow: hidden;
-  box-shadow:
-    0 -4px 24px rgba(39, 63, 82, 0.12),
-    0 -1px 0 rgba(39, 63, 82, 0.08);
+  box-shadow: 0 8px 32px rgba(39, 63, 82, 0.1);
 }
 
 .adminv2-bos-rail-overlay .adminv2-ws-command-rail-bos-dock {
@@ -134,8 +136,62 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] 
   background-color: #f6f8fc !important;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-starters="true"] button {
+html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-starters="true"] .bos-rail-starter-card {
   background-color: #ffffff !important;
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-with-bos {
+  gap: 10px;
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section {
+  margin-bottom: 0;
+  border: 1px solid rgba(39, 63, 82, 0.14);
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section--expanded {
+  border-color: rgba(39, 63, 82, 0.16);
+  background: #ffffff;
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 9px;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #273f52;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
+  border-radius: 9px 9px 0 0;
+  border-bottom: 1px solid rgba(39, 63, 82, 0.1);
+  background: #ffffff;
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger:hover {
+  background: rgba(39, 63, 82, 0.04);
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger-chevron {
+  font-size: 11px;
+  line-height: 1;
+  color: rgba(39, 63, 82, 0.45);
+}
+
+html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-body {
+  padding: 8px 8px 10px;
+  background: #ffffff;
 }
 
 html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {

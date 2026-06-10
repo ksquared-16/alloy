@@ -11,7 +11,10 @@ function isAppShellRoute(pathname: string | null): boolean {
   return (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/adminV2") ||
-    pathname.startsWith("/adminv2")
+    pathname.startsWith("/adminv2") ||
+    pathname.startsWith("/legacy-admin") ||
+    pathname === "/workspace" ||
+    pathname.startsWith("/workspace/")
   );
 }
 

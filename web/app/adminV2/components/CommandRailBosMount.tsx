@@ -12,7 +12,6 @@ import { createPortal } from "react-dom";
 
 import AICommandBar from "./AICommandBar";
 import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
-import RecentAiActionsStrip from "./aiActivity/RecentAiActionsStrip";
 import { ADMINV2_COMMAND_SURFACE_Z } from "@/components/admin/Drawer";
 import { isWorkspaceCommandRailBosHost } from "@/lib/bos/bosRailOverlayAnchor";
 import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
@@ -37,8 +36,7 @@ function adminV2AiCommandSurfaceEnabled(): boolean {
 
 function CommandRailBosDockContent() {
     return (
-        <div className="adminv2-ws-command-rail-bos-dock flex min-h-0 flex-1 flex-col pt-1">
-            <RecentAiActionsStrip />
+        <div className="adminv2-ws-command-rail-bos-dock flex min-h-0 flex-1 flex-col">
             {adminV2AiCommandSurfaceEnabled() ?
                 <AICommandSurfaceShell presentation="rail" />
             :   <AICommandBar />}

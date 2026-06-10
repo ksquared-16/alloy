@@ -40,13 +40,13 @@ export function WorkspaceCommandRailShell({
             data-adminv2-workspace-command-rail
             aria-label={ariaLabel}
         >
-            <div className="adminv2-ws-command-rail-actions min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="adminv2-ws-command-rail-actions min-h-0 shrink-0 overflow-y-auto overscroll-contain">
                 {children}
             </div>
             <div
                 ref={bosHostRef}
                 data-adminv2-command-rail-bos-host
-                className="adminv2-ws-command-rail-bos-host shrink-0"
+                className="adminv2-ws-command-rail-bos-host flex min-h-0 flex-1 flex-col"
             />
         </aside>
     );

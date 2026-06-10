@@ -661,6 +661,85 @@
   color: color-mix(in srgb, var(--d-muted) 38%, var(--d-text-primary, #273f52)) !important;
 }
 
+.adminv2-ws-lifecycle-command-card-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.adminv2-ws-lifecycle-command-card-link:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--d-pine) 55%, #ffffff);
+  outline-offset: 3px;
+  border-radius: 1.35rem;
+}
+
+.adminv2-ws-lifecycle-command-card {
+  position: relative;
+}
+
+.adminv2-ws-lifecycle-command-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+.adminv2-ws-lifecycle-command-card--skeleton {
+  background: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--d-surface) 88%, #ffffff) 8%,
+    color-mix(in srgb, var(--d-muted) 12%, #ffffff) 18%,
+    color-mix(in srgb, var(--d-surface) 88%, #ffffff) 33%
+  );
+  background-size: 200% 100%;
+  animation: adminv2-ws-lifecycle-command-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes adminv2-ws-lifecycle-command-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.adminv2-ws-lifecycle-command-metrics {
+  border: 1px solid color-mix(in srgb, var(--d-border) 70%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 78%, var(--d-surface));
+  padding: 12px 14px;
+}
+
+.adminv2-ws-lifecycle-command-metric-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  line-height: 1.25;
+  color: color-mix(in srgb, var(--d-muted) 70%, var(--d-text-primary, #273f52));
+}
+
+.adminv2-ws-lifecycle-command-metric-value {
+  margin-top: 6px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--d-text-primary, #273f52);
+  font-variant-numeric: tabular-nums;
+}
+
+.adminv2-ws-lifecycle-command-footer {
+  min-height: 4.75rem;
+}
+
+.adminv2-ws-lifecycle-command-cta:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--d-pine) 55%, #ffffff);
+  outline-offset: 2px;
+}
+
 /* A — Headline first, then signals full-width */
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-top-stack,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-top-stack,

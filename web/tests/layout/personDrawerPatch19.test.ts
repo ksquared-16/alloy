@@ -134,7 +134,7 @@ describe("person drawer resolvers", () => {
         expect(entries.some((e) => e.kind === "note" || e.kind === "created")).toBe(true);
     });
 
-    it("orders right rail by metadata priority and hides empty documents", () => {
+    it("orders right rail by metadata priority and keeps empty documents visible", () => {
         const doc = buildPersonDrawerDefaultDoc();
         const slots = partitionPersonOverviewBodySections(doc);
         const record = buildProofPersonRecord({
@@ -143,8 +143,7 @@ describe("person drawer resolvers", () => {
             last_activity_at: "2026-02-01T12:00:00Z",
         });
         const rail = resolvePersonOverviewRightRailSections(slots, record);
-        expect(rail.map((s) => s.key)).toEqual(["notes_communication", "recent_activity"]);
-        expect(rail.map((s) => s.key)).not.toContain("documents");
+        expect(rail.map((s) => s.key)).toEqual(["documents", "notes_communication", "recent_activity"]);
     });
 });
 

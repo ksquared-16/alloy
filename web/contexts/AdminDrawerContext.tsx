@@ -11,6 +11,7 @@ import {
     type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
+import { isOperatorWorkUnitRecordIdOnlyPathChange } from "@/lib/admin/operatorWorkUnitDrawerUrlSync";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { DrawerSubjectContext } from "@/lib/workUnits/lifecycleSubjectContracts";
 import type { PersonDrawerOpenSeed } from "@/lib/admin/drawer/personDrawerOpenSeed";
@@ -1263,6 +1264,10 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             return;
         }
         if (pathnameRef.current === pathname) return;
+        if (isOperatorWorkUnitRecordIdOnlyPathChange(pathnameRef.current, pathname)) {
+            pathnameRef.current = pathname;
+            return;
+        }
         pathnameRef.current = pathname;
         closeDrawer();
     }, [pathname, closeDrawer]);

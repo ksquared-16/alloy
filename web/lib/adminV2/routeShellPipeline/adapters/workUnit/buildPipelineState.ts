@@ -1,4 +1,4 @@
-import { CANONICAL_ADMIN_WORKSPACE } from "@/lib/admin/canonicalAdminRoutes";
+import { CANONICAL_ADMIN_WORKSPACE, CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 import type { RoutePipelineState } from "@/lib/adminV2/routeShellPipeline/types";
 import type { WorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
 import { workUnitAboveFoldAtomicPaintReady } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/aboveFoldTypes";
@@ -17,28 +17,38 @@ export type BuildWorkUnitRoutePipelineInput = {
     primary_loaded: boolean;
     full_complete: boolean;
     workspace_base_path?: string;
+    /** Canonical `/workspace/work-unit/:slug` route — hide department breadcrumb doctrine. */
+    operator_slug_route?: boolean;
     work_unit_above_fold: WorkUnitAboveFoldRenderModel;
 };
 
 const WORKSPACE_BASE = CANONICAL_ADMIN_WORKSPACE;
+const OPERATOR_WORKSPACE_BASE = CANONICAL_OPERATOR_BASE;
 
 export function buildWorkUnitRoutePipelineState(input: BuildWorkUnitRoutePipelineInput): RoutePipelineState {
-    const base = input.workspace_base_path ?? WORKSPACE_BASE;
+    const base = input.workspace_base_path ?? (input.operator_slug_route ? OPERATOR_WORKSPACE_BASE : WORKSPACE_BASE);
     const deptHref = `${base}/dept/${encodeURIComponent(input.department_id)}`;
 
     const shell_identity_ready = input.shell_identity_ready;
     const oper_lane_loading = input.oper_lane_loading || !shell_identity_ready;
     const above_fold_coordinated = workUnitAboveFoldAtomicPaintReady(input.work_unit_above_fold);
 
+    const breadcrumbs = input.operator_slug_route
+        ? [
+              { href: OPERATOR_WORKSPACE_BASE, label: "Workspace" },
+              { label: input.work_unit_title },
+          ]
+        : [
+              { href: base, label: "Workspace" },
+              { href: deptHref, label: input.department_title },
+              { label: input.work_unit_title },
+          ];
+
     return {
         shell: {
             route_id: "work_unit",
             layout_version: "work-unit-route-v1",
-            breadcrumbs: [
-                { href: base, label: "Workspace" },
-                { href: deptHref, label: input.department_title },
-                { label: input.work_unit_title },
-            ],
+            breadcrumbs,
             title: input.work_unit_title,
             subtitle: "",
             regions: [
