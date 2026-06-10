@@ -1,66 +1,26 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
-import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { SettingsNavGroup, SettingsNavTile } from "@/components/adminV2/settings/SettingsNavTile";
 import { SETTINGS_PAGE_INTRO_CLASS, SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
 import { SETTINGS_INDEX_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
-import { settingsSurfacePrefix, type SettingsSurfaceMode } from "@/lib/adminV2/settingsSurfaceModes";
 
 export const dynamic = "force-dynamic";
 
-const TILE_MIN_H = "min-h-[4.75rem]";
-
-function SettingsLink({
-    href,
-    title,
-    children,
-    emphasis = false,
-    mode,
-}: {
+function SettingsLink(props: {
     href: string;
     title: string;
     children: React.ReactNode;
     emphasis?: boolean;
-    mode?: SettingsSurfaceMode;
+    mode?: import("@/lib/adminV2/settingsSurfaceModes").SettingsSurfaceMode;
 }) {
-    const description = mode ? `${settingsSurfacePrefix(mode)}${children}` : children;
-    return (
-        <Link
-            href={href}
-            prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
-            className={[
-                "group flex h-full flex-col justify-center rounded-lg border px-3 py-2.5 shadow-sm transition-colors",
-                TILE_MIN_H,
-                emphasis
-                    ? "border-alloy-pine/25 bg-alloy-pine/[0.06] hover:bg-alloy-pine/[0.1]"
-                    : "border-alloy-forge/12 bg-white/60 hover:bg-white/85",
-            ].join(" ")}
-        >
-            <div className="text-sm font-semibold leading-tight text-alloy-midnight group-hover:text-alloy-pine">{title}</div>
-            <div className="mt-0.5 line-clamp-2 text-xs leading-snug text-alloy-midnight/55">{description}</div>
-        </Link>
-    );
+    return <SettingsNavTile {...props} />;
 }
 
 function SettingsGroup({ label, children }: { label: string; children: ReactNode }) {
-    return (
-        <section className="space-y-2.5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">{label}</h2>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{children}</div>
-        </section>
-    );
+    return <SettingsNavGroup label={label}>{children}</SettingsNavGroup>;
 }
 
-function DiagnosticLink({ href, title, children }: { href: string; title: string; children: React.ReactNode }) {
-    return (
-        <Link
-            href={href}
-            prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
-            className="block rounded-md border border-dashed border-alloy-forge/22 bg-white/40 px-3 py-2 text-sm transition-colors hover:border-alloy-forge/35 hover:bg-white/70"
-        >
-            <span className="font-medium text-alloy-midnight/85">{title}</span>
-            <span className="mt-0.5 block text-xs leading-snug text-alloy-midnight/50">{children}</span>
-        </Link>
-    );
+function DiagnosticLink(props: { href: string; title: string; children: React.ReactNode }) {
+    return <SettingsNavTile {...props} variant="diagnostic" />;
 }
 
 export default function AdminV2SettingsIndexPage() {

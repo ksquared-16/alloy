@@ -359,7 +359,8 @@ export default function OpportunityDrawerVmRuntime() {
         drawerTab !== "overview" ||
         !overviewLayoutBody.cutoverEnabled ||
         overviewLayoutBody.bodyReady ||
-        overviewLayoutBody.phase === "fallback";
+        overviewLayoutBody.phase === "fallback" ||
+        overviewLayoutBody.phase === "loading";
 
     const committedTitleRef = useRef(opportunitySingular);
 

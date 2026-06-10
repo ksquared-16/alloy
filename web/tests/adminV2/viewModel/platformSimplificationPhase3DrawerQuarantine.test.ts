@@ -83,6 +83,8 @@ describe("platform simplification phase 3 — legacy drawer quarantine", () => {
         expect(router).toContain("legacyDrawerMustNotRenderVmBackedEntity");
         expect(router).toMatch(/if \(route === "opportunity"\)/);
         expect(router).toMatch(/if \(route === "person" \|\| route === "child"\)/);
+        expect(router).toContain("dynamic(");
+        expect(router).toContain("AdminEntityDrawerLegacy");
     });
 
     it("AdminEntityDrawerLegacy quarantines VM-backed entities on canonical surfaces", () => {

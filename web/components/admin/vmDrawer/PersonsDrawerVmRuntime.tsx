@@ -266,7 +266,8 @@ export default function PersonsDrawerVmRuntime() {
         drawerTab !== "overview" ||
         !activeOverviewLayoutBody.cutoverEnabled ||
         activeOverviewLayoutBody.bodyReady ||
-        activeOverviewLayoutBody.phase === "fallback";
+        activeOverviewLayoutBody.phase === "fallback" ||
+        activeOverviewLayoutBody.phase === "loading";
 
     const hasWarmPayloadOnOpen = useMemo(
         () =>

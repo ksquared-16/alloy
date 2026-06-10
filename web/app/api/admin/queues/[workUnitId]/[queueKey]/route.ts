@@ -10,9 +10,15 @@ import {
     parseWorkspaceSiteIdFromSearchParams,
     resolveQueueRecordScopeConstraints,
 } from "@/lib/admin/resolveQueueRecordScopeConstraints";
-import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
+import { fetchEffectiveUserDisplayTimezoneCached } from "@/lib/admin/timezoneContract";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
+import { buildWorkUnitQueueScopeCacheKey } from "@/lib/workspace/workUnitQueueScopeCacheKey";
+import {
+    buildWorkUnitQueueItemsServerCacheKey,
+    readWorkUnitQueueItemsServerCache,
+    writeWorkUnitQueueItemsServerCache,
+} from "@/lib/workspace/workUnitQueueItemsServerCache";
 
 function parseLimitOffset(searchParams: URLSearchParams): { limit?: number; offset?: number } {
     const limitRaw = (searchParams.get("limit") ?? "").trim();
@@ -85,13 +91,25 @@ export async function GET(
     if (!queueKey) return NextResponse.json({ error: "Missing queueKey" }, { status: 400 });
 
     const supabase = createAdminClient();
-    const { data: wuExists } = await supabase
-        .from("work_units")
-        .select("id")
-        .eq("id", workUnitId)
-        .eq("org_id", gate.orgId)
-        .maybeSingle();
-    if (!wuExists) {
+    const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
+
+    const tPrep0 = Date.now();
+    const [wuExists, scopeBundle, viewerDisplayTimeZone] = await Promise.all([
+        supabase
+            .from("work_units")
+            .select("id")
+            .eq("id", workUnitId)
+            .eq("org_id", gate.orgId)
+            .maybeSingle(),
+        resolveQueueRecordScopeConstraints(supabase, gate.orgId, dim, workspaceSiteId),
+        fetchEffectiveUserDisplayTimezoneCached(supabase, {
+            orgId: gate.orgId,
+            userId: gate.userId,
+        }),
+    ]);
+    const prep_ms = Date.now() - tPrep0;
+
+    if (!wuExists.data) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
@@ -102,24 +120,61 @@ export async function GET(
         }
     }
 
-    const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
-    const { recordScopeImpossible, recordScopeConstraints } = await resolveQueueRecordScopeConstraints(
-        supabase,
-        gate.orgId,
-        dim,
-        workspaceSiteId
-    );
+    const { recordScopeImpossible, recordScopeConstraints } = scopeBundle;
 
     try {
         const { limit, offset } = parseLimitOffset(request.nextUrl.searchParams);
         const { countAccuracy, omitTotalCount } = parseQueueItemsCountOptions(request.nextUrl.searchParams);
-        const viewerDisplayTimeZone = await fetchEffectiveUserDisplayTimezone(supabase, {
-            orgId: gate.orgId,
-            userId: gate.userId,
-        });
         const attentionBucketKey = (request.nextUrl.searchParams.get("attention_bucket") ?? "").trim() || null;
         const rowMode = (request.nextUrl.searchParams.get("row_mode") ?? "").trim().toLowerCase();
         const rowEnrichment = rowMode === "preview" || rowMode === "reveal" ? "queue_reveal" : "queue_list";
+
+        const queueScopeKey = buildWorkUnitQueueScopeCacheKey({
+            accessDim: dim,
+            workspaceSiteId,
+            recordScopeImpossible,
+        });
+        const cacheKey = buildWorkUnitQueueItemsServerCacheKey({
+            orgId: gate.orgId,
+            workUnitId,
+            queueKey,
+            queueScopeKey,
+            attentionBucketKey,
+            limit,
+            offset,
+            rowEnrichment,
+            omitTotalCount,
+            countAccuracy,
+        });
+
+        const cached = readWorkUnitQueueItemsServerCache(cacheKey);
+        if (cached) {
+            const bodyJson = JSON.stringify(cached.result);
+            const payload_kb = Buffer.byteLength(bodyJson, "utf8") / 1024;
+            perfQueueRowsServer({
+                org_id: gate.orgId,
+                work_unit_id: workUnitId,
+                queue_key: queueKey,
+                total_ms: Date.now() - handlerT0,
+                auth_ms,
+                prep_ms,
+                server_cache_hit: true,
+                row_enrichment: rowEnrichment,
+                enrichment_mode: cached.rowsPerf.enrichment_mode ?? rowEnrichment,
+                row_count: Array.isArray(cached.result.items) ? cached.result.items.length : 0,
+                payload_kb: Math.round(payload_kb * 10) / 10,
+                count_mode: queueRowsCountModeLabel(omitTotalCount, countAccuracy),
+                omit_total_count: omitTotalCount,
+            });
+            return new NextResponse(bodyJson, {
+                status: 200,
+                headers: {
+                    "content-type": "application/json; charset=utf-8",
+                    "x-alloy-queue-rows-cache": "hit",
+                },
+            });
+        }
+
         const { result, rowsPerf } = await getWorkUnitQueueItems({
             orgId: gate.orgId,
             workUnitId,
@@ -135,6 +190,8 @@ export async function GET(
             rowEnrichment,
         });
 
+        writeWorkUnitQueueItemsServerCache(cacheKey, { result, rowsPerf });
+
         const tSer0 = Date.now();
         const bodyJson = JSON.stringify(result);
         const serialize_ms = Date.now() - tSer0;
@@ -149,6 +206,8 @@ export async function GET(
             queue_key: queueKey,
             total_ms,
             auth_ms,
+            prep_ms,
+            server_cache_hit: false,
             row_enrichment: rowEnrichment,
             enrichment_mode: rowsPerf.enrichment_mode ?? rowEnrichment,
             enrichment_queries_run: rowsPerf.enrichment_queries_run,
@@ -167,6 +226,7 @@ export async function GET(
             status: 200,
             headers: {
                 "content-type": "application/json; charset=utf-8",
+                "x-alloy-queue-rows-cache": "miss",
             },
         });
     } catch (e) {

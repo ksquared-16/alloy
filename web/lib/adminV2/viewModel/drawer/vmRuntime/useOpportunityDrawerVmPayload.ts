@@ -15,6 +15,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
+import { prefetchDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
 import { putDrawerViewModelCacheEntry, invalidateDrawerViewModelCacheForEntity } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
 import { peekOpportunityDrawerDisplayVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerPayloadPeekSeed";
@@ -100,6 +101,10 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
                 generation: vm.generation,
                 previousDrawer,
                 stack,
+            });
+            prefetchDrawerLayoutRuntimeBody({
+                apiPath: "/api/admin/layout-runtime/opportunity-drawer-body",
+                entityId: vm.entity.id,
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?

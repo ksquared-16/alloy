@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    allVisibleWorkUnitLanePrefetchTargets,
     filterPrefetchableWorkUnitQueuePillKeys,
     isPrefetchableWorkUnitQueuePillKey,
     workUnitLanePrefetchTargets,
@@ -27,6 +28,17 @@ const waitlistRaw = buildLifecycleWaitlistStageQueueDefinition({
 const waitlistPrimaryKey = loadQueueDefinitionBundle(waitlistRaw).normalized.queues[0]!.key;
 
 describe("workUnitQueuePillPrefetch", () => {
+    it("allVisibleWorkUnitLanePrefetchTargets warms every visible executable pill except selected", () => {
+        const visible = ["new_inquiry", "follow_up", "all_records"];
+        expect(
+            allVisibleWorkUnitLanePrefetchTargets({
+                visiblePillKeys: visible,
+                selectedPillKey: "new_inquiry",
+                workUnit: { id: "wu-1", queue_definition: enrollmentRaw },
+            }).map((t) => t.pillKey)
+        ).toEqual(["follow_up", "all_records"]);
+    });
+
     it("workUnitQueuePillPrefetchTargets warms neighbors including NA buckets", () => {
         const visible = [
             "enrolled",

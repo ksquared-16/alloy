@@ -7,7 +7,7 @@
  * exclude operator/PII fields (names, emails, full records, raw payloads).
  */
 
-export type PerfNamespace = "drawer" | "queue" | "work-unit" | "cache" | "prefetch" | "save";
+export type PerfNamespace = "drawer" | "queue" | "work-unit" | "cache" | "prefetch" | "save" | "settings";
 
 const BLOCKED_KEYS = new Set([
     "email",
@@ -109,6 +109,7 @@ function isSafeKey(key: string): boolean {
         key === "buffered_rows_used" ||
         key === "selected_queue_after" ||
         key === "api_path" ||
+        key === "href" ||
         key === "ownershipKey" ||
         key === "url" ||
         key === "mark_count" ||
@@ -164,6 +165,10 @@ export function perfPrefetch(phase: string, payload: Record<string, unknown> = {
 
 export function perfSave(phase: string, payload: Record<string, unknown> = {}): void {
     emitPerf("save", phase, payload);
+}
+
+export function perfSettings(phase: string, payload: Record<string, unknown> = {}): void {
+    emitPerf("settings", phase, payload);
 }
 
 export function perfRoot(phase: string, payload: Record<string, unknown> = {}): void {

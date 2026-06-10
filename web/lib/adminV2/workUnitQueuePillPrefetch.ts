@@ -171,3 +171,29 @@ export function workUnitLanePrefetchTargets(params: {
 
 /** Max concurrent background row prefetches per scheduling tick. */
 export const WORK_UNIT_QUEUE_PILL_PREFETCH_CONCURRENCY = 2;
+
+/** Prefetch every visible executable pill (excluding active) after above-fold reveal. */
+export function allVisibleWorkUnitLanePrefetchTargets(params: {
+    visiblePillKeys: readonly string[];
+    selectedPillKey: string | null;
+    workUnit: WorkUnitRowForPrefetch | null;
+}): WorkUnitLanePrefetchTarget[] {
+    const wu = params.workUnit;
+    if (!wu?.id?.trim() || !params.visiblePillKeys.length) return [];
+
+    const selected = params.selectedPillKey?.trim() || "";
+    const out: WorkUnitLanePrefetchTarget[] = [];
+    const seen = new Set<string>();
+
+    for (const pillKey of params.visiblePillKeys) {
+        const key = pillKey.trim();
+        if (!key || key === selected) continue;
+        const sig = `${wu.id}|${key}`;
+        if (seen.has(sig)) continue;
+        if (!isPrefetchableWorkUnitQueuePillKey(key, wu)) continue;
+        seen.add(sig);
+        out.push({ workUnitId: wu.id, pillKey: key });
+    }
+
+    return out;
+}

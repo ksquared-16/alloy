@@ -1,17 +1,24 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { AdminEntityDrawerLegacy } from "@/components/admin/AdminEntityDrawerLegacy";
 import OpportunityDrawerVmRuntime from "@/components/admin/vmDrawer/OpportunityDrawerVmRuntime";
 import PersonsDrawerVmRuntime from "@/components/admin/vmDrawer/PersonsDrawerVmRuntime";
 import { legacyDrawerMustNotRenderVmBackedEntity } from "@/lib/adminV2/viewModel/drawer/vmRuntime/legacyDrawerVmEntityQuarantine";
 import { resolveVmDrawerDisplayRoute } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 
+const AdminEntityDrawerLegacy = dynamic(
+    () =>
+        import("@/components/admin/AdminEntityDrawerLegacy").then((m) => ({
+            default: m.AdminEntityDrawerLegacy,
+        })),
+    { ssr: false }
+);
+
 /**
  * Drawer entry router — VM cutover entities use isolated runtimes;
- * all other entity types / flags use the legacy drawer implementation.
- * During VM drawer-to-drawer swaps, keeps the source runtime mounted until target VM is ready.
+ * legacy drawer loads on demand only when the VM path is not active.
  */
 export default function AdminEntityDrawer() {
     const pathname = usePathname();

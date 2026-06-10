@@ -13,7 +13,7 @@ import {
     peekDrawerLayoutRuntimeBodyCacheEntry,
     putDrawerLayoutRuntimeBodyCacheEntry,
 } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
-import { perfCache } from "@/lib/perf/perfNamespaceLog";
+import { perfCache, perfDrawer } from "@/lib/perf/perfNamespaceLog";
 import {
     ADMINV2_LAYOUT_RUNTIME_BODY_INVALIDATE,
     parseDrawerLayoutRuntimeBodyInvalidateDetail,
@@ -70,6 +70,7 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
     const [layoutVersion, setLayoutVersion] = useState<number | null>(null);
     const [lastError, setLastError] = useState<string | null>(null);
     const readyIdRef = useRef<string | null>(null);
+    const fetchGenRef = useRef(0);
     const [invalidationGen, setInvalidationGen] = useState(0);
 
     useEffect(() => {
@@ -143,6 +144,9 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
                 cache_hit: true,
                 source: "cache",
             });
+            if (process.env.NODE_ENV !== "production") {
+                perfDrawer("body_fetch_cache_hit", { entity_id: id, api_path: apiPath });
+            }
             setDoc(cached.doc);
             setRecord(cached.record);
             setLayoutSource(cached.layoutSource);
@@ -157,8 +161,12 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         if (readyIdRef.current === id) return;
 
         let cancelled = false;
+        const gen = ++fetchGenRef.current;
         setPhase("loading");
         setLastError(null);
+        if (process.env.NODE_ENV !== "production") {
+            perfDrawer("body_fetch_start", { entity_id: id, api_path: apiPath });
+        }
 
         // No false timeout flip: while the request is in flight we stay in the
         // coordinated hold/loading state. Only a genuine failure (non-ok /
@@ -172,7 +180,7 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
 
         fetch(`${apiPath}?${qs.toString()}`)
             .then(async (res) => {
-                if (cancelled) return;
+                if (cancelled || gen !== fetchGenRef.current) return;
                 if (!res.ok) {
                     const json = await res.json().catch(() => ({}));
                     const reason = (json as { error?: string }).error ?? `http_${res.status}`;
@@ -213,9 +221,12 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
                 setLastError(null);
                 setPhase("ready");
                 readyIdRef.current = id;
+                if (process.env.NODE_ENV !== "production") {
+                    perfDrawer("body_fetch_ready", { entity_id: id, api_path: apiPath, cache_hit: false });
+                }
             })
             .catch((err) => {
-                if (cancelled) return;
+                if (cancelled || gen !== fetchGenRef.current) return;
                 setLastError(err instanceof Error ? err.message : String(err));
                 setPhase("fallback");
             });

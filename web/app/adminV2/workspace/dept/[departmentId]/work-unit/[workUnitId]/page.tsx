@@ -295,6 +295,7 @@ import { setAdminV2PrimarySurfacePending } from "@/lib/perf/adminV2PrimarySurfac
 import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import {
+    allVisibleWorkUnitLanePrefetchTargets,
     flattenWorkUnitVisibleQueuePillKeys,
     WORK_UNIT_QUEUE_PILL_PREFETCH_CONCURRENCY,
     workUnitLanePrefetchTargets,
@@ -1929,7 +1930,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 setQueueItemsLoading(false);
                 return;
             }
-            if (!queueRowActionsHydratedRef.current) {
+            const skipActionsHydrateBeforeCache =
+                options?.userInitiated || options?.prefetchOnly || options?.quietStaleRefresh;
+            if (!skipActionsHydrateBeforeCache && !queueRowActionsHydratedRef.current) {
                 await hydrateWorkUnitQueueRowActions();
             }
             const queueKeyForLane = guarded.pillKey;
@@ -2420,6 +2423,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 return prev;
             });
             try {
+                if (!queueRowActionsHydratedRef.current) {
+                    await hydrateWorkUnitQueueRowActions();
+                }
                 await runNetwork(seq, true);
                 primaryLaneRowsSettledOnceRef.current = true;
             } catch (e) {
@@ -2647,8 +2653,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     }
                 }
                 const fromQueueKeyBeforeSwitch = selectedQueueKeyRef.current;
-                queueRowActionsHydratedRef.current = false;
-                setQueueRowActionsReady(false);
                 if (targetSelection?.queueKey) {
                     applyActiveLifecycleWorkUnitSelection(targetSelection, "lifecycleWuNav");
                     void hydrateWorkUnitQueueRowActions();
@@ -6452,7 +6456,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const queuePillPrefetchSigRef = useRef("");
     useEffect(() => {
         if (!workUnitAboveFoldPageReady || !workUnitId || !workUnit || !visibleQueuePillKeys.length) return;
-        const targets = workUnitLanePrefetchTargets({
+        const targets = allVisibleWorkUnitLanePrefetchTargets({
             visiblePillKeys: visibleQueuePillKeys,
             selectedPillKey: selectedQueueKey,
             workUnit: {
@@ -6460,9 +6464,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 queue_definition: workUnit.queue_definition,
                 metadata: workUnit.metadata,
             },
-            lifecycleSiblings: lifecycleSiblingWorkUnits,
-            includeLifecycleSiblings: false,
-            cap: 2,
         });
         if (!targets.length) return;
         const sig = `${workUnitId}|${viewScopeFingerprint}|${selectedQueueKey ?? ""}|${targets.map((t) => `${t.workUnitId}:${t.pillKey}`).join(",")}`;
@@ -6516,7 +6517,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     });
                 });
             },
-            { idleTimeoutMs: 5000, fallbackMs: 1200 }
+            { idleTimeoutMs: 400, fallbackMs: 120 }
         );
         return cancel;
     }, [

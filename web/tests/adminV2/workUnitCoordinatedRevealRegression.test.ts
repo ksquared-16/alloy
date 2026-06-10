@@ -32,7 +32,7 @@ describe("workUnitCoordinatedRevealRegression", () => {
 
 describe("drawerCoordinatedRevealRegression (source)", () => {
     it("opportunity releases below-fold lock on primary coordinated reveal", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain(
             "opportunityDrawerOverviewRevealReady && opportunityDrawerPrimaryContractSatisfied"
         );
@@ -40,7 +40,7 @@ describe("drawerCoordinatedRevealRegression (source)", () => {
     });
 
     it("child→opportunity restore reveals below-fold for header actions", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain('prev.type === "persons"');
         expect(drawer).toContain("restoreCanRenderFrame");
         expect(drawer).toContain("setOpportunityDrawerBelowFoldRevealed(true)");
