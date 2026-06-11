@@ -1,5 +1,6 @@
 "use client";
 
+import { BosButton } from "@/app/adminV2/components/bos/identity/BosButton";
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
 
@@ -76,16 +77,14 @@ export function ActionIntakePastePanel({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-                <button
-                    type="button"
+                <BosButton
+                    variant="primary"
+                    size="sm"
+                    label={parsing ? "Parsing…" : "Parse with BOS"}
                     disabled={disabled || parsing || !pasteText.trim()}
                     onClick={onParse}
-                    className="inline-flex items-center gap-1.5 rounded-lg bg-alloy-juniper px-3 py-2 text-sm font-semibold text-white hover:bg-[#009676] disabled:opacity-50"
                     data-testid="action-intake-parse-button"
-                >
-                    <BosMark size="sm" color="#ffffff" />
-                    {parsing ? "Parsing…" : "Parse with BOS"}
-                </button>
+                />
                 <span className="text-[11px] text-alloy-midnight/50">
                     Maps into fields below for your review
                 </span>

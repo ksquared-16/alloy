@@ -6,6 +6,8 @@ Define **BOS** as Alloy’s unified **orchestration intelligence layer**: how as
 
 **This is not a rebuild.** BOS names and unifies what already ships: Orchestrator routing, specialist assists, deterministic insight, and audited config commits.
 
+**Visual identity (frozen):** Mark, horizon, smoke, reveal, and workspace shell are locked — **`docs/system/bos-identity-doctrine.md`**. Adoption work wires real product flows to those primitives; it does not redesign them.
+
 **Implementation inventory** (routes, env gates, staging SQL) remains in this file under **§ Implementation inventory** (formerly `ai-system.md`).
 
 ## Program status (execution)

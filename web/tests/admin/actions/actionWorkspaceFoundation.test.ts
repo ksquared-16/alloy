@@ -131,6 +131,7 @@ describe("action workspace foundation", () => {
         expect(banner).toContain("BosMark");
         expect(success).toContain("BosMark");
         expect(paste).toContain("BosRevealSequence");
+        expect(paste).toContain("BosButton");
         expect(shell).not.toContain("Sparkles");
         expect(banner).not.toContain("Sparkles");
     });

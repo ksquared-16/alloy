@@ -1,6 +1,6 @@
 "use client";
 
-import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import { BosButton } from "@/app/adminV2/components/bos/identity/BosButton";
 import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
 import { BOS_PASTE_CANVAS_MIN_HEIGHT } from "@/lib/admin/actions/bosWorkspaceShell";
 
@@ -71,16 +71,14 @@ export function ActionWorkspacePasteCanvas({
             </div>
 
             <div className="flex shrink-0 flex-wrap items-center gap-3">
-                <button
-                    type="button"
+                <BosButton
+                    variant="primary"
+                    size="md"
+                    label={analyzing ? "Analyzing…" : "Analyze with BOS"}
                     disabled={disabled || analyzing || !pasteText.trim()}
                     onClick={onAnalyze}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#00A283] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.15)_inset,0_4px_14px_rgba(0,162,131,0.28)] transition-all hover:bg-[#009676] disabled:opacity-50"
                     data-testid="action-workspace-analyze-button"
-                >
-                    <BosMark size="sm" color="#ffffff" />
-                    {analyzing ? "Analyzing…" : "Analyze with BOS"}
-                </button>
+                />
             </div>
 
             {analyzeError ?

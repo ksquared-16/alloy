@@ -218,7 +218,8 @@ export default function BosIdentitySystemGallery() {
                             Composer BOS enhance modal.
                         </li>
                         <li className="text-[12px] text-alloy-midnight/50">
-                            Not applied to route transitions, drawer open, standard page loading, or button busy states.
+                            Identity frozen — see <code className="text-[11px]">docs/system/bos-identity-doctrine.md</code>.
+                            Adoption Sprint 01 audit: <code className="text-[11px]">docs/sprints/06_2026/bos_adoption_sprint01_surface_audit.md</code>.
                         </li>
                     </ul>
                 </Frame>

@@ -1,6 +1,6 @@
 "use client";
 
-import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import { BosButton } from "@/app/adminV2/components/bos/identity/BosButton";
 
 type ComposerReplyActionClusterProps = {
     sendLabel?: string;
@@ -40,16 +40,14 @@ export default function ComposerReplyActionCluster({
             >
                 Send later
             </button>
-            <button
-                type="button"
+            <BosButton
+                variant="secondary"
+                size="sm"
+                label="BOS Assist"
                 onClick={onBosEnhance}
                 title="Polish this message with BOS Assist"
-                className={`inline-flex items-center gap-1.5 ${secondaryClass}`}
                 data-adminv2-composer-bos-assist="true"
-            >
-                <BosMark size="sm" />
-                BOS Assist
-            </button>
+            />
             <button
                 type="button"
                 disabled={sendDisabled || sendBusy}

@@ -106,7 +106,7 @@ describe("BOS identity system — Sprint 02 migration", () => {
     it("BOS entry points use BosMark", () => {
         expect(read("components/admin/drawer/BosDrawerAssistCta.tsx")).toContain("BosMark");
         expect(read("components/layout/QueueRowActionsMenu.tsx")).toContain("BosMark");
-        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("BosMark");
+        expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("BosButton");
         expect(read("app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation.tsx")).toContain("BosMark");
     });
 
