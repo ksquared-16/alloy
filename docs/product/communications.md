@@ -157,3 +157,13 @@ Org-wide thread list via **`GET /api/admin/inbox/threads`** (`web/lib/communicat
 ## When this doc must be updated
 
 Channels, enqueue model, provider bindings, dual-write flags, worker contracts, webhook behavior change, **enrollment packet email semantics** (queued/sent/delivered distinctions, Resend expectations), **Task Assist V1.1 scheduled-send / process-due contracts**, or **Admin Inbox V2** behavior (folders, composer, thread history, Send later / BOS entry points).
+
+---
+
+## Communications V2 — foundation (June 2026, branch `communications-v2`)
+
+**Status:** Implementation in progress on the dedicated `communications-v2` branch, package-by-package. Canonical sprint source: **`docs/sprints/06_2026/communications-v2/`** (Architecture & Scope Freeze r2, Governance Charter, Package Tracker, QA Workbook, Sprint Backlog, Plan, Work Orders).
+
+Communications V2 transforms Messaging into a **Communications Command Center** (Queue → Conversation Workspace → BOS rail) plus an upgraded record-drawer Communications tab, **extending the canonical `communication_*` path** — it does **not** expand legacy `messages`. V1 providers are **Resend (email)** and **Twilio (SMS)** behind a new provider abstraction; **Google Workspace and Microsoft 365 remain in the architecture but off the V1 critical path** (V1.5 adapters, no schema/UX change).
+
+**PKG-01 (foundation, this branch):** Communications V2 **feature flags** (`web/lib/communications/v2/flags.ts`, all default OFF), a **telemetry scaffold** (`web/lib/communications/v2/telemetry.ts` — typed `CommsV2Event` catalog + best-effort `emitCommsV2Event` over `emitEvent`, never throws in the request path), and **doctrine guardrail contract tests** (`web/tests/adminV2/commsV2Doctrine.contract.test.ts`): no generic-inbox regression, no BOS-in-content, no provider leakage outside the adapter dir, no auto-send, flags-off-by-default. No product behavior, schema, or provider change in PKG-01.
