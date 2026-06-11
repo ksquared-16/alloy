@@ -64,6 +64,21 @@ function workflowHealthLabel(kpis: AutomationWorkflowKpis, kpisLoading: boolean)
     return "Healthy";
 }
 
+/** Runs today — canonical collapsed-rail count (activity, not failures). */
+export function workflowTelemetryActivityCount(
+    kpis: AutomationWorkflowKpis,
+    kpisLoading: boolean,
+): number | null {
+    if (kpisLoading) return null;
+    return kpis.runs_today;
+}
+
+function workflowTelemetryCountLabel(kpis: AutomationWorkflowKpis, kpisLoading: boolean): string {
+    const count = workflowTelemetryActivityCount(kpis, kpisLoading);
+    if (count == null) return "";
+    return ` (${count})`;
+}
+
 function WorkUnitRailTelemetryBlock(props: {
     kpis: AutomationWorkflowKpis;
     kpisLoading: boolean;
@@ -77,6 +92,7 @@ function WorkUnitRailTelemetryBlock(props: {
 
     const healthLabel = workflowHealthLabel(kpis, kpisLoading);
     const healthNeedsAttention = healthLabel === "Needs attention";
+    const activityCountLabel = workflowTelemetryCountLabel(kpis, kpisLoading);
     const recentActivity = recentWorkflowActivityRows(collectScopedWorkflowRows(partitions, workflows));
 
     const runsTodayLabel = kpisLoading ? "—" : String(kpis.runs_today);
@@ -86,7 +102,7 @@ function WorkUnitRailTelemetryBlock(props: {
 
     return (
         <section
-            className={`adminv2-ws-command-rail-actions-section adminv2-ws-command-rail-telemetry-section${expanded ? " adminv2-ws-command-rail-actions-section--expanded" : ""}`}
+            className={`adminv2-ws-command-rail-actions-section adminv2-ws-command-rail-telemetry-section${expanded ? " adminv2-ws-command-rail-actions-section--expanded" : ""}${healthNeedsAttention ? " adminv2-ws-command-rail-telemetry-section--attention" : ""}`}
             data-adminv2-command-rail-telemetry-section="true"
             data-ws-component="automation_telemetry"
             data-ws-automation-telemetry-expanded={expanded ? "true" : "false"}
@@ -101,7 +117,13 @@ function WorkUnitRailTelemetryBlock(props: {
             >
                 <span className="adminv2-ws-command-rail-actions-trigger-label inline-flex items-center gap-1.5">
                     <GitBranch className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden strokeWidth={2.2} />
-                    Workflow Telemetry
+                    Workflow Telemetry{activityCountLabel}
+                    {healthNeedsAttention ?
+                        <span
+                            className="adminv2-ws-command-rail-telemetry-attention-badge"
+                            aria-label="Workflow health needs attention"
+                        />
+                    :   null}
                 </span>
                 <span className="adminv2-ws-command-rail-actions-trigger-chevron" aria-hidden>
                     {expanded ? "▼" : "▶"}

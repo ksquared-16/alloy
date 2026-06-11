@@ -203,6 +203,15 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-secti
   margin-bottom: 0;
 }
 
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-attention-badge {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #bc4300;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+}
+
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-body {
   max-height: min(28vh, 240px);
   overflow-y: auto;

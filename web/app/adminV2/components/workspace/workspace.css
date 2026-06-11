@@ -109,33 +109,33 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
   /*
-   * Work Unit Layout Doctrine V3 — telemetry in command rail; queue uses full primary column.
-   * Target 6–8 visible rows on common laptop/desktop viewports. See work-unit-layout-doctrine.md
+   * Work Unit Layout Doctrine V3 — queue fills rail-aligned lane; compact rows for density.
+   * Target 5–6 visible rows (laptop) / 6–7 (large desktop). See work-unit-layout-doctrine.md
    */
-  --ws-wu-queue-records-scroll-top-offset: 17rem;
-  --ws-wu-queue-row-stack-estimate: clamp(3rem, calc(var(--ws-dept-queue-row-min-height) + 0.875rem), 4.125rem);
-  --ws-wu-queue-row-gap: 8px;
-  --ws-wu-queue-visible-rows-target: 6;
-  --ws-wu-queue-records-scroll-height-cap: 680px;
+  --ws-wu-queue-row-min-height: 43px;
+  --ws-wu-queue-records-scroll-top-offset: 14rem;
+  --ws-wu-queue-row-stack-estimate: clamp(2.45rem, calc(var(--ws-wu-queue-row-min-height) + 0.5rem), 3.35rem);
+  --ws-wu-queue-row-gap: 6px;
+  --ws-wu-queue-visible-rows-target: 5;
+  --ws-wu-queue-records-scroll-height-cap: 9999px;
   --ws-wu-queue-records-scroll-max-height: min(
     calc(
       var(--ws-wu-queue-visible-rows-target) * var(--ws-wu-queue-row-stack-estimate) +
         (var(--ws-wu-queue-visible-rows-target) - 1) * var(--ws-wu-queue-row-gap)
     ),
-    calc(100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px)),
-    var(--ws-wu-queue-records-scroll-height-cap)
+    calc(100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 16px))
   );
 }
 
 @media (min-width: 1440px) {
   [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-    --ws-wu-queue-visible-rows-target: 7;
+    --ws-wu-queue-visible-rows-target: 6;
   }
 }
 
 @media (min-width: 1280px) and (min-height: 900px) {
   [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-    --ws-wu-queue-visible-rows-target: 8;
+    --ws-wu-queue-visible-rows-target: 7;
   }
 }
 
@@ -6199,11 +6199,59 @@
 
 @media (min-width: 1001px) {
   html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list-shell {
-    max-height: min(
-      var(--ws-wu-queue-records-scroll-max-height),
-      100%
-    );
+    max-height: 100%;
   }
+}
+
+/* Work unit — compact queue row density (~12% tighter than default operational rows) */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row-shell {
+  min-height: 2.35rem;
+  gap: 3px 6px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row {
+  min-height: 1.65rem;
+  gap: 1px 8px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row-shell > .operational-queue-row__content {
+  gap: 2px 8px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck {
+  padding: 1px 3px 3px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list {
+  gap: 5px;
+  padding: 4px 6px 5px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card {
+  padding: 2px 5px 3px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--compact {
+  padding: 4px 7px 4px;
+  gap: 8px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview.adminv2-ws-crm-queue-preview {
+  gap: 3px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__body {
+  gap: 6px 10px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__zone--middle {
+  gap: 3px;
+  padding-left: 6px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-item-wrap {
+  gap: 5px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-count-badge {

@@ -23,10 +23,11 @@ describe("Work Unit Layout Doctrine V3", () => {
         expect(doc).not.toContain("Zone 3 — Workflow Telemetry Summary Banner");
     });
 
-    it("targets 6–8 visible queue rows without telemetry banner reserve", () => {
+    it("targets 5–7 visible queue rows with compact work-unit row stack", () => {
         const css = read("app/adminV2/components/workspace/workspace.css");
-        expect(css).toContain("--ws-wu-queue-visible-rows-target: 6");
-        expect(css).toContain("--ws-wu-queue-records-scroll-height-cap: 680px");
+        expect(css).toContain("--ws-wu-queue-visible-rows-target: 5");
+        expect(css).toContain("--ws-wu-queue-row-min-height: 43px");
+        expect(css).toContain("--ws-wu-queue-records-scroll-top-offset: 14rem");
         expect(css).not.toContain("--ws-wu-queue-intelligence-banner-reserve");
     });
 
@@ -41,9 +42,12 @@ describe("Work Unit Layout Doctrine V3", () => {
         expect(css).toContain("min-height: var(--adminv2-workspace-rail-height");
     });
 
-    it("uses single-row Actions-matching telemetry trigger in work-unit command rail", () => {
+    it("uses single-row Actions-matching telemetry trigger with activity count", () => {
         const block = read("app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx");
         expect(block).toContain("WorkUnitRailTelemetryBlock");
+        expect(block).toContain("workflowTelemetryActivityCount");
+        expect(block).toContain("Workflow Telemetry{activityCountLabel}");
+        expect(block).toContain("adminv2-ws-command-rail-telemetry-attention-badge");
         expect(block).toContain("adminv2-ws-command-rail-telemetry-section");
         expect(block).toContain("adminv2-ws-command-rail-actions-trigger");
         expect(block).toContain("Recent Workflow Activity");

@@ -32,11 +32,12 @@ describe("AutomationWorkflowsBlock Ask Workflow Assist", () => {
         expect(src).toContain("onWorkflowDiagnostics={openWorkflowDiagnostics}");
     });
 
-    it("rail telemetry exposes Workflow Diagnostics affordance", () => {
+    it("rail telemetry exposes Workflow Diagnostics affordance and activity count", () => {
         const src = readFileSync(
             join(process.cwd(), "app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx"),
             "utf8",
         );
+        expect(src).toContain("workflowTelemetryActivityCount");
         expect(src).toContain('data-ws-workflow-diagnostics="true"');
         expect(src).toContain("Workflow Diagnostics");
     });

@@ -23,8 +23,9 @@ Work-unit pages contain **two vertical zones only**:
 Queue visibility is **higher priority** than telemetry visibility.
 
 - Queue list uses a **bounded scroll shell** (`.adminv2-ws-wu-queue-list-shell`).
-- Target **6–8 visible rows** on common laptop/desktop viewports (row height unchanged).
+- Target **5–6 visible rows** on laptop viewports; **6–7** on larger monitors.
 - Queue lane **bottom aligns with command rail bottom** on desktop (throughput deck stretches to rail height; records scroll inside).
+- Work-unit rows use a **~12% tighter** vertical stack (padding/gap only — columns and actions unchanged).
 - Row behavior, selection, drawer open, and registry actions are **unchanged**.
 - Telemetry must **not** consume primary-column vertical space.
 
@@ -32,11 +33,11 @@ Queue visibility is **higher priority** than telemetry visibility.
 
 | Token | Role |
 |-------|------|
-| `--ws-wu-queue-visible-rows-target` | Row-count target (6 laptop; 7 @1440px; 8 @1280×900+) |
-| `--ws-wu-queue-row-stack-estimate` | Per-row height estimate from `--ws-dept-queue-row-min-height` |
-| `--ws-wu-queue-records-scroll-top-offset` | Reserve space for header deck |
-| `--ws-wu-queue-records-scroll-height-cap` | Hard cap (680px) |
-| `--ws-wu-queue-records-scroll-max-height` | `min(row-target, viewport-remaining, cap)` |
+| `--ws-wu-queue-visible-rows-target` | Row-count floor (5 laptop; 6 @1440px; 7 @1280×900+) |
+| `--ws-wu-queue-row-min-height` | Work-unit row min height (~43px, ~12% tighter) |
+| `--ws-wu-queue-row-stack-estimate` | Per-row height estimate for scroll floor |
+| `--ws-wu-queue-records-scroll-top-offset` | Reserve space for header deck (~14rem) |
+| `--ws-wu-queue-records-scroll-max-height` | Viewport-based scroll fallback (mobile) |
 
 ## Right rail utilities (Actions → Telemetry → BOS)
 
@@ -50,17 +51,18 @@ Telemetry is a **right rail utility** alongside Actions and BOS — same collaps
 
 ### Workflow Telemetry — collapsed (default)
 
-**Collapsed rail modules are always a single row.** Match Actions visual treatment exactly: same height, spacing, border, collapse affordance, and rail rhythm.
+**Collapsed rail modules are always a single row with a count**, matching Actions.
 
-- **▶ Workflow Telemetry** with workflow iconography  
+- **▶ Workflow Telemetry (n)** with workflow iconography — `n` = runs today (recent activity), not failures  
 - **No** secondary line, metrics, health summary, or subtitles in collapsed state  
+- Failures / health concerns use **attention badge** on the collapsed header, not the count  
 - Telemetry details appear **only when expanded**  
 
 Canonical rail pattern:
 
 ```
 ▶ Actions (N)
-▶ Workflow Telemetry
+▶ Workflow Telemetry (n)
 BOS
 ```
 
