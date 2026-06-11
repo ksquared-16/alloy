@@ -54,9 +54,11 @@ describe("work-unit queue row open contract", () => {
         )?.[0];
         expect(scrollShellRule).toBeDefined();
         expect(scrollShellRule).toContain("overflow-y: auto");
-        expect(scrollShellRule).toContain("flex: 1 1 auto");
+        expect(scrollShellRule).toContain("flex: 1 1 0");
+        expect(scrollShellRule).toContain("min-height: 0");
+        expect(scrollShellRule).toContain("overscroll-behavior: contain");
         expect(scrollShellRule).toContain("padding-bottom:");
-        expect(css).toContain("min-height: var(--adminv2-workspace-rail-height");
+        expect(css).toContain("height: var(--adminv2-workspace-rail-height");
         const wuListRule = css.match(
             /\[data-ws-surface="work_unit"\]\.adminv2-ws-wu-v2 \.adminv2-ws-wu-queue-list\.adminv2-ws-queue-list\s*\{[^}]+\}/,
         )?.[0];

@@ -2123,21 +2123,45 @@
     0 1px 3px rgba(39, 63, 82, 0.06);
 }
 
-/* Work unit — stretch queue lane to command rail bottom on desktop */
+/* Work unit — stretch queue lane to command rail bottom; queue owns vertical scroll */
 @media (min-width: 1001px) {
+  html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface:has([data-ws-surface="work_unit"].adminv2-ws-wu-v2) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-contain,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-page-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
   html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-primary-column {
     min-height: var(--adminv2-workspace-rail-height, 0);
+    max-height: var(--adminv2-workspace-rail-height, none);
+    height: var(--adminv2-workspace-rail-height, auto);
+    overflow: hidden;
   }
 
   html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     align-items: stretch;
     min-height: 0;
+    overflow: hidden;
   }
 
   html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane--throughput {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
+    overflow: hidden;
   }
 }
 
@@ -6171,8 +6195,9 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-shell.adminv2-ws-dept-qsec--primary {
   display: flex;
   flex-direction: column;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
+  overflow: hidden;
   border-bottom: none;
   padding-bottom: 6px;
 }
@@ -6182,12 +6207,9 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list-shell {
-  flex: 1 1 auto;
-  min-height: calc(
-    var(--ws-wu-queue-visible-rows-target) * var(--ws-wu-queue-row-stack-estimate) +
-      (var(--ws-wu-queue-visible-rows-target) - 1) * var(--ws-wu-queue-row-gap)
-  );
-  max-height: none;
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -6195,12 +6217,6 @@
   -webkit-overflow-scrolling: touch;
   padding-bottom: 6px;
   scroll-padding-bottom: 8px;
-}
-
-@media (min-width: 1001px) {
-  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list-shell {
-    max-height: 100%;
-  }
 }
 
 /* Work unit — compact queue row density (~12% tighter than default operational rows) */

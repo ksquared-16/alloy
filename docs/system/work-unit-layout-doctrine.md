@@ -22,7 +22,7 @@ Work-unit pages contain **two vertical zones only**:
 
 Queue visibility is **higher priority** than telemetry visibility.
 
-- Queue list uses a **bounded scroll shell** (`.adminv2-ws-wu-queue-list-shell`).
+- Queue list uses a **bounded scroll shell** (`.adminv2-ws-wu-queue-list-shell`) with **`overflow-y: auto`** — the queue owns scroll, not the page.
 - Target **5–6 visible rows** on laptop viewports; **6–7** on larger monitors.
 - Queue lane **bottom aligns with command rail bottom** on desktop (throughput deck stretches to rail height; records scroll inside).
 - Work-unit rows use a **~12% tighter** vertical stack (padding/gap only — columns and actions unchanged).
@@ -133,7 +133,8 @@ A user should be able to:
 - [ ] Queue shows 6–8 rows on common laptop viewports without page scroll.  
 - [ ] No telemetry below queue or in primary column.  
 - [ ] Right rail shows Actions, Workflow Telemetry, BOS in order.  
-- [ ] Queue lane bottom aligns with command rail bottom on desktop.  
+- [ ] Queue scrolls independently (`overflow-y: auto` on `.adminv2-ws-wu-queue-list-shell`); 50+ records reachable.
+- [ ] Wheel over queue scrolls the queue (not the page shell).
 - [ ] Telemetry collapsed header is single-row (matches Actions).  
 - [ ] Expand shows operator content only (health, recent activity, actions).  
 - [ ] Expand does not move queue or shrink BOS.  

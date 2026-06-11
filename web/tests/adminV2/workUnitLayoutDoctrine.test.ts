@@ -31,15 +31,18 @@ describe("Work Unit Layout Doctrine V3", () => {
         expect(css).not.toContain("--ws-wu-queue-intelligence-banner-reserve");
     });
 
-    it("keeps queue records in a scroll shell that fills the rail-aligned lane", () => {
+    it("keeps queue records in a scroll-owned viewport that fills the rail-aligned lane", () => {
         const css = read("app/adminV2/components/workspace/workspace.css");
         const scrollShellRule = css.match(
             /\[data-ws-surface="work_unit"\]\.adminv2-ws-work-unit\.adminv2-ws-wu-v2 \.adminv2-ws-wu-queue-list-shell\s*\{[^}]+\}/,
         )?.[0];
         expect(scrollShellRule).toBeDefined();
         expect(scrollShellRule).toContain("overflow-y: auto");
-        expect(scrollShellRule).toContain("flex: 1 1 auto");
-        expect(css).toContain("min-height: var(--adminv2-workspace-rail-height");
+        expect(scrollShellRule).toContain("flex: 1 1 0");
+        expect(scrollShellRule).toContain("min-height: 0");
+        expect(scrollShellRule).toContain("overscroll-behavior: contain");
+        expect(css).toContain("height: var(--adminv2-workspace-rail-height");
+        expect(css).toContain(".adminv2-workspace-scroll-surface:has([data-ws-surface=\"work_unit\"]");
     });
 
     it("uses single-row Actions-matching telemetry trigger with activity count", () => {
