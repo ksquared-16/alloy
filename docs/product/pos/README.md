@@ -19,8 +19,12 @@ These docs are the input to the **Doctrine Gate** and **UX Gate** (POS-06). Noth
 | [`POS-04-ux-vision-package.md`](./POS-04-ux-vision-package.md) | 26 Alloy-native screen definitions (purpose, goal, layout, actions, BOS rail, status/empty/error states, doctrine inheritance). |
 | [`POS-05-outcome-framework.md`](./POS-05-outcome-framework.md) | Outcome taxonomy, example recipes, approval model, relationships to workflows/lifecycle/billing/communications. |
 | [`POS-06-claude-execution-charter.md`](./POS-06-claude-execution-charter.md) | How later development runs: branch model, package-by-package loop, substitute vs real gates, 2-failed-repair pause, report-at-gates, no doctrine drift. |
+| [`POS-07-visual-mockup-brief.md`](./POS-07-visual-mockup-brief.md) | Art-direction brief to generate Alloy-native mockups for the 8 hero screen groups (Doctrine Gate follow-up 1). |
+| [`POS-08-visual-vision-package.md`](./POS-08-visual-vision-package.md) | Final UX/experience definition before architecture: 11 future-state screens (purpose, goal, layout, hierarchy, BOS behavior, actions, empty/success/conflict states, doctrine notes) + Architecture Readiness Assessment. |
+| [`POS-09-mockup-generation-prompts.md`](./POS-09-mockup-generation-prompts.md) | Per-screen GPT Image / Midjourney prompts + Figma recreation notes, so mockups can be generated without reinterpreting doctrine. |
+| [`PR-DESCRIPTION-pos-planning-v1.md`](./PR-DESCRIPTION-pos-planning-v1.md) | Ready-to-paste PR description for the `pos-planning-v1` branch. |
 
-Read in order. POS-01 is load-bearing; everything else inherits from it.
+Read in order. POS-01 is load-bearing; everything else inherits from it. POS-04 / POS-07 / POS-08 / POS-09 are the UX/visual set; POS-08 is the canonical final UX artifact reviewed before the Architecture Gate.
 
 ## Doctrine in one screen
 
