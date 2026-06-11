@@ -30,23 +30,25 @@ describe("Work Unit Layout Doctrine V3", () => {
         expect(css).not.toContain("--ws-wu-queue-intelligence-banner-reserve");
     });
 
-    it("keeps queue records in an independently scrolling shell", () => {
+    it("keeps queue records in a scroll shell that fills the rail-aligned lane", () => {
         const css = read("app/adminV2/components/workspace/workspace.css");
         const scrollShellRule = css.match(
             /\[data-ws-surface="work_unit"\]\.adminv2-ws-work-unit\.adminv2-ws-wu-v2 \.adminv2-ws-wu-queue-list-shell\s*\{[^}]+\}/,
         )?.[0];
         expect(scrollShellRule).toBeDefined();
-        expect(scrollShellRule).toContain("max-height: var(--ws-wu-queue-records-scroll-max-height)");
         expect(scrollShellRule).toContain("overflow-y: auto");
+        expect(scrollShellRule).toContain("flex: 1 1 auto");
+        expect(css).toContain("min-height: var(--adminv2-workspace-rail-height");
     });
 
-    it("uses Actions-matching collapsible telemetry in work-unit command rail", () => {
+    it("uses single-row Actions-matching telemetry trigger in work-unit command rail", () => {
         const block = read("app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx");
         expect(block).toContain("WorkUnitRailTelemetryBlock");
         expect(block).toContain("adminv2-ws-command-rail-telemetry-section");
         expect(block).toContain("adminv2-ws-command-rail-actions-trigger");
         expect(block).toContain("Recent Workflow Activity");
         expect(block).toContain("Workflow Diagnostics");
+        expect(block).not.toContain("adminv2-ws-command-rail-telemetry-trigger-summary");
         expect(block).not.toContain("adminv2-ws-automation-telemetry__rail-stats");
 
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");

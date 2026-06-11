@@ -24,6 +24,7 @@ Queue visibility is **higher priority** than telemetry visibility.
 
 - Queue list uses a **bounded scroll shell** (`.adminv2-ws-wu-queue-list-shell`).
 - Target **6–8 visible rows** on common laptop/desktop viewports (row height unchanged).
+- Queue lane **bottom aligns with command rail bottom** on desktop (throughput deck stretches to rail height; records scroll inside).
 - Row behavior, selection, drawer open, and registry actions are **unchanged**.
 - Telemetry must **not** consume primary-column vertical space.
 
@@ -49,12 +50,19 @@ Telemetry is a **right rail utility** alongside Actions and BOS — same collaps
 
 ### Workflow Telemetry — collapsed (default)
 
-Match Actions visual treatment: same spacing, border, collapse affordance, header style.
+**Collapsed rail modules are always a single row.** Match Actions visual treatment exactly: same height, spacing, border, collapse affordance, and rail rhythm.
 
 - **▶ Workflow Telemetry** with workflow iconography  
-- Compact status summary under title, e.g. `Healthy · 3 runs today • 100% success • 0 failures`  
-- Approximately the same height as the Actions header  
-- **No** large cards, dashboards, charts, or metric grids  
+- **No** secondary line, metrics, health summary, or subtitles in collapsed state  
+- Telemetry details appear **only when expanded**  
+
+Canonical rail pattern:
+
+```
+▶ Actions (N)
+▶ Workflow Telemetry
+BOS
+```
 
 ### Workflow Telemetry — expanded (on demand)
 
@@ -115,16 +123,16 @@ A user should be able to:
 
 1. See **more queue records** without scrolling (≥2–3 additional rows vs pre-rail layouts).  
 2. Keep **BOS fully visible**.  
-3. Check **workflow health at a glance** from collapsed telemetry.  
-4. **Expand telemetry only when needed** for recent activity and diagnostics actions.  
-5. **Access Automations** without leaving the work unit.  
+3. **Expand telemetry** when workflow health, recent activity, or diagnostics are needed.  
+4. **Access Automations** without leaving the work unit.  
 
 ## Validation checklist
 
 - [ ] Queue shows 6–8 rows on common laptop viewports without page scroll.  
 - [ ] No telemetry below queue or in primary column.  
 - [ ] Right rail shows Actions, Workflow Telemetry, BOS in order.  
-- [ ] Telemetry collapsed by default; matches Actions rail styling.  
+- [ ] Queue lane bottom aligns with command rail bottom on desktop.  
+- [ ] Telemetry collapsed header is single-row (matches Actions).  
 - [ ] Expand shows operator content only (health, recent activity, actions).  
 - [ ] Expand does not move queue or shrink BOS.  
 - [ ] BOS remains visible or recoverable after telemetry expansion.  

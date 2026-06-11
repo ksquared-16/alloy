@@ -64,15 +64,6 @@ function workflowHealthLabel(kpis: AutomationWorkflowKpis, kpisLoading: boolean)
     return "Healthy";
 }
 
-function workflowCompactSummaryLine(kpis: AutomationWorkflowKpis, kpisLoading: boolean): string {
-    if (kpisLoading) return "Loading workflow status…";
-    const runsToday = `${kpis.runs_today} run${kpis.runs_today === 1 ? "" : "s"} today`;
-    const success =
-        kpis.success_rate_last_7d == null ? "— success" : `${Math.round(kpis.success_rate_last_7d * 100)}% success`;
-    const failures = `${kpis.failed_last_7d} failure${kpis.failed_last_7d === 1 ? "" : "s"}`;
-    return `${runsToday} • ${success} • ${failures}`;
-}
-
 function WorkUnitRailTelemetryBlock(props: {
     kpis: AutomationWorkflowKpis;
     kpisLoading: boolean;
@@ -86,7 +77,6 @@ function WorkUnitRailTelemetryBlock(props: {
 
     const healthLabel = workflowHealthLabel(kpis, kpisLoading);
     const healthNeedsAttention = healthLabel === "Needs attention";
-    const compactSummary = workflowCompactSummaryLine(kpis, kpisLoading);
     const recentActivity = recentWorkflowActivityRows(collectScopedWorkflowRows(partitions, workflows));
 
     const runsTodayLabel = kpisLoading ? "—" : String(kpis.runs_today);
@@ -104,25 +94,14 @@ function WorkUnitRailTelemetryBlock(props: {
         >
             <button
                 type="button"
-                className="adminv2-ws-command-rail-actions-trigger adminv2-ws-command-rail-telemetry-trigger"
+                className="adminv2-ws-command-rail-actions-trigger"
                 aria-expanded={expanded}
                 onClick={() => setExpanded((open) => !open)}
                 data-command-rail-telemetry-toggle="true"
             >
-                <span className="adminv2-ws-command-rail-telemetry-trigger-main">
-                    <span className="adminv2-ws-command-rail-actions-trigger-label inline-flex items-center gap-1.5">
-                        <GitBranch className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden strokeWidth={2.2} />
-                        Workflow Telemetry
-                    </span>
-                    <span
-                        className={`adminv2-ws-command-rail-telemetry-trigger-summary${healthNeedsAttention ? " adminv2-ws-command-rail-telemetry-trigger-summary--attention" : ""}`}
-                    >
-                        <span className="adminv2-ws-command-rail-telemetry-trigger-health">{healthLabel}</span>
-                        <span className="adminv2-ws-command-rail-telemetry-trigger-metrics" aria-hidden>
-                            {" "}
-                            · {compactSummary}
-                        </span>
-                    </span>
+                <span className="adminv2-ws-command-rail-actions-trigger-label inline-flex items-center gap-1.5">
+                    <GitBranch className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden strokeWidth={2.2} />
+                    Workflow Telemetry
                 </span>
                 <span className="adminv2-ws-command-rail-actions-trigger-chevron" aria-hidden>
                     {expanded ? "▼" : "▶"}

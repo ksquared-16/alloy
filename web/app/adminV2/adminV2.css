@@ -203,34 +203,6 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-secti
   margin-bottom: 0;
 }
 
-html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-trigger {
-  align-items: flex-start;
-}
-
-html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-trigger-main {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-  text-align: left;
-}
-
-html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-trigger-summary {
-  font-size: 10px;
-  font-weight: 500;
-  line-height: 1.35;
-  color: rgba(39, 63, 82, 0.62);
-}
-
-html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-trigger-summary--attention {
-  color: rgba(188, 67, 0, 0.88);
-}
-
-html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-trigger-health {
-  font-weight: 600;
-}
-
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-body {
   max-height: min(28vh, 240px);
   overflow-y: auto;
