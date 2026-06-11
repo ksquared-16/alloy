@@ -32,13 +32,17 @@ describe("Inbox foundation UI contracts", () => {
         expect(read("lib/adminV2/inboxNavUnreadCache.ts")).toContain("alloy-comms-unread-refresh");
     });
 
-    it("InboxModal follows tasks pop-out pattern", () => {
+    it("InboxModal uses BOS-rail workspace shell like entity drawers", () => {
         const modal = read("app/adminV2/components/InboxModal.tsx");
+        const shell = read("app/adminV2/components/AdminV2WorkspaceBosModalShell.tsx");
+        expect(modal).toContain("AdminV2WorkspaceBosModalShell");
         expect(modal).toContain('data-adminv2-inbox-modal="true"');
-        expect(modal).toContain('role="dialog"');
         expect(modal).toContain("InboxPanel");
         expect(modal).not.toContain("useRouter");
         expect(modal).not.toContain("Open full inbox");
+        expect(shell).toContain("adminv2-drawer-modal-panel--bos-rail");
+        expect(shell).toContain("measureAndApplyDrawerWorkspaceGeometry");
+        expect(shell).toContain('data-adminv2-drawer="true"');
     });
 
     it("header Inbox modal does not promote full inbox route", () => {

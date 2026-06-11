@@ -51,16 +51,19 @@ describe("My tasks modal UX", () => {
         expect(readFileSync(navBadge, "utf8")).not.toContain('href="/adminV2/tasks"');
     });
 
-    it("modal uses overlay pattern like quick message", () => {
+    it("modal uses BOS-rail workspace shell like entity drawers", () => {
         const src = readFileSync(modal, "utf8");
-        expect(src).toContain("fixed inset-0");
+        const shell = readFileSync(
+            join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/AdminV2WorkspaceBosModalShell.tsx"),
+            "utf8"
+        );
+        expect(src).toContain("AdminV2WorkspaceBosModalShell");
         expect(src).toContain("MyTasksPanel");
         expect(src).toContain('data-adminv2-tasks-modal="true"');
-        expect(src).toContain("if (!open) return null");
-        expect(src).toContain("max-w-3xl");
-        expect(src).toContain("max-w-[56rem]");
         expect(src).toContain("fetchOperationalTasksSummary");
         expect(src).toContain('data-adminv2-tasks-summary="true"');
+        expect(shell).toContain("adminv2-drawer-modal-panel--bos-rail");
+        expect(shell).toContain("measureAndApplyDrawerWorkspaceGeometry");
     });
 
     it("task cards use friendly source labels not raw task_assist", () => {

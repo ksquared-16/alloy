@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ListTodo } from "lucide-react";
 
+import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
 import MyTasksPanel from "@/app/adminV2/components/MyTasksPanel";
 import { fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 
@@ -33,15 +34,6 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
 
     useEffect(() => {
         if (!open) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [open, onClose]);
-
-    useEffect(() => {
-        if (!open) return;
         let cancelled = false;
         void (async () => {
             try {
@@ -63,22 +55,19 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
         setFilterCount(count);
     }, []);
 
-    if (!open) return null;
-
     const summary = formatHeaderSummary(counts, filterCount);
 
     return (
-        <div
-            className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-alloy-midnight/45 px-2 py-6 backdrop-blur-[2px] sm:px-4 sm:py-10"
-            data-adminv2-tasks-modal="true"
+        <AdminV2WorkspaceBosModalShell
+            open={open}
+            onClose={onClose}
+            dataModalAttr="adminv2-tasks-modal"
+            ariaLabelledBy="adminv2-tasks-modal-title"
+            panelClassName="max-h-[min(92vh,56rem)]"
         >
-            <button type="button" className="absolute inset-0 cursor-default" aria-label="Close tasks" onClick={onClose} />
             <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="adminv2-tasks-modal-title"
-                className="relative z-[1] flex max-h-[min(92vh,56rem)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-[#f7f6f3] shadow-2xl sm:max-w-[56rem]"
-                onClick={(e) => e.stopPropagation()}
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-[#f7f6f3]"
+                data-adminv2-tasks-modal="true"
             >
                 <div className="flex shrink-0 items-start justify-between gap-3 border-b border-alloy-stone/15 bg-white px-4 py-3.5 sm:px-5">
                     <div className="min-w-0">
@@ -88,7 +77,10 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
                                 My tasks
                             </h2>
                         </div>
-                        <p className="mt-0.5 pl-6 text-[11px] leading-snug text-alloy-midnight/55" data-adminv2-tasks-summary="true">
+                        <p
+                            className="mt-0.5 pl-6 text-[11px] leading-snug text-alloy-midnight/55"
+                            data-adminv2-tasks-summary="true"
+                        >
                             {summary}
                         </p>
                     </div>
@@ -105,6 +97,6 @@ export default function MyTasksModal({ open, onClose }: MyTasksModalProps) {
                     <MyTasksPanel compact onClose={onClose} onFilterCountChange={onFilterCountChange} />
                 </div>
             </div>
-        </div>
+        </AdminV2WorkspaceBosModalShell>
     );
 }
