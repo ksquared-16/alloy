@@ -31,6 +31,39 @@ describe("Work Unit Layout Doctrine V3", () => {
         expect(css).not.toContain("--ws-wu-queue-intelligence-banner-reserve");
     });
 
+    it("enables queue density experiment pass-1 with spacing-only compact tokens", () => {
+        const shell = read("app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx");
+        const layout = read("components/admin/workspace/WorkspaceShellLayout.tsx");
+        const css = read("app/adminV2/components/workspace/workspace.css");
+
+        expect(shell).toContain('workUnitQueueDensity="pass-1"');
+        expect(layout).toContain('workUnitQueueDensity?: "pass-1"');
+        expect(layout).toContain('"data-ws-wu-queue-density": workUnitQueueDensity');
+        expect(css).toContain('[data-ws-wu-queue-density="pass-1"]');
+        expect(css).toContain("--ws-wu-queue-row-min-height: 37px");
+        expect(css).toMatch(
+            /\[data-ws-wu-queue-density="pass-1"\][\s\S]*--ws-wu-queue-visible-rows-target:\s*6/,
+        );
+    });
+
+    it("reclaims horizontal queue width and standardizes neutral queue icons on work-unit surfaces", () => {
+        const css = read("app/adminV2/components/workspace/workspace.css");
+        const adminCss = read("app/adminV2/adminV2.css");
+        const doc = readFileSync(join(webRoot, "../docs/system/work-unit-layout-doctrine.md"), "utf8");
+
+        expect(css).toContain("--ws-wu-contain-padding-inline-end: 0px");
+        expect(css).toContain("--ws-wu-workbench-gutter: 14px");
+        expect(css).toContain("--ws-wu-queue-icon-primary-size: 16px");
+        expect(css).toContain("--ws-wu-queue-icon-secondary-size: 14px");
+        expect(css).toContain("Work unit queue — icon + metadata color doctrine");
+        expect(adminCss).toContain(
+            '.adminv2-workspace-scroll-surface:has([data-ws-surface="work_unit"].adminv2-ws-wu-v2)',
+        );
+        expect(doc).toContain("Horizontal layout polish");
+        expect(doc).toContain("Queue record icon + color doctrine");
+        expect(doc).toContain("Pine/green is **not** a default person/contact accent");
+    });
+
     it("keeps queue records in a scroll-owned viewport that fills the rail-aligned lane", () => {
         const css = read("app/adminV2/components/workspace/workspace.css");
         const scrollShellRule = css.match(

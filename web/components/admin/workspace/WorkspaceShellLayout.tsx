@@ -25,6 +25,8 @@ export type WorkspaceShellLayoutProps = {
   /** When set, overrides automatic `railContent != null` visibility. */
   showRail?: boolean;
   railAriaLabel?: string;
+  /** Queue density experiment — spacing-only compact mode on work-unit surfaces. */
+  workUnitQueueDensity?: "pass-1";
 };
 
 /**
@@ -43,6 +45,7 @@ export function WorkspaceShellLayout({
   commandRailTelemetrySlot = null,
   showRail,
   railAriaLabel = "Decisions and actions",
+  workUnitQueueDensity,
 }: WorkspaceShellLayoutProps) {
   const hasRail = typeof showRail === "boolean" ? showRail : railContent != null;
 
@@ -53,6 +56,7 @@ export function WorkspaceShellLayout({
       style={style}
       {...(workspaceRootShell ? { "data-adminv2-workspace-root-shell": "true" } : {})}
       {...(productionWorkspaceBridge ? { "data-production-workspace-bridge": "true" } : {})}
+      {...(workUnitQueueDensity ? { "data-ws-wu-queue-density": workUnitQueueDensity } : {})}
     >
       <div className="adminv2-ws-dept-v2-contain">
         {containLead}

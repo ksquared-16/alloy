@@ -23,10 +23,10 @@ Work-unit pages contain **two vertical zones only**:
 Queue visibility is **higher priority** than telemetry visibility.
 
 - Queue list uses a **bounded scroll shell** (`.adminv2-ws-wu-queue-list-shell`) with **`overflow-y: auto`** — the queue owns scroll, not the page.
-- Target **5–6 visible rows** on laptop viewports; **6–7** on larger monitors.
+- Target **5–6 visible rows** on laptop viewports; **6–7** on larger monitors (with **`data-ws-wu-queue-density="pass-1"`** compact spacing active on `WorkUnitWorkspace`).
 - Queue lane **bottom aligns with command rail bottom** on desktop (throughput deck stretches to rail height).
 - **Scroll ownership:** `.adminv2-ws-wu-queue-list-shell` owns `overflow-y: auto`; header and rails stay fixed.
-- Work-unit rows use a **~12% tighter** vertical stack (padding/gap only — columns and actions unchanged).
+- Work-unit rows use **compact spacing** (`data-ws-wu-queue-density="pass-1"`) — padding/gap only; typography and badge sizes unchanged.
 - Row behavior, selection, drawer open, and registry actions are **unchanged**.
 - Telemetry must **not** consume primary-column vertical space.
 
@@ -34,11 +34,53 @@ Queue visibility is **higher priority** than telemetry visibility.
 
 | Token | Role |
 |-------|------|
-| `--ws-wu-queue-visible-rows-target` | Row-count floor (5 laptop; 6 @1440px; 7 @1280×900+) |
-| `--ws-wu-queue-row-min-height` | Work-unit row min height (~43px, ~12% tighter) |
+| `--ws-wu-queue-visible-rows-target` | Row-count floor (6 laptop / 7 @1440px+ with pass-1) |
+| `--ws-wu-queue-row-min-height` | Work-unit row min height (~37px with pass-1) |
 | `--ws-wu-queue-row-stack-estimate` | Per-row height estimate for scroll floor |
 | `--ws-wu-queue-records-scroll-top-offset` | Reserve space for header deck (~14rem) |
 | `--ws-wu-queue-records-scroll-max-height` | Viewport-based scroll fallback (mobile) |
+| `--ws-wu-contain-padding-inline-end` | Trailing contain inset (`0` — rail closer to viewport edge) |
+| `--ws-wu-workbench-gutter` | Primary ↔ command gap (`14px`; default surfaces use `20px`) |
+| `--ws-wu-queue-icon-primary-size` | Household / entity icon (`16px`) |
+| `--ws-wu-queue-icon-secondary-size` | Contact / child / email / phone icons (`14px`) |
+| `--ws-wu-queue-icon-muted-color` | Neutral metadata icon color |
+| `--ws-wu-queue-icon-neutral-color` | Primary entity icon color |
+
+## Horizontal layout polish (right rail edge alignment)
+
+Reclaim **~16–32px** for the primary queue without shrinking the command rail or BOS content.
+
+**Rules:**
+
+- Trim **trailing** workspace scroll padding on work-unit routes (`padding-right: 12px` at `sm+`; was `20px` from shell `px-5`).
+- Set **`--ws-wu-contain-padding-inline-end: 0`** on work-unit root (default contain trailing inset is `12px`).
+- Tighten **`--ws-wu-workbench-gutter`** to `14px` for page split, operational row, and command-rail separator padding.
+- **Do not** change command column grid fraction or BOS host `min-height`.
+- **Do not** introduce horizontal overflow; drawer overlay geometry unchanged (`--adminv2-drawer-outer-margin` untouched).
+- Scoped to **`work_unit` + `adminv2-ws-wu-v2`** only — department/record/company surfaces keep default gutters.
+
+## Queue record icon + color doctrine
+
+Work-unit queue rows use **neutral metadata icons**. Pine/green is **not** a default person/contact accent.
+
+| Role | Size | Color |
+|------|------|-------|
+| Household / primary entity | `16px` (`--ws-wu-queue-icon-primary-size`) | `--ws-wu-queue-icon-neutral-color` |
+| Person, email, phone, related child | `14px` (`--ws-wu-queue-icon-secondary-size`) | `--ws-wu-queue-icon-muted-color` |
+| Primary contact name | typography tier | dark / midnight — **not** green |
+| Email / phone values | typography tier | muted text + muted icon |
+| Status / attention | semantic tokens | unchanged — amber/red only when meaningful |
+| BOS + row action buttons | existing pine treatment | **only** explicit action affordances |
+
+**Reserved pine/green for:**
+
+- BOS composer and row **Work with BOS** controls
+- Positive / selected / active action states
+- Brand accents on buttons — **not** record metadata icons
+
+**Do not:** mix green person icons with dark email/phone icons in the same contact stack; use decorative pine circles on household icons.
+
+Implementation: `workspace.css` under `[data-ws-surface="work_unit"].adminv2-ws-wu-v2`. Cross-surface queue row rules remain in **`queue-record-doctrine.md`**; work-unit surfaces override icon color to neutral per this doc.
 
 ## Right rail utilities (Actions → Telemetry → BOS)
 

@@ -629,6 +629,13 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface {
   background-color: #ffffff;
 }
 
+/* Work unit — trim trailing scroll-surface padding so command rail sits closer to viewport edge */
+@media (min-width: 640px) {
+  html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface:has([data-ws-surface="work_unit"].adminv2-ws-wu-v2) {
+    padding-right: 12px !important;
+  }
+}
+
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-root {
   --ws-dept-surface-solid: #ffffff;
   --ws-dept-surface-raised: #ffffff;
