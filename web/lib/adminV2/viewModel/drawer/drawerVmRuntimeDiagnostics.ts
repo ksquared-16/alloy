@@ -35,7 +35,9 @@ export type DrawerVmRuntimeDiagnosticEvent =
     | "drawer_vm_status_defs_reconciled"
     | "drawer_vm_status_double_commit_detected"
     | "drawer_vm_status_write"
-    | "work_unit_row_related_targets_resolved";
+    | "work_unit_row_related_targets_resolved"
+    | "drawer_vm_composed_not_ready"
+    | "drawer_vm_composed_legacy_miss_vm_ok";
 
 function mapEventToPhase(event: DrawerVmRuntimeDiagnosticEvent): string {
     if (event.includes("cache_hit")) return "cache_hit";

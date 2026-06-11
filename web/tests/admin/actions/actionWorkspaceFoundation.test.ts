@@ -118,7 +118,8 @@ describe("action workspace foundation", () => {
         expect(addChild).toContain("BOS_EXECUTION_LOADER_PHASES_ADD_CHILD");
         expect(scheduleTour).toContain("BosExecutionLoader");
         expect(scheduleTour).toContain("BOS_EXECUTION_LOADER_PHASES_SCHEDULE_TOUR");
-        expect(drawerOpening).toContain("BosExecutionLoader");
+        expect(drawerOpening).toContain("AlloyCanonicalLoadingSurface");
+        expect(drawerOpening).not.toContain("BosExecutionLoader");
         expect(drawerOpening).not.toContain("animate-spin");
     });
 

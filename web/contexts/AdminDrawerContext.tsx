@@ -67,6 +67,7 @@ import {
     isDrawerSwapLayoutBodyWarm,
     waitForDrawerSwapLayoutBodyWarm,
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerSwapBodyReadiness";
+import { DRAWER_SWAP_BODY_MAX_HOLD_MS } from "@/lib/adminV2/runtime/adminV2UiSessionCacheTtl";
 import type { PersonDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel";
 import type { ChildDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
 import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
@@ -831,7 +832,11 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     swapBodyCommitTransitionRef.current = next.transitionId;
                     return next;
                 });
-                void waitForDrawerSwapLayoutBodyWarm(swapParamsForBody).then(() => {
+                const bodyWarmP = waitForDrawerSwapLayoutBodyWarm(swapParamsForBody).then(() => true);
+                const bodyHoldTimeoutP = new Promise<boolean>((resolve) => {
+                    window.setTimeout(() => resolve(true), DRAWER_SWAP_BODY_MAX_HOLD_MS);
+                });
+                void Promise.race([bodyWarmP, bodyHoldTimeoutP]).then(() => {
                     if (swapBodyCommitTransitionRef.current !== bodyWaitTransitionId) return;
                     if (drawerRuntimePhaseRef.current.transitionId !== bodyWaitTransitionId) return;
                     if (drawerRuntimePhaseRef.current.phase !== "applying_vm") return;

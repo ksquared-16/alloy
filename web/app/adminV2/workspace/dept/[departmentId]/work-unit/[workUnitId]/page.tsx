@@ -65,6 +65,7 @@ import {
     queueRowsBufferMatchesActiveLane,
     shouldApplyWorkUnitQueueRowsResponse,
 } from "@/lib/workspace/workUnitQueueRowFetchApply";
+import { queuePayloadMatchesActiveLane } from "@/lib/workspace/workUnitQueueLaneOwnership";
 import {
     peekCachedQueueItemsForPill,
     resolveWorkUnitQueueRowsRefreshing,
@@ -2733,8 +2734,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setActiveWorkUnitId(lifecycleNavWuId);
                 }
                 setWuQueueLaneAuthorityReady(true);
-                lifecyclePillSwitchRetainRowsRef.current = true;
-                setLifecyclePillRetainRows(true);
                 if (targetSelection?.queueKey) {
                     const cachedLane = touchCachedQueueItemsForPill({
                         cache: queueRowClientCacheRef.current,
@@ -2771,6 +2770,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             { quietStaleRefresh: true, userInitiated: true }
                         );
                     } else {
+                        setQueueItems(null);
+                        queueRowsBufferRef.current = [];
+                        queueRowsBufferQueueKeyRef.current = null;
+                        queueRowsBufferWorkUnitIdRef.current = null;
+                        lifecyclePillSwitchRetainRowsRef.current = false;
+                        setLifecyclePillRetainRows(false);
                         setQueueItemsLoading(true);
                         void fetchQueueItems(
                             targetSelection.workUnitId,
@@ -2920,8 +2925,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     department_id: departmentId,
                 });
                 setQueuePillPendingKey(nextKey);
-                lifecyclePillSwitchRetainRowsRef.current = true;
-                setLifecyclePillRetainRows(true);
+                setQueueItems(null);
+                queueRowsBufferRef.current = [];
+                queueRowsBufferQueueKeyRef.current = null;
+                queueRowsBufferWorkUnitIdRef.current = null;
+                lifecyclePillSwitchRetainRowsRef.current = false;
+                setLifecyclePillRetainRows(false);
+                setQueueItemsLoading(true);
                 markWorkUnitVmPillSwitchCacheMissHoldCurrent({
                     department_id: departmentId,
                     work_unit_id: workUnitId,
@@ -3020,8 +3030,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 ? `${ATTENTION_BUCKET_PILL_PREFIX}${next}`
                 : "needs_attention";
             setQueuePillPendingKey(pillKey);
-            lifecyclePillSwitchRetainRowsRef.current = true;
-            setLifecyclePillRetainRows(true);
+            setQueueItems(null);
+            lifecyclePillSwitchRetainRowsRef.current = false;
+            setLifecyclePillRetainRows(false);
+            setQueueItemsLoading(true);
             setSelectedQueueKeyTraced("handleAttentionBucketSelect", pillKey);
             setLaneUnmappedOnly(false);
             setAttentionBucketKey(next);
@@ -4548,13 +4560,31 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 );
                 const ent = peekFreshQueueRowCache(queueRowClientCacheRef.current, logicalKey);
                 if (ent?.payload) {
-                    queueItemsForDisplay = ent.payload;
+                    const peekMatchesLane = queuePayloadMatchesActiveLane({
+                        workUnitId: workUnitId ?? "",
+                        activeWorkUnitId: workUnitId ?? "",
+                        activeQueueKey,
+                        queueItems: ent.payload,
+                        queueDefinition: workUnit?.queue_definition,
+                    });
+                    if (peekMatchesLane) {
+                        queueItemsForDisplay = ent.payload;
+                    }
                 }
             }
         }
 
-        const entity = queueItemsForDisplay?.queue.entity_type ?? activeQueue?.entity_type ?? "job";
-        const rawList = (queueItemsForDisplay?.items ?? []) as unknown[];
+        const payloadMatchesActiveLane = queuePayloadMatchesActiveLane({
+            workUnitId: workUnitId ?? "",
+            activeWorkUnitId: workUnitId ?? "",
+            activeQueueKey,
+            queueItems: queueItemsForDisplay,
+            queueDefinition: workUnit?.queue_definition,
+        });
+        const authoritativeQueueItems = payloadMatchesActiveLane ? queueItemsForDisplay : null;
+
+        const entity = authoritativeQueueItems?.queue.entity_type ?? activeQueue?.entity_type ?? "job";
+        const rawList = (authoritativeQueueItems?.items ?? []) as unknown[];
 
         const unmappedClientFilter =
             laneUnmappedOnly &&
@@ -4581,7 +4611,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 (r as { _placement_waitlist_row?: unknown })._placement_waitlist_row != null
         );
         const waitlistShadowMode =
-            queueItems?.placement_projection_diagnostics?.shadow_mode !== false;
+            authoritativeQueueItems?.placement_projection_diagnostics?.shadow_mode !== false;
         const rowsForQueueVm = waitlistCandidateSourceRows
             ? (() => {
                   const sorted = sortPlacementCandidateQueueRows(
@@ -4893,13 +4923,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (
             !queueItemsError &&
             !queueItemsLoading &&
-            queueItems &&
-            activeQueueKey &&
-            workUnitQueuePillKeysEquivalent(
-                workUnit ? { queue_definition: workUnit.queue_definition } : null,
-                String(queueItems.queue.key ?? ""),
-                activeQueueKey
-            )
+            payloadMatchesActiveLane &&
+            authoritativeQueueItems &&
+            activeQueueKey
         ) {
             queueRowsBufferRef.current = liveVmItems.slice();
             queueRowsBufferWorkUnitIdRef.current = workUnitId;
@@ -4918,26 +4944,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         b
                     )
             );
-        const laneMayPaint = workUnitLaneReveal.mayPaintRows;
-        const lifecycleRetainPaint =
-            lifecyclePillRetainRows && queueItemsLoading && liveVmItems.length > 0;
-        const pillSwitchRetainPaint =
-            (lifecyclePillRetainRows || queuePillPendingKey != null) &&
-            queueItemsLoading &&
-            (liveVmItems.length > 0 || queueRowsBufferRef.current.length > 0);
+        const laneMayPaint = workUnitLaneReveal.mayPaintRows && payloadMatchesActiveLane;
+        const pillSwitchPending = queuePillPendingKey != null;
         const rowsRefreshing = resolveWorkUnitQueueRowsRefreshing({
             lane_reveal_settled: laneMayPaint,
             queue_items_loading: queueItemsLoading,
             bootstrap_loading: loading,
-            pill_switch_retain_rows: lifecycleRetainPaint || pillSwitchRetainPaint,
+            pill_switch_retain_rows: false,
         });
-        const displayItems = laneMayPaint
-            ? liveVmItems
-            : lifecycleRetainPaint
-              ? liveVmItems
-              : bufferMatchesLane && queueRowsBufferRef.current.length > 0
-                ? queueRowsBufferRef.current
-                : [];
+        const displayItems =
+            laneMayPaint && payloadMatchesActiveLane
+                ? liveVmItems
+                : bufferMatchesLane && payloadMatchesActiveLane && queueRowsBufferRef.current.length > 0
+                  ? queueRowsBufferRef.current
+                  : [];
         queueDisplayItemsRef.current = displayItems;
 
         const laneTitle = workUnit.name ?? "Queue";
@@ -4948,21 +4968,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const tabCount =
             activeQueue?.counts_deferred === true ? undefined : typeof activeQueue?.count === "number" ? activeQueue.count : undefined;
         const siteScopedLoadedTotal =
-            queueItems != null &&
+            authoritativeQueueItems != null &&
+            payloadMatchesActiveLane &&
             !queueItemsError &&
             !queueItemsLoading &&
-            queueItems.total_omitted !== true &&
-            typeof queueItems.total === "number"
-                ? queueItems.total
+            authoritativeQueueItems.total_omitted !== true &&
+            typeof authoritativeQueueItems.total === "number"
+                ? authoritativeQueueItems.total
                 : undefined;
         const reconcileListEmptyVsTab =
-            queueItems != null &&
+            authoritativeQueueItems != null &&
+            payloadMatchesActiveLane &&
             !queueItemsError &&
             !queueItemsLoading &&
-            queueItems.queue.key === activeQueue?.key &&
-            (queueItems.offset ?? 0) === 0 &&
+            authoritativeQueueItems.queue.key === activeQueue?.key &&
+            (authoritativeQueueItems.offset ?? 0) === 0 &&
             liveVmItems.length === 0 &&
-            queueItems.total_omitted === true &&
+            authoritativeQueueItems.total_omitted === true &&
             typeof tabCount === "number" &&
             tabCount > 0;
         const unmappedListView =
@@ -4975,10 +4997,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
               ? 0
               : siteScopedLoadedTotal != null
                 ? siteScopedLoadedTotal
-                : queueItems != null
-                  ? queueItems.total_omitted === true
+                : authoritativeQueueItems != null && payloadMatchesActiveLane
+                  ? authoritativeQueueItems.total_omitted === true
                       ? tabCount
-                      : queueItems.total
+                      : authoritativeQueueItems.total
                   : tabCount;
         const rowTotalDisplay = effectiveRowTotal == null ? "—" : String(effectiveRowTotal);
         const activeGrainPres = activeQueue
@@ -4995,15 +5017,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
         const placementDiagnostics: WorkUnitPlacementQueueDiagnostics | undefined =
             entity === "opportunity" &&
-            queueItems &&
-            !queueItemsError &&
-            (String(queueItems.queue.key ?? "") === activeQueueKey ||
-                workUnitQueuePillKeysEquivalent(
-                    workUnit ? { queue_definition: workUnit.queue_definition } : null,
-                    String(queueItems.queue.key ?? ""),
-                    activeQueueKey
-                ))
-                ? queueItems.placement_projection_diagnostics
+            authoritativeQueueItems &&
+            payloadMatchesActiveLane &&
+            !queueItemsError
+                ? authoritativeQueueItems.placement_projection_diagnostics
                 : undefined;
 
         const hasPlacementCandidateRows = liveVmItems.some((i) => i.placementWaitlistCandidate != null);
@@ -5068,14 +5085,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 queueEntityType: entity,
                 // rowsLoading suppresses "No records" empty-state copy while a fetch is in flight.
                 // Belt-and-suspenders with rowsHeld (which QueueBlock also checks for empty state).
-                rowsLoading: queueItemsLoading && !pillSwitchRetainPaint && !lifecycleRetainPaint,
-                rowsHeld: !laneMayPaint && !lifecycleRetainPaint && !pillSwitchRetainPaint,
+                rowsLoading:
+                    queueItemsLoading &&
+                    (payloadMatchesActiveLane || pillSwitchPending) &&
+                    displayItems.length === 0,
+                rowsHeld:
+                    (pillSwitchPending || !payloadMatchesActiveLane) &&
+                    queueItemsLoading &&
+                    displayItems.length === 0,
                 rowsRefreshing,
                 rowActionsPending:
                     displayItems.length > 0 &&
                     !queueRowActionsReady &&
-                    !queueRowActionsHydratedRef.current &&
-                    !lifecycleRetainPaint,
+                    !queueRowActionsHydratedRef.current,
                 ...(workUnitGroupHeaders ? { workUnitGroupHeaders } : {}),
                 waitlistProgramCategoryContext,
             },
@@ -6783,22 +6805,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             wuPlacementRows && wuPlacementRows.length > 0 ? wuPlacementRows.length : undefined
                         }
                         commandRailTelemetrySlot={
-                            workUnitQueueRevealReady ? (
-                                <AutomationWorkflowsBlock
-                                    presentation="work_unit_rail"
-                                    title="Automations"
-                                    kpisLoading={workflowKpisLoading}
-                                    kpis={{
-                                        runs_today: workflowKpis.runs_today,
-                                        failed_last_7d: workflowKpis.failed_last_7d,
-                                        running_last_7d: workflowKpis.running_last_7d,
-                                        success_rate_last_7d: workflowKpis.success_rate_last_7d,
-                                    }}
-                                    partitions={workflowPartitions}
-                                    href="/admin/workflows"
-                                    onWorkflowDiagnostics={openWorkflowDiagnostics}
-                                />
-                            ) : null
+                            <AutomationWorkflowsBlock
+                                presentation="work_unit_rail"
+                                title="Automations"
+                                kpisLoading={workflowKpisLoading}
+                                kpis={{
+                                    runs_today: workflowKpis.runs_today,
+                                    failed_last_7d: workflowKpis.failed_last_7d,
+                                    running_last_7d: workflowKpis.running_last_7d,
+                                    success_rate_last_7d: workflowKpis.success_rate_last_7d,
+                                }}
+                                partitions={workflowPartitions}
+                                href="/admin/workflows"
+                                onWorkflowDiagnostics={openWorkflowDiagnostics}
+                            />
                         }
                     />
                     <UpdateStatusAddNoteModal

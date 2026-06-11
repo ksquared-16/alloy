@@ -71,11 +71,14 @@ describe("Queue No-records display guard", () => {
      * Structural: page.tsx must pass queueItemsLoading as rowsLoading so an in-flight
      * request suppresses "No records" at the data layer too (belt-and-suspenders).
      */
-    it("page.tsx wires rowsLoading to queueItemsLoading in queue block model", () => {
+    it("page.tsx wires lane-aware rowsLoading in queue block model", () => {
         const src = readSrc(
             "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"
         );
-        expect(src).toContain("rowsLoading: queueItemsLoading,");
+        expect(src).toContain("queuePayloadMatchesActiveLane");
+        expect(src).toContain("rowsLoading:");
+        expect(src).toContain("rowsHeld:");
+        expect(src).toContain("payloadMatchesActiveLane");
     });
 
     /**

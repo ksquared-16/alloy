@@ -4,7 +4,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { shouldShowVmDrawerColdShell } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 import { isOpportunityDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
-import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import {
+    loadOpportunityDrawerViaViewModel,
+    type LoadOpportunityDrawerViaViewModelResult,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import { opportunityDrawerViewModelHardCutoverFailureMessage } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelHardCutover";
 import {
     buildPrepareParamsFromOpenDrawer,
     peekDrawerViewModelPreloadSync,
@@ -45,6 +49,15 @@ export type OpportunityDrawerVmPayloadState = {
     ) => void;
     reloadOpportunityDisplayVm: () => Promise<void>;
 };
+
+function formatOpportunityDrawerVmLoadError(
+    result: Extract<LoadOpportunityDrawerViaViewModelResult, { ok: false }>
+): string {
+    if (result.reason === "composed_not_ready" && result.missing_fields?.length) {
+        return `Drawer is preparing required fields: ${result.missing_fields.join(", ")}.`;
+    }
+    return opportunityDrawerViewModelHardCutoverFailureMessage(result);
+}
 
 export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState {
     const {
@@ -223,7 +236,15 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
                 :   0;
             if (!result.ok) {
                 setColdLoading(false);
-                setError(result.reason);
+                setError(formatOpportunityDrawerVmLoadError(result));
+                logDrawerVmRuntime("cold_fetch_error", {
+                    opportunity_id: drawer.id,
+                    reason: result.reason,
+                    missing_fields:
+                        result.reason === "composed_not_ready"
+                            ? (result.missing_fields ?? []).join(",")
+                            : undefined,
+                });
                 return;
             }
             if (!isOpportunityDrawerViewModelPreload(result.preload)) {

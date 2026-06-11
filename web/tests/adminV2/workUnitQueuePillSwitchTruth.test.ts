@@ -29,14 +29,17 @@ describe("workUnitQueuePillSwitchTruth", () => {
         expect(cachedLaneIdx).toBeLessThan(pillKeyIdx);
     });
 
-    it("cache-miss pill switch retains prior rows and marks pending before key change", () => {
+    it("cache-miss pill switch clears stale rows and marks pending before key change", () => {
         const src = readFileSync(PAGE, "utf8");
         expect(src).toContain("setQueuePillPendingKey(nextKey)");
-        expect(src).toContain("lifecyclePillSwitchRetainRowsRef.current = true");
+        expect(src).toContain("setQueueItems(null)");
+        expect(src).toContain("queuePayloadMatchesActiveLane");
         expect(src).toContain("markKpiPillCache(\"miss\"");
         expect(src).toContain("shouldSuppressQueueLoadingOnPillSwitch");
         expect(src).toContain('qs.set("row_mode", "reveal")');
         expect(src).toContain("backgroundListRefresh: true");
+        const missBlock = src.slice(src.indexOf('markKpiPillCache("miss"'));
+        expect(missBlock).not.toContain("lifecyclePillSwitchRetainRowsRef.current = true");
     });
 
     it("user-initiated fetch does not block row apply on row-actions hydration", () => {

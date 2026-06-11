@@ -1,15 +1,14 @@
 "use client";
 
-import { BosExecutionLoader } from "@/components/admin/actions/BosExecutionLoader";
+import { AlloyCanonicalLoadingSurface } from "@/lib/adminV2/runtime/alloyCanonicalLoadingSurface";
 
-/** External first-paint gate — drawer modal does not mount until bootstrap + primary are ready. */
+/** Canonical BOS loading gate — drawer modal does not mount until VM + body are ready. */
 export default function OpportunityDrawerOpeningOverlay(props: {
     onCancel: () => void;
     errorMessage?: string | null;
     recordLabel?: string;
 }) {
     const { onCancel, errorMessage, recordLabel = "record" } = props;
-    const openingTitle = `Opening ${recordLabel}…`;
 
     return (
         <div
@@ -24,7 +23,7 @@ export default function OpportunityDrawerOpeningOverlay(props: {
             data-opportunity-drawer-opening-overlay="true"
         >
             <div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border border-alloy-stone/20 bg-white px-5 py-4 shadow-lg">
-                {errorMessage ? (
+                {errorMessage ?
                     <>
                         <p className="text-center text-sm font-medium text-alloy-ember">{errorMessage}</p>
                         <button
@@ -35,14 +34,11 @@ export default function OpportunityDrawerOpeningOverlay(props: {
                             Dismiss
                         </button>
                     </>
-                ) : (
-                    <BosExecutionLoader
-                        variant="drawer"
-                        title={openingTitle}
-                        subtitle="Preparing inquiry workspace…"
+                :   <AlloyCanonicalLoadingSurface
+                        message={`Preparing ${recordLabel}…`}
                         data-testid="opportunity-drawer-opening-loader"
                     />
-                )}
+                }
             </div>
         </div>
     );

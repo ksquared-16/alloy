@@ -45,6 +45,7 @@ import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawer
 import { shouldUseLeadOverviewComposition } from "@/lib/layout/runtime/leadOverviewComposition";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawerOpeningOverlay";
+import { AlloyCanonicalLoadingSurface } from "@/lib/adminV2/runtime/alloyCanonicalLoadingSurface";
 import OpportunityDrawerTabBackgroundLoader from "@/components/admin/vmDrawer/OpportunityDrawerTabBackgroundLoader";
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
@@ -606,8 +607,7 @@ export default function OpportunityDrawerVmRuntime() {
         drawerVmRender.type === "opportunities" &&
         Boolean(drawerVmRender.id) &&
         !isOpportunityDrawerOpening &&
-        !drawerOpen &&
-        !error;
+        !drawerOpen;
 
     const locationLabel = useMemo(() => {
         if (!record) return null;
@@ -688,6 +688,7 @@ export default function OpportunityDrawerVmRuntime() {
                 <OpportunityDrawerOpeningOverlay
                     onCancel={closeDrawer}
                     recordLabel={opportunitySingular}
+                    errorMessage={error}
                 />
                 : null}
             <EntityDrawerOperatingShell
@@ -725,13 +726,11 @@ export default function OpportunityDrawerVmRuntime() {
                         {queueNavigationControls}
                     </div>
                     : null}
-                {error ?
-                    <p className="text-sm text-alloy-ember">{error}</p>
-                    : null}
                 {showColdShell ?
-                    <div className="adminv2-drawer-vm-cold-loading" data-drawer-vm-runtime-cold-loading="true">
-                        <p className="text-sm font-medium text-alloy-midnight/75">Loading opportunity…</p>
-                    </div>
+                    <AlloyCanonicalLoadingSurface
+                        message={`Preparing ${opportunitySingular}…`}
+                        data-testid="opportunity-drawer-cold-loading"
+                    />
                     : committedVisible && displayVm && record ?
                         <>
                             {!layoutCutoverHeader ?
