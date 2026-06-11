@@ -181,7 +181,7 @@ export default function AdminV2WorkspaceIndexPage() {
         if (lifecycleCardsPending || lifecycleCards.length === 0) return;
         return scheduleAdminV2BackgroundWork(
             () => {
-                warmDefaultOperatorLifecycleEntries(lifecycleCards, null, 1);
+                warmDefaultOperatorLifecycleEntries(lifecycleCards, null);
             },
             { idleTimeoutMs: 1400, fallbackMs: 500 },
         );

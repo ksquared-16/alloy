@@ -77,6 +77,19 @@ describe("workUnitQueuePillPrefetch", () => {
         ).toBe(true);
     });
 
+    it("fails closed without parseable queue_definition", () => {
+        expect(isPrefetchableWorkUnitQueuePillKey("new_inquiry", null)).toBe(false);
+        expect(isPrefetchableWorkUnitQueuePillKey("new_inquiry", {})).toBe(false);
+    });
+
+    it("fails closed when executable key list is empty", () => {
+        expect(
+            isPrefetchableWorkUnitQueuePillKey("new_inquiry", {
+                queue_definition: { version: 2, entity_type: "opportunity", queues: [] },
+            })
+        ).toBe(false);
+    });
+
     it("filterPrefetchableWorkUnitQueuePillKeys drops invalid lanes", () => {
         const visible = [
             "new_inquiry",

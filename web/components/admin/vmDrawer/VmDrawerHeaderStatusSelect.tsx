@@ -206,8 +206,10 @@ export default function VmDrawerHeaderStatusSelect({
 
     const progressiveMenu = statusControl?.renderAs === "dropdown" ? statusControl.progressive_menu : undefined;
     const editableOptions = options ?? [];
+    const hasKnownStatusPresentation = Boolean(displayLabel.trim()) || Boolean(statusKey.trim());
     const showMenu = canMutate && editableOptions.length >= 2;
-    const showSkeleton = canMutate && optionsLoading && editableOptions.length < 2;
+    const showSkeleton =
+        canMutate && optionsLoading && editableOptions.length < 2 && !hasKnownStatusPresentation;
 
     useEffect(() => {
         onDebugModeChange?.(showMenu ? "vm-dropdown" : "vm-readonly-pill");

@@ -194,7 +194,17 @@ export async function runAdminV2NavigationTransition(
             opts.commit();
         } finally {
             activeRunId = null;
-            setSnapshot(IDLE_SNAPSHOT);
+            // Defer idle reset one microtask so pending tile CSS can paint before route commit.
+            void Promise.resolve().then(() => {
+                const snap = getAdminV2NavigationTransitionSnapshot();
+                if (
+                    snap.isTransitioning &&
+                    snap.href === href &&
+                    snap.clickedKey === clickedKey
+                ) {
+                    setSnapshot(IDLE_SNAPSHOT);
+                }
+            });
         }
         return reason;
     };

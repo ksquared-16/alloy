@@ -259,6 +259,7 @@ import {
 import { readQueueUiPresentationFlags } from "@/lib/ui-v2/readQueueUiPresentationFlags";
 import {
     resolveWorkUnitQueueRowsFetchLimit,
+    WORK_UNIT_QUEUE_REVEAL_FETCH_ROWS,
 } from "@/lib/adminV2/workUnitQueueRowsFetchLimit";
 import { applyWorkUnitQueueRecordFilters } from "@/lib/workspace/applyWorkUnitQueueRecordFilters";
 import {
@@ -1953,7 +1954,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     ? findQueueSummaryForSelection(summariesForLimit, workUnitRef.current, queueKeyForLane)
                     : null;
             const searchActive = recordFiltersRef.current.search.trim().length > 0;
-            const fetchLimit = resolveWorkUnitQueueRowsFetchLimit(summaryForLane?.count, { searchActive });
+            const revealFirstFetch =
+                !options?.backgroundListRefresh &&
+                (options?.quietStaleRefresh || options?.userInitiated || options?.prefetchOnly);
+            const fetchLimit =
+                revealFirstFetch ?
+                    WORK_UNIT_QUEUE_REVEAL_FETCH_ROWS
+                :   resolveWorkUnitQueueRowsFetchLimit(summaryForLane?.count, { searchActive });
             const resolvedFetch = resolveWorkUnitFetchQueueKeyFromPill(
                 queueKeyForLane,
                 options?.attentionBucketOverride !== undefined
@@ -1987,7 +1994,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (abSnap) qs.set("attention_bucket", abSnap);
             if (options?.backgroundListRefresh) {
                 /* full queue_list enrichment — no row_mode */
-            } else if (options?.quietStaleRefresh || options?.userInitiated) {
+            } else if (options?.quietStaleRefresh || options?.userInitiated || options?.prefetchOnly) {
                 qs.set("row_mode", "reveal");
             }
             const route = appendWorkspaceSiteToUrl(
@@ -6526,7 +6533,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const queuePillPrefetchSigRef = useRef("");
     useEffect(() => {
-        if (!workUnitAboveFoldPageReady || !workUnitId || !workUnit || !visibleQueuePillKeys.length) return;
+        if (
+            !workUnitAboveFoldPageReady ||
+            !workUnitId ||
+            !workUnit ||
+            workUnit.queue_definition == null ||
+            !visibleQueuePillKeys.length
+        ) {
+            return;
+        }
         const targets = allVisibleWorkUnitLanePrefetchTargets({
             visiblePillKeys: visibleQueuePillKeys,
             selectedPillKey: selectedQueueKey,

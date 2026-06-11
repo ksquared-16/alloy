@@ -704,6 +704,17 @@
   text-decoration: none;
 }
 
+.adminv2-ws-lifecycle-command-card-link:active {
+  transform: scale(0.995) translateY(1px);
+}
+
+.adminv2-ws-lifecycle-command-card-link[data-adminv2-nav-pending="true"] {
+  opacity: 0.92;
+  pointer-events: none;
+  cursor: wait;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--d-accent, #00a283) 28%, transparent);
+}
+
 .adminv2-ws-lifecycle-command-card-link:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--d-pine) 55%, #ffffff);
   outline-offset: 3px;

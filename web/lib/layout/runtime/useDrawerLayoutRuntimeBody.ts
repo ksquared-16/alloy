@@ -136,7 +136,7 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
         }
 
         const id = entityId?.trim() ?? "";
-        if (!id || !vmReady) return;
+        if (!id) return;
 
         const cacheKey = buildDrawerLayoutRuntimeBodyCacheKey(apiPath, id, queryParamsKey);
         const cached = peekDrawerLayoutRuntimeBodyCacheEntry(cacheKey);
@@ -160,6 +160,7 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
             readyIdRef.current = id;
         }
 
+        if (!vmReady) return;
         if (readyIdRef.current === id) return;
 
         let cancelled = false;

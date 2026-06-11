@@ -256,6 +256,16 @@ export function cachePersonDrawerChildOpenSeed(
     return seedRecord;
 }
 
+function stampOpportunityIdOnPersonDrawerSeed(
+    seed: PersonDrawerOpenSeed | null,
+    opportunityRecord: Record<string, unknown>
+): PersonDrawerOpenSeed | null {
+    if (!seed) return null;
+    const opportunityId = trimOrNull(opportunityRecord.id);
+    if (!opportunityId) return seed;
+    return { ...seed, opportunity_id: opportunityId };
+}
+
 /** Build seed from opportunity mirror fields or `_opportunity_persons` row when id matches. */
 export function personDrawerSeedFromOpportunityRecord(
     opportunityRecord: Record<string, unknown>,
@@ -264,15 +274,21 @@ export function personDrawerSeedFromOpportunityRecord(
     const pid = personId.trim();
     if (!pid) return null;
 
-    const inquirySeed = seedFromInquiryChildMatch(opportunityRecord, pid);
+    const inquirySeed = stampOpportunityIdOnPersonDrawerSeed(
+        seedFromInquiryChildMatch(opportunityRecord, pid),
+        opportunityRecord
+    );
     if (inquirySeed) return inquirySeed;
 
     const primaryId = primaryPersonIdFromOpportunityRecord(opportunityRecord);
     if (primaryId === pid) {
         const values = primaryPersonCardValuesFromRecord(opportunityRecord);
-        return personDrawerOpenSeedFromContactValues(pid, values, {
-            presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
-        });
+        return stampOpportunityIdOnPersonDrawerSeed(
+            personDrawerOpenSeedFromContactValues(pid, values, {
+                presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+            }),
+            opportunityRecord
+        );
     }
 
     const rows = opportunityRecord._opportunity_persons;
@@ -282,15 +298,18 @@ export function personDrawerSeedFromOpportunityRecord(
             if (trimOrNull((row as { person_id?: unknown }).person_id) !== pid) continue;
             const name = trimOrNull((row as { name?: unknown }).name);
             const parts = name ? name.split(/\s+/).filter(Boolean) : [];
-            return {
-                personId: pid,
-                first_name: parts[0] ?? "",
-                last_name: parts.length > 1 ? parts.slice(1).join(" ") : "",
-                email: trimOrNull((row as { email?: unknown }).email) ?? undefined,
-                phone: trimOrNull((row as { phone?: unknown }).phone) ?? undefined,
-                display_name: name ?? undefined,
-                presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
-            };
+            return stampOpportunityIdOnPersonDrawerSeed(
+                {
+                    personId: pid,
+                    first_name: parts[0] ?? "",
+                    last_name: parts.length > 1 ? parts.slice(1).join(" ") : "",
+                    email: trimOrNull((row as { email?: unknown }).email) ?? undefined,
+                    phone: trimOrNull((row as { phone?: unknown }).phone) ?? undefined,
+                    display_name: name ?? undefined,
+                    presentation_emphasis: PERSON_DRAWER_GUARDIAN_PRESENTATION_EMPHASIS,
+                },
+                opportunityRecord
+            );
         }
     }
 

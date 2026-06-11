@@ -45,6 +45,16 @@ describe("workUnitQueuePillSwitchTruth", () => {
         expect(src).toMatch(/if \(options\?\.userInitiated\) \{\s*\n\s*void hydrateWorkUnitQueueRowActions\(\)/);
     });
 
+    it("KPI prefetch uses reveal mode with slim row limit", () => {
+        const src = readFileSync(PAGE, "utf8");
+        expect(src).toContain("options?.prefetchOnly");
+        expect(src).toContain("WORK_UNIT_QUEUE_REVEAL_FETCH_ROWS");
+        expect(src).toMatch(
+            /options\?\.quietStaleRefresh \|\| options\?\.userInitiated \|\| options\?\.prefetchOnly/
+        );
+        expect(src).toContain("workUnit.queue_definition == null");
+    });
+
     it("touchCachedQueueItemsForPill returns distinct lane payloads for cache-hit swap", () => {
         const map = new Map<string, { payload: { total: number; items: unknown[] }; fetchedAt: number }>();
         const waitlist = { total: 3, items: [{ id: "w1" }] };

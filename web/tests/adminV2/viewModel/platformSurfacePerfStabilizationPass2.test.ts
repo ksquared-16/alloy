@@ -95,7 +95,7 @@ describe("platform surface perf stabilization pass 2", () => {
         );
     });
 
-    it("warmDefaultOperatorLifecycleEntries caps idle prewarm to one href", async () => {
+    it("warmDefaultOperatorLifecycleEntries respects explicit cap", async () => {
         putWorkUnitSlugRouteCache("new-leads", {
             routeSlug: "new-leads",
             departmentId: "dept-1",

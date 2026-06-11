@@ -93,17 +93,16 @@ export function isPrefetchableWorkUnitQueuePillKey(
     if (isLifecycleWorkUnitNavChipKey(key)) return false;
     if (key === LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY) return false;
 
-    const resolved = resolveWorkUnitFetchQueueKeyFromPill(
-        key,
-        "",
-        workUnit?.queue_definition != null ? { queue_definition: workUnit.queue_definition } : undefined
-    );
+    if (workUnit?.queue_definition == null) return false;
+
+    const resolved = resolveWorkUnitFetchQueueKeyFromPill(key, "", {
+        queue_definition: workUnit.queue_definition,
+    });
     const apiKey = resolved.queueKey.trim();
     if (!apiKey) return false;
 
-    const validKeys = workUnit ? listExecutableQueueKeysForWorkUnit(workUnit) : [];
-    if (workUnit?.queue_definition != null && validKeys.length === 0) return false;
-    if (validKeys.length === 0) return Boolean(apiKey);
+    const validKeys = listExecutableQueueKeysForWorkUnit(workUnit);
+    if (validKeys.length === 0) return false;
     return validKeys.includes(apiKey);
 }
 
@@ -179,7 +178,7 @@ export function allVisibleWorkUnitLanePrefetchTargets(params: {
     workUnit: WorkUnitRowForPrefetch | null;
 }): WorkUnitLanePrefetchTarget[] {
     const wu = params.workUnit;
-    if (!wu?.id?.trim() || !params.visiblePillKeys.length) return [];
+    if (!wu?.id?.trim() || wu.queue_definition == null || !params.visiblePillKeys.length) return [];
 
     const selected = params.selectedPillKey?.trim() || "";
     const out: WorkUnitLanePrefetchTarget[] = [];

@@ -168,6 +168,29 @@ describe("workspace continuity + instant navigation pass 2", () => {
         const grid = read("components/admin/workspace/WorkspaceRootLifecycleGrid.tsx");
         expect(grid).toContain("commitFirst: true");
         expect(grid).toContain("lifecycle_tile_click");
+        expect(grid).toContain("adminV2NavigationClickedItemProps");
+    });
+
+    it("lifecycle tiles have press and pending CSS parity with company tiles", () => {
+        const css = read("app/adminV2/components/workspace/workspace.css");
+        expect(css).toContain(".adminv2-ws-lifecycle-command-card-link:active");
+        expect(css).toContain(
+            '.adminv2-ws-lifecycle-command-card-link[data-adminv2-nav-pending="true"]'
+        );
+    });
+
+    it("opportunity VM drawer waits for body ready before overview shell reveal", () => {
+        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(runtime).toContain("overviewLayoutBody.bodyReady");
+        expect(runtime).not.toContain('overviewLayoutBody.phase === "loading"');
+    });
+
+    it("workspace idle prewarms multiple lifecycle slug entries", () => {
+        const page = read("app/adminV2/workspace/page.tsx");
+        const warm = read("lib/admin/operatorWorkUnitEntryWarm.ts");
+        expect(warm).toContain("OPERATOR_LIFECYCLE_ENTRY_WARM_CAP");
+        expect(page).toContain("warmDefaultOperatorLifecycleEntries(lifecycleCards, null)");
+        expect(page).not.toContain("warmDefaultOperatorLifecycleEntries(lifecycleCards, null, 1)");
     });
 
     it("work-unit page retains coordinated reveal on shell cache seed", () => {
@@ -183,6 +206,21 @@ describe("workspace continuity + instant navigation pass 2", () => {
         );
         expect(warm).toContain("prefetchDrawerLayoutRuntimeBody");
         expect(warm).toContain("markDrawerLinkedPrewarmScheduled");
+    });
+
+    it("linked person prewarm body key aligns with person drawer runtime", () => {
+        const warm = read(
+            "lib/adminV2/viewModel/drawer/vmRuntime/warmLinkedPersonDrawerVmsFromOpportunityRecord.ts",
+        );
+        const personRuntime = read("components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx");
+        const bodyHook = read("lib/layout/runtime/useDrawerLayoutRuntimeBody.ts");
+        const seed = read("lib/admin/drawer/personDrawerOpenSeed.ts");
+        expect(warm).toContain("queryParams: childOpen ? undefined : { opportunityId }");
+        expect(personRuntime).toContain("opportunityId: pinnedOpportunityId");
+        expect(personRuntime).toContain("personDrawerOpenSeed?.opportunity_id");
+        expect(seed).toContain("stampOpportunityIdOnPersonDrawerSeed");
+        expect(bodyHook).toContain("if (!id) return;");
+        expect(bodyHook).toContain("const cacheKey = buildDrawerLayoutRuntimeBodyCacheKey");
     });
 
     it("operational tasks enrichment uses cached entity labels", () => {

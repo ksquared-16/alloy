@@ -159,11 +159,14 @@ export function warmOperatorWorkUnitEntryFromHref(
     });
 }
 
-/** Idle prewarm after /workspace settles — default lifecycle entry only. */
+/** Max lifecycle entry tiles to idle-prewarm without flooding the network. */
+export const OPERATOR_LIFECYCLE_ENTRY_WARM_CAP = 6;
+
+/** Idle prewarm after /workspace settles — visible lifecycle entry tiles (capped). */
 export function warmDefaultOperatorLifecycleEntries(
     cards: readonly Pick<OperatorLifecycleLandingCard, "entryHref">[],
     selectedSiteId: string | null,
-    cap: number = 1,
+    cap: number = OPERATOR_LIFECYCLE_ENTRY_WARM_CAP,
 ): void {
     const hrefs = [...new Set(cards.map((card) => card.entryHref.trim()).filter(Boolean))].slice(0, cap);
     for (const href of hrefs) {
