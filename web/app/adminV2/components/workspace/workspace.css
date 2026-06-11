@@ -120,14 +120,14 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
   /*
-   * Work Unit Layout Doctrine V3 — queue fills rail-aligned lane; compact rows for density.
-   * Target 5–6 visible rows (laptop) / 6–7 (large desktop). See work-unit-layout-doctrine.md
+   * Work Unit Layout Doctrine V3 (frozen June 2026) — compact queue density + rail-aligned lane.
+   * See docs/system/work-unit-layout-doctrine.md § Approved Layout Baseline
    */
-  --ws-wu-queue-row-min-height: 43px;
+  --ws-wu-queue-row-min-height: 37px;
   --ws-wu-queue-records-scroll-top-offset: 14rem;
   --ws-wu-queue-row-stack-estimate: clamp(2.45rem, calc(var(--ws-wu-queue-row-min-height) + 0.5rem), 3.35rem);
-  --ws-wu-queue-row-gap: 6px;
-  --ws-wu-queue-visible-rows-target: 5;
+  --ws-wu-queue-row-gap: 5px;
+  --ws-wu-queue-visible-rows-target: 6;
   --ws-wu-queue-records-scroll-height-cap: 9999px;
   --ws-wu-queue-records-scroll-max-height: min(
     calc(
@@ -140,35 +140,12 @@
 
 @media (min-width: 1440px) {
   [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-    --ws-wu-queue-visible-rows-target: 6;
+    --ws-wu-queue-visible-rows-target: 7;
   }
 }
 
 @media (min-width: 1280px) and (min-height: 900px) {
   [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-    --ws-wu-queue-visible-rows-target: 7;
-  }
-}
-
-/*
- * Queue density experiment pass-1 — spacing-only (~10–15% tighter than V3 baseline).
- * Opt-in via data-ws-wu-queue-density="pass-1". Not canonical doctrine yet.
- * See docs/sprints/06_2026/queue_density_experiment_pass_1.md
- */
-[data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] {
-  --ws-wu-queue-row-min-height: 37px;
-  --ws-wu-queue-row-gap: 5px;
-  --ws-wu-queue-visible-rows-target: 6;
-}
-
-@media (min-width: 1440px) {
-  [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] {
-    --ws-wu-queue-visible-rows-target: 7;
-  }
-}
-
-@media (min-width: 1280px) and (min-height: 900px) {
-  [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] {
     --ws-wu-queue-visible-rows-target: 7;
   }
 }
@@ -6309,127 +6286,127 @@
   scroll-padding-bottom: 8px;
 }
 
-/* Work unit — queue density experiment pass-1 (spacing-only; typography unchanged) */
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .operational-queue-row-shell {
+/* Work unit — compact queue row density (V3 frozen baseline; spacing-only) */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row-shell {
   min-height: 2.05rem;
   gap: 2px 5px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .operational-queue-row {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row {
   min-height: 1.45rem;
   gap: 1px 6px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .operational-queue-row-shell > .operational-queue-row__content {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row-shell > .operational-queue-row__content {
   gap: 2px 6px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-dept-v2-lane-chrome--throughput-deck {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck {
   padding: 1px 3px 2px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-wu-queue-list {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list {
   gap: 4px;
   padding: 3px 5px 4px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-wu-queue-card {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card {
   padding: 1px 4px 2px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-wu-queue-card--compact {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--compact {
   padding: 3px 6px 3px;
   gap: 6px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-crm-queue-preview,
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-enrollment-crm-preview.adminv2-ws-crm-queue-preview {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview.adminv2-ws-crm-queue-preview {
   gap: 2px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-crm-queue-preview__body {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__body {
   gap: 4px 8px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-crm-queue-preview__zone--middle {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__zone--middle {
   gap: 2px;
   padding-left: 5px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-crm-queue-preview--scan .adminv2-ws-crm-queue-preview__zone--left {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview--scan .adminv2-ws-crm-queue-preview__zone--left {
   gap: 2px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-crm-queue-preview__attention-headline {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__attention-headline {
   margin-top: 1px;
   padding: 4px 6px 4px 8px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-crm-queue-preview__operational-summary-preview {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-summary-preview {
   margin-top: 2px;
   padding: 2px 6px 3px;
   gap: 3px 5px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-wu-queue-item-wrap {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-item-wrap {
   gap: 4px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-column-grid {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-column-grid {
   column-gap: 28px;
   row-gap: 4px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-queue-operational-record__header-zone {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-zone {
   padding: 3px 5px 4px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-queue-operational-record__header-grid {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-grid {
   column-gap: 12px;
   row-gap: 1px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-queue-operational-record__header-band {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-band {
   gap: 4px;
   padding-bottom: 2px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-queue-operational-record__facts-band,
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-queue-operational-record__lifecycle-band {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__facts-band,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__lifecycle-band {
   padding: 2px 5px 3px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-queue-operational-record__lifecycle-band {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__lifecycle-band {
   gap: 3px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-queue-operational-record__people-band .adminv2-ws-queue-related-record-rows--compact {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__people-band .adminv2-ws-queue-related-record-rows--compact {
   gap: 1px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .adminv2-ws-queue-operational-record .adminv2-ws-queue-related-record-rows--compact .adminv2-ws-queue-related-record-row {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record .adminv2-ws-queue-related-record-rows--compact .adminv2-ws-queue-related-record-row {
   padding: 1px 4px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .queue-record-field {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field {
   gap: 3px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .queue-record-widget__task-list {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-widget__task-list {
   gap: 1px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .queue-record-widget__task-card,
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .queue-record-widget__task-row {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-widget__task-card,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-widget__task-row {
   padding: 2px 5px;
   gap: 5px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .operational-queue-row__action-rail {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__action-rail {
   gap: 2px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2[data-ws-wu-queue-density="pass-1"] .operational-queue-row__action-rail [data-record-drawer-header-action="true"] {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__action-rail [data-record-drawer-header-action="true"] {
   min-height: 24px;
   max-height: 26px;
   padding: 2px 5px;

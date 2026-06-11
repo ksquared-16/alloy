@@ -103,7 +103,6 @@ export default function WorkUnitWorkspace({
     <WorkspaceShellLayout
       surface="work_unit"
       rootClassName="adminv2-ws-work-unit adminv2-ws-wu-v2"
-      workUnitQueueDensity="pass-1"
       style={wuShellStyle}
       railAriaLabel="Decisions and actions"
       showRail
