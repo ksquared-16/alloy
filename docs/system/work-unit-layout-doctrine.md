@@ -24,7 +24,8 @@ Queue visibility is **higher priority** than telemetry visibility.
 
 - Queue list uses a **bounded scroll shell** (`.adminv2-ws-wu-queue-list-shell`) with **`overflow-y: auto`** — the queue owns scroll, not the page.
 - Target **5–6 visible rows** on laptop viewports; **6–7** on larger monitors.
-- Queue lane **bottom aligns with command rail bottom** on desktop (throughput deck stretches to rail height; records scroll inside).
+- Queue lane **bottom aligns with command rail bottom** on desktop (throughput deck stretches to rail height).
+- **Scroll ownership:** `.adminv2-ws-wu-queue-list-shell` owns `overflow-y: auto`; header and rails stay fixed.
 - Work-unit rows use a **~12% tighter** vertical stack (padding/gap only — columns and actions unchanged).
 - Row behavior, selection, drawer open, and registry actions are **unchanged**.
 - Telemetry must **not** consume primary-column vertical space.

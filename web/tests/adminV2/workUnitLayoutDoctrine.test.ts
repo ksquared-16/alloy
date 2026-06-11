@@ -41,7 +41,12 @@ describe("Work Unit Layout Doctrine V3", () => {
         expect(scrollShellRule).toContain("flex: 1 1 0");
         expect(scrollShellRule).toContain("min-height: 0");
         expect(scrollShellRule).toContain("overscroll-behavior: contain");
+        expect(scrollShellRule).toContain("touch-action: pan-y");
         expect(css).toContain("height: var(--adminv2-workspace-rail-height");
+        expect(css).toContain("grid-template-rows: minmax(0, 1fr)");
+        expect(css).toMatch(
+            /adminv2-ws-wu-queue-list-shell[\s\S]*?height:\s*0/,
+        );
         expect(css).toContain(".adminv2-workspace-scroll-surface:has([data-ws-surface=\"work_unit\"]");
     });
 

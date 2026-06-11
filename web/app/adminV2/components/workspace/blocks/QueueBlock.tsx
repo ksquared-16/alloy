@@ -1891,6 +1891,7 @@ function WorkUnitQueueLane({
       <div
         ref={listShellRef}
         className="adminv2-ws-wu-queue-list-shell relative min-h-0 min-w-0"
+        data-workspace-queue-scrollport="true"
         style={refreshMinHeightPx ? { minHeight: refreshMinHeightPx } : undefined}
       >
         {queue.rowsRefreshing ? (

@@ -2145,10 +2145,16 @@
   }
 
   html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-primary-column {
+    display: flex;
+    flex-direction: column;
     min-height: var(--adminv2-workspace-rail-height, 0);
     max-height: var(--adminv2-workspace-rail-height, none);
     height: var(--adminv2-workspace-rail-height, auto);
     overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck {
+    flex: 0 0 auto;
   }
 
   html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row {
@@ -2156,12 +2162,48 @@
     align-items: stretch;
     min-height: 0;
     overflow: hidden;
+    grid-template-rows: minmax(0, 1fr);
   }
 
   html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane--throughput {
     flex: 1 1 0;
     min-height: 0;
     overflow: hidden;
+    height: 100%;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-lane-strip,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-record-filter-bar-slot {
+    flex-shrink: 0;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-shell.adminv2-ws-dept-qsec--primary {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list-shell {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    scroll-padding-bottom: 8px;
   }
 }
 
@@ -6209,10 +6251,11 @@
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list-shell {
   flex: 1 1 0;
   min-height: 0;
-  max-height: 100%;
+  max-height: var(--ws-wu-queue-records-scroll-max-height);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 6px;
