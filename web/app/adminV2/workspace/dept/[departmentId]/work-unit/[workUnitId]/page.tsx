@@ -3352,6 +3352,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     queueDefinition: cachedWu.queue_definition,
                 });
                 if (cachedPrimary) {
+                    bootstrapPrimaryRowFetchScheduledRef.current = true;
+                    bootstrapPrimaryRowKeyRef.current = primaryKey;
+                    suppressQueueFetchEffectOnceRef.current = true;
+                    primaryLaneRowsSettledOnceRef.current = true;
                     void hydrateWorkUnitQueueRowActions().then(() => {
                         if (cancelled) return;
                         setQueueItems(cachedPrimary);
@@ -3365,6 +3369,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     });
                     return;
                 }
+                bootstrapPrimaryRowFetchScheduledRef.current = true;
+                bootstrapPrimaryRowKeyRef.current = primaryKey;
+                suppressQueueFetchEffectOnceRef.current = true;
                 if (!seededWorkUnitShellRef.current) {
                     setQueueItemsLoading(true);
                 }
@@ -3729,7 +3736,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 primaryLaneHydratedInline = true;
                                 if (inlineIncomplete) {
                                     void fetchQueueItemsRef.current(workUnitId, pillKey, qs, {
-                                        force: true,
+                                        initialLaneReveal: true,
                                         ...(primaryAb ? { attentionBucketOverride: primaryAb } : {}),
                                     });
                                 } else {
@@ -3770,7 +3777,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 bootstrapPrimaryRowFetchScheduledRef.current = true;
                                 setQueueItemsLoading(true);
                                 suppressQueueFetchEffectOnceRef.current = true;
-                                void fetchQueueItemsRef.current(workUnitId, authoritativePrimary, null, {
+                                void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
+                                    initialLaneReveal: true,
                                     ...(authoritativePrimary.trim().toLowerCase() === "needs_attention" &&
                                     abInit
                                         ? { attentionBucketOverride: abInit }
@@ -4248,6 +4256,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey || loading || !workUnit) return;
         if (!wuQueueLaneAuthorityReady) return;
+        if (!primaryLaneRowsSettledOnceRef.current) return;
         if (suppressQueueFetchEffectOnceRef.current) {
             suppressQueueFetchEffectOnceRef.current = false;
             return;

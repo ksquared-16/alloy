@@ -51,4 +51,18 @@ describe("work-unit above-fold reveal gate (page)", () => {
         expect(page).toContain("initialLaneReveal: true");
         expect(page).toContain('qs.set("row_mode", "reveal")');
     });
+
+    it("bootstrap primary lane never blocks first paint on full queue_list", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        const inlineIdx = page.indexOf("if (inlineIncomplete)");
+        const inlineBlock = page.slice(inlineIdx, page.indexOf("} else {", inlineIdx));
+        expect(inlineBlock).toContain("initialLaneReveal: true");
+        expect(inlineBlock).not.toContain("force: true");
+        expect(page).toMatch(
+            /!bootstrapPrimaryRowFetchScheduledRef\.current[\s\S]*?initialLaneReveal: true/
+        );
+        expect(page).toMatch(/!primaryLaneRowsSettledOnceRef\.current\) return/);
+        expect(page).toContain("bootstrapPrimaryRowFetchScheduledRef.current = true");
+        expect(page).toContain("suppressQueueFetchEffectOnceRef.current = true");
+    });
 });
