@@ -1674,11 +1674,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
     }, [departmentId, workUnitId]);
 
-    const askWorkflowAssist = useCallback(() => {
+    const openWorkflowDiagnostics = useCallback(() => {
         const wuLabel = workUnit?.name?.trim() || "this work unit";
         const deptLabel = dept?.name?.trim() || "this department";
         globalAssistant?.focusCommandBar({
-            seedCommand: `Create a workflow for ${wuLabel} in ${deptLabel}`,
+            seedCommand: `Review workflow health, recent failures, and recent runs for ${wuLabel} in ${deptLabel}.`,
             expandThread: true,
         });
     }, [globalAssistant, workUnit?.name, dept?.name]);
@@ -6662,7 +6662,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     }}
                                     partitions={workflowPartitions}
                                     href="/admin/workflows"
-                                    onAskWorkflowAssist={askWorkflowAssist}
+                                    onWorkflowDiagnostics={openWorkflowDiagnostics}
                                 />
                             ) : null
                         }

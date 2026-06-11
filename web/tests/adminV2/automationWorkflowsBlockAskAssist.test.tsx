@@ -22,12 +22,22 @@ describe("AutomationWorkflowsBlock Ask Workflow Assist", () => {
         expect(src).toContain("seedCommand:");
     });
 
-    it("work-unit page uses rail presentation for telemetry", () => {
+    it("work-unit page uses rail presentation and workflow diagnostics", () => {
         const src = readFileSync(
             join(process.cwd(), "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"),
             "utf8",
         );
         expect(src).toContain('presentation="work_unit_rail"');
         expect(src).toContain("commandRailTelemetrySlot");
+        expect(src).toContain("onWorkflowDiagnostics={openWorkflowDiagnostics}");
+    });
+
+    it("rail telemetry exposes Workflow Diagnostics affordance", () => {
+        const src = readFileSync(
+            join(process.cwd(), "app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx"),
+            "utf8",
+        );
+        expect(src).toContain('data-ws-workflow-diagnostics="true"');
+        expect(src).toContain("Workflow Diagnostics");
     });
 });
