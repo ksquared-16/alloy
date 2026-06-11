@@ -75,6 +75,8 @@ All authoritative reads must come from:
 
 **Performance (June 2026):** Atomic above-fold reveal (Pass 3) — **`platform-performance-doctrine.md`**. Locked runtime rules: **`adminv2-runtime-performance-doctrine.md`**.
 
+**Work unit page layout (June 2026 — canonical):** Three-zone primary column (header → bounded queue → operational intelligence) plus sticky BOS command rail. **`work-unit-layout-doctrine.md`**.
+
 **AdminV2 runtime contract (2026-05):** Composer-owned reveal for drawers and work-unit lanes — no section-local skeleton/pop-in. Code: `web/lib/adminV2/runtime/contract/`. **Locked performance doctrine (June 2026):** **`docs/system/adminv2-runtime-performance-doctrine.md`** (supersedes sprint-only **`docs/sprints/05_2026/completed/adminv2-runtime-contract.md`** for reveal/loading rules).
 
 **AdminV2 performance closeout (May 2026 — shipped):** Reveal doctrine (`adminv2_reveal_doctrine.md`), route shell pipeline gates, WU operational bootstrap + session cache, sticky workspace site filter, generic drawer pipeline, drawer queue prev/next with adjacent prefetch, **route-owned WU queue selection** (`workUnitQueueSelection.ts` — URL `?queue=` beats bootstrap default lane; bootstrap accepts `focus_queue`). Closeout UX fixes and regression tests: **`docs/sprints/05_2026/completed/adminv2_performance_closeout.md`**. **June 2026 runtime consistency closeout:** **`docs/sprints/06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`**. Backend optimization backlog: **`docs/sprints/06_2026/adminv2_backend_query_payload_optimization_phase.md`**. Broad speed sprint **closed** for runtime architecture; remaining latency is scoped backend work only.

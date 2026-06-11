@@ -240,7 +240,11 @@ export default function WorkUnitWorkspace({
             </div>
           ) : null}
           {primaryFooterSlot ? (
-            <div className="adminv2-ws-dept-v2-workflows-strip" data-ws-lane-kind="automation_workflows">
+            <div
+              className="adminv2-ws-dept-v2-workflows-strip"
+              data-ws-lane-kind="automation_workflows"
+              data-workspace-zone="operational-intelligence"
+            >
               {primaryFooterSlot}
             </div>
           ) : null}

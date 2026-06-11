@@ -27,6 +27,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 | **Routing** | **`system/routing-doctrine.md`** |
 | **Navigation** | **`system/navigation-doctrine.md`** |
 | **Drawers** | **`system/drawer-doctrine.md`** (+ detail: `drawer-operating-model-v1.md`, `drawer-view-model-runtime-contract.md`) |
+| **Work unit layout** | **`system/work-unit-layout-doctrine.md`** |
 | **Performance** | **`system/platform-performance-doctrine.md`** (+ locked gates: `adminv2-runtime-performance-doctrine.md`) |
 | **Lifecycle model** | **`navigation-doctrine.md`**, **`workspace-system.md`**, **`product/crm-system.md`** |
 | **Legacy classification** | **`system/legacy-architecture-inventory.md`** |
@@ -43,7 +44,7 @@ Do **not** duplicate these topics in new active docs — link instead.
 5. **`system/entity-model.md`** — Tables and identity.
 6. **`system/actions-and-workflows.md`** — Events, workflows, admin actions.
 7. **`system/record-system.md`** — Resolver-backed records, drawer/API truth vs previews.
-8. **`system/workspace-system.md`** — Lifecycles, work units, queues. **Queue row contract:** **`system/queue-record-doctrine.md`**. **Presentation:** **`system/typography-and-presentation-doctrine.md`**.
+8. **`system/workspace-system.md`** — Lifecycles, work units, queues. **Work-unit page layout:** **`system/work-unit-layout-doctrine.md`**. **Queue row contract:** **`system/queue-record-doctrine.md`**. **Presentation:** **`system/typography-and-presentation-doctrine.md`**.
 9. **`system/drawer-doctrine.md`** — Drawer ownership, VM, warm navigation.
 10. **`system/platform-performance-doctrine.md`** — Performance passes and principles. **Locked gates:** **`system/adminv2-runtime-performance-doctrine.md`**.
 11. **`system/roles-and-permissions.md`** — Capabilities vs visibility.

@@ -43,6 +43,8 @@ describe("work-unit queue row open contract", () => {
         const queueBlock = readFileSync(queueBlockPath, "utf8");
         expect(queueBlock).toContain("adminv2-ws-wu-queue-list-shell");
         expect(css).toContain("--ws-wu-queue-records-scroll-max-height");
+        expect(css).toContain("--ws-wu-queue-records-scroll-height-cap: 528px");
+        expect(css).toContain("--ws-wu-queue-intelligence-peek-reserve");
         expect(css).toContain("--ws-shell-bottom-safe");
         expect(css).toMatch(
             /--ws-wu-queue-records-scroll-max-height:[\s\S]*var\(--ws-shell-bottom-safe/,

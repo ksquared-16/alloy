@@ -108,11 +108,24 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-  /* Reserve header/control deck + bottom BOS command bar; records scroll inside `.adminv2-ws-wu-queue-list-shell`. */
+  /*
+   * Work Unit Layout Doctrine — Zone 2 queue workspace (bounded scroll).
+   * ~17.5% shorter than prior cap (640px → 528px) plus intelligence peek reserve
+   * so Workflow Telemetry mast is visible on first paint at standard desktop heights.
+   * See docs/system/work-unit-layout-doctrine.md
+   */
   --ws-wu-queue-records-scroll-top-offset: 17rem;
+  --ws-wu-queue-intelligence-peek-reserve: 10rem;
+  --ws-wu-queue-viewport-height-ratio: 0.825;
+  --ws-wu-queue-records-scroll-height-cap: 528px;
   --ws-wu-queue-records-scroll-max-height: min(
-    calc(100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px)),
-    640px
+    calc(
+      (
+        100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px) -
+          var(--ws-wu-queue-intelligence-peek-reserve)
+      ) * var(--ws-wu-queue-viewport-height-ratio)
+    ),
+    var(--ws-wu-queue-records-scroll-height-cap)
   );
 }
 
