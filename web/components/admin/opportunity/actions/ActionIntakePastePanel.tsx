@@ -1,7 +1,7 @@
 "use client";
 
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
-import { BosWorkingState } from "@/app/adminV2/components/bos/identity/BosWorkingState";
+import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
 
 type Props = {
     pasteText: string;
@@ -53,9 +53,10 @@ export function ActionIntakePastePanel({
             <div className="relative">
                 {parsing ?
                     <div className="absolute inset-0 z-[1] flex items-center justify-center rounded-xl bg-white/90">
-                        <BosWorkingState
+                        <BosRevealSequence
+                            mode="working"
                             message="Analyzing pasted details…"
-                            state="thinking"
+                            active={parsing}
                             markSize="md"
                             data-testid="action-intake-paste-analyzing"
                         />

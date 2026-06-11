@@ -3,7 +3,7 @@ import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollu
 import type { PacketReviewInsightV1 } from "@/lib/forms/packets/packetReviewInsightTypes";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
 import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
-import { BosWorkingState } from "@/app/adminV2/components/bos/identity/BosWorkingState";
+import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
 import {
     BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE,
     FORMS_CASE_FILE_SECTION,
@@ -211,9 +211,10 @@ export function BosReviewSummaryPlaceholder({
             </div>
 
             {loading ?
-                <BosWorkingState
+                <BosRevealSequence
+                    mode="working"
                     message="Preparing review summary…"
-                    state="thinking"
+                    active={loading}
                     markSize="sm"
                     className="py-4"
                     data-testid="bos-review-loading"

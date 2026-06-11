@@ -4,6 +4,7 @@ import { X } from "lucide-react";
 import { useLayoutEffect, useState, type ReactNode } from "react";
 
 import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
+import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
 import "@/app/adminV2/components/bos/identity/bosIdentity.css";
 import { measureActionWorkspacePanelLayout } from "@/lib/bos/bosRailPresentationFlags";
 import { useActionWorkspaceOpenDocumentFlag } from "@/lib/bos/useActionWorkspaceOpenDocumentFlag";
@@ -62,6 +63,11 @@ export function ActionWorkspaceBosShell({
     useActionWorkspaceOpenDocumentFlag(open, presentation);
 
     const [panelLayout, setPanelLayout] = useState<{ left: number; width: number } | null>(null);
+    const [revealComplete, setRevealComplete] = useState(false);
+
+    useLayoutEffect(() => {
+        if (open) setRevealComplete(presentation === "embedded");
+    }, [open, presentation]);
 
     useLayoutEffect(() => {
         if (!open || embedded) {
@@ -174,6 +180,15 @@ export function ActionWorkspaceBosShell({
                     <div className="bos-workspace-shell__atmosphere" aria-hidden />
                     <div className="bos-workspace-shell__perimeter" aria-hidden />
                     <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
+                    {!revealComplete ?
+                        <BosRevealSequence
+                            mode="workspace"
+                            autoPlay
+                            fill
+                            onComplete={() => setRevealComplete(true)}
+                            data-testid="action-workspace-bos-reveal"
+                        />
+                    :   <>
                     <header
                         className="relative shrink-0 text-white"
                         style={{
@@ -236,6 +251,7 @@ export function ActionWorkspaceBosShell({
                             </div>
                         </footer>
                     :   null}
+                    </>}
                     </div>
                 </div>
             </div>

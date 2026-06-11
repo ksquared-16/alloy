@@ -10,6 +10,7 @@ import {
     BosHorizon,
     BosMark,
     BosNotification,
+    BosRevealSequence,
     BosSmoke,
     BosWorkingState,
     BosWorkspaceShell,
@@ -47,6 +48,7 @@ describe("BOS identity system — Sprint 01 primitives", () => {
         expect(BosHorizon).toBeTypeOf("function");
         expect(BosSmoke).toBeTypeOf("function");
         expect(BosWorkingState).toBeTypeOf("function");
+        expect(BosRevealSequence).toBeTypeOf("function");
         expect(BosButton).toBeTypeOf("function");
         expect(BosHeader).toBeTypeOf("function");
         expect(BosNotification).toBeTypeOf("function");
@@ -121,14 +123,24 @@ describe("BOS identity system — Sprint 02 migration", () => {
         expect(read("components/adminV2/messaging/ComposerBosEnhanceModal.tsx")).toContain("BosWorkspaceShell");
     });
 
-    it("smoke appears only in BosWorkingState and BosSmoke modules", () => {
-        const smokeFiles = ["components/admin/actions/ActionWorkspacePasteCanvas.tsx", "components/admin/opportunity/actions/ActionIntakePastePanel.tsx", "components/forms/review/BosReviewSummaryPlaceholder.tsx"];
+    it("thinking surfaces use BosRevealSequence working mode", () => {
+        const smokeFiles = [
+            "components/admin/actions/ActionWorkspacePasteCanvas.tsx",
+            "components/admin/opportunity/actions/ActionIntakePastePanel.tsx",
+            "components/forms/review/BosReviewSummaryPlaceholder.tsx",
+        ];
         for (const f of smokeFiles) {
-            expect(read(f)).toContain("BosWorkingState");
+            expect(read(f)).toContain("BosRevealSequence");
+            expect(read(f)).toContain('mode="working"');
             expect(read(f)).not.toContain("BosSmoke");
         }
         expect(read("components/admin/OpportunityDrawerOpeningOverlay.tsx")).not.toContain("BosSmoke");
         expect(read("components/admin/workspace/AdminV2RouteLoadingState.tsx")).not.toContain("BosSmoke");
+    });
+
+    it("workspace open surfaces use BosRevealSequence workspace mode", () => {
+        expect(read("components/admin/actions/ActionWorkspaceBosShell.tsx")).toContain('mode="workspace"');
+        expect(read("components/adminV2/messaging/ComposerBosEnhanceModal.tsx")).toContain('mode="workspace"');
     });
 
     it("identity gallery exists for screenshot capture", () => {
@@ -152,18 +164,19 @@ describe("BOS identity system — Sprint 03 refinement", () => {
         expect(html).toContain('data-bos-horizon="true"');
     });
 
-    it("BosSmoke uses directional intake/merge/funnel keyframes and complete fade", () => {
+    it("BosSmoke uses soft condensing cloud layers — not stream or lane metaphors", () => {
         const smokeSrc = read("app/adminV2/components/bos/identity/BosSmoke.tsx");
-        expect(smokeSrc).toContain("bos-smoke__wisp--core");
+        expect(smokeSrc).toContain("bos-smoke__cloud--upper");
         expect(smokeSrc).toContain('"complete"');
+        expect(smokeSrc).not.toContain("branch-left");
 
         const css = read("app/adminV2/components/bos/identity/bosIdentity.css");
-        expect(css).toContain("bos-smoke-think-intake-left");
-        expect(css).toContain("bos-smoke-think-merge-a");
-        expect(css).toContain("bos-smoke-converge-stream-left");
+        expect(css).toContain("bos-smoke-think-upper");
+        expect(css).toContain("bos-smoke-converge-upper");
         expect(css).toContain("bos-smoke-complete");
-        expect(css).toContain("linear-gradient(");
-        expect(css).toContain("bottom: 0.125rem");
+        expect(css).toContain("radial-gradient(");
+        expect(css).not.toContain("bos-smoke-think-intake");
+        expect(css).not.toContain("linear-gradient(");
 
         const html = renderToStaticMarkup(createElement(BosSmoke, { state: "complete" }));
         expect(html).toContain('data-bos-smoke="complete"');
@@ -192,5 +205,28 @@ describe("BOS identity system — Sprint 03 refinement", () => {
         const css = read("app/adminV2/components/bos/identity/bosIdentity.css");
         expect(css).toContain("radial-gradient");
         expect(css).not.toContain("border-image");
+    });
+});
+
+describe("BOS identity system — reveal sequence", () => {
+    it("BosRevealSequence exposes working and workspace modes with phase data", () => {
+        const src = read("app/adminV2/components/bos/identity/BosRevealSequence.tsx");
+        expect(src).toContain('mode: BosRevealMode');
+        expect(src).toContain('"working"');
+        expect(src).toContain('"workspace"');
+        expect(src).toContain("data-bos-reveal-phase");
+
+        const html = renderToStaticMarkup(
+            createElement(BosRevealSequence, { mode: "working", message: "Analyzing…", active: true }),
+        );
+        expect(html).toContain('data-bos-reveal-mode="working"');
+        expect(html).not.toContain("animate-spin");
+    });
+
+    it("reveal CSS includes center clear and environment emerge without stream lanes", () => {
+        const css = read("app/adminV2/components/bos/identity/bosIdentity.css");
+        expect(css).toContain("bos-reveal__smoke-veil--clearing");
+        expect(css).toContain("bos-reveal-environment-emerge");
+        expect(css).not.toContain("bos-smoke-think-intake");
     });
 });

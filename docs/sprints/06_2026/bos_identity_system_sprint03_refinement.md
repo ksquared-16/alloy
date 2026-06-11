@@ -80,17 +80,15 @@ These are intentional or out of scope for identity freeze; note for manual scree
 5. **Dev mockups** (`action-workspace-v2-mockups`) — may still show pre-Sprint 03 patterns; not production surfaces.
 6. **Dark forge demo block** in gallery header frame — dark *surface* for `onDark` header is intentional; mark has no badge container.
 
-## Final directional motion pass
+## Smoke direction correction (final)
 
-Smoke-only — frozen identity components untouched.
+Reverted stream/lane/pipeline motion. Smoke is **emotional** — a soft cloud of possibility condensing toward clarity. The mark remains structural.
 
-- **Thinking:** intake from flanks → inward organization → vertical spine → merge streams (collect / organize / structure cycle).
-- **Converging:** all streams funnel to a shared focal point above the mark with accelerating inward easing.
+- **Thinking:** four stacked cloud lobes — wide footprint, soft radial edges, gentle breathe (unresolved, gathering).
+- **Converging:** same cloud mass pulls inward and downward toward the focal point above the mark (understanding emerging).
 - **Complete:** unchanged — smoke fades, mark remains.
 
-Wisps anchored at the mark focal line; linear vertical gradients replace radial cloud blobs.
-
-Review in workflow surfaces: Action Workspace paste canvas, Forms Review placeholder, Action Intake paste panel — not gallery only.
+Explicitly not: intake channels, merge streams, converging lanes, or process-graphic motion.
 
 ## Explicitly not done (per doctrine)
 

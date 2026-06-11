@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
+
 import {
     BosButton,
     BosHeader,
     BosHorizon,
     BosMark,
     BosNotification,
+    BosRevealSequence,
     BosSmoke,
     BosWorkingState,
     BosWorkspaceShell,
@@ -15,11 +18,14 @@ const STATES = [
     { id: "mark", label: "1 · BosMark" },
     { id: "horizon", label: "2 · BosHorizon" },
     { id: "smoke", label: "3 · BosSmoke" },
-    { id: "working", label: "4 · BosWorkingState" },
-    { id: "button", label: "5 · BosButton" },
-    { id: "header", label: "6 · BosHeader" },
-    { id: "notification", label: "7 · BosNotification" },
-    { id: "shell", label: "8 · BosWorkspaceShell" },
+    { id: "reveal-working", label: "4 · BosRevealSequence · working" },
+    { id: "reveal-workspace", label: "5 · BosRevealSequence · workspace" },
+    { id: "working", label: "6 · BosWorkingState (static)" },
+    { id: "button", label: "7 · BosButton" },
+    { id: "header", label: "8 · BosHeader" },
+    { id: "notification", label: "9 · BosNotification" },
+    { id: "shell", label: "10 · BosWorkspaceShell" },
+    { id: "applied", label: "11 · Applied examples" },
 ] as const;
 
 function Frame({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
@@ -35,8 +41,10 @@ function Frame({ id, label, children }: { id: string; label: string; children: R
     );
 }
 
-/** Sprint 03 identity gallery — visual refinement baseline for screenshot review. */
+/** BOS identity gallery — frozen primitives + reveal motion integration. */
 export default function BosIdentitySystemGallery() {
+    const [workspaceReplay, setWorkspaceReplay] = useState(0);
+
     return (
         <div className="min-h-screen bg-[#F6F8FC] px-6 py-10" data-bos-identity-gallery="true">
             <div className="mx-auto max-w-4xl space-y-8">
@@ -44,7 +52,7 @@ export default function BosIdentitySystemGallery() {
                     <p className="font-mono text-xs text-alloy-midnight/45">/dev/bos-identity-system</p>
                     <h1 className="text-2xl font-bold text-alloy-midnight">BOS Identity System</h1>
                     <p className="text-sm text-alloy-midnight/60">
-                        Sprint 03 refinement — mark + horizon + wave, visible smoke, atmospheric shell. Doctrine locked.
+                        Frozen identity + final reveal motion — cloud condenses into BOS; workspace perimeter emerges on open.
                     </p>
                 </header>
 
@@ -96,39 +104,85 @@ export default function BosIdentitySystemGallery() {
                 <Frame id="smoke" label={STATES[2].label}>
                     <div className="grid gap-8 md:grid-cols-3">
                         <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
-                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">thinking — branch, rise, recombine</p>
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">thinking — broad uncertainty</p>
                             <BosSmoke state="thinking" />
                         </div>
                         <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
-                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">converging — narrow toward mark</p>
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">converging — condensing toward mark</p>
                             <BosSmoke state="converging" />
                         </div>
                         <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
-                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">complete — smoke fades, mark remains</p>
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">complete — smoke fades</p>
                             <BosSmoke state="complete" />
                         </div>
                     </div>
                 </Frame>
 
-                <Frame id="working" label={STATES[3].label}>
+                <Frame id="reveal-working" label={STATES[3].label}>
+                    <div className="grid gap-6 md:grid-cols-2">
+                        <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-8">
+                            <p className="mb-4 text-xs font-medium text-alloy-midnight/50">autoPlay — full working reveal</p>
+                            <BosRevealSequence
+                                mode="working"
+                                message="Analyzing inquiry with BOS…"
+                                autoPlay
+                                markSize="md"
+                            />
+                        </div>
+                        <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-8">
+                            <p className="mb-4 text-xs font-medium text-alloy-midnight/50">active loop — live analyze state</p>
+                            <BosRevealSequence
+                                mode="working"
+                                message="Drafting communication…"
+                                active
+                                markSize="md"
+                            />
+                        </div>
+                    </div>
+                </Frame>
+
+                <Frame id="reveal-workspace" label={STATES[4].label}>
+                    <div className="rounded-xl border border-alloy-stone/10 bg-[#FAFBFC] p-4">
+                        <div className="mb-3 flex items-center justify-between gap-3">
+                            <p className="text-xs font-medium text-alloy-midnight/50">workspace reveal — cloud opens into perimeter shell</p>
+                            <button
+                                type="button"
+                                className="rounded-md border border-alloy-stone/20 px-2 py-1 text-[10px] font-semibold text-alloy-midnight/70 hover:bg-white"
+                                onClick={() => setWorkspaceReplay((n) => n + 1)}
+                            >
+                                Replay
+                            </button>
+                        </div>
+                        <div className="relative min-h-[16rem] overflow-hidden rounded-[1.35rem] border border-alloy-stone/10 bg-white">
+                            {workspaceReplay >= 0 ?
+                                <BosRevealSequence
+                                    key={workspaceReplay}
+                                    mode="workspace"
+                                    autoPlay
+                                    fill
+                                    onComplete={() => {}}
+                                />
+                            :   null}
+                        </div>
+                    </div>
+                </Frame>
+
+                <Frame id="working" label={STATES[5].label}>
                     <div className="grid gap-6 md:grid-cols-2">
                         <BosWorkingState message="Analyzing enrollment pipeline…" state="thinking" />
                         <BosWorkingState message="Drafting communication…" state="converging" />
                     </div>
                 </Frame>
 
-                <Frame id="button" label={STATES[4].label}>
+                <Frame id="button" label={STATES[6].label}>
                     <div className="flex flex-wrap items-center gap-3">
                         <BosButton variant="primary" onClick={() => {}} />
                         <BosButton variant="secondary" onClick={() => {}} />
                         <BosButton variant="primary" size="sm" onClick={() => {}} />
                     </div>
-                    <p className="mt-3 text-[11px] text-alloy-midnight/50">
-                        Primary CTAs use white mark only; secondary uses mark + horizon lockup.
-                    </p>
                 </Frame>
 
-                <Frame id="header" label={STATES[5].label}>
+                <Frame id="header" label={STATES[7].label}>
                     <div className="grid gap-6">
                         <div className="grid gap-4 md:grid-cols-3">
                             <BosHeader size="sm" title="BOS Assist" subtitle="Enrollment context loaded" />
@@ -141,19 +195,32 @@ export default function BosIdentitySystemGallery() {
                     </div>
                 </Frame>
 
-                <Frame id="notification" label={STATES[6].label}>
-                    <BosNotification
-                        message="3 recommendations identified."
-                        onAction={() => {}}
-                    />
+                <Frame id="notification" label={STATES[8].label}>
+                    <BosNotification message="3 recommendations identified." onAction={() => {}} />
                 </Frame>
 
-                <Frame id="shell" label={STATES[7].label}>
+                <Frame id="shell" label={STATES[9].label}>
                     <BosWorkspaceShell title="BOS Assist" subtitle="Atmospheric perimeter — discovered, not illustrated">
                         <div className="px-5 py-8 text-sm text-alloy-midnight/70">
                             Workspace content slot — cloud perimeter + header lockup.
                         </div>
                     </BosWorkspaceShell>
+                </Frame>
+
+                <Frame id="applied" label={STATES[10].label}>
+                    <ul className="space-y-2 text-sm text-alloy-midnight/70">
+                        <li>
+                            <span className="font-medium text-alloy-midnight">Working reveal</span> — Action Workspace paste analyze,
+                            Forms review summary loading, Action Intake paste panel.
+                        </li>
+                        <li>
+                            <span className="font-medium text-alloy-midnight">Workspace reveal</span> — Action Workspace BOS shell open,
+                            Composer BOS enhance modal.
+                        </li>
+                        <li className="text-[12px] text-alloy-midnight/50">
+                            Not applied to route transitions, drawer open, standard page loading, or button busy states.
+                        </li>
+                    </ul>
                 </Frame>
             </div>
         </div>

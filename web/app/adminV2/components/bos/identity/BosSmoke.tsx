@@ -10,8 +10,8 @@ type Props = {
 };
 
 /**
- * BOS smoke motion — directional information streams above the mark.
- * Thinking: intake → organize → structure. Converging: funnel to focal point. Complete: fade.
+ * BOS smoke — soft cloud of possibility condensing toward clarity above the mark.
+ * Emotional motion only; the mark carries structure.
  */
 export function BosSmoke({ state = "thinking", className = "" }: Props) {
     return (
@@ -20,11 +20,10 @@ export function BosSmoke({ state = "thinking", className = "" }: Props) {
             aria-hidden
             data-bos-smoke={state}
         >
-            <span className="bos-smoke__wisp bos-smoke__wisp--branch-left" />
-            <span className="bos-smoke__wisp bos-smoke__wisp--branch-right" />
-            <span className="bos-smoke__wisp bos-smoke__wisp--core" />
-            <span className="bos-smoke__wisp bos-smoke__wisp--trail-a" />
-            <span className="bos-smoke__wisp bos-smoke__wisp--trail-b" />
+            <span className="bos-smoke__cloud bos-smoke__cloud--upper" />
+            <span className="bos-smoke__cloud bos-smoke__cloud--mid" />
+            <span className="bos-smoke__cloud bos-smoke__cloud--lower" />
+            <span className="bos-smoke__cloud bos-smoke__cloud--near" />
         </div>
     );
 }

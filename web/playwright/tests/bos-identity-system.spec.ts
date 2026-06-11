@@ -8,7 +8,19 @@ test.describe("BOS identity system gallery screenshots", () => {
         await page.goto("/dev/bos-identity-system", { waitUntil: "networkidle", timeout: 60_000 });
         await expect(page.locator('[data-bos-identity-gallery="true"]')).toBeVisible();
 
-        const frames = ["mark", "horizon", "smoke", "working", "button", "header", "notification", "shell"];
+        const frames = [
+            "mark",
+            "horizon",
+            "smoke",
+            "reveal-working",
+            "reveal-workspace",
+            "working",
+            "button",
+            "header",
+            "notification",
+            "shell",
+            "applied",
+        ];
         for (const frame of frames) {
             const el = page.locator(`[data-bos-identity-gallery-frame="${frame}"]`);
             await el.scrollIntoViewIfNeeded();

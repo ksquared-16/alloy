@@ -1,7 +1,7 @@
 "use client";
 
 import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
-import { BosWorkingState } from "@/app/adminV2/components/bos/identity/BosWorkingState";
+import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
 import { BOS_PASTE_CANVAS_MIN_HEIGHT } from "@/lib/admin/actions/bosWorkspaceShell";
 
 type Props = {
@@ -48,9 +48,10 @@ export function ActionWorkspacePasteCanvas({
             >
                 {analyzing ?
                     <div className="absolute inset-0 z-[1] flex items-center justify-center rounded-[14px] bg-white/88 backdrop-blur-[1px]">
-                        <BosWorkingState
+                        <BosRevealSequence
+                            mode="working"
                             message="Analyzing inquiry with BOS…"
-                            state="thinking"
+                            active={analyzing}
                             markSize="lg"
                             data-testid="action-workspace-paste-analyzing"
                         />

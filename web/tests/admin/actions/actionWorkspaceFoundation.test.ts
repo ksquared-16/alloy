@@ -48,7 +48,8 @@ describe("action workspace foundation", () => {
         expect(bos).not.toContain("BosTerritoryShell");
         expect(bos).not.toContain("BosCloudTerritorySvg");
         expect(bos).not.toContain("clipPath");
-        expect(bos).not.toContain("clip-path");
+        expect(bos).toContain("BosRevealSequence");
+        expect(bos).toContain('mode="workspace"');
         expect(constants).toContain("BOS_WORKSPACE_WIDTH");
         expect(constants).toContain("min(1200px, 84vw)");
         expect(constants).toContain("BOS_WORKSPACE_TOP_INSET");
@@ -129,7 +130,7 @@ describe("action workspace foundation", () => {
         expect(shell).toContain("BosHeader");
         expect(banner).toContain("BosMark");
         expect(success).toContain("BosMark");
-        expect(paste).toContain("BosWorkingState");
+        expect(paste).toContain("BosRevealSequence");
         expect(shell).not.toContain("Sparkles");
         expect(banner).not.toContain("Sparkles");
     });
@@ -321,12 +322,9 @@ describe("CreateLeadActionWorkspace render", () => {
         expect(html).toContain('data-bos-ambient-glow="true"');
         expect(html).not.toContain('data-action-workspace-bos-cloud-territory="true"');
         expect(html).not.toContain("data-bos-cloud-territory-svg");
-        expect(html).toContain('data-testid="create-lead-gather-step"');
-        expect(html).toContain('data-testid="action-workspace-paste-canvas"');
-        expect(html).toContain('data-testid="action-workspace-analyze-button"');
-        expect(html).toContain("Analyze with BOS");
-        expect(html).toContain("Tell BOS about the family");
-        expect(html).toContain('data-testid="action-workspace-step-rail"');
+        expect(html).toContain('data-testid="action-workspace-bos-reveal"');
+        expect(html).toContain('data-bos-reveal-mode="workspace"');
+        expect(html).not.toContain('data-testid="create-lead-gather-step"');
         expect(html).not.toContain('data-testid="create-lead-review-step"');
         expect(html).not.toContain('data-testid="create-lead-gather-fields"');
     });
