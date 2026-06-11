@@ -109,38 +109,33 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
   /*
-   * Work Unit Layout Doctrine V2 — queue-first with discoverable telemetry banner.
-   * Target ~6 visible rows (laptop) / ~7–8 (large desktop); collapsed banner reserves ~4.5rem.
-   * See docs/system/work-unit-layout-doctrine.md
+   * Work Unit Layout Doctrine V3 — telemetry in command rail; queue uses full primary column.
+   * Target ~7 visible rows (laptop) / ~8–9 (large desktop). See work-unit-layout-doctrine.md
    */
   --ws-wu-queue-records-scroll-top-offset: 17rem;
-  --ws-wu-queue-intelligence-banner-reserve: 4.5rem;
   --ws-wu-queue-row-stack-estimate: clamp(3rem, calc(var(--ws-dept-queue-row-min-height) + 0.875rem), 4.125rem);
   --ws-wu-queue-row-gap: 8px;
-  --ws-wu-queue-visible-rows-target: 6;
-  --ws-wu-queue-records-scroll-height-cap: 640px;
+  --ws-wu-queue-visible-rows-target: 7;
+  --ws-wu-queue-records-scroll-height-cap: 680px;
   --ws-wu-queue-records-scroll-max-height: min(
     calc(
       var(--ws-wu-queue-visible-rows-target) * var(--ws-wu-queue-row-stack-estimate) +
         (var(--ws-wu-queue-visible-rows-target) - 1) * var(--ws-wu-queue-row-gap)
     ),
-    calc(
-      100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px) -
-        var(--ws-wu-queue-intelligence-banner-reserve)
-    ),
+    calc(100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px)),
     var(--ws-wu-queue-records-scroll-height-cap)
   );
 }
 
 @media (min-width: 1440px) {
   [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-    --ws-wu-queue-visible-rows-target: 7;
+    --ws-wu-queue-visible-rows-target: 8;
   }
 }
 
 @media (min-width: 1280px) and (min-height: 900px) {
   [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-    --ws-wu-queue-visible-rows-target: 8;
+    --ws-wu-queue-visible-rows-target: 9;
   }
 }
 
@@ -13027,6 +13022,117 @@
   justify-content: flex-end;
   margin: 0 0 12px;
   padding: 0 2px;
+}
+
+/* Work-unit command rail — telemetry card (Actions → Telemetry → BOS) */
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(42vh, 360px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"] .adminv2-ws-command-rail-bos-host {
+  flex: 1 1 auto;
+  min-height: 14rem;
+}
+
+.adminv2-ws-automation-telemetry--work-unit-rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: inherit;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 22%, var(--d-border));
+  border-left: 3px solid color-mix(in srgb, var(--d-brand) 55%, var(--d-border));
+  background: linear-gradient(165deg,
+      color-mix(in srgb, #ffffff 97%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-surface) 94%, var(--d-panel-quiet)) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 3px rgba(39, 63, 82, 0.05);
+  padding: 0;
+  overflow: hidden;
+}
+
+.adminv2-ws-automation-telemetry__rail-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  min-height: 64px;
+  flex-shrink: 0;
+}
+
+.adminv2-ws-automation-telemetry__rail-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.adminv2-ws-automation-telemetry__rail-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--d-text-primary, #18273a) 88%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__rail-subtitle {
+  font-size: 10px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-muted) 45%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__rail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 8px;
+  margin: 0;
+}
+
+.adminv2-ws-automation-telemetry__rail-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.adminv2-ws-automation-telemetry__rail-stat dt {
+  margin: 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+}
+
+.adminv2-ws-automation-telemetry__rail-stat dd {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--d-text-primary, #18273a) 90%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__rail-stat--attention dd {
+  color: color-mix(in srgb, #bc4300 78%, var(--d-text-primary, #18273a));
+}
+
+.adminv2-ws-automation-telemetry__rail-toggle {
+  align-self: flex-start;
+}
+
+.adminv2-ws-automation-telemetry__rail-details {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 10px 12px;
+  scrollbar-gutter: stable;
+}
+
+.adminv2-ws-automation-telemetry--work-unit-rail-expanded {
+  max-height: inherit;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry__mast,

@@ -6648,10 +6648,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         kpiStripSkeletonCellCount={
                             wuPlacementRows && wuPlacementRows.length > 0 ? wuPlacementRows.length : undefined
                         }
-                        primaryFooterSlot={
+                        commandRailTelemetrySlot={
                             workUnitQueueRevealReady ? (
                                 <AutomationWorkflowsBlock
-                                    presentation="work_unit_summary"
+                                    presentation="work_unit_rail"
                                     title="Automations"
                                     kpisLoading={workflowKpisLoading}
                                     kpis={{

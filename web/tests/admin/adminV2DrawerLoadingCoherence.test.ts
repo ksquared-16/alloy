@@ -288,7 +288,7 @@ describe("Work-unit queue-first loading coherence", () => {
         expect(src).toMatch(
             /workUnitKpiStripPlaceholder = workUnitQueueRevealReady && workUnitKpiMetricsPending/,
         );
-        expect(src).toMatch(/primaryFooterSlot=\{[\s\S]*?workUnitQueueRevealReady/);
+        expect(src).toMatch(/commandRailTelemetrySlot=\{[\s\S]*?workUnitQueueRevealReady/);
         expect(src).not.toContain("wu-blocking-kpi-skeleton");
     });
 

@@ -33,7 +33,8 @@ type Props = {
   otherPillSectionKey?: string | null;
   kpiStripPlaceholder: boolean;
   kpiStripSkeletonCellCount?: number;
-  primaryFooterSlot?: ReactNode;
+  /** Workflow telemetry card in the command rail (between Actions and BOS). */
+  commandRailTelemetrySlot?: ReactNode;
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
   queueRowOpenPendingOpportunityId?: string | null;
   queuePillPendingKey?: string | null;
@@ -52,7 +53,7 @@ export default function WorkUnitWorkspace({
   otherPillSectionKey = null,
   kpiStripPlaceholder,
   kpiStripSkeletonCellCount: _kpiStripSkeletonCellCount,
-  primaryFooterSlot,
+  commandRailTelemetrySlot = null,
   opportunityDrawerWorkspaceContext = null,
   queueRowOpenPendingOpportunityId = null,
   queuePillPendingKey = null,
@@ -105,6 +106,7 @@ export default function WorkUnitWorkspace({
       style={wuShellStyle}
       railAriaLabel="Decisions and actions"
       showRail
+      commandRailTelemetrySlot={commandRailTelemetrySlot}
       railContent={
         <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />
       }
@@ -237,15 +239,6 @@ export default function WorkUnitWorkspace({
           {model.workSummary ? (
             <div className="adminv2-ws-dept-v2-workflows-strip">
               <WorkBlock work={model.workSummary} onAction={onAction} mode="summary" surface="work_unit" />
-            </div>
-          ) : null}
-          {primaryFooterSlot ? (
-            <div
-              className="adminv2-ws-dept-v2-workflows-strip"
-              data-ws-lane-kind="automation_workflows"
-              data-workspace-zone="operational-intelligence"
-            >
-              {primaryFooterSlot}
             </div>
           ) : null}
         </>

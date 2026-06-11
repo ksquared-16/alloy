@@ -22,11 +22,12 @@ describe("AutomationWorkflowsBlock Ask Workflow Assist", () => {
         expect(src).toContain("seedCommand:");
     });
 
-    it("work-unit page uses summary presentation for telemetry", () => {
+    it("work-unit page uses rail presentation for telemetry", () => {
         const src = readFileSync(
             join(process.cwd(), "app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx"),
             "utf8",
         );
-        expect(src).toContain('presentation="work_unit_summary"');
+        expect(src).toContain('presentation="work_unit_rail"');
+        expect(src).toContain("commandRailTelemetrySlot");
     });
 });

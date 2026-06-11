@@ -11,15 +11,18 @@ type Props = {
     children: ReactNode;
     ariaLabel: string;
     className?: string;
+    /** Work-unit command rail: Workflow Telemetry card between Actions and BOS. */
+    telemetrySlot?: ReactNode;
 };
 
 /**
- * Workspace right command column — actions scroll region with BOS dock host at bottom.
+ * Workspace right command column — Actions, optional telemetry, BOS dock host at bottom.
  */
 export function WorkspaceCommandRailShell({
     children,
     ariaLabel,
     className = "adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell",
+    telemetrySlot = null,
 }: Props) {
     const bosHostRef = useCommandRailBosHostRef();
     const drawerRailActions = useDrawerCommandRailActionsOptional()?.registration;
@@ -55,6 +58,14 @@ export function WorkspaceCommandRailShell({
             <div className="adminv2-ws-command-rail-actions min-h-0 shrink-0 overflow-y-auto overscroll-contain">
                 {actionsContent}
             </div>
+            {telemetrySlot ?
+                <div
+                    className="adminv2-ws-command-rail-telemetry min-h-0 shrink-0"
+                    data-command-rail-telemetry="true"
+                >
+                    {telemetrySlot}
+                </div>
+            :   null}
             <div
                 ref={bosHostRef}
                 data-adminv2-command-rail-bos-host
