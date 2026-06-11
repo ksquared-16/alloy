@@ -1,4 +1,5 @@
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { ADMINV2_UI_SESSION_CACHE_TTL_MS } from "@/lib/adminV2/runtime/adminV2UiSessionCacheTtl";
 import type { ChildDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
 import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import type { PersonDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel";
@@ -33,7 +34,7 @@ export type DrawerViewModelCacheEntry =
           cachedAt: number;
       };
 
-const DEFAULT_TTL_MS = 5 * 60 * 1000;
+const DEFAULT_TTL_MS = ADMINV2_UI_SESSION_CACHE_TTL_MS;
 
 /** Optional shell pin — header/tabs/first_paint flags for instant reopen without recompose. */
 export type DrawerShellPinSnapshot = {

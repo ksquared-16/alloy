@@ -308,6 +308,7 @@ import {
 import {
     putWorkUnitLaneCacheEntry,
 } from "@/lib/adminV2/viewModel/workUnit/workUnitViewModelSessionCache";
+import { restoreWarmWorkUnitLaneRows } from "@/lib/workspace/workUnitRetainedSurface";
 import { queueRowHasOperationalAttention } from "@/lib/adminV2/workUnitQueueRowAttention";
 import {
     clearWorkUnitBootstrapSessionForEntity,
@@ -1440,27 +1441,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
             return;
         }
 
-        queueRowActionsHydratedRef.current = false;
-        setQueueRowActionsReady(false);
-
-        resetWorkUnitCriticalPathTrace();
-        resetWorkUnitRevealGatePerf();
-        setEnrollmentActionsSettled(false);
-        parallelPrimaryRowStartedRef.current = false;
-        setWuQueueLaneAuthorityReady(false);
-        bootstrapPrimaryRowKeyRef.current = null;
-        bootstrapPrimaryRowFetchScheduledRef.current = false;
-        suppressQueueFetchEffectOnceRef.current = false;
-        wuDeferredQueueKeysRef.current = [];
-        wuLanePreviewBundleDoneRef.current = false;
-        wuDeferredSummaryHydrateDoneRef.current = false;
-        wuBootstrapAttentionRef.current = null;
-        setWuBootstrapAttentionBuckets(null);
-        userLaneTouchedRef.current = false;
-        skipNextQueueFetchEffectRef.current = false;
-
-        setWuPrimaryLaneTimedOut(false);
-
         initialLocationRef.current = readWorkUnitInitialLocationParams();
         setRecordFilters(readWorkUnitQueueRecordFiltersFromLocation());
         const init = initialLocationRef.current;
@@ -1479,6 +1459,34 @@ export default function AdminV2OpportunityWorkUnitPage() {
             pageCacheHitEarly.departmentId === departmentId &&
             pageCacheHitEarly.workUnit.id === workUnitId
         );
+
+        if (!warmLaneRetain) {
+            queueRowActionsHydratedRef.current = false;
+            setQueueRowActionsReady(false);
+        }
+
+        resetWorkUnitCriticalPathTrace();
+        resetWorkUnitRevealGatePerf();
+        setEnrollmentActionsSettled(false);
+        parallelPrimaryRowStartedRef.current = false;
+        if (warmLaneRetain) {
+            setWuQueueLaneAuthorityReady(true);
+            warmLaneRevealReadyRef.current = true;
+        } else {
+            setWuQueueLaneAuthorityReady(false);
+        }
+        bootstrapPrimaryRowKeyRef.current = null;
+        bootstrapPrimaryRowFetchScheduledRef.current = false;
+        suppressQueueFetchEffectOnceRef.current = false;
+        wuDeferredQueueKeysRef.current = [];
+        wuLanePreviewBundleDoneRef.current = false;
+        wuDeferredSummaryHydrateDoneRef.current = false;
+        wuBootstrapAttentionRef.current = null;
+        setWuBootstrapAttentionBuckets(null);
+        userLaneTouchedRef.current = false;
+        skipNextQueueFetchEffectRef.current = false;
+
+        setWuPrimaryLaneTimedOut(false);
 
         if (!warmLaneRetain) {
             queueItemsRequestSeq.current += 1;
@@ -1512,9 +1520,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
         setLaneUnmappedOnly(init.unmapped);
 
-        seededWorkUnitShellRef.current = false;
-        setWorkUnitPageSeededFromCache(false);
-        clearWorkUnitBootstrapSessionForEntity(departmentId, workUnitId);
+        if (!warmLaneRetain) {
+            seededWorkUnitShellRef.current = false;
+            setWorkUnitPageSeededFromCache(false);
+            clearWorkUnitBootstrapSessionForEntity(departmentId, workUnitId);
+        }
         if (!orgId) return;
         setWorkUnit((prev) => (prev?.id === workUnitId ? prev : null));
         if (!pageCacheHitEarly || pageCacheHitEarly.departmentId !== departmentId || pageCacheHitEarly.workUnit.id !== workUnitId) {
@@ -1548,7 +1558,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 { queue_definition: pageCacheHitEarly.workUnit.queue_definition }
             );
             const apiQueueKey = resolvedFetch.queueKey;
-            const cachedPayload = touchCachedQueueItemsForPill({
+            const cachedPayload = restoreWarmWorkUnitLaneRows({
                 cache: queueRowClientCacheRef.current,
                 viewScopeFingerprint,
                 workUnitId,
@@ -1556,9 +1566,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 attentionBucketKey: abSnap,
                 unmappedOnly: init.unmapped,
                 queueDefinition: pageCacheHitEarly.workUnit.queue_definition,
+                laneContext: {
+                    orgId,
+                    departmentId,
+                    workUnitId,
+                    userId: principalUserId,
+                    scopeFingerprint: viewScopeFingerprint,
+                },
             });
             if (cachedPayload) {
-                setQueueItems(cachedPayload);
+                setQueueItems(cachedPayload as QueueItemsResult);
                 setQueueItemsError(null);
                 setQueueItemsLoading(false);
                 primaryLaneRowsSettledOnceRef.current = true;
@@ -1899,6 +1916,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 userInitiated?: boolean;
                 /** Full list enrichment after reveal-first pill switch (background, no loading shell). */
                 backgroundListRefresh?: boolean;
+                /** Initial active lane — reveal-first paint, full list upgrades in background. */
+                initialLaneReveal?: boolean;
                 fromQueueKey?: string | null;
                 /** Prefetch/sibling fetch — use this work unit row for queue_definition guard. */
                 workUnitRowOverride?: {
@@ -1956,7 +1975,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const searchActive = recordFiltersRef.current.search.trim().length > 0;
             const revealFirstFetch =
                 !options?.backgroundListRefresh &&
-                (options?.quietStaleRefresh || options?.userInitiated || options?.prefetchOnly);
+                (options?.quietStaleRefresh ||
+                    options?.userInitiated ||
+                    options?.prefetchOnly ||
+                    options?.initialLaneReveal);
             const fetchLimit =
                 revealFirstFetch ?
                     WORK_UNIT_QUEUE_REVEAL_FETCH_ROWS
@@ -1994,7 +2016,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (abSnap) qs.set("attention_bucket", abSnap);
             if (options?.backgroundListRefresh) {
                 /* full queue_list enrichment — no row_mode */
-            } else if (options?.quietStaleRefresh || options?.userInitiated || options?.prefetchOnly) {
+            } else if (
+                options?.quietStaleRefresh ||
+                options?.userInitiated ||
+                options?.prefetchOnly ||
+                options?.initialLaneReveal
+            ) {
                 qs.set("row_mode", "reveal");
             }
             const route = appendWorkspaceSiteToUrl(
@@ -2458,8 +2485,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 await runNetwork(seq, true);
                 primaryLaneRowsSettledOnceRef.current = true;
                 if (
-                    options?.userInitiated &&
-                    !options.backgroundListRefresh &&
+                    (options?.userInitiated || options?.initialLaneReveal) &&
+                    !options?.backgroundListRefresh &&
                     seq === queueItemsRequestSeq.current
                 ) {
                     void fetchQueueItems(workUnitId, queueKey, null, {
@@ -3338,8 +3365,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     });
                     return;
                 }
-                setQueueItemsLoading(true);
+                if (!seededWorkUnitShellRef.current) {
+                    setQueueItemsLoading(true);
+                }
                 void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
+                    initialLaneReveal: true,
                     ...(primaryKey.trim().toLowerCase() === "needs_attention" && abForFetch
                         ? { attentionBucketOverride: abForFetch }
                         : {}),
@@ -3377,6 +3407,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 suppressQueueFetchEffectOnceRef.current = true;
                 const abForFetch = initialLocation.attentionBucket.trim();
                 void fetchQueueItemsRef.current(workUnitId, pillKey, null, {
+                    initialLaneReveal: true,
                     ...(primaryKey.trim().toLowerCase() === "needs_attention" && abForFetch
                         ? { attentionBucketOverride: abForFetch }
                         : {}),

@@ -50,7 +50,7 @@ describe("workUnitQueuePillSwitchTruth", () => {
         expect(src).toContain("options?.prefetchOnly");
         expect(src).toContain("WORK_UNIT_QUEUE_REVEAL_FETCH_ROWS");
         expect(src).toMatch(
-            /options\?\.quietStaleRefresh \|\| options\?\.userInitiated \|\| options\?\.prefetchOnly/
+            /options\?\.quietStaleRefresh \|\|[\s\S]*options\?\.initialLaneReveal/
         );
         expect(src).toContain("workUnit.queue_definition == null");
     });

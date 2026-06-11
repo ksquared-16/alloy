@@ -42,4 +42,13 @@ describe("work-unit above-fold reveal gate (page)", () => {
         expect(page).toContain("startParallelPrimaryRowFetchFromCache");
         expect(page).toContain("fetchWorkUnitOperationalBootstrapSession");
     });
+
+    it("warm navigation retains lane authority and restores session lane rows", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("restoreWarmWorkUnitLaneRows");
+        expect(page).toMatch(/if \(warmLaneRetain\) \{[\s\S]*setWuQueueLaneAuthorityReady\(true\)/);
+        expect(page).toMatch(/if \(!warmLaneRetain\) \{[\s\S]*clearWorkUnitBootstrapSessionForEntity/);
+        expect(page).toContain("initialLaneReveal: true");
+        expect(page).toContain('qs.set("row_mode", "reveal")');
+    });
 });

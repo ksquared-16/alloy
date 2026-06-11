@@ -17,7 +17,9 @@ export type DrawerLayoutRuntimeBodyCacheEntry = {
 
 export type DrawerLayoutRuntimeBodyPayload = Omit<DrawerLayoutRuntimeBodyCacheEntry, "cachedAt">;
 
-const DEFAULT_TTL_MS = 5 * 60 * 1000;
+import { ADMINV2_UI_SESSION_CACHE_TTL_MS } from "@/lib/adminV2/runtime/adminV2UiSessionCacheTtl";
+
+const DEFAULT_TTL_MS = ADMINV2_UI_SESSION_CACHE_TTL_MS;
 const cache = new Map<string, DrawerLayoutRuntimeBodyCacheEntry>();
 const inflight = new Map<string, Promise<DrawerLayoutRuntimeBodyPayload | null>>();
 

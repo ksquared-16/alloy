@@ -7,6 +7,7 @@ import {
     shouldShowVmDrawerColdShell,
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 import {
+    drawerRuntimePhaseForApplyingVm,
     drawerRuntimePhaseForSwapStart,
     INITIAL_DRAWER_RUNTIME_PHASE_STATE,
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
@@ -28,6 +29,22 @@ describe("vmDrawerTransitionCoordinator", () => {
             entityId: "person-2",
         });
         const render = resolveDrawerVmRenderDrawer(source, phase);
+        expect(render.type).toBe("opportunities");
+        expect(render.id).toBe("opp-1");
+    });
+
+    it("keeps source drawer visible during applying_vm body hold", () => {
+        const source = {
+            type: "opportunities" as const,
+            id: "opp-1",
+            opportunityWorkspaceContext: { department_id: "d1", work_unit_id: "w1" },
+        };
+        const preparing = drawerRuntimePhaseForSwapStart(INITIAL_DRAWER_RUNTIME_PHASE_STATE, {
+            entityType: "persons",
+            entityId: "person-2",
+        });
+        const applying = drawerRuntimePhaseForApplyingVm(preparing);
+        const render = resolveDrawerVmRenderDrawer(source, applying);
         expect(render.type).toBe("opportunities");
         expect(render.id).toBe("opp-1");
     });
@@ -102,10 +119,15 @@ describe("VM drawer transition wiring", () => {
         for (const file of ["OpportunityDrawerVmRuntime.tsx", "PersonsDrawerVmRuntime.tsx"]) {
             const src = readFileSync(join(webRoot, "components/admin/vmDrawer", file), "utf8");
             expect(src).toContain("vmMatchesRender");
-            expect(src).toContain("data-drawer-vm-transition-hold");
             expect(src).toContain("drawerVmRender");
+            expect(src).toContain("overviewLayoutShellReady");
             expect(src).not.toContain("Preparing parent profile");
             expect(src).not.toContain("Preparing child profile");
+            if (file === "PersonsDrawerVmRuntime.tsx") {
+                expect(src).not.toMatch(
+                    /overviewLayoutShellReady[\s\S]*activeOverviewLayoutBody\.phase === "loading"/
+                );
+            }
         }
     });
 
@@ -118,7 +140,8 @@ describe("VM drawer transition wiring", () => {
             join(webRoot, "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
             "utf8"
         );
-        expect(src).toContain("committedTitleRef");
-        expect(src).toMatch(/!committedVisible[\s\S]*committedTitleRef\.current/);
+        expect(src).toContain("committedVisible");
+        expect(src).toContain("overviewLayoutShellReady");
+        expect(src).not.toMatch(/overviewLayoutShellReady[\s\S]*phase === "loading"/);
     });
 });

@@ -52,6 +52,7 @@ import {
     resolveModelSwapOpportunityContext,
 } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import {
+    drawerRuntimePhaseForApplyingVm,
     drawerRuntimePhaseForIdle,
     drawerRuntimePhaseForOpeningCold,
     drawerRuntimePhaseForShowing,
@@ -62,6 +63,10 @@ import {
     isSameDrawerRuntimeTransitionTarget,
     type DrawerRuntimePhaseState,
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
+import {
+    isDrawerSwapLayoutBodyWarm,
+    waitForDrawerSwapLayoutBodyWarm,
+} from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerSwapBodyReadiness";
 import type { PersonDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/person/buildPersonDrawerOpenPreloadFromViewModel";
 import type { ChildDrawerOpenPreload } from "@/lib/adminV2/viewModel/drawer/child/buildChildDrawerOpenPreloadFromViewModel";
 import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerHardCutoverGate";
@@ -304,15 +309,18 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const opportunityDrawerPreloadRef = useRef<OpportunityDrawerOpenPreload | null>(null);
     const personDrawerPreloadRef = useRef<PersonDrawerOpenPreload | ChildDrawerOpenPreload | null>(null);
     const [opportunityPreloadGeneration, setOpportunityPreloadGeneration] = useState(0);
+    const drawerRuntimePhaseRef = useRef<DrawerRuntimePhaseState>(INITIAL_DRAWER_RUNTIME_PHASE_STATE);
     const [drawerRuntimePhase, setDrawerRuntimePhase] = useState<DrawerRuntimePhaseState>(
         INITIAL_DRAWER_RUNTIME_PHASE_STATE
     );
+    drawerRuntimePhaseRef.current = drawerRuntimePhase;
     const queueNavRunRef = useRef(0);
     /** Synchronous one-shot for entity-open effect (React state alone is not readable in the same tick). */
     const swapFallbackFetchPendingRef = useRef(false);
     const lastAttachedSwapPreloadKeyRef = useRef<string | null>(null);
     const swapFallbackFetchInFlightKeyRef = useRef<string | null>(null);
     const pendingModelSwapParamsRef = useRef<OpenDrawerParams | null>(null);
+    const swapBodyCommitTransitionRef = useRef<number | null>(null);
     const [drawerLinkPendingKey, setDrawerLinkPendingKey] = useState<string | null>(null);
     const [drawerLinkPendingError, setDrawerLinkPendingError] = useState<{
         key: string;
@@ -780,25 +788,59 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                 drawer_before_id: drawer.id,
             });
 
-            applyDrawerTargetNavigation(
-                {
-                    ...params,
-                    source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
-                },
-                { skipStackPush: true }
-            );
-            logDrawerVmRuntimeDiagnostic("model_swap_commit", {
-                entity_type: params.type,
-                entity_id: params.id,
-                open_source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
-                runtime:
-                    params.type === "opportunities" ? "opportunity-vm"
-                    : params.personDrawerOpenSeed?.presentation_emphasis === "child_lifecycle" ||
-                        params.source === "opportunity_inquiry_child" ?
-                        "child-vm"
-                    :   "person-vm",
-            });
-            setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
+            const finishDrawerModelSwapCommit = () => {
+                applyDrawerTargetNavigation(
+                    {
+                        ...params,
+                        source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                    },
+                    { skipStackPush: true }
+                );
+                logDrawerVmRuntimeDiagnostic("model_swap_commit", {
+                    entity_type: params.type,
+                    entity_id: params.id,
+                    open_source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                    runtime:
+                        params.type === "opportunities" ? "opportunity-vm"
+                        : params.personDrawerOpenSeed?.presentation_emphasis === "child_lifecycle" ||
+                            params.source === "opportunity_inquiry_child" ?
+                            "child-vm"
+                        :   "person-vm",
+                });
+                swapBodyCommitTransitionRef.current = null;
+                setDrawerRuntimePhase((prev) => drawerRuntimePhaseForShowing(prev));
+            };
+
+            if (params.type !== "opportunities" && params.type !== "persons") {
+                finishDrawerModelSwapCommit();
+                return;
+            }
+            const swapParamsForBody = {
+                type: params.type,
+                id: params.id,
+                source: params.source ?? DRAWER_MODEL_SWAP_OPEN_SOURCE,
+                personDrawerOpenSeed: params.personDrawerOpenSeed ?? null,
+                opportunityWorkspaceContext:
+                    params.opportunityWorkspaceContext ?? drawer.opportunityWorkspaceContext ?? null,
+            };
+            if (!isDrawerSwapLayoutBodyWarm(swapParamsForBody)) {
+                let bodyWaitTransitionId = drawerRuntimePhaseRef.current.transitionId;
+                setDrawerRuntimePhase((prev) => {
+                    const next = drawerRuntimePhaseForApplyingVm(prev);
+                    bodyWaitTransitionId = next.transitionId;
+                    swapBodyCommitTransitionRef.current = next.transitionId;
+                    return next;
+                });
+                void waitForDrawerSwapLayoutBodyWarm(swapParamsForBody).then(() => {
+                    if (swapBodyCommitTransitionRef.current !== bodyWaitTransitionId) return;
+                    if (drawerRuntimePhaseRef.current.transitionId !== bodyWaitTransitionId) return;
+                    if (drawerRuntimePhaseRef.current.phase !== "applying_vm") return;
+                    finishDrawerModelSwapCommit();
+                });
+                return;
+            }
+
+            finishDrawerModelSwapCommit();
         },
         [applyDrawerTargetNavigation, drawer.id, drawer.opportunityWorkspaceContext, drawer.type, markOpportunityPreloadReady]
     );
