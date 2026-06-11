@@ -22,6 +22,8 @@ describe("workUnitQueuePillSwitchRegression", () => {
         expect(src).toContain("markWorkUnitVmPillSwitchCacheMissHoldCurrent");
         expect(src).toContain("lifecyclePillSwitchRetainRowsRef.current = true");
         expect(src).toContain("if (options?.userInitiated) return prev");
+        expect(src).toContain("markKpiPillClick");
+        expect(src).toContain("pill_switch_retain_rows");
     });
 
     it("prefetches valid lanes after first paint", () => {

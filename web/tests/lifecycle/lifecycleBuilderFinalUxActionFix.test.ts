@@ -14,8 +14,8 @@ function read(rel: string): string {
 
 describe("lifecycle builder final UX and action save", () => {
     it("compressed page header with short subtitle only", () => {
-        const page = read("app/adminV2/settings/lifecycle/page.tsx");
-        expect(page).toContain('data-testid="lifecycle-page-header"');
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
+        expect(page).toContain('data-testid="business-processes-page-header"');
         expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE");
         expect(page).not.toContain("Advanced Configuration for additional");
         expect(page).toContain("SETTINGS_PAGE_SHELL_COMPACT_CLASS");

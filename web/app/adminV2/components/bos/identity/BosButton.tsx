@@ -14,8 +14,7 @@ type Props = {
 } & ButtonHTMLAttributes<HTMLButtonElement>;
 
 /**
- * Work with BOS — primary entry CTA using Alloy mark identity.
- * Keep inline button spinners elsewhere; this is the canonical BOS handoff control.
+ * Work with BOS — primary entry CTA. Secondary variant shows mark + horizon lockup.
  */
 export function BosButton({
     variant = "primary",
@@ -35,7 +34,11 @@ export function BosButton({
             "bg-alloy-juniper font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.12)_inset,0_3px_10px_rgba(0,162,131,0.22)] hover:bg-[#009676]"
         :   "border border-alloy-juniper/25 bg-white font-semibold text-[#007A63] hover:bg-[#00A283]/[0.06]";
 
-    const markColor = variant === "primary" ? "#ffffff" : undefined;
+    const markSize = size === "sm" ? "sm" : "md";
+    const defaultIcon =
+        variant === "secondary" ?
+            <BosMark size={markSize} horizon />
+        :   <BosMark size={markSize} color="#ffffff" />;
 
     return (
         <button
@@ -45,7 +48,7 @@ export function BosButton({
             data-testid="bos-button"
             {...buttonProps}
         >
-            {leadingIcon ?? <BosMark size={size === "sm" ? "sm" : "md"} color={markColor} />}
+            {leadingIcon ?? defaultIcon}
             {label}
         </button>
     );

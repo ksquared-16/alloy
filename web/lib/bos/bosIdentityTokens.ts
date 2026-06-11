@@ -34,9 +34,9 @@ export const BOS_MARK_SIZE_CLASS: Record<BosIdentitySize, string> = {
 };
 
 export const BOS_HORIZON_WIDTH_CLASS: Record<BosIdentitySize, string> = {
-    sm: "w-10",
+    sm: "w-11",
     md: "w-14",
-    lg: "w-20",
+    lg: "w-[5.5rem]",
 };
 
 export const BOS_DEFAULT_HEADER_TITLE = "BOS";

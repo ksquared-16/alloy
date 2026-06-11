@@ -35,7 +35,7 @@ function Frame({ id, label, children }: { id: string; label: string; children: R
     );
 }
 
-/** Sprint 01/02 identity gallery — all canonical BOS visual states. */
+/** Sprint 03 identity gallery — visual refinement baseline for screenshot review. */
 export default function BosIdentitySystemGallery() {
     return (
         <div className="min-h-screen bg-[#F6F8FC] px-6 py-10" data-bos-identity-gallery="true">
@@ -44,36 +44,68 @@ export default function BosIdentitySystemGallery() {
                     <p className="font-mono text-xs text-alloy-midnight/45">/dev/bos-identity-system</p>
                     <h1 className="text-2xl font-bold text-alloy-midnight">BOS Identity System</h1>
                     <p className="text-sm text-alloy-midnight/60">
-                        Alloy Mark · Horizon · Smoke · Cloud Workspace — single visual language.
+                        Sprint 03 refinement — mark + horizon + wave, visible smoke, atmospheric shell. Doctrine locked.
                     </p>
                 </header>
 
                 <Frame id="mark" label={STATES[0].label}>
-                    <div className="flex flex-wrap items-end gap-8">
-                        <BosMark size="sm" />
-                        <BosMark size="md" />
-                        <BosMark size="lg" />
-                        <BosMark size="md" horizon />
+                    <div className="flex flex-wrap items-end gap-10">
+                        <div className="flex flex-col items-center gap-1.5">
+                            <BosMark size="sm" />
+                            <span className="text-[10px] text-alloy-midnight/45">sm · mark only</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1.5">
+                            <BosMark size="md" />
+                            <span className="text-[10px] text-alloy-midnight/45">md · mark only</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1.5">
+                            <BosMark size="lg" />
+                            <span className="text-[10px] text-alloy-midnight/45">lg · mark only</span>
+                        </div>
+                        <div
+                            className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-[#00A283]/25 bg-[#00A283]/[0.03] px-5 py-4"
+                            data-bos-gallery-canonical-lockup="true"
+                        >
+                            <BosMark size="md" horizon />
+                            <span className="text-[10px] font-medium text-[#007A63]">canonical lockup · md + horizon + wave</span>
+                        </div>
                     </div>
                 </Frame>
 
                 <Frame id="horizon" label={STATES[1].label}>
-                    <div className="flex flex-col gap-4">
-                        <BosHorizon size="sm" />
-                        <BosHorizon size="md" />
-                        <BosHorizon size="lg" />
+                    <div className="flex flex-col gap-5">
+                        <div>
+                            <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                Primary + secondary wave (default)
+                            </p>
+                            <div className="flex flex-col gap-3">
+                                <BosHorizon size="sm" />
+                                <BosHorizon size="md" />
+                                <BosHorizon size="lg" />
+                            </div>
+                        </div>
+                        <div>
+                            <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
+                                Primary only
+                            </p>
+                            <BosHorizon size="md" showWave={false} />
+                        </div>
                     </div>
                 </Frame>
 
                 <Frame id="smoke" label={STATES[2].label}>
-                    <div className="grid gap-8 md:grid-cols-2">
-                        <div>
-                            <p className="mb-2 text-xs font-medium text-alloy-midnight/50">thinking</p>
+                    <div className="grid gap-8 md:grid-cols-3">
+                        <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">thinking — branch, rise, recombine</p>
                             <BosSmoke state="thinking" />
                         </div>
-                        <div>
-                            <p className="mb-2 text-xs font-medium text-alloy-midnight/50">converging</p>
+                        <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">converging — narrow toward mark</p>
                             <BosSmoke state="converging" />
+                        </div>
+                        <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">complete — smoke fades, mark remains</p>
+                            <BosSmoke state="complete" />
                         </div>
                     </div>
                 </Frame>
@@ -86,17 +118,25 @@ export default function BosIdentitySystemGallery() {
                 </Frame>
 
                 <Frame id="button" label={STATES[4].label}>
-                    <div className="flex flex-wrap gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <BosButton variant="primary" onClick={() => {}} />
                         <BosButton variant="secondary" onClick={() => {}} />
+                        <BosButton variant="primary" size="sm" onClick={() => {}} />
                     </div>
+                    <p className="mt-3 text-[11px] text-alloy-midnight/50">
+                        Primary CTAs use white mark only; secondary uses mark + horizon lockup.
+                    </p>
                 </Frame>
 
                 <Frame id="header" label={STATES[5].label}>
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <BosHeader />
-                        <div className="rounded-xl bg-[#273F52] p-4">
-                            <BosHeader onDark />
+                    <div className="grid gap-6">
+                        <div className="grid gap-4 md:grid-cols-3">
+                            <BosHeader size="sm" title="BOS Assist" subtitle="Enrollment context loaded" />
+                            <BosHeader size="md" />
+                            <BosHeader size="lg" title="BOS Assist" subtitle="Review recommendations before sending" />
+                        </div>
+                        <div className="rounded-xl bg-[#273F52] p-5">
+                            <BosHeader onDark title="BOS Assist" subtitle="Midnight forge surface — no badge container" />
                         </div>
                     </div>
                 </Frame>
@@ -109,9 +149,9 @@ export default function BosIdentitySystemGallery() {
                 </Frame>
 
                 <Frame id="shell" label={STATES[7].label}>
-                    <BosWorkspaceShell>
+                    <BosWorkspaceShell title="BOS Assist" subtitle="Atmospheric perimeter — discovered, not illustrated">
                         <div className="px-5 py-8 text-sm text-alloy-midnight/70">
-                            Workspace content slot — cloud perimeter + horizon header.
+                            Workspace content slot — cloud perimeter + header lockup.
                         </div>
                     </BosWorkspaceShell>
                 </Frame>

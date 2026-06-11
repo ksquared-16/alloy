@@ -15,7 +15,6 @@ type Props = {
 
 /**
  * BOS working state — smoke above mark + horizon, with operational copy.
- * Use for analysis, drafting, and assembly — not generic page navigation.
  */
 export function BosWorkingState({
     message,
@@ -33,10 +32,10 @@ export function BosWorkingState({
             data-bos-working-state={state}
             data-testid={dataTestId}
         >
-            <div className="relative flex w-full max-w-xs flex-col items-center">
-                <BosSmoke state={state} className="mb-1 w-full max-w-[9rem]" />
+            <div className="relative flex w-full max-w-[12rem] flex-col items-center">
+                <BosSmoke state={state} className="mb-1 w-full" />
                 <BosMark size={markSize} horizon />
-                <p className="mt-4 text-sm font-medium text-alloy-midnight">{message}</p>
+                <p className="mt-5 text-sm font-medium text-alloy-midnight/85">{message}</p>
             </div>
         </div>
     );

@@ -52,10 +52,23 @@ export function SettingsNavTile({
     );
 }
 
-export function SettingsNavGroup({ label, children }: { label: string; children: ReactNode }) {
+export function SettingsNavGroup({
+    label,
+    description,
+    children,
+}: {
+    label: string;
+    description?: string;
+    children: ReactNode;
+}) {
     return (
-        <section className="space-y-2.5">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">{label}</h2>
+        <section className="space-y-3 rounded-xl border border-alloy-forge/10 bg-white/50 px-4 py-3.5">
+            <div>
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">{label}</h2>
+                {description ? (
+                    <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/45">{description}</p>
+                ) : null}
+            </div>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{children}</div>
         </section>
     );

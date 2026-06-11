@@ -53,7 +53,9 @@ export default function BosDrawerAssistCta({
             proofLayoutActions={proofLayoutActions}
             actionVariant={actionVariant}
             leadingIcon={
-                <BosMark size="sm" color={actionVariant === "juniper" ? "#ffffff" : undefined} />
+                actionVariant === "juniper" ?
+                    <BosMark size="sm" color="#ffffff" />
+                :   <BosMark size="sm" horizon />
             }
             data-drawer-action="bos_assist"
             data-bos-assist-button="true"

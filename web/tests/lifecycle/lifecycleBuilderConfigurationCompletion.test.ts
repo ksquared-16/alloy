@@ -18,6 +18,7 @@ import {
 import { sortBaseActionKeysByMatrixOrder, parseLifecycleActionsMatrixOrder } from "@/lib/lifecycle/lifecycleActionsMatrixOrder";
 import { lifecycleRequirementEntityLabelsFromMap } from "@/lib/lifecycle/lifecycleRequirementEntityLabels";
 import { activeStagesForProcess, reorderStage, defaultLifecycleBuilderV1 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { applyEnrollmentTemplateInConfig } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import { stageSavedStatusKeys } from "@/lib/lifecycle/lifecycleActivationStep3";
 
 const read = (rel: string) => readFileSync(join(process.cwd(), rel), "utf8");
@@ -39,7 +40,8 @@ describe("lifecycle builder configuration completion", () => {
 
     it("stage workspace keeps concise statuses helper copy", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
-        expect(workspace).toContain("Which CRM statuses belong in this stage?");
+        expect(workspace).toContain("STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL");
+        expect(workspace).not.toContain("CRM statuses");
     });
 
     it("enrolling stage key is distinct from enrollment and enrolled for palette", () => {
@@ -67,7 +69,8 @@ describe("lifecycle builder configuration completion", () => {
     });
 
     it("stage reorder updates sort_order on builder stages", () => {
-        let config = defaultLifecycleBuilderV1();
+        const base = defaultLifecycleBuilderV1();
+        let config = applyEnrollmentTemplateInConfig(base, base.active_process_id!);
         const process = config.processes[0]!;
         const qualification = process.stages.find((s) => s.key === "qualification")!;
         const tour = process.stages.find((s) => s.key === "tour")!;

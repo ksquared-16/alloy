@@ -16,6 +16,12 @@ import LifecycleStageConfiguration from "@/components/adminV2/settings/lifecycle
 import type { LifecycleStageWorkspaceHandle } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import type { LifecycleStageSaveUiState } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
 import LifecycleActionsMatrix from "@/components/adminV2/settings/lifecycle/LifecycleActionsMatrix";
+import BusinessProcessTrackExplainer from "@/components/adminV2/settings/lifecycle/BusinessProcessTrackExplainer";
+import {
+    BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY,
+    BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE,
+} from "@/lib/lifecycle/businessProcessUiLabels";
+import { queueMembershipWithSyncedStatusKeys } from "@/lib/lifecycle/queueMembershipEditorModel";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { notifyWorkspaceDepartmentsChanged } from "@/lib/workspace/notifyWorkspaceDepartmentsChanged";
 import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
@@ -726,8 +732,15 @@ export default function LifecycleActivationBoard({
         const queueName =
             handle?.getQueueDisplayName()?.trim() || defaultWorkUnitQueueNameForStageKey(sk);
 
-        const queueMembership =
-            handle?.isQueueMembershipDirty() ? handle.getQueueMembershipDraft() : null;
+        const membershipBase =
+            handle?.isQueueMembershipDirty()
+                ? handle.getQueueMembershipDraft()
+                : (stageBootstrap?.queue_membership ?? null);
+        const queueMembership = queueMembershipWithSyncedStatusKeys(
+            membershipBase,
+            sk,
+            selectedKeys,
+        );
         const stageOperatingPlan =
             handle?.isStageOperatingPlanDirty() ? handle.getStageOperatingPlanDraft() : null;
 
@@ -738,7 +751,7 @@ export default function LifecycleActivationBoard({
             selected_status_keys: selectedKeys,
             work_unit_name: queueName,
             ...(fieldRules ? { field_rules: fieldRules } : {}),
-            ...(queueMembership ? { queue_membership_v1: queueMembership } : {}),
+            queue_membership_v1: queueMembership,
             ...(stageOperatingPlan ? { stage_operating_plan_v1: stageOperatingPlan } : {}),
         };
 
@@ -1518,12 +1531,16 @@ export default function LifecycleActivationBoard({
                         queueCount={catalogSummary?.queueCount ?? 0}
                         onBack={onBackToCatalog}
                     />
+                    <BusinessProcessTrackExplainer
+                        tracks={processTracks}
+                        processKey={builderProcess?.key ?? "enrollment"}
+                    />
                     {activeSplitRule ?
                         <p
-                            className="text-xs text-alloy-midnight/60"
+                            className="rounded-lg border border-alloy-forge/10 bg-white/80 px-3 py-2 text-xs text-alloy-midnight/65"
                             data-testid="lifecycle-split-rule-hint"
                         >
-                            At {stageLabel || activeSplitRule.from_stage_key}, choose each child&apos;s path:{" "}
+                            At Decision, choose a path for each child:{" "}
                             {activeSplitRule.per_subject_outcomes.map((o) => o.label).join(" · ")}
                         </p>
                     :   null}
@@ -1657,11 +1674,27 @@ export default function LifecycleActivationBoard({
                                 draftStatusLabels={draftStatusLabels}
                                 enabledActionsCount={enabledActionsCount}
                                 actionsSection={
-                                    <p className="text-[11px] text-alloy-midnight/55">
-                                        {enabledActionsCount > 0
-                                            ? `${enabledActionsCount} action${enabledActionsCount === 1 ? "" : "s"} enabled for this lifecycle. Adjust placements in the actions matrix below.`
-                                            : "No actions enabled yet. Use the actions matrix below when you are ready."}
-                                    </p>
+                                    <div className="space-y-2 text-[11px] text-alloy-midnight/55">
+                                        {enabledActionsCount > 0 ? (
+                                            <p>
+                                                {enabledActionsCount} action
+                                                {enabledActionsCount === 1 ? "" : "s"} available in this
+                                                stage.
+                                            </p>
+                                        ) : (
+                                            <p>No actions are enabled for this process yet.</p>
+                                        )}
+                                        <p>
+                                            Configure placements and availability in{" "}
+                                            <a
+                                                href="#business-process-actions"
+                                                className="font-medium text-alloy-pine hover:underline"
+                                            >
+                                                Process Actions
+                                            </a>{" "}
+                                            below.
+                                        </p>
+                                    </div>
                                 }
                                 saveState={stageSaveState}
                                 saveError={stageSaveError}
@@ -1704,13 +1737,30 @@ export default function LifecycleActivationBoard({
                                 }
                                 readyCheckRefreshKey={`${runtimeDepartmentId}:${readyCheckRevision}`}
                             />
-                            <LifecycleActionsMatrix
-                                departmentId={runtimeDepartmentId}
-                                builderStageKeys={builderStageKeys}
-                                onSaved={async () => {
-                                    await refreshStageBootstrap();
-                                }}
-                            />
+                            <details
+                                id="business-process-actions"
+                                className="rounded-xl border border-alloy-forge/12 bg-white/90 shadow-sm"
+                                data-testid="business-process-actions-section"
+                            >
+                                <summary className="cursor-pointer list-none px-4 py-3 [&::-webkit-details-marker]:hidden">
+                                    <h3 className="text-sm font-semibold text-alloy-midnight">
+                                        {BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE}
+                                    </h3>
+                                    <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
+                                        {BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY}
+                                    </p>
+                                </summary>
+                                <div className="border-t border-alloy-forge/8 px-2 py-2">
+                                    <LifecycleActionsMatrix
+                                        departmentId={runtimeDepartmentId}
+                                        builderStageKeys={builderStageKeys}
+                                        embedded
+                                        onSaved={async () => {
+                                            await refreshStageBootstrap();
+                                        }}
+                                    />
+                                </div>
+                            </details>
                         </>
                     ) : null}
                 </>

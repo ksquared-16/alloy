@@ -178,7 +178,7 @@ export default function OperationalProposalCardFrame(props: OperationalProposalC
                         style={{ color: CMD.textLabel }}
                         data-operational-proposal-eyebrow="true"
                     >
-                        <BosMark size="sm" className="h-3 w-3" />
+                        <BosMark size="sm" className="h-3 w-3" horizon />
                         Operational proposal
                     </p>
                 ) : null}

@@ -60,9 +60,9 @@ describe("Lifecycle scratch setup reset", () => {
     });
 
     it("page subtitle does not reference enrollment demo", () => {
-        const page = read("app/adminV2/settings/lifecycle/page.tsx");
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
         expect(page).not.toContain("Enrollment is the first working example");
-        expect(page).toContain("Build processes from scratch");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE");
     });
 
     it("GET lifecycle builder does not auto-seed enrollment", () => {

@@ -9,7 +9,8 @@ const PREFIX: Record<SettingsSurfaceMode, string> = {
     related_hub: "Related hub",
 };
 
-/** Short prefix for settings tile descriptions, e.g. "Editable · …" */
+/** Short prefix for settings tile descriptions — editable surfaces omit the prefix. */
 export function settingsSurfacePrefix(mode: SettingsSurfaceMode): string {
+    if (mode === "editable") return "";
     return `${PREFIX[mode]} · `;
 }

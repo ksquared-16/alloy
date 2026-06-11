@@ -192,9 +192,10 @@ describe("workspace continuity + instant navigation pass 2", () => {
     });
 
     it("opportunity drawer schedules linked person prewarm on idle", () => {
-        const drawer = read("components/admin/AdminEntityDrawerLegacy.tsx");
-        expect(drawer).toContain("scheduleAdminV2BackgroundWork");
-        expect(drawer).toContain('source: "opportunity_drawer_idle"');
+        const vmRuntime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        expect(vmRuntime).toContain("scheduleAdminV2BackgroundWork");
+        expect(vmRuntime).toContain("prefetchLinkedPersonsFromOpportunityRecord");
+        expect(vmRuntime).toContain('source: "opportunity_drawer_idle"');
     });
 
     it("scheduleWorkspaceRootRevalidation is deduped per scope", () => {

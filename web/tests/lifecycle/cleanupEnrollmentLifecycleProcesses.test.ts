@@ -121,7 +121,7 @@ describe("cleanupEnrollmentLifecycleProcesses", () => {
 
 describe("Lifecycle Builder UI — enrollment cleanup pass", () => {
     it("primary UI has no visible legacy wording", () => {
-        const page = read("app/adminV2/settings/lifecycle/page.tsx");
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
         const shell = read("components/adminV2/settings/LifecycleSettingsShell.tsx");
         const select = read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx");
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");

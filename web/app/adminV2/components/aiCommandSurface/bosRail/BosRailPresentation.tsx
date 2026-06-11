@@ -155,11 +155,8 @@ export function BosRailStarterCards(props: {
                         }}
                         onClick={() => props.onPick(suggestion.prompt)}
                     >
-                        <span
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
-                            style={{ backgroundColor: "rgba(0, 162, 131, 0.08)" }}
-                        >
-                            <BosMark size="sm" />
+                        <span className="flex shrink-0 items-start pt-0.5">
+                            <BosMark size="sm" horizon />
                         </span>
                         <span className="min-w-0 flex-1">
                             <span

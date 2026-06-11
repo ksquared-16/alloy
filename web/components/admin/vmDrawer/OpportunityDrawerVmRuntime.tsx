@@ -47,7 +47,9 @@ import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayout
 import OpportunityDrawerOpeningOverlay from "@/components/admin/OpportunityDrawerOpeningOverlay";
 import OpportunityDrawerTabBackgroundLoader from "@/components/admin/vmDrawer/OpportunityDrawerTabBackgroundLoader";
 import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
+import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
@@ -229,6 +231,38 @@ export default function OpportunityDrawerVmRuntime() {
             String(drawer.id) === String(displayVm?.entity.id),
         [vmMatchesRender, drawer.type, drawer.id, displayVm?.entity.id]
     );
+
+    const opportunityLinkedPersonsPrefetchedRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            opportunityLinkedPersonsPrefetchedRef.current = null;
+            return;
+        }
+        if (!committedVisible || !record) return;
+        if (opportunityLinkedPersonsPrefetchedRef.current === drawer.id) return;
+        opportunityLinkedPersonsPrefetchedRef.current = drawer.id;
+        const ws = drawer.opportunityWorkspaceContext ?? null;
+        const recordSnapshot = record as Record<string, unknown>;
+        return scheduleAdminV2BackgroundWork(
+            () => {
+                try {
+                    prefetchLinkedPersonsFromOpportunityRecord(recordSnapshot, {
+                        source: "opportunity_drawer_idle",
+                        opportunityWorkspaceContext: ws,
+                    });
+                } catch {
+                    /* non-fatal */
+                }
+            },
+            { idleTimeoutMs: 800, fallbackMs: 250 },
+        );
+    }, [
+        drawer.type,
+        drawer.id,
+        drawer.opportunityWorkspaceContext,
+        committedVisible,
+        record,
+    ]);
 
     const layoutRuntimeShadow = useOpportunityDrawerLayoutRuntimeShadow({
         opportunityId: committedVisible ? drawer.id : null,

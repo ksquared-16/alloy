@@ -41,13 +41,8 @@ export function ActionWorkspaceSuccessState({
             className="flex min-h-[320px] flex-col items-center justify-center gap-5 px-4 py-2 text-center"
             data-testid="action-workspace-success-state"
         >
-            <div className="relative flex h-20 w-20 items-center justify-center">
-                <div className="absolute inset-0 rounded-full bg-[#00A283]/10" aria-hidden />
-                <div
-                    className="absolute inset-2 rounded-full border border-[#00A283]/25 bg-[#00A283]/[0.06]"
-                    aria-hidden
-                />
-                <BosMark size="lg" horizon className="relative h-10 w-10" />
+            <div className="flex flex-col items-center">
+                <BosMark size="lg" horizon />
             </div>
             <div>
                 <p className="text-xl font-semibold text-alloy-midnight">{title}</p>

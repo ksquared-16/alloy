@@ -26,18 +26,15 @@ export function BosNotification({
 }: Props) {
     return (
         <div
-            className={`rounded-xl border border-[#00A283]/15 bg-gradient-to-br from-[#00A283]/[0.06] via-white to-white px-4 py-3.5 shadow-[0_1px_0_rgba(39,63,82,0.04)] ${className}`.trim()}
+            className={`rounded-xl border border-[#00A283]/12 bg-gradient-to-br from-[#00A283]/[0.04] via-white to-white px-4 py-3.5 shadow-[0_1px_0_rgba(39,63,82,0.04)] ${className}`.trim()}
             role="status"
             data-bos-notification="true"
             data-testid={dataTestId}
         >
-            <div className="flex items-start gap-3">
-                <span
-                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#00A283]/10"
-                    aria-hidden
-                >
+            <div className="flex items-start gap-3.5">
+                <div className="shrink-0 pt-0.5" aria-hidden>
                     <BosMark size="sm" horizon />
-                </span>
+                </div>
                 <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-alloy-midnight">{title}</p>
                     <div className="mt-0.5 text-[12px] leading-snug text-alloy-midnight/65">{message}</div>

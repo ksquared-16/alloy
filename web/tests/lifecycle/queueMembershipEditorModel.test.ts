@@ -72,8 +72,8 @@ describe("queueMembershipEditorModel", () => {
 
 describe("queueMembershipUiLabels", () => {
     it("uses operator language for subjects", () => {
-        expect(QUEUE_MEMBERSHIP_SUBJECT_LABELS.case).toBe("Family case");
-        expect(QUEUE_MEMBERSHIP_SUBJECT_LABELS.child).toBe("Child enrollment track");
-        expect(QUEUE_MEMBERSHIP_SUBJECT_LABELS.candidate).toBe("Waitlist candidate");
+        expect(QUEUE_MEMBERSHIP_SUBJECT_LABELS.case).toBe("Families / leads");
+        expect(QUEUE_MEMBERSHIP_SUBJECT_LABELS.child).toBe("Children in enrollment");
+        expect(QUEUE_MEMBERSHIP_SUBJECT_LABELS.candidate).toBe("Waitlist candidates");
     });
 });

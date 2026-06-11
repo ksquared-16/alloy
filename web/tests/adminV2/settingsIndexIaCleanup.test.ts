@@ -23,7 +23,7 @@ describe("Settings index IA — Settings V2 domains", () => {
     it("business processes tile lives under Operations with editable mode", () => {
         const page = read("app/adminV2/settings/page.tsx");
         expect(page).toContain('title="Business Processes"');
-        expect(page).toContain("/admin/settings/lifecycle");
+        expect(page).toContain("ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH");
         expect(page).toMatch(/title="Business Processes"[\s\S]*mode="editable"/);
     });
 

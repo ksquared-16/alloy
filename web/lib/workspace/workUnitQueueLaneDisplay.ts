@@ -87,10 +87,21 @@ export function resolveWorkUnitQueueRowsRefreshing(args: {
     lane_reveal_settled: boolean;
     queue_items_loading: boolean;
     bootstrap_loading: boolean;
+    /** Pill switch retaining prior rows — suppress shimmer/opacity dip. */
+    pill_switch_retain_rows?: boolean;
 }): boolean {
+    if (args.pill_switch_retain_rows) return false;
     return (
         args.lane_reveal_settled &&
         args.queue_items_loading &&
         !args.bootstrap_loading
     );
+}
+
+/** KPI pill switch: do not flip queue into skeleton/loading when retaining visible rows. */
+export function shouldSuppressQueueLoadingOnPillSwitch(args: {
+    user_initiated: boolean;
+    retain_prior_rows: boolean;
+}): boolean {
+    return args.user_initiated && args.retain_prior_rows;
 }

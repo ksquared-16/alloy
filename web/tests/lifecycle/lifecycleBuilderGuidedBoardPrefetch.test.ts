@@ -18,30 +18,34 @@ function read(rel: string): string {
 describe("lifecycle builder stage workspace and prefetch", () => {
     it("stage workspace orders operational sections before queue view", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
-        expect(workspace).toContain('id="statuses"');
+        expect(workspace).toContain('id="membership"');
         expect(workspace).toContain('id="required"');
         expect(workspace).toContain('id="actions"');
-        expect(workspace).toContain('id="queue"');
+        expect(workspace).toContain("lifecycle-stage-section-queue-advanced");
         expect(workspace).toContain('id="ready_check"');
-        expect(workspace.indexOf('id="statuses"')).toBeLessThan(workspace.indexOf('id="queue"'));
-        expect(workspace.indexOf('id="required"')).toBeLessThan(workspace.indexOf('id="queue"'));
-        expect(workspace.indexOf('id="actions"')).toBeLessThan(workspace.indexOf('id="queue"'));
-        expect(workspace).toContain("Queue view");
-        expect(workspace).toContain("Ready check");
+        expect(workspace.indexOf('id="membership"')).toBeLessThan(
+            workspace.indexOf("lifecycle-stage-section-queue-advanced")
+        );
+        expect(workspace.indexOf('id="required"')).toBeLessThan(
+            workspace.indexOf("lifecycle-stage-section-queue-advanced")
+        );
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED");
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_READY");
         expect(workspace).not.toContain("defaultOpen");
     });
 
-    it("stage workspace has sticky save bar", () => {
+    it("stage workspace has sticky header save bar only", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
-        expect(workspace).toContain("lifecycle-stage-save-sticky-bar");
+        expect(workspace).not.toContain("lifecycle-stage-save-sticky-bar");
         expect(workspace).toContain("sticky top-0");
+        expect(workspace).toContain("lifecycle-stage-save");
     });
 
     it("unified save is the single stage entry point", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         expect(workspace).toContain('"lifecycle-stage-save"');
-        expect(workspace).toContain("Save stage");
+        expect(workspace).toContain("BUSINESS_PROCESS_SAVE_STAGE");
         expect(board).toContain("saveStageUnified");
         expect(board).toContain("LIFECYCLE_STAGE_RUNTIME_CONFIG_PATH");
     });

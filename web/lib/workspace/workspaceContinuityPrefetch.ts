@@ -94,6 +94,21 @@ export function scheduleWorkspaceRootRevalidation(
     );
 }
 
+/** Preserve card order on background refresh — metrics update in place, no section jump. */
+export function mergeLifecycleCardsStableOrder(
+    previous: readonly OperatorLifecycleLandingCard[],
+    incoming: OperatorLifecycleLandingCard[],
+): OperatorLifecycleLandingCard[] {
+    if (!previous.length || !incoming.length) return incoming;
+    const order = new Map(previous.map((card, index) => [card.id, index]));
+    return [...incoming].sort((a, b) => {
+        const ai = order.get(a.id) ?? 10_000;
+        const bi = order.get(b.id) ?? 10_000;
+        if (ai !== bi) return ai - bi;
+        return a.label.localeCompare(b.label);
+    });
+}
+
 /** @internal */
 export function resetWorkspaceContinuityPrefetchForTests(): void {
     scheduledForScope = null;

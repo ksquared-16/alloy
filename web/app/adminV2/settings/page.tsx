@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { SettingsNavGroup, SettingsNavTile } from "@/components/adminV2/settings/SettingsNavTile";
 import { SETTINGS_PAGE_INTRO_CLASS, SETTINGS_PAGE_SHELL_CLASS } from "@/lib/adminV2/settingsPageLayout";
 import { SETTINGS_INDEX_SUBTITLE } from "@/lib/adminV2/settingsPageSubtitles";
+import { ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +16,16 @@ function SettingsLink(props: {
     return <SettingsNavTile {...props} />;
 }
 
-function SettingsGroup({ label, children }: { label: string; children: ReactNode }) {
-    return <SettingsNavGroup label={label}>{children}</SettingsNavGroup>;
+function SettingsGroup({
+    label,
+    description,
+    children,
+}: {
+    label: string;
+    description?: string;
+    children: ReactNode;
+}) {
+    return <SettingsNavGroup label={label} description={description}>{children}</SettingsNavGroup>;
 }
 
 function DiagnosticLink(props: { href: string; title: string; children: React.ReactNode }) {
@@ -26,14 +35,17 @@ function DiagnosticLink(props: { href: string; title: string; children: React.Re
 export default function AdminV2SettingsIndexPage() {
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS} data-testid="settings-index-page">
-            <header>
+            <header className="rounded-xl border border-alloy-forge/12 border-l-4 border-l-alloy-pine bg-white/90 px-5 py-4 shadow-sm">
                 <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Settings</h1>
-                <p className={`mt-0.5 ${SETTINGS_PAGE_INTRO_CLASS}`}>{SETTINGS_INDEX_SUBTITLE}</p>
+                <p className={`mt-1 ${SETTINGS_PAGE_INTRO_CLASS}`}>{SETTINGS_INDEX_SUBTITLE}</p>
             </header>
 
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(240px,280px)] lg:items-start">
-                <div className="space-y-7">
-                    <SettingsGroup label="Configure">
+                <div className="space-y-8">
+                    <SettingsGroup
+                        label="Configure"
+                        description="Organization structure, access, and communications."
+                    >
                         <SettingsLink href="/admin/settings/locations" title="Locations & hierarchy" mode="editable">
                             Physical sites and classroom or room structure.
                         </SettingsLink>
@@ -48,7 +60,7 @@ export default function AdminV2SettingsIndexPage() {
                         </SettingsLink>
                     </SettingsGroup>
 
-                    <SettingsGroup label="Data Model">
+                    <SettingsGroup label="Data Model" description="Fields, labels, and how records appear in drawers.">
                         <SettingsLink href="/admin/settings/fields" title="Fields" mode="editable">
                             Field labels, visibility, and help text.
                         </SettingsLink>
@@ -66,8 +78,16 @@ export default function AdminV2SettingsIndexPage() {
                         </SettingsLink>
                     </SettingsGroup>
 
-                    <SettingsGroup label="Operations">
-                        <SettingsLink href="/admin/settings/lifecycle" title="Business Processes" mode="editable">
+                    <SettingsGroup
+                        label="Operations"
+                        description="How work moves, what staff can do, and when attention is needed."
+                    >
+                        <SettingsLink
+                            href={ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH}
+                            title="Business Processes"
+                            mode="editable"
+                            emphasis
+                        >
                             Configure processes, stages, membership, expected work, and actions.
                         </SettingsLink>
                         <SettingsLink href="/admin/settings/statuses" title="Statuses" mode="editable">
@@ -93,7 +113,7 @@ export default function AdminV2SettingsIndexPage() {
                         </SettingsLink>
                     </SettingsGroup>
 
-                    <SettingsGroup label="Workspace Experience">
+                    <SettingsGroup label="Workspace Experience" description="Metrics, forms, and operator-facing surfaces.">
                         <SettingsLink href="/admin/settings/kpis" title="Workspace metrics" mode="editable">
                             Dashboard KPI tiles.
                         </SettingsLink>

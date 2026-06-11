@@ -18,13 +18,13 @@ describe("lifecycle Settings IA", () => {
         const page = read("app/adminV2/settings/page.tsx");
         expect(page).toContain('label="Operations"');
         expect(page).toContain('title="Business Processes"');
-        expect(page).toContain("/admin/settings/lifecycle");
+        expect(page).toContain("ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH");
     });
 
-    it("lifecycle hub page renders with operator title and test id", () => {
-        const page = read("app/adminV2/settings/lifecycle/page.tsx");
+    it("business-processes hub page renders with operator title and test id", () => {
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
         expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
-        expect(page).toContain("settings-lifecycle-page");
+        expect(page).toContain("settings-business-processes-page");
         expect(page).toContain("LifecycleSettingsShell");
     });
 

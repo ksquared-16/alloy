@@ -1,7 +1,7 @@
 /** One-line operator subtitles for AdminV2 Settings pages. */
 
 export const SETTINGS_INDEX_SUBTITLE =
-    "Configure your organization, data model, operations, and workspace experience.";
+    "Configure how Alloy works for your organization — structure, data model, operations, and workspace experience.";
 
 export const SETTINGS_FIELDS_SUBTITLE =
     "Define record fields, labels, help text, and option sets.";

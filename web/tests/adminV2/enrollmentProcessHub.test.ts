@@ -19,19 +19,19 @@ describe("Lifecycle hub", () => {
         const page = read("app/adminV2/settings/page.tsx");
         expect(page).toContain('label="Operations"');
         expect(page).toContain('title="Business Processes"');
-        expect(page).toContain("/admin/settings/lifecycle");
+        expect(page).toContain("ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH");
         expect(page).not.toContain('title="Enrollment Process"');
     });
 
-    it("enrollment-process route redirects to lifecycle", () => {
+    it("enrollment-process route redirects to business-processes", () => {
         const page = read("app/adminV2/settings/enrollment-process/page.tsx");
         expect(page).toContain("redirect");
-        expect(page).toContain("ADMIN_V2_SETTINGS_LIFECYCLE_PATH");
+        expect(page).toContain("ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH");
     });
 
-    it("lifecycle page renders Business Processes primary shell", () => {
-        const page = read("app/adminV2/settings/lifecycle/page.tsx");
-        expect(page).toContain("settings-lifecycle-page");
+    it("business-processes page renders primary shell", () => {
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
+        expect(page).toContain("settings-business-processes-page");
         expect(page).toContain("LifecycleSettingsShell");
         expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
     });

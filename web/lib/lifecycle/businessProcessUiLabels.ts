@@ -16,18 +16,24 @@ export const BUSINESS_PROCESS_CATALOG_BACK = "All processes";
 
 export const BUSINESS_PROCESS_SECTION_MEMBERSHIP = "Stage Membership";
 export const BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY =
-    "Who belongs in this stage and which statuses roll up here.";
-export const BUSINESS_PROCESS_SECTION_REQUIRED = "Required Information";
+    "Stages are rollups. Records appear in this stage when their status matches the rules below.";
+export const BUSINESS_PROCESS_SECTION_REQUIRED = "Stage requirements";
 export const BUSINESS_PROCESS_SECTION_REQUIRED_SUMMARY =
-    "Fields to collect before work moves forward.";
-export const BUSINESS_PROCESS_SECTION_ACTIONS = "Actions";
-export const BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY = "Buttons staff see on records in this stage.";
+    "Fields recommended or required while a record is in this stage.";
+export const BUSINESS_PROCESS_STAGE_REQUIREMENTS_HELPER =
+    "Choose which configured fields should be recommended or required while a record is in this stage.";
+export const BUSINESS_PROCESS_SECTION_ACTIONS = "Actions in this stage";
+export const BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY =
+    "Actions available to staff while records are in this stage.";
+export const BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE = "Process Actions";
+export const BUSINESS_PROCESS_PROCESS_ACTIONS_SUMMARY =
+    "Configure which actions are available in this process and where they appear.";
 export const BUSINESS_PROCESS_SECTION_READY = "Ready Check";
 export const BUSINESS_PROCESS_SECTION_READY_SUMMARY =
     "Confirm this stage is ready for staff on the workspace.";
 export const BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED = "Queue presentation";
 export const BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED_SUMMARY =
-    "How this stage appears in workspace queues — configure row layout in Layouts.";
+    "This stage can appear as a workspace queue. Queue layout is managed in Layouts.";
 
 export const BUSINESS_PROCESS_CREATE_TITLE = "Create a Business Process";
 export const BUSINESS_PROCESS_CREATE_SUBTITLE =

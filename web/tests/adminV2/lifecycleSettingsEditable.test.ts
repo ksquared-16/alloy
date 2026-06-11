@@ -25,10 +25,10 @@ describe("editable lifecycle settings", () => {
         expect(page).toContain('label="Operations"');
     });
 
-    it("lifecycle page title is Business Processes with compact shell", () => {
-        const page = read("app/adminV2/settings/lifecycle/page.tsx");
+    it("business-processes page title is Business Processes with compact shell", () => {
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
         expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
-        expect(page).toContain("settings-lifecycle-page");
+        expect(page).toContain("settings-business-processes-page");
         expect(page).toContain("SETTINGS_PAGE_SHELL_COMPACT_CLASS");
     });
 

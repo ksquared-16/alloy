@@ -3,6 +3,7 @@
 import {
     BOS_DEFAULT_HEADER_SUBTITLE,
     BOS_DEFAULT_HEADER_TITLE,
+    BOS_IDENTITY,
     type BosIdentitySize,
 } from "@/lib/bos/bosIdentityTokens";
 
@@ -12,15 +13,20 @@ type Props = {
     title?: string;
     subtitle?: string;
     size?: BosIdentitySize;
-    /** On midnight-forge or dark chrome. */
+    /** On midnight-forge or dark chrome — mark stays pine, no badge container. */
     onDark?: boolean;
     className?: string;
     titleId?: string;
 };
 
+const MARK_SIZE: Record<BosIdentitySize, BosIdentitySize> = {
+    sm: "sm",
+    md: "sm",
+    lg: "md",
+};
+
 /**
- * BOS header — mark + title + operational intelligence subtitle.
- * Reusable in drawers, modals, workspace shells, and recommendation panels.
+ * BOS header — distant focal mark + title stack. No logo lockup containers.
  */
 export function BosHeader({
     title = BOS_DEFAULT_HEADER_TITLE,
@@ -40,17 +46,14 @@ export function BosHeader({
         : size === "sm" ? "text-[10px] leading-snug text-alloy-midnight/50"
         : "text-[11px] leading-snug text-alloy-midnight/50";
 
-    const markWrapClass =
-        onDark ?
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00A283]/20"
-        :   "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#00A283]/10";
+    const markColor = onDark ? BOS_IDENTITY.bendPine : undefined;
 
     return (
-        <div className={`flex min-w-0 items-center gap-3 ${className}`.trim()} data-bos-header="true">
-            <span className={markWrapClass} aria-hidden>
-                <BosMark size={size === "lg" ? "md" : size === "sm" ? "sm" : "md"} horizon />
-            </span>
-            <div className="min-w-0 text-left">
+        <div className={`flex min-w-0 items-start gap-3.5 ${className}`.trim()} data-bos-header="true">
+            <div className="shrink-0 pt-0.5" aria-hidden>
+                <BosMark size={MARK_SIZE[size]} horizon color={markColor} />
+            </div>
+            <div className="min-w-0 flex-1 text-left">
                 <div
                     id={titleId}
                     className={`${titleClass} ${onDark ? "text-white" : "text-alloy-midnight"}`}

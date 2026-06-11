@@ -15,15 +15,15 @@ import { BosHorizon } from "@/app/adminV2/components/bos/identity/BosHorizon";
 
 type Props = {
     size?: BosIdentitySize;
-    /** Render the BOS-only horizon artifact beneath the mark. */
+    /** Primary horizon + secondary wave beneath the mark (canonical BOS lockup). */
     horizon?: boolean;
     className?: string;
     color?: string;
 } & Omit<SVGProps<SVGSVGElement>, "color">;
 
 /**
- * BOS mark — Alloy brandmark in single-color Bend Pine.
- * Alloy geometry unchanged; horizon is optional and separate from the logo.
+ * BOS mark — official Alloy brandmark in single-color Bend Pine.
+ * Alloy geometry unchanged; horizon artifacts are separate from the logo.
  */
 export function BosMark({
     size = "md",
@@ -37,6 +37,7 @@ export function BosMark({
             viewBox={ALLOY_BRANDMARK_VIEWBOX}
             className={`${BOS_MARK_SIZE_CLASS[size]} shrink-0 ${className}`.trim()}
             aria-hidden
+            data-bos-mark-core="true"
             {...svgProps}
         >
             {ALLOY_BRANDMARK_PATHS.map((d, index) => (
@@ -48,9 +49,9 @@ export function BosMark({
     if (!horizon) return mark;
 
     return (
-        <span className="inline-flex flex-col items-center gap-0.5" data-bos-mark="true">
+        <span className="inline-flex flex-col items-center gap-1" data-bos-mark="true" data-bos-mark-horizon="true">
             {mark}
-            <BosHorizon size={size} className={BOS_HORIZON_WIDTH_CLASS[size]} />
+            <BosHorizon size={size} className={BOS_HORIZON_WIDTH_CLASS[size]} color={color} />
         </span>
     );
 }

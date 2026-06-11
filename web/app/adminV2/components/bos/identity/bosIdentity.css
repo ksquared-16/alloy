@@ -1,127 +1,329 @@
 /**
  * BOS smoke motion — drifts above the mark; never originates from Alloy geometry.
- * Converging state tightens toward clarity (center, lower opacity).
+ * Directional pass: streams organize upward (thinking), funnel inward to focal point (converging).
  */
 
-@keyframes bos-smoke-drift-a {
+@keyframes bos-smoke-think-intake-left {
     0%,
     100% {
-        transform: translate(-12%, 0) scale(1);
-        opacity: 0.22;
+        transform: translate(calc(-50% - 10px), 0) scale(0.88, 0.92);
+        opacity: 0.56;
     }
-    50% {
-        transform: translate(8%, -3px) scale(1.06);
-        opacity: 0.38;
+    18% {
+        transform: translate(calc(-50% - 28px), 2px) scale(0.96, 0.86);
+        opacity: 0.68;
+    }
+    42% {
+        transform: translate(calc(-50% - 14px), -10px) scale(0.92, 1.08);
+        opacity: 0.74;
+    }
+    58% {
+        transform: translate(calc(-50% - 5px), -18px) scale(0.84, 1.14);
+        opacity: 0.8;
+    }
+    78% {
+        transform: translate(calc(-50% - 20px), -8px) scale(0.9, 1);
+        opacity: 0.66;
     }
 }
 
-@keyframes bos-smoke-drift-b {
+@keyframes bos-smoke-think-intake-right {
     0%,
     100% {
-        transform: translate(10%, 2px) scale(1.02);
-        opacity: 0.16;
+        transform: translate(calc(-50% + 10px), 0) scale(0.88, 0.92);
+        opacity: 0.56;
     }
-    50% {
-        transform: translate(-6%, -5px) scale(0.98);
-        opacity: 0.3;
+    18% {
+        transform: translate(calc(-50% + 28px), 2px) scale(0.96, 0.86);
+        opacity: 0.68;
+    }
+    42% {
+        transform: translate(calc(-50% + 14px), -10px) scale(0.92, 1.08);
+        opacity: 0.74;
+    }
+    58% {
+        transform: translate(calc(-50% + 5px), -18px) scale(0.84, 1.14);
+        opacity: 0.8;
+    }
+    78% {
+        transform: translate(calc(-50% + 20px), -8px) scale(0.9, 1);
+        opacity: 0.66;
     }
 }
 
-@keyframes bos-smoke-converge-a {
+@keyframes bos-smoke-think-spine {
     0%,
     100% {
-        transform: translate(-18%, 4px) scale(1.08);
-        opacity: 0.2;
+        transform: translate(-50%, 0) scale(0.82, 0.78);
+        opacity: 0.58;
     }
-    50% {
-        transform: translate(0%, -2px) scale(0.92);
-        opacity: 0.12;
+    32% {
+        transform: translate(-50%, -8px) scale(0.92, 1.02);
+        opacity: 0.72;
+    }
+    52% {
+        transform: translate(-50%, -20px) scale(0.88, 1.18);
+        opacity: 0.84;
+    }
+    72% {
+        transform: translate(-50%, -12px) scale(0.86, 1.06);
+        opacity: 0.7;
     }
 }
 
-@keyframes bos-smoke-converge-b {
+@keyframes bos-smoke-think-merge-a {
     0%,
     100% {
-        transform: translate(16%, 3px) scale(1.04);
-        opacity: 0.18;
+        transform: translate(calc(-50% - 18px), 3px) scale(0.78, 0.86);
+        opacity: 0.46;
     }
-    50% {
-        transform: translate(0%, -1px) scale(0.88);
-        opacity: 0.08;
+    36% {
+        transform: translate(calc(-50% - 6px), -12px) scale(0.9, 1.02);
+        opacity: 0.68;
+    }
+    62% {
+        transform: translate(-50%, -16px) scale(0.82, 1.08);
+        opacity: 0.76;
+    }
+}
+
+@keyframes bos-smoke-think-merge-b {
+    0%,
+    100% {
+        transform: translate(calc(-50% + 18px), 3px) scale(0.78, 0.86);
+        opacity: 0.46;
+    }
+    36% {
+        transform: translate(calc(-50% + 6px), -12px) scale(0.9, 1.02);
+        opacity: 0.68;
+    }
+    62% {
+        transform: translate(-50%, -16px) scale(0.82, 1.08);
+        opacity: 0.76;
+    }
+}
+
+@keyframes bos-smoke-converge-stream-left {
+    0%,
+    100% {
+        transform: translate(calc(-50% - 32px), 6px) scale(1.08, 0.82);
+        opacity: 0.58;
+    }
+    38% {
+        transform: translate(calc(-50% - 14px), -2px) scale(0.82, 0.94);
+        opacity: 0.72;
+    }
+    62% {
+        transform: translate(-50%, -8px) scale(0.46, 0.62);
+        opacity: 0.82;
+    }
+}
+
+@keyframes bos-smoke-converge-stream-right {
+    0%,
+    100% {
+        transform: translate(calc(-50% + 32px), 6px) scale(1.08, 0.82);
+        opacity: 0.58;
+    }
+    38% {
+        transform: translate(calc(-50% + 14px), -2px) scale(0.82, 0.94);
+        opacity: 0.72;
+    }
+    62% {
+        transform: translate(-50%, -8px) scale(0.46, 0.62);
+        opacity: 0.82;
+    }
+}
+
+@keyframes bos-smoke-converge-spine {
+    0%,
+    100% {
+        transform: translate(-50%, 8px) scale(1.12, 0.76);
+        opacity: 0.52;
+    }
+    62% {
+        transform: translate(-50%, -8px) scale(0.42, 0.58);
+        opacity: 0.78;
+    }
+}
+
+@keyframes bos-smoke-converge-feed-a {
+    0%,
+    100% {
+        transform: translate(calc(-50% - 22px), 5px) scale(0.92);
+        opacity: 0.5;
+    }
+    62% {
+        transform: translate(-50%, -7px) scale(0.4);
+        opacity: 0.74;
+    }
+}
+
+@keyframes bos-smoke-converge-feed-b {
+    0%,
+    100% {
+        transform: translate(calc(-50% + 22px), 5px) scale(0.92);
+        opacity: 0.5;
+    }
+    62% {
+        transform: translate(-50%, -7px) scale(0.4);
+        opacity: 0.74;
+    }
+}
+
+@keyframes bos-smoke-complete {
+    0% {
+        transform: translate(-50%, -4px) scale(0.85);
+        opacity: 0.42;
+    }
+    100% {
+        transform: translate(-50%, -18px) scale(0.35);
+        opacity: 0;
     }
 }
 
 .bos-smoke {
     position: relative;
     width: 100%;
-    height: 1.75rem;
+    height: 3.5rem;
     pointer-events: none;
     overflow: visible;
 }
 
-.bos-smoke__layer {
+.bos-smoke__wisp {
     position: absolute;
     left: 50%;
-    top: 50%;
-    border-radius: 9999px;
-    background: rgba(0, 162, 131, 0.14);
-    filter: blur(10px);
-    transform: translate(-50%, -50%);
+    bottom: 0.125rem;
+    transform: translate(-50%, 0);
+    filter: blur(2.5px);
+    will-change: transform, opacity;
 }
 
-.bos-smoke__layer--1 {
-    width: 3.5rem;
-    height: 1.1rem;
+.bos-smoke__wisp--branch-left,
+.bos-smoke__wisp--branch-right {
+    width: 1.05rem;
+    height: 1.6rem;
+    border-radius: 44% 56% 48% 52% / 72% 68% 32% 28%;
+    background: linear-gradient(
+        to top,
+        rgba(0, 162, 131, 0.76) 0%,
+        rgba(0, 162, 131, 0.44) 46%,
+        rgba(0, 162, 131, 0) 100%
+    );
 }
 
-.bos-smoke__layer--2 {
-    width: 2.75rem;
-    height: 0.85rem;
-    margin-left: -0.5rem;
+.bos-smoke__wisp--core {
+    width: 1.15rem;
+    height: 1.75rem;
+    border-radius: 46% 54% 42% 58% / 74% 72% 28% 26%;
+    background: linear-gradient(
+        to top,
+        rgba(0, 162, 131, 0.82) 0%,
+        rgba(0, 162, 131, 0.48) 50%,
+        rgba(0, 162, 131, 0) 100%
+    );
+    filter: blur(2px);
 }
 
-.bos-smoke__layer--3 {
-    width: 2rem;
-    height: 0.65rem;
-    margin-left: 0.75rem;
+.bos-smoke__wisp--trail-a,
+.bos-smoke__wisp--trail-b {
+    width: 0.95rem;
+    height: 1.25rem;
+    border-radius: 48% 52% 50% 50% / 68% 68% 32% 32%;
+    background: linear-gradient(
+        to top,
+        rgba(0, 162, 131, 0.62) 0%,
+        rgba(0, 162, 131, 0.28) 55%,
+        rgba(0, 162, 131, 0) 100%
+    );
+    filter: blur(2px);
 }
 
-.bos-smoke--thinking .bos-smoke__layer--1 {
-    animation: bos-smoke-drift-a 7s ease-in-out infinite;
+.bos-smoke--thinking .bos-smoke__wisp--branch-left {
+    animation: bos-smoke-think-intake-left 4.2s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
 }
 
-.bos-smoke--thinking .bos-smoke__layer--2 {
-    animation: bos-smoke-drift-b 9s ease-in-out infinite;
-    animation-delay: -2s;
+.bos-smoke--thinking .bos-smoke__wisp--branch-right {
+    animation: bos-smoke-think-intake-right 4.2s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
+    animation-delay: -0.55s;
 }
 
-.bos-smoke--thinking .bos-smoke__layer--3 {
-    animation: bos-smoke-drift-a 8s ease-in-out infinite reverse;
-    animation-delay: -4s;
+.bos-smoke--thinking .bos-smoke__wisp--core {
+    animation: bos-smoke-think-spine 4.2s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
+    animation-delay: -1.05s;
 }
 
-.bos-smoke--converging .bos-smoke__layer--1 {
-    animation: bos-smoke-converge-a 5s ease-in-out infinite;
+.bos-smoke--thinking .bos-smoke__wisp--trail-a {
+    animation: bos-smoke-think-merge-a 4.2s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
+    animation-delay: -1.65s;
 }
 
-.bos-smoke--converging .bos-smoke__layer--2 {
-    animation: bos-smoke-converge-b 6s ease-in-out infinite;
-    animation-delay: -1.5s;
+.bos-smoke--thinking .bos-smoke__wisp--trail-b {
+    animation: bos-smoke-think-merge-b 4.2s cubic-bezier(0.45, 0.05, 0.25, 1) infinite;
+    animation-delay: -2.25s;
 }
 
-.bos-smoke--converging .bos-smoke__layer--3 {
-    animation: bos-smoke-converge-a 5.5s ease-in-out infinite reverse;
-    animation-delay: -3s;
+.bos-smoke--converging .bos-smoke__wisp--branch-left {
+    animation: bos-smoke-converge-stream-left 3.6s cubic-bezier(0.62, 0, 0.38, 1) infinite;
+}
+
+.bos-smoke--converging .bos-smoke__wisp--branch-right {
+    animation: bos-smoke-converge-stream-right 3.6s cubic-bezier(0.62, 0, 0.38, 1) infinite;
+    animation-delay: -0.45s;
+}
+
+.bos-smoke--converging .bos-smoke__wisp--core {
+    animation: bos-smoke-converge-spine 3.6s cubic-bezier(0.62, 0, 0.38, 1) infinite;
+    animation-delay: -0.9s;
+}
+
+.bos-smoke--converging .bos-smoke__wisp--trail-a {
+    animation: bos-smoke-converge-feed-a 3.6s cubic-bezier(0.62, 0, 0.38, 1) infinite;
+    animation-delay: -1.35s;
+}
+
+.bos-smoke--converging .bos-smoke__wisp--trail-b {
+    animation: bos-smoke-converge-feed-b 3.6s cubic-bezier(0.62, 0, 0.38, 1) infinite;
+    animation-delay: -1.8s;
+}
+
+.bos-smoke--complete .bos-smoke__wisp {
+    animation: bos-smoke-complete 0.85s ease-out forwards;
+}
+
+.bos-smoke--complete .bos-smoke__wisp--branch-left {
+    animation-delay: 0s;
+}
+
+.bos-smoke--complete .bos-smoke__wisp--branch-right {
+    animation-delay: 0.06s;
+}
+
+.bos-smoke--complete .bos-smoke__wisp--core {
+    animation-delay: 0.03s;
+}
+
+.bos-smoke--complete .bos-smoke__wisp--trail-a {
+    animation-delay: 0.09s;
+}
+
+.bos-smoke--complete .bos-smoke__wisp--trail-b {
+    animation-delay: 0.12s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .bos-smoke__layer {
+    .bos-smoke__wisp {
         animation: none !important;
-        opacity: 0.14;
+        opacity: 0.48;
+        transform: translate(-50%, -6px) scale(0.9);
+    }
+
+    .bos-smoke--complete .bos-smoke__wisp {
+        opacity: 0;
     }
 }
 
-/** Cloud workspace perimeter — soft intelligence field, not cartoon cloud. */
+/** Cloud workspace — atmospheric field discovered at the edge, not illustrated. */
 .bos-workspace-shell {
     position: relative;
     isolation: isolate;
@@ -130,20 +332,22 @@
 .bos-workspace-shell__perimeter {
     pointer-events: none;
     position: absolute;
-    inset: -1px;
+    inset: 0;
     border-radius: inherit;
-    box-shadow:
-        inset 0 0 0 1px rgba(0, 162, 131, 0.14),
-        0 0 0 1px rgba(0, 162, 131, 0.08),
-        0 12px 40px rgba(39, 63, 82, 0.08);
+    box-shadow: none;
+    background:
+        radial-gradient(ellipse 120% 55% at 50% 0%, rgba(0, 162, 131, 0.05), transparent 58%),
+        radial-gradient(ellipse 90% 40% at 50% 100%, rgba(0, 162, 131, 0.035), transparent 52%);
+    opacity: 0.9;
 }
 
 .bos-workspace-shell__atmosphere {
     pointer-events: none;
     position: absolute;
-    inset: 0;
+    inset: 1px;
     border-radius: inherit;
-    background:
-        radial-gradient(ellipse 80% 45% at 50% 0%, rgba(0, 162, 131, 0.1), transparent 62%),
-        radial-gradient(ellipse 60% 35% at 88% 12%, rgba(0, 162, 131, 0.06), transparent 55%);
+    background: transparent;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 162, 131, 0.07),
+        inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }

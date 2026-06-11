@@ -64,6 +64,7 @@ import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLife
 import { loadOperatorLifecycleLandingCards, invalidateOperatorLifecycleLandingCache } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 import { warmDefaultOperatorLifecycleEntries } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import {
+    mergeLifecycleCardsStableOrder,
     peekWorkspaceLifecycleCardsForRestore,
     writeWorkspaceLifecycleCardsCache,
 } from "@/lib/workspace/workspaceContinuityPrefetch";
@@ -159,7 +160,7 @@ export default function AdminV2WorkspaceIndexPage() {
         void loadOperatorLifecycleLandingCards()
             .then((cards) => {
                 if (!cancelled) {
-                    setLifecycleCards(cards);
+                    setLifecycleCards((prev) => mergeLifecycleCardsStableOrder(prev, cards));
                     if (orgId && cards.length) {
                         writeWorkspaceLifecycleCardsCache(
                             { orgId, principalUserId, accessScopeFingerprint },

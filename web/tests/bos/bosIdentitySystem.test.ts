@@ -136,3 +136,61 @@ describe("BOS identity system — Sprint 02 migration", () => {
         expect(read("playwright/tests/bos-identity-system.spec.ts")).toContain("bos-identity-system");
     });
 });
+
+describe("BOS identity system — Sprint 03 refinement", () => {
+    it("BosHorizon includes primary curve and secondary atmospheric wave", () => {
+        const src = read("app/adminV2/components/bos/identity/BosHorizon.tsx");
+        expect(src).toContain('data-bos-horizon-primary="true"');
+        expect(src).toContain('data-bos-horizon-wave="true"');
+        const html = renderToStaticMarkup(createElement(BosHorizon, { size: "md" }));
+        expect(html).toContain('data-bos-horizon-wave="true"');
+    });
+
+    it("BosMark horizon lockup stacks mark above BosHorizon", () => {
+        const html = renderToStaticMarkup(createElement(BosMark, { size: "md", horizon: true }));
+        expect(html).toContain('data-bos-mark-horizon="true"');
+        expect(html).toContain('data-bos-horizon="true"');
+    });
+
+    it("BosSmoke uses directional intake/merge/funnel keyframes and complete fade", () => {
+        const smokeSrc = read("app/adminV2/components/bos/identity/BosSmoke.tsx");
+        expect(smokeSrc).toContain("bos-smoke__wisp--core");
+        expect(smokeSrc).toContain('"complete"');
+
+        const css = read("app/adminV2/components/bos/identity/bosIdentity.css");
+        expect(css).toContain("bos-smoke-think-intake-left");
+        expect(css).toContain("bos-smoke-think-merge-a");
+        expect(css).toContain("bos-smoke-converge-stream-left");
+        expect(css).toContain("bos-smoke-complete");
+        expect(css).toContain("linear-gradient(");
+        expect(css).toContain("bottom: 0.125rem");
+
+        const html = renderToStaticMarkup(createElement(BosSmoke, { state: "complete" }));
+        expect(html).toContain('data-bos-smoke="complete"');
+    });
+
+    it("BosHeader and BosNotification omit dark logo badge containers", () => {
+        const header = read("app/adminV2/components/bos/identity/BosHeader.tsx");
+        expect(header).not.toMatch(/rounded-(xl|lg|md).*bg-\[#00A283\]/);
+        expect(header).toContain("horizon");
+
+        const notification = read("app/adminV2/components/bos/identity/BosNotification.tsx");
+        expect(notification).not.toMatch(/rounded-lg bg-\[#00A283\]/);
+    });
+
+    it("production BOS banners removed boxed mark treatments", () => {
+        const banner = read("components/admin/actions/ActionWorkspaceBosBanner.tsx");
+        expect(banner).not.toContain("justify-center");
+        expect(banner).not.toMatch(/rounded-(xl|lg|md).*bg-\[#00A283\]/);
+
+        expect(read("components/admin/actions/ActionWorkspaceSuccessState.tsx")).not.toContain(
+            "rounded-full bg-[#00A283]/10",
+        );
+    });
+
+    it("BosWorkspaceShell uses atmospheric perimeter not illustrated cloud borders", () => {
+        const css = read("app/adminV2/components/bos/identity/bosIdentity.css");
+        expect(css).toContain("radial-gradient");
+        expect(css).not.toContain("border-image");
+    });
+});

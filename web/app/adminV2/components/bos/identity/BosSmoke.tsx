@@ -2,7 +2,7 @@
 
 import "@/app/adminV2/components/bos/identity/bosIdentity.css";
 
-export type BosSmokeState = "thinking" | "converging";
+export type BosSmokeState = "thinking" | "converging" | "complete";
 
 type Props = {
     state?: BosSmokeState;
@@ -10,8 +10,8 @@ type Props = {
 };
 
 /**
- * BOS smoke motion — subtle opacity drift above the mark.
- * Smoke never originates from the Alloy mark; it converges toward clarity when `state="converging"`.
+ * BOS smoke motion — directional information streams above the mark.
+ * Thinking: intake → organize → structure. Converging: funnel to focal point. Complete: fade.
  */
 export function BosSmoke({ state = "thinking", className = "" }: Props) {
     return (
@@ -20,9 +20,11 @@ export function BosSmoke({ state = "thinking", className = "" }: Props) {
             aria-hidden
             data-bos-smoke={state}
         >
-            <span className="bos-smoke__layer bos-smoke__layer--1" />
-            <span className="bos-smoke__layer bos-smoke__layer--2" />
-            <span className="bos-smoke__layer bos-smoke__layer--3" />
+            <span className="bos-smoke__wisp bos-smoke__wisp--branch-left" />
+            <span className="bos-smoke__wisp bos-smoke__wisp--branch-right" />
+            <span className="bos-smoke__wisp bos-smoke__wisp--core" />
+            <span className="bos-smoke__wisp bos-smoke__wisp--trail-a" />
+            <span className="bos-smoke__wisp bos-smoke__wisp--trail-b" />
         </div>
     );
 }

@@ -25,6 +25,10 @@ import {
     BUSINESS_PROCESS_SECTION_REQUIRED_SUMMARY,
     BUSINESS_PROCESS_STAGE_HEADER,
 } from "@/lib/lifecycle/businessProcessUiLabels";
+import {
+    STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER,
+    STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL,
+} from "@/lib/lifecycle/queueMembershipUiLabels";
 import LifecycleStatusesCard from "@/components/adminV2/settings/lifecycle/LifecycleStatusesCard";
 import type { LifecycleStatusesSaveState } from "@/lib/lifecycle/lifecycleStatusesCardState";
 import LifecycleStageFieldRequirementsEditor, {
@@ -357,13 +361,14 @@ export default function LifecycleStageWorkspace({
                                 departmentId={departmentId}
                                 stageKey={stageKey}
                                 savedMembership={bootstrap?.queue_membership ?? null}
-                                statusOptions={bootstrap?.queue_membership_status_options ?? []}
                                 onDirtyChange={setMembershipDirty}
                             />
-                            <div className="border-t border-alloy-forge/8 pt-3">
-                                <p className="mb-2 text-[11px] font-medium text-alloy-midnight/65">Status rollups</p>
+                            <div className="border-t border-alloy-forge/8 pt-3" data-testid="stage-membership-included-statuses">
+                                <p className="mb-1 text-[11px] font-medium text-alloy-midnight/70">
+                                    {STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL}
+                                </p>
                                 <p className="mb-2 text-[11px] text-alloy-midnight/50">
-                                    Select which CRM statuses belong in this stage.
+                                    {STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER}
                                 </p>
                                 <LifecycleStatusesCard
                                     payload={statusesPayload}
@@ -450,11 +455,11 @@ export default function LifecycleStageWorkspace({
                     </summary>
                     <div className="border-t border-alloy-forge/8 px-4 py-3">
                         <p className="mb-2 text-[11px] text-alloy-midnight/50">
-                            Row layout and columns are configured in{" "}
+                            Queue layout is managed in{" "}
                             <Link href="/admin/settings/layouts" className="font-medium text-alloy-pine hover:underline">
                                 Layouts
                             </Link>
-                            . This section syncs the workspace lane when you save the stage.
+                            . Saving the stage syncs the workspace lane when statuses are assigned.
                         </p>
                         {draftStatusCount > 0 || savedStatusKeys.length > 0 ? (
                             <LifecycleStageWorkUnitCard
@@ -481,21 +486,6 @@ export default function LifecycleStageWorkspace({
                 </details>
             </div>
 
-            <footer
-                className="sticky bottom-0 z-10 mt-2 rounded-b-xl border-t border-alloy-forge/12 bg-white/95 px-3 py-2 shadow-[0_-2px_8px_rgba(0,0,0,0.04)] backdrop-blur-sm"
-                data-testid="lifecycle-stage-save-sticky-bar"
-            >
-                <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0 hidden sm:block">{summaryLine}</div>
-                    <SaveBar
-                        compact
-                        effectiveSaveState={effectiveSaveState}
-                        saveError={saveError}
-                        saveDisabled={saveDisabled}
-                        onSaveStage={onSaveStage}
-                    />
-                </div>
-            </footer>
         </div>
     );
 }
