@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ADMIN_WORKFLOWS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import Link from "next/link";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
@@ -109,6 +110,11 @@ export function AutomationWorkflowsBlock(props: {
     workflowAssistHref?: string | null;
     /** Focus command surface with seeded Workflow Assist prompt (preferred). */
     onAskWorkflowAssist?: (() => void) | null;
+    /**
+     * `full` — department context-lower card (default).
+     * `work_unit_summary` — collapsed telemetry banner on work-unit pages; expand for full detail.
+     */
+    presentation?: "full" | "work_unit_summary";
 }) {
     const {
         kpis,
@@ -120,7 +126,11 @@ export function AutomationWorkflowsBlock(props: {
         metadataAssociationNote = null,
         workflowAssistHref = null,
         onAskWorkflowAssist = null,
+        presentation = "full",
     } = props;
+
+    const isWorkUnitSummary = presentation === "work_unit_summary";
+    const [summaryExpanded, setSummaryExpanded] = useState(false);
 
     const scopedWu = partitions?.scoped_work_unit ?? [];
     const scopedDept = partitions?.scoped_department ?? [];
@@ -138,54 +148,134 @@ export function AutomationWorkflowsBlock(props: {
         kpis.success_rate_last_7d < 0.92 &&
         kpis.success_rate_last_7d >= 0;
 
+    const runsTodayLabel = kpisLoading ? "—" : String(kpis.runs_today);
+    const successRateLabel =
+        kpisLoading ? "—" : kpis.success_rate_last_7d == null ? "—" : `${Math.round(kpis.success_rate_last_7d * 100)}%`;
+    const failuresLabel = kpisLoading ? "—" : String(kpis.failed_last_7d);
+
+    const showFullDetails = !isWorkUnitSummary || summaryExpanded;
+
     return (
-        <div className="adminv2-ws-automation-telemetry" data-ws-component="automation_telemetry">
-            <header className="adminv2-ws-automation-telemetry__mast">
-                <div className="adminv2-ws-automation-telemetry__mast-primary">
-                    <p className="adminv2-ws-automation-telemetry__kicker">Workflow telemetry</p>
-                    <h3 className="adminv2-ws-automation-telemetry__title">{title}</h3>
-                    <p className="adminv2-ws-automation-telemetry__subtitle">
-                        Live runs, reliability, and workflows scoped to this workspace surface.
-                    </p>
-                </div>
-                <div className="adminv2-ws-automation-telemetry__mast-actions">
-                    <Link
-                        href={href}
-                        prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
-                        className="adminv2-ws-automation-telemetry__review"
+        <div
+            className={`adminv2-ws-automation-telemetry${isWorkUnitSummary ? " adminv2-ws-automation-telemetry--work-unit-summary" : ""}${isWorkUnitSummary && summaryExpanded ? " adminv2-ws-automation-telemetry--work-unit-summary-expanded" : ""}`}
+            data-ws-component="automation_telemetry"
+            data-ws-automation-telemetry-expanded={isWorkUnitSummary ? (summaryExpanded ? "true" : "false") : undefined}
+        >
+            {isWorkUnitSummary ?
+                <div
+                    className="adminv2-ws-automation-telemetry__summary-banner"
+                    role="region"
+                    aria-label="Workflow telemetry summary"
+                >
+                    <div className="adminv2-ws-automation-telemetry__summary-primary">
+                        <span className="adminv2-ws-automation-telemetry__summary-title">Workflow Telemetry</span>
+                        <dl className="adminv2-ws-automation-telemetry__summary-stats">
+                            <div className="adminv2-ws-automation-telemetry__summary-stat">
+                                <dt>Runs Today</dt>
+                                <dd>{runsTodayLabel}</dd>
+                            </div>
+                            <div className="adminv2-ws-automation-telemetry__summary-stat">
+                                <dt>Success Rate</dt>
+                                <dd>{successRateLabel}</dd>
+                            </div>
+                            <div
+                                className={`adminv2-ws-automation-telemetry__summary-stat${failuresHot ? " adminv2-ws-automation-telemetry__summary-stat--attention" : ""}`}
+                            >
+                                <dt>Failures</dt>
+                                <dd>{failuresLabel}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    <button
+                        type="button"
+                        className="adminv2-ws-automation-telemetry__summary-toggle"
+                        aria-expanded={summaryExpanded}
+                        onClick={() => setSummaryExpanded((open) => !open)}
                     >
-                        Open Automations
-                        <span aria-hidden> →</span>
-                    </Link>
-                    {onAskWorkflowAssist ?
-                        <button
-                            type="button"
-                            className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
-                            data-ws-ask-workflow-assist="true"
-                            onClick={onAskWorkflowAssist}
-                        >
-                            Ask Workflow Assist
-                        </button>
-                    : workflowAssistHref ?
-                        <Link
-                            href={workflowAssistHref}
-                            prefetch={shouldDisableAdminV2LinkPrefetch(workflowAssistHref) ? false : undefined}
-                            className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
-                            data-ws-ask-workflow-assist="true"
-                        >
-                            Ask Workflow Assist
-                        </Link>
-                    : null}
+                        {summaryExpanded ? "Collapse" : "Expand"}
+                    </button>
                 </div>
-            </header>
+            :   <header className="adminv2-ws-automation-telemetry__mast">
+                    <div className="adminv2-ws-automation-telemetry__mast-primary">
+                        <p className="adminv2-ws-automation-telemetry__kicker">Workflow telemetry</p>
+                        <h3 className="adminv2-ws-automation-telemetry__title">{title}</h3>
+                        <p className="adminv2-ws-automation-telemetry__subtitle">
+                            Live runs, reliability, and workflows scoped to this workspace surface.
+                        </p>
+                    </div>
+                    <div className="adminv2-ws-automation-telemetry__mast-actions">
+                        <Link
+                            href={href}
+                            prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
+                            className="adminv2-ws-automation-telemetry__review"
+                        >
+                            Open Automations
+                            <span aria-hidden> →</span>
+                        </Link>
+                        {onAskWorkflowAssist ?
+                            <button
+                                type="button"
+                                className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
+                                data-ws-ask-workflow-assist="true"
+                                onClick={onAskWorkflowAssist}
+                            >
+                                Ask Workflow Assist
+                            </button>
+                        : workflowAssistHref ?
+                            <Link
+                                href={workflowAssistHref}
+                                prefetch={shouldDisableAdminV2LinkPrefetch(workflowAssistHref) ? false : undefined}
+                                className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
+                                data-ws-ask-workflow-assist="true"
+                            >
+                                Ask Workflow Assist
+                            </Link>
+                        : null}
+                    </div>
+                </header>
+            }
 
-            {associationNote ?
-                <p className="adminv2-ws-automation-telemetry__association-note" data-ws-automation-metadata-gap="true">
-                    {associationNote}
-                </p>
-            : null}
+            {showFullDetails ?
+                <>
+                    {isWorkUnitSummary ?
+                        <div className="adminv2-ws-automation-telemetry__mast-actions adminv2-ws-automation-telemetry__mast-actions--expanded">
+                            <Link
+                                href={href}
+                                prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
+                                className="adminv2-ws-automation-telemetry__review"
+                            >
+                                Open Automations
+                                <span aria-hidden> →</span>
+                            </Link>
+                            {onAskWorkflowAssist ?
+                                <button
+                                    type="button"
+                                    className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
+                                    data-ws-ask-workflow-assist="true"
+                                    onClick={onAskWorkflowAssist}
+                                >
+                                    Ask Workflow Assist
+                                </button>
+                            : workflowAssistHref ?
+                                <Link
+                                    href={workflowAssistHref}
+                                    prefetch={shouldDisableAdminV2LinkPrefetch(workflowAssistHref) ? false : undefined}
+                                    className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
+                                    data-ws-ask-workflow-assist="true"
+                                >
+                                    Ask Workflow Assist
+                                </Link>
+                            : null}
+                        </div>
+                    :   null}
 
-            <div className="adminv2-ws-automation-telemetry__groups" role="group" aria-label="Automation metrics">
+                    {associationNote ?
+                        <p className="adminv2-ws-automation-telemetry__association-note" data-ws-automation-metadata-gap="true">
+                            {associationNote}
+                        </p>
+                    :   null}
+
+                    <div className="adminv2-ws-automation-telemetry__groups" role="group" aria-label="Automation metrics">
                 <section className="adminv2-ws-automation-telemetry__group" aria-label="Throughput">
                     <h4 className="adminv2-ws-automation-telemetry__group-title">Throughput</h4>
                     <div className="adminv2-ws-automation-telemetry__group-cells">
@@ -260,6 +350,8 @@ export function AutomationWorkflowsBlock(props: {
             : workflows?.length ?
                 <WorkflowListSection kicker="In scope" hint="Workflow list" rows={workflows} />
             : null}
+                </>
+            :   null}
         </div>
     );
 }

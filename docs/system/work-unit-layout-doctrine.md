@@ -1,11 +1,11 @@
 # Work Unit Layout Doctrine
 
-**Status:** Canonical (June 2026)  
+**Status:** Canonical V2 (June 2026)  
 **Scope:** All Admin V2 work-unit execution surfaces (`WorkUnitWorkspace`, slug and UUID routes)
 
 ## Purpose
 
-Lock a consistent work-unit page structure so operators immediately see **operational work** (queue) and **operational intelligence** (automation, telemetry, analytics) on the same page — without the queue consuming the full viewport.
+Lock a consistent work-unit page structure where the **queue remains the primary operating surface**, while **Workflow Telemetry stays discoverable** without consuming excessive vertical space.
 
 Related: **`workspace-system.md`**, **`platform-performance-doctrine.md`**, **`bos-foundation.md`**.
 
@@ -15,72 +15,89 @@ Related: **`workspace-system.md`**, **`platform-performance-doctrine.md`**, **`b
 
 **Contains:** lifecycle name, work unit title, stage pills / sibling work units, Needs Attention (when configured), filters/search.
 
-**Behavior:** Normal page content in the control deck. No change to header doctrine.
+**Behavior:** Normal page content in the control deck. Unchanged.
 
 **Implementation:** `adminv2-ws-dept-v2-control-deck` inside `WorkUnitWorkspace` primary column.
 
-### Zone 2 — Queue Workspace
+### Zone 2 — Queue Workspace (primary)
 
 **Contains:** queue rows, queue actions, row interactions, row expansion.
 
 **Behavior:**
 
-- Queue uses a **bounded workspace height** — not unbounded viewport growth.
-- Queue list scrolls **inside** `.adminv2-ws-wu-queue-list-shell` when rows exceed the cap.
-- Queue height is **~15–20% shorter** than the pre-doctrine cap so intelligence sections surface on first paint.
+- Queue is the **dominant** surface — not compressed to expose telemetry.
+- Queue list uses a **bounded scroll shell** (`.adminv2-ws-wu-queue-list-shell`).
+- Target **~5–7 visible rows** on standard laptop viewports; **~6–8** on larger monitors.
 - Row behavior, selection, drawer open, and registry actions are **unchanged**.
 
 **CSS tokens** (work-unit surface only):
 
 | Token | Role |
 |-------|------|
+| `--ws-wu-queue-visible-rows-target` | Row-count target (6 laptop; 7 @1440px; 8 @1280×900+) |
+| `--ws-wu-queue-row-stack-estimate` | Per-row height estimate from `--ws-dept-queue-row-min-height` |
 | `--ws-wu-queue-records-scroll-top-offset` | Reserve space for Zone 1 header deck |
-| `--ws-wu-queue-intelligence-peek-reserve` | Reserve viewport space for Zone 3 mast on first paint |
-| `--ws-wu-queue-viewport-height-ratio` | Viewport fraction applied to remaining height (~0.825 ≈ 17.5% reduction) |
-| `--ws-wu-queue-records-scroll-height-cap` | Hard cap on list shell height (528px; prior cap 640px) |
-| `--ws-wu-queue-records-scroll-max-height` | `min(calc(...), cap)` — bound for `.adminv2-ws-wu-queue-list-shell` |
+| `--ws-wu-queue-intelligence-banner-reserve` | Reserve ~4.5rem for collapsed telemetry banner |
+| `--ws-wu-queue-records-scroll-height-cap` | Hard cap (640px) |
+| `--ws-wu-queue-records-scroll-max-height` | `min(row-target, viewport-remaining, cap)` |
 
-**Target:** Workflow Telemetry header visible without page scroll on standard desktop resolutions (1080p-class).
+### Zone 3 — Workflow Telemetry Summary Banner
 
-### Zone 3 — Operational Intelligence
+**Contains:** collapsed telemetry summary — Runs Today, Success Rate, Failures, Expand control.
 
-**Contains:** Workflow Telemetry, automation outcomes, system health, future operational analytics.
+**Behavior:**
 
-**Behavior:** Standard document flow **below** the queue workspace. Not hidden behind excessive queue height.
+- **Always visible** below the queue without page scroll (standard desktop).
+- Single compact row (~60–80px).
+- Immediately communicates automation health.
+- **Collapsed by default** on work-unit pages.
 
-**Implementation:** `primaryFooterSlot` on `WorkUnitWorkspace` → `[data-workspace-zone="operational-intelligence"]` with `data-ws-lane-kind="automation_workflows"`.
+**Implementation:** `AutomationWorkflowsBlock` with `presentation="work_unit_summary"` in `primaryFooterSlot` → `[data-workspace-zone="operational-intelligence"]`.
+
+### Zone 4 — Expanded Operational Intelligence (on demand)
+
+**Contains:** full telemetry — throughput/reliability metric groups, scoped workflow lists, Open Automations / Ask Workflow Assist.
+
+**Behavior:**
+
+- Revealed when operator clicks **Expand** on the summary banner.
+- Expands **inline** below the banner (no modal, no drawer).
+- May use full telemetry height when expanded.
+- **No data removed** — same KPIs and workflow partitions as the full department card.
 
 ## BOS Rail Doctrine
 
-BOS is a **persistent assistant surface** outside the three-zone vertical flow.
+BOS is a **persistent assistant surface** outside the four-zone vertical flow.
 
 **Requirements:**
 
 - BOS rail stays **fixed in viewport** while primary-column content scrolls.
-- BOS does **not** move when scrolling queue content or intelligence sections.
+- BOS does **not** move when scrolling queue content or telemetry sections.
 - BOS remains continuously available as operational copilot.
 
-**Implementation:** `[data-adminv2-workspace-command-column]` uses `position: sticky` + `--adminv2-workspace-rail-height` in `adminV2.css` (workspace shell v2). `WorkspaceShellLayout` mounts `WorkspaceCommandRailShell` in the command column for all work-unit pages.
+**Implementation:** `[data-adminv2-workspace-command-column]` uses `position: sticky` + `--adminv2-workspace-rail-height` in `adminV2.css`.
 
 ## Future work units
 
 All new work-unit surfaces **must**:
 
-1. Render through `WorkUnitWorkspace` + `WorkspaceShellLayout` (or a successor that preserves these zone contracts).
-2. Keep queue preview in Zone 2 with bounded scroll — never full-page queue growth.
-3. Mount operational intelligence below the queue (Zone 3).
-4. Keep BOS in the sticky command column — not inline in the primary scroll column.
+1. Render through `WorkUnitWorkspace` + `WorkspaceShellLayout`.
+2. Keep Zone 2 queue bounded but **row-count-primary** (~5–7+ visible rows).
+3. Mount `AutomationWorkflowsBlock` with `presentation="work_unit_summary"` below the queue.
+4. Keep BOS in the sticky command column.
 
 **Must not:**
 
-- Allow queue content to consume the entire page.
-- Hide telemetry/automation sections below excessive queue height.
-- Require scrolling before operators discover automation/intelligence areas.
+- Shrink the queue solely to expose telemetry detail by default.
+- Hide telemetry entirely below the fold.
+- Require scrolling before operators discover that automation exists.
 
 ## Validation checklist
 
-- [ ] Workflow Telemetry mast visible on first paint (standard desktop, queue populated).
-- [ ] Queue list scrolls inside shell when rows exceed cap.
+- [ ] Queue shows ~5–7 records on standard laptop without inner scroll (or scrolls only when list exceeds target).
+- [ ] Workflow Telemetry summary banner visible without page scroll.
+- [ ] Telemetry detail hidden until Expand.
+- [ ] Expand reveals full telemetry (metrics + workflow lists + actions).
 - [ ] BOS rail position stable while primary column scrolls.
 - [ ] Queue row open, filters, and registry actions unchanged.
 - [ ] Slug and UUID work-unit routes share `WorkUnitWorkspace` shell.
@@ -90,8 +107,7 @@ All new work-unit surfaces **must**:
 | Concern | Location |
 |---------|----------|
 | Zone layout shell | `web/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx` |
-| Shared page grid + rail | `web/components/admin/workspace/WorkspaceShellLayout.tsx` |
+| Telemetry summary + expand | `web/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx` |
 | Queue height tokens | `web/app/adminV2/components/workspace/workspace.css` |
-| Queue list scroll shell | `web/app/adminV2/components/workspace/blocks/QueueBlock.tsx` |
-| BOS sticky rail | `web/app/adminV2/adminV2.css` (`[data-adminv2-workspace-command-column]`) |
+| BOS sticky rail | `web/app/adminV2/adminV2.css` |
 | Tests | `web/tests/adminV2/workUnitLayoutDoctrine.test.ts`, `web/tests/admin/adminV2QueueRowClick.test.ts` |

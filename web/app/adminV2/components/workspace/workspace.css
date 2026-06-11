@@ -109,24 +109,39 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
   /*
-   * Work Unit Layout Doctrine — Zone 2 queue workspace (bounded scroll).
-   * ~17.5% shorter than prior cap (640px → 528px) plus intelligence peek reserve
-   * so Workflow Telemetry mast is visible on first paint at standard desktop heights.
+   * Work Unit Layout Doctrine V2 — queue-first with discoverable telemetry banner.
+   * Target ~6 visible rows (laptop) / ~7–8 (large desktop); collapsed banner reserves ~4.5rem.
    * See docs/system/work-unit-layout-doctrine.md
    */
   --ws-wu-queue-records-scroll-top-offset: 17rem;
-  --ws-wu-queue-intelligence-peek-reserve: 10rem;
-  --ws-wu-queue-viewport-height-ratio: 0.825;
-  --ws-wu-queue-records-scroll-height-cap: 528px;
+  --ws-wu-queue-intelligence-banner-reserve: 4.5rem;
+  --ws-wu-queue-row-stack-estimate: clamp(3rem, calc(var(--ws-dept-queue-row-min-height) + 0.875rem), 4.125rem);
+  --ws-wu-queue-row-gap: 8px;
+  --ws-wu-queue-visible-rows-target: 6;
+  --ws-wu-queue-records-scroll-height-cap: 640px;
   --ws-wu-queue-records-scroll-max-height: min(
     calc(
-      (
-        100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px) -
-          var(--ws-wu-queue-intelligence-peek-reserve)
-      ) * var(--ws-wu-queue-viewport-height-ratio)
+      var(--ws-wu-queue-visible-rows-target) * var(--ws-wu-queue-row-stack-estimate) +
+        (var(--ws-wu-queue-visible-rows-target) - 1) * var(--ws-wu-queue-row-gap)
+    ),
+    calc(
+      100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px) -
+        var(--ws-wu-queue-intelligence-banner-reserve)
     ),
     var(--ws-wu-queue-records-scroll-height-cap)
   );
+}
+
+@media (min-width: 1440px) {
+  [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
+    --ws-wu-queue-visible-rows-target: 7;
+  }
+}
+
+@media (min-width: 1280px) and (min-height: 900px) {
+  [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
+    --ws-wu-queue-visible-rows-target: 8;
+  }
 }
 
 /* Work-unit route loading: subtle enrollment/dept pine accent (quieter than department cold shell). */
@@ -12907,6 +12922,111 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 1px 3px rgba(39, 63, 82, 0.05);
   padding: 18px 14px 14px 13px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry--work-unit-summary {
+  padding: 0;
+  overflow: hidden;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry--work-unit-summary-expanded {
+  padding: 12px 14px 14px 13px;
+}
+
+.adminv2-ws-automation-telemetry__summary-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+  max-height: 80px;
+  padding: 10px 14px;
+  border-left: 3px solid color-mix(in srgb, var(--d-brand) 55%, var(--d-border));
+  background: linear-gradient(165deg,
+      color-mix(in srgb, #ffffff 97%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-surface) 94%, var(--d-panel-quiet)) 100%);
+}
+
+.adminv2-ws-automation-telemetry__summary-primary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+}
+
+.adminv2-ws-automation-telemetry__summary-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--d-text-primary, #18273a) 88%, var(--d-brand));
+  white-space: nowrap;
+}
+
+.adminv2-ws-automation-telemetry__summary-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.adminv2-ws-automation-telemetry__summary-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.adminv2-ws-automation-telemetry__summary-stat dt {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+}
+
+.adminv2-ws-automation-telemetry__summary-stat dd {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--d-text-primary, #18273a) 90%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__summary-stat--attention dd {
+  color: color-mix(in srgb, #bc4300 78%, var(--d-text-primary, #18273a));
+}
+
+.adminv2-ws-automation-telemetry__summary-toggle {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 24%, var(--d-border));
+  background: color-mix(in srgb, #ffffff 92%, var(--d-brand));
+  color: color-mix(in srgb, var(--d-brand) 82%, var(--d-text-primary, #18273a));
+  cursor: pointer;
+}
+
+.adminv2-ws-automation-telemetry__summary-toggle:hover {
+  background: color-mix(in srgb, var(--d-brand) 8%, #ffffff);
+}
+
+.adminv2-ws-automation-telemetry__summary-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--d-brand) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.adminv2-ws-automation-telemetry__mast-actions--expanded {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 0 0 12px;
+  padding: 0 2px;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry__mast,

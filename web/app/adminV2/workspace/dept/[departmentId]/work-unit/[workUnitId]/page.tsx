@@ -6651,6 +6651,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         primaryFooterSlot={
                             workUnitQueueRevealReady ? (
                                 <AutomationWorkflowsBlock
+                                    presentation="work_unit_summary"
                                     title="Automations"
                                     kpisLoading={workflowKpisLoading}
                                     kpis={{
