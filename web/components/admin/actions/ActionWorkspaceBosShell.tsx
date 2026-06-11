@@ -1,9 +1,10 @@
 "use client";
 
 import { X } from "lucide-react";
-
-import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import { useLayoutEffect, useState, type ReactNode } from "react";
+
+import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
+import "@/app/adminV2/components/bos/identity/bosIdentity.css";
 import { measureActionWorkspacePanelLayout } from "@/lib/bos/bosRailPresentationFlags";
 import { useActionWorkspaceOpenDocumentFlag } from "@/lib/bos/useActionWorkspaceOpenDocumentFlag";
 import type { ActionWorkspaceStep } from "@/lib/admin/actions/actionWorkspaceTypes";
@@ -165,11 +166,14 @@ export function ActionWorkspaceBosShell({
                     role="dialog"
                     aria-modal={!embedded}
                     aria-label={title ? `${BOS_SHELL_TERRITORY_TITLE} — ${title}` : BOS_SHELL_TERRITORY_TITLE}
-                    className="relative z-10 flex min-h-0 flex-col overflow-hidden bg-white"
+                    className="bos-workspace-shell relative z-10 flex min-h-0 flex-col overflow-hidden bg-white"
                     style={panelStyle}
                     data-action-workspace-panel="true"
                     data-action-workspace-bos-workspace="true"
                 >
+                    <div className="bos-workspace-shell__atmosphere" aria-hidden />
+                    <div className="bos-workspace-shell__perimeter" aria-hidden />
+                    <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
                     <header
                         className="relative shrink-0 text-white"
                         style={{
@@ -181,24 +185,13 @@ export function ActionWorkspaceBosShell({
                     >
                         <div style={contentWrapStyle}>
                             <div className="flex items-start justify-between gap-4">
-                                <div
-                                    className="flex min-w-0 items-center gap-3.5"
-                                    data-action-workspace-bos-brand="true"
-                                >
-                                    <span
-                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00A283]/20 text-[#7EEBD4]"
-                                        aria-hidden
-                                    >
-                                        <BosGenieLampIcon size="md" />
-                                    </span>
-                                    <div className="min-w-0">
-                                        <h2 className="text-xl font-bold tracking-tight text-white">
-                                            {BOS_SHELL_TERRITORY_TITLE}
-                                        </h2>
-                                        <p className="mt-0.5 text-[12px] leading-snug text-white/48">
-                                            {tagline}
-                                        </p>
-                                    </div>
+                                <div className="min-w-0" data-action-workspace-bos-brand="true">
+                                    <BosHeader
+                                        title={BOS_SHELL_TERRITORY_TITLE}
+                                        subtitle={tagline}
+                                        size="lg"
+                                        onDark
+                                    />
                                 </div>
                                 <button
                                     type="button"
@@ -243,6 +236,7 @@ export function ActionWorkspaceBosShell({
                             </div>
                         </footer>
                     :   null}
+                    </div>
                 </div>
             </div>
         </div>

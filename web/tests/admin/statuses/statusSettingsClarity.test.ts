@@ -9,6 +9,11 @@ import {
     statusDrawerSourceTagsForEntityType,
     statusDrawerSourceTagsForPersonRow,
 } from "@/lib/admin/statusSettingsClarity";
+import { ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES } from "@/lib/admin/statusDefinitionsAdminEntityTypes";
+import {
+    OPERATOR_STATUS_CATEGORY_REGISTRY,
+    PRIMARY_STATUS_CATEGORY_ENTITY_TYPES,
+} from "@/lib/admin/statusCategoryRegistry";
 import {
     PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
     PERSON_STATUS_PROFILE_GENERIC,
@@ -23,9 +28,19 @@ describe("statusSettingsClarity", () => {
         expect(STATUS_SETTINGS_SECTION_DESCRIPTIONS.opportunity_customer_members).toContain(
             "enrollment"
         );
-        expect(STATUS_SETTINGS_SECTION_DESCRIPTIONS.customer_members).toContain(
-            "not the same as the Child drawer"
-        );
+        expect(STATUS_SETTINGS_SECTION_DESCRIPTIONS).not.toHaveProperty("customer_members");
+    });
+
+    it("excludes deprecated customer_members roster status from operator settings registry", () => {
+        expect(ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES).not.toContain("customer_members");
+        expect(
+            OPERATOR_STATUS_CATEGORY_REGISTRY.some((e) => e.entity_type === "customer_members")
+        ).toBe(false);
+        expect(PRIMARY_STATUS_CATEGORY_ENTITY_TYPES).toEqual([
+            "opportunities",
+            "opportunity_customer_members",
+            "persons",
+        ]);
     });
 
     it("maps entity types to drawer source tags", () => {
@@ -125,6 +140,7 @@ describe("statusSettingsClarity", () => {
         expect(src).toContain("data-status-settings-person-profile-chips");
         expect(src).toContain("StatusSettingsInventoryPanel");
         expect(src).toContain("personStatusDrawerPreviewNotes");
+        expect(src).toContain('entityTypeFilter === "customer_members"');
     });
 
     it("Opportunity Sub Statuses are not tagged as child drawer header statuses", () => {

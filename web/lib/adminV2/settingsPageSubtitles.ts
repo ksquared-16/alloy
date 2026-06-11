@@ -1,7 +1,7 @@
 /** One-line operator subtitles for AdminV2 Settings pages. */
 
 export const SETTINGS_INDEX_SUBTITLE =
-    "Configure teams, records, layouts, vocabulary, and automation for your organization.";
+    "Configure your organization, data model, operations, and workspace experience.";
 
 export const SETTINGS_FIELDS_SUBTITLE =
     "Define record fields, labels, help text, and option sets.";

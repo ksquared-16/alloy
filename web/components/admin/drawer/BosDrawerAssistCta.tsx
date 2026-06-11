@@ -6,7 +6,7 @@ import {
 } from "@/lib/adminV2/bos/bosDrawerAssistHandoff";
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
 import { operatorDisplayNameFromEmail } from "@/lib/adminV2/bos/communication/operatorDisplayNameFromEmail";
-import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import OpportunityDrawerHeaderActionButton from "@/components/admin/opportunity/OpportunityDrawerHeaderActionButton";
 import OpportunityDrawerHeaderActionsPanel from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsPanel";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
@@ -53,10 +53,7 @@ export default function BosDrawerAssistCta({
             proofLayoutActions={proofLayoutActions}
             actionVariant={actionVariant}
             leadingIcon={
-                <BosGenieLampIcon
-                    size="sm"
-                    color={actionVariant === "juniper" ? "#ffffff" : undefined}
-                />
+                <BosMark size="sm" color={actionVariant === "juniper" ? "#ffffff" : undefined} />
             }
             data-drawer-action="bos_assist"
             data-bos-assist-button="true"

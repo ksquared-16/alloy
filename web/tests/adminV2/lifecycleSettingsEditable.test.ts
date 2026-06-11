@@ -20,16 +20,16 @@ describe("editable lifecycle settings", () => {
         const page = read("app/adminV2/settings/page.tsx");
         expect(page).toContain('title="Work Units & Queues"');
         expect(page).toContain('title="Action Buttons"');
-        expect(page).toContain('title="Record Layouts"');
+        expect(page).toContain('title="Layouts"');
         expect(page).toContain('title="Forms & Packets"');
-        expect(page).toContain('label="Enrollment Operations"');
+        expect(page).toContain('label="Operations"');
     });
 
-    it("lifecycle page title is Lifecycle with compact helper", () => {
+    it("lifecycle page title is Business Processes with compact shell", () => {
         const page = read("app/adminV2/settings/lifecycle/page.tsx");
-        expect(page).toContain(">Lifecycle</h1>");
-        expect(page).toContain("lifecycle-page-compact-helper");
-        expect(page).toContain("Choose what must be complete before a family moves forward");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
+        expect(page).toContain("settings-lifecycle-page");
+        expect(page).toContain("SETTINGS_PAGE_SHELL_COMPACT_CLASS");
     });
 
     it("hub renders field-level editor and save/reset", () => {
@@ -49,6 +49,6 @@ describe("editable lifecycle settings", () => {
         expect(route).toContain("export async function PATCH");
         expect(route).toContain("reset_stage");
         expect(route).toContain("buildLifecycleFieldRulesOverridePatch");
-        expect(route).toContain("field_palette");
+        expect(route).toContain("mergeLifecycleFieldPaletteForBuilderStage");
     });
 });

@@ -2,7 +2,7 @@
 
 import { Calendar, Check, ExternalLink, Mail } from "lucide-react";
 
-import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import {
     bosRecommendationReadinessLabel,
     type BosRecommendation,
@@ -47,7 +47,7 @@ export function ActionWorkspaceSuccessState({
                     className="absolute inset-2 rounded-full border border-[#00A283]/25 bg-[#00A283]/[0.06]"
                     aria-hidden
                 />
-                <BosGenieLampIcon size="xl" className="relative" />
+                <BosMark size="lg" horizon className="relative h-10 w-10" />
             </div>
             <div>
                 <p className="text-xl font-semibold text-alloy-midnight">{title}</p>

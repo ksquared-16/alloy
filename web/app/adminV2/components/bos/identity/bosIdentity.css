@@ -1,0 +1,149 @@
+/**
+ * BOS smoke motion — drifts above the mark; never originates from Alloy geometry.
+ * Converging state tightens toward clarity (center, lower opacity).
+ */
+
+@keyframes bos-smoke-drift-a {
+    0%,
+    100% {
+        transform: translate(-12%, 0) scale(1);
+        opacity: 0.22;
+    }
+    50% {
+        transform: translate(8%, -3px) scale(1.06);
+        opacity: 0.38;
+    }
+}
+
+@keyframes bos-smoke-drift-b {
+    0%,
+    100% {
+        transform: translate(10%, 2px) scale(1.02);
+        opacity: 0.16;
+    }
+    50% {
+        transform: translate(-6%, -5px) scale(0.98);
+        opacity: 0.3;
+    }
+}
+
+@keyframes bos-smoke-converge-a {
+    0%,
+    100% {
+        transform: translate(-18%, 4px) scale(1.08);
+        opacity: 0.2;
+    }
+    50% {
+        transform: translate(0%, -2px) scale(0.92);
+        opacity: 0.12;
+    }
+}
+
+@keyframes bos-smoke-converge-b {
+    0%,
+    100% {
+        transform: translate(16%, 3px) scale(1.04);
+        opacity: 0.18;
+    }
+    50% {
+        transform: translate(0%, -1px) scale(0.88);
+        opacity: 0.08;
+    }
+}
+
+.bos-smoke {
+    position: relative;
+    width: 100%;
+    height: 1.75rem;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.bos-smoke__layer {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    border-radius: 9999px;
+    background: rgba(0, 162, 131, 0.14);
+    filter: blur(10px);
+    transform: translate(-50%, -50%);
+}
+
+.bos-smoke__layer--1 {
+    width: 3.5rem;
+    height: 1.1rem;
+}
+
+.bos-smoke__layer--2 {
+    width: 2.75rem;
+    height: 0.85rem;
+    margin-left: -0.5rem;
+}
+
+.bos-smoke__layer--3 {
+    width: 2rem;
+    height: 0.65rem;
+    margin-left: 0.75rem;
+}
+
+.bos-smoke--thinking .bos-smoke__layer--1 {
+    animation: bos-smoke-drift-a 7s ease-in-out infinite;
+}
+
+.bos-smoke--thinking .bos-smoke__layer--2 {
+    animation: bos-smoke-drift-b 9s ease-in-out infinite;
+    animation-delay: -2s;
+}
+
+.bos-smoke--thinking .bos-smoke__layer--3 {
+    animation: bos-smoke-drift-a 8s ease-in-out infinite reverse;
+    animation-delay: -4s;
+}
+
+.bos-smoke--converging .bos-smoke__layer--1 {
+    animation: bos-smoke-converge-a 5s ease-in-out infinite;
+}
+
+.bos-smoke--converging .bos-smoke__layer--2 {
+    animation: bos-smoke-converge-b 6s ease-in-out infinite;
+    animation-delay: -1.5s;
+}
+
+.bos-smoke--converging .bos-smoke__layer--3 {
+    animation: bos-smoke-converge-a 5.5s ease-in-out infinite reverse;
+    animation-delay: -3s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bos-smoke__layer {
+        animation: none !important;
+        opacity: 0.14;
+    }
+}
+
+/** Cloud workspace perimeter — soft intelligence field, not cartoon cloud. */
+.bos-workspace-shell {
+    position: relative;
+    isolation: isolate;
+}
+
+.bos-workspace-shell__perimeter {
+    pointer-events: none;
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 162, 131, 0.14),
+        0 0 0 1px rgba(0, 162, 131, 0.08),
+        0 12px 40px rgba(39, 63, 82, 0.08);
+}
+
+.bos-workspace-shell__atmosphere {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+        radial-gradient(ellipse 80% 45% at 50% 0%, rgba(0, 162, 131, 0.1), transparent 62%),
+        radial-gradient(ellipse 60% 35% at 88% 12%, rgba(0, 162, 131, 0.06), transparent 55%);
+}

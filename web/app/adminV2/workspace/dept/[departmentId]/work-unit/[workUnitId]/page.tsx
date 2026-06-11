@@ -240,6 +240,8 @@ import {
     readWorkUnitPageCache,
     writeWorkUnitPageCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
+import { scheduleWorkspaceRootRevalidation } from "@/lib/workspace/workspaceContinuityPrefetch";
+import { markWorkUnitTransitionReady } from "@/lib/perf/workspaceContinuityPerf";
 import {
     readWorkUnitShellDisplayTitleFromSessionCache,
     resolveWorkUnitShellDisplayTitle,
@@ -4305,6 +4307,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [wuCoordinatedRevealDone, setWuCoordinatedRevealDone] = useState(false);
 
     useEffect(() => {
+        if (seededWorkUnitShellRef.current) {
+            setWuInitialLaneRevealDone(true);
+            setWuCoordinatedRevealDone(true);
+            return;
+        }
         setWuInitialLaneRevealDone(false);
         setWuCoordinatedRevealDone(false);
     }, [departmentId, workUnitId]);
@@ -6260,6 +6267,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     useEffect(() => {
         if (!workUnitPageContentReady) return;
+        markWorkUnitTransitionReady({ department_id: departmentId, work_unit_id: workUnitId });
         markWorkUnitLaneShellChromeReal({ departmentId, workUnitId });
         markRouteBootstrapReturned("work_unit", { departmentId, workUnitId });
         if (typeof performance !== "undefined" && typeof window !== "undefined") {
@@ -6536,6 +6544,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         markWorkUnitLaneQueueRowsReal({ departmentId, workUnitId });
         markRouteHydrationComplete("work_unit", { departmentId, workUnitId });
     }, [workUnitQueueRevealReady, departmentId, workUnitId]);
+
+    useEffect(() => {
+        if (!workUnitShellReady || !orgId) return;
+        return scheduleWorkspaceRootRevalidation(
+            { orgId, principalUserId, accessScopeFingerprint },
+            "work_unit_shell_ready",
+        );
+    }, [workUnitShellReady, orgId, principalUserId, accessScopeFingerprint]);
 
     useEffect(() => {
         if (!workUnitShellReady) return;

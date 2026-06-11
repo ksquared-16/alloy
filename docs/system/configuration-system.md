@@ -16,7 +16,7 @@ Define what **configuration** is allowed to control vs what must remain **platfo
 
 ## Four-plane operator model (Records settings)
 
-Settings hub: **`/admin`** (canonical) — rewrites to `app/adminV2/settings`. Product hrefs must use **`/admin/settings/…`**, not `/adminV2/settings/…`. Tiles use **Editable ·**, **Partial ·**, **Read-only ·**, or **Related hub ·** (`web/lib/adminV2/settingsSurfaceModes.ts`). Sprint baselines: **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13; **May 2026 control plane closeout:** **`docs/sprints/05_2026/completed/settings_control_plane_closeout.md`** (Layouts composition, Action buttons, Status vs Automations).
+Settings hub: **`/admin`** (canonical) — rewrites to `app/adminV2/settings`. Product hrefs must use **`/admin/settings/…`**, not `/adminV2/settings/…`. Tiles use **Editable ·**, **Partial ·**, **Read-only ·**, or **Related hub ·** (`web/lib/adminV2/settingsSurfaceModes.ts`). **Settings V2 domain organization and Business Processes reference patterns:** **`docs/system/settings-v2-doctrine.md`**. Sprint baselines: **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12–§13; **May 2026 control plane closeout:** **`docs/sprints/05_2026/completed/settings_control_plane_closeout.md`** (Layouts composition, Action buttons, Status vs Automations).
 
 | Plane | Route (canonical) | Owns | Does **not** own |
 |-------|-------------------|------|------------------|

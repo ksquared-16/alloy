@@ -24,6 +24,7 @@ export type LifecycleCatalogEntry = {
     lifecycle_name: string;
     source: LifecycleCatalogSource;
     stage_count: number;
+    track_count: number;
     work_unit_count: number;
     activation_owned: boolean;
     can_delete: boolean;

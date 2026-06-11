@@ -14,12 +14,11 @@ function read(rel: string): string {
 }
 
 describe("lifecycle Settings IA", () => {
-    it("Settings index includes lifecycle tile under Enrollment operations", () => {
+    it("Settings index includes lifecycle tile under Operations", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain("Enrollment Operations");
+        expect(page).toContain('label="Operations"');
         expect(page).toContain('title="Business Processes"');
         expect(page).toContain("/admin/settings/lifecycle");
-        expect(page).toContain('emphasis');
     });
 
     it("lifecycle hub page renders with operator title and test id", () => {
@@ -68,13 +67,11 @@ describe("lifecycle Settings IA", () => {
         expect(requiredLabels.some((l) => l.includes("_"))).toBe(false);
     });
 
-    it("Record layouts links to lifecycle hub instead of owning the panel", () => {
+    it("layouts page owns drawer and queue presentation", () => {
         const layoutsPage = read("app/adminV2/settings/layouts/page.tsx");
-        const workspace = read("components/adminV2/settings/RecordDrawerCompositionWorkspace.tsx");
-        expect(layoutsPage).toContain("LifecycleSettingsCrossLinkBanner");
-        expect(layoutsPage).toContain('variant="layouts"');
-        expect(workspace).not.toContain("LifecycleProgressionRequirementsSettingsPanel");
-        expect(workspace).not.toContain("LifecycleStagesRequirementsHub");
+        expect(layoutsPage).toContain("settings-layouts-page");
+        expect(layoutsPage).toContain("LayoutConfigClient");
+        expect(layoutsPage).toContain("queue presentation");
     });
 
     it("related Settings pages cross-link to lifecycle hub", () => {

@@ -15,12 +15,11 @@ function read(rel: string): string {
 }
 
 describe("Lifecycle hub", () => {
-    it("Settings index includes Lifecycle hero tile", () => {
+    it("Settings index includes Business Processes under Operations", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain("Enrollment Operations");
+        expect(page).toContain('label="Operations"');
         expect(page).toContain('title="Business Processes"');
-        expect(page).toContain("/adminV2/settings/lifecycle");
-        expect(page).toContain('emphasis');
+        expect(page).toContain("/admin/settings/lifecycle");
         expect(page).not.toContain('title="Enrollment Process"');
     });
 
@@ -30,36 +29,21 @@ describe("Lifecycle hub", () => {
         expect(page).toContain("ADMIN_V2_SETTINGS_LIFECYCLE_PATH");
     });
 
-    it("lifecycle page renders operator title and hub client", () => {
+    it("lifecycle page renders Business Processes primary shell", () => {
         const page = read("app/adminV2/settings/lifecycle/page.tsx");
-        const types = read("lib/lifecycle/lifecycleProcessTypes.ts");
         expect(page).toContain("settings-lifecycle-page");
-        expect(page).toContain("LifecycleHubClient");
-        expect(page).toContain("Build processes from scratch");
-        expect(types).toContain('settingsPath: "/adminV2/settings/lifecycle"');
-        expect(types).toContain('title: "Enrollment"');
+        expect(page).toContain("LifecycleSettingsShell");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
     });
 
-    it("hub client exposes scratch setup workbench", () => {
+    it("advanced hub exposes legacy workbench behind toggle", () => {
+        const shell = read("components/adminV2/settings/LifecycleSettingsShell.tsx");
         const hub = read("components/adminV2/settings/LifecycleHubClient.tsx");
-        const createForm = read("components/adminV2/settings/lifecycle/LifecycleCreateForm.tsx");
-        const wizard = read("components/adminV2/settings/lifecycle/LifecycleStageSetupWizard.tsx");
-        const statuses = read("components/adminV2/settings/enrollmentProcess/EnrollmentProcessStageStatusesCard.tsx");
+        expect(shell).toContain("LifecycleActivationClient");
+        expect(shell).toContain("lifecycle-advanced-configuration");
         expect(hub).toContain("lifecycle-hub");
-        expect(hub).toContain("LifecycleCreateForm");
-        expect(hub).toContain("LifecycleStageSetupWizard");
-        expect(hub).toContain("LifecycleWorkbenchHeader");
-        expect(hub).not.toContain("lifecycle-department-select");
-        expect(hub).not.toContain("LifecycleBuilderToolbar");
-        expect(hub).not.toContain("LIFECYCLE_STAGE_ORDER");
-        expect(createForm).toContain("lifecycle-create-lifecycle");
-        expect(wizard).toContain("lifecycle-stage-setup-wizard");
-        expect(statuses).toContain("Work Unit Queue filter");
-        expect(read("components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard.tsx")).toContain(
-            "lifecycle-create-work-unit"
-        );
         expect(read("app/api/admin/enrollment-process/status-stages/route.ts")).toContain(
-            "syncDepartmentQueueForStage"
+            "persistEnrollmentStageStatusAssignments"
         );
     });
 
@@ -68,14 +52,13 @@ describe("Lifecycle hub", () => {
         expect(route).toContain("buildEnrollmentStatusStagesPayload");
         expect(route).toContain("reset_stage");
         expect(route).toContain("status_keys");
-        expect(route).toContain("ensureOrgOpportunityStatusRow");
+        expect(route).toContain("process_stage_key");
     });
 
-    it("work unit card supports in-hub create without manual sync", () => {
+    it("work unit card supports create and queue view copy", () => {
         const card = read("components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard.tsx");
-        expect(card).toContain("Work Units &amp; Queues");
         expect(card).toContain("lifecycle-create-work-unit");
-        expect(card).toContain("lifecycle-work-unit-queue-copy");
+        expect(card).toContain("lifecycle-queue-view-copy");
         expect(card).not.toContain("lifecycle-sync-queue-statuses");
     });
 
@@ -97,17 +80,15 @@ describe("Lifecycle hub", () => {
         expect(ENROLLMENT_STAGE_QUEUE_KEYS.lead).toContain("new_leads");
     });
 
-    it("architecture reality check doc exists", () => {
-        const doc = readFileSync(
-            resolve(root, "../docs/sprints/06_2026/lifecycle_builder_architecture_reality_check_v1.md"),
-            "utf8"
-        );
-        expect(doc).toContain("lifecycle");
+    it("settings v2 doctrine doc exists", () => {
+        const doc = readFileSync(resolve(root, "../docs/system/settings-v2-doctrine.md"), "utf8");
+        expect(doc).toContain("Business Processes");
+        expect(doc).toContain("Data Model");
     });
 
-    it("cross-link banners point to lifecycle hub", () => {
+    it("cross-link banners point to business processes", () => {
         const banner = read("components/adminV2/settings/LifecycleSettingsCrossLinkBanner.tsx");
         expect(banner).toContain("ADMIN_V2_SETTINGS_LIFECYCLE_PATH");
-        expect(banner).toContain("Open Lifecycle");
+        expect(banner).toContain("BUSINESS_PROCESS_CROSS_LINK_OPEN");
     });
 });

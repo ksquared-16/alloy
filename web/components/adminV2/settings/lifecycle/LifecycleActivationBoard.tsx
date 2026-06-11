@@ -8,8 +8,9 @@ import LifecycleActivationValidation from "@/components/adminV2/settings/lifecyc
 import LifecycleActivationDeleteModal from "@/components/adminV2/settings/lifecycle/LifecycleActivationDeleteModal";
 import LifecycleActivationDeleteStageModal from "@/components/adminV2/settings/lifecycle/LifecycleActivationDeleteStageModal";
 import LifecycleRenameModal from "@/components/adminV2/settings/lifecycle/LifecycleRenameModal";
+import LifecycleProcessWorkspaceHeader from "@/components/adminV2/settings/lifecycle/LifecycleProcessWorkspaceHeader";
 import LifecycleStageNav from "@/components/adminV2/settings/lifecycle/LifecycleStageNav";
-import LifecycleTrackNav from "@/components/adminV2/settings/lifecycle/LifecycleTrackNav";
+import LifecycleTrackStageNav from "@/components/adminV2/settings/lifecycle/LifecycleTrackStageNav";
 import LifecycleEnrollmentV2TemplateCard from "@/components/adminV2/settings/lifecycle/LifecycleEnrollmentV2TemplateCard";
 import LifecycleStageConfiguration from "@/components/adminV2/settings/lifecycle/LifecycleStageConfiguration";
 import type { LifecycleStageWorkspaceHandle } from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkspace";
@@ -100,6 +101,8 @@ export default function LifecycleActivationBoard({
     canDeleteLifecycle = false,
     onRepairVisibility,
     repairingVisibility: repairingFromParent = false,
+    catalogSummary = null,
+    onBackToCatalog,
 }: {
     identity: LifecycleRuntimeIdentity | null;
     catalog?: LifecycleCatalogEntry[];
@@ -115,6 +118,8 @@ export default function LifecycleActivationBoard({
     canDeleteLifecycle?: boolean;
     onRepairVisibility?: () => void;
     repairingVisibility?: boolean;
+    catalogSummary?: { trackCount: number; stageCount: number; queueCount: number } | null;
+    onBackToCatalog?: () => void;
 }) {
     const runtimeDepartmentId = identity?.runtimeDepartmentId?.trim() ?? "";
     const catalogEntry =
@@ -1505,17 +1510,14 @@ export default function LifecycleActivationBoard({
                 )
             ) : (
                 <>
-                    {processTracks ?
-                        <LifecycleTrackNav
-                            tracks={processTracks}
-                            activeTrackKey={activeTrackKey}
-                            onSelect={(trackKey) => {
-                                setActiveTrackKey(trackKey);
-                                const next = stagesForTrack(builderProcess!, trackKey)[0];
-                                if (next) void selectStage(next);
-                            }}
-                        />
-                    :   null}
+                    <LifecycleProcessWorkspaceHeader
+                        processName={lifecycleName}
+                        description={lifecycleDescription}
+                        trackCount={catalogSummary?.trackCount ?? (processTracks?.tracks.length ?? 0)}
+                        stageCount={catalogSummary?.stageCount ?? builderStages.length}
+                        queueCount={catalogSummary?.queueCount ?? 0}
+                        onBack={onBackToCatalog}
+                    />
                     {activeSplitRule ?
                         <p
                             className="text-xs text-alloy-midnight/60"
@@ -1526,17 +1528,30 @@ export default function LifecycleActivationBoard({
                         </p>
                     :   null}
                     <div
-                        className="flex flex-wrap items-center justify-between gap-2"
+                        className="flex flex-wrap items-start justify-between gap-2"
                         data-testid="lifecycle-stage-nav-row"
                     >
-                        <LifecycleStageNav
-                            stages={navStages}
-                            activeStageKey={stageKey}
-                            onSelect={(s) => void selectStage(s)}
-                            onAddStageClick={() => setShowAddStage((v) => !v)}
-                            onReorderStage={reorderBuilderStage}
-                            reorderBusy={stageReorderBusy}
-                        />
+                        {processTracks && builderProcess ?
+                            <div className="min-w-0 flex-1">
+                                <LifecycleTrackStageNav
+                                    tracks={processTracks}
+                                    builderProcess={builderProcess}
+                                    activeStageKey={stageKey}
+                                    onSelect={(s) => void selectStage(s)}
+                                    onAddStageClick={() => setShowAddStage((v) => !v)}
+                                    onReorderStage={reorderBuilderStage}
+                                    reorderBusy={stageReorderBusy}
+                                />
+                            </div>
+                        :   <LifecycleStageNav
+                                stages={navStages}
+                                activeStageKey={stageKey}
+                                onSelect={(s) => void selectStage(s)}
+                                onAddStageClick={() => setShowAddStage((v) => !v)}
+                                onReorderStage={reorderBuilderStage}
+                                reorderBusy={stageReorderBusy}
+                            />
+                        }
                         {processId ? (
                             <details
                                 className="relative shrink-0 text-xs"

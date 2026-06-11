@@ -3,11 +3,12 @@
  * Intended for shell/stability wins on dept ↔ workspace revisit — always revalidated over the network silently.
  */
 
+import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
 import type { WorkspaceRootDepartmentRow, WorkspaceRootDeptTileStats } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 
-const SCHEMA_V = 5 as const;
+const SCHEMA_V = 6 as const;
 
 export type CachedWorkspaceRoot = {
     v: typeof SCHEMA_V;
@@ -20,6 +21,8 @@ export type CachedWorkspaceRoot = {
     workspaceKpiStrip?: KPIVm[] | undefined;
     kpiPlacementPending: boolean;
     rollupRefined: boolean;
+    /** Lifecycle landing cards — instant /workspace return without tile skeleton. */
+    lifecycleCards?: OperatorLifecycleLandingCard[];
 };
 
 export type WritableWorkspaceRootSnapshot = Omit<CachedWorkspaceRoot, "v" | "savedAtMs">;

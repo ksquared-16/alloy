@@ -1292,7 +1292,6 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
     entityType: "customer_members",
     table: {
       columns: [
-        { key: "_status_display", label: "Status", sortable: true, renderHint: "status", locked: true },
         { key: "display_name", label: "Name", sortable: true, renderHint: "text", locked: true },
         { key: "_relationship_label", label: "Relationship", sortable: false, renderHint: "text" },
         { key: "_customer_name", label: "Customer", sortable: false, renderHint: "text" },
@@ -1315,7 +1314,6 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
           collapsible: true,
           gridCols: 2,
           fields: [
-            { key: "status_key", label: "Status", span: 1, renderHint: "status", editable: true, locked: true },
             { key: "display_name", label: "Display name", span: 1, renderHint: "text", editable: true, locked: true },
             { key: "_relationship_label", label: "Relationship", span: 1, renderHint: "text", editable: false, locked: true },
             { key: "_customer_name", label: "Customer", span: 1, renderHint: "link", locked: true, linkTarget: { idField: "customer_id", entityType: "customers" } },

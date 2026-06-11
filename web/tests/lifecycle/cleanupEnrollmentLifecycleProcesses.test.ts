@@ -123,7 +123,7 @@ describe("Lifecycle Builder UI — enrollment cleanup pass", () => {
     it("primary UI has no visible legacy wording", () => {
         const page = read("app/adminV2/settings/lifecycle/page.tsx");
         const shell = read("components/adminV2/settings/LifecycleSettingsShell.tsx");
-        const select = read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx");
+        const select = read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx");
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         for (const src of [page, shell, select, board]) {
             expect(src).not.toMatch(/Advanced legacy/i);
@@ -142,17 +142,17 @@ describe("Lifecycle Builder UI — enrollment cleanup pass", () => {
     });
 
     it("lifecycle selector shows empty state when catalog has no items", () => {
-        const select = read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx");
+        const select = read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx");
         expect(select).toContain("lifecycle-catalog-empty");
-        expect(select).toContain("No lifecycles");
+        expect(select).toContain("BUSINESS_PROCESS_CATALOG_EMPTY");
     });
 
-    it("lifecycle selector uses dropdown not horizontal lifecycle tabs", () => {
+    it("lifecycle selector uses process cards not horizontal lifecycle tabs", () => {
         const primary = read("components/adminV2/settings/lifecycle/LifecycleBuilderPrimary.tsx");
-        const select = read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx");
-        expect(primary).toContain("LifecycleCatalogSelect");
+        const cards = read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx");
+        expect(primary).toContain("LifecycleProcessCatalogCards");
         expect(primary).not.toContain("LifecycleCatalogRail");
-        expect(select).toContain("lifecycle-catalog-dropdown");
-        expect(select).not.toContain("lifecycle-catalog-rail");
+        expect(cards).toContain("lifecycle-process-catalog");
+        expect(cards).not.toContain("lifecycle-catalog-rail");
     });
 });

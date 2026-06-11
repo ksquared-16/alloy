@@ -469,7 +469,35 @@ describe("runGlobalRecordSearch — Chen family", () => {
 
         const meta = formatGlobalSearchHitMetaLine(child);
         expect(meta).not.toContain("Family lead");
-        expect(meta).toMatch(/Active|Tour Scheduled/);
+        expect(meta).toMatch(/Active|Future Start/);
+    });
+
+    it("child search status label uses linked person status_key, not customer_members roster status", async () => {
+        const fixtures = {
+            ...chenFixtures,
+            customer_members: [
+                {
+                    ...chenFixtures.customer_members[0]!,
+                    status_key: "legacy_roster_only",
+                },
+            ],
+            persons: [
+                {
+                    ...chenFixtures.persons[0]!,
+                    status_key: "future_start",
+                },
+                chenFixtures.persons[1]!,
+            ],
+        };
+        const supabase = createMockSupabase(fixtures);
+        const { results } = await runGlobalRecordSearch({
+            supabase,
+            orgId: ORG,
+            accessDim: openDim,
+            rawQ: "Sophia",
+        });
+        const child = results.find((r) => r.group === "children" && r.entity_id === CHILD_MEMBER);
+        expect(child?.status_label).toBe("Future Start");
     });
 });
 
@@ -516,6 +544,12 @@ describe("global search implementation guards", () => {
         const locationSrc = readFileSync(locationPath, "utf8");
         expect(serviceSrc).not.toMatch(/customer_members[\s\S]{0,400}\bsite_id\b/);
         expect(locationSrc).not.toContain("customer_members");
+    });
+
+    it("does not fetch customer_members status definitions in global search", () => {
+        const servicePath = resolve(process.cwd(), "lib/admin/globalSearch/globalRecordSearchService.ts");
+        const serviceSrc = readFileSync(servicePath, "utf8");
+        expect(serviceSrc).not.toMatch(/fetchEffectiveStatusDefinitions\([^)]*["']customer_members["']/);
     });
 
     it("TopNavBar uses inline GlobalSearchBox without modal", () => {
@@ -970,6 +1004,7 @@ describe("runGlobalRecordSearch — Mitchell household completeness", () => {
         for (const child of results.filter((r) => r.group === "children")) {
             expect(child.person_id).toBeNull();
             expect(child.open_entity_type).toBe("opportunities");
+            expect(child.status_label).toBeNull();
         }
     });
 

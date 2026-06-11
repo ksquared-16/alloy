@@ -2,47 +2,43 @@
 
 import type { SVGProps } from "react";
 
-import { palette } from "@/styles/tokens/colors";
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import type { BosIdentitySize } from "@/lib/bos/bosIdentityTokens";
 
+/** @deprecated Sprint 02 — use {@link BosMark} from `@/app/adminV2/components/bos/identity`. */
 export type BosGenieLampIconSize = "xs" | "sm" | "md" | "base" | "lg" | "xl";
 
-const SIZE_CLASS: Record<BosGenieLampIconSize, string> = {
-    xs: "h-3.5 w-3.5",
-    sm: "h-4 w-4",
-    md: "h-5 w-5",
-    base: "h-6 w-6",
-    lg: "h-8 w-8",
-    xl: "h-9 w-9",
+const SIZE_MAP: Record<BosGenieLampIconSize, BosIdentitySize> = {
+    xs: "sm",
+    sm: "sm",
+    md: "md",
+    base: "md",
+    lg: "lg",
+    xl: "lg",
 };
-
-/** Genie lamp silhouette from brand asset — no background rect; fill uses Bend Pine by default. */
-const GENIE_LAMP_PATH =
-    "M302.115 23.723c-3.62.685-11.773 9.383-13.026 13.896-2.477 8.921-.593 18.738 5.101 26.577 2.833 3.901-3.635 22.759-10.808 31.513-4.155 5.071-6.461 6.342-15.882 8.754-16.688 4.272-30.941 13.562-35.418 23.086C228.237 135.728 220.87 135 307.5 135c87.074 0 79.407.76 75.625-7.5-4.19-9.15-19.67-19.172-35.625-23.064-8.962-2.187-12.562-4.39-16.96-10.381-7.063-9.622-12.441-26.132-9.726-29.859 5.481-7.522 7.26-16.988 4.791-25.484-3.365-11.573-12.095-17.144-23.49-14.989m183.51 75.831c-23.217 4.613-47.514 18.503-67.102 38.36L410.547 146l-90.524-.002-90.523-.001-25-3.011c-32.064-3.862-62.427-8.344-74.5-10.997-13.559-2.979-40.039-3.764-53.313-1.58-25.057 4.123-42.999 16.803-43.015 30.402-.007 5.573 3.597 9.572 8.523 9.458 1.818-.042 12.305-.403 23.305-.801 28.289-1.026 45.02 1.021 66.406 8.124 18.117 6.018 20.469 7.658 42.094 29.355 30.94 31.044 48.639 43.457 77.057 54.045 14.496 5.401 25.846 7.342 42.943 7.345 17.767.003 28.079-1.866 42.783-7.752 23.321-9.336 32.447-16.3 75.933-57.94 45.945-43.994 50.435-48.055 58.175-52.626 26.021-15.368 51.275-11.228 59.101 9.689 5.087 13.596-.036 31.547-10.992 38.512-5.899 3.75-11.846 5.355-26.921 7.269-14.422 1.83-24.923 5.058-34.115 10.486-22.093 13.047-29.118 37.903-17.443 61.71 7.522 15.337 22.381 23.312 43.654 23.427 11.206.061 14.898-1.236 20.194-7.098 8.635-9.559 5.838-25.595-5.584-32.015-3.073-1.727-6.259-2.473-11.97-2.804-8.009-.463-10.582-1.754-9.439-4.733.98-2.553 8.516-5.255 18.124-6.497 22.747-2.942 35.18-6.683 45.554-13.705 16.345-11.065 23.23-20.221 29.522-39.26 2.563-7.756 2.813-9.813 2.855-23.5.051-16.76-.957-21.53-7.188-34-14.469-28.957-47.533-44.52-80.618-37.946M327.047 275.599c-14.792 4.621-41.173 5.479-58.429 1.9-4.335-.899-8.194-1.267-8.574-.817s-1.447 4.916-2.372 9.925c-.924 5.008-2.567 11.758-3.651 15C250.532 312.035 245.796 311 297 311c24.75 0 45-.38 45-.843 0-.464-.918-3.502-2.04-6.75s-3.083-11.061-4.357-17.359-2.719-11.54-3.21-11.646-2.897.432-5.346 1.197m-105.584 47.992c-20.507 7.282-22.346 36.292-2.963 46.751 3.976 2.145 4.425 2.16 76 2.461 52.707.222 73.07-.009 75.994-.863 6.078-1.775 11.973-6.555 15.145-12.281 3.698-6.674 3.953-16.798.586-23.287-2.759-5.319-10.023-11.695-15.032-13.196-2.859-.857-23.168-1.155-74.809-1.097-58.853.065-71.569.322-74.921 1.512";
 
 type Props = {
     size?: BosGenieLampIconSize;
     className?: string;
-    /** Defaults to Bend Pine */
     color?: string;
 } & Omit<SVGProps<SVGSVGElement>, "color">;
 
 /**
- * BOS identity — genie lamp silhouette (Bend Pine). Source: brand genie-lamp-icon asset.
+ * @deprecated Sprint 02 identity consolidation — renders {@link BosMark} (Alloy mark + optional horizon).
+ * Genie lamp motif removed; do not use in new code.
  */
 export function BosGenieLampIcon({
     size = "base",
     className = "",
-    color = palette.bendPine,
+    color,
     ...svgProps
 }: Props) {
     return (
-        <svg
-            viewBox="0 0 609 400"
-            className={`${SIZE_CLASS[size]} shrink-0 ${className}`.trim()}
-            aria-hidden
+        <BosMark
+            size={SIZE_MAP[size]}
+            color={color}
+            className={className}
             {...svgProps}
-        >
-            <path fill={color} fillRule="evenodd" d={GENIE_LAMP_PATH} />
-        </svg>
+        />
     );
 }

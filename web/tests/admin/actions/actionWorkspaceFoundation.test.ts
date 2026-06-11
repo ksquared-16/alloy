@@ -121,13 +121,15 @@ describe("action workspace foundation", () => {
         expect(drawerOpening).not.toContain("animate-spin");
     });
 
-    it("BOS action workspace uses genie lamp not sparkle icons", () => {
+    it("BOS action workspace uses BosMark identity not sparkle icons", () => {
         const shell = read("components/admin/actions/ActionWorkspaceBosShell.tsx");
         const banner = read("components/admin/actions/ActionWorkspaceBosBanner.tsx");
         const success = read("components/admin/actions/ActionWorkspaceSuccessState.tsx");
-        expect(shell).toContain("BosGenieLampIcon");
-        expect(banner).toContain("BosGenieLampIcon");
-        expect(success).toContain("BosGenieLampIcon");
+        const paste = read("components/admin/actions/ActionWorkspacePasteCanvas.tsx");
+        expect(shell).toContain("BosHeader");
+        expect(banner).toContain("BosMark");
+        expect(success).toContain("BosMark");
+        expect(paste).toContain("BosWorkingState");
         expect(shell).not.toContain("Sparkles");
         expect(banner).not.toContain("Sparkles");
     });

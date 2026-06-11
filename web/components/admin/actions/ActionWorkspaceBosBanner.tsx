@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 
 type Props = {
     title?: string;
@@ -33,7 +33,7 @@ export function ActionWorkspaceBosBanner({
                 }
                 aria-hidden
             >
-                <BosGenieLampIcon size={compact ? "sm" : "md"} />
+                <BosMark size={compact ? "sm" : "md"} horizon />
             </div>
             <div className="min-w-0 flex-1">
                 <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-alloy-midnight/45">

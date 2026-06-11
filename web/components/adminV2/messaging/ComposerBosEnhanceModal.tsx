@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
+import { BosWorkspaceShell } from "@/app/adminV2/components/bos/identity/BosWorkspaceShell";
 import {
     MESSAGING_BOS_ENHANCE_INTENTS,
     MESSAGING_BOS_ENHANCE_TECHNICAL_GAP,
@@ -10,7 +12,6 @@ import {
 import {
     MESSAGING_MODAL_BODY_CLASS,
     MESSAGING_MODAL_HEADER_CLASS,
-    MESSAGING_MODAL_PANEL_CLASS,
     MESSAGING_MODAL_SECONDARY_BUTTON_CLASS,
 } from "@/lib/adminV2/messaging/messagingComposerModalChrome";
 
@@ -45,20 +46,25 @@ export default function ComposerBosEnhanceModal({ open, onClose, draft }: Compos
             data-adminv2-composer-bos-modal="true"
         >
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close" onClick={onClose} />
-            <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="composer-bos-title"
-                className={`${MESSAGING_MODAL_PANEL_CLASS} max-w-lg`}
-                onClick={(e) => e.stopPropagation()}
+            <BosWorkspaceShell
+                showHeader={false}
+                className="max-w-lg shadow-2xl"
+                data-testid="composer-bos-enhance-shell"
             >
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="composer-bos-title"
+                    className="overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                >
                 <div className={MESSAGING_MODAL_HEADER_CLASS}>
-                    <p id="composer-bos-title" className="text-sm font-semibold text-alloy-midnight">
-                        BOS Assist
-                    </p>
-                    <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/55">
-                        Review your draft and choose how BOS should refine it. Changes apply only after you review them.
-                    </p>
+                    <BosHeader
+                        title="BOS Assist"
+                        subtitle="Review your draft and choose how BOS should refine it."
+                        size="sm"
+                        titleId="composer-bos-title"
+                    />
                 </div>
 
                 <div className={MESSAGING_MODAL_BODY_CLASS}>
@@ -108,7 +114,8 @@ export default function ComposerBosEnhanceModal({ open, onClose, draft }: Compos
                         </button>
                     </div>
                 </div>
-            </div>
+                </div>
+            </BosWorkspaceShell>
         </div>
     );
 }

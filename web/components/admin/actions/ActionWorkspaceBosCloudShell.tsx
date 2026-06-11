@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react";
 
-import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
+import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
 import type { ReactNode } from "react";
 import type { ActionWorkspaceStep } from "@/lib/admin/actions/actionWorkspaceTypes";
 import { ACTION_WORKSPACE_LAYER_Z } from "@/lib/admin/actions/actionWorkspaceLayer";
@@ -117,24 +117,13 @@ export function ActionWorkspaceBosCloudShell({
                     >
                         <div style={contentWrapStyle}>
                             <div className="flex items-start justify-between gap-4">
-                                <div
-                                    className="flex min-w-0 items-center gap-3.5"
-                                    data-action-workspace-bos-brand="true"
-                                >
-                                    <span
-                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00A283]/20 text-[#7EEBD4] shadow-[0_0_24px_rgba(0,162,131,0.18)]"
-                                        aria-hidden
-                                    >
-                                        <BosGenieLampIcon size="md" />
-                                    </span>
-                                    <div className="min-w-0">
-                                        <h2 className="text-xl font-bold tracking-tight text-white">
-                                            {BOS_SHELL_TERRITORY_TITLE}
-                                        </h2>
-                                        <p className="mt-0.5 text-[12px] leading-snug text-white/48">
-                                            {tagline}
-                                        </p>
-                                    </div>
+                                <div className="min-w-0" data-action-workspace-bos-brand="true">
+                                    <BosHeader
+                                        title={BOS_SHELL_TERRITORY_TITLE}
+                                        subtitle={tagline}
+                                        size="lg"
+                                        onDark
+                                    />
                                 </div>
                                 <button
                                     type="button"

@@ -161,5 +161,6 @@ describe("business process runtime cleanup", () => {
         expect(STATUS_SETTINGS_SECTION_TITLES.opportunity_customer_members).toBe("Enrollment Statuses");
         expect(STATUS_SETTINGS_SECTION_TITLES.persons).toBe("People Statuses");
         expect(STATUS_SETTINGS_SECTION_TITLES).not.toHaveProperty("children");
+        expect(STATUS_SETTINGS_SECTION_TITLES).not.toHaveProperty("customer_members");
     });
 });

@@ -18,6 +18,7 @@
         "screenshots:action-workspace": "playwright test playwright/tests/action-workspace-review.spec.ts",
         "screenshots:action-workspace-v2": "playwright test playwright/tests/action-workspace-v2-mockups.spec.ts",
         "screenshots:bos-identity": "playwright test playwright/tests/bos-identity-exploration.spec.ts",
+        "screenshots:bos-identity-system": "playwright test playwright/tests/bos-identity-system.spec.ts",
         "screenshots:bos-shape": "playwright test playwright/tests/bos-shape-exploration.spec.ts",
         "screenshots:bos-workspace-shell": "playwright test playwright/tests/bos-workspace-shell-exploration.spec.ts",
         "screenshots:bos-atmospheric-border": "playwright test playwright/tests/bos-atmospheric-border-exploration.spec.ts",

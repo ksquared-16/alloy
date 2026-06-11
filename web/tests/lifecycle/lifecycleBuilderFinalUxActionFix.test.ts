@@ -16,7 +16,7 @@ describe("lifecycle builder final UX and action save", () => {
     it("compressed page header with short subtitle only", () => {
         const page = read("app/adminV2/settings/lifecycle/page.tsx");
         expect(page).toContain('data-testid="lifecycle-page-header"');
-        expect(page).toContain("Configure stages, queues, and actions");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE");
         expect(page).not.toContain("Advanced Configuration for additional");
         expect(page).toContain("SETTINGS_PAGE_SHELL_COMPACT_CLASS");
     });
@@ -30,11 +30,10 @@ describe("lifecycle builder final UX and action save", () => {
     });
 
     it("Create Process uses standard secondary button not dashed oversized", () => {
-        const select = read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx");
-        expect(select).toContain("Create Process");
-        expect(select).not.toContain("+ New Lifecycle");
-        expect(select).not.toContain("border-dashed");
-        expect(select).toContain("border-alloy-forge/20");
+        const cards = read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx");
+        expect(cards).toContain("BUSINESS_PROCESS_CATALOG_CREATE");
+        expect(cards).not.toContain("+ New Lifecycle");
+        expect(cards).toContain("lifecycle-catalog-create-new");
     });
 
     it("activation board removes prominent header chrome and repair from primary row", () => {
@@ -52,7 +51,6 @@ describe("lifecycle builder final UX and action save", () => {
         expect(guided).toContain("Fields needed before work can move forward.");
         expect(guided).toContain("Statuses included in this stage.");
         expect(guided).toContain("Queue records by selected statuses.");
-        expect(guided).toContain("Actions operators can use from workspace surfaces.");
         expect(guided).not.toContain('stepId="forms"');
         expect(guided).not.toContain("EnrollmentProcessFormsCoverageCard");
     });
@@ -77,15 +75,14 @@ describe("lifecycle builder final UX and action save", () => {
         );
     });
 
-    it("Save Action UX and footer placement", () => {
-        const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain('primaryLabel="Save Action"');
-        expect(guided).toContain("lifecycle-guided-save-${stepId}");
+    it("stage workspace uses unified Save stage pattern", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain("BUSINESS_PROCESS_SAVE_STAGE");
+        expect(workspace).toContain("lifecycle-stage-save");
         const card = read("components/adminV2/settings/lifecycle/LifecycleBuilderActionsCard.tsx");
         expect(card).not.toContain("lifecycle-add-action-submit");
         expect(card).toContain("lifecycle-action-save-success");
         const activation = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(activation).toContain('setActionFeedback("Action added")');
         expect(activation).toContain("department_id: runtimeDepartmentId");
     });
 });

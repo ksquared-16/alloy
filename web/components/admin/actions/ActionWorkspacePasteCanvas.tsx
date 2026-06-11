@@ -1,6 +1,7 @@
 "use client";
 
-import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import { BosWorkingState } from "@/app/adminV2/components/bos/identity/BosWorkingState";
 import { BOS_PASTE_CANVAS_MIN_HEIGHT } from "@/lib/admin/actions/bosWorkspaceShell";
 
 type Props = {
@@ -42,9 +43,19 @@ export function ActionWorkspacePasteCanvas({
             </div>
 
             <div
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/10 bg-[#FAFBFC] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_1px_2px_rgba(15,35,52,0.04)]"
+                className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/10 bg-[#FAFBFC] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_1px_2px_rgba(15,35,52,0.04)]"
                 style={{ minHeight: hero ? `calc(${heroMinHeight} + 8px)` : undefined }}
             >
+                {analyzing ?
+                    <div className="absolute inset-0 z-[1] flex items-center justify-center rounded-[14px] bg-white/88 backdrop-blur-[1px]">
+                        <BosWorkingState
+                            message="Analyzing inquiry with BOS…"
+                            state="thinking"
+                            markSize="lg"
+                            data-testid="action-workspace-paste-analyzing"
+                        />
+                    </div>
+                :   null}
                 <textarea
                     value={pasteText}
                     onChange={(e) => onPasteTextChange(e.target.value)}
@@ -66,7 +77,7 @@ export function ActionWorkspacePasteCanvas({
                     className="inline-flex items-center gap-2 rounded-xl bg-[#00A283] px-6 py-2.5 text-sm font-semibold text-white shadow-[0_1px_0_rgba(255,255,255,0.15)_inset,0_4px_14px_rgba(0,162,131,0.28)] transition-all hover:bg-[#009676] disabled:opacity-50"
                     data-testid="action-workspace-analyze-button"
                 >
-                    <BosGenieLampIcon size="sm" color="#ffffff" />
+                    <BosMark size="sm" color="#ffffff" />
                     {analyzing ? "Analyzing…" : "Analyze with BOS"}
                 </button>
             </div>

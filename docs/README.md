@@ -74,7 +74,7 @@ Do **not** duplicate these topics in new active docs — link instead.
 
 - **June 2026 freeze index:** `docs/archive/2026-06-freeze/README.md` — superseded assumptions.
 - **Prior reset:** `docs/archive/2026-05-02-docs-reset/`
-- **Sprints:** `docs/sprints/` — execution history; **not** canonical doctrine when a system doc exists. **Shipped index:** `docs/sprints/COMPLETED_SPRINTS_SUMMARY.md`. **Export packs:** `docs/export/`.
+- **Sprints:** `docs/sprints/` — execution history; **not** canonical doctrine when a system doc exists. **Shipped index:** `docs/sprints/COMPLETED_SPRINTS_SUMMARY.md`. **Export packs:** `docs/export/` — **`comms-messaging-handoff-pack`**, **`forms-handoff-pack`** (portable doc bundles + zip).
 
 ## When this README must be updated
 

@@ -2382,7 +2382,6 @@ export function AdminEntityDrawerLegacy() {
     const STATUS_ENTITY_TYPES = [
         "customers",
         "contacts",
-        "customer_members",
         "vendors",
         "opportunities",
         "jobs",
@@ -6121,7 +6120,6 @@ export function AdminEntityDrawerLegacy() {
                 last_name: data.last_name ?? "",
                 dob: data.dob ?? "",
                 is_active: data.is_active ?? true,
-                status_key: (data.status_key as string) ?? "",
                 external_source: (data.external_source as string) ?? "",
                 external_id: (data.external_id as string) ?? "",
             });
@@ -6691,7 +6689,6 @@ export function AdminEntityDrawerLegacy() {
                 last_name: data.last_name ?? "",
                 dob: data.dob ?? "",
                 is_active: data.is_active ?? true,
-                status_key: (data.status_key as string) ?? "",
                 external_source: (data.external_source as string) ?? "",
                 external_id: (data.external_id as string) ?? "",
             };
@@ -6924,7 +6921,6 @@ export function AdminEntityDrawerLegacy() {
                 const meta = rel === "other"
                     ? { ...existingMeta, relationship_custom: (formData.relationship_custom as string)?.trim() || null }
                     : existingMeta;
-                const status_key = typeof formData.status_key === "string" && formData.status_key.trim() ? formData.status_key.trim() : null;
                 const payload = {
                     display_name: typeof formData.display_name === "string" ? formData.display_name.trim() : "",
                     relationship: rel,
@@ -6932,7 +6928,6 @@ export function AdminEntityDrawerLegacy() {
                     last_name: typeof formData.last_name === "string" ? formData.last_name.trim() || null : null,
                     dob: typeof formData.dob === "string" && formData.dob.trim() ? formData.dob.trim() : null,
                     is_active: !!formData.is_active,
-                    status_key,
                     external_source: typeof formData.external_source === "string" ? formData.external_source.trim() || null : null,
                     external_id: typeof formData.external_id === "string" ? formData.external_id.trim() || null : null,
                     metadata: Object.keys(meta).length ? meta : undefined,
@@ -9273,17 +9268,28 @@ export function AdminEntityDrawerLegacy() {
 
         opportunityLinkedPersonsPrefetchedRef.current = drawer.id;
         const record = data as Record<string, unknown>;
-        try {
-            prefetchLinkedPersonsFromOpportunityRecord(record, { source: "opportunity_drawer_idle" });
-        } catch {
-            /* non-fatal */
-        }
+        const ws = drawer.opportunityWorkspaceContext ?? null;
+        return scheduleAdminV2BackgroundWork(
+            () => {
+                try {
+                    prefetchLinkedPersonsFromOpportunityRecord(record, {
+                        source: "opportunity_drawer_idle",
+                        opportunityWorkspaceContext: ws,
+                    });
+                } catch {
+                    /* non-fatal */
+                }
+            },
+            { idleTimeoutMs: 800, fallbackMs: 250 },
+        );
     }, [
         drawer.type,
         drawer.id,
+        drawer.opportunityWorkspaceContext,
         opportunityPrimaryHydrateApplied,
         data,
         dataMatchesDrawer,
+        pathname,
     ]);
 
     useEffect(() => {
@@ -10665,15 +10671,6 @@ export function AdminEntityDrawerLegacy() {
                         <div>
                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Display name</label>
                             <input value={String(formData.display_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, display_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label>
-                            <select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}>
-                                <option value="">— None —</option>
-                                {statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => (
-                                    <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>
-                                ))}
-                            </select>
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Relationship</label>
@@ -17201,9 +17198,6 @@ export function AdminEntityDrawerLegacy() {
                                                     <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
                                                 </div>
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">DOB</label><input type="date" value={String(formData.dob ?? "")} onChange={(e) => setFormData((f) => ({ ...f, dob: e.target.value }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm" /></div>
-                                                {statusDefsLoading ? null : (
-                                                    <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                                )}
                                                 <label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} disabled={!canMutate} /> <span className="text-sm text-alloy-midnight/70">Active</span></label>
                                                 <div className="flex gap-2 pt-2">
                                                     <button type="button" disabled={memberCreateSaving || !canMutate || !(formData.display_name as string)?.trim() || !(formData.customer_id as string)?.trim()} onClick={async () => {
@@ -17211,8 +17205,7 @@ export function AdminEntityDrawerLegacy() {
                                                         try {
                                                             const rel = (formData.relationship as string)?.trim() || null;
                                                             const meta = rel === "other" ? { relationship_custom: (formData.relationship_custom as string)?.trim() || null } : undefined;
-                                                            const status_key = (formData.status_key as string)?.trim() || null;
-                                                            const res = await fetch("/api/admin/customer-members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: formData.customer_id, display_name: (formData.display_name as string)?.trim(), relationship: rel, first_name: (formData.first_name as string)?.trim() || null, last_name: (formData.last_name as string)?.trim() || null, dob: (formData.dob as string)?.trim() || null, is_active: !!formData.is_active, status_key, metadata: meta }) });
+                                                            const res = await fetch("/api/admin/customer-members", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: formData.customer_id, display_name: (formData.display_name as string)?.trim(), relationship: rel, first_name: (formData.first_name as string)?.trim() || null, last_name: (formData.last_name as string)?.trim() || null, dob: (formData.dob as string)?.trim() || null, is_active: !!formData.is_active, metadata: meta }) });
                                                             const json = await res.json().catch(() => ({}));
                                                             if (!res.ok) throw new Error((json.error as string) || "Create failed");
                                                             const newId = (json as { id?: string }).id;
@@ -17243,9 +17236,6 @@ export function AdminEntityDrawerLegacy() {
                                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Last name</label><input value={String(formData.last_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, last_name: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                     </div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">DOB</label><input type="date" value={String(formData.dob ?? "")} onChange={(e) => setFormData((f) => ({ ...f, dob: e.target.value }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
-                                                    {statusDefsLoading ? <div className="text-sm text-alloy-midnight/60">Status: Loading…</div> : (
-                                                        <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Status</label><select value={String(formData.status_key ?? "")} onChange={(e) => setFormData((f) => ({ ...f, status_key: e.target.value || "" }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS}><option value="">— None —</option>{statusDefsForDrawer.filter((s) => s.is_active).sort((a, b) => a.sort_order - b.sort_order).map((s) => <option key={s.status_key} value={s.status_key}>{s.status_label ?? s.status_key}</option>)}</select></div>
-                                                    )}
                                                     <label className="flex items-center gap-2"><input type="checkbox" checked={!!formData.is_active} onChange={(e) => setFormData((f) => ({ ...f, is_active: e.target.checked }))} onBlur={() => { if (drawer.type === "customer_members" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} /> <span className="text-sm text-alloy-midnight/70">Active</span></label>
                                                 </div>
                                                 <DrawerLinkWithName label="Customer" id={data?.customer_id != null ? String(data.customer_id) : null} type="customers" displayName={String(data?._customer_name ?? "")} />

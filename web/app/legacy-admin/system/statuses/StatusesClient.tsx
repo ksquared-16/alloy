@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
@@ -63,7 +63,6 @@ const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
     service_plan_templates: "service_plan_templates",
     persons: "persons",
     contacts: "contacts",
-    customer_members: "customer_members",
     locations: "locations",
     documents: "documents",
     payments: "payments",
@@ -80,7 +79,6 @@ const FALLBACK_LABELS: Record<string, string> = {
     service_plan_templates: "Plan templates",
     persons: "People Statuses",
     contacts: "Contacts",
-    customer_members: "Customer members",
     locations: "Locations",
     documents: "Documents",
     payments: "Payments",
@@ -124,6 +122,7 @@ export default function StatusesClient({
     adminV2Chrome = false,
 }: { basePath?: string; adminV2Chrome?: boolean } = {}) {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const entityTypeFilter = searchParams.get("entity_type")?.trim() ?? "";
     const personProfileFilter = parsePersonProfileFilterParam(searchParams.get("profile"));
     const { labels } = useEntityLabels();
@@ -182,6 +181,12 @@ export default function StatusesClient({
     useEffect(() => {
         fetchStatuses();
     }, [fetchStatuses]);
+
+    useEffect(() => {
+        if (entityTypeFilter === "customer_members") {
+            router.replace(basePath);
+        }
+    }, [entityTypeFilter, basePath, router]);
 
     useEffect(() => {
         if (entityTypeFilter) {
@@ -835,7 +840,7 @@ export default function StatusesClient({
                                     </select>
                                     <p className="mt-1 text-[11px] leading-snug text-[#59678b]">
                                         Creates a <strong>People</strong> status on persons.status_key — not
-                                        customer_members roster or opportunity enrollment sub-statuses.
+                                        opportunity enrollment sub-statuses.
                                     </p>
                                 </div>
                             ) : null}

@@ -20,6 +20,32 @@ describe("adminV2NavigationTransition", () => {
         vi.useRealTimers();
     });
 
+    it("commitFirst commits immediately and runs prepare in background", async () => {
+        const commit = vi.fn();
+        let resolvePrepare: (() => void) | undefined;
+        const prepare = vi.fn(
+            () =>
+                new Promise<void>((resolve) => {
+                    resolvePrepare = resolve;
+                })
+        );
+
+        const result = await runAdminV2NavigationTransition({
+            href: "/workspace/work-unit/new-leads",
+            clickedKey: "lifecycle:lc-1",
+            variant: "work_unit",
+            commitFirst: true,
+            prepare,
+            commit,
+        });
+
+        expect(result).toBe("commit_first");
+        expect(commit).toHaveBeenCalledTimes(1);
+        expect(prepare).toHaveBeenCalledTimes(1);
+        resolvePrepare?.();
+        expect(getAdminV2NavigationTransitionSnapshot().phase).toBe("idle");
+    });
+
     it("commits after successful prepare before timeout", async () => {
         const commit = vi.fn();
         const prepare = vi.fn(async () => {
