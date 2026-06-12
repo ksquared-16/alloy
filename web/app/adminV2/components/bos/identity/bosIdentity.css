@@ -397,3 +397,38 @@
         inset 0 0 0 1px rgba(0, 162, 131, 0.07),
         inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
+
+/** Canonical Alloy loader — mark, horizon, atmospheric smoke. No blur blobs. */
+.alloy-identity-loader__smoke .bos-smoke {
+    height: 100%;
+}
+
+.alloy-identity-loader__smoke .bos-smoke__cloud {
+    opacity: 0.22;
+}
+
+.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--upper {
+    animation: bos-smoke-think-upper 6.4s ease-in-out infinite;
+}
+
+.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--mid {
+    animation: bos-smoke-think-mid 6.8s ease-in-out infinite;
+    animation-delay: -0.8s;
+}
+
+.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--lower {
+    animation: bos-smoke-think-lower 6.2s ease-in-out infinite;
+    animation-delay: -1.4s;
+}
+
+.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--near {
+    animation: bos-smoke-think-near 6s ease-in-out infinite;
+    animation-delay: -0.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .alloy-identity-loader__smoke .bos-smoke__cloud {
+        animation: none !important;
+        opacity: 0.16;
+    }
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { BosWorkingState } from "@/app/adminV2/components/bos/identity/BosWorkingState";
+import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
 
 type AlloyCanonicalLoadingSurfaceProps = {
     message: string;
@@ -8,7 +8,7 @@ type AlloyCanonicalLoadingSurfaceProps = {
     "data-testid"?: string;
 };
 
-/** Canonical Alloy/BOS loading visual for drawers, work-units, and transitions. */
+/** Canonical Alloy loading visual for drawers, work-units, and transitions. */
 export function AlloyCanonicalLoadingSurface({
     message,
     className = "",
@@ -20,7 +20,7 @@ export function AlloyCanonicalLoadingSurface({
             data-alloy-canonical-loading="true"
             data-testid={dataTestId}
         >
-            <BosWorkingState message={message} markSize="md" />
+            <AlloyIdentityLoader message={message} markSize="md" data-testid={`${dataTestId}-identity`} />
         </div>
     );
 }

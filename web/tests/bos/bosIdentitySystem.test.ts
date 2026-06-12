@@ -5,6 +5,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import {
+    AlloyIdentityLoader,
     BosButton,
     BosHeader,
     BosHorizon,
@@ -47,6 +48,7 @@ describe("BOS identity system — Sprint 01 primitives", () => {
         expect(BosMark).toBeTypeOf("function");
         expect(BosHorizon).toBeTypeOf("function");
         expect(BosSmoke).toBeTypeOf("function");
+        expect(AlloyIdentityLoader).toBeTypeOf("function");
         expect(BosWorkingState).toBeTypeOf("function");
         expect(BosRevealSequence).toBeTypeOf("function");
         expect(BosButton).toBeTypeOf("function");
@@ -72,11 +74,25 @@ describe("BOS identity system — Sprint 01 primitives", () => {
         expect(src).not.toContain("BosMark");
     });
 
-    it("BosWorkingState composes smoke, mark, and message without spinners", () => {
+    it("BosWorkingState composes canonical AlloyIdentityLoader without spinners", () => {
         const html = renderToStaticMarkup(
             createElement(BosWorkingState, { message: "Drafting communication…", state: "thinking" }),
         );
+        expect(html).toContain("data-alloy-identity-loader");
+        expect(html).toContain("data-bos-mark-core");
+        expect(html).toContain('data-bos-horizon="true"');
         expect(html).not.toContain("animate-spin");
+        expect(html).not.toContain("radialGradient");
+    });
+
+    it("AlloyIdentityLoader renders mark above horizon with smoke layer", () => {
+        const html = renderToStaticMarkup(
+            createElement(AlloyIdentityLoader, { message: "Preparing Lead…" }),
+        );
+        expect(html).toContain("data-bos-mark-core");
+        expect(html).toContain('data-bos-horizon="true"');
+        expect(html).toContain('data-bos-smoke="thinking"');
+        expect(html).toContain("Preparing Lead…");
     });
 });
 
@@ -103,11 +119,14 @@ describe("BOS identity system — Sprint 02 migration", () => {
         expect(offenders).toEqual([]);
     });
 
-    it("BOS entry points use BosMark", () => {
+    it("BOS entry points use BosMark; rail starter rows use action icons", () => {
         expect(read("components/admin/drawer/BosDrawerAssistCta.tsx")).toContain("BosMark");
         expect(read("components/layout/QueueRowActionsMenu.tsx")).toContain("BosMark");
         expect(read("components/adminV2/messaging/ComposerReplyActionCluster.tsx")).toContain("BosButton");
-        expect(read("app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation.tsx")).toContain("BosMark");
+        const rail = read("app/adminV2/components/aiCommandSurface/bosRail/BosRailPresentation.tsx");
+        expect(rail).toContain("BosHeader");
+        expect(rail).toContain("BosRailActionIcon");
+        expect(rail).not.toMatch(/BosRailStarterCards[\s\S]{0,800}BosMark/);
     });
 
     it("BOS headers use BosHeader", () => {

@@ -124,9 +124,10 @@ describe("performanceUiStabilityHotfix — work-unit rail and reveal", () => {
         expect(src).not.toMatch(/workUnitQueueRevealReady \? \(\s*<AutomationWorkflowsBlock/);
     });
 
-    it("canonical loading surface wraps BosWorkingState", () => {
+    it("canonical loading surface wraps AlloyIdentityLoader", () => {
         const loader = read("lib/adminV2/runtime/alloyCanonicalLoadingSurface.tsx");
-        expect(loader).toContain("BosWorkingState");
+        expect(loader).toContain("AlloyIdentityLoader");
         expect(loader).toContain("data-alloy-canonical-loading");
+        expect(loader).not.toContain("BosWorkingState");
     });
 });

@@ -29,25 +29,31 @@ describe("action workspace foundation", () => {
         expect(shell).toContain("data-action-workspace-panel");
     });
 
-    it("production create lead uses stable BOS workspace without cloud perimeter", () => {
+    it("production create lead uses locked stadium BOS workspace shell", () => {
         const bos = read("components/admin/actions/ActionWorkspaceBosShell.tsx");
+        const frame = read("components/admin/actions/BosOperationalIntakeShellFrame.tsx");
+        const pathModule = read("lib/bos/bosOperationalIntakeShellPath.ts");
         const constants = read("lib/admin/actions/bosWorkspaceShell.ts");
         const paste = read("components/admin/actions/ActionWorkspacePasteCanvas.tsx");
         const gather = read("components/admin/actions/ActionWorkspaceGatherFields.tsx");
+        expect(bos).toContain("BosOperationalIntakeShellFrame");
+        expect(frame).toContain("buildOperationalIntakeShellPath");
+        expect(pathModule).toContain("BOS_OPERATIONAL_INTAKE_SHELL_SWELL_RATIO");
         expect(bos).toContain("BOS_BACKDROP_STYLE");
-        expect(bos).toContain("BOS_AMBIENT_GLOW_STYLE");
+        expect(frame).toContain("data-bos-shell-outer-haze");
         expect(bos).toContain("BOS_SHELL_MIDNIGHT_FORGE");
         expect(bos).toContain("data-action-workspace-bos-brand");
         expect(bos).toContain("BOS_SHELL_TERRITORY_TITLE");
         expect(bos).toContain('data-action-workspace-shell="bos"');
         expect(bos).toContain("data-action-workspace-bos-workspace");
-        expect(bos).toContain("data-bos-ambient-glow");
+        expect(bos).not.toContain("BOS_AMBIENT_GLOW_STYLE");
+        expect(bos).not.toContain("bos-workspace-shell__atmosphere");
         expect(bos).toContain("ACTION_WORKSPACE_VIEWPORT_INSET");
         expect(bos).toContain("overflow-hidden");
         expect(bos).toContain("BOS_WORKSPACE_PANEL_HEIGHT");
         expect(bos).not.toContain("BosTerritoryShell");
         expect(bos).not.toContain("BosCloudTerritorySvg");
-        expect(bos).not.toContain("clipPath");
+        expect(bos).not.toContain("BosSmoke");
         expect(bos).toContain("BosRevealSequence");
         expect(bos).toContain('mode="workspace"');
         expect(constants).toContain("BOS_WORKSPACE_WIDTH");
@@ -100,7 +106,8 @@ describe("action workspace foundation", () => {
         expect(loader).toContain('"fullscreen"');
         expect(loader).toContain('"drawer"');
         expect(loader).toContain("data-bos-execution-loader");
-        expect(loader).toContain("ActionWorkspaceBosNeuralPulse");
+        expect(loader).toContain("AlloyIdentityLoader");
+        expect(loader).not.toContain("ActionWorkspaceBosNeuralPulse");
         expect(loader).toContain("Create Lead");
         expect(loader).toContain("Schedule Tour");
         expect(loader).toContain("BOS_EXECUTION_LOADER_PHASES_SEND_WELCOME");
@@ -321,7 +328,8 @@ describe("CreateLeadActionWorkspace render", () => {
         expect(html).toContain('data-testid="create-lead-action-workspace"');
         expect(html).toContain('data-action-workspace-shell="bos"');
         expect(html).toContain('data-action-workspace-bos-workspace="true"');
-        expect(html).toContain('data-bos-ambient-glow="true"');
+        expect(html).toContain('data-bos-shell-outer-haze="true"');
+        expect(html).not.toContain('data-bos-ambient-glow="true"');
         expect(html).not.toContain('data-action-workspace-bos-cloud-territory="true"');
         expect(html).not.toContain("data-bos-cloud-territory-svg");
         expect(html).toContain('data-testid="action-workspace-bos-reveal"');

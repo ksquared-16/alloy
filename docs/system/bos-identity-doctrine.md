@@ -50,10 +50,13 @@ Gallery: `/dev/bos-identity-system`
 | **BosHeader** | BOS territory title blocks (Action Workspace header, Forms review assist, Command Center rail, modals). |
 | **BosButton** | “Work with BOS”, “Analyze with BOS”, “BOS Assist” — prefer over custom juniper buttons. |
 | **BosNotification** | Insight-ready BOS cards with optional action link. |
-| **BosWorkingState** | Static gallery/docs only when `state` prop is set. Live thinking: `BosRevealSequence` `mode="working"`. |
+| **AlloyIdentityLoader** | **Canonical loading** — crisp Alloy mark above horizon, Bend Pine smoke behind mark, secondary message. Drawers, routes, execution, transitions. |
+| **BosWorkingState** | Static gallery/docs only when `state` prop is set (delegates to `AlloyIdentityLoader`). Live thinking: `BosRevealSequence` `mode="working"`. |
 | **BosRevealSequence** | Live analyze/generate/review (working) or BOS workspace/modal open (workspace). |
 | **BosWorkspaceShell** | Full BOS modal/workspace surfaces with atmospheric perimeter. |
-| **BosExecutionLoader** | Action execution / drawer prep / route-adjacent **execution** loading — numbered phases, **not** identity smoke. |
+| **ActionWorkspaceBosShell** | Create Lead operational intake — locked stadium shell. See **`docs/system/bos-operational-intake-shell-doctrine.md`**. |
+| **BosExecutionLoader** | Phased execution narrative beside **`AlloyIdentityLoader`** — Create Lead execute, drawer prep, route load. |
+| **BosRailActionIcon** | Operational icons on BOS rail recommendation rows — not `BosMark`. See **`docs/system/bos-rail-action-icon-doctrine.md`**. |
 
 ---
 
@@ -64,7 +67,7 @@ Do **not** introduce or restore:
 - Genie lamp (`BosGenieLampIcon` — deprecated wrapper only)
 - Star, sparkle, magic wand, “AI” generic icons
 - Spinning or pulsing Alloy mark
-- Identity smoke on standard route transitions, drawer open, page loading, or button busy states
+- Green blur blobs, glow ellipses, or neural-graph placeholders as loaders
 - Dark rounded-square logo badges / boxed mark containers
 - Stream/lane/pipeline smoke motion
 - Competing parallel BOS visual systems
@@ -122,7 +125,26 @@ Embedded presentations may skip reveal when layout regression risk exists.
 
 // Full modal shell
 <BosWorkspaceShell title="BOS Assist" subtitle="…">{children}</BosWorkspaceShell>
+
+// Drawer / route / execution loading (one canonical loader)
+<AlloyIdentityLoader message="Preparing Lead…" />
 ```
+
+---
+
+## Canonical loader
+
+**One loader composition** for drawer open, route transitions, execution, and shell prep:
+
+1. **Alloy mark** — crisp, 100% opacity, official geometry  
+2. **Horizon** — thin canonical line beneath the mark (mark sits slightly above)  
+3. **BosSmoke** — Bend Pine, very soft, behind the mark, rising from the horizon  
+4. **Message** — secondary (`Preparing Lead…`, `Opening Lead…`, etc.)
+
+Do **not** use blur blobs, radial glow ellipses, neural graphs, spinners, or skeleton placeholders for these surfaces. `BosExecutionLoader` pairs phased copy beside the same identity stack — it does not introduce a second visual language.
+
+Full inventory and migration order: **`docs/system/alloy-loader-inventory-audit.md`**.
+
 
 ---
 

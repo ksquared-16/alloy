@@ -4,7 +4,7 @@ import type { RefObject } from "react";
 import { AlertTriangle, ChevronRight, Send } from "lucide-react";
 
 import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
-import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import { BosRailActionIcon } from "@/app/adminV2/components/bos/identity/BosRailActionIcon";
 import type { BosRailAttentionPresentation } from "@/lib/bos/bosRailAttentionPresentation";
 import { parseBosRailContextChips } from "@/lib/bos/bosRailContextChips";
 import type { CommandSurfaceRailStarterSuggestion } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
@@ -156,7 +156,7 @@ export function BosRailStarterCards(props: {
                         onClick={() => props.onPick(suggestion.prompt)}
                     >
                         <span className="flex shrink-0 items-start pt-0.5">
-                            <BosMark size="sm" horizon />
+                            <BosRailActionIcon icon={suggestion.icon} />
                         </span>
                         <span className="min-w-0 flex-1">
                             <span

@@ -2,24 +2,18 @@
 
 import { useEffect, useState } from "react";
 
-import { ActionWorkspaceBosNeuralPulse } from "@/components/admin/actions/ActionWorkspaceBosNeuralPulse";
+import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
+import type { BosIdentitySize } from "@/lib/bos/bosIdentityTokens";
 
 export type BosExecutionLoaderVariant = "inline" | "panel" | "fullscreen" | "drawer";
 
 /**
- * Canonical BOS execution loading treatment — neural pulse + optional phased progress.
+ * Canonical BOS execution loading — Alloy mark, horizon, atmospheric smoke, optional phased progress.
  *
  * Use when the system is working, executing, navigating, or preparing operational data
  * (Create Lead, Add Child, Schedule Tour, drawer open, cold route prep, workflow execute).
  *
  * **Do not use** for tiny inline button busy states — keep a small spinner or label there.
- *
- * | Variant     | When |
- * |-------------|------|
- * | `inline`    | Warm navigation, compact reserves, subtle in-place holds |
- * | `panel`     | Cold route/data load, centered card within a page region |
- * | `drawer`    | Drawer body while BOS/action-driven record prep is in flight |
- * | `fullscreen`| Action workspace execute step with multi-step assembly narrative |
  */
 export const BOS_EXECUTION_LOADER_DEFAULT_TITLE = "Preparing workspace…";
 
@@ -79,29 +73,39 @@ type Props = {
 
 const VARIANT_LAYOUT: Record<
     BosExecutionLoaderVariant,
-    { root: string; pulse: string; showStepsDefault: boolean; showProgressDefault: boolean }
+    {
+        root: string;
+        identity: string;
+        markSize: BosIdentitySize;
+        showStepsDefault: boolean;
+        showProgressDefault: boolean;
+    }
 > = {
     inline: {
-        root: "flex min-h-0 items-center gap-3 px-1 py-2",
-        pulse: "h-10 w-8 shrink-0",
+        root: "flex min-h-0 items-center gap-4 px-1 py-2",
+        identity: "shrink-0 scale-[0.82]",
+        markSize: "sm",
         showStepsDefault: false,
         showProgressDefault: false,
     },
     panel: {
         root: "flex min-h-[12rem] items-center justify-center gap-8 px-4 py-8",
-        pulse: "h-24 w-20 shrink-0",
+        identity: "shrink-0",
+        markSize: "md",
         showStepsDefault: false,
         showProgressDefault: false,
     },
     drawer: {
         root: "flex min-h-[10rem] w-full items-center justify-center gap-8 px-4 py-8",
-        pulse: "h-24 w-20 shrink-0",
+        identity: "shrink-0",
+        markSize: "md",
         showStepsDefault: false,
         showProgressDefault: false,
     },
     fullscreen: {
         root: "flex min-h-[320px] items-center justify-center gap-12 px-4",
-        pulse: "h-36 w-28 shrink-0",
+        identity: "shrink-0",
+        markSize: "lg",
         showStepsDefault: true,
         showProgressDefault: true,
     },
@@ -161,7 +165,12 @@ export function BosExecutionLoader({
             aria-busy="true"
             aria-label={title}
         >
-            <ActionWorkspaceBosNeuralPulse className={layout.pulse} activePhaseIndex={phaseIndex} />
+            <AlloyIdentityLoader
+                markSize={layout.markSize}
+                showMessage={false}
+                className={layout.identity}
+                data-testid="bos-execution-loader-identity"
+            />
             <div className={`min-w-0 ${variant === "inline" ? "flex-1" : "max-w-lg"} text-left`}>
                 <p className={titleClass}>{title}</p>
                 {resolvedSubtitle ?
