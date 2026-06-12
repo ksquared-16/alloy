@@ -68,10 +68,8 @@ import {
 import {
     peekCachedQueueItemsForPill,
     resolveWorkUnitQueueRowsRefreshing,
-    shouldSuppressQueueLoadingOnPillSwitch,
     touchCachedQueueItemsForPill,
 } from "@/lib/workspace/workUnitQueueLaneDisplay";
-import { markKpiPillCache, markKpiPillClick } from "@/lib/perf/workspaceContinuityPerf";
 import {
     resolveWorkUnitQueueLaneRevealState,
     workUnitQueueLaneMayPaintRows,
@@ -242,8 +240,6 @@ import {
     readWorkUnitPageCache,
     writeWorkUnitPageCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
-import { scheduleWorkspaceRootRevalidation } from "@/lib/workspace/workspaceContinuityPrefetch";
-import { markWorkUnitTransitionReady } from "@/lib/perf/workspaceContinuityPerf";
 import {
     readWorkUnitShellDisplayTitleFromSessionCache,
     resolveWorkUnitShellDisplayTitle,
@@ -1896,8 +1892,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 attentionBucketOverride?: string | null;
                 /** User pill click — bypass in-flight lease and always fetch/apply for target lane. */
                 userInitiated?: boolean;
-                /** Full list enrichment after reveal-first pill switch (background, no loading shell). */
-                backgroundListRefresh?: boolean;
                 fromQueueKey?: string | null;
                 /** Prefetch/sibling fetch — use this work unit row for queue_definition guard. */
                 workUnitRowOverride?: {
@@ -1985,9 +1979,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 omit_total_count: "true",
             });
             if (abSnap) qs.set("attention_bucket", abSnap);
-            if (options?.backgroundListRefresh) {
-                /* full queue_list enrichment — no row_mode */
-            } else if (options?.quietStaleRefresh || options?.userInitiated) {
+            if (options?.quietStaleRefresh) {
                 qs.set("row_mode", "reveal");
             }
             const route = appendWorkspaceSiteToUrl(
@@ -2210,11 +2202,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     });
                 }
                 if (decision.apply) {
-                    if (
-                        !options?.prefetchOnly &&
-                        !options?.quietStaleRefresh &&
-                        !options?.userInitiated
-                    ) {
+                    if (!options?.prefetchOnly && !options?.quietStaleRefresh) {
                         await hydrateWorkUnitQueueRowActions();
                     }
                     putQueueRowCache(cache, viewScopeFingerprint, workUnitId, apiQueueKey, payload, abSnap);
@@ -2344,14 +2332,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 return;
             }
 
-            if (options?.quietStaleRefresh || options?.backgroundListRefresh) {
+            if (options?.quietStaleRefresh) {
                 if (lease.has(fetchSig)) return;
                 lease.add(fetchSig);
                 const seq = ++queueItemsRequestSeq.current;
                 try {
                     await runNetwork(seq, false);
                 } catch {
-                    /* stale/background refresh silent */
+                    /* stale refresh silent */
                 } finally {
                     lease.delete(fetchSig);
                 }
@@ -2421,13 +2409,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     userInitiated: options?.userInitiated ?? false,
                 });
             }
-            const suppressLoadingShell = shouldSuppressQueueLoadingOnPillSwitch({
-                user_initiated: options?.userInitiated === true,
-                retain_prior_rows: lifecyclePillSwitchRetainRowsRef.current,
-            });
-            if (!suppressLoadingShell) {
-                setQueueItemsLoading(true);
-            }
+            setQueueItemsLoading(true);
             setQueueItemsError(null);
             setQueueItemsRoute(route);
             setQueueItems((prev) => {
@@ -2442,29 +2424,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             });
             try {
                 if (!queueRowActionsHydratedRef.current) {
-                    if (options?.userInitiated) {
-                        void hydrateWorkUnitQueueRowActions();
-                    } else {
-                        await hydrateWorkUnitQueueRowActions();
-                    }
+                    await hydrateWorkUnitQueueRowActions();
                 }
                 await runNetwork(seq, true);
                 primaryLaneRowsSettledOnceRef.current = true;
-                if (
-                    options?.userInitiated &&
-                    !options.backgroundListRefresh &&
-                    seq === queueItemsRequestSeq.current
-                ) {
-                    void fetchQueueItems(workUnitId, queueKey, null, {
-                        backgroundListRefresh: true,
-                        logicalUnmapped: logicalUm,
-                        ...(resolvedFetch.attentionBucketOverride !== undefined
-                            ? { attentionBucketOverride: resolvedFetch.attentionBucketOverride }
-                            : abSnap
-                              ? { attentionBucketOverride: abSnap }
-                              : {}),
-                    });
-                }
             } catch (e) {
                 if (seq === queueItemsRequestSeq.current) {
                     pendingQueueTabPerfRef.current = false;
@@ -2809,16 +2772,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     to_pill: nextKey,
                 });
             }
-            markKpiPillClick({
-                department_id: departmentId,
-                work_unit_id: workUnitId,
-                from_pill: prevKey,
-                to_pill: nextKey,
-            });
             if (!sameQueue) {
                 const clearedFilters = clearLaneScopedWorkUnitRecordFilters(recordFiltersRef.current);
                 setRecordFilters(clearedFilters);
                 replaceWorkUnitQueueRecordFiltersInLocation(clearedFilters);
+            }
+            if (prevKey !== nextKey) {
+                setSelectedQueueKeyTraced("handleQueueTabChange", nextKey);
+            }
+            if (prevUnmapped !== unmappedActive) {
+                setLaneUnmappedOnly(unmappedActive);
             }
             const resolvedPill = resolveWorkUnitFetchQueueKeyFromPill(
                 nextKey,
@@ -2832,75 +2795,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     : na && !nextKey.startsWith(ATTENTION_BUCKET_PILL_PREFIX)
                       ? ""
                       : attentionBucketKeyRef.current;
-            const abForLane =
-                resolvedPill.attentionBucketOverride !== undefined
-                    ? String(resolvedPill.attentionBucketOverride ?? "").trim()
-                    : na
-                      ? ""
-                      : attentionBucketKeyRef.current.trim();
-            const cachedLane =
-                workUnitId ?
-                    touchCachedQueueItemsForPill({
-                        cache: queueRowClientCacheRef.current,
-                        viewScopeFingerprint,
-                        workUnitId,
-                        pillKey: nextKey,
-                        attentionBucketKey: abForLane,
-                        unmappedOnly: unmappedActive,
-                        queueDefinition: wu?.queue_definition,
-                    })
-                :   null;
-            if (cachedLane) {
-                markKpiPillCache("hit", {
-                    department_id: departmentId,
-                    work_unit_id: workUnitId,
-                    pill_key: nextKey,
-                });
-                logDrawerVmRuntimeDiagnostic("lane_payload_cache_hit", {
-                    work_unit_id: workUnitId,
-                    pill_key: nextKey,
-                    department_id: departmentId,
-                });
-                markWorkUnitVmPillSwitchCacheHit({
-                    department_id: departmentId,
-                    work_unit_id: workUnitId,
-                    pill_key: nextKey,
-                });
-                setQueueItems(cachedLane);
-                setQueueItemsError(null);
-                setQueueItemsLoading(false);
-                setQueuePillPendingKey(null);
-                lifecyclePillSwitchRetainRowsRef.current = false;
-                setLifecyclePillRetainRows(false);
-            } else {
-                markKpiPillCache("miss", {
-                    department_id: departmentId,
-                    work_unit_id: workUnitId,
-                    pill_key: nextKey,
-                    from_pill: prevKey,
-                });
-                logDrawerVmRuntimeDiagnostic("lane_payload_cache_miss", {
-                    work_unit_id: workUnitId,
-                    pill_key: nextKey,
-                    from_pill: prevKey,
-                    department_id: departmentId,
-                });
-                setQueuePillPendingKey(nextKey);
-                lifecyclePillSwitchRetainRowsRef.current = true;
-                setLifecyclePillRetainRows(true);
-                markWorkUnitVmPillSwitchCacheMissHoldCurrent({
-                    department_id: departmentId,
-                    work_unit_id: workUnitId,
-                    from_pill: prevKey,
-                    to_pill: nextKey,
-                });
-            }
-            if (prevKey !== nextKey) {
-                setSelectedQueueKeyTraced("handleQueueTabChange", nextKey);
-            }
-            if (prevUnmapped !== unmappedActive) {
-                setLaneUnmappedOnly(unmappedActive);
-            }
             if (resolvedPill.attentionBucketOverride !== undefined) {
                 setAttentionBucketKey(resolvedPill.attentionBucketOverride);
             } else if (na && !nextKey.startsWith(ATTENTION_BUCKET_PILL_PREFIX)) {
@@ -2916,13 +2810,57 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     caller: "handleQueueTabChange",
                     workUnitId,
                 });
+            }
+            if (workUnitId) {
+                const abForLane =
+                    resolvedPill.attentionBucketOverride !== undefined
+                        ? String(resolvedPill.attentionBucketOverride ?? "").trim()
+                        : na
+                          ? ""
+                          : attentionBucketKeyRef.current.trim();
+                const cachedLane = touchCachedQueueItemsForPill({
+                    cache: queueRowClientCacheRef.current,
+                    viewScopeFingerprint,
+                    workUnitId,
+                    pillKey: nextKey,
+                    attentionBucketKey: abForLane,
+                    unmappedOnly: unmappedActive,
+                    queueDefinition: wu?.queue_definition,
+                });
+                if (cachedLane) {
+                    logDrawerVmRuntimeDiagnostic("lane_payload_cache_hit", {
+                        work_unit_id: workUnitId,
+                        pill_key: nextKey,
+                        department_id: departmentId,
+                    });
+                    markWorkUnitVmPillSwitchCacheHit({
+                        department_id: departmentId,
+                        work_unit_id: workUnitId,
+                        pill_key: nextKey,
+                    });
+                } else {
+                    logDrawerVmRuntimeDiagnostic("lane_payload_cache_miss", {
+                        work_unit_id: workUnitId,
+                        pill_key: nextKey,
+                        from_pill: prevKey,
+                        department_id: departmentId,
+                    });
+                    setQueuePillPendingKey(nextKey);
+                    lifecyclePillSwitchRetainRowsRef.current = true;
+                    setLifecyclePillRetainRows(true);
+                    markWorkUnitVmPillSwitchCacheMissHoldCurrent({
+                        department_id: departmentId,
+                        work_unit_id: workUnitId,
+                        from_pill: prevKey,
+                        to_pill: nextKey,
+                    });
+                }
                 suppressQueueFetchEffectOnceRef.current = true;
                 void fetchQueueItems(workUnitId, nextKey, null, {
                     force: false,
                     userInitiated: true,
                     fromQueueKey: prevKey,
                     logicalUnmapped: unmappedActive,
-                    ...(cachedLane ? { quietStaleRefresh: true } : {}),
                     ...(resolvedPill.attentionBucketOverride !== undefined
                         ? { attentionBucketOverride: resolvedPill.attentionBucketOverride }
                         : na
@@ -4367,11 +4305,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [wuCoordinatedRevealDone, setWuCoordinatedRevealDone] = useState(false);
 
     useEffect(() => {
-        if (seededWorkUnitShellRef.current) {
-            setWuInitialLaneRevealDone(true);
-            setWuCoordinatedRevealDone(true);
-            return;
-        }
         setWuInitialLaneRevealDone(false);
         setWuCoordinatedRevealDone(false);
     }, [departmentId, workUnitId]);
@@ -4874,16 +4807,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const laneMayPaint = workUnitLaneReveal.mayPaintRows;
         const lifecycleRetainPaint =
             lifecyclePillRetainRows && queueItemsLoading && liveVmItems.length > 0;
-        const pillSwitchRetainPaint =
-            (lifecyclePillRetainRows || queuePillPendingKey != null) &&
-            queueItemsLoading &&
-            (liveVmItems.length > 0 || queueRowsBufferRef.current.length > 0);
-        const rowsRefreshing = resolveWorkUnitQueueRowsRefreshing({
-            lane_reveal_settled: laneMayPaint,
-            queue_items_loading: queueItemsLoading,
-            bootstrap_loading: loading,
-            pill_switch_retain_rows: lifecycleRetainPaint || pillSwitchRetainPaint,
-        });
+        const rowsRefreshing =
+            lifecycleRetainPaint ?
+                false
+            :   resolveWorkUnitQueueRowsRefreshing({
+                    lane_reveal_settled: laneMayPaint,
+                    queue_items_loading: queueItemsLoading,
+                    bootstrap_loading: loading,
+                });
         const displayItems = laneMayPaint
             ? liveVmItems
             : lifecycleRetainPaint
@@ -5021,8 +4952,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 queueEntityType: entity,
                 // rowsLoading suppresses "No records" empty-state copy while a fetch is in flight.
                 // Belt-and-suspenders with rowsHeld (which QueueBlock also checks for empty state).
-                rowsLoading: queueItemsLoading && !pillSwitchRetainPaint && !lifecycleRetainPaint,
-                rowsHeld: !laneMayPaint && !lifecycleRetainPaint && !pillSwitchRetainPaint,
+                rowsLoading: queueItemsLoading,
+                rowsHeld: !laneMayPaint && !lifecycleRetainPaint,
                 rowsRefreshing,
                 rowActionsPending:
                     displayItems.length > 0 &&
@@ -5063,7 +4994,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         workUnitLaneReveal.mayPaintRows,
         workUnitLaneReveal.settled,
         lifecyclePillRetainRows,
-        queuePillPendingKey,
         queueRowActionsReady,
     ]);
 
@@ -6330,7 +6260,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     useEffect(() => {
         if (!workUnitPageContentReady) return;
-        markWorkUnitTransitionReady({ department_id: departmentId, work_unit_id: workUnitId });
         markWorkUnitLaneShellChromeReal({ departmentId, workUnitId });
         markRouteBootstrapReturned("work_unit", { departmentId, workUnitId });
         if (typeof performance !== "undefined" && typeof window !== "undefined") {
@@ -6607,14 +6536,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         markWorkUnitLaneQueueRowsReal({ departmentId, workUnitId });
         markRouteHydrationComplete("work_unit", { departmentId, workUnitId });
     }, [workUnitQueueRevealReady, departmentId, workUnitId]);
-
-    useEffect(() => {
-        if (!workUnitShellReady || !orgId) return;
-        return scheduleWorkspaceRootRevalidation(
-            { orgId, principalUserId, accessScopeFingerprint },
-            "work_unit_shell_ready",
-        );
-    }, [workUnitShellReady, orgId, principalUserId, accessScopeFingerprint]);
 
     useEffect(() => {
         if (!workUnitShellReady) return;

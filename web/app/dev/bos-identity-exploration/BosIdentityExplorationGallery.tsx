@@ -3,7 +3,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Check } from "lucide-react";
 
-import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import { FINDINGS_FULL, SOURCE_INQUIRY } from "../action-workspace-v2-mockups/fixtures";
 import { BosContourMark } from "./BosContourMark";
 import { BOS_IDENTITY_THEMES, type BosIdentityVariant } from "./bosIdentityThemes";
@@ -34,7 +34,7 @@ function PlatformRecognitionStrip({ variant }: { variant: BosIdentityVariant }) 
                         }}
                     >
                         <div className="flex items-center gap-2">
-                            <ExplorationBosMark variant={variant} size="sm" />
+                            <BosMark variant={variant} size="sm" />
                             <span
                                 className="text-[11px] font-medium"
                                 style={{ color: variant === "intelligence-surface" ? "rgba(255,255,255,0.9)" : PINE }}
@@ -63,7 +63,7 @@ function PlatformRecognitionStrip({ variant }: { variant: BosIdentityVariant }) 
                         style={drawerBosStyle(variant)}
                     >
                         <div className="flex items-center gap-1.5">
-                            <ExplorationBosMark variant={variant} size="sm" />
+                            <BosMark variant={variant} size="sm" />
                             <span className="text-[10px] font-bold uppercase tracking-wide" style={{ color: bosLabelColor(variant) }}>
                                 BOS
                             </span>
@@ -139,7 +139,7 @@ function findingCardStyle(variant: BosIdentityVariant, status: "confirmed" | "re
     };
 }
 
-function ExplorationBosMark({ variant, size = "md" }: { variant: BosIdentityVariant; size?: "sm" | "md" }) {
+function BosMark({ variant, size = "md" }: { variant: BosIdentityVariant; size?: "sm" | "md" }) {
     const dim = size === "sm" ? "h-5 w-5" : "h-7 w-7";
     if (variant === "contour") {
         return (
@@ -156,7 +156,7 @@ function ExplorationBosMark({ variant, size = "md" }: { variant: BosIdentityVari
                 border: `1px solid ${variant === "pine-first" ? "rgba(0,162,131,0.3)" : "rgba(0,162,131,0.4)"}`,
             }}
         >
-            <BosMark size="sm" color={variant === "pine-first" ? GOLD : JUNIPER} />
+            <BosGenieLampIcon size="xs" color={variant === "pine-first" ? GOLD : JUNIPER} />
         </div>
     );
 }
@@ -293,7 +293,7 @@ function BosFindingsHeader({ variant }: { variant: BosIdentityVariant }) {
                 <div className="relative overflow-hidden rounded-t-xl px-3 py-2" style={{ background: "rgba(0,162,131,0.08)" }}>
                     <BosContourMark variant="crest" className="absolute inset-x-0 top-0 h-10 w-full text-alloy-juniper" accentGold />
                     <div className="relative flex items-center gap-2">
-                        <ExplorationBosMark variant={variant} />
+                        <BosMark variant={variant} />
                         <div>
                             <div className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: JUNIPER }}>
                                 BOS Findings
@@ -310,7 +310,7 @@ function BosFindingsHeader({ variant }: { variant: BosIdentityVariant }) {
         return (
             <div className="relative z-10 border-b px-3 py-2.5" style={{ borderColor: "rgba(0,162,131,0.3)" }}>
                 <div className="flex items-center gap-2">
-                    <ExplorationBosMark variant={variant} />
+                    <BosMark variant={variant} />
                     <div>
                         <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-alloy-juniper">
                             BOS Findings
@@ -331,7 +331,7 @@ function BosFindingsHeader({ variant }: { variant: BosIdentityVariant }) {
             }}
         >
             <div className="flex items-center gap-2">
-                <ExplorationBosMark variant={variant} />
+                <BosMark variant={variant} />
                 <div>
                     <div className="text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: PINE }}>
                         BOS Findings

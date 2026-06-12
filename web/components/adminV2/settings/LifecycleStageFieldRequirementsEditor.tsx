@@ -12,7 +12,6 @@ import {
     isWaitlistBuilderStage,
     WAITLIST_REQUIRED_INFO_HELPER,
 } from "@/lib/lifecycle/lifecycleBuilderStagePalette";
-import { BUSINESS_PROCESS_STAGE_REQUIREMENTS_HELPER } from "@/lib/lifecycle/businessProcessUiLabels";
 import {
     BUILDER_REQUIREMENT_LEVEL_COPY,
     builderFieldRulesDirty,
@@ -449,15 +448,6 @@ const LifecycleStageFieldRequirementsEditor = forwardRef<
                         Apply suggestions
                     </button>
                 </div>
-            ) : null}
-
-            {workspaceMode ? (
-                <p
-                    className="mb-3 text-[11px] leading-relaxed text-alloy-midnight/55"
-                    data-testid="stage-requirements-helper"
-                >
-                    {BUSINESS_PROCESS_STAGE_REQUIREMENTS_HELPER}
-                </p>
             ) : null}
 
             {showWaitlistHelper ? (

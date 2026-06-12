@@ -11,8 +11,6 @@ import { childDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/ch
 import { buildPrepareParamsFromOpenDrawer } from "@/lib/adminV2/viewModel/drawer/drawerShellPinnedModelSwap";
 import { prepareDrawerViewModelDeduped } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import { personDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/person/personDrawerHardCutoverGate";
-import { prefetchDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
-import { markDrawerLinkedPrewarmScheduled } from "@/lib/perf/workspaceContinuityPerf";
 import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
 
 /**
@@ -47,11 +45,6 @@ export function warmLinkedPersonDrawerVmsFromOpportunityRecord(
             source,
             open_source: openSource,
         });
-        markDrawerLinkedPrewarmScheduled({
-            person_id: personId,
-            source,
-            open_source: openSource,
-        });
 
         void prepareDrawerViewModelDeduped({
             ...buildPrepareParamsFromOpenDrawer({
@@ -64,17 +57,6 @@ export function warmLinkedPersonDrawerVmsFromOpportunityRecord(
             linkedPerfPhase: "prefetch",
         }).catch(() => {
             /* best-effort idle warm */
-        });
-
-        const opportunityId =
-            typeof record.id === "string" && record.id.trim() ? record.id.trim() : null;
-        prefetchDrawerLayoutRuntimeBody({
-            apiPath:
-                childOpen ?
-                    "/api/admin/layout-runtime/child-drawer-body"
-                :   "/api/admin/layout-runtime/person-drawer-body",
-            entityId: personId,
-            queryParams: childOpen ? undefined : { opportunityId },
         });
     }
     return ids;

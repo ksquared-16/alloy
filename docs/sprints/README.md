@@ -61,7 +61,6 @@ See **[`COMPLETED_SPRINTS_SUMMARY.md`](./COMPLETED_SPRINTS_SUMMARY.md)** for the
 | Pack | Path |
 |------|------|
 | Communications & messaging handoff | **`docs/export/comms-messaging-handoff-pack/`** (folder) or **`docs/export/comms-messaging-handoff-pack.zip`** |
-| Forms & documents handoff | **`docs/export/forms-handoff-pack/`** (folder) or **`docs/export/forms-handoff-pack.zip`** |
 
 ---
 

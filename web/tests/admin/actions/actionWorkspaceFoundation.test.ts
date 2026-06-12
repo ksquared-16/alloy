@@ -48,8 +48,7 @@ describe("action workspace foundation", () => {
         expect(bos).not.toContain("BosTerritoryShell");
         expect(bos).not.toContain("BosCloudTerritorySvg");
         expect(bos).not.toContain("clipPath");
-        expect(bos).toContain("BosRevealSequence");
-        expect(bos).toContain('mode="workspace"');
+        expect(bos).not.toContain("clip-path");
         expect(constants).toContain("BOS_WORKSPACE_WIDTH");
         expect(constants).toContain("min(1200px, 84vw)");
         expect(constants).toContain("BOS_WORKSPACE_TOP_INSET");
@@ -122,16 +121,13 @@ describe("action workspace foundation", () => {
         expect(drawerOpening).not.toContain("animate-spin");
     });
 
-    it("BOS action workspace uses BosMark identity not sparkle icons", () => {
+    it("BOS action workspace uses genie lamp not sparkle icons", () => {
         const shell = read("components/admin/actions/ActionWorkspaceBosShell.tsx");
         const banner = read("components/admin/actions/ActionWorkspaceBosBanner.tsx");
         const success = read("components/admin/actions/ActionWorkspaceSuccessState.tsx");
-        const paste = read("components/admin/actions/ActionWorkspacePasteCanvas.tsx");
-        expect(shell).toContain("BosHeader");
-        expect(banner).toContain("BosMark");
-        expect(success).toContain("BosMark");
-        expect(paste).toContain("BosRevealSequence");
-        expect(paste).toContain("BosButton");
+        expect(shell).toContain("BosGenieLampIcon");
+        expect(banner).toContain("BosGenieLampIcon");
+        expect(success).toContain("BosGenieLampIcon");
         expect(shell).not.toContain("Sparkles");
         expect(banner).not.toContain("Sparkles");
     });
@@ -323,9 +319,12 @@ describe("CreateLeadActionWorkspace render", () => {
         expect(html).toContain('data-bos-ambient-glow="true"');
         expect(html).not.toContain('data-action-workspace-bos-cloud-territory="true"');
         expect(html).not.toContain("data-bos-cloud-territory-svg");
-        expect(html).toContain('data-testid="action-workspace-bos-reveal"');
-        expect(html).toContain('data-bos-reveal-mode="workspace"');
-        expect(html).not.toContain('data-testid="create-lead-gather-step"');
+        expect(html).toContain('data-testid="create-lead-gather-step"');
+        expect(html).toContain('data-testid="action-workspace-paste-canvas"');
+        expect(html).toContain('data-testid="action-workspace-analyze-button"');
+        expect(html).toContain("Analyze with BOS");
+        expect(html).toContain("Tell BOS about the family");
+        expect(html).toContain('data-testid="action-workspace-step-rail"');
         expect(html).not.toContain('data-testid="create-lead-review-step"');
         expect(html).not.toContain('data-testid="create-lead-gather-fields"');
     });

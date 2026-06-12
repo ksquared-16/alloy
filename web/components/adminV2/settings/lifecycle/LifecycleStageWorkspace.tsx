@@ -8,27 +8,14 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import Link from "next/link";
 import {
     BUSINESS_PROCESS_SAVE_STAGE,
-    BUSINESS_PROCESS_SECTION_ACTIONS,
-    BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY,
     BUSINESS_PROCESS_SECTION_EXPECTED_WORK,
     BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY,
-    BUSINESS_PROCESS_SECTION_MEMBERSHIP,
-    BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY,
-    BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED,
-    BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED_SUMMARY,
-    BUSINESS_PROCESS_SECTION_READY,
-    BUSINESS_PROCESS_SECTION_READY_SUMMARY,
-    BUSINESS_PROCESS_SECTION_REQUIRED,
-    BUSINESS_PROCESS_SECTION_REQUIRED_SUMMARY,
+    BUSINESS_PROCESS_SECTION_WHO_BELONGS,
+    BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY,
     BUSINESS_PROCESS_STAGE_HEADER,
 } from "@/lib/lifecycle/businessProcessUiLabels";
-import {
-    STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER,
-    STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL,
-} from "@/lib/lifecycle/queueMembershipUiLabels";
 import LifecycleStatusesCard from "@/components/adminV2/settings/lifecycle/LifecycleStatusesCard";
 import type { LifecycleStatusesSaveState } from "@/lib/lifecycle/lifecycleStatusesCardState";
 import LifecycleStageFieldRequirementsEditor, {
@@ -299,7 +286,7 @@ export default function LifecycleStageWorkspace({
                     ? `${enabledActionsCount} action${enabledActionsCount === 1 ? "" : "s"} enabled`
                     : "No actions enabled"}
             </li>
-            <li>{queueConfigured ? "Workspace lane synced" : "Workspace lane pending"}</li>
+            <li>{queueConfigured ? "Queue view configured" : "Queue view not published"}</li>
             {bootstrap?.stage_operating_plan?.work_templates.length ? (
                 <li>{bootstrap.stage_operating_plan.work_templates.length} work item(s)</li>
             ) : null}
@@ -351,58 +338,17 @@ export default function LifecycleStageWorkspace({
             <div className="space-y-1.5">
                 <StageSection
                     id="membership"
-                    title={BUSINESS_PROCESS_SECTION_MEMBERSHIP}
-                    summary={BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY}
+                    title={BUSINESS_PROCESS_SECTION_WHO_BELONGS}
+                    summary={BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY}
                 >
                     {stageKey.trim() ? (
-                        <div className="space-y-4">
-                            <LifecycleStageQueueMembershipEditor
-                                ref={membershipRef}
-                                departmentId={departmentId}
-                                stageKey={stageKey}
-                                savedMembership={bootstrap?.queue_membership ?? null}
-                                onDirtyChange={setMembershipDirty}
-                            />
-                            <div className="border-t border-alloy-forge/8 pt-3" data-testid="stage-membership-included-statuses">
-                                <p className="mb-1 text-[11px] font-medium text-alloy-midnight/70">
-                                    {STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL}
-                                </p>
-                                <p className="mb-2 text-[11px] text-alloy-midnight/50">
-                                    {STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER}
-                                </p>
-                                <LifecycleStatusesCard
-                                    payload={statusesPayload}
-                                    loading={false}
-                                    saving={false}
-                                    saveState={statusesSaveState}
-                                    savedKeys={savedStatusKeys}
-                                    error={null}
-                                    onToggleStatus={onToggleStatus}
-                                />
-                            </div>
-                        </div>
-                    ) : (
-                        <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>
-                    )}
-                </StageSection>
-
-                <StageSection
-                    id="required"
-                    title={BUSINESS_PROCESS_SECTION_REQUIRED}
-                    summary={BUSINESS_PROCESS_SECTION_REQUIRED_SUMMARY}
-                >
-                    {stageKey.trim() ? (
-                        <LifecycleStageFieldRequirementsEditor
-                            ref={fieldReqRef}
+                        <LifecycleStageQueueMembershipEditor
+                            ref={membershipRef}
                             departmentId={departmentId}
-                            activeStageKey={stageKey}
-                            compact
-                            workspaceMode
-                            prefetchedFieldRequirements={bootstrap?.field_requirements ?? null}
-                            entityDisplayLabels={
-                                entityDisplayLabels ?? bootstrap?.entity_display_labels ?? undefined
-                            }
-                            onDirtyChange={setFieldDirty}
+                            stageKey={stageKey}
+                            savedMembership={bootstrap?.queue_membership ?? null}
+                            statusOptions={bootstrap?.queue_membership_status_options ?? []}
+                            onDirtyChange={setMembershipDirty}
                         />
                     ) : (
                         <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>
@@ -427,65 +373,109 @@ export default function LifecycleStageWorkspace({
                 </StageSection>
 
                 <StageSection
-                    id="actions"
-                    title={BUSINESS_PROCESS_SECTION_ACTIONS}
-                    summary={BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY}
+                    id="statuses"
+                    title="Statuses"
+                    summary="Which CRM statuses belong in this stage?"
                 >
+                    <p className="mb-2 text-[11px] text-alloy-midnight/50">
+                        Statuses label where each lead is in your pipeline. Select the statuses that belong in this
+                        stage.
+                    </p>
+                    <LifecycleStatusesCard
+                        payload={statusesPayload}
+                        loading={false}
+                        saving={false}
+                        saveState={statusesSaveState}
+                        savedKeys={savedStatusKeys}
+                        error={null}
+                        onToggleStatus={onToggleStatus}
+                    />
+                </StageSection>
+
+                <StageSection
+                    id="required"
+                    title="Required information"
+                    summary="Fields to collect before work moves forward."
+                >
+                    {stageKey.trim() ? (
+                        <LifecycleStageFieldRequirementsEditor
+                            ref={fieldReqRef}
+                            departmentId={departmentId}
+                            activeStageKey={stageKey}
+                            compact
+                            workspaceMode
+                            prefetchedFieldRequirements={bootstrap?.field_requirements ?? null}
+                            entityDisplayLabels={
+                                entityDisplayLabels ?? bootstrap?.entity_display_labels ?? undefined
+                            }
+                            onDirtyChange={setFieldDirty}
+                        />
+                    ) : (
+                        <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>
+                    )}
+                </StageSection>
+
+                <StageSection id="actions" title="Actions" summary="Buttons staff see on records in this stage.">
                     {actionsSection}
                 </StageSection>
 
                 <StageSection
+                    id="queue"
+                    title="Queue view"
+                    summary="What staff see on the workspace for this stage."
+                >
+                    <p className="mb-2 text-[11px] text-alloy-midnight/50">
+                        The queue view shows leads whose status matches your selections above. It is published when you
+                        save this stage.
+                    </p>
+                    {draftStatusCount > 0 || savedStatusKeys.length > 0 ? (
+                        <LifecycleStageWorkUnitCard
+                            ref={workUnitRef}
+                            departmentId={departmentId}
+                            activeStageKey={stageKey}
+                            stageLabel={stageLabel || stageKey}
+                            stageStatusDisplayLabels={previewStatusLabels}
+                            stageSavedStatusKeys={savedStatusKeys}
+                            pipeline={pipeline}
+                            workUnitIdentityState={workUnitIdentityState}
+                            workUnitNeedsSync={workUnitNeedsSync}
+                            loadingPipeline={false}
+                            onPipelineUpdated={onPipelineUpdated}
+                            workspaceMode
+                            onDraftNameDirtyChange={setQueueNameDirty}
+                        />
+                    ) : (
+                        <p className="text-xs text-alloy-midnight/50">
+                            Select at least one status above to preview the queue view.
+                        </p>
+                    )}
+                </StageSection>
+
+                <StageSection
                     id="ready_check"
-                    title={BUSINESS_PROCESS_SECTION_READY}
-                    summary={BUSINESS_PROCESS_SECTION_READY_SUMMARY}
+                    title="Ready check"
+                    summary="Confirm this lifecycle is ready for staff on the workspace."
                     lazyMount
                 >
                     <div key={readyCheckRefreshKey ?? "initial"}>{validationSlot}</div>
                 </StageSection>
-
-                <details
-                    className="rounded-xl border border-dashed border-alloy-forge/15 bg-alloy-stone/[0.03]"
-                    data-testid="lifecycle-stage-section-queue-advanced"
-                >
-                    <summary className="cursor-pointer list-none px-4 py-2.5 text-xs font-medium text-alloy-midnight/60 [&::-webkit-details-marker]:hidden">
-                        <span>{BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED}</span>
-                        <p className="mt-0.5 text-[11px] font-normal text-alloy-midnight/45">
-                            {BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED_SUMMARY}
-                        </p>
-                    </summary>
-                    <div className="border-t border-alloy-forge/8 px-4 py-3">
-                        <p className="mb-2 text-[11px] text-alloy-midnight/50">
-                            Queue layout is managed in{" "}
-                            <Link href="/admin/settings/layouts" className="font-medium text-alloy-pine hover:underline">
-                                Layouts
-                            </Link>
-                            . Saving the stage syncs the workspace lane when statuses are assigned.
-                        </p>
-                        {draftStatusCount > 0 || savedStatusKeys.length > 0 ? (
-                            <LifecycleStageWorkUnitCard
-                                ref={workUnitRef}
-                                departmentId={departmentId}
-                                activeStageKey={stageKey}
-                                stageLabel={stageLabel || stageKey}
-                                stageStatusDisplayLabels={previewStatusLabels}
-                                stageSavedStatusKeys={savedStatusKeys}
-                                pipeline={pipeline}
-                                workUnitIdentityState={workUnitIdentityState}
-                                workUnitNeedsSync={workUnitNeedsSync}
-                                loadingPipeline={false}
-                                onPipelineUpdated={onPipelineUpdated}
-                                workspaceMode
-                                onDraftNameDirtyChange={setQueueNameDirty}
-                            />
-                        ) : (
-                            <p className="text-xs text-alloy-midnight/50">
-                                Select at least one status in Stage Membership to sync the workspace lane.
-                            </p>
-                        )}
-                    </div>
-                </details>
             </div>
 
+            <footer
+                className="sticky bottom-0 z-10 mt-2 rounded-b-xl border-t border-alloy-forge/12 bg-white/95 px-3 py-2 shadow-[0_-2px_8px_rgba(0,0,0,0.04)] backdrop-blur-sm"
+                data-testid="lifecycle-stage-save-sticky-bar"
+            >
+                <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 hidden sm:block">{summaryLine}</div>
+                    <SaveBar
+                        compact
+                        effectiveSaveState={effectiveSaveState}
+                        saveError={saveError}
+                        saveDisabled={saveDisabled}
+                        onSaveStage={onSaveStage}
+                    />
+                </div>
+            </footer>
         </div>
     );
 }

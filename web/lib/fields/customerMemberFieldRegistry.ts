@@ -18,6 +18,7 @@ export const CUSTOMER_MEMBER_NATIVE_COLUMN_KEYS = [
     "dob",
     "display_name",
     "relationship",
+    "status_key",
     "person_id",
     "customer_id",
     "is_active",

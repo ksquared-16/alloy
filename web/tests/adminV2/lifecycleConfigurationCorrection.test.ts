@@ -26,9 +26,8 @@ describe("lifecycle configuration correction", () => {
         expect(DEPRECATED_LIFECYCLE_FIELD_RULE_IDS.has("person:email_or_phone")).toBe(true);
     });
 
-    it("business processes hub is canonical at /business-processes", () => {
-        expect(read("app/adminV2/settings/business-processes/page.tsx")).toContain("LifecycleSettingsShell");
-        expect(read("app/adminV2/settings/lifecycle/page.tsx")).toContain("redirect");
+    it("lifecycle hub is canonical at /lifecycle", () => {
+        expect(read("app/adminV2/settings/lifecycle/page.tsx")).toContain("LifecycleHubClient");
         expect(read("app/adminV2/settings/enrollment-process/page.tsx")).toContain("redirect");
         expect(read("app/adminV2/settings/page.tsx")).toContain('title="Business Processes"');
         expect(read("app/adminV2/settings/page.tsx")).not.toContain('title="Enrollment Process"');
@@ -42,7 +41,7 @@ describe("lifecycle configuration correction", () => {
 
     it("statuses card shows opportunity-only context", () => {
         const card = read("components/adminV2/settings/enrollmentProcess/EnrollmentProcessStageStatusesCard.tsx");
-        expect(card).toContain("Add or remove opportunity statuses for this stage");
+        expect(card).toContain("Choose which opportunity statuses belong to this stage");
         expect(card).not.toContain("lifecycle-status-entity-select");
         expect(card).toContain("Create or edit status definitions");
     });

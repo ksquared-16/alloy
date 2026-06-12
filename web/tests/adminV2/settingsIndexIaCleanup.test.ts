@@ -7,36 +7,37 @@ function read(rel: string): string {
     return readFileSync(resolve(root, rel), "utf8");
 }
 
-describe("Settings index IA — Settings V2 domains", () => {
-    it("groups tiles by configuration domain", () => {
+describe("Settings index IA cleanup", () => {
+    it("groups tiles by operator mental model", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain('label="Configure"');
-        expect(page).toContain('label="Data Model"');
-        expect(page).toContain('label="Operations"');
-        expect(page).toContain('label="Workspace Experience"');
-        expect(page).toContain("Advanced");
-        expect(page).not.toContain('label="Enrollment Operations"');
-        expect(page).not.toContain('label="Record Setup"');
-        expect(page).not.toContain('label="Actions & Automation"');
+        expect(page).toContain('label="Organization"');
+        expect(page).toContain('label="Enrollment Operations"');
+        expect(page).toContain('label="Record Setup"');
+        expect(page).toContain('label="Actions & Automation"');
+        expect(page).toContain('label="Documents & Forms"');
+        expect(page).toContain("Diagnostics & reference");
+        expect(page).not.toContain("Enrollment lifecycle");
+        expect(page).not.toContain("Organization setup");
+        expect(page).not.toContain("Records & layouts");
     });
 
-    it("business processes tile lives under Operations with editable mode", () => {
+    it("lifecycle tile lives under Enrollment operations with read-only mode", () => {
         const page = read("app/adminV2/settings/page.tsx");
         expect(page).toContain('title="Business Processes"');
-        expect(page).toContain("ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH");
+        expect(page).toContain("/adminV2/settings/lifecycle");
         expect(page).toMatch(/title="Business Processes"[\s\S]*mode="editable"/);
+        expect(page).toContain("settingsSurfacePrefix");
     });
 
-    it("advanced surfaces stay in sidebar aside", () => {
+    it("diagnostic surfaces stay in sidebar aside", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain("/admin/settings/status-transition-rules");
-        expect(page).toContain("/admin/settings/field-sections");
+        expect(page).toContain("/adminV2/settings/status-transition-rules");
+        expect(page).toContain("/adminV2/settings/field-sections");
         expect(page).toContain("data-testid=\"settings-index-page\"");
     });
 
-    it("action buttons tile lives under Operations", () => {
+    it("action buttons tile uses editable mode", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toMatch(/label="Operations"[\s\S]*title="Action Buttons"/);
         expect(page).toMatch(/title="Action Buttons"[\s\S]*mode="editable"/);
     });
 });

@@ -51,6 +51,7 @@ const INVENTORY_LAYERS: Array<{ entity_type: string; table: string; column: stri
         table: "opportunity_customer_members",
         column: "outcome_status_key",
     },
+    { entity_type: "customer_members", table: "customer_members", column: "status_key" },
 ];
 
 const INVENTORY_PAGE_SIZE = 2000;

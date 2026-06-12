@@ -63,12 +63,6 @@ import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { loadOperatorLifecycleLandingCards, invalidateOperatorLifecycleLandingCache } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 import { warmDefaultOperatorLifecycleEntries } from "@/lib/admin/operatorWorkUnitEntryWarm";
-import {
-    mergeLifecycleCardsStableOrder,
-    peekWorkspaceLifecycleCardsForRestore,
-    writeWorkspaceLifecycleCardsCache,
-} from "@/lib/workspace/workspaceContinuityPrefetch";
-import { peekOperatorLifecycleLandingCards } from "@/lib/admin/loadOperatorLifecycleLandingClient";
 
 /** First paint: work-unit counts + rollup lines without per-dept growth KPI / pipeline calls. */
 function buildWorkspaceQuickRollup(
@@ -128,46 +122,15 @@ export default function AdminV2WorkspaceIndexPage() {
     const [deptRefreshNonce, setDeptRefreshNonce] = useState(0);
     const [tilePipelineTrace, setTilePipelineTrace] = useState<WorkspaceTilePipelineTrace | null>(null);
     const [workspaceIdAudit, setWorkspaceIdAudit] = useState<LifecycleDepartmentIdAudit | null>(null);
-    const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>(() => {
-        if (typeof window === "undefined") return [];
-        return peekOperatorLifecycleLandingCards() ?? [];
-    });
-    const [lifecycleCardsPending, setLifecycleCardsPending] = useState(() => {
-        if (typeof window === "undefined") return true;
-        return !peekOperatorLifecycleLandingCards()?.length;
-    });
-    const lifecycleCacheHydratedRef = useRef(false);
-
-    useLayoutEffect(() => {
-        if (!orgId || lifecycleCacheHydratedRef.current) return;
-        const restored = peekWorkspaceLifecycleCardsForRestore({
-            orgId,
-            principalUserId,
-            accessScopeFingerprint,
-        });
-        if (!restored?.length) return;
-        lifecycleCacheHydratedRef.current = true;
-        setLifecycleCards(restored);
-        setLifecycleCardsPending(false);
-    }, [orgId, principalUserId, accessScopeFingerprint]);
+    const [lifecycleCards, setLifecycleCards] = useState<OperatorLifecycleLandingCard[]>([]);
+    const [lifecycleCardsPending, setLifecycleCardsPending] = useState(true);
 
     useEffect(() => {
         let cancelled = false;
-        const hasRestoredCards = lifecycleCacheHydratedRef.current || Boolean(peekOperatorLifecycleLandingCards()?.length);
-        if (!hasRestoredCards) {
-            setLifecycleCardsPending(true);
-        }
+        setLifecycleCardsPending(true);
         void loadOperatorLifecycleLandingCards()
             .then((cards) => {
-                if (!cancelled) {
-                    setLifecycleCards((prev) => mergeLifecycleCardsStableOrder(prev, cards));
-                    if (orgId && cards.length) {
-                        writeWorkspaceLifecycleCardsCache(
-                            { orgId, principalUserId, accessScopeFingerprint },
-                            cards,
-                        );
-                    }
-                }
+                if (!cancelled) setLifecycleCards(cards);
             })
             .finally(() => {
                 if (!cancelled) setLifecycleCardsPending(false);
@@ -175,7 +138,7 @@ export default function AdminV2WorkspaceIndexPage() {
         return () => {
             cancelled = true;
         };
-    }, [orgId, principalUserId, accessScopeFingerprint, deptRefreshNonce]);
+    }, [deptRefreshNonce]);
 
     useEffect(() => {
         if (lifecycleCardsPending || lifecycleCards.length === 0) return;

@@ -61,7 +61,6 @@ describe("drawerOverviewCompositionStandard", () => {
 
     it("uses neutral outer drawer shell tokens", () => {
         expect(LAYOUT_RUNTIME_DRAWER_OUTER_BORDER).toContain("39, 63, 82");
-        expect(LAYOUT_RUNTIME_DRAWER_OUTER_BORDER).toContain("0.28");
         expect(LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW).toContain("rgba");
     });
 });

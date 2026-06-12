@@ -26,7 +26,6 @@ const catalogEntry = (partial: Partial<LifecycleCatalogEntry>): LifecycleCatalog
     lifecycle_name: "Enrollment",
     source: "legacy",
     stage_count: 1,
-    track_count: 0,
     work_unit_count: 0,
     activation_owned: false,
     can_delete: false,

@@ -1,195 +1,189 @@
 # Work Unit Layout Doctrine
 
-**Status:** **Canonical V3 — frozen (June 2026)**  
+**Status:** Canonical V3 (June 2026)  
 **Scope:** All Admin V2 work-unit execution surfaces (`WorkUnitWorkspace`, slug and UUID routes)
 
-This is a **doctrine lock**, not a redesign exercise. Do not propose alternatives unless correcting a defect.
+## Purpose
 
-Related: **`workspace-system.md`**, **`queue-record-doctrine.md`**, **`platform-performance-doctrine.md`**, **`bos-foundation.md`**.
+Lock a consistent work-unit page structure where the **queue remains the primary operating surface**. Workflow telemetry is **secondary diagnostic information** and lives in the **right command rail** — not in the primary page flow.
 
-Closeout: **`docs/sprints/06_2026/completed/work_unit_layout_v3_freeze_closeout.md`**.
+Related: **`workspace-system.md`**, **`platform-performance-doctrine.md`**, **`bos-foundation.md`**.
 
----
+## Primary page flow
 
-## Approved Layout Baseline (June 2026)
+Work-unit pages contain **two vertical zones only**:
 
-Validated on staging and approved as the canonical work-unit implementation:
+1. **Header** — lifecycle, filters, KPI strip, lane context  
+2. **Queue** — dominant operating surface for record processing  
 
-| Baseline | Rule |
-|----------|------|
-| **Queue density (pass-1 adopted)** | Spacing-only compact rows — reduced vertical padding, internal gaps, action-rail spacing. **No** further typography reduction. |
-| **Queue icon doctrine** | Household `16px`; person / child / email / phone `14px`; **neutral** metadata color only. Pine reserved for BOS + explicit actions. |
-| **Queue width doctrine** | Trailing contain inset `0`, workbench gutter `14px`, scroll-surface trailing padding `12px` — reclaim primary queue width without changing BOS rail width. |
-| **Command rail utilities** | Collapsed **Actions (N)** and **Workflow Telemetry (n)** — single-line headers with counts only. |
-| **BOS preservation** | Sticky, full-height within rail; telemetry never steals BOS vertical space. |
+**Nothing appears below the queue.** Telemetry is not part of the main page flow.
 
----
+## Queue visibility doctrine
 
-## Canonical Work Unit Layout (V3)
+Queue visibility is **higher priority** than telemetry visibility.
 
-### Zone 1 — Header
+- Queue list uses a **bounded scroll shell** (`.adminv2-ws-wu-queue-list-shell`) with **`overflow-y: auto`** — the queue owns scroll, not the page.
+- Target **5–6 visible rows** on laptop viewports; **6–7** on larger monitors (with **`data-ws-wu-queue-density="pass-1"`** compact spacing active on `WorkUnitWorkspace`).
+- Queue lane **bottom aligns with command rail bottom** on desktop (throughput deck stretches to rail height).
+- **Scroll ownership:** `.adminv2-ws-wu-queue-list-shell` owns `overflow-y: auto`; header and rails stay fixed.
+- Work-unit rows use **compact spacing** (`data-ws-wu-queue-density="pass-1"`) — padding/gap only; typography and badge sizes unchanged.
+- Row behavior, selection, drawer open, and registry actions are **unchanged**.
+- Telemetry must **not** consume primary-column vertical space.
 
-Contains:
-
-- Lifecycle title
-- Work-unit pills
-- Attention summary (KPI / lane context)
-
-**Fixed height.** No additional telemetry sections in the primary column.
-
-### Zone 2 — Queue (primary surface)
-
-The **dominant** operating surface. Operator attention stays on records.
-
-**Goals:** maximum visible records · fast scanning · fast actions · minimal scrolling.
-
-**Nothing appears below the queue.**
-
-#### Queue density (pass-1 — adopted)
-
-Maintain:
-
-- Reduced vertical spacing
-- Reduced row padding
-- Reduced action-rail spacing
-
-**Do not** reduce typography further. **Do not** reduce readability. Density changes prioritize **spacing** before font size.
-
-**Targets:** ≥5 visible rows on laptop; 6–7 on larger monitors.
-
-**Scroll:** `.adminv2-ws-wu-queue-list-shell` owns `overflow-y: auto`; header and rails stay fixed; 50+ records reachable.
-
-#### Queue row icon doctrine
-
-All work-unit queues use a **consistent icon system**:
-
-| Type | Size |
-|------|------|
-| Household | 16px |
-| Person | 14px |
-| Child | 14px |
-| Email | 14px |
-| Phone | 14px |
-
-**Rules:**
-
-- Neutral color only for record metadata icons
-- No green icons by data type; no special coloring for people
-- Pine reserved for **actions** and **BOS** only
-- Hover states remain subtle (dark text / neutral icon — not pine flood)
-- Contact names: standard dark text — **not** green by default
-
-Applies to **all future work-unit queue layouts**.
-
-#### Queue width doctrine
-
-Maintain:
-
-- Reduced trailing page padding (`--ws-wu-contain-padding-inline-end: 0`)
-- Reduced primary ↔ rail gutter (`--ws-wu-workbench-gutter: 14px`)
-- Reduced scroll-surface right padding (`12px` at `sm+` on work-unit routes)
-
-**Goals:** maximize queue width · preserve BOS rail width · preserve BOS usability · preserve drawer alignment.
-
-**Do not** increase or shrink BOS width. Future gains come from **workspace reclamation**, not BOS reduction.
-
-**CSS tokens** (work-unit surface):
+**CSS tokens** (work-unit surface only):
 
 | Token | Role |
 |-------|------|
-| `--ws-wu-queue-visible-rows-target` | Row-count floor (6 laptop / 7 @1440px+) |
-| `--ws-wu-queue-row-min-height` | ~37px compact row stack |
-| `--ws-wu-queue-row-gap` | 5px inter-row gap |
-| `--ws-wu-contain-padding-inline-end` | Trailing contain inset (`0`) |
-| `--ws-wu-workbench-gutter` | Primary ↔ command gap (`14px`) |
-| `--ws-wu-queue-icon-primary-size` | Household icon (`16px`) |
-| `--ws-wu-queue-icon-secondary-size` | Contact / child icons (`14px`) |
-| `--ws-wu-queue-icon-muted-color` | Metadata icon color |
+| `--ws-wu-queue-visible-rows-target` | Row-count floor (6 laptop / 7 @1440px+ with pass-1) |
+| `--ws-wu-queue-row-min-height` | Work-unit row min height (~37px with pass-1) |
+| `--ws-wu-queue-row-stack-estimate` | Per-row height estimate for scroll floor |
+| `--ws-wu-queue-records-scroll-top-offset` | Reserve space for header deck (~14rem) |
+| `--ws-wu-queue-records-scroll-max-height` | Viewport-based scroll fallback (mobile) |
+| `--ws-wu-contain-padding-inline-end` | Trailing contain inset (`0` — rail closer to viewport edge) |
+| `--ws-wu-workbench-gutter` | Primary ↔ command gap (`14px`; default surfaces use `20px`) |
+| `--ws-wu-queue-icon-primary-size` | Household / entity icon (`16px`) |
+| `--ws-wu-queue-icon-secondary-size` | Contact / child / email / phone icons (`14px`) |
+| `--ws-wu-queue-icon-muted-color` | Neutral metadata icon color |
 | `--ws-wu-queue-icon-neutral-color` | Primary entity icon color |
 
-### Zone 3 — Command rail
+## Horizontal layout polish (right rail edge alignment)
+
+Reclaim **~16–32px** for the primary queue without shrinking the command rail or BOS content.
+
+**Rules:**
+
+- Trim **trailing** workspace scroll padding on work-unit routes (`padding-right: 12px` at `sm+`; was `20px` from shell `px-5`).
+- Set **`--ws-wu-contain-padding-inline-end: 0`** on work-unit root (default contain trailing inset is `12px`).
+- Tighten **`--ws-wu-workbench-gutter`** to `14px` for page split, operational row, and command-rail separator padding.
+- **Do not** change command column grid fraction or BOS host `min-height`.
+- **Do not** introduce horizontal overflow; drawer overlay geometry unchanged (`--adminv2-drawer-outer-margin` untouched).
+- Scoped to **`work_unit` + `adminv2-ws-wu-v2`** only — department/record/company surfaces keep default gutters.
+
+## Queue record icon + color doctrine
+
+Work-unit queue rows use **neutral metadata icons**. Pine/green is **not** a default person/contact accent.
+
+| Role | Size | Color |
+|------|------|-------|
+| Household / primary entity | `16px` (`--ws-wu-queue-icon-primary-size`) | `--ws-wu-queue-icon-neutral-color` |
+| Person, email, phone, related child | `14px` (`--ws-wu-queue-icon-secondary-size`) | `--ws-wu-queue-icon-muted-color` |
+| Primary contact name | typography tier | dark / midnight — **not** green |
+| Email / phone values | typography tier | muted text + muted icon |
+| Status / attention | semantic tokens | unchanged — amber/red only when meaningful |
+| BOS + row action buttons | existing pine treatment | **only** explicit action affordances |
+
+**Reserved pine/green for:**
+
+- BOS composer and row **Work with BOS** controls
+- Positive / selected / active action states
+- Brand accents on buttons — **not** record metadata icons
+
+**Do not:** mix green person icons with dark email/phone icons in the same contact stack; use decorative pine circles on household icons.
+
+Implementation: `workspace.css` under `[data-ws-surface="work_unit"].adminv2-ws-wu-v2`. Cross-surface queue row rules remain in **`queue-record-doctrine.md`**; work-unit surfaces override icon color to neutral per this doc.
+
+## Right rail utilities (Actions → Telemetry → BOS)
+
+Telemetry is a **right rail utility** alongside Actions and BOS — same collapsible pattern as Actions.
 
 **Order (fixed):**
 
-1. **Actions** — collapsed utility card, single line, shows count — e.g. `▶ Actions (2)`
-2. **Workflow Telemetry** — collapsed utility card, single line, shows count — e.g. `▶ Workflow Telemetry (0)`
-3. **BOS** — primary intelligence surface
+1. **Actions** — registry / lifecycle actions  
+2. **Workflow Telemetry** — compact operator utility  
+3. **BOS** — sticky assistant dock  
 
-#### Workflow Telemetry — collapsed (default)
+### Workflow Telemetry — collapsed (default)
 
-- Single row with count (`n` = runs today; failures use **attention badge**, not count)
-- **No** secondary line, metrics, health summary, or subtitles when collapsed
-- **No** large telemetry blocks on work-unit pages
-- **No** telemetry sections below queues
+**Collapsed rail modules are always a single row with a count**, matching Actions.
 
-#### Workflow Telemetry — expanded (on demand)
+- **▶ Workflow Telemetry (n)** with workflow iconography — `n` = runs today (recent activity), not failures  
+- **No** secondary line, metrics, health summary, or subtitles in collapsed state  
+- Failures / health concerns use **attention badge** on the collapsed header, not the count  
+- Telemetry details appear **only when expanded**  
 
-Operator-relevant information only: workflow health lines, recent activity, Open Automations, Workflow Diagnostics.
+Canonical rail pattern:
 
-**Must not** show: throughput dashboards, reliability cards, 7-day KPI grids, analytics blocks.
+```
+▶ Actions (N)
+▶ Workflow Telemetry (n)
+BOS
+```
 
-Expanded content scrolls **inside** the telemetry section — must **not** push queue content down or reduce BOS height.
+### Workflow Telemetry — expanded (on demand)
 
-**Implementation:** `AutomationWorkflowsBlock` with `presentation="work_unit_rail"` in `commandRailTelemetrySlot`.
+Operator-relevant information **only**:
 
-#### BOS
+- **Workflow Health** — status label + runs today / success / failures (plain lines)  
+- **Recent Workflow Activity** — short bullet list of recent scoped workflow runs  
+- **Actions** — Open Automations, Workflow Diagnostics  
 
-BOS is the **primary intelligence surface** in the command rail.
+**Must not** show in work-unit rail expand:
 
-- Telemetry exists to **support** BOS, not compete with it
-- BOS must **never** lose vertical space to telemetry
-- BOS remains **sticky**, **full-height** within rail, consistent across work units
-- **Do not** reduce, shrink, or move BOS for telemetry
+- Throughput dashboards  
+- Reliability cards  
+- 7-day KPI grids  
+- Analytics blocks  
 
-**Implementation:** `[data-adminv2-workspace-command-column]` sticky in `adminV2.css`; BOS host `min-height: 14rem`.
+Detailed analytics belong on department surfaces (`presentation="full"`) or dedicated diagnostics pages.
 
----
+Expanded content scrolls **inside the telemetry section**. It must **not** push queue content down or reduce BOS height.
 
-## Explicitly rejected
+**Implementation:** `AutomationWorkflowsBlock` with `presentation="work_unit_rail"` in `commandRailTelemetrySlot` → `[data-command-rail-telemetry]` inside `WorkspaceCommandRailShell`.
 
-Do **not** reintroduce:
+## BOS rail doctrine
 
-- Large workflow telemetry sections below queues
-- Expandable telemetry blocks inside primary content
-- Reduced BOS height or width
-- Colored queue icons by record type
-- Green contact names by default
-- Additional work-unit chrome
-- Horizontal scrolling
-- Typography shrink for density (spacing-first only)
+BOS is a **persistent assistant surface** fixed below telemetry in the command rail.
 
----
+**Requirements:**
+
+- **Do not** reduce, shrink, or move BOS to make room for telemetry.  
+- BOS stays **fixed in viewport** while primary-column content scrolls.  
+- Telemetry adapts around BOS (internal scroll / collapse), not the reverse.  
+- BOS remains continuously available as operational copilot.  
+
+**Implementation:** `[data-adminv2-workspace-command-column]` uses `position: sticky` in `adminV2.css`. BOS host uses `flex: 1 1 auto` with `min-height: 14rem` on work-unit surfaces.
 
 ## Department / diagnostics full telemetry (unchanged)
 
-Department surfaces keep `AutomationWorkflowsBlock` with `presentation="full"` — full metric groups, scoped workflow lists, Ask Workflow Assist.
-
----
+Department context-lower surfaces keep `AutomationWorkflowsBlock` with `presentation="full"` (default) — full metric groups, scoped workflow lists, Ask Workflow Assist.
 
 ## Future work units
 
 All new work-unit surfaces **must**:
 
-1. Render through `WorkUnitWorkspace` + `WorkspaceShellLayout`
-2. Keep primary flow as **Header → Queue** only
-3. Mount telemetry with `presentation="work_unit_rail"` in the command rail
-4. Apply V3 density, icon, and width tokens on `adminv2-ws-wu-v2`
+1. Render through `WorkUnitWorkspace` + `WorkspaceShellLayout`.  
+2. Keep primary flow as **Header → Queue** only.  
+3. Mount telemetry with `presentation="work_unit_rail"` in the command rail.  
+4. Keep BOS below telemetry without height reduction.  
 
----
+**Must not:**
 
-## Validation checklist (frozen — passed June 2026)
+- Mount telemetry below the queue or anywhere in the primary column.  
+- Show analytics dashboards in work-unit rail expand.  
+- Shrink BOS for telemetry expansion.  
 
-- [x] Queue scrolls through all records independently
-- [x] Drawer alignment correct after width reclaim
-- [x] No horizontal scrollbar on staging
-- [x] Laptop and large desktop remain readable
-- [x] BOS rail behavior stable
-- [x] Queue density increases visible records without harming scanability
-- [x] Right rail: Actions → Workflow Telemetry → BOS in order
-- [x] Telemetry collapsed headers single-line with counts
-- [x] Slug and UUID routes share `WorkUnitWorkspace` shell
+## Success criteria
 
----
+A user should be able to:
+
+1. See **more queue records** without scrolling (≥2–3 additional rows vs pre-rail layouts).  
+2. Keep **BOS fully visible**.  
+3. **Expand telemetry** when workflow health, recent activity, or diagnostics are needed.  
+4. **Access Automations** without leaving the work unit.  
+
+## Validation checklist
+
+- [ ] Queue shows 6–8 rows on common laptop viewports without page scroll.  
+- [ ] No telemetry below queue or in primary column.  
+- [ ] Right rail shows Actions, Workflow Telemetry, BOS in order.  
+- [ ] Queue scrolls independently (`overflow-y: auto` on `.adminv2-ws-wu-queue-list-shell`); 50+ records reachable.
+- [ ] Wheel over queue scrolls the queue (not the page shell).
+- [ ] Telemetry collapsed header is single-row (matches Actions).  
+- [ ] Expand shows operator content only (health, recent activity, actions).  
+- [ ] Expand does not move queue or shrink BOS.  
+- [ ] BOS remains visible or recoverable after telemetry expansion.  
+- [ ] Slug and UUID routes share `WorkUnitWorkspace` shell.  
+- [ ] Department pages keep full telemetry (`presentation="full"`).  
 
 ## Code map
 
@@ -198,6 +192,7 @@ All new work-unit surfaces **must**:
 | Primary layout shell | `web/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx` |
 | Command rail shell | `web/app/adminV2/components/workspace/WorkspaceCommandRailShell.tsx` |
 | Rail telemetry block | `web/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx` |
-| Queue density + icon + width tokens | `web/app/adminV2/components/workspace/workspace.css` |
-| Rail telemetry + scroll reclaim | `web/app/adminV2/adminV2.css` |
+| Queue height tokens | `web/app/adminV2/components/workspace/workspace.css` |
+| Rail telemetry styles | `web/app/adminV2/adminV2.css` |
+| BOS sticky rail | `web/app/adminV2/adminV2.css` |
 | Tests | `web/tests/adminV2/workUnitLayoutDoctrine.test.ts`, `web/tests/admin/adminV2QueueRowClick.test.ts` |

@@ -48,12 +48,10 @@ function draftToSaveRow(row: LifecycleActionsMatrixDraftRow, displayOrder: numbe
 export default function LifecycleActionsMatrix({
     departmentId,
     builderStageKeys,
-    embedded = false,
     onSaved,
 }: {
     departmentId: string;
     builderStageKeys: readonly string[];
-    embedded?: boolean;
     onSaved?: () => void | Promise<void>;
 }) {
     const [rows, setRows] = useState<LifecycleActionsMatrixDraftRow[]>([]);
@@ -176,7 +174,7 @@ export default function LifecycleActionsMatrix({
             const j = (await res.json().catch(() => ({}))) as { error?: string; rows?: LifecycleActionsMatrixRow[] };
             if (!res.ok) throw new Error(j.error ?? "Save failed");
             if (j.rows) setRows(j.rows.map(draftFromRow));
-            setSuccess("Process actions saved.");
+            setSuccess("Lifecycle actions saved.");
             await onSaved?.();
         } catch (e) {
             setError(e instanceof Error ? e.message : "Save failed");
@@ -189,27 +187,20 @@ export default function LifecycleActionsMatrix({
     if (loading) {
         return (
             <p className="text-xs text-alloy-midnight/50" data-testid="lifecycle-actions-matrix-loading">
-                Loading process actions…
+                Loading lifecycle actions…
             </p>
         );
     }
 
-    const Wrapper = embedded ? "div" : "section";
-    const wrapperClass = embedded
-        ? "space-y-2"
-        : "rounded-xl border border-alloy-forge/12 bg-white/90 shadow-sm";
-
     return (
-        <Wrapper className={wrapperClass} data-testid="lifecycle-actions-matrix">
-            {!embedded ? (
-                <header className="border-b border-alloy-forge/8 px-3 py-2.5">
-                    <h3 className="text-sm font-semibold text-alloy-midnight">Process Actions</h3>
-                    <p className="mt-1 text-[11px] leading-relaxed text-alloy-midnight/60">
-                        Configure which actions are available in this process and where they appear. Stage
-                        restrictions are optional.
-                    </p>
-                </header>
-            ) : null}
+        <section className="rounded-xl border border-alloy-forge/12 bg-white/90 shadow-sm" data-testid="lifecycle-actions-matrix">
+            <header className="border-b border-alloy-forge/8 px-3 py-2.5">
+                <h3 className="text-sm font-semibold text-alloy-midnight">Lifecycle Actions</h3>
+                <p className="mt-1 text-[11px] leading-relaxed text-alloy-midnight/60">
+                    Actions define what operators can do from workspace surfaces. Placements decide where actions
+                    appear. Stage restrictions are optional.
+                </p>
+            </header>
 
             <div className="overflow-x-auto px-2 py-2">
                 <table className="w-full min-w-[720px] border-collapse text-[11px]">
@@ -369,9 +360,9 @@ export default function LifecycleActionsMatrix({
                     onClick={() => void save()}
                     data-testid="lifecycle-actions-matrix-save"
                 >
-                    {saving ? "Saving…" : "Save process actions"}
+                    {saving ? "Saving…" : "Save lifecycle actions"}
                 </button>
             </footer>
-        </Wrapper>
+        </section>
     );
 }

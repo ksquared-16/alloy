@@ -15,7 +15,6 @@ function visibleCatalogEntry(overrides: Partial<LifecycleCatalogEntry>): Lifecyc
         lifecycle_name: "Lead Management",
         source: "builder_owned",
         stage_count: 6,
-        track_count: 0,
         work_unit_count: 1,
         activation_owned: true,
         can_delete: false,

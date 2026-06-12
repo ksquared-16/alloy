@@ -16,7 +16,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 | Folder | Files |
 |--------|-------|
 | `core/` | `system-overview.md`, `glossary.md` |
-| `system/` | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, `queue-record-doctrine.md`, `typography-and-presentation-doctrine.md`, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md`, **`adminv2-runtime-performance-doctrine.md`** (locked implementation), **`bos-identity-doctrine.md`** (frozen BOS visual identity) |
+| `system/` | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, `queue-record-doctrine.md`, `typography-and-presentation-doctrine.md`, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md`, **`adminv2-runtime-performance-doctrine.md`** (locked implementation) |
 | `product/` | `crm-system.md`, `communications.md`, `documents-and-forms.md`, `billing-and-financials.md`, `bos-foundation.md`, `ai-system.md` (stub) |
 | `execution/` | `operating-doctrine.md`, `roadmap-and-gaps.md` |
 
@@ -29,7 +29,6 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 | **Drawers** | **`system/drawer-doctrine.md`** (+ detail: `drawer-operating-model-v1.md`, `drawer-view-model-runtime-contract.md`) |
 | **Work unit layout** | **`system/work-unit-layout-doctrine.md`** |
 | **Performance** | **`system/platform-performance-doctrine.md`** (+ locked gates: `adminv2-runtime-performance-doctrine.md`) |
-| **BOS visual identity** | **`system/bos-identity-doctrine.md`** (frozen — mark, smoke, reveal, shell) |
 | **Lifecycle model** | **`navigation-doctrine.md`**, **`workspace-system.md`**, **`product/crm-system.md`** |
 | **Legacy classification** | **`system/legacy-architecture-inventory.md`** |
 | **Platform snapshot** | **`system/repository-state-2026-06.md`** |
@@ -59,7 +58,7 @@ Do **not** duplicate these topics in new active docs — link instead.
 - `product/communications.md` — Threads, canonical enqueue, webhooks.
 - `product/documents-and-forms.md` — Forms engine, packets.
 - `product/billing-and-financials.md`
-- `product/bos-foundation.md` — BOS capabilities; human-in-the-loop only. **Visual identity:** **`system/bos-identity-doctrine.md`**.
+- `product/bos-foundation.md` — BOS capabilities; human-in-the-loop only.
 - `product/ai-system.md` — Stub redirect to `bos-foundation.md`.
 
 **Execution / change management:**
@@ -75,7 +74,7 @@ Do **not** duplicate these topics in new active docs — link instead.
 
 - **June 2026 freeze index:** `docs/archive/2026-06-freeze/README.md` — superseded assumptions.
 - **Prior reset:** `docs/archive/2026-05-02-docs-reset/`
-- **Sprints:** `docs/sprints/` — execution history; **not** canonical doctrine when a system doc exists. **Shipped index:** `docs/sprints/COMPLETED_SPRINTS_SUMMARY.md`. **Export packs:** `docs/export/` — **`comms-messaging-handoff-pack`**, **`forms-handoff-pack`** (portable doc bundles + zip).
+- **Sprints:** `docs/sprints/` — execution history; **not** canonical doctrine when a system doc exists. **Shipped index:** `docs/sprints/COMPLETED_SPRINTS_SUMMARY.md`. **Export packs:** `docs/export/`.
 
 ## When this README must be updated
 

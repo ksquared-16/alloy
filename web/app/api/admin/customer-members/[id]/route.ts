@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 /** GET: single customer_member by id. Admin + ops can read. */
 export async function GET(
@@ -23,7 +24,7 @@ export async function GET(
     const supabase = createAdminClient();
     const { data: row, error } = await supabase
         .from("customer_members")
-        .select("id, org_id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, metadata, created_at, updated_at")
+        .select("id, org_id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, metadata, created_at, updated_at")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -74,6 +75,7 @@ export async function PATCH(
         last_name?: string;
         dob?: string | null;
         is_active?: boolean;
+        status_key?: string | null;
         external_source?: string | null;
         external_id?: string | null;
         metadata?: Record<string, unknown>;
@@ -93,6 +95,7 @@ export async function PATCH(
     if (body.last_name !== undefined) updates.last_name = typeof body.last_name === "string" ? body.last_name.trim() || null : null;
     if (body.dob !== undefined) updates.dob = typeof body.dob === "string" && body.dob.trim() ? body.dob.trim() : null;
     if (typeof body.is_active === "boolean") updates.is_active = body.is_active;
+    if (body.status_key !== undefined) updates.status_key = typeof body.status_key === "string" && body.status_key.trim() ? body.status_key.trim() : null;
     if (body.external_source !== undefined) updates.external_source = typeof body.external_source === "string" ? body.external_source.trim() || null : null;
     if (body.external_id !== undefined) updates.external_id = typeof body.external_id === "string" ? body.external_id.trim() || null : null;
     if (body.metadata !== undefined) updates.metadata = body.metadata && typeof body.metadata === "object" ? body.metadata : null;
@@ -100,6 +103,14 @@ export async function PATCH(
     if (Object.keys(updates).length === 0) {
         return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
     }
+
+    const { data: existing } = await supabase
+        .from("customer_members")
+        .select("status_key")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+    const oldStatusKey = (existing as { status_key?: string | null } | null)?.status_key ?? null;
 
     const { data, error } = await supabase
         .from("customer_members")
@@ -114,6 +125,18 @@ export async function PATCH(
     }
     if (!data) {
         return NextResponse.json({ error: "Member not found" }, { status: 404 });
+    }
+
+    if (updates.status_key !== undefined) {
+        const newStatusKey = (updates.status_key as string) ?? null;
+        await emitStatusChangedEvent({
+            supabase,
+            orgId: ctx.orgId,
+            entityType: "customer_members",
+            entityId: id,
+            oldStatusKey,
+            newStatusKey,
+        });
     }
 
     return NextResponse.json(data);

@@ -105,44 +105,18 @@ async function resolveChildAgeLabelsByMemberId(
     return out;
 }
 
-async function resolveChildPersonStatusKeyByPersonId(
-    supabase: SupabaseClient,
-    orgId: string,
-    rows: GlobalSearchChildMemberRow[]
-): Promise<Map<string, string | null>> {
-    const out = new Map<string, string | null>();
-    const personIds = [...new Set(rows.map((r) => String(r.person_id ?? "").trim()).filter(Boolean))];
-    if (!personIds.length) return out;
-
-    const { data, error } = await supabase
-        .from("persons")
-        .select("id, status_key")
-        .eq("org_id", orgId)
-        .in("id", personIds);
-    if (error) throw new Error(error.message);
-
-    for (const row of data ?? []) {
-        const id = String((row as { id?: string }).id ?? "");
-        const sk = (row as { status_key?: string | null }).status_key ?? null;
-        if (id) {
-            out.set(id, sk != null && String(sk).trim() ? String(sk).trim() : null);
-        }
-    }
-    return out;
-}
-
 async function buildChildHitsFromMemberRows(
     supabase: SupabaseClient,
     orgId: string,
     accessDim: AdminAccessScopeDimensions,
     rows: GlobalSearchChildMemberRow[],
-    personStatusLabels: Map<string, string>,
+    memberStatusLabels: Map<string, string>,
     oppStatusLabels: Map<string, string>
 ): Promise<GlobalRecordSearchHit[]> {
     if (!rows.length) return [];
 
     const customerIds = rows.map((r) => r.customer_id);
-    const [contextByCustomer, ageByMemberId, statusKeyByPersonId] = await Promise.all([
+    const [contextByCustomer, ageByMemberId] = await Promise.all([
         fetchCustomerEnrollmentContextByCustomerIds(
             supabase,
             orgId,
@@ -151,14 +125,12 @@ async function buildChildHitsFromMemberRows(
             oppStatusLabels
         ),
         resolveChildAgeLabelsByMemberId(supabase, orgId, rows),
-        resolveChildPersonStatusKeyByPersonId(supabase, orgId, rows),
     ]);
 
     const hits: GlobalRecordSearchHit[] = [];
     for (const m of rows) {
         const ctx = contextByCustomer.get(String(m.customer_id)) ?? null;
-        const personId = m.person_id?.trim() || null;
-        const statusKey = personId ? statusKeyByPersonId.get(personId) ?? null : null;
+        const statusKey = m.status_key?.trim() || null;
         const assembled = assembleGlobalSearchHit({
             entity_type: "customer_members",
             entity_id: m.id,
@@ -168,7 +140,8 @@ async function buildChildHitsFromMemberRows(
             household_name: ctx?.customer_name ?? null,
             opportunity_name: ctx?.opportunity_name ?? null,
             status_key: statusKey,
-            status_labels: personStatusLabels,
+            status_labels: memberStatusLabels,
+            fallback_status_label: ctx?.opportunity_status_label ?? null,
             location_label: ctx?.location_label ?? null,
             person_id: m.person_id ?? null,
             customer_id: String(m.customer_id),
@@ -193,7 +166,7 @@ async function searchChildrenDirectMemberRows(
     if (CRM_ENTITY_SEARCH_UUID_RE.test(rawQ)) {
         const { data, error } = await supabase
             .from("customer_members")
-            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, dob")
+            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key, dob")
             .eq("org_id", orgId)
             .eq("id", rawQ)
             .maybeSingle();
@@ -205,7 +178,7 @@ async function searchChildrenDirectMemberRows(
     const q = () =>
         supabase
             .from("customer_members")
-            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, dob")
+            .select("id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key, dob")
             .eq("org_id", orgId)
             .limit(fetchCap);
     const [dn, fn, ln] = await Promise.all([
@@ -251,7 +224,7 @@ async function searchChildren(
     rawQ: string,
     token: string,
     perGroupCap: number,
-    personStatusLabels: Map<string, string>,
+    memberStatusLabels: Map<string, string>,
     oppStatusLabels: Map<string, string>,
     _seedCustomerIds: string[] = []
 ): Promise<GlobalRecordSearchHit[]> {
@@ -275,7 +248,7 @@ async function searchChildren(
         orgId,
         accessDim,
         expandedRows.slice(0, GLOBAL_SEARCH_CHILD_MEMBER_FETCH_CAP),
-        personStatusLabels,
+        memberStatusLabels,
         oppStatusLabels
     );
 }
@@ -287,7 +260,7 @@ async function supplementChildrenFromHouseholdSeeds(
     existingChildren: GlobalRecordSearchHit[],
     seedHits: GlobalRecordSearchHit[],
     perGroupCap: number,
-    personStatusLabels: Map<string, string>,
+    memberStatusLabels: Map<string, string>,
     oppStatusLabels: Map<string, string>
 ): Promise<GlobalRecordSearchHit[]> {
     const existingIds = new Set(existingChildren.map((h) => h.entity_id));
@@ -303,7 +276,7 @@ async function supplementChildrenFromHouseholdSeeds(
         orgId,
         accessDim,
         missingRows,
-        personStatusLabels,
+        memberStatusLabels,
         oppStatusLabels
     );
 
@@ -648,15 +621,17 @@ export async function runGlobalRecordSearch(args: SearchArgs): Promise<{
     const limit = clampLimit(args.limit);
     const perGroupCap = Math.min(GLOBAL_RECORD_SEARCH_PER_GROUP_CAP, limit);
 
-    const [personDefs, oppDefs] = await Promise.all([
+    const [memberDefs, personDefs, oppDefs] = await Promise.all([
+        fetchEffectiveStatusDefinitions(args.supabase, args.orgId, "customer_members", { activeOnly: true }),
         fetchEffectiveStatusDefinitions(args.supabase, args.orgId, "persons", { activeOnly: true }),
         fetchEffectiveStatusDefinitions(args.supabase, args.orgId, "opportunities", { activeOnly: true }),
     ]);
+    const memberStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(memberDefs)));
     const personStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(personDefs)));
     const oppStatusLabels = new Map(Object.entries(displayLabelsFromDefinitions(oppDefs)));
 
     const [childrenRaw, parents, leads, locations] = await Promise.all([
-        searchChildren(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, personStatusLabels, oppStatusLabels),
+        searchChildren(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, memberStatusLabels, oppStatusLabels),
         searchParents(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, personStatusLabels, oppStatusLabels),
         searchLeads(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap, oppStatusLabels),
         searchLocations(args.supabase, args.orgId, args.accessDim, rawQ, token, perGroupCap),
@@ -669,7 +644,7 @@ export async function runGlobalRecordSearch(args: SearchArgs): Promise<{
         childrenRaw,
         [...parents, ...leads],
         perGroupCap,
-        personStatusLabels,
+        memberStatusLabels,
         oppStatusLabels
     );
 

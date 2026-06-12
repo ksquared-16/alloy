@@ -10,39 +10,46 @@ function read(rel: string): string {
     return readFileSync(join(webRoot, rel), "utf8");
 }
 
-describe("Work Unit Layout Doctrine V3 (frozen)", () => {
-    it("documents frozen V3 layout with approved baseline and rejected patterns", () => {
+describe("Work Unit Layout Doctrine V3", () => {
+    it("documents queue-first layout with telemetry as right rail utility", () => {
         const doc = readFileSync(join(webRoot, "../docs/system/work-unit-layout-doctrine.md"), "utf8");
-        expect(doc).toContain("Canonical V3 — frozen");
-        expect(doc).toContain("Approved Layout Baseline (June 2026)");
-        expect(doc).toContain("Queue density (pass-1 — adopted)");
-        expect(doc).toContain("Zone 1 — Header");
-        expect(doc).toContain("Zone 2 — Queue");
-        expect(doc).toContain("Zone 3 — Command rail");
+        expect(doc).toContain("Canonical V3");
+        expect(doc).toContain("Header");
+        expect(doc).toContain("Queue");
+        expect(doc).toContain("Right rail utilities (Actions → Telemetry → BOS)");
         expect(doc).toContain("presentation=\"work_unit_rail\"");
+        expect(doc).toContain("reduce, shrink, or move BOS");
         expect(doc).toContain("Nothing appears below the queue");
-        expect(doc).toContain("Explicitly rejected");
-        expect(doc).not.toContain("experiment");
         expect(doc).not.toContain("Zone 3 — Workflow Telemetry Summary Banner");
     });
 
-    it("locks compact queue density tokens on default work-unit surface", () => {
+    it("targets 5–7 visible queue rows with compact work-unit row stack", () => {
         const css = read("app/adminV2/components/workspace/workspace.css");
-        expect(css).toContain("--ws-wu-queue-row-min-height: 37px");
-        expect(css).toContain("--ws-wu-queue-visible-rows-target: 6");
+        expect(css).toContain("--ws-wu-queue-visible-rows-target: 5");
+        expect(css).toContain("--ws-wu-queue-row-min-height: 43px");
         expect(css).toContain("--ws-wu-queue-records-scroll-top-offset: 14rem");
-        expect(css).not.toContain("data-ws-wu-queue-density");
         expect(css).not.toContain("--ws-wu-queue-intelligence-banner-reserve");
+    });
+
+    it("enables queue density experiment pass-1 with spacing-only compact tokens", () => {
+        const shell = read("app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx");
+        const layout = read("components/admin/workspace/WorkspaceShellLayout.tsx");
+        const css = read("app/adminV2/components/workspace/workspace.css");
+
+        expect(shell).toContain('workUnitQueueDensity="pass-1"');
+        expect(layout).toContain('workUnitQueueDensity?: "pass-1"');
+        expect(layout).toContain('"data-ws-wu-queue-density": workUnitQueueDensity');
+        expect(css).toContain('[data-ws-wu-queue-density="pass-1"]');
+        expect(css).toContain("--ws-wu-queue-row-min-height: 37px");
+        expect(css).toMatch(
+            /\[data-ws-wu-queue-density="pass-1"\][\s\S]*--ws-wu-queue-visible-rows-target:\s*6/,
+        );
     });
 
     it("reclaims horizontal queue width and standardizes neutral queue icons on work-unit surfaces", () => {
         const css = read("app/adminV2/components/workspace/workspace.css");
         const adminCss = read("app/adminV2/adminV2.css");
         const doc = readFileSync(join(webRoot, "../docs/system/work-unit-layout-doctrine.md"), "utf8");
-        const closeout = readFileSync(
-            join(webRoot, "../docs/sprints/06_2026/completed/work_unit_layout_v3_freeze_closeout.md"),
-            "utf8",
-        );
 
         expect(css).toContain("--ws-wu-contain-padding-inline-end: 0px");
         expect(css).toContain("--ws-wu-workbench-gutter: 14px");
@@ -52,10 +59,9 @@ describe("Work Unit Layout Doctrine V3 (frozen)", () => {
         expect(adminCss).toContain(
             '.adminv2-workspace-scroll-surface:has([data-ws-surface="work_unit"].adminv2-ws-wu-v2)',
         );
-        expect(doc).toContain("Queue width doctrine");
-        expect(doc).toContain("Queue row icon doctrine");
-        expect(doc).toContain("Pine reserved for **actions** and **BOS** only");
-        expect(closeout).toContain("What is now frozen");
+        expect(doc).toContain("Horizontal layout polish");
+        expect(doc).toContain("Queue record icon + color doctrine");
+        expect(doc).toContain("Pine/green is **not** a default person/contact accent");
     });
 
     it("keeps queue records in a scroll-owned viewport that fills the rail-aligned lane", () => {
@@ -71,8 +77,10 @@ describe("Work Unit Layout Doctrine V3 (frozen)", () => {
         expect(scrollShellRule).toContain("touch-action: pan-y");
         expect(css).toContain("height: var(--adminv2-workspace-rail-height");
         expect(css).toContain("grid-template-rows: minmax(0, 1fr)");
-        expect(css).toMatch(/adminv2-ws-wu-queue-list-shell[\s\S]*?height:\s*0/);
-        expect(css).toContain('.adminv2-workspace-scroll-surface:has([data-ws-surface="work_unit"]');
+        expect(css).toMatch(
+            /adminv2-ws-wu-queue-list-shell[\s\S]*?height:\s*0/,
+        );
+        expect(css).toContain(".adminv2-workspace-scroll-surface:has([data-ws-surface=\"work_unit\"]");
     });
 
     it("uses single-row Actions-matching telemetry trigger with activity count", () => {
@@ -111,7 +119,6 @@ describe("Work Unit Layout Doctrine V3 (frozen)", () => {
         const shell = read("app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx");
         expect(shell).toContain("commandRailTelemetrySlot");
         expect(shell).not.toContain("primaryFooterSlot");
-        expect(shell).not.toContain("workUnitQueueDensity");
     });
 
     it("preserves BOS host min-height on work-unit surfaces", () => {

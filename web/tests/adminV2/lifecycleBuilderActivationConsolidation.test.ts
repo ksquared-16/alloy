@@ -48,9 +48,9 @@ describe("Lifecycle Builder activation consolidation", () => {
         expect(shell).not.toMatch(/legacy/i);
     });
 
-    it("primary builder uses process catalog cards", () => {
+    it("primary builder uses lifecycle dropdown selector", () => {
         const primary = read("components/adminV2/settings/lifecycle/LifecycleBuilderPrimary.tsx");
-        expect(primary).toContain("LifecycleProcessCatalogCards");
+        expect(primary).toContain("LifecycleCatalogSelect");
         expect(primary).toContain("/api/admin/lifecycle-catalog");
         expect(read("lib/lifecycle/lifecycleCatalog.ts")).toContain(
             'source = activationOwned ? "builder_owned" : "legacy"'
@@ -114,8 +114,8 @@ describe("Lifecycle Builder activation consolidation", () => {
     it("uses capitalized Lifecycle in header actions", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         expect(board).toContain("Delete lifecycle");
-        expect(read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx")).toContain(
-            "BUSINESS_PROCESS_CATALOG_CREATE"
+        expect(read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx")).toContain(
+            "Create Process"
         );
     });
 });

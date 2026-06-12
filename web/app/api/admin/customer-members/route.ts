@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { emitEvent } from "@/lib/emitEvent";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 
@@ -16,18 +17,22 @@ export async function GET(request: NextRequest) {
     }
 
     const customerId = request.nextUrl.searchParams.get("customer_id")?.trim() || undefined;
+    const statusKey = request.nextUrl.searchParams.get("status_key")?.trim() || undefined;
     const supabase = createAdminClient();
 
     let query = supabase
         .from("customer_members")
         .select(
-            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, created_at, updated_at"
+            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at, updated_at"
         )
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false });
 
     if (customerId) {
         query = query.eq("customer_id", customerId);
+    }
+    if (statusKey) {
+        query = query.eq("status_key", statusKey);
     }
 
     const { data: rows, error } = await query;
@@ -67,11 +72,19 @@ export async function GET(request: NextRequest) {
         return age >= 0 ? age : null;
     }
 
+    const memberDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "customer_members", { activeOnly: true });
+    const memberStatusLabels = displayLabelsFromDefinitions(memberDefs);
+
     const members = (rows ?? []).map((r) => {
         const id = (r as { id: string }).id;
         const relationshipKey = (r as { relationship: string | null }).relationship ?? null;
         const created_at = (r as { created_at: string }).created_at;
         const updated_at = (r as { updated_at?: string | null }).updated_at ?? null;
+        const sk = (r as { status_key?: string | null }).status_key ?? null;
+        const _status_display =
+            sk != null && String(sk).trim() !== ""
+                ? (memberStatusLabels.get(String(sk).trim()) ?? String(sk).trim())
+                : null;
         return {
             id,
             customer_id: (r as { customer_id: string }).customer_id,
@@ -82,8 +95,10 @@ export async function GET(request: NextRequest) {
             last_name: (r as { last_name: string | null }).last_name ?? null,
             dob: (r as { dob: string | null }).dob ?? null,
             is_active: (r as { is_active: boolean }).is_active ?? true,
+            status_key: sk,
             created_at,
             updated_at,
+            _status_display,
             _customer_name: customerMap.get((r as { customer_id: string }).customer_id) ?? null,
             _relationship_label: relationshipKey ? (relationshipMap.get(relationshipKey) ?? relationshipKey) : null,
             _age: ageFromDob((r as { dob: string | null }).dob),
@@ -113,6 +128,7 @@ export async function POST(request: NextRequest) {
         last_name?: string;
         dob?: string | null;
         is_active?: boolean;
+        status_key?: string | null;
         metadata?: Record<string, unknown>;
     } = {};
     try {
@@ -144,6 +160,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Customer not found or not in your org" }, { status: 400 });
     }
 
+    const status_key = typeof body.status_key === "string" && body.status_key.trim() ? body.status_key.trim() : null;
     const relationship =
         typeof body.relationship === "string" ? body.relationship.trim().toLowerCase() || null : null;
     const first_name = typeof body.first_name === "string" ? body.first_name.trim() || null : null;
@@ -180,10 +197,11 @@ export async function POST(request: NextRequest) {
             dob,
             person_id,
             is_active: body.is_active !== false,
+            status_key,
             metadata: body.metadata && typeof body.metadata === "object" ? body.metadata : null,
         })
         .select(
-            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, created_at",
+            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at",
         )
         .single();
 

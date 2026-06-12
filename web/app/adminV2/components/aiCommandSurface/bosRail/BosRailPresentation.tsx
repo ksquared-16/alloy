@@ -3,8 +3,7 @@
 import type { RefObject } from "react";
 import { AlertTriangle, ChevronRight, Send } from "lucide-react";
 
-import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
-import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
+import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
 import type { BosRailAttentionPresentation } from "@/lib/bos/bosRailAttentionPresentation";
 import { parseBosRailContextChips } from "@/lib/bos/bosRailContextChips";
 import type { CommandSurfaceRailStarterSuggestion } from "@/lib/adminV2/aiCommandSurface/commandSurfaceShellLayout";
@@ -22,7 +21,24 @@ export function BosRailHeader(props: { contextDisplayLine: string | null; status
     return (
         <div className="bos-rail-header px-2 pb-2.5 pt-2" data-command-surface-rail-header="true">
             <div className="flex items-center justify-between gap-2">
-                <BosHeader size="sm" className="min-w-0 flex-1" />
+                <div className="flex min-w-0 items-center gap-2">
+                    <BosGenieLampIcon size="md" />
+                    <div className="min-w-0">
+                        <span
+                            className="text-[15px] font-semibold tracking-tight"
+                            style={{ color: CMD.textBody }}
+                            data-command-surface-rail-title="true"
+                        >
+                            BOS
+                        </span>
+                        <span
+                            className="block text-[10px] font-medium leading-tight"
+                            style={{ color: CMD.textLabel }}
+                        >
+                            Command Center
+                        </span>
+                    </div>
+                </div>
                 {props.statusLabel ?
                     <span
                         className="shrink-0 text-[10px] font-medium tabular-nums"
@@ -155,8 +171,11 @@ export function BosRailStarterCards(props: {
                         }}
                         onClick={() => props.onPick(suggestion.prompt)}
                     >
-                        <span className="flex shrink-0 items-start pt-0.5">
-                            <BosMark size="sm" horizon />
+                        <span
+                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+                            style={{ backgroundColor: "rgba(0, 162, 131, 0.08)" }}
+                        >
+                            <BosGenieLampIcon size="sm" />
                         </span>
                         <span className="min-w-0 flex-1">
                             <span

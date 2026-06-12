@@ -22,7 +22,6 @@ function catalogEntry(partial: Partial<LifecycleCatalogEntry>): LifecycleCatalog
         lifecycle_name: "Enrollment",
         source: "legacy",
         stage_count: 3,
-        track_count: 0,
         work_unit_count: 1,
         activation_owned: false,
         can_delete: false,
@@ -41,10 +40,10 @@ function catalogEntry(partial: Partial<LifecycleCatalogEntry>): LifecycleCatalog
 }
 
 describe("Lifecycle promote + workspace repair", () => {
-    it("primary builder uses process cards without legacy badges", () => {
-        const cards = read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx");
-        expect(cards).toContain("lifecycle-process-catalog");
-        expect(cards).not.toMatch(/\bLegacy\b/);
+    it("primary builder uses dropdown without legacy badges", () => {
+        const select = read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx");
+        expect(select).toContain("lifecycle-catalog-dropdown");
+        expect(select).not.toMatch(/\bLegacy\b/);
         expect(read("components/adminV2/settings/lifecycle/LifecycleCatalogList.tsx")).toContain(
             "lifecycle-catalog-repair-"
         );

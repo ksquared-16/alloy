@@ -75,7 +75,7 @@ All authoritative reads must come from:
 
 **Performance (June 2026):** Atomic above-fold reveal (Pass 3) — **`platform-performance-doctrine.md`**. Locked runtime rules: **`adminv2-runtime-performance-doctrine.md`**.
 
-**Work unit page layout (June 2026 — frozen V3):** Primary column is **Header → Queue only** (no telemetry below queue). Command rail: **Actions → Workflow Telemetry → BOS** (sticky). Compact queue density, neutral icon doctrine, and width reclaim are locked — **`work-unit-layout-doctrine.md`** § Approved Layout Baseline.
+**Work unit page layout (June 2026 — canonical):** Three-zone primary column (header → bounded queue → operational intelligence) plus sticky BOS command rail. **`work-unit-layout-doctrine.md`**.
 
 **AdminV2 runtime contract (2026-05):** Composer-owned reveal for drawers and work-unit lanes — no section-local skeleton/pop-in. Code: `web/lib/adminV2/runtime/contract/`. **Locked performance doctrine (June 2026):** **`docs/system/adminv2-runtime-performance-doctrine.md`** (supersedes sprint-only **`docs/sprints/05_2026/completed/adminv2-runtime-contract.md`** for reveal/loading rules).
 

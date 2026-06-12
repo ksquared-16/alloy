@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import LifecycleProcessCatalogCards from "@/components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards";
+import LifecycleCatalogSelect from "@/components/adminV2/settings/lifecycle/LifecycleCatalogSelect";
 import LifecycleActivationBoard from "@/components/adminV2/settings/lifecycle/LifecycleActivationBoard";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import { lifecycleCatalogId } from "@/lib/lifecycle/lifecycleCatalog";
@@ -206,18 +206,16 @@ export default function LifecycleBuilderPrimary() {
                 </p>
             ) : null}
 
-            {!creatingNew && !selectedCatalogEntry ? (
-                <LifecycleProcessCatalogCards
-                    items={catalog}
-                    selectedId={selectedCatalogId}
-                    loading={catalogLoading}
-                    onSelect={selectCatalogEntry}
-                    onCreateNew={() => {
-                        setCreatingNew(true);
-                        setIdentity(null);
-                    }}
-                />
-            ) : null}
+            <LifecycleCatalogSelect
+                items={catalog}
+                selectedId={selectedCatalogId}
+                loading={catalogLoading}
+                onSelect={selectCatalogEntry}
+                onCreateNew={() => {
+                    setCreatingNew(true);
+                    setIdentity(null);
+                }}
+            />
 
             {creatingNew || selectedCatalogEntry ? (
                 <LifecycleActivationBoard
@@ -275,25 +273,6 @@ export default function LifecycleBuilderPrimary() {
                             : undefined
                     }
                     repairingVisibility={repairingId === selectedCatalogEntry?.id}
-                    catalogSummary={
-                        selectedCatalogEntry
-                            ? {
-                                  trackCount: selectedCatalogEntry.track_count,
-                                  stageCount: selectedCatalogEntry.stage_count,
-                                  queueCount: selectedCatalogEntry.work_unit_count,
-                              }
-                            : null
-                    }
-                    onBackToCatalog={
-                        creatingNew
-                            ? () => {
-                                  setCreatingNew(false);
-                                  setIdentity(null);
-                              }
-                            : () => {
-                                  setIdentity(null);
-                              }
-                    }
                 />
             ) : null}
 

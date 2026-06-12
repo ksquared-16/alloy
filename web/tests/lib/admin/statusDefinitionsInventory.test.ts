@@ -41,11 +41,6 @@ describe("statusDefinitionsInventory script", () => {
         expect(src).toContain('export async function GET');
         expect(src).not.toContain("POST");
     });
-
-    it("does not inventory deprecated customer_members roster status layer", () => {
-        const src = readFileSyncSafe("lib/admin/statusDefinitionsInventory.ts");
-        expect(src).not.toContain('entity_type: "customer_members"');
-    });
 });
 
 function readFileSyncSafe(rel: string): string {

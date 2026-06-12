@@ -16,7 +16,7 @@ vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
 }));
 
 vi.mock("@/lib/admin/entityLabelsResolve", () => ({
-    resolveEntityLabelsForOrgCached: vi.fn(async () => ({
+    resolveEntityLabelsForOrg: vi.fn(async () => ({
         effective: [{ entity_type: "opportunities", singular: "Lead", plural: "Leads" }],
         defaults: [],
         overrides: [],

@@ -9,10 +9,7 @@ import {
     useAdminV2NavigationTransition,
 } from "@/lib/adminV2/navigation";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
-import {
-    parseOperatorWorkUnitEntryHref,
-    warmOperatorWorkUnitEntryFromHref,
-} from "@/lib/admin/operatorWorkUnitEntryWarm";
+import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitEntryWarm";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import "@/app/adminV2/components/workspace/workspace.css";
 
@@ -87,18 +84,11 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                         onClick={(e) => {
                             if (isModifiedNavClick(e)) return;
                             e.preventDefault();
-                            const href = lifecycle.entryHref;
                             void runAdminV2NavigationTransition({
-                                href,
+                                href: lifecycle.entryHref,
                                 clickedKey,
                                 variant: "work_unit",
-                                commitFirst: true,
-                                prepare: () => {
-                                    const { workUnitSlug } = parseOperatorWorkUnitEntryHref(href);
-                                    if (!workUnitSlug) return;
-                                    warmOperatorWorkUnitEntryFromHref(href, null, "lifecycle_tile_click");
-                                },
-                                commit: () => router.push(href),
+                                commit: () => router.push(lifecycle.entryHref),
                             });
                         }}
                     >

@@ -22,6 +22,13 @@ These docs are the input to the **Doctrine Gate** and **UX Gate** (POS-06). Noth
 | [`POS-07-visual-mockup-brief.md`](./POS-07-visual-mockup-brief.md) | Art-direction brief to generate Alloy-native mockups for the 8 hero screen groups (Doctrine Gate follow-up 1). |
 | [`POS-08-visual-vision-package.md`](./POS-08-visual-vision-package.md) | Final UX/experience definition before architecture: 11 future-state screens (purpose, goal, layout, hierarchy, BOS behavior, actions, empty/success/conflict states, doctrine notes) + Architecture Readiness Assessment. |
 | [`POS-09-mockup-generation-prompts.md`](./POS-09-mockup-generation-prompts.md) | Per-screen GPT Image / Midjourney prompts + Figma recreation notes, so mockups can be generated without reinterpreting doctrine. |
+| [`POS-10-visual-validation-review.md`](./POS-10-visual-validation-review.md) | Visual validation of the frozen vision — per screen: What Works, What Feels Un-Alloy, Recommended Refinements, Confidence, Remaining Risks. "Does POS feel like Alloy?" |
+| [`POS-11-architecture-readiness-review.md`](./POS-11-architecture-readiness-review.md) | Architecture Gate readiness: frozen areas, open areas, risks, approach guidance (not design), Go/No-Go. |
+| [`POS-12-alloyification-review.md`](./POS-12-alloyification-review.md) | Alloyification review of the 3 decisive screens vs actual Alloy doctrine — current state, un-Alloy gaps, specific doctrine violations, recommended changes, before/after, confidence. |
+| [`POS-13-alloy-native-mockup-brief.md`](./POS-13-alloy-native-mockup-brief.md) | Replacement visual brief (Processing Workspace, Processing Case, Outcome Configuration) grounded in real Alloy tokens/components so concepts inherit Alloy DNA. Supersedes POS-07/09 for these 3 screens. |
+| [`POS-A01-architecture-assessment.md`](./POS-A01-architecture-assessment.md) | Architecture Gate: principles, 7 architecture decisions, reuse analysis, ownership boundaries, risks, recommendations. Conceptual only. |
+| [`POS-A02-foundation-recommendation.md`](./POS-A02-foundation-recommendation.md) | Which existing Alloy systems become the POS foundation: reuse candidates, extension candidates, new capabilities required, rationale. |
+| [`POS-A03-implementation-roadmap.md`](./POS-A03-implementation-roadmap.md) | Phases, gates, dependencies, sequencing for future execution. No tickets/code/schema/APIs. |
 | [`PR-DESCRIPTION-pos-planning-v1.md`](./PR-DESCRIPTION-pos-planning-v1.md) | Ready-to-paste PR description for the `pos-planning-v1` branch. |
 
 Read in order. POS-01 is load-bearing; everything else inherits from it. POS-04 / POS-07 / POS-08 / POS-09 are the UX/visual set; POS-08 is the canonical final UX artifact reviewed before the Architecture Gate.

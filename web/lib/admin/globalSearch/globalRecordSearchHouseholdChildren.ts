@@ -15,7 +15,7 @@ export type GlobalSearchChildMemberRow = {
 };
 
 export const GLOBAL_SEARCH_CHILD_MEMBER_SELECT =
-    "id, customer_id, person_id, display_name, first_name, last_name, relationship, dob";
+    "id, customer_id, person_id, display_name, first_name, last_name, relationship, status_key, dob";
 
 /** Customer ids whose household name matches the search token. */
 export async function resolveGlobalSearchHouseholdCustomerIdsByName(

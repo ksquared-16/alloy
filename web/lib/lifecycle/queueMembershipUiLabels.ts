@@ -9,29 +9,23 @@ import type {
     QueueMembershipSubjectType,
 } from "@/lib/lifecycle/queueMembershipV1";
 
-/** Field label: "This stage is for" */
-export const QUEUE_MEMBERSHIP_SUBJECT_FIELD_LABEL = "This stage is for";
-
 export const QUEUE_MEMBERSHIP_SUBJECT_LABELS: Record<QueueMembershipSubjectType, string> = {
-    case: "Families / leads",
-    child: "Children in enrollment",
-    candidate: "Waitlist candidates",
+    case: "Family case",
+    child: "Child enrollment track",
+    candidate: "Waitlist candidate",
 };
 
-/** Field label: "Rows are counted by" */
-export const QUEUE_MEMBERSHIP_COUNT_UNIT_FIELD_LABEL = "Rows are counted by";
-
 export const QUEUE_MEMBERSHIP_COUNT_UNIT_LABELS: Record<QueueMembershipCountUnit, string> = {
-    cases: "Family",
-    enrollment_tracks: "Child",
-    children: "Child",
-    candidates: "Candidate",
+    cases: "Families/cases",
+    enrollment_tracks: "Enrollment tracks",
+    children: "Children",
+    candidates: "Candidates",
 };
 
 export const QUEUE_MEMBERSHIP_LOCATION_SCOPE_LABELS: Record<QueueMembershipLocationScopeSource, string> = {
-    case_site: "Family location",
-    ocm_site: "Child location",
-    placement_site: "Waitlist location",
+    case_site: "Case location",
+    ocm_site: "Child enrollment location",
+    placement_site: "Placement/waitlist location",
 };
 
 export const QUEUE_MEMBERSHIP_PLACEMENT_SCOPE_LABELS: Record<QueueMembershipPlacementScope, string> = {
@@ -55,21 +49,15 @@ export function defaultCountUnitForSubject(subject: QueueMembershipSubjectType):
 export function includedStatusFieldLabel(subject: QueueMembershipSubjectType): string {
     switch (subject) {
         case "case":
-            return "Family statuses";
+            return "Case status";
         case "child":
-            return "Enrollment statuses";
+            return "Enrollment status";
         case "candidate":
-            return "Waitlist statuses";
+            return "Candidate status";
     }
 }
 
-/** Canonical status assignment label inside Stage Membership. */
-export const STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL = "Included statuses";
-
-export const STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER =
-    "Select the statuses that roll up into this stage.";
-
 /** Summary label for count unit in stage header. */
 export function countUnitSummaryLabel(countUnit: QueueMembershipCountUnit): string {
-    return `Rows counted by ${QUEUE_MEMBERSHIP_COUNT_UNIT_LABELS[countUnit].toLowerCase()}`;
+    return `Counts as ${QUEUE_MEMBERSHIP_COUNT_UNIT_LABELS[countUnit].toLowerCase()}`;
 }

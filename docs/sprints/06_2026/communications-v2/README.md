@@ -40,3 +40,6 @@ Doctrine conflict · security concern · compliance concern · destructive migra
 | PKG | Status | Commit | Notes |
 |---|---|---|---|
 | PKG-01 Foundation (flags, guardrail tests, telemetry) | In review | see branch | Flags default off; doctrine contract tests; telemetry shim. No product/schema/provider change. |
+| PKG-02 Conversation core schema (assignment/SLA/attention) | Built — bundle | see branch | Additive migration + constants + schema contract test. No UI/provider/send. |
+| PKG-03 Delivery events + read receipts | Built — bundle | see branch | Additive migration (receipt cols + provider-neutral events table) + constants + receipt adapter + contract/unit tests. No UI/send/provider. |
+| PKG-04 Recipients + per-person preferences + audit | Built — bundle | see branch | Additive: 3 tables (recipients, preferences, preference_events) + taxonomy classifiers + contract/unit tests. No enforcement/backfill/UI/provider. |

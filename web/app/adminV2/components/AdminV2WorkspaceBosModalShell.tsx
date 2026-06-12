@@ -23,8 +23,7 @@ import {
     isDrawerGeometryProbeActive,
     measureAndApplyDrawerWorkspaceGeometry,
 } from "@/lib/bos/drawerWorkspaceGeometry";
-import { LAYOUT_RUNTIME_DRAWER_OUTER_BORDER } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
-import { neutral } from "@/styles/tokens/colors";
+import { derived, neutral } from "@/styles/tokens/colors";
 
 export type AdminV2WorkspaceBosModalShellProps = {
     open: boolean;
@@ -105,10 +104,10 @@ export default function AdminV2WorkspaceBosModalShell({
         zIndex: ADMINV2_DRAWER_PANEL_Z,
         backgroundColor: neutral.surface,
         color: neutral.textPrimary,
-        borderTopColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
-        borderRightColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
-        borderBottomColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
-        borderLeftColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
+        borderTopColor: derived.border,
+        borderRightColor: derived.border,
+        borderBottomColor: derived.border,
+        borderLeftColor: derived.border,
         left: `var(${DRAWER_COMPUTED_LEFT_CSS_VAR})`,
         width: `var(${DRAWER_COMPUTED_WIDTH_CSS_VAR})`,
         maxWidth: `var(${DRAWER_COMPUTED_WIDTH_CSS_VAR})`,

@@ -2,8 +2,6 @@ import clsx from "clsx";
 import type { PacketReviewRollupV1 } from "@/lib/forms/packets/packetReviewRollupTypes";
 import type { PacketReviewInsightV1 } from "@/lib/forms/packets/packetReviewInsightTypes";
 import { FormsReviewBadge } from "@/components/forms/review/FormsReviewBadge";
-import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
-import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
 import {
     BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE,
     FORMS_CASE_FILE_SECTION,
@@ -200,25 +198,19 @@ export function BosReviewSummaryPlaceholder({
             aria-label={BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE}
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
-                <BosHeader
-                    title={BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE}
-                    subtitle="Operational guidance · read-only"
-                    size="sm"
-                />
+                <div>
+                    <p className={opSectionTitle}>{BOS_REVIEW_SUMMARY_PLACEHOLDER_TITLE}</p>
+                    <p className={opInsightSupport}>Operational guidance · read-only</p>
+                </div>
                 <span data-testid="bos-readiness-badge">
                     <FormsReviewBadge label={model.readinessLabel} tone={model.readinessTone} />
                 </span>
             </div>
 
             {loading ?
-                <BosRevealSequence
-                    mode="working"
-                    message="Preparing review summary…"
-                    active={loading}
-                    markSize="sm"
-                    className="py-4"
-                    data-testid="bos-review-loading"
-                />
+                <p className={clsx(opAssistBodyOffset, opMetadata)} data-testid="bos-review-loading">
+                    Preparing review summary…
+                </p>
             :   <div className={opAssistBodyOffset}>
                     <AssistBody model={model} compact={compact} />
                 </div>

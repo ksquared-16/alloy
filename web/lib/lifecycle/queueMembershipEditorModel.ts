@@ -115,17 +115,3 @@ export function applySubjectTypeChange(
         placement_scope: nextSubject === "candidate" ? null : null,
     };
 }
-
-/** Keep queue_membership included keys aligned with stage status rollups on save. */
-export function queueMembershipWithSyncedStatusKeys(
-    membership: QueueMembershipV1 | null | undefined,
-    stageKey: string,
-    selectedStatusKeys: readonly string[],
-): QueueMembershipV1 | null {
-    const draft = queueMembershipEditorDraftFromSaved(membership, stageKey);
-    const synced: QueueMembershipEditorDraft = {
-        ...draft,
-        included_keys: [...new Set(selectedStatusKeys.map((k) => k.trim()).filter(Boolean))],
-    };
-    return queueMembershipDraftToPersisted(synced, stageKey);
-}

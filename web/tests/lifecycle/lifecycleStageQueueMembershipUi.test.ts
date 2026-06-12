@@ -12,9 +12,9 @@ function read(rel: string): string {
 }
 
 describe("Lifecycle stage queue membership UI", () => {
-    it("stage workspace exposes Stage Membership section", () => {
+    it("stage workspace exposes Who belongs here section", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
-        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_MEMBERSHIP");
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_WHO_BELONGS");
         expect(workspace).toContain("LifecycleStageQueueMembershipEditor");
         expect(workspace).toContain('id="membership"');
     });

@@ -18,7 +18,8 @@ export type StatusDrawerSourceTag =
     | "person_drawer"
     | "child_drawer"
     | "enrollment_pipeline"
-    | "queue_lifecycle";
+    | "queue_lifecycle"
+    | "customer_roster";
 
 export const STATUS_DRAWER_SOURCE_TAG_LABELS: Record<StatusDrawerSourceTag, string> = {
     lead_drawer: "Lead drawer",
@@ -26,6 +27,7 @@ export const STATUS_DRAWER_SOURCE_TAG_LABELS: Record<StatusDrawerSourceTag, stri
     child_drawer: "Child drawer",
     enrollment_pipeline: "Enrollment pipeline",
     queue_lifecycle: "Queue / lifecycle",
+    customer_roster: "Customer roster",
 };
 
 /** Operator-facing Settings → Statuses section titles (tenant labels may override via entity labels). */
@@ -43,6 +45,8 @@ export const STATUS_SETTINGS_SECTION_DESCRIPTIONS: Record<string, string> = {
         "Controls People drawer status dropdowns. Options are filtered by Applicability profile.",
     opportunity_customer_members:
         "Controls per-child enrollment status on a Lead (child track). Drives Waitlist, Enrolling, and Enrolled queues.",
+    customer_members:
+        "Controls customer/member records where applicable. This is not the same as the Child drawer status.",
 };
 
 /** Default section tags shown at entity-type level. */
@@ -54,6 +58,8 @@ export function statusDrawerSourceTagsForEntityType(entityType: string): StatusD
             return ["person_drawer", "child_drawer"];
         case "opportunity_customer_members":
             return ["enrollment_pipeline", "queue_lifecycle"];
+        case "customer_members":
+            return ["customer_roster"];
         default:
             return [];
     }

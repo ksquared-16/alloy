@@ -53,17 +53,8 @@ export const LAYOUT_RUNTIME_BODY_SECTION_HEADER =
 /** White drawer overview canvas — depth comes from section panels, not gray fill. */
 export const LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS = "bg-white";
 
-/**
- * AdminV2 container hierarchy — border strength only (no layout/spacing changes).
- * Level 1: drawer shells (strongest)
- * Level 2: BOS rail + actions rail outer containers
- * Level 3: internal cards/widgets — use border-admin-border / LAYOUT_RUNTIME_* surfaces (unchanged here)
- */
-export const CONTAINER_BORDER_LEVEL_1_DRAWER_SHELL = "rgba(39, 63, 82, 0.28)";
-export const CONTAINER_BORDER_LEVEL_2_RAIL_SHELL = "rgba(39, 63, 82, 0.2)";
-
-/** Neutral outer drawer shell rim — Lead/Person/Child/Inbox/Tasks modal presentation. */
-export const LAYOUT_RUNTIME_DRAWER_OUTER_BORDER = CONTAINER_BORDER_LEVEL_1_DRAWER_SHELL;
+/** Neutral outer drawer shell rim — Lead/Person/Child modal presentation. */
+export const LAYOUT_RUNTIME_DRAWER_OUTER_BORDER = "rgba(39, 63, 82, 0.12)";
 
 export const LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW =
     "0 12px 40px rgba(39, 63, 82, 0.08), 0 2px 8px rgba(39, 63, 82, 0.04)";

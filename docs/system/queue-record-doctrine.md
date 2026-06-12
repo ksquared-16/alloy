@@ -187,7 +187,7 @@ Use Alloy hierarchy:
 | Element | Treatment |
 |---------|-----------|
 | Record title | bold, midnight |
-| Linked fields | midnight/slate text; muted icon at rest (work-unit: **neutral** icon — see **`work-unit-layout-doctrine.md`**) |
+| Linked fields | midnight/slate text; muted pine icon at rest |
 | Linked hover | `rgba(49,57,77,0.06)` background; `#1B1B27` text — **not** green/pine flood |
 | Primary contact | secondary tier — smaller than household, stronger than phone/email |
 | Secondary details | muted slate |
@@ -207,16 +207,12 @@ Use restrained Alloy colors:
 | Token role | Use |
 |------------|-----|
 | Midnight / navy | structure and primary text |
-| Bend Pine | BOS accent, explicit row actions — **not** default linked-field or work-unit metadata icons |
+| Bend Pine | icon accent at rest, BOS accent — not linked-field hover fill |
 | Muted slate | secondary text |
 | Amber | actual attention only |
 | Red | severe/blocking only |
 
 **Do not use:** loud green everywhere, blue plugin-looking buttons, rainbow statuses, heavy teal outlines on every row.
-
-### Work-unit queue override (frozen V3 — June 2026)
-
-On **`[data-ws-surface="work_unit"].adminv2-ws-wu-v2`**, metadata icons use **neutral** sizing/color only (household 16px; person/child/email/phone 14px). Pine is reserved for BOS and row action affordances. Full rules: **`work-unit-layout-doctrine.md`** § Queue row icon doctrine.
 
 Card row hover must **not** activate when hovering linked fields or fixed controls (`:not(:has(...))` on operational row card).
 

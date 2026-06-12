@@ -25,7 +25,6 @@ import {
     type DrawerLinkPendingActions,
 } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerLinkPending";
 import { logDrawerHardTrace } from "@/lib/adminV2/drawer/drawerHardTrace";
-import { markPersonDrawerOpenSource } from "@/lib/perf/workspaceContinuityPerf";
 
 export type OpenDrawerFromOpportunityFn = (params: OpenDrawerParams) => void;
 
@@ -114,16 +113,6 @@ export function openViewPersonFromOpportunity(args: {
         timeToVisibleMs,
         source: openSource,
     });
-    markPersonDrawerOpenSource(
-        cacheHit ? (vmCutover ? "prewarm" : "cache") : "network",
-        {
-            person_id: personId,
-            opportunity_id: opportunityId,
-            open_source: openSource,
-            vm_cutover: vmCutover,
-            time_to_visible_ms: timeToVisibleMs,
-        }
-    );
 
     if (!cacheHit && !vmCutover) {
         try {
