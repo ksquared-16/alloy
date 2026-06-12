@@ -105,7 +105,6 @@ export default function WorkUnitWorkspace({
       rootClassName="adminv2-ws-work-unit adminv2-ws-wu-v2"
       style={wuShellStyle}
       railAriaLabel="Decisions and actions"
-      showRail
       commandRailTelemetrySlot={commandRailTelemetrySlot}
       railContent={
         <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />

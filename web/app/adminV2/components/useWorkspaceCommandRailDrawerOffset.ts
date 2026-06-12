@@ -17,7 +17,7 @@ import {
 } from "@/lib/bos/drawerWorkspaceGeometry";
 
 const BOS_OVERLAY_SELECTOR = "[data-adminv2-bos-rail-overlay=\"true\"]";
-const COMMAND_COLUMN_SELECTOR = "[data-adminv2-workspace-command-column]";
+const COMMAND_COLUMN_SELECTOR = "[data-adminv2-workspace-command-column], [data-adminv2-persistent-command-rail=\"true\"]";
 const SIDEBAR_SELECTOR = "[data-adminv2-sidebar=\"true\"]";
 
 /**

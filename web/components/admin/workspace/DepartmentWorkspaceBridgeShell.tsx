@@ -57,7 +57,6 @@ export function DepartmentWorkspaceBridgeShell({
     const hasTopStack = hasBrief || hasKpis || hasSignals;
     const hasControlDeck = hasTopStack;
     const hasAttentionLane = attentionSlot != null;
-    const hasRail = railSlot != null;
 
     return (
         <WorkspaceShellLayout
@@ -65,8 +64,7 @@ export function DepartmentWorkspaceBridgeShell({
             rootClassName="adminv2-ws-department adminv2-ws-dept-v2"
             style={bridgeShellStyle}
             productionWorkspaceBridge
-            showRail={hasRail}
-            railContent={hasRail ? railSlot : null}
+            railContent={railSlot}
             railAriaLabel="Decisions and actions"
             primaryColumn={
                 <>

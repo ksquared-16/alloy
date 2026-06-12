@@ -67,6 +67,39 @@ html[data-adminv2-workspace-shell="v2"] {
     overflow: hidden;
     align-self: stretch;
   }
+
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-persistent-command-rail="true"] {
+    width: var(--ws-rail, 345px);
+    max-width: min(var(--ws-rail, 345px), 28vw);
+    align-self: stretch;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    border-left: 1px solid rgba(39, 63, 82, 0.08);
+    background: rgba(255, 255, 255, 0.92);
+    padding-inline: 10px 12px;
+    padding-block: 10px 12px;
+    pointer-events: auto;
+    isolation: isolate;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-persistent-command-rail="true"] .adminv2-persistent-command-rail {
+    flex: 1 1 auto;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 1000px) {
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-persistent-command-rail="true"] {
+    width: 100%;
+    max-width: none;
+    border-left: none;
+    border-top: 1px solid rgba(39, 63, 82, 0.08);
+    max-height: min(42vh, 520px);
+  }
 }
 
 html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
@@ -314,6 +347,10 @@ html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay
 }
 
 /* BOS Action Workspace — suppress persistent rail (modal is the BOS experience) */
+html[data-adminv2-action-workspace-open="true"] [data-adminv2-persistent-command-rail="true"] {
+  display: none !important;
+}
+
 html[data-adminv2-action-workspace-open="true"] [data-adminv2-bos-rail-overlay="true"] {
   visibility: hidden !important;
   pointer-events: none !important;

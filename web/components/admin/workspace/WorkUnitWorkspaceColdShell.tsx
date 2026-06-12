@@ -1,7 +1,6 @@
 "use client";
 
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
-import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import {
     WorkUnitOperationalLaneLoader,
     WorkspaceQuietKpiReserve,
@@ -37,9 +36,7 @@ export function WorkUnitWorkspaceColdShell({
                 surface="work_unit"
                 rootClassName="adminv2-ws-work-unit adminv2-ws-wu-v2"
                 style={operationalWorkspaceShellStyle({ layer: "work_unit" })}
-                showRail={reserveActionsRail}
                 railAriaLabel="Decisions and actions"
-                railContent={reserveActionsRail ? <WorkspaceActionsRailPlaceholder /> : null}
                 primaryColumn={
                     <>
                         <div className="adminv2-ws-dept-v2-control-deck">

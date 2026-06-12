@@ -109,6 +109,8 @@ Maintain:
 
 ### Zone 3 — Command rail
 
+**Persistence:** The command rail is a **persistent command surface** mounted in `AdminV2Shell` (`AdminV2PersistentCommandRail`). The workspace primary column changes on navigation; the rail shell (Actions → Workflow Telemetry → BOS) does not unmount. Pages register rail bodies through `WorkspaceCommandRailRegistrar`. When a section has no data, collapsed headers still render with zero counts. Exception: full BOS Action Workspace portal may hide the rail until closed.
+
 **Order (fixed):**
 
 1. **Actions** — collapsed utility card, single line, shows count — e.g. `▶ Actions (2)`

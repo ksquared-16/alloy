@@ -35,11 +35,13 @@ import {
     isCanonicalWorkflowsPath,
     isCanonicalWorkspacePath,
 } from "@/lib/admin/canonicalAdminRoutes";
-import AdminV2CommandRailBosHostFooter from "./AdminV2CommandRailBosHostFooter";
+import AdminV2PersistentCommandRail from "./AdminV2PersistentCommandRail";
 import { CommandRailBosMount } from "./CommandRailBosMount";
 import { useAdminV2WorkspaceShellDocumentFlag } from "./useAdminV2WorkspaceShellDocumentFlag";
 import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
+import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
+import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
 
 /**
  * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
@@ -143,6 +145,8 @@ export default function AdminV2Shell({
     return (
       <GlobalAssistantProvider>
         <CommandRailBosMount>
+        <WorkspaceCommandRailRegistryProvider>
+        <DrawerCommandRailActionsProvider>
         <BosDrawerGeometryDiagnostics />
         <AskBosHandoffListener />
         <WorkspaceSiteFilterProvider>
@@ -162,7 +166,7 @@ export default function AdminV2Shell({
               </div>
               <div
                 data-adminv2-workspace-ambient-root
-                className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
+                className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden lg:flex-row"
                 style={workspaceContentAmbientStyle}
               >
                 <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
@@ -170,16 +174,16 @@ export default function AdminV2Shell({
                   {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
                     <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                       {children}
-                      {isAiActivityRoute || isWorkflowsRoute ?
-                        <AdminV2CommandRailBosHostFooter />
-                      :   null}
                     </main>
                   : children}
                 </div>
+                <AdminV2PersistentCommandRail />
               </div>
             </div>
           </div>
         </WorkspaceSiteFilterProvider>
+        </DrawerCommandRailActionsProvider>
+        </WorkspaceCommandRailRegistryProvider>
         </CommandRailBosMount>
       </GlobalAssistantProvider>
     );

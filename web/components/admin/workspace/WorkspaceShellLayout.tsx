@@ -4,6 +4,8 @@ import type { CSSProperties, ReactNode } from "react";
 
 import "@/app/adminV2/components/workspace/workspace.css";
 import { WorkspaceCommandRailShell } from "@/app/adminV2/components/workspace/WorkspaceCommandRailShell";
+import { WorkspaceCommandRailRegistrar } from "@/app/adminV2/components/workspace/WorkspaceCommandRailRegistrar";
+import { usePersistentCommandRailEnabled } from "@/contexts/WorkspaceCommandRailRegistryContext";
 
 export type WorkspaceShellSurface = "company" | "department" | "work_unit";
 
@@ -44,7 +46,9 @@ export function WorkspaceShellLayout({
   showRail,
   railAriaLabel = "Decisions and actions",
 }: WorkspaceShellLayoutProps) {
-  const hasRail = typeof showRail === "boolean" ? showRail : railContent != null;
+  const persistentCommandRail = usePersistentCommandRailEnabled();
+  const hasLocalRail =
+    !persistentCommandRail && (typeof showRail === "boolean" ? showRail : railContent != null);
 
   return (
     <div
@@ -55,16 +59,19 @@ export function WorkspaceShellLayout({
       {...(productionWorkspaceBridge ? { "data-production-workspace-bridge": "true" } : {})}
     >
       <div className="adminv2-ws-dept-v2-contain">
+        {persistentCommandRail ?
+          <WorkspaceCommandRailRegistrar actions={railContent ?? null} telemetry={commandRailTelemetrySlot ?? null} />
+        :   null}
         {containLead}
         <div
           className={
-            hasRail
+            hasLocalRail
               ? "adminv2-ws-dept-v2-page-split"
               : "adminv2-ws-dept-v2-page-split adminv2-ws-dept-v2-page-split--no-rail"
           }
         >
           <div className="adminv2-ws-dept-v2-primary-column">{primaryColumn}</div>
-          {hasRail ? (
+          {hasLocalRail ?
             <div
               className="adminv2-ws-dept-v2-command-column adminv2-ws-shell-command-column"
               data-adminv2-workspace-command-column
@@ -73,7 +80,7 @@ export function WorkspaceShellLayout({
                 {railContent}
               </WorkspaceCommandRailShell>
             </div>
-          ) : null}
+          :   null}
         </div>
       </div>
     </div>

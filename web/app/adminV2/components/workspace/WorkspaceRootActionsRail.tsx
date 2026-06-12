@@ -120,8 +120,6 @@ export function WorkspaceRootActionsRail({ defaultDepartmentId = null }: Props) 
         [defaultDepartmentId, openDrawer, openScheduleTourRecordPicker, resolvedByKey, router]
     );
 
-    if (settled && (actionCount ?? 0) === 0) return null;
-
     return (
         <>
             <WorkspaceCommandRailActionsSection
