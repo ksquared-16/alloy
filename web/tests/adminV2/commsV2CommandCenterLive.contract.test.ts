@@ -1,0 +1,29 @@
+import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+/** ACT-1 — the Command Center shell is wired to live data (read-only + assignment, no send). */
+describe("command center live wiring", () => {
+    const src = readFileSync(join(process.cwd(), "app", "adminV2", "communications", "CommandCenterShell.tsx"), "utf8");
+    it("fetches conversations from the dark API", () => {
+        expect(src).toMatch(/\/api\/admin\/communications\/conversations/);
+    });
+    it("renders metrics, filters, queues, and a timeline", () => {
+        expect(src).toMatch(/data-cc-metrics/);
+        expect(src).toMatch(/data-cc-filters/);
+        expect(src).toMatch(/OPERATIONAL_QUEUES/);
+        expect(src).toMatch(/data-cc-timeline/);
+        expect(src).toMatch(/computeCommandCenterMetrics/);
+        expect(src).toMatch(/applyQueueFilters/);
+        expect(src).toMatch(/groupConversationsByQueue/);
+    });
+    it("wires claim/assign via the dark assign route", () => {
+        expect(src).toMatch(/data-cc-claim/);
+        expect(src).toMatch(/\/assign/);
+        expect(src).toMatch(/action:\s*"claim"/);
+    });
+    it("does not send or embed a BOS panel", () => {
+        expect(src).not.toMatch(/executeCommunicationsSend|enqueueCanonicalOutboundMessage|\/communications\/send/);
+        expect(src).not.toMatch(/aiCommandSurface\/[A-Za-z]*Panel/);
+    });
+});

@@ -19,6 +19,8 @@ import {
 } from "@/lib/communications/drawerEmailRecipients";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
+import { enforceConsentForSend } from "@/lib/communications/v2/consentEnforcement";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -100,6 +102,20 @@ export async function executeCommunicationsSend(
         toRawInput,
         sendMetadataAugment,
     } = params;
+
+
+    // PKG-18A: platform consent enforcement (DARK — only runs under comms_v2_compliance; no-op when off).
+    if (
+        isCommsV2FlagEnabled("comms_v2_compliance") &&
+        (channel === "email" || channel === "sms") &&
+        recipientPersonIdRaw &&
+        UUID_RE.test(recipientPersonIdRaw)
+    ) {
+        const consent = await enforceConsentForSend({ supabase, orgId, personId: recipientPersonIdRaw, channel });
+        if (!consent.allowed) {
+            return { ok: false, status: 403, error: consent.reason, code: "consent_blocked" };
+        }
+    }
 
     let toRaw = toRawInput.trim();
 

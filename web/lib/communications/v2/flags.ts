@@ -46,8 +46,8 @@ export function commsV2FlagEnvName(key: CommsV2FlagKey): string {
     return ENV_BY_KEY[key];
 }
 
-function envEnabled(name: string): boolean {
-    const v = (process.env[name] ?? "").trim().toLowerCase();
+function envEnabled(value: string | undefined): boolean {
+    const v = (value ?? "").trim().toLowerCase();
     return v === "1" || v === "true" || v === "yes";
 }
 
@@ -56,7 +56,33 @@ function envEnabled(name: string): boolean {
  * env var is unset or not a truthy token ("1" | "true" | "yes", case-insensitive).
  */
 export function isCommsV2FlagEnabled(key: CommsV2FlagKey): boolean {
-    const name = ENV_BY_KEY[key];
-    if (!name) return false;
-    return envEnabled(name);
+    // STATIC process.env.NEXT_PUBLIC_* access is REQUIRED: Next.js only inlines NEXT_PUBLIC_* env into the
+    // CLIENT bundle when referenced as a literal member expression. Dynamic process.env[name] is NOT inlined
+    // → it is undefined in client components → every client-side flag would read false. Keep this a switch.
+    switch (key) {
+        case "comms_v2_command_center":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_COMMAND_CENTER);
+        case "comms_v2_record_tab":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_RECORD_TAB);
+        case "comms_v2_composer":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_COMPOSER);
+        case "comms_v2_preferences":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_PREFERENCES);
+        case "comms_v2_compliance":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_COMPLIANCE);
+        case "comms_v2_assignment":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_ASSIGNMENT);
+        case "comms_v2_sla":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_SLA);
+        case "comms_v2_templates":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_TEMPLATES);
+        case "comms_v2_announcements":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_ANNOUNCEMENTS);
+        case "comms_v2_deliverability":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_DELIVERABILITY);
+        case "comms_v2_bos":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_BOS);
+        default:
+            return false;
+    }
 }
