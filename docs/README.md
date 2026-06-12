@@ -59,6 +59,7 @@ Start here: **`platform/foundation/system-overview.md`**
 | Deployment | `platform/governance/deployment-and-environments.md` |
 | Testing | `platform/governance/testing-and-quality.md` |
 | Documentation rules | `platform/governance/documentation-governance.md` |
+| Agent repo boundaries | `governance/agent-repo-boundaries.md` |
 
 ### 6. Roadmap & history
 
@@ -124,6 +125,8 @@ CSV source: `supabase/reference/*.csv` (8 files)
 | `audits/` | Point-in-time investigations |
 | `archive/` | Superseded docs — not current truth |
 | `export/` | Portable handoff packs |
+
+**Agent development:** [`governance/agent-repo-boundaries.md`](governance/agent-repo-boundaries.md) — Cursor vs Claude repo separation, branching, merge flow
 
 **Rebaseline audit:** `audits/documentation-audit.md`  
 **Closeout:** `audits/documentation-closeout-report.md`
