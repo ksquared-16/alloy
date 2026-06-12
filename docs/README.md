@@ -1,82 +1,148 @@
-# Alloy documentation (active)
+# Alloy documentation
 
-**Purpose:** Single compact source of truth for Cursor, GPT, and engineers. Prefer these files over chat memory or archived material under `docs/archive/`.  
+**Purpose:** Authoritative navigation for engineers, implementers, and AI agents. Prefer these files over chat memory or archived sprint material.
 
-For any merge that changes behavior, include `docs/execution/operating-doctrine.md` in context.
+**June 2026 rebaseline:** Canonical platform docs live under **`docs/platform/`**. Schema reference under **`docs/schema/`** (generated). Business Process → Stage → Record is the operator mental model; work units are documented as runtime constructs.
 
-**June 2026 re-baseline:** Platform freeze documented in **`system/repository-state-2026-06.md`**. Superseded assumptions indexed in **`archive/2026-06-freeze/README.md`**.
+For behavior-changing work, include **`docs/platform/governance/design-and-operational-doctrine.md`** in context.
 
-## Source pack (markdown + Supabase reference)
+---
 
-- **Active markdown:** topic files below plus this README.
-- **Supabase reference CSVs:** **8** generated files under `docs/supabase/reference/` — **do not edit by hand**; regenerate with `npm run export:supabase-schema` and `DATABASE_URL`.
+## What Alloy is
 
-### Core topic files
+A configurable operating system for service businesses. Primary documentation is **industry-agnostic**; childcare enrollment appears as a reference implementation in supplemental docs.
 
-| Folder | Files |
-|--------|-------|
-| `core/` | `system-overview.md`, `glossary.md` |
-| `system/` | `entity-model.md`, `actions-and-workflows.md`, `record-system.md`, `workspace-system.md`, `queue-record-doctrine.md`, `typography-and-presentation-doctrine.md`, `roles-and-permissions.md`, `configuration-system.md`, `api-contracts.md`, **`adminv2-runtime-performance-doctrine.md`** (locked implementation), **`bos-identity-doctrine.md`** (frozen BOS visual identity) |
-| `product/` | `crm-system.md`, `communications.md`, `documents-and-forms.md`, `billing-and-financials.md`, `bos-foundation.md`, `ai-system.md` (stub) |
-| `execution/` | `operating-doctrine.md`, `roadmap-and-gaps.md` |
+Start here: **`platform/foundation/system-overview.md`**
 
-### Canonical doctrine (June 2026 — single source of truth)
+---
+
+## Load order (onboarding)
+
+**Agent load order (Cursor / AI):** matches **`.cursor/rules/alloy-project-context.mdc`** — start at `docs/README.md`, then foundation → core → operator → modules → governance → schema.
+
+### 1. Foundation
+
+1. `platform/foundation/system-overview.md`
+2. `platform/foundation/platform-capabilities.md`
+3. `platform/foundation/product-roadmap.md`
+4. `platform/foundation/architecture.md`
+5. `platform/governance/glossary.md`
+
+### 2. Core platform
+
+6. `platform/core/business-process-system.md` — **operator model: Business Process → Stage → Record**
+7. `platform/core/entity-model.md`
+8. `platform/core/navigation-and-workspace-doctrine.md`
+9. `platform/core/record-system.md`
+10. `platform/core/status-and-state-system.md`
+
+### 3. Operator experience
+
+11. `platform/operator/queue-system.md`
+12. `platform/operator/drawer-system.md`
+
+### 4. Platform modules (load when touching area)
+
+| Module | Doc |
+|--------|-----|
+| Documents & forms | `platform/modules/documents-and-forms.md` |
+| Communications | `platform/modules/communications-platform.md` |
+| Actions & workflows | `platform/modules/actions-and-workflows.md` |
+| Configuration | `platform/modules/configuration-platform.md` |
+| AI / BOS | `platform/modules/ai-platform.md` |
+
+### 5. Governance & standards
 
 | Topic | Doc |
 |-------|-----|
-| **Routing** | **`system/routing-doctrine.md`** |
-| **Navigation** | **`system/navigation-doctrine.md`** |
-| **Drawers** | **`system/drawer-doctrine.md`** (+ detail: `drawer-operating-model-v1.md`, `drawer-view-model-runtime-contract.md`) |
-| **Work unit layout** | **`system/work-unit-layout-doctrine.md`** |
-| **Performance** | **`system/platform-performance-doctrine.md`** (+ locked gates: `adminv2-runtime-performance-doctrine.md`) |
-| **BOS visual identity** | **`system/bos-identity-doctrine.md`** (frozen — mark, smoke, reveal, shell) |
-| **Lifecycle model** | **`navigation-doctrine.md`**, **`workspace-system.md`**, **`product/crm-system.md`** |
-| **Legacy classification** | **`system/legacy-architecture-inventory.md`** |
-| **Platform snapshot** | **`system/repository-state-2026-06.md`** |
+| Design & operational doctrine | `platform/governance/design-and-operational-doctrine.md` |
+| Documentation rules | `platform/governance/documentation-governance.md` |
+| Agent repo boundaries | `governance/agent-repo-boundaries.md` |
+| API contracts | `platform/governance/api-contracts.md` |
+| Roles & permissions | `platform/governance/roles-and-permissions.md` |
+| Implementation patterns | `platform/governance/implementation-patterns.md` |
+| Deployment | `platform/governance/deployment-and-environments.md` |
+| Testing | `platform/governance/testing-and-quality.md` |
 
-Do **not** duplicate these topics in new active docs — link instead.
+### 6. Roadmap & history
 
-## Load order for AI / onboarding
+- `platform/foundation/product-roadmap.md` (also in §1)
+- `platform/foundation/release-history.md`
 
-1. **`core/system-overview.md`** — Multi-tenant model, event/workflow spine, lifecycle-first workspace.
-2. **`core/glossary.md`** — Shared vocabulary.
-3. **`system/repository-state-2026-06.md`** — Current platform snapshot (June 2026).
-4. **`system/routing-doctrine.md`** + **`system/navigation-doctrine.md`** — URLs and operator navigation.
-5. **`system/entity-model.md`** — Tables and identity.
-6. **`system/actions-and-workflows.md`** — Events, workflows, admin actions.
-7. **`system/record-system.md`** — Resolver-backed records, drawer/API truth vs previews.
-8. **`system/workspace-system.md`** — Lifecycles, work units, queues. **Work-unit page layout:** **`system/work-unit-layout-doctrine.md`**. **Queue row contract:** **`system/queue-record-doctrine.md`**. **Presentation:** **`system/typography-and-presentation-doctrine.md`**.
-9. **`system/drawer-doctrine.md`** — Drawer ownership, VM, warm navigation.
-10. **`system/platform-performance-doctrine.md`** — Performance passes and principles. **Locked gates:** **`system/adminv2-runtime-performance-doctrine.md`**.
-11. **`system/roles-and-permissions.md`** — Capabilities vs visibility.
-12. **`system/configuration-system.md`** — Config vs code/workflows; Admin Settings four-plane model.
-13. **`system/legacy-architecture-inventory.md`** — Canonical vs transitional vs legacy.
-14. **`system/api-contracts.md`** — Representative admin/public API boundaries.
+### 7. Schema (when touching DB / RLS / triggers)
 
-**Product (load when touching that area):**
+1. `schema/schema-tables.md`
+2. `schema/schema-columns.md`
+3. `schema/schema-constraints.md`
+4. `schema/schema-indexes.md`
+5. `schema/schema-functions.md`
+6. `schema/schema-triggers.md`
+7. `schema/schema-policies-and-security.md`
 
-- `product/crm-system.md` — Opportunities, lifecycle ownership, scheduling.
-- `product/communications.md` — Threads, canonical enqueue, webhooks.
-- `product/documents-and-forms.md` — Forms engine, packets.
-- `product/billing-and-financials.md`
-- `product/bos-foundation.md` — BOS capabilities; human-in-the-loop only. **Visual identity:** **`system/bos-identity-doctrine.md`**.
-- `product/ai-system.md` — Stub redirect to `bos-foundation.md`.
+**Regenerate:**
 
-**Execution / change management:**
+```bash
+DATABASE_URL=... npm run export:supabase-schema
+node scripts/generate-schema-docs.mjs
+```
 
-- `execution/operating-doctrine.md` — Documentation rules, deploy guardrails.
-- `execution/roadmap-and-gaps.md` — Sequencing and verification debt.
+CSV source: `supabase/reference/*.csv` (8 files)
 
-**Schema reference (when touching DB / RLS / triggers):**
+---
 
-- `docs/supabase/reference/*.csv` (8 files)
+## Locked runtime doctrines (do not duplicate)
 
-## Archive and sprints
+| Topic | Doc |
+|-------|-----|
+| AdminV2 reveal / performance gates | `system/adminv2-runtime-performance-doctrine.md` |
+| Platform performance passes | `system/platform-performance-doctrine.md` |
+| Work unit page layout (V3) | `system/work-unit-layout-doctrine.md` |
+| Queue record row layout | `system/queue-record-doctrine.md` |
+| BOS visual identity | `system/bos-identity-doctrine.md` |
+| Routing detail | `system/routing-doctrine.md` |
+| Drawer VM contracts | `system/drawer-doctrine.md`, `drawer-operating-model-v1.md`, `drawer-view-model-runtime-contract.md` |
+| Legacy inventory | `system/legacy-architecture-inventory.md` |
 
-- **June 2026 freeze index:** `docs/archive/2026-06-freeze/README.md` — superseded assumptions.
-- **Prior reset:** `docs/archive/2026-05-02-docs-reset/`
-- **Sprints:** `docs/sprints/` — execution history; **not** canonical doctrine when a system doc exists. **Shipped index:** `docs/sprints/COMPLETED_SPRINTS_SUMMARY.md`. **Export packs:** `docs/export/` — **`comms-messaging-handoff-pack`**, **`forms-handoff-pack`** (portable doc bundles + zip).
+---
+
+## Supplemental (vertical / expanded reference)
+
+| Doc | Use |
+|-----|-----|
+| `product/crm-system.md` | Enrollment pipeline grain detail (childcare) |
+| `product/billing-and-financials.md` | Billing maturity |
+| `system/*` (remaining) | Transitional expanded references — prefer `platform/` |
+| `core/system-overview.md` | Redirect — see platform foundation |
+| `execution/roadmap-and-gaps.md` | Transitional detailed gap list |
+
+---
+
+## Sprints, audits, archive
+
+| Location | Purpose |
+|----------|---------|
+| `sprints/active/` | In-flight initiatives (index) |
+| `sprints/completed/` | Shipped closeout index |
+| `sprints/archive/` | Historical sprint artifacts |
+| `sprints/05_2026/`, `06_2026/` | **Transitional paths** — migrating to active/completed/archive |
+| `audits/` | Point-in-time investigations |
+| `archive/` | Superseded docs — not current truth |
+| `export/` | Portable handoff packs |
+
+**Agent development:** [`governance/agent-repo-boundaries.md`](governance/agent-repo-boundaries.md) — Cursor vs Claude repo separation, branching, merge flow
+
+**Rebaseline audit:** `audits/documentation-audit.md`  
+**Governance follow-up:** `audits/documentation-governance-followup.md`  
+**Closeout:** `audits/documentation-closeout-report.md`
+
+---
+
+## Active initiatives (June 2026)
+
+See `sprints/active/README.md` and `platform/foundation/product-roadmap.md`.
+
+---
 
 ## When this README must be updated
 
-Load order changes, new canonical doctrine files, consolidation moves, or archive path changes.
+Canonical path changes, new frozen doctrine files, consolidation moves, or schema regeneration workflow changes.

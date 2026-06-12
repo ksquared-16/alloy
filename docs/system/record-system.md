@@ -1,5 +1,8 @@
 # Record system (RRS & entity API)
 
+> **Canonical summary:** [`docs/platform/core/record-system.md`](../platform/core/record-system.md)  
+> This file retains expanded PATCH/layout enforcement detail as transitional reference.
+
 ## Purpose
 
 Clarify where **authoritative record payloads** come from for admin UI and why **queue list rows** are not equivalent.
@@ -35,7 +38,7 @@ All authoritative reads must come from:
 
 **Never:** Queue → execute logic directly.
 
-Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
+Workspace navigation context for queues: **`docs/platform/operator/queue-system.md`** (canonical); expanded enrollment detail in **`docs/system/workspace-system.md`**.
 
 For **opportunity** queues, **`QueueService.enrichOpportunityRows`** may attach person/contact/customer/member data, **read active `tour_bookings`** for tour preview fields, **`_placement_priority`** when placement is enabled (opt-in), and **`_operational_summary_preview`** for lane hints — while **filters** may still use **`metadata.tour_date`** for historical compatibility. None of that makes the queue row authoritative: **Queue → select entity → entity GET → act** remains mandatory (see **`docs/sprints/05_2026/tour_scheduling_v1.md`** §12).
 

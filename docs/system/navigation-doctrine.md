@@ -1,7 +1,10 @@
 # Navigation doctrine
 
+> **Canonical summary (June 2026 rebaseline):** [`docs/platform/core/navigation-and-workspace-doctrine.md`](../platform/core/navigation-and-workspace-doctrine.md)  
+> This file retains routing/sidebar detail as transitional expanded reference.
+
 **Path:** `docs/system/navigation-doctrine.md`  
-**Status:** **Canonical** (June 2026 freeze). How operators move through Alloy today.  
+**Status:** **Canonical detail** (June 2026 freeze). How operators move through Alloy today.  
 **Supersedes:** Department-first navigation as **primary** operator mental model (department remains a **scope/ACL** concept).
 
 ---
@@ -10,14 +13,16 @@
 
 ```
 Organization
-  └── Lifecycle          ← primary landing grouping (/workspace tiles, sidebar)
-        └── Work Unit    ← execution domain with queues (/workspace/work-unit/:slug)
-              └── Record ← drawer detail (URL segment :recordId)
+  └── Business Process     ← primary landing grouping (/workspace tiles, sidebar)
+        └── Stage          ← queue lanes on work-unit execution route
+              └── Record   ← drawer detail (URL segment :recordId)
 ```
 
-**Not canonical for daily ops:** Organization → Department → Lifecycle → Work Unit → Record.
+Work units are the runtime host for stage queues — see **`docs/platform/core/business-process-system.md`**.
 
-**Department** still exists in data (`departments`, ACL, metadata, attention rules) but is **not** the primary navigation spine. Operators start at **lifecycle**, not department tiles.
+**Not canonical for daily ops:** Organization → Department → Business Process → …
+
+**Department** still exists in data (`departments`, ACL, metadata, attention rules) but is **not** the primary navigation spine. Operators start at **business process**, not department tiles.
 
 ---
 

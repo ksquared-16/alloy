@@ -1,0 +1,24 @@
+---
+description: Restrict Cursor to /Users/Kelly/Alloy only; never touch Alloy-Claude
+alwaysApply: true
+---
+
+# Repo Boundary Rule
+
+This Cursor workspace must only operate in:
+
+/Users/Kelly/Alloy
+
+Do not read, edit, diff, commit, push, or reference:
+
+/Users/Kelly/Alloy-Claude
+/Users/Kelly/Claude/Projects/Alloy
+
+Canonical doc: `docs/governance/agent-repo-boundaries.md`
+
+Default branch behavior:
+- Use `staging` for shared documentation/tooling/hotfix work.
+- Use feature branches for larger runtime work.
+- Before work, confirm `pwd`, branch, `git status --short`, and latest `origin/staging`.
+
+Claude-owned work lives outside this repo unless intentionally merged from a reviewed branch.

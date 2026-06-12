@@ -8,7 +8,7 @@
 
 ## Executive summary
 
-Alloy is a configurable operating system for service businesses (childcare first). The **operator workspace** is **lifecycle-first**: Organization → Lifecycle → Work Unit → Record. **Admin/config** lives at `/admin`. **Legacy admin** remains at `/legacy-admin` for unmigrated modules.
+Alloy is a configurable operating system for service businesses (childcare first). The **operator workspace** is **process-first**: Organization → **Business Process** → **Stage** → **Record**. Work units remain internal execution hosts. **Admin/config** lives at `/admin`. **Legacy admin** remains at `/legacy-admin` for unmigrated modules.
 
 Implementation runs on Next.js App Router (`web/`), Supabase (RLS, org-scoped), event/workflow side effects, and a converging **drawer VM + layout runtime** stack for CRM records.
 
@@ -48,8 +48,8 @@ Implementation runs on Next.js App Router (`web/`), Supabase (RLS, org-scoped), 
 
 | System | Doc entry | Maturity |
 |--------|-----------|----------|
-| Workspace / queues | `workspace-system.md` | Production — atomic reveal Pass 3 |
-| CRM / lifecycle | `crm-system.md` | Production — lifecycle hub configurable |
+| Workspace / queues | `platform/operator/queue-system.md`, `platform/core/business-process-system.md` | Production — atomic reveal Pass 3 |
+| CRM / enrollment pipeline | `product/crm-system.md` (supplemental) | Production — process hub configurable |
 | Records / drawers | `record-system.md`, `drawer-doctrine.md` | Opp VM canonical; Person/Child transitional |
 | Actions / workflows | `actions-and-workflows.md` | Production |
 | Configuration | `configuration-system.md` | Production — `/admin/settings` |
@@ -115,15 +115,16 @@ Implementation runs on Next.js App Router (`web/`), Supabase (RLS, org-scoped), 
 
 ## Developer load order (clone → understand)
 
-1. `README.md`, `docs/README.md`
-2. **`docs/core/system-overview.md`**
-3. **`docs/core/glossary.md`**
-4. **`docs/system/routing-doctrine.md`**, **`navigation-doctrine.md`**
-5. **`docs/system/workspace-system.md`**, **`drawer-doctrine.md`**
-6. **`docs/system/platform-performance-doctrine.md`**
-7. **`docs/system/legacy-architecture-inventory.md`** (this file's companion)
-8. Relevant product doc for task area
-9. Sprint docs only when touching that sprint's scope
+1. `README.md`, **`docs/README.md`**
+2. **`docs/platform/foundation/system-overview.md`**
+3. **`docs/platform/governance/glossary.md`**
+4. **`docs/platform/core/business-process-system.md`**
+5. **`docs/platform/core/navigation-and-workspace-doctrine.md`**, **`docs/system/drawer-doctrine.md`**
+6. **`docs/platform/operator/queue-system.md`**
+7. **`docs/system/platform-performance-doctrine.md`**
+8. **`docs/system/legacy-architecture-inventory.md`** (this file's companion)
+9. Relevant **`docs/platform/modules/*`** or supplemental **`docs/product/*`** for task area
+10. Sprint docs only when touching that sprint's scope
 
 ---
 
@@ -131,7 +132,7 @@ Implementation runs on Next.js App Router (`web/`), Supabase (RLS, org-scoped), 
 
 | Gap | Action taken |
 |-----|--------------|
-| Department-first hierarchy in core docs | Updated to lifecycle-first |
+| Department-first hierarchy in core docs | Updated to business-process-first |
 | No single routing doctrine | Created `routing-doctrine.md` |
 | Performance split across sprints | Created `platform-performance-doctrine.md` |
 | Drawer ownership scattered | Created `drawer-doctrine.md` index |
@@ -148,4 +149,4 @@ Implementation runs on Next.js App Router (`web/`), Supabase (RLS, org-scoped), 
 
 ## Related docs
 
-All canonical doctrine files linked from **`docs/README.md`** and **`docs/core/system-overview.md`**.
+All canonical doctrine files linked from **`docs/README.md`** and **`docs/platform/foundation/system-overview.md`**.

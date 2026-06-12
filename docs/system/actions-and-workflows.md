@@ -1,10 +1,12 @@
 # Actions, workflows, and events
 
+> **Canonical summary:** [`docs/platform/modules/actions-and-workflows.md`](../platform/modules/actions-and-workflows.md)
+
 ## Purpose
 
 Explain how **business facts** become **`workflow_events`**, trigger **workflows**, and drive **effects** — and how **admin actions** fit in.
 
-**Terminology:** **Admin action** refers to UI/system-triggered admin operations; **workflow action** refers to an ordered step executed inside workflow runs. Disambiguation of terms: **`docs/core/glossary.md`**.
+**Terminology:** **Admin action** refers to UI/system-triggered admin operations; **workflow action** refers to an ordered step executed inside workflow runs. Disambiguation: **`docs/platform/governance/glossary.md`** (canonical); expanded terms in **`docs/core/glossary.md`** (transitional).
 
 ## Actions (placement) vs Automations (execution)
 
