@@ -94,7 +94,7 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | Settings four-plane V1 | **Complete** | Fields, grouping, layouts, actions | May 2026 |
 | Field policy enforcement | **Complete** | Opportunity/job subset | Forms parity open |
 | Record Experience Builder | **Planned** | Deferred from parity sprint | |
-| Placement priority (waitlist) | **Complete** | Opt-in ordering layer | Off by default |
+| Placement priority | **Complete** | Opt-in ordered cohort ranking layer | Childcare waitlist is one use; off by default |
 
 ## AI / BOS
 

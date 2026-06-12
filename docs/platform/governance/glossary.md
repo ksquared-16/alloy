@@ -55,12 +55,13 @@
 | **Permission key** | Capability grant via `role_permission_grants`. |
 | **Access profile** | Dept/site visibility — separate from permissions. |
 | **BOS** | Business Orchestration System — assist layer, human-in-the-loop. |
+| **Placement priority** | Generalized opt-in ordered cohort ranking (`placement_priority_v1` metadata). Childcare **waitlist** ordering is one vertical implementation — not global platform identity. |
 
 ---
 
 ## Expanded glossary
 
-Additional terms (placement priority, packet rollup, etc.): `../../core/glossary.md` (transitional — merge on next pass).
+Additional terms (packet rollup, queue selection, etc.): `../../core/glossary.md` (transitional — vertical-specific detail).
 
 ---
 

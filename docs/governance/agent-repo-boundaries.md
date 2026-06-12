@@ -118,7 +118,8 @@ Update this table when new long-lived agent or safety branches are created.
 
 - `docs/README.md` — documentation navigation
 - `docs/platform/governance/documentation-governance.md` — doc system rules
-- `docs/platform/governance/design-and-operational-doctrine.md` — operational doctrine
+- `docs/platform/governance/design-and-operational-doctrine.md`
+- `.cursor/rules/alloy-project-context.mdc` — agent load order — operational doctrine
 - `.cursor/rules/alloy-project-context.mdc` — Cursor load order and platform context
 
 ---

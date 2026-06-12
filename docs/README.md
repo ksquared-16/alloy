@@ -18,25 +18,28 @@ Start here: **`platform/foundation/system-overview.md`**
 
 ## Load order (onboarding)
 
+**Agent load order (Cursor / AI):** matches **`.cursor/rules/alloy-project-context.mdc`** — start at `docs/README.md`, then foundation → core → operator → modules → governance → schema.
+
 ### 1. Foundation
 
 1. `platform/foundation/system-overview.md`
-2. `platform/governance/glossary.md`
-3. `platform/foundation/architecture.md`
-4. `platform/foundation/platform-capabilities.md`
+2. `platform/foundation/platform-capabilities.md`
+3. `platform/foundation/product-roadmap.md`
+4. `platform/foundation/architecture.md`
+5. `platform/governance/glossary.md`
 
 ### 2. Core platform
 
-5. `platform/core/business-process-system.md` — **start here for operator model**
-6. `platform/core/entity-model.md`
-7. `platform/core/navigation-and-workspace-doctrine.md`
-8. `platform/core/record-system.md`
-9. `platform/core/status-and-state-system.md`
+6. `platform/core/business-process-system.md` — **operator model: Business Process → Stage → Record**
+7. `platform/core/entity-model.md`
+8. `platform/core/navigation-and-workspace-doctrine.md`
+9. `platform/core/record-system.md`
+10. `platform/core/status-and-state-system.md`
 
 ### 3. Operator experience
 
-10. `platform/operator/queue-system.md`
-11. `platform/operator/drawer-system.md`
+11. `platform/operator/queue-system.md`
+12. `platform/operator/drawer-system.md`
 
 ### 4. Platform modules (load when touching area)
 
@@ -52,18 +55,18 @@ Start here: **`platform/foundation/system-overview.md`**
 
 | Topic | Doc |
 |-------|-----|
+| Design & operational doctrine | `platform/governance/design-and-operational-doctrine.md` |
+| Documentation rules | `platform/governance/documentation-governance.md` |
+| Agent repo boundaries | `governance/agent-repo-boundaries.md` |
 | API contracts | `platform/governance/api-contracts.md` |
 | Roles & permissions | `platform/governance/roles-and-permissions.md` |
-| Design & operational doctrine | `platform/governance/design-and-operational-doctrine.md` |
 | Implementation patterns | `platform/governance/implementation-patterns.md` |
 | Deployment | `platform/governance/deployment-and-environments.md` |
 | Testing | `platform/governance/testing-and-quality.md` |
-| Documentation rules | `platform/governance/documentation-governance.md` |
-| Agent repo boundaries | `governance/agent-repo-boundaries.md` |
 
 ### 6. Roadmap & history
 
-- `platform/foundation/product-roadmap.md`
+- `platform/foundation/product-roadmap.md` (also in §1)
 - `platform/foundation/release-history.md`
 
 ### 7. Schema (when touching DB / RLS / triggers)
@@ -129,6 +132,7 @@ CSV source: `supabase/reference/*.csv` (8 files)
 **Agent development:** [`governance/agent-repo-boundaries.md`](governance/agent-repo-boundaries.md) — Cursor vs Claude repo separation, branching, merge flow
 
 **Rebaseline audit:** `audits/documentation-audit.md`  
+**Governance follow-up:** `audits/documentation-governance-followup.md`  
 **Closeout:** `audits/documentation-closeout-report.md`
 
 ---

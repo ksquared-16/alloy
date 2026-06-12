@@ -73,7 +73,7 @@ Legacy admin remains at `/legacy-admin` for unmigrated modules.
 
 ## Platform maturity (June 2026)
 
-Alloy has passed foundational architecture proof. Current theme: **operational completion + product hardening**. Focused pilots are appropriate; general customer readiness depends on waitlist mutator activation, forms Phase 2 remainder, messaging hardening, and drawer VM cutover (Person/Child).
+Alloy has passed foundational architecture proof. Current theme: **operational completion + product hardening**. Focused pilots are appropriate; general customer readiness depends on open platform items in **`product-roadmap.md`** (action catalog, forms remainder, messaging hardening, drawer VM cutover).
 
 See `platform-capabilities.md`, `product-roadmap.md`.
 

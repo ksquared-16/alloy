@@ -420,7 +420,7 @@ Tracked UX/product alignment work; close when verified in code or deferred with 
 
 **Opportunities: legacy rows:** Some `opportunities` rows may still have **`primary_contact_id`** set without **`primary_person_id`**. **Reads** must tolerate this; **writes** normalize toward **`primary_person_id`** where resolvable (`web/lib/opportunityIdentity.ts`). Full backfill is a follow-up project.
 
-When verified in code or DB, fold conclusions into **`docs/system/entity-model.md`**, **`docs/product/crm-system.md`**, or **`docs/core/glossary.md`** and shorten the matching bullet here.
+When verified in code or DB, fold conclusions into **`docs/platform/core/entity-model.md`**, **`docs/platform/governance/glossary.md`**, or supplemental **`docs/product/crm-system.md`** (vertical only) and shorten the matching bullet here.
 
 ---
 

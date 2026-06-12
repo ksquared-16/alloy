@@ -55,12 +55,15 @@ Primary doc set stays industry-agnostic; vertical implementations link as supple
 
 ## Source pack budget
 
-AI/Cursor load order uses compact active set:
+AI/Cursor load order uses:
 
-- Platform canonical docs (this rebaseline)
-- Generated schema docs
+- **`docs/README.md`** navigation hub
+- **`.cursor/rules/alloy-project-context.mdc`** — authoritative agent load order
+- Platform canonical docs under `docs/platform/`
+- Generated schema docs under `docs/schema/`
 - Supabase CSV reference
 - Locked runtime doctrines in `docs/system/` (performance, queue record, BOS identity)
+- Agent repo boundaries: `docs/governance/agent-repo-boundaries.md`
 
 Sprints and archive **excluded** from default source pack.
 
