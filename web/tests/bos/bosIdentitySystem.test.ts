@@ -85,14 +85,15 @@ describe("BOS identity system — Sprint 01 primitives", () => {
         expect(html).not.toContain("radialGradient");
     });
 
-    it("AlloyIdentityLoader renders mark above horizon with smoke layer", () => {
+    it("AlloyIdentityLoader renders atmosphere above mark and horizon", () => {
         const html = renderToStaticMarkup(
             createElement(AlloyIdentityLoader, { message: "Preparing Lead…" }),
         );
         expect(html).toContain("data-bos-mark-core");
         expect(html).toContain('data-bos-horizon="true"');
-        expect(html).toContain('data-bos-smoke="thinking"');
+        expect(html).toContain('data-alloy-identity-atmosphere="drifting"');
         expect(html).toContain("Preparing Lead…");
+        expect(html).not.toContain('data-bos-smoke="thinking"');
     });
 });
 
@@ -137,8 +138,8 @@ describe("BOS identity system — Sprint 02 migration", () => {
         expect(read("components/forms/review/BosReviewSummaryPlaceholder.tsx")).toContain("BosHeader");
     });
 
-    it("BOS workspaces use BosWorkspaceShell perimeter", () => {
-        expect(read("components/admin/actions/ActionWorkspaceBosShell.tsx")).toContain("bos-workspace-shell");
+    it("BOS workspaces use drawer band or BosWorkspaceShell perimeter", () => {
+        expect(read("components/admin/actions/ActionWorkspaceBosShell.tsx")).toContain("adminv2-drawer-modal-panel--bos-rail");
         expect(read("components/adminV2/messaging/ComposerBosEnhanceModal.tsx")).toContain("BosWorkspaceShell");
     });
 
@@ -157,9 +158,9 @@ describe("BOS identity system — Sprint 02 migration", () => {
         expect(read("components/admin/workspace/AdminV2RouteLoadingState.tsx")).not.toContain("BosSmoke");
     });
 
-    it("workspace open surfaces use BosRevealSequence workspace mode", () => {
-        expect(read("components/admin/actions/ActionWorkspaceBosShell.tsx")).toContain('mode="workspace"');
-        expect(read("components/adminV2/messaging/ComposerBosEnhanceModal.tsx")).toContain('mode="workspace"');
+    it("BOS action workspace opens immediately without workspace reveal gate", () => {
+        expect(read("components/admin/actions/ActionWorkspaceBosShell.tsx")).not.toContain("BosRevealSequence");
+        expect(read("components/adminV2/messaging/ComposerBosEnhanceModal.tsx")).not.toContain("BosRevealSequence");
     });
 
     it("identity gallery exists for screenshot capture", () => {

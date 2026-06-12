@@ -40,13 +40,9 @@ describe("BOS Adoption Sprint 01", () => {
         );
     });
 
-    it("workspace reveal wired on BOS open surfaces", () => {
-        expect(read("components/admin/actions/ActionWorkspaceBosShell.tsx")).toContain(
-            'mode="workspace"',
-        );
-        expect(read("components/adminV2/messaging/ComposerBosEnhanceModal.tsx")).toContain(
-            'mode="workspace"',
-        );
+    it("workspace open surfaces show content immediately without workspace reveal gate", () => {
+        expect(read("components/admin/actions/ActionWorkspaceBosShell.tsx")).not.toContain("BosRevealSequence");
+        expect(read("components/adminV2/messaging/ComposerBosEnhanceModal.tsx")).not.toContain("BosRevealSequence");
     });
 
     it("BosButton replaces custom BOS CTAs on adoption targets", () => {

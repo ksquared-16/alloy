@@ -43,7 +43,6 @@ const LEGACY_OCM_DISPOSITION_BY_STAGE: Record<string, readonly string[]> = {
     tour_scheduled: ["tour_requested", "tour_scheduled", "tour_completed", "decision_pending"],
     tour_completed: ["tour_completed", "decision_pending"],
     enrolling: [
-        "offer_pending",
         "registration_pending",
         "paperwork_pending",
         "start_date_scheduled",
@@ -51,7 +50,6 @@ const LEGACY_OCM_DISPOSITION_BY_STAGE: Record<string, readonly string[]> = {
         "ready_to_enroll",
     ],
     enrollment: [
-        "offer_pending",
         "registration_pending",
         "paperwork_pending",
         "start_date_scheduled",

@@ -45,12 +45,13 @@ const ENROLLMENT_MEMBERSHIP_DEFAULTS: Record<string, EnrollmentMembershipSpec> =
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["new_inquiry"],
+        included_status_keys: ["new_inquiry", "needs_qualification"],
     },
     qualification: {
         subject_type: "case",
         count_unit: "cases",
-        included_disposition_keys: ["needs_qualification", "qualified"],
+        included_disposition_keys: [],
+        included_status_keys: ["qualified"],
     },
     tour: {
         subject_type: "case",
@@ -68,24 +69,23 @@ const ENROLLMENT_MEMBERSHIP_DEFAULTS: Record<string, EnrollmentMembershipSpec> =
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["closed", "lost", "withdrawn"],
+        included_status_keys: ["lost", "withdrawn", "not_a_fit", "aged_out", "not_enrolling"],
     },
     waitlist: {
         subject_type: "candidate",
         count_unit: "candidates",
         location_scope_source: "placement_site",
-        included_disposition_keys: ["waitlisted", "waitlist_paused"],
+        included_disposition_keys: ["waitlisted", "offer_pending", "waitlist_paused"],
     },
     enrolling: {
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
         included_disposition_keys: [
-            "offer_pending",
+            "enrolling",
             "registration_pending",
             "paperwork_pending",
             "start_date_scheduled",
-            "enrolling",
         ],
     },
     enrollment: {
@@ -93,7 +93,7 @@ const ENROLLMENT_MEMBERSHIP_DEFAULTS: Record<string, EnrollmentMembershipSpec> =
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
         included_disposition_keys: [
-            "offer_pending",
+            "enrolling",
             "registration_pending",
             "paperwork_pending",
             "start_date_scheduled",
@@ -103,7 +103,13 @@ const ENROLLMENT_MEMBERSHIP_DEFAULTS: Record<string, EnrollmentMembershipSpec> =
         subject_type: "child",
         count_unit: "enrollment_tracks",
         location_scope_source: "ocm_site",
-        included_disposition_keys: ["family_withdrew", "withdrawn", "closed"],
+        included_disposition_keys: [
+            "withdrawn",
+            "family_withdrew",
+            "not_moving_forward",
+            "aged_out",
+            "not_enrolling",
+        ],
     },
     enrolled: {
         subject_type: "child",

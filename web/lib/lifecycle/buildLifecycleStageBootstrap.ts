@@ -25,6 +25,9 @@ import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleSt
 import { loadQueueMembershipStatusOptions } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
 import { resolveQueueMembershipForStage } from "@/lib/businessProcesses/resolveQueueMembership";
 import { enrollmentQueueMembershipLegacyFallback } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
+import { loadStatusCategoryCatalog } from "@/lib/lifecycle/loadStatusCategoryCatalog";
+import { resolveStatusRollupForStage } from "@/lib/lifecycle/statusCategoryCatalog";
+import { queueMembershipSubjectForStatusOptions } from "@/lib/lifecycle/stageStatusRollup";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
 
@@ -211,7 +214,23 @@ export async function buildLifecycleStageBootstrap(params: {
     const queue_membership =
         resolveQueueMembershipForStage(stageRecord ?? {}, builderStageKey) ??
         enrollmentQueueMembershipLegacyFallback(builderStageKey, process?.key ?? "");
-    const subjectForOptions = queue_membership?.subject_type ?? "case";
+    const subjectForOptions = queueMembershipSubjectForStatusOptions({
+        stageKey: builderStageKey,
+        trackKey: stageRecord?.track_key ?? null,
+        queueMembership: queue_membership,
+    });
+    const status_category_catalog = await loadStatusCategoryCatalog(supabase, orgId);
+    const legacyRollupKeys = [
+        ...(queue_membership?.included_status_keys ?? []),
+        ...(queue_membership?.included_disposition_keys ?? []),
+    ];
+    const status_rollup_v1 = resolveStatusRollupForStage({
+        savedRollup: stageRecord?.status_rollup_v1 ?? null,
+        stageKey: builderStageKey,
+        trackKey: stageRecord?.track_key ?? null,
+        catalog: status_category_catalog,
+        legacySelectedKeys: legacyRollupKeys,
+    });
     const queue_membership_status_options = await loadQueueMembershipStatusOptions(
         supabase,
         orgId,
@@ -227,6 +246,7 @@ export async function buildLifecycleStageBootstrap(params: {
     return {
         department_id: departmentId,
         builder_stage_key: builderStageKey,
+        stage_track_key: stageRecord?.track_key ?? null,
         operator_stage: operatorStage,
         statuses,
         pipeline,
@@ -238,6 +258,8 @@ export async function buildLifecycleStageBootstrap(params: {
         base_actions,
         queue_membership,
         queue_membership_status_options,
+        status_category_catalog,
+        status_rollup_v1,
         stage_operating_plan,
     };
 }

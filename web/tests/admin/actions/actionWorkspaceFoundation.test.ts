@@ -29,40 +29,38 @@ describe("action workspace foundation", () => {
         expect(shell).toContain("data-action-workspace-panel");
     });
 
-    it("production create lead uses locked stadium BOS workspace shell", () => {
+    it("production create lead uses workspace drawer shell with BOS rail band geometry", () => {
         const bos = read("components/admin/actions/ActionWorkspaceBosShell.tsx");
-        const frame = read("components/admin/actions/BosOperationalIntakeShellFrame.tsx");
-        const pathModule = read("lib/bos/bosOperationalIntakeShellPath.ts");
         const constants = read("lib/admin/actions/bosWorkspaceShell.ts");
+        const geometry = read("lib/admin/actions/actionWorkspaceGeometry.ts");
         const paste = read("components/admin/actions/ActionWorkspacePasteCanvas.tsx");
         const gather = read("components/admin/actions/ActionWorkspaceGatherFields.tsx");
-        expect(bos).toContain("BosOperationalIntakeShellFrame");
-        expect(frame).toContain("buildOperationalIntakeShellPath");
-        expect(pathModule).toContain("BOS_OPERATIONAL_INTAKE_SHELL_SWELL_RATIO");
-        expect(bos).toContain("BOS_BACKDROP_STYLE");
-        expect(frame).toContain("data-bos-shell-outer-haze");
-        expect(bos).toContain("BOS_SHELL_MIDNIGHT_FORGE");
-        expect(bos).toContain("data-action-workspace-bos-brand");
-        expect(bos).toContain("BOS_SHELL_TERRITORY_TITLE");
+        expect(bos).toContain('presentation = "workspace-drawer"');
+        expect(bos).toContain("measureAndApplyActionWorkspaceGeometry");
+        expect(bos).toContain("data-adminv2-drawer");
+        expect(bos).toContain("adminv2-drawer-modal-panel--bos-rail");
+        expect(bos).toContain("BOS_ACTION_WORKSPACE_FORGE_PERIMETER_STYLE");
+        expect(bos).toContain("action-workspace-bos-shell");
+        expect(bos).not.toContain("BosRevealSequence");
+        expect(bos).not.toContain("measureActionWorkspacePanelLayout");
+        expect(bos).toContain("contentBleed");
+        expect(bos).toContain("headerTone?:");
+        expect(bos).toContain('headerTone = "integrated"');
         expect(bos).toContain('data-action-workspace-shell="bos"');
         expect(bos).toContain("data-action-workspace-bos-workspace");
-        expect(bos).not.toContain("BOS_AMBIENT_GLOW_STYLE");
-        expect(bos).not.toContain("bos-workspace-shell__atmosphere");
-        expect(bos).toContain("ACTION_WORKSPACE_VIEWPORT_INSET");
-        expect(bos).toContain("overflow-hidden");
-        expect(bos).toContain("BOS_WORKSPACE_PANEL_HEIGHT");
+        expect(bos).toContain("BOS_ACTION_WORKSPACE_VIEWPORT_SCRIM_STYLE");
+        expect(bos).toContain("BOS_ACTION_WORKSPACE_FORGE_PERIMETER_STYLE");
+        expect(bos).toContain("BOS_AMBIENT_GLOW_STYLE");
+        expect(bos).toContain("bos-workspace-shell__perimeter");
+        expect(bos).toContain("bos-workspace-shell__atmosphere");
         expect(bos).not.toContain("BosTerritoryShell");
         expect(bos).not.toContain("BosCloudTerritorySvg");
         expect(bos).not.toContain("BosSmoke");
-        expect(bos).toContain("BosRevealSequence");
-        expect(bos).toContain('mode="workspace"');
-        expect(constants).toContain("BOS_WORKSPACE_WIDTH");
-        expect(constants).toContain("min(1200px, 84vw)");
-        expect(constants).toContain("BOS_WORKSPACE_TOP_INSET");
-        expect(constants).toContain("3.75rem");
-        expect(constants).toContain("BOS_WORKSPACE_PANEL_HEIGHT");
-        expect(constants).toContain("ACTION_WORKSPACE_VIEWPORT_INSET");
-        expect(constants).toContain("BOS_PASTE_CANVAS_MIN_HEIGHT");
+        expect(constants).toContain("BOS_WORKSPACE_DRAWER_WIDTH");
+        expect(constants).toContain("BOS_WORKSPACE_DRAWER_HEIGHT");
+        expect(constants).toContain("BOS_WORKSPACE_BAND_BACKDROP_STYLE");
+        expect(constants).toContain("CREATE_LEAD_WORKSPACE_TITLE");
+        expect(geometry).toContain("measureAndApplyActionWorkspaceGeometry");
         expect(paste).toContain("bosWorkspaceShell");
         expect(paste).toContain("sectionTitle");
         expect(paste).toContain("Tell BOS about the family");
@@ -136,6 +134,12 @@ describe("action workspace foundation", () => {
         const success = read("components/admin/actions/ActionWorkspaceSuccessState.tsx");
         const paste = read("components/admin/actions/ActionWorkspacePasteCanvas.tsx");
         expect(shell).toContain("BosHeader");
+        expect(shell).toContain('size="lg"');
+        expect(shell).toContain("BOS_ACTION_WORKSPACE_VIEWPORT_SCRIM_STYLE");
+        expect(shell).toContain("data-action-workspace-viewport-scrim");
+        expect(shell).not.toMatch(
+            /className="[^"]*action-workspace-bos-drawer-panel[^"]*bos-workspace-shell/,
+        );
         expect(banner).toContain("BosMark");
         expect(success).toContain("BosMark");
         expect(paste).toContain("BosRevealSequence");
@@ -165,12 +169,13 @@ describe("action workspace foundation", () => {
         expect(modal).toContain("validateCreateLeadPlatformMinimum");
         expect(modal).toContain("gatherPhase");
         expect(modal).toContain("Create Lead");
-        expect(modal).toContain("Review details");
+        expect(modal).toContain("CreateLeadOperationalIntake");
+        expect(modal).not.toContain("Review details");
         expect(modal).toContain("resolveCreateLeadPostCreateRecommendations");
         expect(modal).toContain("mapBosRecommendationsToSuccessActions");
-        expect(modal).toContain("Tell BOS about the family");
+        expect(modal).toContain("CreateLeadOperationalIntake");
+        expect(modal).not.toContain("ActionWorkspacePasteCanvas");
         expect(modal).toContain("onCreated");
-        expect(modal).toContain("ActionWorkspaceBosGuidancePanel");
         expect(modal).toContain("householdLabel");
         expect(modal).toContain("bosRecommendations");
     });
@@ -181,18 +186,14 @@ describe("action workspace foundation", () => {
         expect(review).toContain("Read-only summary");
     });
 
-    it("workspace and work-unit actions share command-rail button component", () => {
-        const actionsBlock = read("app/adminV2/components/workspace/blocks/ActionsBlock.tsx");
-        const railButton = read("app/adminV2/components/workspace/WorkspaceActionRailButton.tsx");
-        const railSection = read("app/adminV2/components/workspace/WorkspaceCommandRailActionsSection.tsx");
-        const deptPage = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
-        const wuRail = read("app/adminV2/components/workspace/WorkUnitAboveFoldActionsRail.tsx");
-        expect(actionsBlock).toContain("WorkspaceActionRailButton");
-        expect(railButton).toContain("workspaceActionRailButtonClass");
-        expect(railSection).toContain("WorkspaceCommandRailActionsSection");
-        expect(railSection).toContain("suppressSectionTitles");
-        expect(deptPage).toContain("WorkspaceCommandRailActionsSection");
-        expect(wuRail).toContain("WorkspaceCommandRailActionsSection");
+    it("persistent command rail renders executable action rows", () => {
+        const list = read("app/adminV2/components/workspace/CommandRailExecutableActionList.tsx");
+        const section = read("app/adminV2/components/workspace/WorkspaceCommandRailActionsSection.tsx");
+        const css = read("app/adminV2/adminV2.css");
+        expect(list).toContain("adminv2-command-rail-executable-action");
+        expect(list).toContain("ChevronRight");
+        expect(section).toContain("executableRows");
+        expect(css).toContain("adminv2-command-rail-executable-actions");
     });
 });
 
@@ -314,29 +315,35 @@ describe("create lead BOS suggestion flow", () => {
     });
 });
 
+/**
+ * @vitest-environment node
+ */
 describe("CreateLeadActionWorkspace render", () => {
-    it("renders gather step with paste canvas and analyze CTA", () => {
+    it("renders gather step with two-column operational intake", () => {
         const html = renderToStaticMarkup(
             createElement(CreateLeadModal, {
                 open: true,
                 departmentId: "dept-1",
                 onClose: () => {},
                 onSubmit: vi.fn(),
-            })
+            }),
         );
 
         expect(html).toContain('data-testid="create-lead-action-workspace"');
         expect(html).toContain('data-action-workspace-shell="bos"');
+        expect(html).toContain('data-action-workspace-presentation="workspace-drawer"');
         expect(html).toContain('data-action-workspace-bos-workspace="true"');
-        expect(html).toContain('data-bos-shell-outer-haze="true"');
-        expect(html).not.toContain('data-bos-ambient-glow="true"');
-        expect(html).not.toContain('data-action-workspace-bos-cloud-territory="true"');
-        expect(html).not.toContain("data-bos-cloud-territory-svg");
-        expect(html).toContain('data-testid="action-workspace-bos-reveal"');
-        expect(html).toContain('data-bos-reveal-mode="workspace"');
-        expect(html).not.toContain('data-testid="create-lead-gather-step"');
+        expect(html).toContain('data-action-workspace-header-tone="integrated"');
+        expect(html).toContain('data-testid="create-lead-gather-step"');
+        expect(html).toContain('data-testid="create-lead-operational-intake"');
+        expect(html).toContain('data-create-lead-column="material"');
+        expect(html).toContain('data-create-lead-column="draft-lead"');
+        expect(html).not.toContain('data-create-lead-column="bos-suggestions"');
+        expect(html).not.toContain('data-create-lead-column="guidance"');
+        expect(html).not.toContain('data-create-lead-column="findings"');
+        expect(html).not.toContain('data-testid="action-workspace-paste-canvas"');
+        expect(html).not.toContain("Analyze with BOS");
         expect(html).not.toContain('data-testid="create-lead-review-step"');
-        expect(html).not.toContain('data-testid="create-lead-gather-fields"');
     });
 });
 

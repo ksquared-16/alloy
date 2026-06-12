@@ -18,6 +18,7 @@ import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 
 export const LIFECYCLE_BUILDER_METADATA_KEY = "lifecycle_builder_v1" as const;
 
@@ -33,6 +34,8 @@ export type LifecycleBuilderStageRecord = {
     track_key?: string;
     /** Phase B — subject-grain queue membership metadata (optional until configured). */
     queue_membership_v1?: QueueMembershipV1;
+    /** Category-based status rollup for stage membership (V2). */
+    status_rollup_v1?: StatusRollupV1;
     /** Stage work plan + outcome rules (metadata only). */
     stage_operating_plan_v1?: StageOperatingPlanV1;
 };
@@ -118,6 +121,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             const label = typeof sr.label === "string" ? sr.label.trim() : "";
             if (!sid || !skey || !label) continue;
             const queueMembership = parseQueueMembershipV1(sr.queue_membership_v1);
+            const statusRollup = parseStatusRollupV1(sr.status_rollup_v1);
             const operatingPlan = parseStageOperatingPlanV1(sr.stage_operating_plan_v1);
             const track_key = typeof sr.track_key === "string" ? sr.track_key.trim() : undefined;
             stages.push({
@@ -129,6 +133,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
                 is_active: sr.is_active !== false,
                 ...(track_key ? { track_key } : {}),
                 ...(queueMembership ? { queue_membership_v1: queueMembership } : {}),
+                ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
                 ...(operatingPlan ? { stage_operating_plan_v1: operatingPlan } : {}),
             });
         }

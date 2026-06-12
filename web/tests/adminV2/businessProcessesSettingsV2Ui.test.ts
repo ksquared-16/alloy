@@ -9,6 +9,9 @@ import {
 } from "@/lib/lifecycle/queueMembershipUiLabels";
 import {
     BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE,
+    BUSINESS_PROCESS_SECTION_MEMBERSHIP,
+    BUSINESS_PROCESS_SECTION_OPERATING_PLAN,
+    BUSINESS_PROCESS_SECTION_READY,
     BUSINESS_PROCESS_SECTION_REQUIRED,
 } from "@/lib/lifecycle/businessProcessUiLabels";
 import { ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
@@ -22,8 +25,9 @@ function read(rel: string): string {
 describe("Business Processes Settings V2 — operator UI", () => {
     it("settings index links Business Processes to canonical route", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain("ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH");
-        expect(page).toContain('title="Business Processes"');
+        expect(page).toContain("CONFIGURATION_WORKSPACE_DOMAINS");
+        const domains = read("lib/adminV2/configurationWorkspaceDomains.ts");
+        expect(domains).toContain("/admin/settings/business-processes");
         expect(page).not.toContain('href="/admin/settings/lifecycle"');
     });
 
@@ -72,7 +76,7 @@ describe("Business Processes Settings V2 — operator UI", () => {
         expect(matrix).not.toContain("Lifecycle Actions");
         expect(matrix).not.toContain("Save lifecycle actions");
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        expect(board).toContain(BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE);
+        expect(board).toContain("BUSINESS_PROCESS_PROCESS_ACTIONS_TITLE");
         expect(board).toContain("business-process-actions-section");
     });
 
@@ -95,6 +99,62 @@ describe("Business Processes Settings V2 — operator UI", () => {
         const editor = read("components/adminV2/settings/LifecycleStageFieldRequirementsEditor.tsx");
         expect(editor).toContain("stage-requirements-helper");
         expect(editor).toContain("BUSINESS_PROCESS_STAGE_REQUIREMENTS_HELPER");
+    });
+
+    it("live stage workspace uses V3 section structure only", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        const configuration = read("components/adminV2/settings/lifecycle/LifecycleStageConfiguration.tsx");
+        const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
+
+        expect(configuration).toContain("LifecycleStageWorkspace");
+        expect(board).toContain("LifecycleStageConfiguration");
+
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_MEMBERSHIP");
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_REQUIRED");
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_OPERATING_PLAN");
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_READY");
+        expect(workspace).toContain('id="operating_plan"');
+        expect(workspace).toContain("lifecycle-stage-section-${id}");
+        expect(workspace).toContain("LifecycleStageAttentionSection");
+
+        expect(workspace).not.toContain("BUSINESS_PROCESS_SECTION_ACTIONS");
+        expect(workspace).not.toContain("BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED");
+        expect(workspace).not.toContain("lifecycle-stage-section-queue-advanced");
+        expect(workspace).not.toContain("LifecycleStageWorkUnitCard");
+        expect(workspace).not.toContain("Actions in this stage");
+        expect(workspace).not.toContain("Queue presentation");
+
+        expect(board).not.toContain("actionsSection=");
+    });
+
+    it("included statuses use category rollup picker with labels only", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        const bootstrap = read("lib/lifecycle/buildLifecycleStageBootstrap.ts");
+        const rollupEditor = read(
+            "components/adminV2/settings/lifecycle/LifecycleStageStatusRollupEditor.tsx"
+        );
+
+        expect(workspace).toContain("LifecycleStageStatusRollupEditor");
+        expect(workspace).toContain("status_category_catalog");
+        expect(workspace).toContain("status_rollup_v1");
+        expect(workspace).toContain("statusesSettingsHrefForEntity");
+        expect(bootstrap).toContain("loadStatusCategoryCatalog");
+        expect(bootstrap).toContain("status_rollup_v1");
+        expect(rollupEditor).toContain("lifecycle-status-category-selector");
+        expect(rollupEditor).toContain("{row.status_label}");
+        expect(rollupEditor).not.toMatch(/>\s*\{optionKey\}\s*</);
+        expect(rollupEditor).toContain("STAGE_MEMBERSHIP_INCLUDED_STATUSES_EMPTY");
+        expect(read("lib/lifecycle/statusRollupV1.ts")).toContain("status_rollup_v1");
+    });
+
+    it("status persistence routes by entity type for child vs lead tracks", () => {
+        const persist = read("lib/lifecycle/persistEnrollmentStageStatusAssignments.ts");
+        const save = read("lib/lifecycle/saveLifecycleStageRuntimeConfig.ts");
+
+        expect(persist).toContain("persistStageStatusAssignments");
+        expect(persist).toContain("StageStatusEntityType");
+        expect(save).toContain("statusEntityTypeForSubject");
+        expect(save).toContain("persistStageStatusAssignments");
     });
 });
 

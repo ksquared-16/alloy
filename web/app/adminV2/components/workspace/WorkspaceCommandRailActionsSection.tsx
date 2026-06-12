@@ -58,6 +58,7 @@ export function WorkspaceCommandRailActionsSection({
                         title={title}
                         surface={surface === "company" ? "company" : surface}
                         suppressSectionTitles
+                        executableRows
                     />
                 }
                 {footer}

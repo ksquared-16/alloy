@@ -63,16 +63,19 @@ describe("bosRailPresentationFlags", () => {
 });
 
 describe("bosRailPresentation CSS guards", () => {
-    it("adminV2.css suppresses rail for action workspace only", () => {
+    it("adminV2.css no longer suppresses rail for action workspace drawer", () => {
         const css = read("app/adminV2/adminV2.css");
-        expect(css).toContain("data-adminv2-action-workspace-open");
-        expect(css).not.toContain("data-adminv2-bos-rail-minimized");
+        expect(css).not.toContain('[data-adminv2-action-workspace-open="true"] [data-adminv2-persistent-command-rail="true"]');
     });
 
-    it("ActionWorkspaceBosShell wires action workspace document flag hook", () => {
+    it("ActionWorkspaceBosShell uses workspace drawer by default and only flags overlay mode", () => {
         const shell = read("components/admin/actions/ActionWorkspaceBosShell.tsx");
+        expect(shell).toContain('presentation = "workspace-drawer"');
         expect(shell).toContain("useActionWorkspaceOpenDocumentFlag");
-        expect(shell).toContain("measureActionWorkspacePanelLayout");
+        expect(shell).toContain('presentation === "overlay" ? "overlay" : "embedded"');
+        expect(shell).toContain("createPortal");
+        expect(shell).toContain("data-adminv2-drawer");
+        expect(shell).not.toContain("measureActionWorkspacePanelLayout");
     });
 
     it("does not auto-minimize BOS on record drawer", () => {

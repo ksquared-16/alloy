@@ -10,9 +10,11 @@ import {
 import { parseProcessStageKeyFromStatusMetadata } from "@/lib/businessProcesses/processStageMetadata";
 import type { EnrollmentStatusStageRow } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import type { QueueMembershipStatusOption } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
+import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
 import type {
     QueueMembershipCountUnit,
     QueueMembershipSubjectType,
+    QueueMembershipV1,
 } from "@/lib/lifecycle/queueMembershipV1";
 
 export type StageStatusEntityType = "opportunities" | "opportunity_customer_members";
@@ -29,10 +31,31 @@ export function stageTrackKeyFromRecord(
 }
 
 export function defaultSubjectTypeForStage(stageKey: string, trackKey?: string | null): QueueMembershipSubjectType {
-    const track = stageTrackKeyFromRecord(stageKey, trackKey);
+    const sk = stageKey.trim();
+    if (sk === "waitlist") return "candidate";
+
+    const templateDefault = defaultEnrollmentQueueMembershipForStage(sk);
+    if (templateDefault?.subject_type) return templateDefault.subject_type;
+
+    const track = stageTrackKeyFromRecord(sk, trackKey);
     if (track === ENROLLMENT_TRACK_CHILD_KEY) return "child";
-    if (stageKey.trim() === "waitlist") return "candidate";
     return "case";
+}
+
+/** Subject grain for Included Statuses — track-aware; ignores stale case grain on child-track stages. */
+export function queueMembershipSubjectForStatusOptions(params: {
+    stageKey: string;
+    trackKey?: string | null;
+    queueMembership?: QueueMembershipV1 | null;
+}): QueueMembershipSubjectType {
+    const sk = params.stageKey.trim();
+    const trackDefault = defaultSubjectTypeForStage(sk, params.trackKey);
+    const track = stageTrackKeyFromRecord(sk, params.trackKey);
+    const saved = params.queueMembership?.subject_type;
+
+    if (!saved) return trackDefault;
+    if (track === ENROLLMENT_TRACK_CHILD_KEY && saved === "case") return trackDefault;
+    return saved;
 }
 
 export function statusEntityTypeForSubject(subject: QueueMembershipSubjectType): StageStatusEntityType {

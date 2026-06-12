@@ -44,6 +44,14 @@ export function fieldBehaviorConfiguredOnRecordLayouts(entityType: string): bool
 export const FIELDS_HUB_DATA_STRUCTURE_INTRO =
     "Fields define data structure for each record type: labels, help text, field types, option sets, and where fields can appear.";
 
+/** F1 — fields created here propagate to Layouts, Forms, and Business Processes pickers. */
+export const FIELDS_HUB_REGISTRY_TRUST_NOTE =
+    "Fields you create or edit here are the canonical registry. They appear in Layouts, Forms Builder, and Business Processes stage requirements without adding them to a separate catalog.";
+
+/** Layouts — record experience presentation reads from the same field registry (F1). */
+export const LAYOUTS_HUB_REGISTRY_TRUST_NOTE =
+    "Layout fields come from the Fields registry. New fields appear here after you save them in Fields — no separate catalog step.";
+
 export const FIELDS_HUB_LAYOUT_BEHAVIOR_NOTE =
     "Required and read-only behavior for opportunity and job drawers is configured on Record layouts, not on this page.";
 

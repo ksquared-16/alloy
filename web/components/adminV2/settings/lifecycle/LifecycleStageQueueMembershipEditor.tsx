@@ -16,7 +16,6 @@ import type {
     QueueMembershipV1,
 } from "@/lib/lifecycle/queueMembershipV1";
 import {
-    countUnitSummaryLabel,
     QUEUE_MEMBERSHIP_COUNT_UNIT_FIELD_LABEL,
     QUEUE_MEMBERSHIP_COUNT_UNIT_LABELS,
     QUEUE_MEMBERSHIP_LOCATION_SCOPE_LABELS,
@@ -192,11 +191,6 @@ const LifecycleStageQueueMembershipEditor = forwardRef<
                 </label>
             ) : null}
 
-            {draft.included_keys.length > 0 ? (
-                <p className="text-[10px] text-alloy-midnight/45" data-testid="queue-membership-summary">
-                    {countUnitSummaryLabel(draft.count_unit)}
-                </p>
-            ) : null}
         </div>
     );
 });

@@ -1,10 +1,11 @@
 /**
- * Persist opportunity status_definitions process_stage_key for one builder stage.
+ * Persist status_definitions process_stage_key for one builder stage.
  * Shared by status-stages PATCH and saveLifecycleStageRuntimeConfig.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
 import {
     mergeProcessStageMetadata,
@@ -12,6 +13,7 @@ import {
     PROCESS_STAGE_UNASSIGNED,
 } from "@/lib/businessProcesses/processStageMetadata";
 import { ensureOrgOpportunityStatusRow } from "@/lib/lifecycle/ensureOrgOpportunityStatus";
+import type { StageStatusEntityType } from "@/lib/lifecycle/stageStatusRollup";
 
 export const ENROLLMENT_STAGE_STATUS_KEY_REGEX = /^[a-z0-9_]{2,32}$/;
 
@@ -36,17 +38,76 @@ export function assertValidEnrollmentStageStatusKeys(statusKeys: readonly string
     return normalized;
 }
 
-export async function persistEnrollmentStageStatusAssignments(
+async function ensureOrgStatusRow(
+    supabase: SupabaseClient,
+    orgId: string,
+    entityType: StageStatusEntityType,
+    statusKey: string,
+    effectiveRow: StatusDefinitionRow
+): Promise<{ id: string; metadata: Record<string, unknown> }> {
+    if (entityType === "opportunities") {
+        return ensureOrgOpportunityStatusRow(supabase, orgId, statusKey, effectiveRow);
+    }
+
+    const { data: existing } = await supabase
+        .from("status_definitions")
+        .select("id, metadata")
+        .eq("org_id", orgId)
+        .eq("entity_type", entityType)
+        .eq("status_key", statusKey)
+        .maybeSingle();
+
+    if (existing?.id) {
+        const metadata =
+            existing.metadata !== null &&
+            typeof existing.metadata === "object" &&
+            !Array.isArray(existing.metadata)
+                ? (existing.metadata as Record<string, unknown>)
+                : {};
+        return { id: existing.id as string, metadata };
+    }
+
+    const insert = {
+        org_id: orgId,
+        entity_type: entityType,
+        status_key: statusKey,
+        status_label: effectiveRow.status_label,
+        sort_order: effectiveRow.sort_order,
+        is_active: effectiveRow.is_active,
+        is_system: false,
+        industry_key: null as string | null,
+        metadata: normalizeStatusDefinitionMetadata(effectiveRow.metadata ?? {}),
+    };
+
+    const { data: created, error } = await supabase
+        .from("status_definitions")
+        .insert(insert)
+        .select("id, metadata")
+        .single();
+
+    if (error) {
+        throw new Error(error.message);
+    }
+
+    const metadata =
+        created.metadata !== null && typeof created.metadata === "object" && !Array.isArray(created.metadata)
+            ? (created.metadata as Record<string, unknown>)
+            : {};
+    return { id: created.id as string, metadata };
+}
+
+export async function persistStageStatusAssignments(
     supabase: SupabaseClient,
     orgId: string,
     stageKey: string,
-    statusKeys: readonly string[]
+    statusKeys: readonly string[],
+    entityType: StageStatusEntityType
 ): Promise<{ changedIds: string[] }> {
     const stage = stageKey.trim();
     const desiredKeys = assertValidEnrollmentStageStatusKeys(statusKeys);
     const desired = new Set(desiredKeys);
 
-    const effective = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", {
+    const effective = await fetchEffectiveStatusDefinitions(supabase, orgId, entityType, {
         activeOnly: false,
     });
     const byKey = new Map(effective.map((r) => [r.status_key, r]));
@@ -55,7 +116,7 @@ export async function persistEnrollmentStageStatusAssignments(
         .from("status_definitions")
         .select("id, status_key, metadata")
         .eq("org_id", orgId)
-        .eq("entity_type", "opportunities");
+        .eq("entity_type", entityType);
 
     const changedIds: string[] = [];
 
@@ -64,7 +125,7 @@ export async function persistEnrollmentStageStatusAssignments(
         if (!eff) {
             throw new Error(`Unknown status: ${key}`);
         }
-        const org = await ensureOrgOpportunityStatusRow(supabase, orgId, key, eff);
+        const org = await ensureOrgStatusRow(supabase, orgId, entityType, key, eff);
         const merged = mergeProcessStageMetadata(org.metadata, stage);
         const { error } = await supabase
             .from("status_definitions")
@@ -96,4 +157,14 @@ export async function persistEnrollmentStageStatusAssignments(
     }
 
     return { changedIds };
+}
+
+/** @deprecated Use {@link persistStageStatusAssignments} with explicit entity type. */
+export async function persistEnrollmentStageStatusAssignments(
+    supabase: SupabaseClient,
+    orgId: string,
+    stageKey: string,
+    statusKeys: readonly string[]
+): Promise<{ changedIds: string[] }> {
+    return persistStageStatusAssignments(supabase, orgId, stageKey, statusKeys, "opportunities");
 }

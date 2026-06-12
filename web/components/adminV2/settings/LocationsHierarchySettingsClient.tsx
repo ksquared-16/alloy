@@ -25,7 +25,8 @@ import {
     resolveActiveProgramCategoriesForSite,
     type LocationProgramCategoryRow,
 } from "@/lib/locations/locationProgramCategories";
-import LocationProgramCategoriesSettingsPanel from "@/components/adminV2/settings/LocationProgramCategoriesSettingsPanel";
+import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
+import LocationSiteConfigurationWorkspace from "@/components/adminV2/settings/LocationSiteConfigurationWorkspace";
 
 type DeletionEligibility = { allowed: boolean; reason?: string | null };
 
@@ -55,6 +56,7 @@ export default function LocationsHierarchySettingsClient() {
     const [deleteReasonById, setDeleteReasonById] = useState<Record<string, string>>({});
     const [programCategories, setProgramCategories] = useState<LocationProgramCategoryRow[]>([]);
     const [ageUnitSelectOptions, setAgeUnitSelectOptions] = useState<{ value: string; label: string }[]>([]);
+    const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
 
     const categoriesBySite = useMemo(
         () => indexLocationProgramCategoriesBySite(programCategories),
@@ -65,6 +67,37 @@ export default function LocationsHierarchySettingsClient() {
         () => rows.filter((r) => String(r.location_type ?? "").trim() === "site"),
         [rows]
     );
+
+    const siteTabs = useMemo(
+        () =>
+            siteRows.map((s) => ({
+                key: s.id,
+                label: (s.label ?? "").trim() || "Untitled site",
+            })),
+        [siteRows]
+    );
+
+    useEffect(() => {
+        if (!siteTabs.length) {
+            setSelectedSiteId(null);
+            return;
+        }
+        setSelectedSiteId((prev) => (prev && siteTabs.some((t) => t.key === prev) ? prev : siteTabs[0]!.key));
+    }, [siteTabs]);
+
+    const selectedSite = useMemo(
+        () => siteRows.find((s) => s.id === selectedSiteId) ?? null,
+        [siteRows, selectedSiteId]
+    );
+
+    const selectedSiteRoomRows = useMemo(() => {
+        if (!selectedSiteId) return [];
+        return rows.filter(
+            (r) =>
+                String(r.location_type ?? "").trim() === "unit" &&
+                r.parent_location_id === selectedSiteId
+        );
+    }, [rows, selectedSiteId]);
 
     useEffect(() => {
         let cancelled = false;
@@ -218,8 +251,9 @@ export default function LocationsHierarchySettingsClient() {
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS}>
             <SettingsPageHeader
+                variant="hero"
                 title="Locations"
-                subtitle="Sites and rooms for org configuration. Edit room metadata inline; open a row for full site or room details."
+                subtitle="Each site owns its Programs, Rooms, and (interim) schedule vocabulary. Child intake and drawer placement read from this configuration."
                 actions={
                     <button
                         type="button"
@@ -230,6 +264,28 @@ export default function LocationsHierarchySettingsClient() {
                     </button>
                 }
             />
+
+            {siteTabs.length > 0 && selectedSite && selectedSiteId ?
+                <div className="space-y-3" data-testid="location-site-workspace-shell">
+                    <SettingsEntityTabBar
+                        tabs={siteTabs}
+                        activeKey={selectedSiteId}
+                        onSelect={setSelectedSiteId}
+                        aria-label="Location sites"
+                    />
+                    <LocationSiteConfigurationWorkspace
+                        site={selectedSite}
+                        roomRows={selectedSiteRoomRows}
+                        categoriesBySite={categoriesBySite}
+                        programCategories={programCategories}
+                        onCategoriesChange={setProgramCategories}
+                        onError={setError}
+                        onOpenSite={(id) => openDrawer({ type: "locations", id })}
+                        onOpenRoom={(id) => openDrawer({ type: "locations", id })}
+                        inputClass={inputClass}
+                    />
+                </div>
+            :   null}
 
             <div className="mb-3">
                 <label className="sr-only" htmlFor="locations-search">
@@ -254,6 +310,12 @@ export default function LocationsHierarchySettingsClient() {
                     {search.trim() ? "No locations match your search." : "No org locations yet."}
                 </p>
             ) : (
+                <section className="space-y-2">
+                    <h3 className="text-xs font-semibold text-alloy-midnight/70">Room details</h3>
+                    <p className="text-[11px] text-alloy-midnight/50">
+                        Edit capacity, age range, and program category per classroom. Site workspace above summarizes
+                        offerings.
+                    </p>
                 <div className="overflow-x-auto rounded-lg border border-alloy-forge/12 bg-white/80">
                     <table
                         className="w-full table-fixed border-collapse text-sm"
@@ -476,26 +538,8 @@ export default function LocationsHierarchySettingsClient() {
                         </tbody>
                     </table>
                 </div>
+                </section>
             )}
-
-            <section className="mt-6 rounded-lg border border-alloy-forge/10 bg-white/70 px-3 py-3">
-                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                    Programs / offerings (per site)
-                </h3>
-                <p className="mb-3 text-xs text-alloy-midnight/55">
-                    Each site owns its program list. Add or edit programs here — lead intake, room categories,
-                    waitlists, and layouts read labels from this configuration via{" "}
-                    <span className="font-mono text-[10px]">inquiry_child.desired_program_type</span>.
-                </p>
-                <LocationProgramCategoriesSettingsPanel
-                    sites={siteRows}
-                    categoriesBySite={categoriesBySite}
-                    programCategories={programCategories}
-                    onCategoriesChange={setProgramCategories}
-                    onError={setError}
-                    inputClass={inputClass}
-                />
-            </section>
         </div>
     );
 }

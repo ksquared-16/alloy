@@ -1,12 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Zap } from "lucide-react";
-
-import {
-    loadCommandRailActionsExpanded,
-    persistCommandRailActionsExpanded,
-} from "@/lib/bos/commandRailActionsCollapsePersistence";
 
 type Props = {
     actionCount: number | null;
@@ -17,20 +12,13 @@ type Props = {
 
 /**
  * Compact collapsible Actions section above BOS dock in the workspace command rail.
+ * Collapsed by default — BOS remains the primary expanded surface.
  */
 export function CommandRailCollapsibleActionsSection({ actionCount, children, loading = false }: Props) {
     const [expanded, setExpanded] = useState(false);
 
-    useEffect(() => {
-        setExpanded(loadCommandRailActionsExpanded());
-    }, []);
-
     const toggle = useCallback(() => {
-        setExpanded((prev) => {
-            const next = !prev;
-            persistCommandRailActionsExpanded(next);
-            return next;
-        });
+        setExpanded((prev) => !prev);
     }, []);
 
     const countLabel =

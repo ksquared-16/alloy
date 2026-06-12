@@ -5,7 +5,7 @@
 
 export const BUSINESS_PROCESS_SETTINGS_PAGE_TITLE = "Business Processes";
 export const BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE =
-    "Configure how work moves through your organization — stages, membership, expected work, and actions.";
+    "Configure how work moves — stage membership, requirements, operating plan, and process actions.";
 
 export const BUSINESS_PROCESS_CATALOG_LABEL = "Processes";
 export const BUSINESS_PROCESS_CATALOG_EMPTY = "No processes yet";
@@ -22,6 +22,11 @@ export const BUSINESS_PROCESS_SECTION_REQUIRED_SUMMARY =
     "Fields recommended or required while a record is in this stage.";
 export const BUSINESS_PROCESS_STAGE_REQUIREMENTS_HELPER =
     "Choose which configured fields should be recommended or required while a record is in this stage.";
+
+/** Honest field-source note until stage requirements converge on layout field keys. */
+export const BUSINESS_PROCESS_STAGE_REQUIREMENTS_FIELD_SOURCE_NOTE =
+    "Fields come from your org field registry (Fields settings) plus platform enrollment defaults. Stage requiredness is stored separately from Layout placement — see configuration-ownership-doctrine.";
+
 export const BUSINESS_PROCESS_SECTION_ACTIONS = "Actions in this stage";
 export const BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY =
     "Actions available to staff while records are in this stage.";
@@ -51,17 +56,26 @@ export const BUSINESS_PROCESS_SECTION_WHO_BELONGS = "Who belongs here?";
 export const BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY =
     "Which families, children, or candidates appear in this stage.";
 
-export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK = "Expected Work";
+/** Top-level stage section — groups purpose, work, success, and attention rules. */
+export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN = "Operating Plan";
+export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY =
+    "What staff should do in this stage: purpose, expected work, success criteria, and when records need attention. Process Actions are configured at the process level below the stage list.";
+
+export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK = "Expected work";
 export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY =
-    "Work staff should complete while records are in this stage.";
+    "Tasks and outcomes staff should complete while records are in this stage.";
+
+export const BUSINESS_PROCESS_SECTION_ATTENTION = "Attention";
+export const BUSINESS_PROCESS_SECTION_ATTENTION_SUMMARY =
+    "When records in this stage should surface for follow-up. Off-track rules are edited in Expected work above; org-wide bucket labels are in advanced Attention defaults.";
+export const BUSINESS_PROCESS_SECTION_ATTENTION_ORG_DEFAULTS_LINK = "Org-wide attention defaults";
+
+export const BUSINESS_PROCESS_PROCESS_ACTIONS_GUIDANCE =
+    "Enable and restrict actions for this process in Process Actions — not per-stage queue settings.";
 
 export const BUSINESS_PROCESS_SECTION_PURPOSE = "Purpose";
 export const BUSINESS_PROCESS_SECTION_SUCCESS = "Success Criteria";
 export const BUSINESS_PROCESS_SECTION_OFF_TRACK = "Off Track Criteria";
-
-export const BUSINESS_PROCESS_SECTION_ATTENTION_SUMMARY =
-    "Off-track criteria in Expected work define when records in this stage need attention. Org-wide attention buckets and SLA thresholds are configured separately.";
-export const BUSINESS_PROCESS_SECTION_ATTENTION_ORG_DEFAULTS_LINK = "Attention defaults (org-wide)";
 
 export const BUSINESS_PROCESS_CROSS_LINK_OPEN = "Open Business Processes";
 

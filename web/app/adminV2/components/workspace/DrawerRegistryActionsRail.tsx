@@ -1,7 +1,6 @@
 "use client";
 
-import { WorkspaceActionRailButton } from "@/app/adminV2/components/workspace/WorkspaceActionRailButton";
-import { WORKSPACE_ACTION_RAIL_LIST_COLUMN_CLASS } from "@/lib/adminV2/workspace/workspaceActionRailButton";
+import { CommandRailExecutableActionList } from "@/app/adminV2/components/workspace/CommandRailExecutableActionList";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 type Props = {
@@ -13,7 +12,7 @@ type Props = {
 };
 
 /**
- * Drawer registry actions as rail buttons (replaces header Actions menu when BOS copilot is on).
+ * Drawer registry actions as executable rail rows (replaces header Actions menu when BOS copilot is on).
  */
 export function DrawerRegistryActionsRail({
     actions,
@@ -33,33 +32,21 @@ export function DrawerRegistryActionsRail({
     }
 
     return (
-        <ul className={`${WORKSPACE_ACTION_RAIL_LIST_COLUMN_CLASS} flex flex-col gap-1.5`} data-drawer-rail-actions-list="true">
-            {actions.map((action) => {
+        <CommandRailExecutableActionList
+            actions={actions.map((action) => {
                 const busy = actionLoadingKey === action.key;
                 const itemDisabled = disabled || busy;
-                return (
-                    <li key={action.key}>
-                        <WorkspaceActionRailButton
-                            tier="primary"
-                            className="w-full text-left"
-                            disabled={itemDisabled}
-                            title={
-                                busy ? "Action in progress…"
-                                : disabledReason && itemDisabled ?
-                                    disabledReason
-                                :   action.label
-                            }
-                            data-drawer-rail-action-key={action.key}
-                            onClick={() => {
-                                if (itemDisabled) return;
-                                onActionSelect(action);
-                            }}
-                        >
-                            {busy ? "…" : action.label}
-                        </WorkspaceActionRailButton>
-                    </li>
-                );
+                return {
+                    id: action.key,
+                    label: action.label,
+                    disabled: itemDisabled,
+                    busy,
+                    onClick: () => {
+                        if (itemDisabled) return;
+                        onActionSelect(action);
+                    },
+                };
             })}
-        </ul>
+        />
     );
 }

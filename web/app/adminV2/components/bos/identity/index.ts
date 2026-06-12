@@ -1,4 +1,8 @@
 export { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
+export {
+    AlloyIdentityAtmosphere,
+    type AlloyIdentityAtmospherePhase,
+} from "@/app/adminV2/components/bos/identity/AlloyIdentityAtmosphere";
 export { BosRailActionIcon } from "@/app/adminV2/components/bos/identity/BosRailActionIcon";
 export { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 export { BosHorizon } from "@/app/adminV2/components/bos/identity/BosHorizon";

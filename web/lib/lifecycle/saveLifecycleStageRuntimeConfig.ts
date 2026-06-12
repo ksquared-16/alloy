@@ -17,7 +17,12 @@ import type {
     LifecycleStageRuntimeConfigSnapshot,
     LifecycleStageSetupDebugTrace,
 } from "@/lib/lifecycle/lifecycleStageRuntimeConfigTypes";
-import { persistEnrollmentStageStatusAssignments } from "@/lib/lifecycle/persistEnrollmentStageStatusAssignments";
+import { persistStageStatusAssignments } from "@/lib/lifecycle/persistEnrollmentStageStatusAssignments";
+import { resolveQueueMembershipForStage } from "@/lib/businessProcesses/resolveQueueMembership";
+import {
+    queueMembershipSubjectForStatusOptions,
+    statusEntityTypeForSubject,
+} from "@/lib/lifecycle/stageStatusRollup";
 import {
     lifecycleStageWorkUnitNeedsQueueFilterSync,
     queueFilterKeysFromAssignedStatusKeys,
@@ -42,7 +47,9 @@ import { persistQueueMembershipForLifecycleStageSave } from "@/lib/lifecycle/per
 import { persistStageOperatingPlanForLifecycleStageSave } from "@/lib/lifecycle/persistStageOperatingPlanV1";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import { parseQueueMembershipV1, type QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import { persistStatusRollupForLifecycleStageSave } from "@/lib/lifecycle/persistStatusRollupV1";
 import { parseStageOperatingPlanV1, type StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 
 export type SaveLifecycleStageRuntimeConfigInput = {
     orgId: string;
@@ -56,6 +63,7 @@ export type SaveLifecycleStageRuntimeConfigInput = {
     fieldRules?: LifecycleStageFieldRules | LifecycleStageFieldRulesStored | null;
     queueMembership?: QueueMembershipV1 | unknown | null;
     stageOperatingPlan?: StageOperatingPlanV1 | unknown | null;
+    statusRollup?: StatusRollupV1 | unknown | null;
 };
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
@@ -192,17 +200,45 @@ export async function saveLifecycleStageRuntimeConfig(
         });
     }
 
-    await persistEnrollmentStageStatusAssignments(
-        supabase,
-        input.orgId,
-        stageKey,
-        selectedStatusKeys
-    );
-
     const explicitMembership =
         input.queueMembership !== undefined && input.queueMembership !== null
             ? parseQueueMembershipV1(input.queueMembership)
             : null;
+
+    const builderForMembership = lifecycleBuilderFromDepartmentMetadata(metadata);
+    const processForMembership = builderForMembership ? activeLifecycleProcess(builderForMembership) : null;
+    const stageRecord =
+        processForMembership?.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
+    const membershipForEntity =
+        explicitMembership ??
+        resolveQueueMembershipForStage(stageRecord ?? {}, stageKey) ??
+        null;
+    const subjectType = queueMembershipSubjectForStatusOptions({
+        stageKey,
+        trackKey: stageRecord?.track_key ?? null,
+        queueMembership: membershipForEntity,
+    });
+    const statusEntityType = statusEntityTypeForSubject(subjectType);
+    const parsedRollup = parseStatusRollupV1(input.statusRollup);
+
+    if (parsedRollup) {
+        const rollupPersist = await persistStatusRollupForLifecycleStageSave(supabase, {
+            orgId: input.orgId,
+            departmentId: input.departmentId,
+            stageKey,
+            metadata,
+            rollup: parsedRollup,
+        });
+        metadata = rollupPersist.metadata;
+    } else {
+        await persistStageStatusAssignments(
+            supabase,
+            input.orgId,
+            stageKey,
+            selectedStatusKeys,
+            statusEntityType
+        );
+    }
     const explicitOperatingPlan =
         input.stageOperatingPlan !== undefined && input.stageOperatingPlan !== null
             ? parseStageOperatingPlanV1(input.stageOperatingPlan)

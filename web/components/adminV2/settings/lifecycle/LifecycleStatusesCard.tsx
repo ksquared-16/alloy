@@ -9,8 +9,15 @@ import {
     type LifecycleStatusesSaveState,
 } from "@/lib/lifecycle/lifecycleStatusesCardState";
 
+type StatusOptionRow = {
+    status_key: string;
+    status_label: string;
+};
+
 export default function LifecycleStatusesCard({
     payload,
+    statusOptionRows,
+    statusesSettingsHref = "/admin/settings/statuses?entity_type=opportunities",
     loading,
     saving,
     saveState,
@@ -19,6 +26,9 @@ export default function LifecycleStatusesCard({
     onToggleStatus,
 }: {
     payload: EnrollmentStatusStagesPayload | null;
+    /** Stage-scoped vocabulary from bootstrap (lead vs enrollment status entity). */
+    statusOptionRows?: readonly StatusOptionRow[] | null;
+    statusesSettingsHref?: string;
     loading: boolean;
     saving?: boolean;
     saveState: LifecycleStatusesSaveState;
@@ -33,7 +43,15 @@ export default function LifecycleStatusesCard({
         () => !statusKeySetsEqual(draftKeySet, savedKeySet),
         [draftKeySet, savedKeySet]
     );
-    const allRows = useMemo(() => collectAllOpportunityStatusRows(payload), [payload]);
+    const allRows = useMemo(() => {
+        if (statusOptionRows != null) {
+            return statusOptionRows.map((row) => ({
+                status_key: row.status_key,
+                status_label: row.status_label,
+            }));
+        }
+        return collectAllOpportunityStatusRows(payload);
+    }, [payload, statusOptionRows]);
     const inputDisabled = loading || Boolean(saving);
 
     const activateStatusRow = (statusKey: string, currentlyChecked: boolean) => {
@@ -56,10 +74,12 @@ export default function LifecycleStatusesCard({
         return (
             <div className="space-y-2" data-testid="lifecycle-activation-statuses-empty">
                 <p className="text-xs text-alloy-midnight/60">
-                    No statuses exist yet for this record type.
+                    {statusOptionRows != null
+                        ? "No enrollment statuses are configured for this stage."
+                        : "No statuses exist yet for this record type."}
                 </p>
                 <Link
-                    href="/admin/settings/statuses?entity_type=opportunities"
+                    href={statusesSettingsHref}
                     className="inline-flex rounded-md border border-alloy-pine/30 bg-alloy-pine/5 px-2.5 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/10"
                     data-testid="lifecycle-activation-create-status"
                 >
@@ -119,7 +139,7 @@ export default function LifecycleStatusesCard({
                 </p>
             ) : dirty ? (
                 <p className="text-[10px] text-alloy-midnight/50" data-testid="lifecycle-activation-statuses-unsaved">
-                    Unsaved selection — use Save &amp; continue to persist.
+                    Unsaved selection — use Save stage to persist.
                 </p>
             ) : (
                 <p className="text-[10px] text-alloy-pine" data-testid="lifecycle-activation-statuses-saved">
@@ -128,7 +148,7 @@ export default function LifecycleStatusesCard({
             )}
 
             <Link
-                href="/admin/settings/statuses?entity_type=opportunities"
+                href={statusesSettingsHref}
                 className="inline-block text-[11px] font-medium text-alloy-pine hover:underline"
             >
                 Create or edit status definitions

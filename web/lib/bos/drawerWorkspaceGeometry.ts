@@ -232,12 +232,14 @@ const BOS_OVERLAY_SELECTOR = "[data-adminv2-bos-rail-overlay='true']";
 const COMMAND_COLUMN_SELECTOR = "[data-adminv2-workspace-command-column]";
 const DRAWER_OPEN_SELECTOR = "[data-adminv2-drawer='true']";
 const DRAWER_OPENING_OVERLAY_SELECTOR = "[data-opportunity-drawer-opening-overlay='true']";
+const ACTION_WORKSPACE_OVERLAY_SELECTOR = "[data-action-workspace-overlay='true']";
 
 export function isDrawerWorkspaceGeometryActive(): boolean {
     if (typeof document === "undefined") return false;
     return (
         document.querySelector(DRAWER_OPEN_SELECTOR) != null ||
-        document.querySelector(DRAWER_OPENING_OVERLAY_SELECTOR) != null
+        document.querySelector(DRAWER_OPENING_OVERLAY_SELECTOR) != null ||
+        document.querySelector(ACTION_WORKSPACE_OVERLAY_SELECTOR) != null
     );
 }
 

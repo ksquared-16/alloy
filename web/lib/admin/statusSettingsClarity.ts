@@ -38,11 +38,11 @@ export const STATUS_SETTINGS_SECTION_TITLES: Record<string, string> = {
 /** Section descriptions — what each Settings entity type controls. */
 export const STATUS_SETTINGS_SECTION_DESCRIPTIONS: Record<string, string> = {
     opportunities:
-        "Controls the Lead drawer status dropdown and family-track enrollment stages.",
+        "Controls Lead drawer labels and order for family-track pipeline statuses. Stage rollups are assigned in Business Processes.",
     persons:
         "Controls People drawer status dropdowns. Options are filtered by Applicability profile.",
     opportunity_customer_members:
-        "Controls per-child enrollment status on a Lead (child track). Drives Waitlist, Enrolling, and Enrolled queues.",
+        "Controls per-child enrollment disposition labels and order. Stage rollups are assigned in Business Processes.",
 };
 
 /** Default section tags shown at entity-type level. */

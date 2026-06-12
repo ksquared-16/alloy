@@ -3,8 +3,15 @@
 import type { BosIdentitySize } from "@/lib/bos/bosIdentityTokens";
 
 import { AlloyIdentityLoader } from "@/app/adminV2/components/bos/identity/AlloyIdentityLoader";
+import type { AlloyIdentityAtmospherePhase } from "@/app/adminV2/components/bos/identity/AlloyIdentityAtmosphere";
 import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
 import type { BosSmokeState } from "@/app/adminV2/components/bos/identity/BosSmoke";
+
+function loaderPhaseFromSmokeState(state: BosSmokeState): AlloyIdentityAtmospherePhase {
+    if (state === "converging") return "tightening";
+    if (state === "complete") return "revealing";
+    return "drifting";
+}
 
 type Props = {
     message: string;
@@ -30,7 +37,12 @@ export function BosWorkingState({
     if (state) {
         return (
             <div data-bos-working-state={state} className={className}>
-                <AlloyIdentityLoader message={message} markSize={markSize} data-testid={dataTestId} />
+                <AlloyIdentityLoader
+                    message={message}
+                    markSize={markSize}
+                    phase={loaderPhaseFromSmokeState(state)}
+                    data-testid={dataTestId}
+                />
             </div>
         );
     }

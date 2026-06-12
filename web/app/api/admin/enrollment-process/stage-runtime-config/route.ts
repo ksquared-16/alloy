@@ -10,6 +10,7 @@ import { LifecycleStageQueueFiltersEmptyError } from "@/lib/lifecycle/lifecycleS
 import { LifecycleStageWorkUnitIdentityConflictError } from "@/lib/lifecycle/lifecycleStageWorkUnitIdentity";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { parseStatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import {
     saveLifecycleStageRuntimeConfig,
     validateLifecycleStageRuntimeConfigSnapshot,
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
         } | null;
         queue_membership_v1?: unknown;
         stage_operating_plan_v1?: unknown;
+        status_rollup_v1?: unknown;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -135,6 +137,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid stage_operating_plan_v1" }, { status: 400 });
     }
 
+    const statusRollupRaw = body.status_rollup_v1;
+    const statusRollup =
+        statusRollupRaw !== undefined && statusRollupRaw !== null
+            ? parseStatusRollupV1(statusRollupRaw)
+            : null;
+    if (statusRollupRaw !== undefined && statusRollupRaw !== null && !statusRollup) {
+        return NextResponse.json({ error: "Invalid status_rollup_v1" }, { status: 400 });
+    }
+
     const supabase = createAdminClient();
     const deptOk = await assertRowOrg(supabase, "departments", departmentId, ctx.orgId);
     if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
@@ -154,6 +165,7 @@ export async function POST(request: NextRequest) {
             fieldRules,
             ...(queueMembership ? { queueMembership } : {}),
             ...(stageOperatingPlan ? { stageOperatingPlan } : {}),
+            ...(statusRollup ? { statusRollup } : {}),
         });
 
         const pipelineSnapshot =

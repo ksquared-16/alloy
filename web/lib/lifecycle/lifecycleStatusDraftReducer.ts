@@ -24,6 +24,7 @@ export type LifecycleStatusDraftAction =
     | { type: "toggle"; stageKey: string; statusKey: string; selected: boolean }
     | { type: "syncFromServer"; stageKey: string; keys: readonly string[] }
     | { type: "commitSaved"; stageKey: string; keys: readonly string[] }
+    | { type: "setKeys"; stageKey: string; keys: readonly string[] }
     | { type: "clearStageDraft"; stageKey: string };
 
 export function lifecycleStatusDraftReducer(
@@ -68,6 +69,15 @@ export function lifecycleStatusDraftReducer(
                 draftByStage: writeStatusDraftForStage(state.draftByStage, sk, action.keys),
                 savedByStage: writeStatusDraftForStage(state.savedByStage, sk, action.keys),
                 dirtyByStage,
+            };
+        }
+        case "setKeys": {
+            const sk = normalizeLifecycleBuilderStageKey(action.stageKey);
+            if (!sk) return state;
+            return {
+                ...state,
+                draftByStage: writeStatusDraftForStage(state.draftByStage, sk, action.keys),
+                dirtyByStage: { ...state.dirtyByStage, [sk]: true },
             };
         }
         case "commitSaved": {

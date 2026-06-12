@@ -168,9 +168,19 @@ export default function BosIdentitySystemGallery() {
                 </Frame>
 
                 <Frame id="working" label={STATES[5].label}>
-                    <div className="grid gap-6 md:grid-cols-2">
-                        <BosWorkingState message="Analyzing enrollment pipeline…" state="thinking" />
-                        <BosWorkingState message="Drafting communication…" state="converging" />
+                    <div className="grid gap-6 md:grid-cols-3">
+                        <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">drifting — canonical loader atmosphere</p>
+                            <BosWorkingState message="Gathering context…" state="thinking" />
+                        </div>
+                        <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">tightening — readiness handoff</p>
+                            <BosWorkingState message="Almost ready…" state="converging" />
+                        </div>
+                        <div className="rounded-xl border border-alloy-stone/10 bg-white px-4 py-6">
+                            <p className="mb-3 text-xs font-medium text-alloy-midnight/50">revealing — mark emerges</p>
+                            <BosWorkingState message="Opening…" state="complete" />
+                        </div>
                     </div>
                 </Frame>
 

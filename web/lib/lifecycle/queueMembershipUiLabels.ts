@@ -67,7 +67,10 @@ export function includedStatusFieldLabel(subject: QueueMembershipSubjectType): s
 export const STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL = "Included statuses";
 
 export const STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER =
-    "Select the statuses that roll up into this stage.";
+    "Choose status categories and the statuses that roll up into this stage.";
+
+export const STAGE_MEMBERSHIP_INCLUDED_STATUSES_EMPTY =
+    "No enrollment statuses are configured for this stage.";
 
 /** Summary label for count unit in stage header. */
 export function countUnitSummaryLabel(countUnit: QueueMembershipCountUnit): string {

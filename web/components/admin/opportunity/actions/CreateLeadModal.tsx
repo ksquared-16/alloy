@@ -23,16 +23,13 @@ import {
 } from "@/lib/admin/actions/createLeadPlatformGather";
 import {
     formatCreateLeadHouseholdLabel,
-    resolveCreateLeadBosGuidance,
 } from "@/lib/admin/actions/createLeadBosGuidance";
 import { mapBosRecommendationsToSuccessActions } from "@/lib/admin/actions/mapBosRecommendationsToSuccessActions";
 import { resolveCreateLeadPostCreateRecommendations } from "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations";
+import { CREATE_LEAD_WORKSPACE_TITLE } from "@/lib/admin/actions/bosWorkspaceShell";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
-import { ActionWorkspaceBosGuidancePanel } from "@/components/admin/actions/ActionWorkspaceBosGuidancePanel";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
-import { ActionWorkspacePasteCanvas } from "@/components/admin/actions/ActionWorkspacePasteCanvas";
-import { ActionWorkspaceBosSuggestions } from "@/components/admin/actions/ActionWorkspaceBosSuggestions";
-import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
+import { CreateLeadOperationalIntake } from "@/components/admin/actions/CreateLeadOperationalIntake";
 import { ActionWorkspaceReviewSummary } from "@/components/admin/actions/ActionWorkspaceReviewSummary";
 import { ActionWorkspaceExecuteState } from "@/components/admin/actions/ActionWorkspaceExecuteState";
 import { ActionWorkspaceSuccessState } from "@/components/admin/actions/ActionWorkspaceSuccessState";
@@ -48,7 +45,6 @@ export type CreateLeadFormPayload = {
 };
 
 const SUCCESS_OPEN_DELAY_MS = 1400;
-const WORKSPACE_TITLE = "Tell BOS about the family";
 
 function legacyPayloadFromValues(values: Record<string, string>): CreateLeadFormPayload {
     return {
@@ -72,7 +68,7 @@ export function CreateLeadModal(props: {
     onSubmit: (payload: CreateLeadFormPayload) => Promise<{ opportunity_id: string }>;
     onCreated?: (opportunityId: string) => void;
 }) {
-    const { open, departmentId, title = WORKSPACE_TITLE, onClose, onSubmit, onCreated } = props;
+    const { open, departmentId, title = CREATE_LEAD_WORKSPACE_TITLE, onClose, onSubmit, onCreated } = props;
     const siteFilter = useWorkspaceSiteFilter();
 
     const [step, setStep] = useState<ActionWorkspaceStep>("gather");
@@ -80,6 +76,7 @@ export function CreateLeadModal(props: {
     const [values, setValues] = useState<Record<string, string>>(emptyCreateLeadGatherValues());
     const [pasteText, setPasteText] = useState("");
     const [suggestions, setSuggestions] = useState<ActionWorkspaceBosSuggestion[]>([]);
+    const [materialAnalyzed, setMaterialAnalyzed] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -96,7 +93,6 @@ export function CreateLeadModal(props: {
 
     const sections = useMemo(() => gatherSections(), []);
     const validation = useMemo(() => validateCreateLeadPlatformMinimum(values), [values]);
-    const bosGuidance = useMemo(() => resolveCreateLeadBosGuidance(values), [values]);
     const householdLabel = useMemo(() => formatCreateLeadHouseholdLabel(values), [values]);
     const bosRecommendations = useMemo(() => resolveCreateLeadPostCreateRecommendations(values), [values]);
     const successActions = useMemo(
@@ -108,8 +104,10 @@ export function CreateLeadModal(props: {
                     handoffToCreatedLead(opportunityId);
                 },
             }),
-        [bosRecommendations, handoffToCreatedLead]
+        [bosRecommendations, handoffToCreatedLead],
     );
+    const manualMode = gatherPhase === "details";
+    const validationIssues = validation.ok ? [] : validation.issues;
 
     const reset = useCallback(() => {
         setStep("gather");
@@ -117,6 +115,7 @@ export function CreateLeadModal(props: {
         setValues(emptyCreateLeadGatherValues());
         setPasteText("");
         setSuggestions([]);
+        setMaterialAnalyzed(false);
         setAnalyzing(false);
         setAnalyzeError(null);
         setError(null);
@@ -157,18 +156,27 @@ export function CreateLeadModal(props: {
         setValues((prev) => ({ ...prev, [payloadKey]: next }));
     }, []);
 
+    const clearMaterial = useCallback(() => {
+        setPasteText("");
+        setSuggestions([]);
+        setMaterialAnalyzed(false);
+        setAnalyzeError(null);
+        setGatherPhase("paste");
+    }, []);
+
     const runAnalyze = useCallback(() => {
         if (!departmentId || !pasteText.trim()) return;
         setAnalyzing(true);
         setAnalyzeError(null);
         setError(null);
+        setGatherPhase("paste");
         try {
             const spec = createLeadParserSpec(departmentId);
             const extraction = createLeadIntakePasteParser.parse({ text: pasteText, spec });
             const mapped = bosSuggestionsFromExtraction(extraction);
             if (mapped.length === 0) {
                 setAnalyzeError("BOS could not extract structured fields. Try adding labels like Parent: or Email:.");
-                setGatherPhase("paste");
+                setSuggestions([]);
                 return;
             }
             setSuggestions(
@@ -179,9 +187,9 @@ export function CreateLeadModal(props: {
                     suggested_value: s.suggested_value,
                     confidence: s.confidence,
                     selected: true,
-                }))
+                })),
             );
-            setGatherPhase("bos-results");
+            setMaterialAnalyzed(true);
         } catch (e) {
             setSuggestions([]);
             setAnalyzeError(e instanceof Error ? e.message : "Could not analyze pasted text.");
@@ -199,7 +207,7 @@ export function CreateLeadModal(props: {
             return next;
         });
         setSuggestions([]);
-        setGatherPhase("details");
+        setGatherPhase("paste");
     }, [suggestions]);
 
     const runExecute = useCallback(async () => {
@@ -229,7 +237,7 @@ export function CreateLeadModal(props: {
     }, [departmentId, onSubmit, values]);
 
     const footer =
-        step === "gather" && gatherPhase === "paste" ?
+        step === "gather" ?
             <>
                 <button
                     type="button"
@@ -238,54 +246,31 @@ export function CreateLeadModal(props: {
                 >
                     Cancel
                 </button>
-                <button
-                    type="button"
-                    disabled={!departmentId}
-                    onClick={() => {
-                        setGatherPhase("details");
-                        setError(null);
-                    }}
-                    className="rounded-xl border border-alloy-stone/12 bg-white px-5 py-2.5 text-sm font-semibold text-alloy-midnight/75 shadow-[0_1px_2px_rgba(15,35,52,0.05)] transition-colors hover:border-alloy-stone/20 hover:bg-[#FAFBFC] disabled:opacity-50"
-                    data-testid="create-lead-enter-manually-button"
-                >
-                    Enter manually
-                </button>
-            </>
-        : step === "gather" && gatherPhase === "bos-results" ?
-            null
-        : step === "gather" && gatherPhase === "details" ?
-            <>
-                <button
-                    type="button"
-                    onClick={() => {
-                        setGatherPhase(suggestions.length ? "bos-results" : "paste");
-                        setError(null);
-                    }}
-                    className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/75 hover:bg-alloy-stone/5"
-                >
-                    Back
-                </button>
-                <button
-                    type="button"
-                    disabled={!validation.ok}
-                    onClick={() => {
-                        setError(null);
-                        setStep("review");
-                    }}
-                    className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/5 disabled:opacity-50"
-                    data-testid="create-lead-review-details-button"
-                >
-                    Review details
-                </button>
-                <button
-                    type="button"
-                    disabled={!validation.ok || !departmentId}
-                    onClick={() => void runExecute()}
-                    className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                    data-testid="create-lead-create-button"
-                >
-                    Create Lead
-                </button>
+                {suggestions.length > 0 ?
+                    null
+                :   <>
+                        {validation.ok ?
+                            <button
+                                type="button"
+                                disabled={!departmentId}
+                                onClick={() => void runExecute()}
+                                className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                                data-testid="create-lead-create-button"
+                            >
+                                Create Lead
+                            </button>
+                        :   null}
+                        {manualMode && !validation.ok ?
+                            <button
+                                type="button"
+                                onClick={() => setGatherPhase("paste")}
+                                className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/75 hover:bg-alloy-stone/5"
+                            >
+                                Back to material
+                            </button>
+                        :   null}
+                    </>
+                }
             </>
         : step === "review" ?
             <>
@@ -319,76 +304,52 @@ export function CreateLeadModal(props: {
             onClose={onClose}
             busy={step === "execute" || step === "success"}
             title={title}
+            presentation="workspace-drawer"
+            contentBleed={step === "gather"}
+            headerTone="integrated"
             step={step}
             footer={footer}
             data-testid="create-lead-action-workspace"
         >
             <ActionWorkspaceStepContent step="gather" activeStep={step}>
                 <div className="flex h-full min-h-0 flex-col" data-testid="create-lead-gather-step">
-                    {gatherPhase === "paste" ?
-                        <ActionWorkspacePasteCanvas
-                            pasteText={pasteText}
-                            onPasteTextChange={setPasteText}
-                            onAnalyze={runAnalyze}
-                            analyzing={analyzing}
-                            disabled={!departmentId}
-                            analyzeError={analyzeError}
-                            sectionTitle={title}
-                            hero
-                        />
-                    : null}
-
-                    {gatherPhase === "bos-results" ?
-                        <ActionWorkspaceBosSuggestions
-                            suggestions={suggestions}
-                            onToggle={(id) => {
-                                setSuggestions((prev) =>
-                                    prev.map((s) => (s.id === id ? { ...s, selected: !s.selected } : s))
-                                );
-                            }}
-                            onToggleAll={(selected) => {
-                                setSuggestions((prev) => prev.map((s) => ({ ...s, selected })));
-                            }}
-                            onApply={applySuggestions}
-                            onDismiss={() => {
-                                setSuggestions([]);
-                                setGatherPhase("paste");
-                            }}
-                            onSuggestionValueChange={(id, value) => {
-                                setSuggestions((prev) =>
-                                    prev.map((s) => (s.id === id ? { ...s, suggested_value: value } : s))
-                                );
-                            }}
-                            busy={analyzing}
-                        />
-                    : null}
-
-                    {gatherPhase === "details" ?
-                        <div className="flex h-full min-h-0 flex-col gap-5">
-                            <ActionWorkspaceBosGuidancePanel guidance={bosGuidance} />
-                            <ActionWorkspaceGatherFields
-                                sections={sections}
-                                values={values}
-                                onChange={setFieldValue}
-                                platformRequiredKeys={CREATE_LEAD_PLATFORM_REQUIRED_KEYS}
-                                dataTestIdPrefix="create-lead-gather"
-                            />
-                            {!validation.ok ?
-                                <div
-                                    className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-950"
-                                    data-testid="create-lead-missing-required"
-                                    role="alert"
-                                >
-                                    {validation.issues.join(" · ")}
-                                </div>
-                            :   null}
-                        </div>
-                    : null}
+                    <CreateLeadOperationalIntake
+                        pasteText={pasteText}
+                        onPasteTextChange={setPasteText}
+                        suggestions={suggestions}
+                        values={values}
+                        sections={sections}
+                        platformRequiredKeys={CREATE_LEAD_PLATFORM_REQUIRED_KEYS}
+                        onFieldChange={setFieldValue}
+                        onToggleSuggestion={(id) => {
+                            setSuggestions((prev) =>
+                                prev.map((s) => (s.id === id ? { ...s, selected: !s.selected } : s)),
+                            );
+                        }}
+                        onApplySuggestions={applySuggestions}
+                        onSuggestionValueChange={(id, value) => {
+                            setSuggestions((prev) =>
+                                prev.map((s) => (s.id === id ? { ...s, suggested_value: value } : s)),
+                            );
+                        }}
+                        onAnalyze={runAnalyze}
+                        analyzing={analyzing}
+                        analyzeError={analyzeError}
+                        disabled={!departmentId}
+                        manualMode={manualMode}
+                        onEnterManually={() => {
+                            setGatherPhase("details");
+                            setError(null);
+                        }}
+                        onClearMaterial={clearMaterial}
+                        materialAnalyzed={materialAnalyzed}
+                        validationIssues={validationIssues}
+                    />
                 </div>
             </ActionWorkspaceStepContent>
 
             <ActionWorkspaceStepContent step="review" activeStep={step}>
-                <div className="h-full" data-testid="create-lead-review-step">
+                <div className="h-full px-8 py-4" data-testid="create-lead-review-step">
                     <ActionWorkspaceReviewSummary
                         fields={CREATE_LEAD_GATHER_FIELDS}
                         values={values}
@@ -415,7 +376,7 @@ export function CreateLeadModal(props: {
             </ActionWorkspaceStepContent>
 
             {error ?
-                <div className="mt-2 shrink-0 rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember">
+                <div className="mx-6 mb-3 shrink-0 rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember">
                     {error}
                 </div>
             :   null}

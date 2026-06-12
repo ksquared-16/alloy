@@ -185,7 +185,18 @@ describe("AdminV2 click debug utility", () => {
         expect(src).toContain('addEventListener("click", handler, true)');
     });
 
-    it("is installed inside AdminDrawerProvider workspace tree", () => {
+    it("drawer scope wraps persistent command rail and route children", () => {
+        const shell = read("app/adminV2/components/AdminV2Shell.tsx");
+        const scope = read("app/adminV2/components/AdminV2ShellDrawerScope.tsx");
+        expect(shell).toContain("AdminV2ShellDrawerScope");
+        expect(shell).toContain("AdminV2PersistentCommandRail");
+        expect(scope).toContain("AdminDrawerProvider");
+        expect(scope).not.toMatch(/import AdminEntityDrawer|<AdminEntityDrawer/);
+        expect(read("app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx")).toContain("AdminEntityDrawer");
+        expect(read("app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx")).not.toContain("AdminDrawerProvider");
+    });
+
+    it("click debug installer remains in workspace client tree", () => {
         const src = read("app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx");
         expect(src).toContain("AdminV2ClickDebugInstaller");
     });

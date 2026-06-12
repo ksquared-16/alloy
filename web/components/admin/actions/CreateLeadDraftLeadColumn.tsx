@@ -1,0 +1,271 @@
+"use client";
+
+import { Check, Loader2 } from "lucide-react";
+
+import type {
+    ActionWorkspaceBosSuggestion,
+    ActionWorkspaceGatherField,
+} from "@/lib/admin/actions/actionWorkspaceTypes";
+import type { CreateLeadLiveFinding } from "@/lib/admin/actions/createLeadOperationalIntakeModel";
+import {
+    BOS_CONFIDENCE_STYLES,
+    missingPlatformKeysFromSuggestions,
+} from "@/lib/admin/actions/actionWorkspaceBosTheme";
+import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
+
+type Props = {
+    findings: CreateLeadLiveFinding[];
+    suggestions: ActionWorkspaceBosSuggestion[];
+    analyzing: boolean;
+    manualMode: boolean;
+    sections: Array<{ key: string; label: string; fields: ActionWorkspaceGatherField[] }>;
+    values: Record<string, string>;
+    platformRequiredKeys: readonly string[];
+    onFieldChange: (payloadKey: string, value: string) => void;
+    onSuggestionValueChange: (id: string, value: string) => void;
+    onToggleSuggestion: (id: string) => void;
+    onApplySuggestions: () => void;
+    selectedSuggestionCount: number;
+    analyzeError: string | null;
+    validationIssues: string[];
+};
+
+function DraftFieldCard({
+    finding,
+    onValueChange,
+    onToggle,
+}: {
+    finding: CreateLeadLiveFinding;
+    onValueChange?: (id: string, value: string) => void;
+    onToggle?: (id: string) => void;
+}) {
+    const showSuggestionToggle = finding.source === "suggestion" && onToggle && finding.status !== "streaming";
+
+    if (finding.status === "empty") {
+        return (
+            <div
+                className="rounded-xl border border-dashed border-alloy-stone/15 bg-[#FAFBFC] px-3 py-2.5"
+                data-finding={finding.payloadKey}
+                data-draft-field={finding.payloadKey}
+            >
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/30">
+                    {finding.entity}
+                </p>
+                <p className="mt-1 text-[12px] text-alloy-midnight/25">Waiting for material…</p>
+            </div>
+        );
+    }
+
+    if (finding.status === "streaming") {
+        return (
+            <div
+                className="rounded-xl border border-[#00A283]/20 bg-[#00A283]/[0.05] px-3 py-2.5"
+                data-finding={finding.payloadKey}
+                data-draft-field={finding.payloadKey}
+            >
+                <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[#007A63]">
+                        {finding.entity}
+                    </p>
+                    <span className="flex items-center gap-1 text-[10px] font-medium text-[#007A63]">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Filling
+                    </span>
+                </div>
+                <p className="mt-1 text-[14px] font-semibold text-alloy-midnight">{finding.value}</p>
+            </div>
+        );
+    }
+
+    const review = finding.status === "review";
+    const confidenceStyle =
+        finding.confidence ? BOS_CONFIDENCE_STYLES[finding.confidence] : null;
+
+    return (
+        <div
+            className={`rounded-xl border px-3 py-2.5 shadow-[0_1px_0_rgba(15,35,52,0.03)] ${
+                review ?
+                    "border-amber-200/80 bg-amber-50/50"
+                :   "border-alloy-stone/10 bg-white"
+            } ${confidenceStyle?.border ?? ""}`}
+            data-finding={finding.payloadKey}
+            data-draft-field={finding.payloadKey}
+        >
+            <div className="flex items-start gap-2.5">
+                {showSuggestionToggle ?
+                    <input
+                        type="checkbox"
+                        checked={finding.selected ?? false}
+                        onChange={() => onToggle(finding.id)}
+                        className="mt-1"
+                        data-testid={`action-workspace-bos-suggestion-checkbox-${finding.payloadKey}`}
+                    />
+                :   null}
+                <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                            {finding.entity}
+                        </p>
+                        <span className="flex items-center gap-2">
+                            {confidenceStyle ?
+                                <span
+                                    className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${confidenceStyle.badge}`}
+                                >
+                                    {confidenceStyle.label}
+                                </span>
+                            :   null}
+                            {finding.status === "confirmed" ?
+                                <Check className="h-3.5 w-3.5 text-[#00A283]" strokeWidth={2.5} />
+                            :   review ?
+                                <span className="text-[10px] font-semibold text-amber-800">Review</span>
+                            :   null}
+                        </span>
+                    </div>
+                    {finding.editable && onValueChange ?
+                        <input
+                            value={finding.value}
+                            onChange={(e) => onValueChange(finding.id, e.target.value)}
+                            className="mt-1.5 w-full rounded-md border border-alloy-stone/12 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight focus:outline-none focus:ring-2 focus:ring-[#00A283]/12"
+                            data-testid={
+                                finding.source === "suggestion" ?
+                                    `action-workspace-bos-suggestion-${finding.payloadKey}`
+                                :   `create-lead-draft-${finding.payloadKey}`
+                            }
+                        />
+                    :   <p className="mt-1.5 text-[14px] font-semibold text-alloy-midnight">{finding.value}</p>}
+                    {finding.detail ?
+                        <p className="mt-0.5 text-[11px] text-alloy-midnight/45">{finding.detail}</p>
+                    :   null}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+/** Right column — draft lead answers as extraction fills them in. */
+export function CreateLeadDraftLeadColumn({
+    findings,
+    suggestions,
+    analyzing,
+    manualMode,
+    sections,
+    values,
+    platformRequiredKeys,
+    onFieldChange,
+    onSuggestionValueChange,
+    onToggleSuggestion,
+    onApplySuggestions,
+    selectedSuggestionCount,
+    analyzeError,
+    validationIssues,
+}: Props) {
+    const filledCount = findings.filter((f) => f.status === "confirmed" || f.status === "review").length;
+    const missing = missingPlatformKeysFromSuggestions(suggestions, true);
+    const showApply = suggestions.length > 0 && !analyzing && !manualMode;
+
+    return (
+        <section
+            className="flex min-h-0 flex-col bg-white"
+            data-create-lead-column="draft-lead"
+            data-testid="create-lead-draft-lead"
+        >
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-stone/10 px-4 py-3">
+                <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-alloy-midnight/45">
+                        Draft Lead
+                    </p>
+                    <p className="mt-0.5 text-[12px] text-alloy-midnight/45">
+                        {manualMode ?
+                            "Manual entry"
+                        : analyzing ?
+                            "Extracting lead details…"
+                        : suggestions.length > 0 ?
+                            `${suggestions.length} suggestions · review and apply`
+                        :   `${filledCount} fields · extracted in place`}
+                    </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                    {showApply ?
+                        <button
+                            type="button"
+                            disabled={selectedSuggestionCount === 0}
+                            onClick={onApplySuggestions}
+                            className="rounded-lg border border-[#00A283]/25 bg-[#00A283]/10 px-3 py-1.5 text-[11px] font-semibold text-[#007A63] hover:bg-[#00A283]/15 disabled:opacity-50"
+                            data-testid="action-workspace-bos-apply-button"
+                        >
+                            Apply selected
+                        </button>
+                    :   null}
+                    {analyzing ?
+                        <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#007A63]">
+                            <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2.5} />
+                            Active
+                        </span>
+                    :   null}
+                </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                {analyzeError ?
+                    <p
+                        className="mb-3 rounded-xl border border-alloy-ember/20 bg-alloy-ember/5 px-3 py-2 text-[12px] text-alloy-ember"
+                        role="alert"
+                    >
+                        {analyzeError}
+                    </p>
+                :   null}
+
+                {missing.length > 0 && !manualMode ?
+                    <div
+                        className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-950"
+                        data-testid="action-workspace-bos-missing-hints"
+                    >
+                        <span className="font-semibold">Still needed after apply: </span>
+                        {missing.join(" · ")}
+                    </div>
+                :   null}
+
+                {manualMode ?
+                    <div data-testid="create-lead-gather-fields">
+                        <ActionWorkspaceGatherFields
+                            sections={sections}
+                            values={values}
+                            onChange={onFieldChange}
+                            platformRequiredKeys={platformRequiredKeys}
+                            dataTestIdPrefix="create-lead-gather"
+                        />
+                    </div>
+                :   <div className="space-y-2" data-testid="create-lead-draft-fields">
+                        {findings.map((finding) => (
+                            <DraftFieldCard
+                                key={finding.id}
+                                finding={finding}
+                                onValueChange={
+                                    finding.source === "suggestion" ? onSuggestionValueChange : undefined
+                                }
+                                onToggle={finding.source === "suggestion" ? onToggleSuggestion : undefined}
+                            />
+                        ))}
+                    </div>
+                }
+            </div>
+
+            {validationIssues.length > 0 ?
+                <div
+                    className="shrink-0 border-t border-alloy-stone/10 px-4 py-2.5"
+                    data-testid="create-lead-missing-required"
+                    role="alert"
+                >
+                    <p className="text-[11px] text-amber-950">{validationIssues.join(" · ")}</p>
+                </div>
+            :   <div className="shrink-0 border-t border-alloy-stone/8 px-4 py-2.5">
+                    <p className="text-[11px] text-alloy-midnight/40">
+                        {suggestions.length > 0 && !manualMode ?
+                            "Select suggestions to apply, then confirm in the draft."
+                        :   "Answers appear here as material is analyzed."}
+                    </p>
+                </div>
+            }
+        </section>
+    );
+}

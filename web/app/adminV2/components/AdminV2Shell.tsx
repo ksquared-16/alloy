@@ -36,6 +36,7 @@ import {
     isCanonicalWorkspacePath,
 } from "@/lib/admin/canonicalAdminRoutes";
 import AdminV2PersistentCommandRail from "./AdminV2PersistentCommandRail";
+import { AdminV2ShellDrawerScope } from "./AdminV2ShellDrawerScope";
 import { CommandRailBosMount } from "./CommandRailBosMount";
 import { useAdminV2WorkspaceShellDocumentFlag } from "./useAdminV2WorkspaceShellDocumentFlag";
 import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
@@ -164,21 +165,23 @@ export default function AdminV2Shell({
               <div className="relative z-[100] shrink-0" data-adminv2-shell-header-mount="persistent">
                 <TopNavBar />
               </div>
-              <div
-                data-adminv2-workspace-ambient-root
-                className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden lg:flex-row"
-                style={workspaceContentAmbientStyle}
-              >
-                <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
-                  <AdminV2NavigationTransitionRibbon />
-                  {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
-                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                      {children}
-                    </main>
-                  : children}
+              <AdminV2ShellDrawerScope>
+                <div
+                  data-adminv2-workspace-ambient-root
+                  className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden lg:flex-row"
+                  style={workspaceContentAmbientStyle}
+                >
+                  <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
+                    <AdminV2NavigationTransitionRibbon />
+                    {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute ?
+                      <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                        {children}
+                      </main>
+                    : children}
+                  </div>
+                  <AdminV2PersistentCommandRail />
                 </div>
-                <AdminV2PersistentCommandRail />
-              </div>
+              </AdminV2ShellDrawerScope>
             </div>
           </div>
         </WorkspaceSiteFilterProvider>

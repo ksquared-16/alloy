@@ -398,37 +398,204 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.85);
 }
 
-/** Canonical Alloy loader — mark, horizon, atmospheric smoke. No blur blobs. */
-.alloy-identity-loader__smoke .bos-smoke {
-    height: 100%;
+/** Canonical Alloy loader — drifting atmosphere above mark; no funnel or beam. */
+@keyframes alloy-atmosphere-drift-a {
+    0%,
+    100% {
+        transform: translate(-50%, 0);
+        opacity: 0.24;
+    }
+    40% {
+        transform: translate(calc(-50% + 3px), -3px);
+        opacity: 0.3;
+    }
+    70% {
+        transform: translate(calc(-50% - 2px), -5px);
+        opacity: 0.27;
+    }
 }
 
-.alloy-identity-loader__smoke .bos-smoke__cloud {
-    opacity: 0.22;
+@keyframes alloy-atmosphere-drift-b {
+    0%,
+    100% {
+        transform: translate(-50%, 0);
+        opacity: 0.28;
+    }
+    35% {
+        transform: translate(calc(-50% - 3px), -2px);
+        opacity: 0.34;
+    }
+    65% {
+        transform: translate(calc(-50% + 2px), -4px);
+        opacity: 0.31;
+    }
 }
 
-.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--upper {
-    animation: bos-smoke-think-upper 6.4s ease-in-out infinite;
+@keyframes alloy-atmosphere-drift-c {
+    0%,
+    100% {
+        transform: translate(-50%, 0);
+        opacity: 0.22;
+    }
+    45% {
+        transform: translate(calc(-50% + 2px), -3px);
+        opacity: 0.28;
+    }
+    80% {
+        transform: translate(calc(-50% - 3px), -1px);
+        opacity: 0.25;
+    }
 }
 
-.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--mid {
-    animation: bos-smoke-think-mid 6.8s ease-in-out infinite;
-    animation-delay: -0.8s;
+@keyframes alloy-atmosphere-drift-d {
+    0%,
+    100% {
+        transform: translate(-50%, 0);
+        opacity: 0.26;
+    }
+    30% {
+        transform: translate(calc(-50% - 2px), -4px);
+        opacity: 0.32;
+    }
+    75% {
+        transform: translate(calc(-50% + 3px), -2px);
+        opacity: 0.29;
+    }
 }
 
-.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--lower {
-    animation: bos-smoke-think-lower 6.2s ease-in-out infinite;
-    animation-delay: -1.4s;
+@keyframes alloy-atmosphere-drift-e {
+    0%,
+    100% {
+        transform: translate(-50%, 0);
+        opacity: 0.2;
+    }
+    50% {
+        transform: translate(calc(-50% + 1px), -2px);
+        opacity: 0.26;
+    }
+    85% {
+        transform: translate(calc(-50% - 2px), -3px);
+        opacity: 0.23;
+    }
 }
 
-.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--near {
-    animation: bos-smoke-think-near 6s ease-in-out infinite;
-    animation-delay: -0.4s;
+.alloy-identity-atmosphere {
+    position: relative;
+    width: 100%;
+    height: 2.85rem;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.alloy-identity-atmosphere__band {
+    position: absolute;
+    left: 50%;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(
+        ellipse 100% 100% at 50% 50%,
+        rgba(0, 162, 131, 0.36) 0%,
+        rgba(0, 162, 131, 0.18) 52%,
+        rgba(0, 162, 131, 0) 82%
+    );
+    filter: blur(7px);
+    will-change: transform, opacity;
+}
+
+.alloy-identity-atmosphere__band--a {
+    top: 0;
+    width: 4.35rem;
+    height: 0.72rem;
+    animation: alloy-atmosphere-drift-a 7.2s ease-in-out infinite;
+}
+
+.alloy-identity-atmosphere__band--b {
+    top: 0.52rem;
+    width: 5.4rem;
+    height: 0.82rem;
+    animation: alloy-atmosphere-drift-b 7.6s ease-in-out infinite;
+    animation-delay: -1.1s;
+}
+
+.alloy-identity-atmosphere__band--c {
+    top: 1.05rem;
+    width: 4.1rem;
+    height: 0.68rem;
+    animation: alloy-atmosphere-drift-c 6.9s ease-in-out infinite;
+    animation-delay: -2.3s;
+}
+
+.alloy-identity-atmosphere__band--d {
+    top: 1.58rem;
+    width: 5.15rem;
+    height: 0.78rem;
+    animation: alloy-atmosphere-drift-d 7.4s ease-in-out infinite;
+    animation-delay: -0.6s;
+}
+
+.alloy-identity-atmosphere__band--e {
+    top: 2.1rem;
+    width: 4.5rem;
+    height: 0.64rem;
+    animation: alloy-atmosphere-drift-e 6.7s ease-in-out infinite;
+    animation-delay: -1.8s;
+}
+
+.alloy-identity-loader__mark {
+    position: relative;
+    z-index: 1;
+    transition:
+        opacity 0.2s ease,
+        filter 0.2s ease,
+        transform 0.2s ease;
+}
+
+.alloy-identity-loader--tightening .alloy-identity-atmosphere__band {
+    animation: none;
+    transition:
+        transform 0.2s ease,
+        opacity 0.2s ease,
+        filter 0.2s ease;
+    transform: translate(-50%, 3px) scaleY(0.82);
+    opacity: 0.14;
+    filter: blur(5px);
+}
+
+.alloy-identity-loader--tightening .alloy-identity-atmosphere__band--b,
+.alloy-identity-loader--tightening .alloy-identity-atmosphere__band--d {
+    transform: translate(-50%, 2px) scaleY(0.78);
+    opacity: 0.12;
+}
+
+.alloy-identity-loader--tightening .alloy-identity-loader__mark {
+    filter: contrast(1.04) saturate(1.02);
+}
+
+.alloy-identity-loader--revealing .alloy-identity-atmosphere {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.alloy-identity-loader--revealing .alloy-identity-loader__mark {
+    opacity: 1;
+    transform: scale(1);
+    filter: none;
+}
+
+.alloy-identity-loader--revealing .alloy-identity-loader__message {
+    opacity: 0;
+    transition: opacity 0.2s ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .alloy-identity-loader__smoke .bos-smoke__cloud {
+    .alloy-identity-atmosphere__band {
         animation: none !important;
-        opacity: 0.16;
+        opacity: 0.22;
+        transform: translateX(-50%);
+    }
+
+    .alloy-identity-loader--tightening .alloy-identity-atmosphere__band,
+    .alloy-identity-loader--revealing .alloy-identity-atmosphere {
+        transition: none;
     }
 }

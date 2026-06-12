@@ -50,11 +50,11 @@ Gallery: `/dev/bos-identity-system`
 | **BosHeader** | BOS territory title blocks (Action Workspace header, Forms review assist, Command Center rail, modals). |
 | **BosButton** | “Work with BOS”, “Analyze with BOS”, “BOS Assist” — prefer over custom juniper buttons. |
 | **BosNotification** | Insight-ready BOS cards with optional action link. |
-| **AlloyIdentityLoader** | **Canonical loading** — crisp Alloy mark above horizon, Bend Pine smoke behind mark, secondary message. Drawers, routes, execution, transitions. |
+| **AlloyIdentityLoader** | **Canonical loading** — drifting Bend Pine atmosphere above crisp Alloy mark, horizon beneath, secondary message. Drawers, routes, execution, transitions. |
 | **BosWorkingState** | Static gallery/docs only when `state` prop is set (delegates to `AlloyIdentityLoader`). Live thinking: `BosRevealSequence` `mode="working"`. |
 | **BosRevealSequence** | Live analyze/generate/review (working) or BOS workspace/modal open (workspace). |
 | **BosWorkspaceShell** | Full BOS modal/workspace surfaces with atmospheric perimeter. |
-| **ActionWorkspaceBosShell** | Create Lead operational intake — locked stadium shell. See **`docs/system/bos-operational-intake-shell-doctrine.md`**. |
+| **ActionWorkspaceBosShell** | Create Lead operational intake — rounded rectangular shell, full-viewport overlay, immediate open. See **`docs/system/bos-operational-intake-shell-doctrine.md`**. |
 | **BosExecutionLoader** | Phased execution narrative beside **`AlloyIdentityLoader`** — Create Lead execute, drawer prep, route load. |
 | **BosRailActionIcon** | Operational icons on BOS rail recommendation rows — not `BosMark`. See **`docs/system/bos-rail-action-icon-doctrine.md`**. |
 
@@ -89,10 +89,12 @@ Pass `active={isLoading}` so motion loops during work. Do not add artificial del
 
 ### `mode="workspace"` — use for
 
-Opening a full BOS workspace or modal:
+Gallery and dev previews only. **Production modal/workspace open** shows shell content immediately — no workspace reveal gate.
 
-- Action Workspace BOS shell (overlay presentation)
-- Composer BOS enhance modal
+Previously used on:
+
+- ~~Action Workspace BOS shell~~ (reverted — immediate open)
+- ~~Composer BOS enhance modal~~ (reverted — immediate open)
 
 Embedded presentations may skip reveal when layout regression risk exists.
 
@@ -117,7 +119,7 @@ Embedded presentations may skip reveal when layout regression risk exists.
 // Live thinking (prefer over BosWorkingState without state prop)
 <BosRevealSequence mode="working" message="Analyzing…" active={loading} />
 
-// Workspace open
+// Workspace open (gallery / dev only — production modals open immediately)
 <BosRevealSequence mode="workspace" autoPlay fill onComplete={() => setRevealed(true)} />
 
 // Territory header
@@ -136,12 +138,21 @@ Embedded presentations may skip reveal when layout regression risk exists.
 
 **One loader composition** for drawer open, route transitions, execution, and shell prep:
 
-1. **Alloy mark** — crisp, 100% opacity, official geometry  
-2. **Horizon** — thin canonical line beneath the mark (mark sits slightly above)  
-3. **BosSmoke** — Bend Pine, very soft, behind the mark, rising from the horizon  
+```
+Atmosphere   ≋ drifting mist (above)
+Alloy mark   — crisp, 100% opacity
+─────────    horizon
+Message      secondary copy
+```
+
+1. **Atmosphere** — Bend Pine mist as horizontal drifting bands above the mark. Slow vertical drift, slight lateral meander, varying density. **Never** a funnel, cone, beam, or spotlight toward the mark. Intelligence condenses into form; the mark emerges from atmosphere — atmosphere does not target the mark.
+2. **Alloy mark** — crisp, 100% opacity, official geometry  
+3. **Horizon** — thin canonical line beneath the mark  
 4. **Message** — secondary (`Preparing Lead…`, `Opening Lead…`, etc.)
 
-Do **not** use blur blobs, radial glow ellipses, neural graphs, spinners, or skeleton placeholders for these surfaces. `BosExecutionLoader` pairs phased copy beside the same identity stack — it does not introduce a second visual language.
+**Readiness handoff (~200ms):** atmosphere drifts → atmosphere tightens → mark sharpens → loader fades → drawer reveals. Use `phase="tightening"` then `phase="revealing"` on `AlloyIdentityLoader` when wiring readiness gates.
+
+Do **not** use blur blobs, radial glow ellipses, neural graphs, spinners, skeleton placeholders, or converging `BosSmoke` on these surfaces. `BosSmoke` remains for `BosRevealSequence` (working/workspace reveal). `BosExecutionLoader` pairs phased copy beside the same identity stack — it does not introduce a second visual language.
 
 Full inventory and migration order: **`docs/system/alloy-loader-inventory-audit.md`**.
 

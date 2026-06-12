@@ -7,6 +7,10 @@ import PersonFieldsClient from "@/app/legacy-admin/system/person-fields/PersonFi
 import LocationFieldsClient from "@/app/legacy-admin/system/location-fields/LocationFieldsClient";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
+import {
+    CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES,
+    isChildcareFieldsHubVisibleEntity,
+} from "@/lib/fields/childcareFieldCatalogDoctrine";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
 
 const MANAGE_OPTION_SETS_HREF = "/admin/settings/option-sets";
@@ -15,29 +19,19 @@ export type FieldEntityKey =
     | "person"
     | "location"
     | "customer"
-    | "job"
     | "opportunity"
-    | "inquiry_child"
-    | "vendor"
-    | "schedule";
+    | "inquiry_child";
 
-/** Tab order: person, customer, job, opportunity, inquiry child, vendor, schedule, location */
-const ENTITY_SELECT_ORDER: FieldEntityKey[] = [
-    "person",
-    "customer",
-    "job",
-    "opportunity",
-    "inquiry_child",
-    "vendor",
-    "schedule",
-    "location",
-];
+/** Childcare MVP: Person, Family, Lead, Child, Location only. */
+const ENTITY_SELECT_ORDER: FieldEntityKey[] = [...CHILDCARE_FIELDS_HUB_PRIMARY_ENTITIES];
 
 const ALLOWED_ENTITY_KEYS = new Set<string>(ENTITY_SELECT_ORDER);
 
 function normalizeEntity(raw: string | undefined): FieldEntityKey {
     const t = (raw ?? "").trim().toLowerCase();
-    return ALLOWED_ENTITY_KEYS.has(t) ? (t as FieldEntityKey) : "person";
+    if (t === "job") return "opportunity";
+    if (!isChildcareFieldsHubVisibleEntity(t) || !ALLOWED_ENTITY_KEYS.has(t)) return "person";
+    return t as FieldEntityKey;
 }
 
 function settingsFieldsBasePath(pathname: string): string {
@@ -53,7 +47,11 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
     const entity = useMemo(() => normalizeEntity(initialEntity), [initialEntity]);
 
     const entityTabs = useMemo(
-        () => ENTITY_SELECT_ORDER.map((key) => ({ key, label: adminFieldEntitySingularLabel(labels, key) })),
+        () =>
+            ENTITY_SELECT_ORDER.map((key) => ({
+                key,
+                label: adminFieldEntitySingularLabel(labels, key),
+            })),
         [labels]
     );
 

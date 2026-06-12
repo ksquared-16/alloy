@@ -27,8 +27,8 @@ describe("Right rail persistence doctrine", () => {
     it("avoids hydration mismatch for persisted Actions expand state", () => {
         const section = read("app/adminV2/components/workspace/CommandRailCollapsibleActionsSection.tsx");
         expect(section).toContain("useState(false)");
-        expect(section).toMatch(/useEffect\(\(\) => \{\s*setExpanded\(loadCommandRailActionsExpanded\(\)\)/);
-        expect(section).not.toContain("useState(() => loadCommandRailActionsExpanded())");
+        expect(section).not.toContain("loadCommandRailActionsExpanded");
+        expect(section).not.toContain("persistCommandRailActionsExpanded");
     });
 
     it("uses external-store registry without unregister-on-update loops", () => {
@@ -58,8 +58,20 @@ describe("Right rail persistence doctrine", () => {
         expect(wuDoc).toContain("persistent command surface");
     });
 
-    it("suppresses persistent rail when BOS Action Workspace portal is open", () => {
+    it("persistent command rail shares shell-level AdminDrawerProvider with registered actions", () => {
+        const shell = read("app/adminV2/components/AdminV2Shell.tsx");
+        const scope = read("app/adminV2/components/AdminV2ShellDrawerScope.tsx");
+        const workspaceProviders = read("app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx");
+        expect(shell).toContain("AdminV2ShellDrawerScope");
+        expect(shell).toContain("AdminV2PersistentCommandRail");
+        expect(scope).toContain("AdminDrawerProvider");
+        expect(scope).not.toMatch(/import AdminEntityDrawer|<AdminEntityDrawer/);
+        expect(workspaceProviders).toContain("AdminEntityDrawer");
+        expect(workspaceProviders).not.toContain("AdminDrawerProvider");
+    });
+
+    it("keeps persistent rail visible when BOS Action Workspace drawer is open", () => {
         const css = read("app/adminV2/adminV2.css");
-        expect(css).toContain('[data-adminv2-action-workspace-open="true"] [data-adminv2-persistent-command-rail="true"]');
+        expect(css).not.toContain('[data-adminv2-action-workspace-open="true"] [data-adminv2-persistent-command-rail="true"]');
     });
 });

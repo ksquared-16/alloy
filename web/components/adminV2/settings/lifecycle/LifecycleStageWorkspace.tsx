@@ -8,17 +8,16 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import Link from "next/link";
 import {
     BUSINESS_PROCESS_SAVE_STAGE,
-    BUSINESS_PROCESS_SECTION_ACTIONS,
-    BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY,
+    BUSINESS_PROCESS_SECTION_ATTENTION,
+    BUSINESS_PROCESS_SECTION_ATTENTION_SUMMARY,
     BUSINESS_PROCESS_SECTION_EXPECTED_WORK,
     BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY,
+    BUSINESS_PROCESS_SECTION_OPERATING_PLAN,
+    BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY,
     BUSINESS_PROCESS_SECTION_MEMBERSHIP,
     BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY,
-    BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED,
-    BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED_SUMMARY,
     BUSINESS_PROCESS_SECTION_READY,
     BUSINESS_PROCESS_SECTION_READY_SUMMARY,
     BUSINESS_PROCESS_SECTION_REQUIRED,
@@ -29,31 +28,32 @@ import {
     STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER,
     STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL,
 } from "@/lib/lifecycle/queueMembershipUiLabels";
-import LifecycleStatusesCard from "@/components/adminV2/settings/lifecycle/LifecycleStatusesCard";
-import type { LifecycleStatusesSaveState } from "@/lib/lifecycle/lifecycleStatusesCardState";
+import LifecycleStageStatusRollupEditor, {
+    type LifecycleStageStatusRollupEditorHandle,
+} from "@/components/adminV2/settings/lifecycle/LifecycleStageStatusRollupEditor";
+import type { StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 import LifecycleStageFieldRequirementsEditor, {
     type LifecycleStageFieldRequirementsEditorHandle,
 } from "@/components/adminV2/settings/LifecycleStageFieldRequirementsEditor";
-import LifecycleStageWorkUnitCard, {
-    type LifecycleStageWorkUnitCardHandle,
-} from "@/components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard";
 import LifecycleStageQueueMembershipEditor, {
     type LifecycleStageQueueMembershipEditorHandle,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageQueueMembershipEditor";
+import LifecycleStageAttentionSection from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionSection";
 import LifecycleStageOperatingPlanEditor, {
     type LifecycleStageOperatingPlanEditorHandle,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor";
-import type { EnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
-import type { EnrollmentPipelineWorkUnitSnapshot } from "@/lib/lifecycle/parseEnrollmentPipelineQueues";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
+import {
+    queueMembershipSubjectForStatusOptions,
+    statusEntityTypeForSubject,
+    statusesSettingsHrefForEntity,
+} from "@/lib/lifecycle/stageStatusRollup";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
-import type { LifecycleStageWorkUnitIdentityUiState } from "@/components/adminV2/settings/enrollmentProcess/LifecycleStageWorkUnitCard";
-
 export type LifecycleStageSaveUiState = "idle" | "unsaved" | "saving" | "saved" | "error";
 
-type SectionId = "membership" | "work_plan" | "statuses" | "required" | "actions" | "queue" | "ready_check";
+type SectionId = "membership" | "required" | "operating_plan" | "ready_check";
 
 function countFieldRules(rules: LifecycleStageFieldRules | undefined): number {
     if (!rules) return 0;
@@ -67,6 +67,7 @@ function StageSection({
     children,
     onOpenChange,
     lazyMount,
+    defaultOpen = false,
 }: {
     id: SectionId;
     title: string;
@@ -74,12 +75,14 @@ function StageSection({
     children: ReactNode;
     onOpenChange?: (open: boolean) => void;
     lazyMount?: boolean;
+    defaultOpen?: boolean;
 }) {
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(defaultOpen);
     return (
         <details
             className="group rounded-xl border border-alloy-forge/12 bg-white/90 shadow-sm"
             data-testid={`lifecycle-stage-section-${id}`}
+            open={open}
             onToggle={(e) => {
                 const next = (e.currentTarget as HTMLDetailsElement).open;
                 setOpen(next);
@@ -163,6 +166,8 @@ export type LifecycleStageWorkspaceHandle = {
     getQueueDisplayName: () => string | null;
     getQueueMembershipDraft: () => import("@/lib/lifecycle/queueMembershipV1").QueueMembershipV1 | null;
     isQueueMembershipDirty: () => boolean;
+    getStatusRollupDraft: () => StatusRollupV1 | null;
+    isStatusRollupDirty: () => boolean;
     getStageOperatingPlanDraft: () => import("@/lib/lifecycle/stageOperatingPlanV1").StageOperatingPlanV1 | null;
     isStageOperatingPlanDirty: () => boolean;
 };
@@ -175,19 +180,8 @@ export default function LifecycleStageWorkspace({
     bootstrap,
     bootstrapLoading,
     entityDisplayLabels,
-    statusesPayload,
-    statusesSaveState,
-    savedStatusKeys,
     statusesError,
-    onToggleStatus,
-    pipeline,
-    workUnitIdentityState,
-    workUnitNeedsSync,
-    onPipelineUpdated,
-    statusDisplayLabels,
-    draftStatusLabels,
-    enabledActionsCount,
-    actionsSection,
+    onStatusRollupChange,
     validationSlot,
     readyCheckRefreshKey,
     saveState,
@@ -203,19 +197,8 @@ export default function LifecycleStageWorkspace({
     bootstrap: LifecycleStageBootstrapPayload | null;
     bootstrapLoading: boolean;
     entityDisplayLabels?: Partial<Record<LifecycleRequirementEntityKey, string>>;
-    statusesPayload: EnrollmentStatusStagesPayload | null;
-    statusesSaveState: LifecycleStatusesSaveState;
-    savedStatusKeys: readonly string[];
     statusesError: string | null;
-    onToggleStatus: (statusKey: string, selected: boolean) => void;
-    pipeline: EnrollmentPipelineWorkUnitSnapshot | null;
-    workUnitIdentityState: LifecycleStageWorkUnitIdentityUiState;
-    workUnitNeedsSync: boolean;
-    onPipelineUpdated: (snapshot: EnrollmentPipelineWorkUnitSnapshot | null) => void | Promise<void>;
-    statusDisplayLabels: string[];
-    draftStatusLabels: string[];
-    enabledActionsCount: number;
-    actionsSection: ReactNode;
+    onStatusRollupChange: (rollup: StatusRollupV1, flatKeys: string[]) => void;
     validationSlot: ReactNode;
     readyCheckRefreshKey?: string;
     saveState: LifecycleStageSaveUiState;
@@ -225,30 +208,24 @@ export default function LifecycleStageWorkspace({
     workspaceRef?: React.RefObject<LifecycleStageWorkspaceHandle | null>;
 }) {
     const fieldReqRef = useRef<LifecycleStageFieldRequirementsEditorHandle | null>(null);
-    const workUnitRef = useRef<LifecycleStageWorkUnitCardHandle | null>(null);
     const membershipRef = useRef<LifecycleStageQueueMembershipEditorHandle | null>(null);
+    const rollupRef = useRef<LifecycleStageStatusRollupEditorHandle | null>(null);
     const operatingPlanRef = useRef<LifecycleStageOperatingPlanEditorHandle | null>(null);
     const [fieldDirty, setFieldDirty] = useState(false);
-    const [queueNameDirty, setQueueNameDirty] = useState(false);
     const [membershipDirty, setMembershipDirty] = useState(false);
+    const [rollupDirty, setRollupDirty] = useState(false);
     const [operatingPlanDirty, setOperatingPlanDirty] = useState(false);
-
-    const savedKeySet = useMemo(() => new Set(savedStatusKeys), [savedStatusKeys]);
-    const statusesDirty = useMemo(() => {
-        const draft = statusesSaveState.saveDraftKeys;
-        if (savedStatusKeys.length !== draft.length) return true;
-        for (const k of draft) if (!savedKeySet.has(k)) return true;
-        return false;
-    }, [statusesSaveState.saveDraftKeys, savedStatusKeys, savedKeySet]);
 
     const savedFieldRules = bootstrap?.field_requirements?.effective.field_rules;
     const configuredFieldCount = countFieldRules(savedFieldRules);
-    const draftStatusCount = statusesSaveState.saveDraftKeys.length;
-    const savedStatusCount = savedStatusKeys.length;
-    const queueConfigured =
-        Boolean(pipeline?.id) && workUnitIdentityState === "synced" && !workUnitNeedsSync;
+    const savedStatusCount = bootstrap?.status_rollup_v1
+        ? bootstrap.status_rollup_v1.categories.reduce(
+              (n, c) => n + c.selected_status_keys.length,
+              0
+          )
+        : 0;
 
-    const isDirty = fieldDirty || statusesDirty || queueNameDirty || membershipDirty || operatingPlanDirty;
+    const isDirty = fieldDirty || rollupDirty || membershipDirty || operatingPlanDirty;
 
     useEffect(() => {
         onDirtyChange?.(isDirty);
@@ -257,9 +234,11 @@ export default function LifecycleStageWorkspace({
     useImperativeHandle(workspaceRef, () => ({
         getFieldDraftRules: () => fieldReqRef.current?.getDraftRules() ?? null,
         isFieldDirty: () => fieldReqRef.current?.isDirty() ?? false,
-        getQueueDisplayName: () => workUnitRef.current?.getDisplayName() ?? null,
+        getQueueDisplayName: () => null,
         getQueueMembershipDraft: () => membershipRef.current?.getDraftMembership() ?? null,
         isQueueMembershipDirty: () => membershipRef.current?.isDirty() ?? false,
+        getStatusRollupDraft: () => rollupRef.current?.getDraftRollup() ?? null,
+        isStatusRollupDirty: () => rollupRef.current?.isDirty() ?? false,
         getStageOperatingPlanDraft: () => operatingPlanRef.current?.getDraftPlan() ?? null,
         isStageOperatingPlanDirty: () => operatingPlanRef.current?.isDirty() ?? false,
     }));
@@ -274,8 +253,17 @@ export default function LifecycleStageWorkspace({
     const saveDisabled =
         !stageKey.trim() || effectiveSaveState === "saving" || (!isDirty && effectiveSaveState !== "error");
 
-    const previewStatusLabels =
-        draftStatusLabels.length > 0 ? draftStatusLabels : statusDisplayLabels;
+    const statusSubjectType = queueMembershipSubjectForStatusOptions({
+        stageKey,
+        trackKey: bootstrap?.stage_track_key ?? null,
+        queueMembership: bootstrap?.queue_membership ?? null,
+    });
+    const statusesSettingsHref = statusesSettingsHrefForEntity(
+        statusEntityTypeForSubject(statusSubjectType)
+    );
+    useEffect(() => {
+        setRollupDirty(rollupRef.current?.isDirty() ?? false);
+    }, [bootstrap?.status_rollup_v1, stageKey]);
 
     const summaryLine = (
         <ul
@@ -285,21 +273,15 @@ export default function LifecycleStageWorkspace({
             <li>
                 {savedStatusCount > 0
                     ? `${savedStatusCount} status${savedStatusCount === 1 ? "" : "es"} saved`
-                    : statusesDirty && draftStatusCount > 0
-                      ? `${draftStatusCount} status${draftStatusCount === 1 ? "" : "es"} selected`
+                    : rollupDirty
+                      ? "Unsaved status selection"
                       : "No statuses yet"}
             </li>
             <li>
                 {configuredFieldCount > 0
                     ? `${configuredFieldCount} field${configuredFieldCount === 1 ? "" : "s"} configured`
-                    : "No required information yet"}
+                    : "No stage requirements yet"}
             </li>
-            <li>
-                {enabledActionsCount > 0
-                    ? `${enabledActionsCount} action${enabledActionsCount === 1 ? "" : "s"} enabled`
-                    : "No actions enabled"}
-            </li>
-            <li>{queueConfigured ? "Workspace lane synced" : "Workspace lane pending"}</li>
             {bootstrap?.stage_operating_plan?.work_templates.length ? (
                 <li>{bootstrap.stage_operating_plan.work_templates.length} work item(s)</li>
             ) : null}
@@ -353,6 +335,7 @@ export default function LifecycleStageWorkspace({
                     id="membership"
                     title={BUSINESS_PROCESS_SECTION_MEMBERSHIP}
                     summary={BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY}
+                    defaultOpen
                 >
                     {stageKey.trim() ? (
                         <div className="space-y-4">
@@ -370,14 +353,17 @@ export default function LifecycleStageWorkspace({
                                 <p className="mb-2 text-[11px] text-alloy-midnight/50">
                                     {STAGE_MEMBERSHIP_INCLUDED_STATUSES_HELPER}
                                 </p>
-                                <LifecycleStatusesCard
-                                    payload={statusesPayload}
-                                    loading={false}
-                                    saving={false}
-                                    saveState={statusesSaveState}
-                                    savedKeys={savedStatusKeys}
-                                    error={null}
-                                    onToggleStatus={onToggleStatus}
+                                <LifecycleStageStatusRollupEditor
+                                    editorRef={rollupRef}
+                                    catalog={bootstrap?.status_category_catalog ?? []}
+                                    savedRollup={bootstrap?.status_rollup_v1 ?? null}
+                                    statusesSettingsHref={statusesSettingsHref}
+                                    onRollupChange={(rollup, _flatKeys) => {
+                                        setRollupDirty(
+                                            rollupRef.current?.isDirty() ?? true
+                                        );
+                                        onStatusRollupChange(rollup, _flatKeys);
+                                    }}
                                 />
                             </div>
                         </div>
@@ -410,28 +396,37 @@ export default function LifecycleStageWorkspace({
                 </StageSection>
 
                 <StageSection
-                    id="work_plan"
-                    title={BUSINESS_PROCESS_SECTION_EXPECTED_WORK}
-                    summary={BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY}
+                    id="operating_plan"
+                    title={BUSINESS_PROCESS_SECTION_OPERATING_PLAN}
+                    summary={BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY}
                 >
-                    {stageKey.trim() ? (
-                        <LifecycleStageOperatingPlanEditor
-                            ref={operatingPlanRef}
-                            stageKey={stageKey}
-                            savedPlan={bootstrap?.stage_operating_plan ?? null}
-                            onDirtyChange={setOperatingPlanDirty}
-                        />
-                    ) : (
-                        <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>
-                    )}
-                </StageSection>
-
-                <StageSection
-                    id="actions"
-                    title={BUSINESS_PROCESS_SECTION_ACTIONS}
-                    summary={BUSINESS_PROCESS_SECTION_ACTIONS_SUMMARY}
-                >
-                    {actionsSection}
+                    {stageKey.trim() ?
+                        <div className="space-y-4">
+                            <div>
+                                <h5 className="mb-1 text-[11px] font-semibold text-alloy-midnight/75">
+                                    {BUSINESS_PROCESS_SECTION_EXPECTED_WORK}
+                                </h5>
+                                <p className="mb-2 text-[11px] text-alloy-midnight/50">
+                                    {BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY}
+                                </p>
+                                <LifecycleStageOperatingPlanEditor
+                                    ref={operatingPlanRef}
+                                    stageKey={stageKey}
+                                    savedPlan={bootstrap?.stage_operating_plan ?? null}
+                                    onDirtyChange={setOperatingPlanDirty}
+                                />
+                            </div>
+                            <div className="border-t border-alloy-forge/8 pt-3">
+                                <h5 className="mb-1 text-[11px] font-semibold text-alloy-midnight/75">
+                                    {BUSINESS_PROCESS_SECTION_ATTENTION}
+                                </h5>
+                                <LifecycleStageAttentionSection
+                                    stageLabel={stageLabel || stageKey}
+                                    operatingPlan={bootstrap?.stage_operating_plan ?? null}
+                                />
+                            </div>
+                        </div>
+                    :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
                 </StageSection>
 
                 <StageSection
@@ -443,47 +438,6 @@ export default function LifecycleStageWorkspace({
                     <div key={readyCheckRefreshKey ?? "initial"}>{validationSlot}</div>
                 </StageSection>
 
-                <details
-                    className="rounded-xl border border-dashed border-alloy-forge/15 bg-alloy-stone/[0.03]"
-                    data-testid="lifecycle-stage-section-queue-advanced"
-                >
-                    <summary className="cursor-pointer list-none px-4 py-2.5 text-xs font-medium text-alloy-midnight/60 [&::-webkit-details-marker]:hidden">
-                        <span>{BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED}</span>
-                        <p className="mt-0.5 text-[11px] font-normal text-alloy-midnight/45">
-                            {BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED_SUMMARY}
-                        </p>
-                    </summary>
-                    <div className="border-t border-alloy-forge/8 px-4 py-3">
-                        <p className="mb-2 text-[11px] text-alloy-midnight/50">
-                            Queue layout is managed in{" "}
-                            <Link href="/admin/settings/layouts" className="font-medium text-alloy-pine hover:underline">
-                                Layouts
-                            </Link>
-                            . Saving the stage syncs the workspace lane when statuses are assigned.
-                        </p>
-                        {draftStatusCount > 0 || savedStatusKeys.length > 0 ? (
-                            <LifecycleStageWorkUnitCard
-                                ref={workUnitRef}
-                                departmentId={departmentId}
-                                activeStageKey={stageKey}
-                                stageLabel={stageLabel || stageKey}
-                                stageStatusDisplayLabels={previewStatusLabels}
-                                stageSavedStatusKeys={savedStatusKeys}
-                                pipeline={pipeline}
-                                workUnitIdentityState={workUnitIdentityState}
-                                workUnitNeedsSync={workUnitNeedsSync}
-                                loadingPipeline={false}
-                                onPipelineUpdated={onPipelineUpdated}
-                                workspaceMode
-                                onDraftNameDirtyChange={setQueueNameDirty}
-                            />
-                        ) : (
-                            <p className="text-xs text-alloy-midnight/50">
-                                Select at least one status in Stage Membership to sync the workspace lane.
-                            </p>
-                        )}
-                    </div>
-                </details>
             </div>
 
         </div>

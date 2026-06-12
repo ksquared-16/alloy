@@ -1,13 +1,9 @@
 "use client";
 
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
-import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import { AdminVerticalProvider } from "@/contexts/AdminVerticalContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
-import OpportunityDrawerOpenCoordinator from "@/components/admin/OpportunityDrawerOpenCoordinator";
-import ContextualRecordOpenListener from "@/components/adminV2/ContextualRecordOpenListener";
-import GlobalRecordSearchOpenListener from "@/components/adminV2/GlobalRecordSearchOpenListener";
 import AdminV2ClickDebugInstaller from "@/app/adminV2/components/AdminV2ClickDebugInstaller";
 import PlatformSurfacePerfDebugInstaller from "@/app/adminV2/components/PlatformSurfacePerfDebugInstaller";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
@@ -93,20 +89,15 @@ export default function AdminV2WorkspaceClientProviders({
               >
                 <WorkspaceSiteFilterPersistenceScopeBridge />
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                  <AdminDrawerProvider>
-                      <AdminV2ClickDebugInstaller />
-                      <PlatformSurfacePerfDebugInstaller />
-                      <div
-                        className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 px-4 py-3 sm:px-5"
-                        style={workspaceScrollStyle}
-                      >
-                        {children}
-                      </div>
-                      <OpportunityDrawerOpenCoordinator />
-                      <ContextualRecordOpenListener />
-                      <GlobalRecordSearchOpenListener />
-                      <AdminEntityDrawer />
-                  </AdminDrawerProvider>
+                  <AdminV2ClickDebugInstaller />
+                  <PlatformSurfacePerfDebugInstaller />
+                  <div
+                    className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 px-4 py-3 sm:px-5"
+                    style={workspaceScrollStyle}
+                  >
+                    {children}
+                  </div>
+                  <AdminEntityDrawer />
                 </div>
               </WorkspaceOrgProvider>
             </AdminViewerTimezoneProvider>

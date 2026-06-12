@@ -340,11 +340,21 @@ export default function LifecycleActivationBoard({
         }
     }, [runtimeDepartmentId]);
 
-    const labelsForKeys = useCallback((payload: EnrollmentStatusStagesPayload | null, keys: string[]) => {
-        const rows = collectAllOpportunityStatusRows(payload);
-        const m = new Map(rows.map((r) => [r.status_key, r.status_label]));
-        return keys.map((k) => m.get(k) ?? k.replace(/_/g, " "));
-    }, []);
+    const labelsForKeys = useCallback(
+        (
+            payload: EnrollmentStatusStagesPayload | null,
+            keys: string[],
+            optionRows?: readonly { status_key: string; status_label: string }[] | null
+        ) => {
+            const rows =
+                optionRows?.length
+                    ? optionRows.map((r) => ({ status_key: r.status_key, status_label: r.status_label }))
+                    : collectAllOpportunityStatusRows(payload);
+            const m = new Map(rows.map((r) => [r.status_key, r.status_label]));
+            return keys.map((k) => m.get(k) ?? k.replace(/_/g, " "));
+        },
+        []
+    );
 
     const syncStatusKeysFromPayload = useCallback(
         (payload: EnrollmentStatusStagesPayload | null, key: string, source: string) => {
@@ -435,17 +445,26 @@ export default function LifecycleActivationBoard({
         if (stageBootstrap) applyStageBootstrap(stageBootstrap);
     }, [stageBootstrap, applyStageBootstrap]);
 
-    /** Hydrate empty draft from server when stage or payload loads — never overwrite user selection. */
+    /** Hydrate empty draft from bootstrap rollup — never overwrite user selection. */
     useEffect(() => {
         const sk = normalizeLifecycleBuilderStageKey(stageKey);
-        if (!sk || !statusesPayload) return;
+        if (!sk || !stageBootstrap) return;
         if (!shouldSyncStatusDraftForStage(statusDraftRef.current.dirtyByStage, sk)) return;
         const current = statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk);
         if (current.length > 0) return;
-        const keys = resolveAssignedStatusKeysForStage(statusesPayload, sk, { activationOwned });
+        const rollupKeys =
+            stageBootstrap.status_rollup_v1
+                ? stageBootstrap.status_rollup_v1.categories.flatMap((c) => c.selected_status_keys)
+                : [];
+        const keys =
+            rollupKeys.length > 0
+                ? rollupKeys
+                : statusesPayload
+                  ? resolveAssignedStatusKeysForStage(statusesPayload, sk, { activationOwned })
+                  : [];
         if (keys.length === 0) return;
         dispatchStatusDraft({ type: "syncFromServer", stageKey: sk, keys });
-    }, [stageKey, statusesPayload, activationOwned, dispatchStatusDraft]);
+    }, [stageKey, stageBootstrap, statusesPayload, activationOwned, dispatchStatusDraft]);
 
     const repairLifecycleWorkUnits = useCallback(async () => {
         if (!runtimeDepartmentId || !processId) return;
@@ -655,7 +674,11 @@ export default function LifecycleActivationBoard({
                 );
             }
             if (statusPayload) setStatusesPayload(statusPayload);
-            const labels = labelsForKeys(statusPayload ?? statusesPayload, keys);
+            const labels = labelsForKeys(
+                statusPayload ?? statusesPayload,
+                keys,
+                stageBootstrap?.queue_membership_status_options
+            );
             dispatchStatusDraft({ type: "commitSaved", stageKey: sk, keys });
             if (statusPayload) patchStageBootstrap({ statuses: statusPayload });
             setStatusKeys(keys);
@@ -743,6 +766,10 @@ export default function LifecycleActivationBoard({
         );
         const stageOperatingPlan =
             handle?.isStageOperatingPlanDirty() ? handle.getStageOperatingPlanDraft() : null;
+        const statusRollup =
+            handle?.isStatusRollupDirty()
+                ? handle.getStatusRollupDraft()
+                : (stageBootstrap?.status_rollup_v1 ?? null);
 
         const contractBody = {
             department_id: runtimeDepartmentId,
@@ -753,6 +780,7 @@ export default function LifecycleActivationBoard({
             ...(fieldRules ? { field_rules: fieldRules } : {}),
             queue_membership_v1: queueMembership,
             ...(stageOperatingPlan ? { stage_operating_plan_v1: stageOperatingPlan } : {}),
+            ...(statusRollup ? { status_rollup_v1: statusRollup } : {}),
         };
 
         try {
@@ -774,9 +802,14 @@ export default function LifecycleActivationBoard({
                 j.snapshot?.selectedStatusKeys?.length ? j.snapshot.selectedStatusKeys : selectedKeys;
             const statusPayload = j.status_stages ?? null;
             if (statusPayload) setStatusesPayload(statusPayload);
-            const labels = labelsForKeys(statusPayload ?? statusesPayload, keys);
+            const labels = labelsForKeys(
+                statusPayload ?? statusesPayload,
+                keys,
+                stageBootstrap?.queue_membership_status_options
+            );
             dispatchStatusDraft({ type: "commitSaved", stageKey: sk, keys });
             if (statusPayload) patchStageBootstrap({ statuses: statusPayload });
+            if (statusRollup) patchStageBootstrap({ status_rollup_v1: statusRollup });
             if (fieldRules) {
                 patchStageBootstrap({
                     field_requirements: {
@@ -860,8 +893,13 @@ export default function LifecycleActivationBoard({
     }, [stageSaveState]);
 
     const draftStatusLabels = useMemo(
-        () => labelsForKeys(statusesPayload, statusesSaveState.saveDraftKeys),
-        [labelsForKeys, statusesPayload, statusesSaveState.saveDraftKeys]
+        () =>
+            labelsForKeys(
+                statusesPayload,
+                statusesSaveState.saveDraftKeys,
+                stageBootstrap?.queue_membership_status_options
+            ),
+        [labelsForKeys, statusesPayload, statusesSaveState.saveDraftKeys, stageBootstrap?.queue_membership_status_options]
     );
 
     const enabledActionsCount = useMemo(
@@ -869,21 +907,18 @@ export default function LifecycleActivationBoard({
         [stageBootstrap?.actions]
     );
 
-    const onToggleStatus = useCallback(
-        (statusKeyArg: string, selected: boolean) => {
+    const onStatusRollupChange = useCallback(
+        (_rollup: import("@/lib/lifecycle/statusRollupV1").StatusRollupV1, flatKeys: string[]) => {
             const sk = normalizeLifecycleBuilderStageKey(stageKeyRef.current || stageKey);
-            const status = statusKeyArg.trim();
-            if (!sk || !status) return;
-            dispatchStatusDraft({ type: "toggle", stageKey: sk, statusKey: status, selected });
+            if (!sk) return;
+            dispatchStatusDraft({ type: "setKeys", stageKey: sk, keys: flatKeys });
             setStatusesError(null);
-            logLifecycleStatusStepDebug("checkbox-toggle", {
+            logLifecycleStatusStepDebug("rollup-change", {
                 runtimeDepartmentId,
                 processId,
                 stageKey: sk,
                 stageLabel,
-                statusKey: status,
-                selected,
-                draftStatusKeys: statusDraftKeysForStage(statusDraftRef.current.draftByStage, sk),
+                draftStatusKeys: flatKeys,
             });
         },
         [runtimeDepartmentId, processId, stageKey, stageLabel, dispatchStatusDraft]
@@ -1438,7 +1473,7 @@ export default function LifecycleActivationBoard({
     if (bootLoading && runtimeDepartmentId && processId) {
         return (
             <p className="text-sm text-alloy-midnight/60" data-testid="lifecycle-activation-loading">
-                Loading Lifecycle…
+                Loading process…
             </p>
         );
     }
@@ -1584,7 +1619,7 @@ export default function LifecycleActivationBoard({
                                         onClick={() => setRenameOpen(true)}
                                         data-testid="lifecycle-rename"
                                     >
-                                        Rename lifecycle
+                                        Rename process
                                     </button>
                                     {canDeleteLifecycle ? (
                                         <button
@@ -1593,7 +1628,7 @@ export default function LifecycleActivationBoard({
                                             onClick={handleDeleteLifecycle}
                                             data-testid="lifecycle-activation-delete"
                                         >
-                                            Delete lifecycle
+                                            Delete process
                                         </button>
                                     ) : null}
                                     {onRepairVisibility || (runtimeDepartmentId && processId) ? (
@@ -1663,39 +1698,8 @@ export default function LifecycleActivationBoard({
                                 lifecycleName={lifecycleName}
                                 bootstrap={stageBootstrap}
                                 bootstrapLoading={stageBootstrapLoading}
-                                statusesPayload={statusesPayload}
-                                statusesSaveState={statusesSaveState}
-                                savedStatusKeys={savedStatusKeys}
                                 statusesError={statusesError}
-                                onToggleStatus={onToggleStatus}
-                                pipeline={pipeline}
-                                workUnitIdentityState={workUnitIdentityState}
-                                workUnitNeedsSync={workUnitNeedsSync}
-                                draftStatusLabels={draftStatusLabels}
-                                enabledActionsCount={enabledActionsCount}
-                                actionsSection={
-                                    <div className="space-y-2 text-[11px] text-alloy-midnight/55">
-                                        {enabledActionsCount > 0 ? (
-                                            <p>
-                                                {enabledActionsCount} action
-                                                {enabledActionsCount === 1 ? "" : "s"} available in this
-                                                stage.
-                                            </p>
-                                        ) : (
-                                            <p>No actions are enabled for this process yet.</p>
-                                        )}
-                                        <p>
-                                            Configure placements and availability in{" "}
-                                            <a
-                                                href="#business-process-actions"
-                                                className="font-medium text-alloy-pine hover:underline"
-                                            >
-                                                Process Actions
-                                            </a>{" "}
-                                            below.
-                                        </p>
-                                    </div>
-                                }
+                                onStatusRollupChange={onStatusRollupChange}
                                 saveState={stageSaveState}
                                 saveError={stageSaveError}
                                 onSaveStage={saveStageUnified}
@@ -1703,14 +1707,6 @@ export default function LifecycleActivationBoard({
                                     stageDirtyRef.current = dirty;
                                 }}
                                 workspaceHandleRef={workspaceHandleRef}
-                                onPipelineUpdated={async (snapshot) => {
-                                    if (snapshot) {
-                                        setPipeline(snapshot);
-                                        setWorkUnitId(snapshot.id);
-                                        setWorkUnitName(snapshot.name);
-                                    }
-                                }}
-                                statusDisplayLabels={statusDisplayLabels}
                                 validationSlot={
                                     identity ? (
                                         <LifecycleActivationValidation

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import { WorkspaceActionRailButton } from "@/app/adminV2/components/workspace/WorkspaceActionRailButton";
+import { CommandRailExecutableActionList } from "@/app/adminV2/components/workspace/CommandRailExecutableActionList";
 import type { ActionsVm, PrimaryActionVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import {
@@ -19,6 +20,8 @@ type Props = {
   surface?: "default" | "department" | "company" | "work_unit" | "record";
   /** Hide inner section titles when wrapped by collapsible command-rail header */
   suppressSectionTitles?: boolean;
+  /** Persistent command rail — executable row cards with icon + chevron */
+  executableRows?: boolean;
 };
 
 function actionButtonTier(a: PrimaryActionVm, solidUsed: { n: number }, maxSolid: number) {
@@ -170,6 +173,7 @@ function PrimaryActionsPanel({
   panelClassName,
   maxSolidButtons = PRIMARY_SOLID_CAP,
   suppressSectionTitle = false,
+  executableRows = false,
 }: {
   sectionTitle: string;
   actions: PrimaryActionVm[];
@@ -178,7 +182,28 @@ function PrimaryActionsPanel({
   /** Cap for solid primary styling; department/work_unit right rails pass all actions here. */
   maxSolidButtons?: number;
   suppressSectionTitle?: boolean;
+  executableRows?: boolean;
 }) {
+  if (executableRows) {
+    return (
+      <section
+        className={["adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-command-section--primary", panelClassName]
+          .filter(Boolean)
+          .join(" ")}
+        aria-label={sectionTitle}
+      >
+        <CommandRailExecutableActionList
+          actions={actions.map((a) => ({
+            id: a.id,
+            label: a.label,
+            emphasized: a.emphasized,
+            onClick: () => onAction({ type: "actions.block", actionId: a.id }),
+          }))}
+        />
+      </section>
+    );
+  }
+
   const solidUsed = { n: 0 };
   return (
     <section
@@ -210,6 +235,7 @@ export default function ActionsBlock({
   title = "Actions",
   surface = "default",
   suppressSectionTitles = false,
+  executableRows = false,
 }: Props) {
   if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
     const sysFull = model.systemActions ?? [];
@@ -296,6 +322,7 @@ export default function ActionsBlock({
               maxSolidButtons={maxSolidForPrimary}
               panelClassName={surface === "record" ? "adminv2-ws-actions-rail--record-primary-tier" : undefined}
               suppressSectionTitle={suppressSectionTitles}
+              executableRows={executableRows}
             />
           ) : null}
           {operationalN > 0 ? (
@@ -321,20 +348,30 @@ export default function ActionsBlock({
 
     return (
       <div className="adminv2-ws-dept-command-actions-stack">
-        <div className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel">
+        <div className="adminv2-ws-dept-command-actions-stack">
           {suppressSectionTitles ? null : <div className="adminv2-ws-actions-rail-title">{title}</div>}
-          <div className="adminv2-ws-actions-rail-list">
-            {model.primaries.map((a) => (
-              <WorkspaceActionRailButton
-                key={a.id}
-                tier={a.variant === "secondary" ? "secondary" : "primary"}
-                emphasized={a.emphasized}
-                onClick={() => onAction({ type: "actions.block", actionId: a.id })}
-              >
-                {a.label}
-              </WorkspaceActionRailButton>
-            ))}
-          </div>
+          {executableRows ?
+            <CommandRailExecutableActionList
+              actions={model.primaries.map((a) => ({
+                id: a.id,
+                label: a.label,
+                emphasized: a.emphasized,
+                onClick: () => onAction({ type: "actions.block", actionId: a.id }),
+              }))}
+            />
+          :   <div className="adminv2-ws-actions-rail-list">
+              {model.primaries.map((a) => (
+                <WorkspaceActionRailButton
+                  key={a.id}
+                  tier={a.variant === "secondary" ? "secondary" : "primary"}
+                  emphasized={a.emphasized}
+                  onClick={() => onAction({ type: "actions.block", actionId: a.id })}
+                >
+                  {a.label}
+                </WorkspaceActionRailButton>
+              ))}
+            </div>
+          }
         </div>
         {model.overflow && model.overflow.length > 0 ? (
           <MoreActionsSection items={model.overflow} onAction={onAction} />

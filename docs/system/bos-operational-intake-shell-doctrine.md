@@ -1,6 +1,6 @@
 # BOS Operational Intake Shell Doctrine
 
-**Status:** PROPOSED LOCK (pending QA sign-off)  
+**Status:** REVERTED IN PRODUCTION (June 2026 hotfix) — stadium lock retained in dev galleries only  
 **Version:** 1.0  
 **Last Updated:** June 2026
 
@@ -8,7 +8,15 @@ Companion to **`docs/system/bos-identity-doctrine.md`** (identity primitives). T
 
 ---
 
-## Decision
+## Production (current)
+
+**Action Workspace uses the rounded rectangular shell** (`shellVariant="legacy-rect"`). Full-viewport overlay (`fixed inset-0`), immediate open — no workspace reveal animation.
+
+The stadium shell below remains documented for dev comparison (`/dev/bos-operational-intake-shell-lock`) but is **not** used in production after the June 2026 hotfix.
+
+---
+
+## Archived decision (stadium — not in production)
 
 Production Create Lead uses a **horizontal stadium shell** with a **restrained top-center swell** (90% stadium · 10% cloud influence in geometry only).
 

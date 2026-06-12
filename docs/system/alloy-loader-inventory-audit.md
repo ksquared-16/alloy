@@ -1,7 +1,7 @@
 # Alloy Loader Inventory Audit
 
 **Date:** June 2026  
-**Canonical loader:** `AlloyIdentityLoader` — Alloy mark · horizon · Bend Pine smoke · optional message  
+**Canonical loader:** `AlloyIdentityLoader` — drifting atmosphere · Alloy mark · horizon · optional message  
 **Companion:** `docs/system/bos-identity-doctrine.md` (Canonical loader section)
 
 ---
@@ -23,10 +23,10 @@
 
 | Location | Component | Visual | Notes |
 |----------|-----------|--------|-------|
-| `OpportunityDrawerOpeningOverlay.tsx` | `AlloyCanonicalLoadingSurface` | Mark · horizon · smoke · `Preparing {record}…` | Drawer open gate |
+| `OpportunityDrawerOpeningOverlay.tsx` | `AlloyCanonicalLoadingSurface` | Atmosphere · mark · horizon · `Preparing {record}…` | Drawer open gate |
 | `OpportunityDrawerVmRuntime.tsx` | `AlloyCanonicalLoadingSurface` | Same | Cold VM shell overlay |
 | `alloyCanonicalLoadingSurface.tsx` | `AlloyIdentityLoader` | Identity stack | Shared wrapper |
-| `AlloyIdentityLoader.tsx` | — | Mark above horizon, smoke behind | **Source of truth** |
+| `AlloyIdentityLoader.tsx` | — | Atmosphere above mark, horizon beneath | **Source of truth** |
 | `BosExecutionLoader.tsx` | `AlloyIdentityLoader` + title/steps | Identity + phased copy | Execute / prep |
 | `ActionWorkspaceExecuteState.tsx` | `BosExecutionLoader` fullscreen | Identity + Create Lead phases | |
 | `AdminV2RouteLoadingState.tsx` | `BosExecutionLoader` panel/inline | Identity + route vocabulary | Dept / WU / queue |
@@ -46,10 +46,9 @@
 | Location | Component | Use |
 |----------|-----------|-----|
 | `ActionWorkspacePasteCanvas.tsx` | `BosRevealSequence` mode="working" | Live paste analyze |
-| `ActionWorkspaceBosShell.tsx` | `BosRevealSequence` mode="workspace" | Workspace open reveal |
 | Forms review assist | `BosReviewSummaryPlaceholder` | Working reveal while generating |
 
-These are **live BOS thinking**, not generic loading. Keep separate from route/drawer prep loaders.
+These are **live BOS thinking**, not generic loading. Keep separate from route/drawer prep loaders. **Workspace open reveal removed** from `ActionWorkspaceBosShell` and `ComposerBosEnhanceModal` (June 2026 hotfix).
 
 ---
 

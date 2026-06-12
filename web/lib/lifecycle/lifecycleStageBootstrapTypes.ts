@@ -12,6 +12,7 @@ import type { LifecycleBaseActionDefinition } from "@/lib/lifecycle/lifecycleSta
 import type { QueueMembershipStatusOption } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { StatusCategoryGroup, StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 
 export type LifecycleStageBootstrapFieldPaletteEntry = {
     rule_id: string;
@@ -43,6 +44,8 @@ export type LifecycleStageBootstrapFieldRequirements = {
 export type LifecycleStageBootstrapPayload = {
     department_id: string;
     builder_stage_key: string;
+    /** Process track for builder stage (family_track | child_track). */
+    stage_track_key?: string | null;
     operator_stage: LifecycleOperatorStage | null;
     statuses: EnrollmentStatusStagesPayload;
     pipeline: EnrollmentPipelineWorkUnitSnapshot | null;
@@ -54,5 +57,7 @@ export type LifecycleStageBootstrapPayload = {
     base_actions: LifecycleBaseActionDefinition[];
     queue_membership: QueueMembershipV1 | null;
     queue_membership_status_options: QueueMembershipStatusOption[];
+    status_category_catalog: StatusCategoryGroup[];
+    status_rollup_v1: StatusRollupV1 | null;
     stage_operating_plan: StageOperatingPlanV1 | null;
 };

@@ -1,4 +1,4 @@
-import { ADMINV2_COMMAND_SURFACE_Z } from "@/components/admin/Drawer";
+import { ADMINV2_SHELL_CHROME_Z } from "@/components/admin/Drawer";
 
-/** Action Workspace overlay — above drawer and BOS command surface; below shell chrome. */
-export const ACTION_WORKSPACE_LAYER_Z = ADMINV2_COMMAND_SURFACE_Z + 8;
+/** Action Workspace overlay — full viewport; above drawer, BOS rail, and shell chrome. */
+export const ACTION_WORKSPACE_LAYER_Z = ADMINV2_SHELL_CHROME_Z + 20;

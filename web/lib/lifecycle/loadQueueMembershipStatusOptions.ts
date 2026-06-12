@@ -4,7 +4,13 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
-import { OPPORTUNITY_CASE_STATUS_KEYS } from "@/lib/admin/statusReseed/statusMvpCatalog";
+import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
+import { legacyOcmDispositionKeysForStage } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
+import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
+import { parseProcessStageKeyFromStatusMetadata } from "@/lib/businessProcesses/processStageMetadata";
+import {
+    isGenericEnrollmentCaseContainerStatus,
+} from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { parseEnrollmentOperatorStageFromMetadata } from "@/lib/lifecycle/enrollmentOperatorStage";
 import type { QueueMembershipSubjectType } from "@/lib/lifecycle/queueMembershipV1";
 
@@ -31,6 +37,10 @@ function mapRows(
 
 function enrollmentStageKeyFromMetadata(metadata: Record<string, unknown> | null): string | null {
     if (!metadata) return null;
+    const processStage = parseProcessStageKeyFromStatusMetadata(metadata);
+    if (processStage && processStage !== "unassigned") {
+        return processStage === "enrollment" ? "enrollment" : processStage;
+    }
     const stage =
         (typeof metadata.enrollment_stage_key === "string" && metadata.enrollment_stage_key.trim()) ||
         (typeof metadata.stage_key === "string" && metadata.stage_key.trim()) ||
@@ -41,6 +51,66 @@ function enrollmentStageKeyFromMetadata(metadata: Record<string, unknown> | null
         return operator === "enrollment" ? "enrollment" : operator;
     }
     return null;
+}
+
+function templateStatusKeysForStage(stageKey: string, includeLegacyOcmKeys: boolean): Set<string> {
+    const spec = defaultEnrollmentQueueMembershipForStage(stageKey);
+    const keys = [
+        ...(spec?.included_disposition_keys ?? []),
+        ...(spec?.included_status_keys ?? []),
+        ...(includeLegacyOcmKeys ? legacyOcmDispositionKeysForStage(stageKey) : []),
+    ];
+    return new Set(keys.map((k) => k.trim()).filter(Boolean));
+}
+
+function statusMetadataRecord(row: StatusDefinitionRow): Record<string, unknown> | null {
+    return row.metadata != null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
+        ? (row.metadata as Record<string, unknown>)
+        : null;
+}
+
+/** Pure filter for family-track lead pipeline status picker rows (unit-tested). */
+export function filterFamilyTrackStatusRowsForStage(
+    rows: readonly StatusDefinitionRow[],
+    builderStageKey: string,
+): StatusDefinitionRow[] {
+    const stageKey = builderStageKey.trim();
+    if (!stageKey) return [];
+
+    const templateKeys = templateStatusKeysForStage(stageKey, false);
+    const filtered = rows.filter((r) => {
+        if (r.is_active === false) return false;
+        const meta = statusMetadataRecord(r);
+        if (isGenericEnrollmentCaseContainerStatus(r.status_key, meta)) return false;
+        if (meta?.excluded_from_enrollment_stage_picker === true) return false;
+        if (templateKeys.has(r.status_key)) return true;
+        if (!meta) return false;
+        if (meta.alloy_layer === "case_status") return false;
+        return dispositionMatchesStage(meta, stageKey);
+    });
+
+    return filtered.length ? filtered : rows.filter((r) => r.is_active !== false && templateKeys.has(r.status_key));
+}
+
+/** Pure filter for child-track enrollment disposition picker rows (unit-tested). */
+export function filterEnrollmentTrackStatusRowsForStage(
+    rows: readonly StatusDefinitionRow[],
+    builderStageKey: string,
+): StatusDefinitionRow[] {
+    const stageKey = builderStageKey.trim();
+    if (!stageKey) return [];
+
+    const templateKeys = templateStatusKeysForStage(stageKey, true);
+    const filtered = rows.filter((r) => {
+        if (r.is_active === false) return false;
+        if (templateKeys.has(r.status_key)) return true;
+        const meta = statusMetadataRecord(r);
+        if (!meta) return false;
+        if (meta.alloy_layer != null && meta.alloy_layer !== "enrollment_disposition") return false;
+        return dispositionMatchesStage(meta, stageKey);
+    });
+
+    return filtered.length ? filtered : rows.filter((r) => r.is_active !== false && templateKeys.has(r.status_key));
 }
 
 function normalizeBuilderStageKey(stageKey: string): string {
@@ -72,36 +142,11 @@ export async function loadQueueMembershipStatusOptions(
         const rows = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", {
             activeOnly: true,
         });
-        const filtered = rows.filter((r) => {
-            if (OPPORTUNITY_CASE_STATUS_KEYS.has(r.status_key)) return true;
-            const meta =
-                r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
-                    ? (r.metadata as Record<string, unknown>)
-                    : null;
-            const operator = parseEnrollmentOperatorStageFromMetadata(meta);
-            if (operator && operator !== "unassigned") {
-                return normalizeBuilderStageKey(operator) === normalizeBuilderStageKey(stageKey);
-            }
-            return false;
-        });
-        return mapRows(filtered);
+        return mapRows(filterFamilyTrackStatusRowsForStage(rows, stageKey));
     }
 
     const rows = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunity_customer_members", {
         activeOnly: true,
     });
-    const filtered = rows.filter((r) => {
-        const meta =
-            r.metadata != null && typeof r.metadata === "object" && !Array.isArray(r.metadata)
-                ? (r.metadata as Record<string, unknown>)
-                : null;
-        if (meta?.alloy_layer === "enrollment_disposition") {
-            return dispositionMatchesStage(meta, stageKey);
-        }
-        return dispositionMatchesStage(meta, stageKey);
-    });
-
-    if (filtered.length) return mapRows(filtered);
-
-    return mapRows(rows);
+    return mapRows(filterEnrollmentTrackStatusRowsForStage(rows, stageKey));
 }
