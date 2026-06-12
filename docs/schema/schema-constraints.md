@@ -1,0 +1,781 @@
+# Schema — constraints
+
+**Status:** Generated reference. **Do not edit by hand.**
+
+**Generated:** 2026-06-12 · **Constraint count:** 773
+
+| Table | Name | Type | Definition |
+|-------|------|------|------------|
+| `access_methods` | `access_methods_key_key` | UNIQUE | UNIQUE (key) |
+| `access_methods` | `access_methods_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `action_definitions` | `action_definitions_action_type_check` | CHECK | CHECK (action_type = ANY (ARRAY['navigate'::text, 'open_drawer'::text, 'open_form'::text, 'update_st |
+| `action_definitions` | `action_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `action_definitions` | `action_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `action_definitions` | `action_definitions_workflow_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE SET NULL |
+| `action_links` | `action_links_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `action_links` | `action_links_token_key` | UNIQUE | UNIQUE (token) |
+| `action_placements` | `action_placements_action_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (action_definition_id) REFERENCES action_definitions(id) ON DELETE CASCADE |
+| `action_placements` | `action_placements_department_id_fkey` | FOREIGN KEY | FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE |
+| `action_placements` | `action_placements_display_style_check` | CHECK | CHECK (display_style = ANY (ARRAY['button'::text, 'icon_button'::text, 'link'::text, 'menu_item'::te |
+| `action_placements` | `action_placements_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `action_placements` | `action_placements_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `action_placements` | `action_placements_slot_check` | CHECK | CHECK (slot = ANY (ARRAY['primary'::text, 'secondary'::text, 'overflow'::text, 'right_rail'::text, ' |
+| `action_placements` | `action_placements_surface_check` | CHECK | CHECK (surface = ANY (ARRAY['record_header'::text, 'record_section'::text, 'queue_row'::text, 'work_ |
+| `action_placements` | `action_placements_work_unit_id_fkey` | FOREIGN KEY | FOREIGN KEY (work_unit_id) REFERENCES work_units(id) ON DELETE CASCADE |
+| `activity_log` | `activity_log_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `addon_frequencies` | `addon_frequencies_key_key` | UNIQUE | UNIQUE (key) |
+| `addon_frequencies` | `addon_frequencies_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `addon_types` | `addon_types_key_key` | UNIQUE | UNIQUE (key) |
+| `addon_types` | `addon_types_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `addon_types` | `addon_types_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `agent_v0_apply_audit` | `agent_v0_apply_audit_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `agent_v0_apply_audit` | `agent_v0_apply_audit_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `agent_v0_apply_audit` | `agent_v0_apply_audit_work_unit_id_fkey` | FOREIGN KEY | FOREIGN KEY (work_unit_id) REFERENCES work_units(id) ON DELETE CASCADE |
+| `agent_v0_apply_audit` | `chk_agent_v0_apply_terminal` | CHECK | CHECK (terminal_status = ANY (ARRAY['success'::text, 'failed'::text])) |
+| `agent_v0_apply_audit` | `fk_agent_v0_apply_proposal` | FOREIGN KEY | FOREIGN KEY (proposal_id) REFERENCES agent_v0_proposals(proposal_id) ON DELETE CASCADE |
+| `agent_v0_apply_audit` | `ux_agent_v0_apply_audit_result_id` | UNIQUE | UNIQUE (result_id) |
+| `agent_v0_proposals` | `agent_v0_proposals_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `agent_v0_proposals` | `agent_v0_proposals_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `agent_v0_proposals` | `agent_v0_proposals_work_unit_id_fkey` | FOREIGN KEY | FOREIGN KEY (work_unit_id) REFERENCES work_units(id) ON DELETE CASCADE |
+| `agent_v0_proposals` | `ux_agent_v0_proposals_proposal_id` | UNIQUE | UNIQUE (proposal_id) |
+| `agent_v1_record_layout_apply_audit` | `agent_v1_record_layout_apply_aud_record_overview_layout_id_fkey` | FOREIGN KEY | FOREIGN KEY (record_overview_layout_id) REFERENCES record_overview_layouts(id) ON DELETE CASCADE |
+| `agent_v1_record_layout_apply_audit` | `agent_v1_record_layout_apply_audit_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `agent_v1_record_layout_apply_audit` | `agent_v1_record_layout_apply_audit_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `agent_v1_record_layout_apply_audit` | `chk_agent_v1_rl_apply_terminal` | CHECK | CHECK (terminal_status = ANY (ARRAY['success'::text, 'failed'::text])) |
+| `agent_v1_record_layout_apply_audit` | `fk_agent_v1_rl_apply_proposal` | FOREIGN KEY | FOREIGN KEY (proposal_id) REFERENCES agent_v1_record_layout_proposals(proposal_id) ON DELETE CASCADE |
+| `agent_v1_record_layout_apply_audit` | `ux_agent_v1_rl_apply_result_id` | UNIQUE | UNIQUE (result_id) |
+| `agent_v1_record_layout_proposals` | `agent_v1_record_layout_proposals_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `agent_v1_record_layout_proposals` | `agent_v1_record_layout_proposals_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `agent_v1_record_layout_proposals` | `agent_v1_record_layout_proposals_record_overview_layout_id_fkey` | FOREIGN KEY | FOREIGN KEY (record_overview_layout_id) REFERENCES record_overview_layouts(id) ON DELETE CASCADE |
+| `agent_v1_record_layout_proposals` | `ux_agent_v1_rl_proposals_proposal_id` | UNIQUE | UNIQUE (proposal_id) |
+| `agent_v2_field_visibility_apply_audit` | `agent_v2_field_visibility_apply_audit_field_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (field_definition_id) REFERENCES field_definitions(id) ON DELETE CASCADE |
+| `agent_v2_field_visibility_apply_audit` | `agent_v2_field_visibility_apply_audit_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `agent_v2_field_visibility_apply_audit` | `agent_v2_field_visibility_apply_audit_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `agent_v2_field_visibility_apply_audit` | `chk_agent_v2_fv_apply_terminal` | CHECK | CHECK (terminal_status = ANY (ARRAY['success'::text, 'failed'::text])) |
+| `agent_v2_field_visibility_apply_audit` | `fk_agent_v2_fv_apply_proposal` | FOREIGN KEY | FOREIGN KEY (proposal_id) REFERENCES agent_v2_field_visibility_proposals(proposal_id) ON DELETE CASC |
+| `agent_v2_field_visibility_apply_audit` | `ux_agent_v2_fv_apply_result_id` | UNIQUE | UNIQUE (result_id) |
+| `agent_v2_field_visibility_proposals` | `agent_v2_field_visibility_proposals_field_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (field_definition_id) REFERENCES field_definitions(id) ON DELETE CASCADE |
+| `agent_v2_field_visibility_proposals` | `agent_v2_field_visibility_proposals_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `agent_v2_field_visibility_proposals` | `agent_v2_field_visibility_proposals_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `agent_v2_field_visibility_proposals` | `ux_agent_v2_fv_proposals_proposal_id` | UNIQUE | UNIQUE (proposal_id) |
+| `app_users` | `app_users_auth_user_id_key` | UNIQUE | UNIQUE (auth_user_id) |
+| `app_users` | `app_users_id_fkey` | FOREIGN KEY | FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE |
+| `app_users` | `app_users_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `app_users` | `app_users_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `app_users` | `app_users_role_check` | CHECK | CHECK (role = ANY (ARRAY['admin'::text, 'ops'::text, 'vendor_owner'::text, 'vendor_worker'::text])) |
+| `app_users` | `app_users_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL |
+| `assignment_statuses` | `assignment_statuses_key_key` | UNIQUE | UNIQUE (key) |
+| `assignment_statuses` | `assignment_statuses_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `assignments` | `assignments_assignment_status_id_fkey` | FOREIGN KEY | FOREIGN KEY (assignment_status_id) REFERENCES assignment_statuses(id) ON DELETE SET NULL |
+| `assignments` | `assignments_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `assignments` | `assignments_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `assignments` | `assignments_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `assignments` | `assignments_schedule_id_fkey` | FOREIGN KEY | FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE |
+| `assignments` | `assignments_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE RESTRICT |
+| `assignments` | `assignments_vendor_user_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_user_id) REFERENCES vendor_users(id) ON DELETE SET NULL |
+| `campaigns` | `campaigns_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `charge_line_items` | `charge_line_items_amount_cents_nonzero_chk` | CHECK | CHECK (amount_cents <> 0) |
+| `charge_line_items` | `charge_line_items_charge_id_fkey` | FOREIGN KEY | FOREIGN KEY (charge_id) REFERENCES charges(id) ON DELETE CASCADE |
+| `charge_line_items` | `charge_line_items_job_line_item_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_line_item_id) REFERENCES job_line_items(id) ON DELETE SET NULL |
+| `charge_line_items` | `charge_line_items_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `charge_line_items` | `charge_line_items_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `charges` | `charges_amount_cents_nonzero_chk` | CHECK | CHECK (amount_cents <> 0) |
+| `charges` | `charges_charge_type_chk` | CHECK | CHECK (charge_type = ANY (ARRAY['service'::text, 'fee'::text, 'adjustment'::text, 'cancellation_fee' |
+| `charges` | `charges_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE RESTRICT |
+| `charges` | `charges_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `charges` | `charges_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `charges` | `charges_schedule_id_fkey` | FOREIGN KEY | FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE SET NULL |
+| `charges` | `charges_source_charge_id_fkey` | FOREIGN KEY | FOREIGN KEY (source_charge_id) REFERENCES charges(id) ON DELETE SET NULL |
+| `charges` | `charges_status_chk` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'posted'::text, 'partially_paid'::text, 'paid'::text, 'voi |
+| `charges` | `charges_subscription_id_fkey` | FOREIGN KEY | FOREIGN KEY (subscription_id) REFERENCES customer_subscriptions(id) ON DELETE SET NULL |
+| `cleaning_job_addons` | `cleaning_job_addons_addon_type_id_fkey` | FOREIGN KEY | FOREIGN KEY (addon_type_id) REFERENCES addon_types(id) ON DELETE RESTRICT |
+| `cleaning_job_addons` | `cleaning_job_addons_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `cleaning_job_addons` | `cleaning_job_addons_pkey` | PRIMARY KEY | PRIMARY KEY (job_id, addon_type_id) |
+| `cleaning_job_details` | `cleaning_job_details_addon_frequency_id_fkey` | FOREIGN KEY | FOREIGN KEY (addon_frequency_id) REFERENCES addon_frequencies(id) ON DELETE SET NULL |
+| `cleaning_job_details` | `cleaning_job_details_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `cleaning_job_details` | `cleaning_job_details_pkey` | PRIMARY KEY | PRIMARY KEY (job_id) |
+| `cleaning_job_details` | `cleaning_job_details_service_type_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_type_id) REFERENCES cleaning_service_types(id) ON DELETE SET NULL |
+| `cleaning_service_types` | `cleaning_service_types_key_key` | UNIQUE | UNIQUE (key) |
+| `cleaning_service_types` | `cleaning_service_types_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `communication_message_reads` | `communication_message_reads_message_id_fkey` | FOREIGN KEY | FOREIGN KEY (message_id) REFERENCES communication_messages(id) ON DELETE CASCADE |
+| `communication_message_reads` | `communication_message_reads_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `communication_message_reads` | `communication_message_reads_pkey` | PRIMARY KEY | PRIMARY KEY (message_id, user_id) |
+| `communication_messages` | `communication_messages_channel_check` | CHECK | CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text, 'in_app'::text])) |
+| `communication_messages` | `communication_messages_communication_provider_binding_id_fkey` | FOREIGN KEY | FOREIGN KEY (communication_provider_binding_id) REFERENCES communication_provider_bindings(id) ON DE |
+| `communication_messages` | `communication_messages_direction_check` | CHECK | CHECK (direction = ANY (ARRAY['inbound'::text, 'outbound'::text])) |
+| `communication_messages` | `communication_messages_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `communication_messages` | `communication_messages_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `communication_messages` | `communication_messages_thread_id_fkey` | FOREIGN KEY | FOREIGN KEY (thread_id) REFERENCES communication_threads(id) ON DELETE CASCADE |
+| `communication_messages` | `communication_messages_workflow_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE SET NULL |
+| `communication_provider_bindings` | `communication_provider_bindings_channel_check` | CHECK | CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text])) |
+| `communication_provider_bindings` | `communication_provider_bindings_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL |
+| `communication_provider_bindings` | `communication_provider_bindings_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `communication_provider_bindings` | `communication_provider_bindings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `communication_provider_bindings` | `communication_provider_bindings_scope_check` | CHECK | CHECK (scope = ANY (ARRAY['org'::text, 'location'::text, 'user'::text])) |
+| `communication_provider_bindings` | `communication_provider_bindings_status_check` | CHECK | CHECK (status = ANY (ARRAY['active'::text, 'disabled'::text, 'pending_verification'::text])) |
+| `communication_scheduled_sends` | `chk_comm_sched_sends_schedule_after_approval` | CHECK | CHECK (scheduled_for > approved_at) |
+| `communication_scheduled_sends` | `communication_scheduled_sends_channel_check` | CHECK | CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text])) |
+| `communication_scheduled_sends` | `communication_scheduled_sends_communication_message_id_fkey` | FOREIGN KEY | FOREIGN KEY (communication_message_id) REFERENCES communication_messages(id) ON DELETE SET NULL |
+| `communication_scheduled_sends` | `communication_scheduled_sends_communication_provider_bindi_fkey` | FOREIGN KEY | FOREIGN KEY (communication_provider_binding_id) REFERENCES communication_provider_bindings(id) ON DE |
+| `communication_scheduled_sends` | `communication_scheduled_sends_entity_id_fkey` | FOREIGN KEY | FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `communication_scheduled_sends` | `communication_scheduled_sends_entity_type_check` | CHECK | CHECK (entity_type = 'opportunities'::text) |
+| `communication_scheduled_sends` | `communication_scheduled_sends_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `communication_scheduled_sends` | `communication_scheduled_sends_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `communication_scheduled_sends` | `communication_scheduled_sends_proposal_id_fkey` | FOREIGN KEY | FOREIGN KEY (proposal_id) REFERENCES task_assist_proposals(id) ON DELETE SET NULL |
+| `communication_scheduled_sends` | `communication_scheduled_sends_recipient_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (recipient_person_id) REFERENCES persons(id) ON DELETE RESTRICT |
+| `communication_scheduled_sends` | `communication_scheduled_sends_source_check` | CHECK | CHECK (source = ANY (ARRAY['task_assist'::text, 'tour_scheduling'::text])) |
+| `communication_scheduled_sends` | `communication_scheduled_sends_status_check` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'claimed'::text, 'queued'::text, 'sent'::text, 'canceled |
+| `communication_threads` | `communication_threads_channel_check` | CHECK | CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text, 'in_app'::text])) |
+| `communication_threads` | `communication_threads_identity_uq` | UNIQUE | UNIQUE (org_id, primary_entity_type, primary_entity_id, channel, recipient_key) |
+| `communication_threads` | `communication_threads_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL |
+| `communication_threads` | `communication_threads_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `communication_threads` | `communication_threads_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `config_layout_assist_proposals` | `chk_config_layout_assist_proposals_apply_mode` | CHECK | CHECK (apply_mode = ANY (ARRAY['single_operation'::text, 'batched_atomic'::text, 'recommendation_onl |
+| `config_layout_assist_proposals` | `chk_config_layout_assist_proposals_risk` | CHECK | CHECK (risk_level = ANY (ARRAY['low'::text, 'medium'::text, 'high'::text])) |
+| `config_layout_assist_proposals` | `chk_config_layout_assist_proposals_state` | CHECK | CHECK (state = ANY (ARRAY['draft'::text, 'reviewed'::text, 'approved'::text, 'rejected'::text, 'appl |
+| `config_layout_assist_proposals` | `config_layout_assist_proposals_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `config_layout_assist_proposals` | `config_layout_assist_proposals_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `contact_tags` | `contact_tags_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE |
+| `contact_tags` | `contact_tags_pkey` | PRIMARY KEY | PRIMARY KEY (contact_id, tag_id) |
+| `contact_tags` | `contact_tags_tag_id_fkey` | FOREIGN KEY | FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE |
+| `contacts` | `contacts_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `contacts` | `contacts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `contacts` | `contacts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `contacts` | `contacts_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL |
+| `contacts` | `fk_contacts_person_id` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL |
+| `customer_member_contact_roles` | `customer_member_contact_roles_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `customer_member_contact_roles` | `customer_member_contact_roles_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customer_member_contact_roles` | `customer_member_contact_roles_unique` | UNIQUE | UNIQUE (org_id, role_key) |
+| `customer_member_contacts` | `customer_member_contacts_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE |
+| `customer_member_contacts` | `customer_member_contacts_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE |
+| `customer_member_contacts` | `customer_member_contacts_customer_member_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE CASCADE |
+| `customer_member_contacts` | `customer_member_contacts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `customer_member_contacts` | `customer_member_contacts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customer_member_contacts` | `customer_member_contacts_unique` | UNIQUE | UNIQUE (org_id, customer_member_id, contact_id, role_key) |
+| `customer_member_relationship_types` | `customer_member_relationship_types_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `customer_member_relationship_types` | `customer_member_relationship_types_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customer_members` | `customer_members_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE |
+| `customer_members` | `customer_members_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `customer_members` | `customer_members_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customer_members` | `fk_customer_members_person_id` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL |
+| `customer_payment_methods` | `customer_payment_methods_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) |
+| `customer_payment_methods` | `customer_payment_methods_customer_id_stripe_payment_method__key` | UNIQUE | UNIQUE (customer_id, stripe_payment_method_id) |
+| `customer_payment_methods` | `customer_payment_methods_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customer_person_role_types` | `customer_person_role_types_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customer_person_role_types` | `fk_customer_person_role_types_industry` | FOREIGN KEY | FOREIGN KEY (industry_id) REFERENCES industries(id) ON DELETE CASCADE |
+| `customer_person_role_types` | `fk_customer_person_role_types_vertical` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `customer_persons` | `customer_persons_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customer_persons` | `fk_customer_persons_customer` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE |
+| `customer_persons` | `fk_customer_persons_person` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE |
+| `customer_persons` | `uq_customer_persons_unique` | UNIQUE | UNIQUE (org_id, customer_id, person_id, role_type) |
+| `customer_subscriptions` | `customer_subscriptions_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE |
+| `customer_subscriptions` | `customer_subscriptions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customer_subscriptions` | `customer_subscriptions_primary_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (primary_contact_id) REFERENCES contacts(id) |
+| `customer_subscriptions` | `customer_subscriptions_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) |
+| `customer_tags` | `customer_tags_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE |
+| `customer_tags` | `customer_tags_pkey` | PRIMARY KEY | PRIMARY KEY (customer_id, tag_id) |
+| `customer_tags` | `customer_tags_tag_id_fkey` | FOREIGN KEY | FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE |
+| `customer_vertical_job_counters` | `customer_vertical_job_counters_pkey` | PRIMARY KEY | PRIMARY KEY (customer_id, vertical_id) |
+| `customer_vertical_job_counters` | `uniq_counter_per_customer_vertical` | UNIQUE | UNIQUE (customer_id, vertical_id) |
+| `customers` | `customers_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `customers` | `customers_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `customers` | `customers_primary_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (primary_contact_id) REFERENCES contacts(id) ON DELETE SET NULL |
+| `customers` | `customers_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE RESTRICT |
+| `departments` | `departments_key_nonempty` | CHECK | CHECK (btrim(key) <> ''::text) |
+| `departments` | `departments_name_nonempty` | CHECK | CHECK (btrim(name) <> ''::text) |
+| `departments` | `departments_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `departments` | `departments_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `departments` | `uq_departments_org_key` | UNIQUE | UNIQUE (org_id, key) |
+| `discount_applications` | `discount_applications_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `discount_applications` | `discount_applications_customer_subscription_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_subscription_id) REFERENCES customer_subscriptions(id) ON DELETE SET NULL |
+| `discount_applications` | `discount_applications_discount_amount_cents_check` | CHECK | CHECK (discount_amount_cents >= 0) |
+| `discount_applications` | `discount_applications_discount_commitment_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_commitment_id) REFERENCES discount_commitments(id) ON DELETE SET NULL |
+| `discount_applications` | `discount_applications_discount_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) ON DELETE RESTRICT |
+| `discount_applications` | `discount_applications_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL |
+| `discount_applications` | `discount_applications_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE SET NULL |
+| `discount_applications` | `discount_applications_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `discount_applications` | `discount_applications_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `discount_applications` | `discount_applications_source_check` | CHECK | CHECK (source = ANY (ARRAY['system'::text, 'admin'::text, 'workflow'::text, 'api'::text, 'code'::tex |
+| `discount_applications` | `discount_applications_status_check` | CHECK | CHECK (status = ANY (ARRAY['proposed'::text, 'applied'::text, 'reversed'::text, 'expired'::text, 'vo |
+| `discount_applications` | `discount_applications_target_entity_type_check` | CHECK | CHECK (target_entity_type = ANY (ARRAY['opportunity'::text, 'job'::text, 'customer_subscription'::te |
+| `discount_codes` | `discount_codes_code_key` | UNIQUE | UNIQUE (code) |
+| `discount_codes` | `discount_codes_code_unique` | UNIQUE | UNIQUE (code) |
+| `discount_codes` | `discount_codes_discount_type_check` | CHECK | CHECK (discount_type = ANY (ARRAY['percent'::text, 'fixed'::text])) |
+| `discount_codes` | `discount_codes_discount_value_check` | CHECK | CHECK (discount_value >= 0::numeric) |
+| `discount_codes` | `discount_codes_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `discount_codes` | `uniq_discount_codes_code` | UNIQUE | UNIQUE (code) |
+| `discount_commitments` | `discount_commitments_breach_policy_check` | CHECK | CHECK (breach_policy = ANY (ARRAY['none'::text, 'charge_back'::text, 'convert_to_credit'::text, 'man |
+| `discount_commitments` | `discount_commitments_completed_service_count_check` | CHECK | CHECK (completed_service_count >= 0) |
+| `discount_commitments` | `discount_commitments_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT |
+| `discount_commitments` | `discount_commitments_customer_subscription_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_subscription_id) REFERENCES customer_subscriptions(id) ON DELETE SET NULL |
+| `discount_commitments` | `discount_commitments_discount_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) ON DELETE RESTRICT |
+| `discount_commitments` | `discount_commitments_granted_application_fkey` | FOREIGN KEY | FOREIGN KEY (granted_discount_application_id) REFERENCES discount_applications(id) ON DELETE SET NUL |
+| `discount_commitments` | `discount_commitments_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `discount_commitments` | `discount_commitments_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `discount_commitments` | `discount_commitments_progress_chk` | CHECK | CHECK (completed_service_count <= required_service_count) |
+| `discount_commitments` | `discount_commitments_required_service_count_check` | CHECK | CHECK (required_service_count > 0) |
+| `discount_commitments` | `discount_commitments_status_check` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'active'::text, 'fulfilled'::text, 'breached'::text, 'ex |
+| `discount_commitments` | `discount_commitments_window_chk` | CHECK | CHECK (window_end_at >= window_start_at) |
+| `discount_program_benefits` | `discount_program_benefits_amount_cents_check` | CHECK | CHECK (amount_cents IS NULL OR amount_cents >= 0) |
+| `discount_program_benefits` | `discount_program_benefits_applies_to_check` | CHECK | CHECK (applies_to = ANY (ARRAY['order'::text, 'service'::text, 'first_service'::text, 'nth_service': |
+| `discount_program_benefits` | `discount_program_benefits_benefit_type_check` | CHECK | CHECK (benefit_type = ANY (ARRAY['percent_off'::text, 'fixed_amount_off'::text, 'free_service'::text |
+| `discount_program_benefits` | `discount_program_benefits_discount_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) ON DELETE CASCADE |
+| `discount_program_benefits` | `discount_program_benefits_max_discount_cents_check` | CHECK | CHECK (max_discount_cents IS NULL OR max_discount_cents >= 0) |
+| `discount_program_benefits` | `discount_program_benefits_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `discount_program_benefits` | `discount_program_benefits_percent_basis_points_check` | CHECK | CHECK (percent_basis_points IS NULL OR percent_basis_points >= 0 AND percent_basis_points <= 10000) |
+| `discount_program_benefits` | `discount_program_benefits_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `discount_program_benefits` | `discount_program_benefits_service_index_check` | CHECK | CHECK (service_index IS NULL OR service_index > 0) |
+| `discount_program_benefits` | `discount_program_benefits_value_present_chk` | CHECK | CHECK (amount_cents IS NOT NULL OR percent_basis_points IS NOT NULL OR (benefit_type = ANY (ARRAY['f |
+| `discount_program_commitment_rules` | `discount_program_commitment__max_redemptions_per_customer_check` | CHECK | CHECK (max_redemptions_per_customer IS NULL OR max_redemptions_per_customer > 0) |
+| `discount_program_commitment_rules` | `discount_program_commitment_rul_qualifying_service_status_check` | CHECK | CHECK (qualifying_service_status = ANY (ARRAY['booked'::text, 'completed'::text])) |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_benefit_grant_timing_check` | CHECK | CHECK (benefit_grant_timing = ANY (ARRAY['upfront'::text, 'after_fulfillment'::text])) |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_breach_policy_check` | CHECK | CHECK (breach_policy = ANY (ARRAY['none'::text, 'charge_back'::text, 'convert_to_credit'::text, 'man |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_commitment_start_mode_check` | CHECK | CHECK (commitment_start_mode = ANY (ARRAY['first_service_booked'::text, 'first_service_completed'::t |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_discount_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) ON DELETE CASCADE |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_enrollment_mode_check` | CHECK | CHECK (enrollment_mode = ANY (ARRAY['automatic'::text, 'manual'::text])) |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_program_unique` | UNIQUE | UNIQUE (discount_program_id) |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_required_service_count_check` | CHECK | CHECK (required_service_count > 0) |
+| `discount_program_commitment_rules` | `discount_program_commitment_rules_timeframe_days_check` | CHECK | CHECK (timeframe_days > 0) |
+| `discount_program_qualifiers` | `discount_program_qualifiers_discount_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) ON DELETE CASCADE |
+| `discount_program_qualifiers` | `discount_program_qualifiers_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `discount_program_qualifiers` | `discount_program_qualifiers_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `discount_programs` | `discount_programs_applies_to_entity_type_check` | CHECK | CHECK (applies_to_entity_type = ANY (ARRAY['opportunity'::text, 'job'::text, 'customer_subscription' |
+| `discount_programs` | `discount_programs_max_total_uses_check` | CHECK | CHECK (max_total_uses IS NULL OR max_total_uses >= 0) |
+| `discount_programs` | `discount_programs_max_uses_per_customer_check` | CHECK | CHECK (max_uses_per_customer IS NULL OR max_uses_per_customer >= 0) |
+| `discount_programs` | `discount_programs_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `discount_programs` | `discount_programs_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `discount_programs` | `discount_programs_program_type_check` | CHECK | CHECK (program_type = ANY (ARRAY['code'::text, 'auto'::text, 'commitment'::text, 'subscription'::tex |
+| `discount_programs` | `discount_programs_stacking_mode_check` | CHECK | CHECK (stacking_mode = ANY (ARRAY['exclusive'::text, 'stackable'::text, 'best_of'::text])) |
+| `discount_programs` | `discount_programs_status_check` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'active'::text, 'paused'::text, 'archived'::text])) |
+| `discount_programs` | `discount_programs_valid_window_chk` | CHECK | CHECK (valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from) |
+| `discount_redemptions` | `discount_redemptions_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (contact_id) REFERENCES contacts(id) |
+| `discount_redemptions` | `discount_redemptions_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) |
+| `discount_redemptions` | `discount_redemptions_discount_code_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_code_id) REFERENCES discount_codes(id) |
+| `discount_redemptions` | `discount_redemptions_discount_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) |
+| `discount_redemptions` | `discount_redemptions_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) |
+| `discount_redemptions` | `discount_redemptions_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) |
+| `discount_redemptions` | `discount_redemptions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `discount_redemptions` | `uniq_redemption_per_contact_code` | UNIQUE | UNIQUE (contact_id, discount_code_id) |
+| `discounts` | `discounts_campaign_id_fkey` | FOREIGN KEY | FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE SET NULL |
+| `discounts` | `discounts_code_key` | UNIQUE | UNIQUE (code) |
+| `discounts` | `discounts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `document_field_definitions` | `document_field_definitions_org_doc_type_field_key_key` | UNIQUE | UNIQUE (org_id, doc_type, field_key) |
+| `document_field_definitions` | `document_field_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `document_field_definitions` | `document_field_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `document_field_values` | `document_field_values_document_id_field_key_key` | UNIQUE | UNIQUE (document_id, field_key) |
+| `document_field_values` | `document_field_values_document_id_fkey` | FOREIGN KEY | FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE |
+| `document_field_values` | `document_field_values_field_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (field_definition_id) REFERENCES document_field_definitions(id) ON DELETE SET NULL |
+| `document_field_values` | `document_field_values_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `document_field_values` | `document_field_values_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `document_versions` | `document_versions_document_id_fkey` | FOREIGN KEY | FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE |
+| `document_versions` | `document_versions_document_id_version_number_key` | UNIQUE | UNIQUE (document_id, version_number) |
+| `document_versions` | `document_versions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `document_versions` | `document_versions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `documents` | `documents_generated_from_document_id_fkey` | FOREIGN KEY | FOREIGN KEY (generated_from_document_id) REFERENCES documents(id) ON DELETE SET NULL |
+| `documents` | `documents_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `documents` | `documents_owner_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (owner_contact_id) REFERENCES contacts(id) ON DELETE SET NULL |
+| `documents` | `documents_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `entity_labels` | `entity_labels_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `entity_labels` | `entity_labels_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `entity_labels` | `entity_labels_unique` | UNIQUE | UNIQUE (org_id, entity_type) |
+| `external_mappings` | `external_mappings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `external_mappings` | `external_mappings_source_entity_type_external_id_key` | UNIQUE | UNIQUE (source, entity_type, external_id) |
+| `field_definitions` | `field_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `field_definitions` | `field_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `field_section_definitions` | `field_section_definitions_org_entity_section_key` | UNIQUE | UNIQUE (org_id, entity_type, section_key) |
+| `field_section_definitions` | `field_section_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `field_section_definitions` | `field_section_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `field_values` | `field_values_field_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (field_definition_id) REFERENCES field_definitions(id) ON DELETE CASCADE |
+| `field_values` | `field_values_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `field_values` | `field_values_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_definition_versions` | `chk_form_definition_versions_publish_metadata_consistency` | CHECK | CHECK ((status = ANY (ARRAY['published'::text, 'archived'::text])) AND published_at IS NOT NULL OR s |
+| `form_definition_versions` | `chk_form_definition_versions_status` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'published'::text, 'archived'::text])) |
+| `form_definition_versions` | `form_definition_versions_form_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_definition_id) REFERENCES form_definitions(id) ON DELETE CASCADE |
+| `form_definition_versions` | `form_definition_versions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_definition_versions` | `form_definition_versions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_definition_versions` | `uq_form_definition_versions_definition_version` | UNIQUE | UNIQUE (form_definition_id, version_number) |
+| `form_definitions` | `chk_form_definitions_kind` | CHECK | CHECK (kind = ANY (ARRAY['state'::text, 'center'::text])) |
+| `form_definitions` | `form_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_definitions` | `form_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_definitions` | `uq_form_definitions_org_key` | UNIQUE | UNIQUE (org_id, key) |
+| `form_packet_definitions` | `form_packet_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_packet_definitions` | `form_packet_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_packet_definitions` | `uq_form_packet_definitions_org_key` | UNIQUE | UNIQUE (org_id, key) |
+| `form_packet_items` | `chk_form_packet_items_sequence_nonneg` | CHECK | CHECK (sequence_index >= 0) |
+| `form_packet_items` | `form_packet_items_form_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_definition_id) REFERENCES form_definitions(id) ON DELETE RESTRICT |
+| `form_packet_items` | `form_packet_items_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_packet_items` | `form_packet_items_packet_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (packet_definition_id) REFERENCES form_packet_definitions(id) ON DELETE CASCADE |
+| `form_packet_items` | `form_packet_items_pinned_form_definition_version_id_fkey` | FOREIGN KEY | FOREIGN KEY (pinned_form_definition_version_id) REFERENCES form_definition_versions(id) ON DELETE SE |
+| `form_packet_items` | `form_packet_items_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_packet_items` | `uq_form_packet_items_packet_sequence` | UNIQUE | UNIQUE (packet_definition_id, sequence_index) |
+| `form_packet_session_items` | `chk_form_packet_session_items_seq_nonneg` | CHECK | CHECK (sequence_index >= 0) |
+| `form_packet_session_items` | `chk_form_packet_session_items_status` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'active'::text, 'submitted'::text, 'skipped'::text])) |
+| `form_packet_session_items` | `form_packet_session_items_form_submission_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_submission_id) REFERENCES form_submissions(id) ON DELETE SET NULL |
+| `form_packet_session_items` | `form_packet_session_items_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_packet_session_items` | `form_packet_session_items_packet_item_id_fkey` | FOREIGN KEY | FOREIGN KEY (packet_item_id) REFERENCES form_packet_items(id) ON DELETE RESTRICT |
+| `form_packet_session_items` | `form_packet_session_items_packet_session_id_fkey` | FOREIGN KEY | FOREIGN KEY (packet_session_id) REFERENCES form_packet_sessions(id) ON DELETE CASCADE |
+| `form_packet_session_items` | `form_packet_session_items_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_packet_session_items` | `uq_form_packet_session_items_session_packet_item` | UNIQUE | UNIQUE (packet_session_id, packet_item_id) |
+| `form_packet_session_items` | `uq_form_packet_session_items_session_sequence` | UNIQUE | UNIQUE (packet_session_id, sequence_index) |
+| `form_packet_sessions` | `chk_form_packet_sessions_operator_review_status` | CHECK | CHECK (operator_review_status IS NULL OR (operator_review_status = ANY (ARRAY['needs_review'::text,  |
+| `form_packet_sessions` | `chk_form_packet_sessions_seq_nonneg` | CHECK | CHECK (current_sequence_index >= 0) |
+| `form_packet_sessions` | `chk_form_packet_sessions_status` | CHECK | CHECK (status = ANY (ARRAY['in_progress'::text, 'completed'::text, 'cancelled'::text])) |
+| `form_packet_sessions` | `form_packet_sessions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_packet_sessions` | `form_packet_sessions_packet_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (packet_definition_id) REFERENCES form_packet_definitions(id) ON DELETE RESTRICT |
+| `form_packet_sessions` | `form_packet_sessions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_packet_sessions` | `form_packet_sessions_started_via_public_link_id_fkey` | FOREIGN KEY | FOREIGN KEY (started_via_public_link_id) REFERENCES form_public_links(id) ON DELETE CASCADE |
+| `form_public_links` | `form_public_links_form_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_definition_id) REFERENCES form_definitions(id) ON DELETE CASCADE |
+| `form_public_links` | `form_public_links_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_public_links` | `form_public_links_pinned_form_definition_version_id_fkey` | FOREIGN KEY | FOREIGN KEY (pinned_form_definition_version_id) REFERENCES form_definition_versions(id) ON DELETE SE |
+| `form_public_links` | `form_public_links_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_public_links` | `uq_form_public_links_token_hash` | UNIQUE | UNIQUE (token_hash) |
+| `form_submission_documents` | `chk_form_submission_documents_role` | CHECK | CHECK (role = ANY (ARRAY['generated_pdf'::text, 'signature_asset'::text, 'upload'::text, 'other'::te |
+| `form_submission_documents` | `form_submission_documents_document_id_fkey` | FOREIGN KEY | FOREIGN KEY (document_id) REFERENCES documents(id) ON DELETE CASCADE |
+| `form_submission_documents` | `form_submission_documents_form_submission_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_submission_id) REFERENCES form_submissions(id) ON DELETE CASCADE |
+| `form_submission_documents` | `form_submission_documents_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_submission_documents` | `form_submission_documents_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_submission_documents` | `uq_form_submission_documents_sub_doc` | UNIQUE | UNIQUE (form_submission_id, document_id) |
+| `form_submission_signatures` | `chk_form_submission_signatures_kind` | CHECK | CHECK (signature_kind = ANY (ARRAY['typed'::text, 'drawn'::text])) |
+| `form_submission_signatures` | `form_submission_signatures_drawn_asset_document_id_fkey` | FOREIGN KEY | FOREIGN KEY (drawn_asset_document_id) REFERENCES documents(id) ON DELETE SET NULL |
+| `form_submission_signatures` | `form_submission_signatures_form_submission_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_submission_id) REFERENCES form_submissions(id) ON DELETE CASCADE |
+| `form_submission_signatures` | `form_submission_signatures_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_submission_signatures` | `form_submission_signatures_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `form_submission_signatures` | `uq_form_submission_signatures_field_instance` | UNIQUE | UNIQUE (form_submission_id, field_id, instance_key) |
+| `form_submissions` | `chk_form_submissions_status` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'submitted'::text, 'void'::text])) |
+| `form_submissions` | `form_submissions_created_via_public_link_id_fkey` | FOREIGN KEY | FOREIGN KEY (created_via_public_link_id) REFERENCES form_public_links(id) ON DELETE SET NULL |
+| `form_submissions` | `form_submissions_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `form_submissions` | `form_submissions_customer_member_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE SET NULL |
+| `form_submissions` | `form_submissions_form_definition_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_definition_id) REFERENCES form_definitions(id) ON DELETE RESTRICT |
+| `form_submissions` | `form_submissions_form_definition_version_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_definition_version_id) REFERENCES form_definition_versions(id) ON DELETE RESTRICT |
+| `form_submissions` | `form_submissions_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE SET NULL |
+| `form_submissions` | `form_submissions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `form_submissions` | `form_submissions_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL |
+| `form_submissions` | `form_submissions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `gl_account_mappings` | `gl_account_mappings_gl_account_id_fkey` | FOREIGN KEY | FOREIGN KEY (gl_account_id) REFERENCES gl_accounts(id) ON DELETE RESTRICT |
+| `gl_account_mappings` | `gl_account_mappings_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `gl_account_mappings` | `gl_account_mappings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `gl_accounts` | `gl_accounts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `gl_accounts` | `gl_accounts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `gl_accounts` | `gl_accounts_type_check` | CHECK | CHECK (type = ANY (ARRAY['asset'::text, 'liability'::text, 'equity'::text, 'revenue'::text, 'expense |
+| `gl_journal_entries` | `gl_journal_entries_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `gl_journal_entries` | `gl_journal_entries_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `gl_journal_entries` | `gl_journal_entries_reversal_of_entry_id_fkey` | FOREIGN KEY | FOREIGN KEY (reversal_of_entry_id) REFERENCES gl_journal_entries(id) ON DELETE SET NULL |
+| `gl_journal_entries` | `gl_journal_entries_status_check` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'posted'::text, 'void'::text])) |
+| `gl_journal_lines` | `gl_journal_lines_account_id_fkey` | FOREIGN KEY | FOREIGN KEY (account_id) REFERENCES gl_accounts(id) ON DELETE RESTRICT |
+| `gl_journal_lines` | `gl_journal_lines_credit_nonneg` | CHECK | CHECK (credit_cents >= 0) |
+| `gl_journal_lines` | `gl_journal_lines_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `gl_journal_lines` | `gl_journal_lines_debit_credit_chk` | CHECK | CHECK (debit_cents >= 0 AND credit_cents >= 0 AND NOT (debit_cents > 0 AND credit_cents > 0) AND NOT |
+| `gl_journal_lines` | `gl_journal_lines_debit_nonneg` | CHECK | CHECK (debit_cents >= 0) |
+| `gl_journal_lines` | `gl_journal_lines_entry_id_fkey` | FOREIGN KEY | FOREIGN KEY (entry_id) REFERENCES gl_journal_entries(id) ON DELETE CASCADE |
+| `gl_journal_lines` | `gl_journal_lines_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL |
+| `gl_journal_lines` | `gl_journal_lines_one_sided` | CHECK | CHECK (debit_cents > 0 AND credit_cents = 0 OR credit_cents > 0 AND debit_cents = 0) |
+| `gl_journal_lines` | `gl_journal_lines_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `gl_journal_lines` | `gl_journal_lines_payment_id_fkey` | FOREIGN KEY | FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL |
+| `gl_journal_lines` | `gl_journal_lines_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `gl_journal_lines` | `gl_journal_lines_schedule_id_fkey` | FOREIGN KEY | FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE SET NULL |
+| `gl_journal_lines` | `gl_journal_lines_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL |
+| `home_types` | `home_types_key_key` | UNIQUE | UNIQUE (key) |
+| `home_types` | `home_types_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `industries` | `industries_key_unique` | UNIQUE | UNIQUE (key) |
+| `industries` | `industries_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `industry_default_entity_labels` | `industry_default_entity_labels_industry_fkey` | FOREIGN KEY | FOREIGN KEY (industry_id) REFERENCES industries(id) ON DELETE CASCADE |
+| `industry_default_entity_labels` | `industry_default_entity_labels_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `industry_default_entity_labels` | `industry_default_entity_labels_unique` | UNIQUE | UNIQUE (industry_id, entity_type) |
+| `job_line_items` | `job_line_items_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `job_line_items` | `job_line_items_line_type_check` | CHECK | CHECK (line_type = ANY (ARRAY['service'::text, 'addon'::text, 'discount'::text, 'fee'::text, 'adjust |
+| `job_line_items` | `job_line_items_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `job_line_items` | `job_line_items_replaced_line_item_id_fkey` | FOREIGN KEY | FOREIGN KEY (replaced_line_item_id) REFERENCES job_line_items(id) |
+| `job_pricing_snapshots` | `job_pricing_snapshots_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `job_pricing_snapshots` | `job_pricing_snapshots_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `job_statuses` | `job_statuses_key_key` | UNIQUE | UNIQUE (key) |
+| `job_statuses` | `job_statuses_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `job_statuses` | `job_statuses_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `job_tags` | `job_tags_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `job_tags` | `job_tags_pkey` | PRIMARY KEY | PRIMARY KEY (job_id, tag_id) |
+| `job_tags` | `job_tags_tag_id_fkey` | FOREIGN KEY | FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE |
+| `jobs` | `chk_jobs_amounts_nonnegative` | CHECK | CHECK ((estimated_total_cents IS NULL OR estimated_total_cents >= 0) AND (recurring_total_cents IS N |
+| `jobs` | `jobs_assigned_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (assigned_vendor_id) REFERENCES vendors(id) ON DELETE SET NULL |
+| `jobs` | `jobs_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT |
+| `jobs` | `jobs_discount_code_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_code_id) REFERENCES discount_codes(id) |
+| `jobs` | `jobs_discount_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) ON DELETE SET NULL |
+| `jobs` | `jobs_job_status_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_status_id) REFERENCES job_statuses(id) ON DELETE SET NULL |
+| `jobs` | `jobs_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL |
+| `jobs` | `jobs_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE SET NULL |
+| `jobs` | `jobs_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `jobs` | `jobs_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `jobs` | `jobs_pricing_status_check` | CHECK | CHECK (pricing_status = ANY (ARRAY['draft'::text, 'locked'::text, 'overridden'::text, 'finalized'::t |
+| `jobs` | `jobs_primary_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (primary_contact_id) REFERENCES contacts(id) ON DELETE SET NULL |
+| `jobs` | `jobs_primary_person_fk` | FOREIGN KEY | FOREIGN KEY (primary_person_id) REFERENCES persons(id) ON DELETE SET NULL |
+| `jobs` | `jobs_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE RESTRICT |
+| `jobs` | `jobs_work_unit_id_fkey` | FOREIGN KEY | FOREIGN KEY (work_unit_id) REFERENCES work_units(id) ON DELETE SET NULL |
+| `ledger_transactions` | `ledger_transactions_amount_cents_check` | CHECK | CHECK (amount_cents >= 0) |
+| `ledger_transactions` | `ledger_transactions_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `ledger_transactions` | `ledger_transactions_direction_chk` | CHECK | CHECK (direction = ANY (ARRAY['in'::text, 'out'::text])) |
+| `ledger_transactions` | `ledger_transactions_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL |
+| `ledger_transactions` | `ledger_transactions_journal_entry_id_fkey` | FOREIGN KEY | FOREIGN KEY (journal_entry_id) REFERENCES gl_journal_entries(id) ON DELETE SET NULL |
+| `ledger_transactions` | `ledger_transactions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `ledger_transactions` | `ledger_transactions_payment_id_fkey` | FOREIGN KEY | FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE SET NULL |
+| `ledger_transactions` | `ledger_transactions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `ledger_transactions` | `ledger_transactions_schedule_id_fkey` | FOREIGN KEY | FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE SET NULL |
+| `ledger_transactions` | `ledger_transactions_status_check` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'failed'::text, 'reversed'::text])) |
+| `ledger_transactions` | `ledger_transactions_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL |
+| `location_tags` | `location_tags_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE |
+| `location_tags` | `location_tags_pkey` | PRIMARY KEY | PRIMARY KEY (location_id, tag_id) |
+| `location_tags` | `location_tags_tag_id_fkey` | FOREIGN KEY | FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE |
+| `location_types` | `location_types_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `location_types` | `location_types_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `location_types` | `location_types_unique` | UNIQUE | UNIQUE (org_id, key) |
+| `locations` | `fk_locations_access_method` | FOREIGN KEY | FOREIGN KEY (access_method_id) REFERENCES access_methods(id) ON DELETE SET NULL |
+| `locations` | `locations_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE |
+| `locations` | `locations_location_type_check` | CHECK | CHECK (location_type = ANY (ARRAY['address'::text, 'site'::text, 'unit'::text])) |
+| `locations` | `locations_location_type_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_type_id) REFERENCES location_types(id) ON DELETE SET NULL |
+| `locations` | `locations_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `locations` | `locations_owner_xor_check` | CHECK | CHECK (NOT (customer_id IS NOT NULL AND vendor_id IS NOT NULL)) |
+| `locations` | `locations_parent_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (parent_location_id) REFERENCES locations(id) ON DELETE SET NULL |
+| `locations` | `locations_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `locations` | `locations_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL |
+| `messages_outbox` | `messages_outbox_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `messages_outbox` | `messages_outbox_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `messages_outbox` | `messages_outbox_workflow_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE SET NULL |
+| `messages_outbox` | `messages_outbox_workflow_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE SET NULL |
+| `messages` | `messages_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL |
+| `messages` | `messages_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `messages` | `messages_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL |
+| `messages` | `messages_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE SET NULL |
+| `messages` | `messages_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `messages` | `messages_workflow_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE SET NULL |
+| `operational_tasks` | `operational_tasks_entity_id_fkey` | FOREIGN KEY | FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `operational_tasks` | `operational_tasks_entity_type_check` | CHECK | CHECK (entity_type = 'opportunities'::text) |
+| `operational_tasks` | `operational_tasks_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `operational_tasks` | `operational_tasks_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `operational_tasks` | `operational_tasks_proposal_id_fkey` | FOREIGN KEY | FOREIGN KEY (proposal_id) REFERENCES task_assist_proposals(id) ON DELETE SET NULL |
+| `operational_tasks` | `operational_tasks_source_check` | CHECK | CHECK (source = 'task_assist'::text) |
+| `operational_tasks` | `operational_tasks_status_check` | CHECK | CHECK (status = ANY (ARRAY['open'::text, 'completed'::text, 'canceled'::text])) |
+| `opportunities` | `opportunities_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `opportunities` | `opportunities_discount_code_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_code_id) REFERENCES discount_codes(id) |
+| `opportunities` | `opportunities_discount_program_id_fkey` | FOREIGN KEY | FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) ON DELETE SET NULL |
+| `opportunities` | `opportunities_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL |
+| `opportunities` | `opportunities_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `opportunities` | `opportunities_pipeline_id_fkey` | FOREIGN KEY | FOREIGN KEY (pipeline_id) REFERENCES pipelines(id) ON DELETE SET NULL |
+| `opportunities` | `opportunities_pipeline_stage_id_fkey` | FOREIGN KEY | FOREIGN KEY (pipeline_stage_id) REFERENCES pipeline_stages(id) ON DELETE SET NULL |
+| `opportunities` | `opportunities_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `opportunities` | `opportunities_primary_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (primary_contact_id) REFERENCES contacts(id) ON DELETE SET NULL |
+| `opportunities` | `opportunities_primary_person_fk` | FOREIGN KEY | FOREIGN KEY (primary_person_id) REFERENCES persons(id) ON DELETE SET NULL |
+| `opportunities` | `opportunities_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE RESTRICT |
+| `opportunities` | `opportunities_work_unit_id_fkey` | FOREIGN KEY | FOREIGN KEY (work_unit_id) REFERENCES work_units(id) |
+| `opportunity_customer_members` | `opportunity_customer_members_customer_member_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE CASCADE |
+| `opportunity_customer_members` | `opportunity_customer_members_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `opportunity_customer_members` | `opportunity_customer_members_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `opportunity_customer_members` | `opportunity_customer_members_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `opportunity_customer_members` | `uq_opportunity_customer_members_unique` | UNIQUE | UNIQUE (org_id, opportunity_id, customer_member_id) |
+| `opportunity_persons` | `opportunity_persons_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `opportunity_persons` | `opportunity_persons_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `opportunity_persons` | `opportunity_persons_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE |
+| `opportunity_persons` | `opportunity_persons_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `opportunity_persons` | `uq_opportunity_persons_opp_person` | UNIQUE | UNIQUE (opportunity_id, person_id) |
+| `opportunity_tags` | `opportunity_tags_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `opportunity_tags` | `opportunity_tags_pkey` | PRIMARY KEY | PRIMARY KEY (opportunity_id, tag_id) |
+| `opportunity_tags` | `opportunity_tags_tag_id_fkey` | FOREIGN KEY | FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE |
+| `option_set_items` | `option_set_items_option_set_id_fkey` | FOREIGN KEY | FOREIGN KEY (option_set_id) REFERENCES option_sets(id) ON DELETE CASCADE |
+| `option_set_items` | `option_set_items_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `option_set_items` | `option_set_items_set_item_key` | UNIQUE | UNIQUE (option_set_id, item_key) |
+| `option_sets` | `option_sets_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `option_sets` | `option_sets_org_set_key` | UNIQUE | UNIQUE (org_id, set_key) |
+| `option_sets` | `option_sets_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `org_settings` | `org_settings_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `org_settings` | `org_settings_org_id_key` | UNIQUE | UNIQUE (org_id) |
+| `org_settings` | `org_settings_payout_type_check` | CHECK | CHECK (payout_type = ANY (ARRAY['percentage'::text, 'flat'::text])) |
+| `org_settings` | `org_settings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `orgs` | `orgs_industry_id_fkey` | FOREIGN KEY | FOREIGN KEY (industry_id) REFERENCES industries(id) ON DELETE SET NULL |
+| `orgs` | `orgs_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `orgs` | `orgs_slug_key` | UNIQUE | UNIQUE (slug) |
+| `payment_allocations` | `payment_allocations_allocated_amount_positive_chk` | CHECK | CHECK (allocated_amount_cents > 0) |
+| `payment_allocations` | `payment_allocations_allocation_type_chk` | CHECK | CHECK (allocation_type = ANY (ARRAY['payment_application'::text])) |
+| `payment_allocations` | `payment_allocations_charge_id_fkey` | FOREIGN KEY | FOREIGN KEY (charge_id) REFERENCES charges(id) ON DELETE SET NULL |
+| `payment_allocations` | `payment_allocations_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `payment_allocations` | `payment_allocations_payment_id_fkey` | FOREIGN KEY | FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE RESTRICT |
+| `payment_allocations` | `payment_allocations_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `payment_allocations` | `payment_allocations_reversal_consistency_chk` | CHECK | CHECK (status = 'reversed'::text AND reversed_at IS NOT NULL OR status = 'active'::text AND reversed |
+| `payment_allocations` | `payment_allocations_status_chk` | CHECK | CHECK (status = ANY (ARRAY['active'::text, 'reversed'::text])) |
+| `payment_allocations` | `payment_allocations_target_type_nonempty_chk` | CHECK | CHECK (length(TRIM(BOTH FROM target_entity_type)) > 0) |
+| `payment_statuses` | `payment_statuses_key_key` | UNIQUE | UNIQUE (key) |
+| `payment_statuses` | `payment_statuses_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `payments` | `payments_amount_positive_chk` | CHECK | CHECK (amount_cents > 0) |
+| `payments` | `payments_currency_nonempty_chk` | CHECK | CHECK (length(TRIM(BOTH FROM currency)) > 0) |
+| `payments` | `payments_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT |
+| `payments` | `payments_direction_chk` | CHECK | CHECK (direction = ANY (ARRAY['inbound'::text, 'outbound'::text])) |
+| `payments` | `payments_failed_at_status_chk` | CHECK | CHECK (failed_at IS NULL OR status = 'failed'::text) |
+| `payments` | `payments_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `payments` | `payments_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `payments` | `payments_payer_pair_chk` | CHECK | CHECK (payer_entity_type IS NULL AND payer_entity_id IS NULL OR payer_entity_type IS NOT NULL AND pa |
+| `payments` | `payments_payment_method_chk` | CHECK | CHECK (payment_method = ANY (ARRAY['card'::text, 'ach'::text, 'cash'::text, 'check'::text, 'manual': |
+| `payments` | `payments_payment_status_id_fkey` | FOREIGN KEY | FOREIGN KEY (payment_status_id) REFERENCES payment_statuses(id) ON DELETE SET NULL |
+| `payments` | `payments_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `payments` | `payments_posted_at_status_chk` | CHECK | CHECK (posted_at IS NULL OR status = 'posted'::text) |
+| `payments` | `payments_status_chk` | CHECK | CHECK (status = ANY (ARRAY['pending'::text, 'posted'::text, 'failed'::text, 'voided'::text])) |
+| `payments` | `payments_voided_at_status_chk` | CHECK | CHECK (voided_at IS NULL OR status = 'voided'::text) |
+| `permission_definitions` | `permission_definitions_key_key` | UNIQUE | UNIQUE (key) |
+| `permission_definitions` | `permission_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `permission_keys` | `permission_keys_pkey` | PRIMARY KEY | PRIMARY KEY (key) |
+| `permissions` | `permissions_pkey` | PRIMARY KEY | PRIMARY KEY (key) |
+| `person_locations` | `person_locations_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE |
+| `person_locations` | `person_locations_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE CASCADE |
+| `person_locations` | `person_locations_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `person_relationship_type_settings` | `fk_person_relationship_type_settings_industry` | FOREIGN KEY | FOREIGN KEY (industry_id) REFERENCES industries(id) ON DELETE CASCADE |
+| `person_relationship_type_settings` | `fk_person_relationship_type_settings_vertical` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `person_relationship_type_settings` | `person_relationship_type_settings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `person_relationships` | `ck_person_relationships_not_same` | CHECK | CHECK (from_person_id <> to_person_id) |
+| `person_relationships` | `fk_person_relationships_from_person` | FOREIGN KEY | FOREIGN KEY (from_person_id) REFERENCES persons(id) ON DELETE CASCADE |
+| `person_relationships` | `fk_person_relationships_to_person` | FOREIGN KEY | FOREIGN KEY (to_person_id) REFERENCES persons(id) ON DELETE CASCADE |
+| `person_relationships` | `person_relationships_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `person_relationships` | `uq_person_relationships_unique` | UNIQUE | UNIQUE (org_id, from_person_id, to_person_id, relationship_type) |
+| `persons` | `persons_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pipeline_stages` | `pipeline_stages_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `pipeline_stages` | `pipeline_stages_pipeline_id_fkey` | FOREIGN KEY | FOREIGN KEY (pipeline_id) REFERENCES pipelines(id) ON DELETE CASCADE |
+| `pipeline_stages` | `pipeline_stages_pipeline_id_ghl_stage_uuid_key` | UNIQUE | UNIQUE (pipeline_id, ghl_stage_uuid) |
+| `pipeline_stages` | `pipeline_stages_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pipelines` | `pipelines_ghl_pipeline_id_key` | UNIQUE | UNIQUE (ghl_pipeline_id) |
+| `pipelines` | `pipelines_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `pipelines` | `pipelines_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `placement_candidates` | `placement_candidates_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `placement_candidates` | `placement_candidates_customer_member_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_member_id) REFERENCES customer_members(id) ON DELETE SET NULL |
+| `placement_candidates` | `placement_candidates_opportunity_customer_member_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_customer_member_id) REFERENCES opportunity_customer_members(id) ON DELETE S |
+| `placement_candidates` | `placement_candidates_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `placement_candidates` | `placement_candidates_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `placement_candidates` | `placement_candidates_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (person_id) REFERENCES persons(id) ON DELETE SET NULL |
+| `placement_candidates` | `placement_candidates_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `placement_candidates` | `placement_candidates_program_room_cohort_key_nonempty` | CHECK | CHECK (char_length(btrim(program_room_cohort_key)) > 0) |
+| `placement_candidates` | `placement_candidates_site_id_fkey` | FOREIGN KEY | FOREIGN KEY (site_id) REFERENCES locations(id) ON DELETE SET NULL |
+| `placement_candidates` | `placement_candidates_status_check` | CHECK | CHECK (status = ANY (ARRAY['active'::text, 'paused'::text, 'withdrawn'::text, 'placed'::text])) |
+| `placement_candidates` | `placement_candidates_synthetic_identity_check` | CHECK | CHECK (is_synthetic_fallback = true AND opportunity_customer_member_id IS NULL AND customer_member_i |
+| `placement_link_group_members` | `placement_link_group_members_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `placement_link_group_members` | `placement_link_group_members_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `placement_link_group_members` | `placement_link_group_members_placement_candidate_id_fkey` | FOREIGN KEY | FOREIGN KEY (placement_candidate_id) REFERENCES placement_candidates(id) ON DELETE CASCADE |
+| `placement_link_group_members` | `placement_link_group_members_placement_link_group_id_fkey` | FOREIGN KEY | FOREIGN KEY (placement_link_group_id) REFERENCES placement_link_groups(id) ON DELETE CASCADE |
+| `placement_link_group_members` | `uq_placement_link_group_members_group_candidate` | UNIQUE | UNIQUE (placement_link_group_id, placement_candidate_id) |
+| `placement_link_groups` | `placement_link_groups_customer_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL |
+| `placement_link_groups` | `placement_link_groups_link_mode_check` | CHECK | CHECK (link_mode = ANY (ARRAY['independent'::text, 'preferred_together'::text, 'strictly_together':: |
+| `placement_link_groups` | `placement_link_groups_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `placement_link_groups` | `placement_link_groups_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `placement_link_groups` | `placement_link_groups_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `placement_overrides` | `placement_overrides_cohort_key_nonempty` | CHECK | CHECK (char_length(btrim(program_room_cohort_key)) > 0) |
+| `placement_overrides` | `placement_overrides_kind_check` | CHECK | CHECK (override_kind = ANY (ARRAY['pin'::text, 'tier_boost'::text, 'temporary'::text])) |
+| `placement_overrides` | `placement_overrides_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `placement_overrides` | `placement_overrides_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `placement_overrides` | `placement_overrides_placement_candidate_id_fkey` | FOREIGN KEY | FOREIGN KEY (placement_candidate_id) REFERENCES placement_candidates(id) ON DELETE CASCADE |
+| `placement_overrides` | `placement_overrides_reason_nonempty` | CHECK | CHECK (char_length(btrim(reason)) > 0) |
+| `placement_overrides` | `placement_overrides_temporary_requires_expires` | CHECK | CHECK (override_kind <> 'temporary'::text OR expires_at IS NOT NULL) |
+| `pricing_addons` | `pricing_addons_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_addons` | `pricing_addons_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `pricing_addons` | `pricing_addons_vertical_key_uniq` | UNIQUE | UNIQUE (vertical_id, addon_key) |
+| `pricing_dimension_values` | `pricing_dimension_values_dimension_id_fkey` | FOREIGN KEY | FOREIGN KEY (dimension_id) REFERENCES pricing_dimensions(id) ON DELETE CASCADE |
+| `pricing_dimension_values` | `pricing_dimension_values_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) |
+| `pricing_dimension_values` | `pricing_dimension_values_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_dimensions` | `pricing_dimensions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) |
+| `pricing_dimensions` | `pricing_dimensions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_dimensions` | `pricing_dimensions_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `pricing_first_clean_prices` | `pricing_first_clean_prices_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_first_clean_prices` | `pricing_first_clean_prices_service_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_id) REFERENCES pricing_services(id) ON DELETE CASCADE |
+| `pricing_first_clean_prices` | `pricing_first_clean_prices_sqft_tier_id_fkey` | FOREIGN KEY | FOREIGN KEY (sqft_tier_id) REFERENCES pricing_square_footage_tiers(id) ON DELETE CASCADE |
+| `pricing_first_clean_prices` | `pricing_first_clean_prices_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `pricing_first_clean_prices` | `pricing_first_clean_unique` | UNIQUE | UNIQUE (vertical_id, service_id, sqft_tier_id) |
+| `pricing_frequencies` | `pricing_frequencies_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_frequencies` | `pricing_frequencies_service_plan_template_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_plan_template_id) REFERENCES service_plan_templates(id) ON DELETE SET NULL |
+| `pricing_frequencies` | `pricing_frequencies_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `pricing_matrix` | `pricing_matrix_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `pricing_matrix` | `pricing_matrix_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_matrix` | `pricing_matrix_pricing_dimension_value_id_fkey` | FOREIGN KEY | FOREIGN KEY (pricing_dimension_value_id) REFERENCES pricing_dimension_values(id) ON DELETE SET NULL |
+| `pricing_matrix` | `pricing_matrix_pricing_mode_id_fkey` | FOREIGN KEY | FOREIGN KEY (pricing_mode_id) REFERENCES pricing_modes(id) ON DELETE RESTRICT |
+| `pricing_matrix` | `pricing_matrix_service_offering_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_offering_id) REFERENCES service_offerings(id) ON DELETE SET NULL |
+| `pricing_matrix` | `pricing_matrix_service_plan_template_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_plan_template_id) REFERENCES service_plan_templates(id) ON DELETE SET NULL |
+| `pricing_matrix` | `pricing_matrix_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `pricing_modes` | `pricing_modes_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) |
+| `pricing_modes` | `pricing_modes_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_modes` | `pricing_modes_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `pricing_recurring_prices` | `pricing_recurring_prices_frequency_id_fkey` | FOREIGN KEY | FOREIGN KEY (frequency_id) REFERENCES pricing_frequencies(id) ON DELETE CASCADE |
+| `pricing_recurring_prices` | `pricing_recurring_prices_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_recurring_prices` | `pricing_recurring_prices_service_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_id) REFERENCES pricing_services(id) ON DELETE CASCADE |
+| `pricing_recurring_prices` | `pricing_recurring_prices_sqft_tier_id_fkey` | FOREIGN KEY | FOREIGN KEY (sqft_tier_id) REFERENCES pricing_square_footage_tiers(id) ON DELETE CASCADE |
+| `pricing_recurring_prices` | `pricing_recurring_prices_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `pricing_services` | `pricing_services_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_services` | `pricing_services_service_offering_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_offering_id) REFERENCES service_offerings(id) ON DELETE SET NULL |
+| `pricing_services` | `pricing_services_unique_vertical_service` | UNIQUE | UNIQUE (vertical_id, service_key) |
+| `pricing_services` | `pricing_services_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `pricing_square_footage_tiers` | `pricing_square_footage_tiers_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `pricing_square_footage_tiers` | `pricing_square_footage_tiers_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE CASCADE |
+| `quotes` | `chk_quotes_amounts_nonnegative` | CHECK | CHECK ((subtotal_cents IS NULL OR subtotal_cents >= 0) AND discount_cents >= 0 AND tax_cents >= 0 AN |
+| `quotes` | `quotes_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL |
+| `quotes` | `quotes_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `quotes` | `quotes_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `quotes` | `quotes_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `record_actions` | `record_actions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `record_actions` | `record_actions_placement_check` | CHECK | CHECK (placement = ANY (ARRAY['primary'::text, 'secondary'::text])) |
+| `record_drawer_layouts` | `record_drawer_layouts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `record_drawer_layouts` | `record_drawer_layouts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `record_drawer_layouts` | `ux_record_drawer_layouts_org_entity_surface_key` | UNIQUE | UNIQUE (org_id, entity_type, surface, key) |
+| `record_layouts` | `record_layouts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `record_overview_layouts` | `record_overview_layouts_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `record_overview_layouts` | `record_overview_layouts_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `recurrence_plans` | `recurrence_plans_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `recurrence_plans` | `recurrence_plans_job_id_key` | UNIQUE | UNIQUE (job_id) |
+| `recurrence_plans` | `recurrence_plans_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `role_definitions` | `role_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `role_definitions` | `role_definitions_org_role_key_uk` | UNIQUE | UNIQUE (org_id, role_key) |
+| `role_definitions` | `role_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `role_permission_grants` | `role_permission_grants_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `role_permission_grants` | `role_permission_grants_org_role_perm_uk` | UNIQUE | UNIQUE (org_id, role_key, permission_key) |
+| `role_permission_grants` | `role_permission_grants_permission_key_fkey` | FOREIGN KEY | FOREIGN KEY (permission_key) REFERENCES permission_keys(key) ON DELETE RESTRICT |
+| `role_permission_grants` | `role_permission_grants_permissions_fkey` | FOREIGN KEY | FOREIGN KEY (permission_key) REFERENCES permissions(key) ON DELETE CASCADE |
+| `role_permission_grants` | `role_permission_grants_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `role_permission_grants` | `role_permission_grants_role_definitions_fkey` | FOREIGN KEY | FOREIGN KEY (org_id, role_key) REFERENCES role_definitions(org_id, role_key) ON DELETE CASCADE |
+| `role_permission_grants` | `role_permission_grants_role_fk` | FOREIGN KEY | FOREIGN KEY (org_id, role_key) REFERENCES role_definitions(org_id, role_key) ON DELETE CASCADE |
+| `role_permission_grants` | `role_permission_grants_unique` | UNIQUE | UNIQUE (org_id, role_key, permission_key) |
+| `schedule_statuses` | `schedule_statuses_key_key` | UNIQUE | UNIQUE (key) |
+| `schedule_statuses` | `schedule_statuses_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `schedule_tags` | `schedule_tags_pkey` | PRIMARY KEY | PRIMARY KEY (schedule_id, tag_id) |
+| `schedule_tags` | `schedule_tags_schedule_id_fkey` | FOREIGN KEY | FOREIGN KEY (schedule_id) REFERENCES schedules(id) ON DELETE CASCADE |
+| `schedule_tags` | `schedule_tags_tag_id_fkey` | FOREIGN KEY | FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE |
+| `schedules` | `schedules_customer_subscription_id_fkey` | FOREIGN KEY | FOREIGN KEY (customer_subscription_id) REFERENCES customer_subscriptions(id) |
+| `schedules` | `schedules_job_id_fkey` | FOREIGN KEY | FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE |
+| `schedules` | `schedules_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL |
+| `schedules` | `schedules_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `schedules` | `schedules_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `schedules` | `schedules_rescheduled_from_schedule_id_fkey` | FOREIGN KEY | FOREIGN KEY (rescheduled_from_schedule_id) REFERENCES schedules(id) |
+| `schedules` | `schedules_schedule_status_id_fkey` | FOREIGN KEY | FOREIGN KEY (schedule_status_id) REFERENCES schedule_statuses(id) ON DELETE SET NULL |
+| `service_offerings` | `service_offerings_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `service_offerings` | `service_offerings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `service_offerings` | `service_offerings_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE SET NULL |
+| `service_plan_templates` | `service_plan_templates_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `service_plan_templates` | `service_plan_templates_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `service_plan_templates` | `service_plan_templates_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE SET NULL |
+| `service_price_dimensions` | `service_price_dimensions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `service_price_dimensions` | `service_price_dimensions_pricing_rule_id_fkey` | FOREIGN KEY | FOREIGN KEY (pricing_rule_id) REFERENCES service_pricing_rules(id) ON DELETE CASCADE |
+| `service_pricing_rules` | `service_pricing_rules_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `service_pricing_rules` | `service_pricing_rules_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `service_pricing_rules` | `service_pricing_rules_service_offering_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_offering_id) REFERENCES service_offerings(id) ON DELETE CASCADE |
+| `service_pricing_rules` | `service_pricing_rules_service_plan_template_id_fkey` | FOREIGN KEY | FOREIGN KEY (service_plan_template_id) REFERENCES service_plan_templates(id) ON DELETE SET NULL |
+| `service_pricing_rules` | `service_pricing_rules_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE SET NULL |
+| `sqft_bands` | `sqft_bands_key_key` | UNIQUE | UNIQUE (key) |
+| `sqft_bands` | `sqft_bands_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `status_definitions` | `status_definitions_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `status_definitions` | `status_definitions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `status_transition_rules` | `status_transition_rules_department_id_fkey` | FOREIGN KEY | FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE |
+| `status_transition_rules` | `status_transition_rules_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `status_transition_rules` | `status_transition_rules_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `status_transition_rules` | `status_transition_rules_work_unit_id_fkey` | FOREIGN KEY | FOREIGN KEY (work_unit_id) REFERENCES work_units(id) ON DELETE CASCADE |
+| `tags` | `tags_name_key` | UNIQUE | UNIQUE (name) |
+| `tags` | `tags_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `task_assist_proposals` | `task_assist_proposals_agent_key_check` | CHECK | CHECK (agent_key = 'task_assist'::text) |
+| `task_assist_proposals` | `task_assist_proposals_entity_id_fkey` | FOREIGN KEY | FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `task_assist_proposals` | `task_assist_proposals_entity_type_check` | CHECK | CHECK (entity_type = 'opportunities'::text) |
+| `task_assist_proposals` | `task_assist_proposals_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `task_assist_proposals` | `task_assist_proposals_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `task_assist_proposals` | `task_assist_proposals_proposal_type_check` | CHECK | CHECK (proposal_type = ANY (ARRAY['draft_sms'::text, 'draft_email'::text, 'schedule_send'::text, 're |
+| `task_assist_proposals` | `task_assist_proposals_status_check` | CHECK | CHECK (status = ANY (ARRAY['draft'::text, 'approved'::text, 'rejected'::text, 'expired'::text, 'appl |
+| `tour_availability_rules` | `chk_tour_availability_rules_buffer` | CHECK | CHECK (buffer_minutes >= 0) |
+| `tour_availability_rules` | `chk_tour_availability_rules_day_of_week` | CHECK | CHECK (day_of_week >= 0 AND day_of_week <= 6) |
+| `tour_availability_rules` | `chk_tour_availability_rules_max_bookings` | CHECK | CHECK (max_bookings_per_slot > 0) |
+| `tour_availability_rules` | `chk_tour_availability_rules_metadata_object` | CHECK | CHECK (jsonb_typeof(metadata) = 'object'::text) |
+| `tour_availability_rules` | `chk_tour_availability_rules_slot_duration` | CHECK | CHECK (slot_duration_minutes > 0) |
+| `tour_availability_rules` | `chk_tour_availability_rules_time_window` | CHECK | CHECK (end_time > start_time) |
+| `tour_availability_rules` | `tour_availability_rules_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL |
+| `tour_availability_rules` | `tour_availability_rules_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `tour_availability_rules` | `tour_availability_rules_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `tour_bookings` | `chk_tour_bookings_metadata_object` | CHECK | CHECK (jsonb_typeof(metadata) = 'object'::text) |
+| `tour_bookings` | `chk_tour_bookings_source` | CHECK | CHECK (source = ANY (ARRAY['admin'::text, 'public_link'::text, 'form_submission'::text, 'automation' |
+| `tour_bookings` | `chk_tour_bookings_status_key` | CHECK | CHECK (status_key = ANY (ARRAY['requested'::text, 'pending_approval'::text, 'confirmed'::text, 'resc |
+| `tour_bookings` | `chk_tour_bookings_time_window` | CHECK | CHECK (end_at > start_at) |
+| `tour_bookings` | `tour_bookings_form_public_link_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_public_link_id) REFERENCES form_public_links(id) ON DELETE SET NULL |
+| `tour_bookings` | `tour_bookings_form_submission_id_fkey` | FOREIGN KEY | FOREIGN KEY (form_submission_id) REFERENCES form_submissions(id) ON DELETE SET NULL |
+| `tour_bookings` | `tour_bookings_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT |
+| `tour_bookings` | `tour_bookings_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `tour_bookings` | `tour_bookings_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `tour_bookings` | `tour_bookings_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `tour_bookings` | `tour_bookings_primary_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (primary_contact_id) REFERENCES contacts(id) ON DELETE SET NULL |
+| `tour_bookings` | `tour_bookings_primary_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (primary_person_id) REFERENCES persons(id) ON DELETE SET NULL |
+| `tour_bookings` | `tour_bookings_rescheduled_from_booking_id_fkey` | FOREIGN KEY | FOREIGN KEY (rescheduled_from_booking_id) REFERENCES tour_bookings(id) ON DELETE SET NULL |
+| `tour_public_booking_links` | `chk_tour_public_booking_links_metadata_object` | CHECK | CHECK (jsonb_typeof(metadata) = 'object'::text) |
+| `tour_public_booking_links` | `tour_public_booking_links_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE |
+| `tour_public_booking_links` | `tour_public_booking_links_opportunity_id_fkey` | FOREIGN KEY | FOREIGN KEY (opportunity_id) REFERENCES opportunities(id) ON DELETE CASCADE |
+| `tour_public_booking_links` | `tour_public_booking_links_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `tour_public_booking_links` | `tour_public_booking_links_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `tour_public_booking_links` | `ux_tour_public_booking_links_token_hash` | UNIQUE | UNIQUE (token_hash) |
+| `user_access_profiles` | `uq_user_access_profiles_user_org` | UNIQUE | UNIQUE (user_id, org_id) |
+| `user_access_profiles` | `user_access_profiles_department_scope_check` | CHECK | CHECK (department_scope = ANY (ARRAY['all'::text, 'restricted'::text])) |
+| `user_access_profiles` | `user_access_profiles_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `user_access_profiles` | `user_access_profiles_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `user_access_profiles` | `user_access_profiles_site_scope_check` | CHECK | CHECK (site_scope = ANY (ARRAY['all'::text, 'restricted'::text])) |
+| `user_access_profiles` | `user_access_profiles_user_id_fkey` | FOREIGN KEY | FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE |
+| `user_department_access` | `uq_user_department_access_user_org_dept` | UNIQUE | UNIQUE (user_id, org_id, department_id) |
+| `user_department_access` | `user_department_access_department_id_fkey` | FOREIGN KEY | FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE |
+| `user_department_access` | `user_department_access_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `user_department_access` | `user_department_access_profile_fk` | FOREIGN KEY | FOREIGN KEY (user_id, org_id) REFERENCES user_access_profiles(user_id, org_id) ON DELETE CASCADE |
+| `user_profiles` | `user_profiles_id_fkey` | FOREIGN KEY | FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE |
+| `user_profiles` | `user_profiles_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `user_roles` | `user_roles_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `user_roles` | `user_roles_pkey` | PRIMARY KEY | PRIMARY KEY (user_id, org_id, role) |
+| `user_roles` | `user_roles_user_id_fkey` | FOREIGN KEY | FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE |
+| `user_site_access` | `uq_user_site_access_user_org_location` | UNIQUE | UNIQUE (user_id, org_id, location_id) |
+| `user_site_access` | `user_site_access_location_id_fkey` | FOREIGN KEY | FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE |
+| `user_site_access` | `user_site_access_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `user_site_access` | `user_site_access_profile_fk` | FOREIGN KEY | FOREIGN KEY (user_id, org_id) REFERENCES user_access_profiles(user_id, org_id) ON DELETE CASCADE |
+| `vendor_statuses` | `vendor_statuses_key_key` | UNIQUE | UNIQUE (key) |
+| `vendor_statuses` | `vendor_statuses_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `vendor_tags` | `vendor_tags_pkey` | PRIMARY KEY | PRIMARY KEY (vendor_id, tag_id) |
+| `vendor_tags` | `vendor_tags_tag_id_fkey` | FOREIGN KEY | FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE |
+| `vendor_tags` | `vendor_tags_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE |
+| `vendor_users` | `vendor_users_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE |
+| `vendor_users` | `vendor_users_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `vendor_users` | `vendor_users_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `vendor_users` | `vendor_users_vendor_id_contact_id_key` | UNIQUE | UNIQUE (vendor_id, contact_id) |
+| `vendor_users` | `vendor_users_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE |
+| `vendor_verticals` | `vendor_verticals_pkey` | PRIMARY KEY | PRIMARY KEY (vendor_id, vertical_id) |
+| `vendor_verticals` | `vendor_verticals_vendor_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE CASCADE |
+| `vendor_verticals` | `vendor_verticals_vertical_id_fkey` | FOREIGN KEY | FOREIGN KEY (vertical_id) REFERENCES verticals(id) ON DELETE RESTRICT |
+| `vendors` | `chk_vendors_operating_hours` | CHECK | CHECK (operating_hours_open IS NULL OR operating_hours_close IS NULL OR operating_hours_open < opera |
+| `vendors` | `chk_vendors_payout_percent` | CHECK | CHECK (payout_percent >= 0::numeric AND payout_percent <= 1::numeric) |
+| `vendors` | `vendors_drivers_license_doc_file_id_fkey` | FOREIGN KEY | FOREIGN KEY (drivers_license_doc_file_id) REFERENCES documents(id) ON DELETE SET NULL |
+| `vendors` | `vendors_insurance_doc_file_id_fkey` | FOREIGN KEY | FOREIGN KEY (insurance_doc_file_id) REFERENCES documents(id) ON DELETE SET NULL |
+| `vendors` | `vendors_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `vendors` | `vendors_payout_override_type_check` | CHECK | CHECK (payout_override_type = ANY (ARRAY['percentage'::text, 'flat'::text])) |
+| `vendors` | `vendors_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `vendors` | `vendors_primary_contact_id_fkey` | FOREIGN KEY | FOREIGN KEY (primary_contact_id) REFERENCES contacts(id) ON DELETE SET NULL |
+| `vendors` | `vendors_primary_person_id_fkey` | FOREIGN KEY | FOREIGN KEY (primary_person_id) REFERENCES persons(id) |
+| `vendors` | `vendors_vendor_status_id_fkey` | FOREIGN KEY | FOREIGN KEY (vendor_status_id) REFERENCES vendor_statuses(id) |
+| `verticals` | `verticals_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `verticals` | `verticals_slug_key` | UNIQUE | UNIQUE (slug) |
+| `work_units` | `uq_work_units_department_key` | UNIQUE | UNIQUE (department_id, key) |
+| `work_units` | `work_units_department_id_fkey` | FOREIGN KEY | FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE |
+| `work_units` | `work_units_key_nonempty` | CHECK | CHECK (btrim(key) <> ''::text) |
+| `work_units` | `work_units_name_nonempty` | CHECK | CHECK (btrim(name) <> ''::text) |
+| `work_units` | `work_units_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE RESTRICT |
+| `work_units` | `work_units_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `workflow_action_runs` | `workflow_action_runs_action_id_fkey` | FOREIGN KEY | FOREIGN KEY (action_id) REFERENCES workflow_actions(id) ON DELETE SET NULL |
+| `workflow_action_runs` | `workflow_action_runs_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `workflow_action_runs` | `workflow_action_runs_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `workflow_action_runs` | `workflow_action_runs_workflow_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE |
+| `workflow_action_runs` | `workflow_action_runs_workflow_run_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE CASCADE |
+| `workflow_actions` | `workflow_actions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `workflow_actions` | `workflow_actions_target_entity_required_for_update` | CHECK | CHECK (action_type = 'update_entity'::text AND target_entity IS NOT NULL AND length(TRIM(BOTH FROM t |
+| `workflow_actions` | `workflow_actions_workflow_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE |
+| `workflow_conditions` | `workflow_conditions_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `workflow_conditions` | `workflow_conditions_workflow_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE |
+| `workflow_events` | `workflow_events_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `workflow_events` | `workflow_events_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `workflow_runs` | `workflow_runs_event_id_fkey` | FOREIGN KEY | FOREIGN KEY (event_id) REFERENCES workflow_events(id) ON DELETE SET NULL |
+| `workflow_runs` | `workflow_runs_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `workflow_runs` | `workflow_runs_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `workflow_runs` | `workflow_runs_workflow_id_fkey` | FOREIGN KEY | FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE CASCADE |
+| `workflows` | `workflows_created_by_fkey` | FOREIGN KEY | FOREIGN KEY (created_by) REFERENCES auth.users(id) |
+| `workflows` | `workflows_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `workflows` | `workflows_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `workspace_kpi_placement` | `workspace_kpi_placement_department_id_fkey` | FOREIGN KEY | FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE |
+| `workspace_kpi_placement` | `workspace_kpi_placement_format_check` | CHECK | CHECK (format_override IS NULL OR (format_override = ANY (ARRAY['count'::text, 'currency'::text, 'pe |
+| `workspace_kpi_placement` | `workspace_kpi_placement_lane_check` | CHECK | CHECK (lane_override IS NULL OR (lane_override = ANY (ARRAY['business'::text, 'ai'::text]))) |
+| `workspace_kpi_placement` | `workspace_kpi_placement_org_id_fkey` | FOREIGN KEY | FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE |
+| `workspace_kpi_placement` | `workspace_kpi_placement_pkey` | PRIMARY KEY | PRIMARY KEY (id) |
+| `workspace_kpi_placement` | `workspace_kpi_placement_scope_check` | CHECK | CHECK (surface = 'workspace'::text AND department_id IS NULL AND work_unit_id IS NULL OR surface = ' |
+| `workspace_kpi_placement` | `workspace_kpi_placement_surface_check` | CHECK | CHECK (surface = ANY (ARRAY['workspace'::text, 'department'::text, 'work_unit'::text])) |
+| `workspace_kpi_placement` | `workspace_kpi_placement_work_unit_id_fkey` | FOREIGN KEY | FOREIGN KEY (work_unit_id) REFERENCES work_units(id) ON DELETE CASCADE |

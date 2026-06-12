@@ -1,19 +1,15 @@
 # System overview
 
-## Platform doctrine (June 2026 freeze)
+> **Canonical location (June 2026 rebaseline):** [`docs/platform/foundation/system-overview.md`](../platform/foundation/system-overview.md)  
+> This file remains as a transitional pointer for existing links and cursor rules.
 
-Single sources of truth for onboarding — read before audits or hardening work:
+## Operator hierarchy (updated)
 
-| Topic | Doc |
-|-------|-----|
-| Routing & URLs | `docs/system/routing-doctrine.md` |
-| Navigation | `docs/system/navigation-doctrine.md` |
-| Drawers | `docs/system/drawer-doctrine.md` |
-| Performance | `docs/system/platform-performance-doctrine.md` |
-| Legacy inventory | `docs/system/legacy-architecture-inventory.md` |
-| Repository snapshot | `docs/system/repository-state-2026-06.md` |
+Organization → **Business Process** → **Stage** → **Record**
 
-**Operator hierarchy:** Organization → **Lifecycle** → **Work Unit** → **Record** (not department-first navigation).
+Work units are runtime constructs — see [`docs/platform/core/business-process-system.md`](../platform/core/business-process-system.md).
+
+---
 
 ## Purpose
 

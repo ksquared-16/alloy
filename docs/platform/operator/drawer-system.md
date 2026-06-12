@@ -1,0 +1,82 @@
+# Drawer system
+
+**Status:** Canonical (June 2026 freeze).
+
+Entity drawer architecture, VM ownership, and navigation semantics.
+
+---
+
+## Purpose
+
+Drawers are **operational workspaces** for record detail — opened from queue rows, search, or linked navigation.
+
+---
+
+## Runtime matrix
+
+| Entity | Runtime | Maturity |
+|--------|---------|----------|
+| Opportunity | `OpportunityDrawerVmRuntime` | **Canonical** |
+| Person / Child | `PersonsDrawerVmRuntime` | **Transitional** (VM flag default OFF) |
+| Other | `AdminEntityDrawerLegacy` | **Legacy** — shrinking |
+
+Router: `AdminEntityDrawer.tsx`.
+
+---
+
+## Ownership
+
+| Concern | Owner |
+|---------|--------|
+| VM compose / cache | Entity VM runtime |
+| Layout body | Layout runtime (`LayoutRuntimePlanView`) |
+| Header chrome | Platform — identity, tabs, status, BOS, actions |
+| URL sync | Platform — shallow replaceState, no route remount |
+| Reveal | Composed payload readiness — no partial above-fold sections |
+
+Locked: `../../system/adminv2-runtime-performance-doctrine.md`.
+
+---
+
+## URL synchronization
+
+On work-unit routes: append/strip `:recordId` without remounting queue page.
+
+Linked navigation (person ↔ opportunity): hold prior payload until swap ready.
+
+---
+
+## Warm navigation
+
+- Row intent prefetch
+- Queue adjacent prefetch for prev/next
+- Session dedupe for VM fetches
+
+---
+
+## Field policy & layout
+
+Settings layouts drive drawer composition. Effective policy on GET; PATCH enforcement on opportunity (layout-aware).
+
+Detail: `../core/record-system.md`.
+
+---
+
+## BOS in drawer
+
+Header slot for assist — proposals require human approve/apply. No autonomous side effects.
+
+---
+
+## Expanded contracts
+
+- `../../system/drawer-doctrine.md`
+- `../../system/drawer-operating-model-v1.md`
+- `../../system/drawer-view-model-runtime-contract.md`
+
+---
+
+## Related
+
+- `../core/record-system.md`
+- `../core/navigation-and-workspace-doctrine.md`

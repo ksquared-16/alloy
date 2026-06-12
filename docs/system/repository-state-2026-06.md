@@ -8,7 +8,7 @@
 
 ## Executive summary
 
-Alloy is a configurable operating system for service businesses (childcare first). The **operator workspace** is **lifecycle-first**: Organization → Lifecycle → Work Unit → Record. **Admin/config** lives at `/admin`. **Legacy admin** remains at `/legacy-admin` for unmigrated modules.
+Alloy is a configurable operating system for service businesses (childcare first). The **operator workspace** is **process-first**: Organization → **Business Process** → **Stage** → **Record**. Work units remain internal execution hosts. **Admin/config** lives at `/admin`. **Legacy admin** remains at `/legacy-admin` for unmigrated modules.
 
 Implementation runs on Next.js App Router (`web/`), Supabase (RLS, org-scoped), event/workflow side effects, and a converging **drawer VM + layout runtime** stack for CRM records.
 
@@ -48,8 +48,8 @@ Implementation runs on Next.js App Router (`web/`), Supabase (RLS, org-scoped), 
 
 | System | Doc entry | Maturity |
 |--------|-----------|----------|
-| Workspace / queues | `workspace-system.md` | Production — atomic reveal Pass 3 |
-| CRM / lifecycle | `crm-system.md` | Production — lifecycle hub configurable |
+| Workspace / queues | `platform/operator/queue-system.md`, `platform/core/business-process-system.md` | Production — atomic reveal Pass 3 |
+| CRM / enrollment pipeline | `product/crm-system.md` (supplemental) | Production — process hub configurable |
 | Records / drawers | `record-system.md`, `drawer-doctrine.md` | Opp VM canonical; Person/Child transitional |
 | Actions / workflows | `actions-and-workflows.md` | Production |
 | Configuration | `configuration-system.md` | Production — `/admin/settings` |

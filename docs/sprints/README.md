@@ -1,12 +1,18 @@
 # Sprint documentation index
 
-**Purpose:** Navigation for `docs/sprints/` — **not** part of the GPT/Cursor active source pack (see `docs/README.md`).
+**Purpose:** Navigation for `docs/sprints/` — **not** part of the default AI source pack (see `docs/README.md`).
 
-**Completed work index:** **[`COMPLETED_SPRINTS_SUMMARY.md`](./COMPLETED_SPRINTS_SUMMARY.md)** — one-page shipped sprint map (May + June 2026).
+**New structure (June 2026 rebaseline):**
 
-**Archived superseded cards:** **`docs/archive/sprints-superseded/`** — intermediate planning, debug notes, and duplicates moved June 2026. Do not treat as current truth.
+| Folder | Purpose |
+|--------|---------|
+| **`active/`** | In-flight initiatives — [`active/README.md`](./active/README.md) |
+| **`completed/`** | Shipped closeout index — [`completed/README.md`](./completed/README.md) |
+| **`archive/`** | Historical artifacts — [`archive/README.md`](./archive/README.md) |
 
-**May 2026 closeout wave:** Child lifecycle + work-unit convergence, waitlist pilot, tour Phase 2 Band A, forms MVP, BOS recommendation intelligence, AdminV2 performance. **June 2026 active execution** lives under **`06_2026/`** (trimmed — see summary for in-flight list).
+**Completed work index:** **[`COMPLETED_SPRINTS_SUMMARY.md`](./COMPLETED_SPRINTS_SUMMARY.md)**
+
+**Canonical platform docs:** **`docs/platform/`** — sprint docs are execution history only.
 
 ---
 
