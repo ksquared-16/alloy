@@ -6,18 +6,35 @@ import { measureBosRailOverlayAnchorStyle } from "@/lib/bos/bosRailOverlayAnchor
 
 const HIDDEN_STYLE: CSSProperties = { visibility: "hidden", position: "fixed", pointerEvents: "none" };
 
+function bosRailOverlayStylesEqual(a: CSSProperties, b: CSSProperties): boolean {
+    return (
+        a.visibility === b.visibility &&
+        a.position === b.position &&
+        a.pointerEvents === b.pointerEvents &&
+        a.top === b.top &&
+        a.right === b.right &&
+        a.width === b.width &&
+        a.maxWidth === b.maxWidth &&
+        a.bottom === b.bottom &&
+        a.display === b.display &&
+        a.flexDirection === b.flexDirection &&
+        a.minHeight === b.minHeight
+    );
+}
+
 /** Keeps the portaled BOS rail overlay aligned with the in-layout anchor host. */
 export function useBosRailOverlayAnchorStyle(anchorEl: HTMLElement | null, enabled: boolean): CSSProperties {
     const [style, setStyle] = useState<CSSProperties>(HIDDEN_STYLE);
 
     useLayoutEffect(() => {
         if (!enabled || !anchorEl) {
-            setStyle(HIDDEN_STYLE);
+            setStyle((prev) => (bosRailOverlayStylesEqual(prev, HIDDEN_STYLE) ? prev : HIDDEN_STYLE));
             return;
         }
 
         const update = () => {
-            setStyle(measureBosRailOverlayAnchorStyle(anchorEl));
+            const next = measureBosRailOverlayAnchorStyle(anchorEl);
+            setStyle((prev) => (bosRailOverlayStylesEqual(prev, next) ? prev : next));
         };
 
         update();
@@ -62,7 +79,7 @@ export function useBosRailOverlayAnchorStyle(anchorEl: HTMLElement | null, enabl
             if (mo) {
                 mo.disconnect();
             }
-            setStyle(HIDDEN_STYLE);
+            setStyle((prev) => (bosRailOverlayStylesEqual(prev, HIDDEN_STYLE) ? prev : HIDDEN_STYLE));
         };
     }, [anchorEl, enabled]);
 

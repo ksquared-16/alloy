@@ -5,7 +5,8 @@ import {
     useCallback,
     useContext,
     useMemo,
-    useState,
+    useRef,
+    useSyncExternalStore,
     type ReactNode,
 } from "react";
 
@@ -15,9 +16,10 @@ export type WorkspaceCommandRailRegistration = {
 };
 
 type WorkspaceCommandRailRegistryContextValue = {
-    registration: WorkspaceCommandRailRegistration;
     register: (next: WorkspaceCommandRailRegistration) => void;
     unregister: () => void;
+    subscribe: (listener: () => void) => () => void;
+    getSnapshot: () => WorkspaceCommandRailRegistration;
 };
 
 const EMPTY_REGISTRATION: WorkspaceCommandRailRegistration = {
@@ -29,19 +31,46 @@ const WorkspaceCommandRailRegistryContext =
     createContext<WorkspaceCommandRailRegistryContextValue | null>(null);
 
 export function WorkspaceCommandRailRegistryProvider({ children }: { children: ReactNode }) {
-    const [registration, setRegistration] = useState<WorkspaceCommandRailRegistration>(EMPTY_REGISTRATION);
+    const registrationRef = useRef<WorkspaceCommandRailRegistration>(EMPTY_REGISTRATION);
+    const listenersRef = useRef<Set<() => void>>(new Set());
 
-    const register = useCallback((next: WorkspaceCommandRailRegistration) => {
-        setRegistration(next);
+    const subscribe = useCallback((listener: () => void) => {
+        listenersRef.current.add(listener);
+        return () => {
+            listenersRef.current.delete(listener);
+        };
     }, []);
+
+    const getSnapshot = useCallback(() => registrationRef.current, []);
+
+    const notify = useCallback(() => {
+        for (const listener of listenersRef.current) {
+            listener();
+        }
+    }, []);
+
+    const register = useCallback(
+        (next: WorkspaceCommandRailRegistration) => {
+            if (
+                registrationRef.current.actions === next.actions &&
+                registrationRef.current.telemetry === next.telemetry
+            ) {
+                return;
+            }
+            registrationRef.current = next;
+            notify();
+        },
+        [notify]
+    );
 
     const unregister = useCallback(() => {
-        setRegistration(EMPTY_REGISTRATION);
-    }, []);
+        registrationRef.current = EMPTY_REGISTRATION;
+        notify();
+    }, [notify]);
 
     const value = useMemo(
-        () => ({ registration, register, unregister }),
-        [registration, register, unregister]
+        () => ({ register, unregister, subscribe, getSnapshot }),
+        [register, unregister, subscribe, getSnapshot]
     );
 
     return (
@@ -53,6 +82,15 @@ export function WorkspaceCommandRailRegistryProvider({ children }: { children: R
 
 export function useWorkspaceCommandRailRegistryOptional() {
     return useContext(WorkspaceCommandRailRegistryContext);
+}
+
+export function useWorkspaceCommandRailRegistration(): WorkspaceCommandRailRegistration {
+    const ctx = useWorkspaceCommandRailRegistryOptional();
+    return useSyncExternalStore(
+        ctx?.subscribe ?? (() => () => {}),
+        ctx?.getSnapshot ?? (() => EMPTY_REGISTRATION),
+        () => EMPTY_REGISTRATION
+    );
 }
 
 /** True when the shell owns the command rail (pages register slots instead of rendering a local column). */

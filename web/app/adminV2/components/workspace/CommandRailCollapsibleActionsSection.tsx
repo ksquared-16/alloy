@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Zap } from "lucide-react";
 
 import {
@@ -19,7 +19,11 @@ type Props = {
  * Compact collapsible Actions section above BOS dock in the workspace command rail.
  */
 export function CommandRailCollapsibleActionsSection({ actionCount, children, loading = false }: Props) {
-    const [expanded, setExpanded] = useState(() => loadCommandRailActionsExpanded());
+    const [expanded, setExpanded] = useState(false);
+
+    useEffect(() => {
+        setExpanded(loadCommandRailActionsExpanded());
+    }, []);
 
     const toggle = useCallback(() => {
         setExpanded((prev) => {

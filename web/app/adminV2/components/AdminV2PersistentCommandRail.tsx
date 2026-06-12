@@ -3,16 +3,14 @@
 import { WorkspaceCommandRailShell } from "@/app/adminV2/components/workspace/WorkspaceCommandRailShell";
 import { CommandRailDefaultEmptyActions } from "@/app/adminV2/components/workspace/CommandRailDefaultEmptyActions";
 import { CommandRailDefaultEmptyTelemetry } from "@/app/adminV2/components/workspace/CommandRailDefaultEmptyTelemetry";
-import { useWorkspaceCommandRailRegistryOptional } from "@/contexts/WorkspaceCommandRailRegistryContext";
+import { useWorkspaceCommandRailRegistration } from "@/contexts/WorkspaceCommandRailRegistryContext";
 
 /**
  * Shell-level operator command rail — persists across route changes within AdminV2 workspace shell.
  * Pages register Actions / Workflow Telemetry via {@link WorkspaceCommandRailRegistrar}.
  */
 export default function AdminV2PersistentCommandRail() {
-    const registry = useWorkspaceCommandRailRegistryOptional();
-    const actions = registry?.registration.actions ?? null;
-    const telemetry = registry?.registration.telemetry ?? null;
+    const { actions, telemetry } = useWorkspaceCommandRailRegistration();
 
     return (
         <div

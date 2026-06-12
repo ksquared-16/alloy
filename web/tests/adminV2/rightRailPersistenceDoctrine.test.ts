@@ -24,6 +24,21 @@ describe("Right rail persistence doctrine", () => {
         expect(layout).toContain("usePersistentCommandRailEnabled");
     });
 
+    it("avoids hydration mismatch for persisted Actions expand state", () => {
+        const section = read("app/adminV2/components/workspace/CommandRailCollapsibleActionsSection.tsx");
+        expect(section).toContain("useState(false)");
+        expect(section).toMatch(/useEffect\(\(\) => \{\s*setExpanded\(loadCommandRailActionsExpanded\(\)\)/);
+        expect(section).not.toContain("useState(() => loadCommandRailActionsExpanded())");
+    });
+
+    it("uses external-store registry without unregister-on-update loops", () => {
+        const ctx = read("contexts/WorkspaceCommandRailRegistryContext.tsx");
+        expect(ctx).toContain("useSyncExternalStore");
+        const registrar = read("app/adminV2/components/workspace/WorkspaceCommandRailRegistrar.tsx");
+        expect(registrar).toContain("useLayoutEffect");
+        expect(registrar).not.toContain("[actions, telemetry, ctx]");
+    });
+
     it("always renders Actions, Workflow Telemetry, and BOS slots in persistent rail", () => {
         const rail = read("app/adminV2/components/AdminV2PersistentCommandRail.tsx");
         expect(rail).toContain("CommandRailDefaultEmptyActions");

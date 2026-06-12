@@ -3001,6 +3001,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const lifecycleNavWuId = parseLifecycleWorkUnitNavChipKey(pillKey);
             if (lifecycleNavWuId) return;
             const wu = workUnitRef.current;
+            if (!wu?.queue_definition) return;
             const resolved = resolveWorkUnitFetchQueueKeyFromPill(
                 pillKey,
                 attentionBucketKeyRef.current,
