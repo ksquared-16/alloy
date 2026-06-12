@@ -125,7 +125,7 @@ On enrollment departments, the needs-attention queue usually lives **inside** `e
 | Navigation & workspace landing | `navigation-and-workspace-doctrine.md` |
 | Queues & preview contract | `queue-system.md` |
 | Status ownership | `status-and-state-system.md` |
-| CRM enrollment grain | `../modules/enrollment-and-pipeline.md` (supplemental) |
+| CRM enrollment grain | `../../product/crm-system.md` (supplemental — childcare vertical) |
 | Sprint closeout | `docs/sprints/06_2026/business_processes_v1_sprint_report.md` |
 
 ## When this doc must be updated

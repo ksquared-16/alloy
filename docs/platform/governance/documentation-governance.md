@@ -92,4 +92,4 @@ Current frozen (June 2026):
 
 - `design-and-operational-doctrine.md`
 - `../../execution/operating-doctrine.md` (transitional expanded rules)
-- `../audits/documentation-audit.md`
+- `../../audits/documentation-audit.md`

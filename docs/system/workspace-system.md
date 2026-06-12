@@ -6,7 +6,7 @@
 
 ## Purpose
 
-Document the **operator workspace**: lifecycle-first navigation, work units, queues, and how operators execute work — without confusing queue UI data for canonical records.
+Document the **operator workspace**: business-process-first navigation, stage queues, and how operators execute work — without confusing queue UI data for canonical records. **Canonical:** **`docs/platform/core/business-process-system.md`**, **`docs/platform/operator/queue-system.md`**.
 
 **Canonical hierarchy (June 2026):** Organization → **Business Process** → **Stage** → **Record**.  
 Work units are runtime constructs — see **`docs/platform/core/business-process-system.md`**.  

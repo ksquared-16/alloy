@@ -4,7 +4,9 @@
 
 Single place for **phase timeline**, **completion vs in-progress tracking**, **shipped-feature rows**, **velocity highlights** (observed delivery windows), **active fix/cleanup items**, **confirmed gaps**, and **verification debt** — not a replacement for the issue tracker.
 
-**Product maturity framing:** See **`docs/core/system-overview.md`** (“Product maturity”). Alloy has **passed the “prove foundational architecture” phase**. The program is now **operational completion + product hardening**; **AI groundwork is present** (assistive, narrow, human-in-the-loop) but **deeper agent expansion is intentionally paused**. **Focused pilots** remain appropriate; **general customer readiness** still depends on the checklist below.
+> **Canonical roadmap:** [`docs/platform/foundation/product-roadmap.md`](../platform/foundation/product-roadmap.md) · **Capabilities:** [`docs/platform/foundation/platform-capabilities.md`](../platform/foundation/platform-capabilities.md)
+
+**Product maturity framing:** See **`docs/platform/foundation/system-overview.md`** (“Platform maturity”) and **`docs/platform/foundation/platform-capabilities.md`**. Alloy has **passed the “prove foundational architecture” phase**. The program is now **operational completion + product hardening**; **AI groundwork is present** (assistive, narrow, human-in-the-loop) but **deeper agent expansion is intentionally paused**. **Focused pilots** remain appropriate; **general customer readiness** still depends on the checklist below.
 
 ---
 

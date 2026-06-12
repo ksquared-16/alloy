@@ -21,12 +21,25 @@ When starting non-trivial Alloy work, load context in this order:
 
 1. `README.md`
 2. `docs/README.md`
-3. `docs/core/system-overview.md`
-4. `docs/core/glossary.md`
-5. The relevant `docs/system/*.md` topic file
-6. The relevant `docs/product/*.md` topic file
-7. `docs/execution/operating-doctrine.md` for behavior-changing work
-8. `docs/supabase/reference/*.csv` when touching schema, RLS, triggers, functions, or migrations
+3. `docs/platform/foundation/system-overview.md`
+4. `docs/platform/core/business-process-system.md`
+5. `docs/platform/core/entity-model.md`
+6. `docs/platform/core/record-system.md`
+7. `docs/platform/core/status-and-state-system.md`
+8. `docs/platform/operator/queue-system.md`
+9. `docs/platform/operator/drawer-system.md`
+10. `docs/platform/foundation/platform-capabilities.md`
+11. `docs/platform/foundation/product-roadmap.md`
+12. `docs/platform/governance/glossary.md`
+13. The relevant `docs/platform/modules/*.md` topic file for the task area
+14. `docs/platform/governance/design-and-operational-doctrine.md` for behavior-changing work
+15. `docs/schema/` (when touching schema, RLS, triggers, functions, or migrations) and `docs/supabase/reference/*.csv`
+
+**Operator mental model:** Business Process → Stage → Record. Work units are runtime constructs — see `docs/platform/core/business-process-system.md`.
+
+**Supplemental (vertical detail):** `docs/product/crm-system.md` and other `docs/product/*` files — enrollment/childcare reference implementations, not primary platform framing.
+
+**Transitional expanded references:** `docs/system/*`, `docs/core/*`, `docs/execution/*` — prefer `docs/platform/*` when both exist.
 
 Use `docs/sprints/**` and `docs/audits/**` only when the task touches that area. Treat `docs/archive/**` as historical or imported context, not current truth unless an active doc confirms it.
 

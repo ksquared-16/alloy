@@ -39,9 +39,9 @@ must update the **matching topic file** in `docs/core`, `docs/system`, `docs/pro
 
 ## Source-pack rules (AI / GPT / Cursor)
 
-- Load files in the order given in **`docs/README.md`**. Prefer **`core/system-overview.md`** and **`system/actions-and-workflows.md`** before guessing.
-- For merges that change behavior, include **`docs/execution/operating-doctrine.md`** in context.
-- Prefer **active markdown + `docs/supabase/reference/*.csv`** over archived markdown for schema truth; CSVs reflect whatever database was used when `export:supabase-schema` last ran.
+- Load files in the order given in **`docs/README.md`**. Prefer **`docs/platform/foundation/system-overview.md`** and **`docs/platform/modules/actions-and-workflows.md`** before guessing.
+- For merges that change behavior, include **`docs/platform/governance/design-and-operational-doctrine.md`** in context.
+- Prefer **active platform docs + `docs/supabase/reference/*.csv`** over archived markdown for schema truth; CSVs reflect whatever database was used when `export:supabase-schema` last ran.
 
 ## Anti-patterns
 

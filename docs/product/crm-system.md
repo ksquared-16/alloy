@@ -1,5 +1,7 @@
 # CRM system
 
+> **Supplemental (childcare vertical).** Canonical platform model: **`docs/platform/core/business-process-system.md`**, **`docs/platform/core/status-and-state-system.md`**. This file retains enrollment pipeline implementation detail.
+
 ## Purpose
 
 Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **scheduling** as it shows up today (tours, enrollment lanes, and `schedules` tied to CRM/booking)—with correct identity anchors (**persons** / **customer_persons**). **Communications** in the lead loop are documented in **`docs/product/communications.md`**.
@@ -15,7 +17,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 | **Queue membership** | `QueueService` preview rows | Preview only — entity GET for authority |
 | **Drawer record state** | VM runtime + entity GET | Opportunity VM canonical; Person/Child transitional |
 
-Navigation: **Lifecycle → Work Unit → Record** — see **`docs/system/navigation-doctrine.md`**.
+Navigation: **Business Process → Stage → Record** — see **`docs/platform/core/navigation-and-workspace-doctrine.md`**. Work units are runtime queue hosts — **`docs/platform/core/business-process-system.md`** § Work Units.
 
 ## Current state
 

@@ -1,5 +1,8 @@
 # Entity model
 
+> **Canonical summary:** [`docs/platform/core/entity-model.md`](../platform/core/entity-model.md)  
+> This file retains expanded location/tour/forms detail as transitional reference.
+
 ## Purpose
 
 Describe the main database-backed entities and how **persons**, **customer_persons**, **contacts**, and CRM objects relate — grounded in schema and code, not old doctrine.
