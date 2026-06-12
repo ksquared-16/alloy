@@ -6,6 +6,7 @@ import { dbGetSubmission, dbGetVersion, dbSubmitSubmission } from "@/lib/admin/f
 import { jsonData, jsonError, jsonValidationErrors, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
 import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
+import { maybeOpenProcessingCaseFromFormSubmissionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromFormSubmissionSafe";
 
 /** POST /api/admin/forms/submissions/[submissionId]/submit — draft → submitted (admin only). */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
@@ -100,6 +101,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (sigRes.inserted > 0) {
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
     }
+
+    // POS-FP1: best-effort, marker-gated. POS-connected form submissions open one
+    // Processing Case (primary source); legacy submissions are unaffected. Never throws.
+    await maybeOpenProcessingCaseFromFormSubmissionSafe(supabase, {
+        orgId: ctx.orgId,
+        submissionId,
+        formDefinitionId: String((submittedRow as { form_definition_id?: string }).form_definition_id ?? ""),
+        versionMetadata: (version as { metadata?: unknown }).metadata,
+    });
 
     return jsonData(data);
 }
