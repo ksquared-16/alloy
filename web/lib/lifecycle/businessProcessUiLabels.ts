@@ -59,6 +59,10 @@ export const BUSINESS_PROCESS_SECTION_PURPOSE = "Purpose";
 export const BUSINESS_PROCESS_SECTION_SUCCESS = "Success Criteria";
 export const BUSINESS_PROCESS_SECTION_OFF_TRACK = "Off Track Criteria";
 
+export const BUSINESS_PROCESS_SECTION_ATTENTION_SUMMARY =
+    "Off-track criteria in Expected work define when records in this stage need attention. Org-wide attention buckets and SLA thresholds are configured separately.";
+export const BUSINESS_PROCESS_SECTION_ATTENTION_ORG_DEFAULTS_LINK = "Attention defaults (org-wide)";
+
 export const BUSINESS_PROCESS_CROSS_LINK_OPEN = "Open Business Processes";
 
 export const BUSINESS_PROCESS_BREADCRUMB = "Business Processes";
