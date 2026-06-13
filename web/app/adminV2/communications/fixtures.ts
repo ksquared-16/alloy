@@ -79,3 +79,39 @@ export const FIXTURE_MESSAGES: Record<string, FixtureMessage[]> = {
         { id: "m1", direction: "inbound", channel: "sms", body: "Any movement on the waitlist?", created_at: iso(120) },
     ],
 };
+
+// UI-4G: presentational conversation threads per family (dev-only; visual hierarchy, not wired).
+export type FixtureThread = {
+    id: string;
+    subject: string;
+    channel: "email" | "sms" | "in_app";
+    messageCount: number;
+    lastActivityAt: string;
+    lastPreview: string;
+    unread?: number;
+};
+
+export const FIXTURE_THREADS: Record<string, FixtureThread[]> = {
+    "fx-rivera": [
+        { id: "t-rivera-1", subject: "Preschool availability", channel: "email", messageCount: 4, lastActivityAt: iso(6), lastPreview: "Is the preschool spot still open?", unread: 2 },
+        { id: "t-rivera-2", subject: "Tour confirmation & next steps", channel: "email", messageCount: 3, lastActivityAt: iso(30), lastPreview: "Following up - are afternoons still best?" },
+        { id: "t-rivera-3", subject: "Program questions", channel: "sms", messageCount: 2, lastActivityAt: iso(116), lastPreview: "Thanks! We're very interested." },
+    ],
+    "fx-smith": [
+        { id: "t-smith-1", subject: "Enrollment next steps", channel: "email", messageCount: 4, lastActivityAt: iso(2), lastPreview: "Welcome to Little Oaks Academy" },
+        { id: "t-smith-2", subject: "Tour scheduling", channel: "sms", messageCount: 2, lastActivityAt: iso(24), lastPreview: "Tuesday works for the tour - thank you!" },
+    ],
+    "fx-johnson": [
+        { id: "t-johnson-1", subject: "Tour request follow-up", channel: "email", messageCount: 2, lastActivityAt: iso(26), lastPreview: "Checking in again re: your tour", unread: 1 },
+    ],
+    "fx-garcia": [
+        { id: "t-garcia-1", subject: "Immunization records", channel: "sms", messageCount: 2, lastActivityAt: iso(72), lastPreview: "Sending it over today" },
+        { id: "t-garcia-2", subject: "Enrollment paperwork", channel: "email", messageCount: 3, lastActivityAt: iso(96), lastPreview: "Please complete the remaining forms" },
+    ],
+    "fx-nguyen": [
+        { id: "t-nguyen-1", subject: "Fall re-enrollment", channel: "email", messageCount: 2, lastActivityAt: iso(48), lastPreview: "Yes, please send the forms" },
+    ],
+    "fx-park": [
+        { id: "t-park-1", subject: "Waitlist status", channel: "sms", messageCount: 1, lastActivityAt: iso(120), lastPreview: "Any movement on the waitlist?", unread: 1 },
+    ],
+};

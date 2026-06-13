@@ -20,7 +20,9 @@ import {
     FIXTURE_CONVERSATIONS,
     FIXTURE_MESSAGES,
     FIXTURE_FAMILY_DETAILS,
+    FIXTURE_THREADS,
     type FixtureFamilyDetail,
+    type FixtureThread,
     type ConsentState,
 } from "@/app/adminV2/communications/fixtures";
 
@@ -103,6 +105,9 @@ export default function CommandCenterShell() {
     const [messages, setMessages] = useState<TimelineMessage[]>(
         COMMS_FIXTURES_ENABLED ? (FIXTURE_MESSAGES[FIXTURE_CONVERSATIONS[0]?.id ?? ""] ?? []) : []
     );
+    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
+        COMMS_FIXTURES_ENABLED ? (FIXTURE_THREADS[FIXTURE_CONVERSATIONS[0]?.id ?? ""]?.[0]?.id ?? null) : null
+    );
     const [assignBusy, setAssignBusy] = useState(false);
 
     const loadConversations = useCallback(async () => {
@@ -129,6 +134,7 @@ export default function CommandCenterShell() {
         setSelectedId(id);
         if (COMMS_FIXTURES_ENABLED) {
             setMessages(FIXTURE_MESSAGES[id] ?? []);
+            setSelectedThreadId(FIXTURE_THREADS[id]?.[0]?.id ?? null);
             return;
         }
         setMessages([]);
@@ -169,6 +175,7 @@ export default function CommandCenterShell() {
         () => (detail ? detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean) : []),
         [detail]
     );
+    const threads: FixtureThread[] = selected && COMMS_FIXTURES_ENABLED ? (FIXTURE_THREADS[selected.id] ?? []) : [];
 
     const health = useMemo(
         () =>
@@ -190,24 +197,22 @@ export default function CommandCenterShell() {
 
     // Compact, meaningful KPIs (dot + value + label + priority word)
     const kpis = [
-        { label: "Conversations", value: metrics.total, dot: "bg-alloy-midnight/40", tone: "text-alloy-midnight", status: "active", statusTone: "text-alloy-midnight/45" },
-        { label: "Requires response", value: metrics.requiresResponse, dot: "bg-[#e0a32e]", tone: "text-[#9a6b16]", status: metrics.requiresResponse > 0 ? "needs reply" : "clear", statusTone: "text-[#9a6b16]" },
-        { label: "SLA at risk", value: metrics.slaAtRisk, dot: "bg-alloy-ember", tone: "text-alloy-ember", status: metrics.slaAtRisk > 0 ? "act now" : "on track", statusTone: metrics.slaAtRisk > 0 ? "text-alloy-ember" : "text-[#0f6b4a]" },
-        { label: "Unassigned", value: metrics.unassigned, dot: "bg-[#5b9aa0]", tone: "text-alloy-midnight", status: metrics.unassigned > 0 ? "assign" : "all owned", statusTone: "text-alloy-midnight/45" },
-        { label: "Unread", value: metrics.unread, dot: "bg-[#00A283]", tone: "text-[#0f6b4a]", status: "new", statusTone: "text-[#0f6b4a]" },
+        { label: "Needs reply", value: metrics.requiresResponse, dot: "bg-[#e0a32e]", tone: "text-[#9a6b16]", status: metrics.requiresResponse > 0 ? "awaiting your response" : "all caught up", statusTone: "text-[#9a6b16]" },
+        { label: "Overdue", value: metrics.slaAtRisk, dot: "bg-alloy-ember", tone: "text-alloy-ember", status: metrics.slaAtRisk > 0 ? "SLA breached — act now" : "none overdue", statusTone: metrics.slaAtRisk > 0 ? "text-alloy-ember" : "text-[#0f6b4a]" },
+        { label: "Unread", value: metrics.unread, dot: "bg-[#00A283]", tone: "text-[#0f6b4a]", status: "new inbound", statusTone: "text-[#0f6b4a]" },
     ];
 
     return (
         <div data-cc-shell="communications-command-center" className="flex min-h-0 flex-1 flex-col gap-2.5 bg-[#f2f3ef] p-2.5">
             {/* KPI row — compact, color-coded, with priority language */}
-            <div data-cc-metrics className="grid grid-cols-5 gap-2">
+            <div data-cc-metrics className="flex flex-wrap gap-2">
                 {kpis.map((k) => (
-                    <div key={k.label} className="flex items-center gap-2 rounded-lg border border-alloy-stone/12 bg-white px-2.5 py-1.5 shadow-[0_1px_2px_rgba(20,30,25,0.04)]">
-                        <span className={`h-6 w-1 shrink-0 rounded-full ${k.dot}`} />
-                        <span className={`text-lg font-semibold leading-none tabular-nums ${k.tone}`}>{k.value}</span>
+                    <div key={k.label} className="flex min-w-[180px] items-center gap-3 rounded-xl border border-alloy-stone/12 bg-white px-3.5 py-2.5 shadow-[0_1px_2px_rgba(20,30,25,0.05)]">
+                        <span className={`h-9 w-1.5 shrink-0 rounded-full ${k.dot}`} />
+                        <span className={`text-2xl font-semibold leading-none tabular-nums ${k.tone}`}>{k.value}</span>
                         <span className="min-w-0 leading-tight">
-                            <span className="block truncate text-[10px] font-medium text-alloy-midnight/55">{k.label}</span>
-                            <span className={`block truncate text-[9px] font-medium ${k.statusTone}`}>{k.status}</span>
+                            <span className="block text-[12px] font-semibold text-alloy-midnight">{k.label}</span>
+                            <span className={`block truncate text-[10px] font-medium ${k.statusTone}`}>{k.status}</span>
                         </span>
                     </div>
                 ))}
@@ -216,7 +221,7 @@ export default function CommandCenterShell() {
             {error ? <div className="text-[11px] text-alloy-ember">{error}</div> : null}
 
             {/* UI-1 geometry: queue ~28% (>=320px floor) / workspace ~72%. BOS rail shell-owned at 345px. */}
-            <div className="grid min-h-0 flex-1 grid-cols-[minmax(300px,28%)_minmax(0,1fr)] gap-2.5">
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(260px,25%)_minmax(0,1fr)] gap-2.5">
                 {/* QUEUE — header carries the (compact) filter + search row */}
                 <aside data-cc-column="queue" aria-label="Communication queue" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
                     <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2.5">
@@ -366,10 +371,45 @@ export default function CommandCenterShell() {
                             </div>
 
                             {/* BODY — timeline (left) | persistent composer (right) */}
-                            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(360px,44%)]">
+                            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
                                 <div data-cc-ws-section="timeline" className="min-h-0 overflow-auto bg-[#f5f6f4] px-4 py-3">
-                                    <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Communication timeline</div>
-                                    {messages.length === 0 ? (
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Conversation threads</span>
+                                        {threads.length > 0 ? <span className="text-[10px] tabular-nums text-alloy-midnight/40">{threads.length}</span> : null}
+                                    </div>
+                                    {threads.length > 0 ? (
+                                        <ol data-cc-timeline className="space-y-2">
+                                            {threads.map((t) => {
+                                                const te = eventStyle({ channel: t.channel } as TimelineMessage);
+                                                const isSelThread = selectedThreadId === t.id;
+                                                return (
+                                                    <li key={t.id} data-cc-thread={t.id}>
+                                                        <button
+                                                            type="button"
+                                                            data-cc-thread-open={t.id}
+                                                            onClick={() => setSelectedThreadId(t.id)}
+                                                            className={`group block w-full cursor-pointer rounded-xl border border-l-[3px] ${te.rail} px-3 py-2.5 text-left transition ${isSelThread ? "border-[#00A283] border-l-[#00A283] bg-[#f1faf7] shadow-[0_2px_8px_rgba(0,162,131,0.12)] ring-1 ring-[#00A283]/20" : "border-alloy-stone/12 bg-white shadow-[0_1px_2px_rgba(20,30,25,0.05)] hover:border-[#7fc9b6] hover:shadow-[0_2px_8px_rgba(0,162,131,0.10)]"}`}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="flex min-w-0 items-center gap-1.5">
+                                                                    <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${te.badge}`}>{te.label}</span>
+                                                                    <span className="truncate text-[13px] font-semibold text-alloy-midnight">{t.subject}</span>
+                                                                </span>
+                                                                <span className="flex shrink-0 items-center gap-2">
+                                                                    {t.unread ? <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00A283] px-1 text-[9px] font-bold text-white">{t.unread}</span> : null}
+                                                                    <span className="text-[10px] tabular-nums text-alloy-midnight/40">{relTime(t.lastActivityAt)}</span>
+                                                                </span>
+                                                            </div>
+                                                            <div className="mt-1 flex items-center justify-between gap-2">
+                                                                <span className="truncate text-[11px] text-alloy-midnight/55">{t.messageCount} messages · {t.lastPreview}</span>
+                                                                <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold text-[#0f6b4a] opacity-0 transition group-hover:opacity-100">Open thread<ChevronRight className="h-3 w-3" /></span>
+                                                            </div>
+                                                        </button>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ol>
+                                    ) : messages.length === 0 ? (
                                         <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
                                     ) : (
                                         <ol data-cc-timeline className="space-y-2">
