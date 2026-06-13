@@ -9,6 +9,8 @@ import {
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
+import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
+import ComposerV2 from "@/app/adminV2/communications/composer/ComposerV2";
 
 /**
  * Communications V2 — Command Center body (ACT-1, corrected).
@@ -88,6 +90,22 @@ export default function CommandCenterShell() {
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
     const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
 
+    // UI-2: Family Communication Workspace — health derived client-side from already-fetched messages
+    // (existing pure view-model). No new route/provider/schema. Consent data wires in a later activation step.
+    const health = useMemo(
+        () =>
+            computeCommunicationHealth({
+                messages: messages.map((m) => ({ direction: m.direction, created_at: m.created_at, channel: m.channel })),
+                unreadCount: selected?.unread ?? undefined,
+            }),
+        [messages, selected]
+    );
+    const healthLabel = health.engagementScore >= 66 ? "Healthy" : health.engagementScore >= 33 ? "At risk" : "Unresponsive";
+    const healthDotClass = health.engagementScore >= 66 ? "bg-[#00A283]" : health.engagementScore >= 33 ? "bg-alloy-ember" : "bg-red-600";
+    const lastContactLabel = health.lastContactAt
+        ? `Last contact ${new Date(health.lastContactAt).toLocaleDateString()}`
+        : null;
+
     return (
         <div data-cc-shell="communications-command-center" className="flex min-h-0 flex-1 flex-col gap-2 bg-[#f7f6f3] p-2">
             <div data-cc-metrics className="grid grid-cols-5 gap-1.5">
@@ -165,37 +183,88 @@ export default function CommandCenterShell() {
                     })}
                 </aside>
 
-                <section data-cc-column="workspace" aria-label="Conversation workspace" className="overflow-auto rounded-lg border border-alloy-stone/15 bg-white p-3">
+                <section
+                    data-cc-column="workspace"
+                    data-cc-workspace="family-communication"
+                    aria-label="Family communication workspace"
+                    className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/15 bg-white"
+                >
                     {selected ? (
                         <>
-                            <header className="flex items-center justify-between">
-                                <div>
-                                    <h3 className="text-sm font-semibold text-alloy-midnight">{selected.family_label ?? "Conversation"}</h3>
-                                    <p className="text-[11px] text-alloy-midnight/60">
-                                        {selected.channel} · {selected.assignment_state} · SLA {selected.sla_state ?? "—"}
-                                    </p>
+                            {/* TOP — Family Snapshot + Communication Health + Consent Status (~15-20%) */}
+                            <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/15 p-3">
+                                <header className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                        <h3 className="truncate text-sm font-semibold text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
+                                        <p className="mt-0.5 text-[11px] text-alloy-midnight/60">
+                                            {[
+                                                selected.channel,
+                                                selected.location_id ? `Location ${selected.location_id}` : null,
+                                                `Owner ${selected.assignment_state ?? "unassigned"}`,
+                                                lastContactLabel,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(" \u00b7 ")}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        data-cc-claim
+                                        disabled={assignBusy || selected.assignment_state === "assigned"}
+                                        onClick={() => claim(selected.id)}
+                                        className="shrink-0 rounded-md bg-[#00A283] px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40"
+                                    >
+                                        {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
+                                    </button>
+                                </header>
+                                <div className="mt-2 grid grid-cols-2 gap-2">
+                                    <div data-cc-ws-section="health" className="rounded-md border border-alloy-stone/15 p-2">
+                                        <div className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Communication health</div>
+                                        <div className="mt-0.5 flex items-center gap-1.5">
+                                            <span className={`inline-block h-2 w-2 rounded-full ${healthDotClass}`} />
+                                            <span className="text-xs font-semibold text-alloy-midnight">{healthLabel}</span>
+                                        </div>
+                                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-alloy-midnight/60">
+                                            <span>Engagement {health.engagementScore}</span>
+                                            <span>Response {health.responseRate === null ? "\u2014" : `${Math.round(health.responseRate * 100)}%`}</span>
+                                            <span>SLA {selected.sla_state ?? "\u2014"}</span>
+                                        </div>
+                                    </div>
+                                    <div data-cc-ws-section="consent" className="rounded-md border border-alloy-stone/15 p-2">
+                                        <div className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Consent status</div>
+                                        <div className="mt-1 flex flex-wrap gap-1.5 text-[10px]">
+                                            {["Email", "SMS", "Marketing"].map((c) => (
+                                                <span key={c} className="rounded border border-alloy-stone/20 px-1.5 py-0.5 text-alloy-midnight/70">
+                                                    {c} <span className="text-alloy-midnight/40">{"\u2014"}</span>
+                                                </span>
+                                            ))}
+                                        </div>
+                                        <div className="mt-1 text-[9px] text-alloy-midnight/40">Per-channel consent loads with activation.</div>
+                                    </div>
                                 </div>
-                                <button
-                                    type="button"
-                                    data-cc-claim
-                                    disabled={assignBusy || selected.assignment_state === "assigned"}
-                                    onClick={() => claim(selected.id)}
-                                    className="rounded-md bg-[#00A283] px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40"
-                                >
-                                    {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
-                                </button>
-                            </header>
-                            <ol data-cc-timeline className="mt-3 space-y-1">
-                                {messages.map((m, i) => (
-                                    <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className="rounded-md border border-alloy-stone/10 px-2 py-1 text-xs">
-                                        <span className="text-[10px] text-alloy-midnight/50">{m.direction}</span> {m.body ?? ""}
-                                    </li>
-                                ))}
-                                {messages.length === 0 ? <li className="text-[11px] text-alloy-midnight/50">No messages.</li> : null}
-                            </ol>
+                            </div>
+
+                            {/* MIDDLE — Unified Communication Timeline (~50-60%) */}
+                            <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto p-3">
+                                <div className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Communication timeline</div>
+                                <ol data-cc-timeline className="mt-1.5 space-y-1">
+                                    {messages.map((m, i) => (
+                                        <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className="rounded-md border border-alloy-stone/10 px-2 py-1 text-xs">
+                                            <span className="mr-1 text-[10px] uppercase text-alloy-midnight/45">{[m.channel, m.direction].filter(Boolean).join(" \u00b7 ")}</span>
+                                            <span className="text-alloy-midnight/80">{m.body ?? ""}</span>
+                                        </li>
+                                    ))}
+                                    {messages.length === 0 ? <li className="text-[11px] text-alloy-midnight/50">No messages.</li> : null}
+                                </ol>
+                            </div>
+
+                            {/* BOTTOM — Composer (~25-35%): reuse existing ComposerV2 (self-gated, review-first, no auto-send) */}
+                            <div data-cc-ws-section="composer" className="shrink-0 border-t border-alloy-stone/15 p-2">
+                                <ComposerV2 />
+                            </div>
                         </>
                     ) : (
-                        <p className="text-xs text-alloy-midnight/60">Select a conversation from a queue.</p>
+                        <p className="p-3 text-xs text-alloy-midnight/60">Select a conversation from a queue.</p>
                     )}
                 </section>
             </div>
