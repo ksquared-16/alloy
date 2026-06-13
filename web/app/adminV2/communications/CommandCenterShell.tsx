@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Bold, Italic, List, Link2, Smile, Paperclip, FileText, Clock, Sparkles, Send } from "lucide-react";
 import {
     OPERATIONAL_QUEUES,
     groupConversationsByQueue,
@@ -22,11 +23,10 @@ import {
 /**
  * Communications V2 — Command Center body. Renders INSIDE the existing modal shell
  * (AdminV2WorkspaceBosModalShell); the BOS rail is the shell's and is untouched.
- * Layout = Queue (family cards) -> Family Communication Workspace (Snapshot + Health +
- * Consent + Timeline + Composer). UI-1 geometry preserved. When NEXT_PUBLIC_COMMS_V2_FIXTURES
- * is on, the component renders from dev fixtures (no backend); otherwise it fetches as before.
- * UI-4: visual hierarchy only (separation, activity-history timeline, drafting composer,
- * tighter queue cards) — no data/route/geometry/BOS change.
+ * Layout = Queue (family cards) -> Family Communication Workspace
+ * (operational header + activity timeline + email composer). UI-1 geometry preserved.
+ * Fixture mode (NEXT_PUBLIC_COMMS_V2_FIXTURES) renders with no backend. UI-4B: hierarchy +
+ * composer refinement only — no data/route/geometry/BOS change.
  */
 type TimelineMessage = {
     id?: string;
@@ -45,6 +45,8 @@ const slaChipClass = (s: string | null | undefined): string =>
     : "border border-alloy-stone/25 text-alloy-midnight/55";
 const slaChipLabel = (s: string | null | undefined): string =>
     s === "overdue" ? "Overdue" : s === "due" ? "Due soon" : "On track";
+const slaDotForCard = (s: string | null | undefined): string =>
+    s === "overdue" ? "bg-alloy-ember" : s === "due" ? "bg-[#e0b020]" : "bg-[#00A283]";
 const consentTone = (s: ConsentState): string =>
     s === "opted_in" ? "text-[#0f6b4a]" : s === "opted_out" ? "text-red-600" : "text-alloy-midnight/40";
 const consentMark = (s: ConsentState): string =>
@@ -59,12 +61,19 @@ const relTime = (iso: string | null | undefined): string => {
     if (h < 24) return `${h}h ago`;
     return `${Math.round(h / 24)}d ago`;
 };
-const entryLabel = (m: TimelineMessage): string => {
-    const kind = m.kind && m.kind !== "message" ? m.kind : m.direction === "outbound" ? "sent" : "received";
-    return [m.channel, kind].filter(Boolean).join(" · ");
+const dirLabel = (d: string | null | undefined): string =>
+    d === "outbound" ? "Sent" : d === "inbound" ? "Received" : "Internal";
+const eventBadge = (m: TimelineMessage): { label: string; cls: string } => {
+    const k = m.kind && m.kind !== "message" ? m.kind : null;
+    if (k === "note") return { label: "Note", cls: "border-[#e6c98a] bg-[#fbf3e1] text-[#9a6b16]" };
+    if (k === "system") return { label: "System", cls: "border-alloy-stone/25 bg-alloy-stone/[0.06] text-alloy-midnight/55" };
+    if (k === "call") return { label: "Call", cls: "border-alloy-stone/25 bg-white text-alloy-midnight/60" };
+    if (m.channel === "email") return { label: "Email", cls: "border-[#7fc9b6] bg-[#eef7f3] text-[#0f6b4a]" };
+    if (m.channel === "sms") return { label: "SMS", cls: "border-[#9db7d6] bg-[#eef3f9] text-[#33567f]" };
+    return { label: (m.channel ?? "Event").toString(), cls: "border-alloy-stone/25 bg-white text-alloy-midnight/60" };
 };
-const entryDot = (m: TimelineMessage): string =>
-    m.kind && m.kind !== "message" ? "bg-alloy-stone/40" : m.direction === "outbound" ? "bg-[#00A283]" : "bg-alloy-midnight/45";
+
+const toolbarBtn = "rounded p-1 text-alloy-midnight/55 transition hover:bg-alloy-stone/12 hover:text-alloy-midnight";
 
 export default function CommandCenterShell() {
     const [conversations, setConversations] = useState<ConversationSummary[]>(
@@ -155,6 +164,9 @@ export default function CommandCenterShell() {
     const healthLabel = health.engagementScore >= 66 ? "Healthy" : health.engagementScore >= 33 ? "At risk" : "Unresponsive";
     const healthDot = health.engagementScore >= 66 ? "bg-[#00A283]" : health.engagementScore >= 33 ? "bg-alloy-ember" : "bg-red-600";
     const healthTone = health.engagementScore >= 66 ? "text-[#0f6b4a]" : health.engagementScore >= 33 ? "text-alloy-ember" : "text-red-600";
+    const consentChip = (label: string, st: ConsentState) => (
+        <span className={`font-semibold ${consentTone(st)}`}>{label}{consentMark(st)}</span>
+    );
 
     return (
         <div data-cc-shell="communications-command-center" className="flex min-h-0 flex-1 flex-col gap-2.5 bg-[#f4f4f1] p-2.5">
@@ -197,7 +209,7 @@ export default function CommandCenterShell() {
 
             {/* UI-1 geometry: queue ~28% (>=320px floor) / workspace ~72%. BOS rail shell-owned at 345px. */}
             <div className="grid min-h-0 flex-1 grid-cols-[minmax(320px,28%)_minmax(0,1fr)] gap-2.5">
-                {/* QUEUE — Work Unit-style family cards, grouped by operational state */}
+                {/* QUEUE — Work Unit-style family cards */}
                 <aside data-cc-column="queue" aria-label="Communication queue" className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-white">
                     <div className="shrink-0 border-b border-alloy-stone/12 px-3.5 py-3">
                         <div className="text-sm font-semibold text-alloy-midnight">Communication queue</div>
@@ -223,7 +235,7 @@ export default function CommandCenterShell() {
                                                         type="button"
                                                         data-cc-conversation={c.id}
                                                         onClick={() => openConversation(c.id)}
-                                                        className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${isSel ? "border-[#00A283] bg-[#f3faf8] shadow-[0_1px_0_rgba(0,162,131,0.08)]" : "border-alloy-stone/15 bg-white hover:border-alloy-stone/30 hover:bg-alloy-stone/[0.03]"}`}
+                                                        className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${isSel ? "border-[#00A283] bg-[#f3faf8]" : "border-alloy-stone/15 bg-white hover:border-alloy-stone/30 hover:bg-alloy-stone/[0.03]"}`}
                                                     >
                                                         <div className="flex items-center justify-between gap-2">
                                                             <span className="truncate text-[13px] font-semibold leading-tight text-alloy-midnight">{c.family_label ?? "Family"}</span>
@@ -254,12 +266,12 @@ export default function CommandCenterShell() {
                 <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-white">
                     {selected ? (
                         <>
-                            {/* TOP — Family Snapshot + Communication Health + Consent Status */}
-                            <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/15 bg-white px-4 pb-3 pt-3.5">
-                                <header className="flex items-start justify-between gap-3">
+                            {/* OPERATIONAL HEADER — snapshot + health + consent, compact */}
+                            <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/20 bg-white px-4 py-3">
+                                <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0">
                                         <h3 className="truncate text-[17px] font-semibold leading-tight text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
-                                        <p className="mt-1 truncate text-[11px] text-alloy-midnight/55">
+                                        <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/55">
                                             {detail
                                                 ? `${detail.children} · ${detail.program} · ${detail.location} · ${detail.stage} · ${detail.owner}`
                                                 : [selected.channel, `SLA ${selected.sla_state ?? "—"}`].filter(Boolean).join(" · ")}
@@ -274,60 +286,55 @@ export default function CommandCenterShell() {
                                     >
                                         {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
                                     </button>
-                                </header>
-                                <div className="mt-3 grid grid-cols-2 gap-2.5">
-                                    <div data-cc-ws-section="health" className="rounded-lg border border-alloy-stone/15 bg-[#fafbfa] px-3 py-2.5">
-                                        <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Communication health</div>
-                                        <div className="mt-1 flex items-center gap-2">
-                                            <span className={`inline-block h-2.5 w-2.5 rounded-full ${healthDot}`} />
-                                            <span className={`text-sm font-semibold ${healthTone}`}>{healthLabel}</span>
-                                        </div>
-                                        <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-[10px] text-alloy-midnight/55">
-                                            <span><span className="text-alloy-midnight/40">Engagement</span> <span className="font-semibold text-alloy-midnight/70 tabular-nums">{health.engagementScore}</span></span>
-                                            <span><span className="text-alloy-midnight/40">Response</span> <span className="font-semibold text-alloy-midnight/70 tabular-nums">{health.responseRate === null ? "—" : `${Math.round(health.responseRate * 100)}%`}</span></span>
-                                            <span><span className="text-alloy-midnight/40">SLA</span> <span className="font-semibold text-alloy-midnight/70">{selected.sla_state ?? "—"}</span></span>
-                                        </div>
-                                    </div>
-                                    <div data-cc-ws-section="consent" className="rounded-lg border border-alloy-stone/15 bg-[#fafbfa] px-3 py-2.5">
-                                        <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Consent status</div>
-                                        <div className="mt-1.5 flex flex-wrap gap-1.5 text-[10px]">
-                                            {(["email", "sms", "marketing"] as const).map((k) => {
-                                                const st: ConsentState = detail ? detail.consent[k] : "unset";
-                                                return (
-                                                    <span key={k} className="inline-flex items-center gap-1 rounded-md border border-alloy-stone/20 bg-white px-2 py-1">
-                                                        <span className="capitalize text-alloy-midnight/60">{k}</span>
-                                                        <span className={`font-semibold ${consentTone(st)}`}>{consentMark(st)}</span>
-                                                    </span>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+                                </div>
+                                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                                    <span data-cc-ws-section="health" className="inline-flex items-center gap-1.5 rounded-full border border-alloy-stone/20 bg-white px-2 py-1">
+                                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${healthDot}`} />
+                                        <span className={`font-semibold ${healthTone}`}>{healthLabel}</span>
+                                        <span className="text-alloy-midnight/40">· eng {health.engagementScore}</span>
+                                        <span className="text-alloy-midnight/40">· resp {health.responseRate === null ? "—" : `${Math.round(health.responseRate * 100)}%`}</span>
+                                    </span>
+                                    <span className={`inline-flex items-center rounded-full px-2 py-1 font-semibold ${slaChipClass(selected.sla_state)}`}>SLA {slaChipLabel(selected.sla_state)}</span>
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2 py-1 text-alloy-midnight/60">
+                                        <span className="text-alloy-midnight/40">Owner</span>{detail ? detail.owner : (selected.assignment_state ?? "—")}
+                                    </span>
+                                    <span data-cc-ws-section="consent" className="inline-flex items-center gap-1.5 rounded-full border border-alloy-stone/20 bg-white px-2 py-1">
+                                        <span className="text-alloy-midnight/40">Consent</span>
+                                        {consentChip("E", detail ? detail.consent.email : "unset")}
+                                        {consentChip("S", detail ? detail.consent.sms : "unset")}
+                                        {consentChip("M", detail ? detail.consent.marketing : "unset")}
+                                    </span>
                                 </div>
                             </div>
 
-                            {/* MIDDLE — Unified Communication Timeline (activity history) */}
-                            <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto bg-[#fcfcfb] px-4 py-3">
-                                <div className="mb-2.5 text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Communication timeline</div>
+                            {/* TIMELINE — Alloy activity history, event cards */}
+                            <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto bg-[#f6f7f5] px-4 py-3">
+                                <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Communication timeline</div>
                                 {messages.length === 0 ? (
                                     <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
                                 ) : (
-                                    <ol data-cc-timeline className="relative ml-1 space-y-3.5 border-l border-alloy-stone/20 pl-4">
-                                        {messages.map((m, i) => (
-                                            <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className="relative">
-                                                <span className={`absolute -left-[21px] top-1 inline-block h-2.5 w-2.5 rounded-full ring-2 ring-[#fcfcfb] ${entryDot(m)}`} />
-                                                <div className="flex items-baseline justify-between gap-2">
-                                                    <span className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">{entryLabel(m)}</span>
-                                                    <span className="shrink-0 text-[10px] tabular-nums text-alloy-midnight/35">{relTime(m.created_at)}</span>
-                                                </div>
-                                                <div className="mt-0.5 text-[13px] leading-snug text-alloy-midnight/85">{m.body ?? ""}</div>
-                                            </li>
-                                        ))}
+                                    <ol data-cc-timeline className="space-y-2">
+                                        {messages.map((m, i) => {
+                                            const b = eventBadge(m);
+                                            return (
+                                                <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(20,30,25,0.04)]">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="flex items-center gap-1.5">
+                                                            <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${b.cls}`}>{b.label}</span>
+                                                            <span className="text-[10px] font-medium text-alloy-midnight/45">{dirLabel(m.direction)}</span>
+                                                        </span>
+                                                        <span className="shrink-0 text-[10px] tabular-nums text-alloy-midnight/40">{relTime(m.created_at)}</span>
+                                                    </div>
+                                                    <div className="mt-1.5 text-[13px] leading-snug text-alloy-midnight/85">{m.body ?? ""}</div>
+                                                </li>
+                                            );
+                                        })}
                                     </ol>
                                 )}
                             </div>
 
-                            {/* BOTTOM — Composer (dominant drafting area; review-first, no auto-send) */}
-                            <div data-cc-ws-section="composer" className="flex min-h-[244px] shrink-0 flex-col border-t border-alloy-stone/15 bg-[#f7f8f7] px-4 py-3">
+                            {/* COMPOSER — real email composer */}
+                            <div data-cc-ws-section="composer" className="flex min-h-[288px] shrink-0 flex-col border-t border-alloy-stone/20 bg-[#eef0ed] px-4 py-3">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="inline-flex overflow-hidden rounded-md border border-alloy-stone/20 bg-white text-xs">
                                         <span className="bg-[#00A283] px-3 py-1.5 font-semibold text-white">Email</span>
@@ -335,24 +342,39 @@ export default function CommandCenterShell() {
                                         <span className="border-l border-alloy-stone/15 px-3 py-1.5 text-alloy-midnight/55">Note</span>
                                     </div>
                                     <span className="flex items-center gap-2 text-[10px] text-alloy-midnight/50">
-                                        <span>To <span className="text-alloy-midnight/70">{detail ? detail.recipient : (selected.family_label ?? "")}</span></span>
+                                        <span>To <span className="font-medium text-alloy-midnight/75">{detail ? detail.recipient : (selected.family_label ?? "")}</span></span>
                                         {detail ? <span className={`font-semibold ${consentTone(detail.consent.email)}`}>email {consentMark(detail.consent.email)}</span> : null}
                                     </span>
                                 </div>
                                 <input
                                     aria-label="Subject"
                                     placeholder="Subject"
-                                    className="mt-2.5 w-full rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight placeholder:text-alloy-midnight/35"
+                                    className="mt-2 w-full rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight placeholder:text-alloy-midnight/35"
                                 />
-                                <textarea
-                                    aria-label="Message body"
-                                    placeholder={`Write a message to ${selected.family_label ?? "the family"}…`}
-                                    className="mt-2 w-full min-h-0 flex-1 resize-none rounded-md border border-alloy-stone/20 bg-white px-3 py-2.5 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35"
-                                />
+                                {/* editor card: formatting toolbar + large body */}
+                                <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-md border border-alloy-stone/20 bg-white">
+                                    <div className="flex items-center gap-0.5 border-b border-alloy-stone/12 px-1.5 py-1">
+                                        <button type="button" aria-label="Bold" className={toolbarBtn}><Bold className="h-3.5 w-3.5" /></button>
+                                        <button type="button" aria-label="Italic" className={toolbarBtn}><Italic className="h-3.5 w-3.5" /></button>
+                                        <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
+                                        <button type="button" aria-label="Bulleted list" className={toolbarBtn}><List className="h-3.5 w-3.5" /></button>
+                                        <button type="button" aria-label="Insert link" className={toolbarBtn}><Link2 className="h-3.5 w-3.5" /></button>
+                                        <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
+                                        <span className="ml-auto flex items-center gap-0.5">
+                                            <button type="button" className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-alloy-midnight/55 hover:bg-alloy-stone/12"><Paperclip className="h-3.5 w-3.5" />Attach</button>
+                                            <button type="button" className="inline-flex items-center gap-1 rounded px-1.5 py-1 text-[11px] text-alloy-midnight/55 hover:bg-alloy-stone/12"><FileText className="h-3.5 w-3.5" />Templates</button>
+                                        </span>
+                                    </div>
+                                    <textarea
+                                        aria-label="Message body"
+                                        placeholder={`Write a message to ${selected.family_label ?? "the family"}…`}
+                                        className="w-full min-h-0 flex-1 resize-none border-0 bg-white px-3 py-2.5 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none"
+                                    />
+                                </div>
                                 <div className="mt-2.5 flex items-center gap-2">
-                                    <span className="rounded-md bg-[#00A283] px-4 py-2 text-sm font-semibold text-white shadow-sm">Send now</span>
-                                    <span className="rounded-md border border-alloy-stone/25 bg-white px-3 py-2 text-sm text-alloy-midnight">Send later</span>
-                                    <span className="inline-flex items-center gap-1 rounded-md border border-[#7fc9b6] bg-[#f0f9f6] px-3 py-2 text-sm font-medium text-[#0f6b4a]">BOS Enhance</span>
+                                    <span className="inline-flex items-center gap-1.5 rounded-md bg-[#00A283] px-4 py-2 text-sm font-semibold text-white shadow-sm"><Send className="h-3.5 w-3.5" />Send now</span>
+                                    <span className="inline-flex items-center gap-1.5 rounded-md border border-alloy-stone/25 bg-white px-3 py-2 text-sm text-alloy-midnight"><Clock className="h-3.5 w-3.5" />Send later</span>
+                                    <span className="inline-flex items-center gap-1.5 rounded-md border border-[#7fc9b6] bg-[#f0f9f6] px-3 py-2 text-sm font-medium text-[#0f6b4a]"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</span>
                                     <span className="ml-auto text-[10px] text-alloy-midnight/40">Review-first · no auto-send</span>
                                 </div>
                             </div>
@@ -364,8 +386,4 @@ export default function CommandCenterShell() {
             </div>
         </div>
     );
-}
-
-function slaDotForCard(s: string | null | undefined): string {
-    return s === "overdue" ? "bg-alloy-ember" : s === "due" ? "bg-[#e0b020]" : "bg-[#00A283]";
 }
