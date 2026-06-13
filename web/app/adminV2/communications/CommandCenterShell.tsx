@@ -216,7 +216,7 @@ export default function CommandCenterShell() {
             {error ? <div className="text-[11px] text-alloy-ember">{error}</div> : null}
 
             {/* UI-1 geometry: queue ~28% (>=320px floor) / workspace ~72%. BOS rail shell-owned at 345px. */}
-            <div className="grid min-h-0 flex-1 grid-cols-[minmax(320px,28%)_minmax(0,1fr)] gap-2.5">
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(300px,28%)_minmax(0,1fr)] gap-2.5">
                 {/* QUEUE — header carries the (compact) filter + search row */}
                 <aside data-cc-column="queue" aria-label="Communication queue" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
                     <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2.5">
@@ -366,7 +366,7 @@ export default function CommandCenterShell() {
                             </div>
 
                             {/* BODY — timeline (left) | persistent composer (right) */}
-                            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(340px,40%)]">
+                            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(360px,44%)]">
                                 <div data-cc-ws-section="timeline" className="min-h-0 overflow-auto bg-[#f5f6f4] px-4 py-3">
                                     <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Communication timeline</div>
                                     {messages.length === 0 ? (
@@ -404,13 +404,10 @@ export default function CommandCenterShell() {
                                 </div>
 
                                 <div data-cc-ws-section="composer" className="flex min-h-0 flex-col border-l border-alloy-stone/15 bg-gradient-to-b from-[#fbfcfb] to-[#f3f5f2] px-3.5 py-3">
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Compose</span>
-                                        <div className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
-                                            <span className="bg-[#00A283] px-2.5 py-1 font-semibold text-white">Email</span>
-                                            <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">SMS</span>
-                                            <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">Note</span>
-                                        </div>
+                                    <div className="mb-2 inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
+                                        <span className="bg-[#00A283] px-2.5 py-1 font-semibold text-white">Email</span>
+                                        <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">SMS</span>
+                                        <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">Note</span>
                                     </div>
 
                                     <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 shadow-sm">
@@ -431,7 +428,7 @@ export default function CommandCenterShell() {
                                         className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
                                     />
 
-                                    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm">
+                                    <div className="mt-2 flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm">
                                         <div className="flex items-center gap-0.5 border-b border-alloy-stone/12 bg-[#fbfcfb] px-1.5 py-1">
                                             <button type="button" aria-label="Bold" className={toolbarBtn}><Bold className="h-3.5 w-3.5" /></button>
                                             <button type="button" aria-label="Italic" className={toolbarBtn}><Italic className="h-3.5 w-3.5" /></button>
