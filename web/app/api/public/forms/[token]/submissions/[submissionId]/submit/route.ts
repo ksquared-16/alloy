@@ -29,6 +29,7 @@ import {
     emitFormSubmittedSafe,
 } from "@/lib/forms/workflow/formSubmissionEvents";
 import { emitIntakeCaseLifecycleEventsSafe } from "@/lib/forms/workflow/intakeCaseLifecycleEvents";
+import { maybeOpenProcessingCaseFromPacketCompletionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromPacketCompletionSafe";
 import {
     emitOpportunityEnrollmentPacketCompletedProjectionSafe,
     emitOpportunityEnrollmentPacketOpenedSafe,
@@ -441,6 +442,13 @@ export async function POST(
         if (oDone.error) {
             console.error("[public submit] enrollment completed projection failed:", oDone.error.message);
         }
+
+        // POS-FP1b: best-effort, marker-gated. POS-connected packet completion opens one
+        // Processing Case (packet session as primary source). Legacy packets unaffected. Never throws.
+        await maybeOpenProcessingCaseFromPacketCompletionSafe(supabase, {
+            orgId: ctx.orgId,
+            packetSessionId: ctx.packet.packet_session_id,
+        });
     }
 
     const packetExtras: Record<string, unknown> = {};
