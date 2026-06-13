@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    Users, Activity, ShieldCheck, Clock, User, UserPlus, ChevronDown,
+    Users, Activity, ShieldCheck, Clock, User, UserPlus, ChevronDown, ChevronRight,
     Mail, MessageSquare, Phone, StickyNote, Settings2,
     Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send,
 } from "lucide-react";
@@ -27,9 +27,10 @@ import {
 /**
  * Communications V2 — Command Center body. Renders INSIDE the existing modal shell
  * (AdminV2WorkspaceBosModalShell); the BOS rail is the shell's and is untouched.
- * UI-4D: workspace internal composition — full-width operational header, then a two-column
- * body (timeline | persistent composer). Presentation only; fixture mode kept; no data/route/
- * outer-geometry/BOS change. Multi-child + multi-contact are visual affordances only (not wired).
+ * UI-4E: targeted layout compression (compact KPIs, queue-scoped filters, header
+ * assignment control, clickable timeline w/ View thread affordance, one-row composer
+ * actions, premium header). Presentation only; fixture mode kept; no data/route/outer-
+ * geometry/BOS change. Multi-child + multi-contact remain visual affordances (not wired).
  */
 type TimelineMessage = {
     id?: string;
@@ -187,52 +188,65 @@ export default function CommandCenterShell() {
     const healthDot =
         health.engagementScore >= 66 ? "bg-[#00A283]" : health.engagementScore >= 33 ? "bg-[#e0a32e]" : "bg-red-500";
 
+    // Compact, meaningful KPIs (dot + value + label + priority word)
+    const kpis = [
+        { label: "Conversations", value: metrics.total, dot: "bg-alloy-midnight/40", tone: "text-alloy-midnight", status: "active", statusTone: "text-alloy-midnight/45" },
+        { label: "Requires response", value: metrics.requiresResponse, dot: "bg-[#e0a32e]", tone: "text-[#9a6b16]", status: metrics.requiresResponse > 0 ? "needs reply" : "clear", statusTone: "text-[#9a6b16]" },
+        { label: "SLA at risk", value: metrics.slaAtRisk, dot: "bg-alloy-ember", tone: "text-alloy-ember", status: metrics.slaAtRisk > 0 ? "act now" : "on track", statusTone: metrics.slaAtRisk > 0 ? "text-alloy-ember" : "text-[#0f6b4a]" },
+        { label: "Unassigned", value: metrics.unassigned, dot: "bg-[#5b9aa0]", tone: "text-alloy-midnight", status: metrics.unassigned > 0 ? "assign" : "all owned", statusTone: "text-alloy-midnight/45" },
+        { label: "Unread", value: metrics.unread, dot: "bg-[#00A283]", tone: "text-[#0f6b4a]", status: "new", statusTone: "text-[#0f6b4a]" },
+    ];
+
     return (
         <div data-cc-shell="communications-command-center" className="flex min-h-0 flex-1 flex-col gap-2.5 bg-[#f2f3ef] p-2.5">
+            {/* KPI row — compact, color-coded, with priority language */}
             <div data-cc-metrics className="grid grid-cols-5 gap-2">
-                {([
-                    ["Conversations", metrics.total, "text-alloy-midnight"],
-                    ["Requires response", metrics.requiresResponse, "text-[#9a6b16]"],
-                    ["SLA at risk", metrics.slaAtRisk, "text-alloy-ember"],
-                    ["Unassigned", metrics.unassigned, "text-alloy-midnight"],
-                    ["Unread", metrics.unread, "text-[#0f6b4a]"],
-                ] as const).map(([label, value, tone]) => (
-                    <div key={String(label)} className="rounded-xl border border-alloy-stone/12 bg-white px-3 py-2 shadow-[0_1px_2px_rgba(20,30,25,0.04)]">
-                        <div className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">{label}</div>
-                        <div className={`mt-0.5 text-lg font-semibold tabular-nums ${tone}`}>{value}</div>
+                {kpis.map((k) => (
+                    <div key={k.label} className="flex items-center gap-2 rounded-lg border border-alloy-stone/12 bg-white px-2.5 py-1.5 shadow-[0_1px_2px_rgba(20,30,25,0.04)]">
+                        <span className={`h-6 w-1 shrink-0 rounded-full ${k.dot}`} />
+                        <span className={`text-lg font-semibold leading-none tabular-nums ${k.tone}`}>{k.value}</span>
+                        <span className="min-w-0 leading-tight">
+                            <span className="block truncate text-[10px] font-medium text-alloy-midnight/55">{k.label}</span>
+                            <span className={`block truncate text-[9px] font-medium ${k.statusTone}`}>{k.status}</span>
+                        </span>
                     </div>
                 ))}
             </div>
 
-            <div data-cc-filters className="flex items-center gap-2">
-                <select
-                    aria-label="Channel filter"
-                    value={filters.channel ?? ""}
-                    onChange={(e) => setFilters((f) => ({ ...f, channel: e.target.value || null }))}
-                    className="rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-xs text-alloy-midnight shadow-sm"
-                >
-                    <option value="">All channels</option>
-                    <option value="email">Email</option>
-                    <option value="sms">SMS</option>
-                </select>
-                <input
-                    aria-label="Search families"
-                    value={filters.search ?? ""}
-                    onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || null }))}
-                    placeholder="Search families…"
-                    className="flex-1 rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-1.5 text-xs shadow-sm"
-                />
-                {loading ? <span className="text-[11px] text-alloy-midnight/50">Loading…</span> : null}
-                {error ? <span className="text-[11px] text-alloy-ember">{error}</span> : null}
-            </div>
+            {error ? <div className="text-[11px] text-alloy-ember">{error}</div> : null}
 
             {/* UI-1 geometry: queue ~28% (>=320px floor) / workspace ~72%. BOS rail shell-owned at 345px. */}
             <div className="grid min-h-0 flex-1 grid-cols-[minmax(320px,28%)_minmax(0,1fr)] gap-2.5">
-                {/* QUEUE — Work Unit-style family cards */}
+                {/* QUEUE — header carries the (compact) filter + search row */}
                 <aside data-cc-column="queue" aria-label="Communication queue" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
-                    <div className="shrink-0 border-b border-alloy-stone/12 px-3.5 py-3">
-                        <div className="text-sm font-semibold text-alloy-midnight">Communication queue</div>
-                        <div className="mt-0.5 text-[11px] text-alloy-midnight/50">Families requiring communication work · {filtered.length}</div>
+                    <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2.5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-semibold text-alloy-midnight">Communication queue</span>
+                            <span className="text-[11px] tabular-nums text-alloy-midnight/45">{filtered.length} families</span>
+                        </div>
+                        <div data-cc-filters className="mt-2 flex items-center gap-1.5">
+                            <div className="relative shrink-0">
+                                <select
+                                    aria-label="Channel filter"
+                                    value={filters.channel ?? ""}
+                                    onChange={(e) => setFilters((f) => ({ ...f, channel: e.target.value || null }))}
+                                    className="appearance-none rounded-md border border-alloy-stone/20 bg-white py-1 pl-2 pr-6 text-[11px] text-alloy-midnight shadow-sm focus:outline-none focus:ring-1 focus:ring-[#00A283]/30"
+                                >
+                                    <option value="">All channels</option>
+                                    <option value="email">Email</option>
+                                    <option value="sms">SMS</option>
+                                </select>
+                                <ChevronDown className="pointer-events-none absolute right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 text-alloy-midnight/40" />
+                            </div>
+                            <input
+                                aria-label="Search families"
+                                value={filters.search ?? ""}
+                                onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || null }))}
+                                placeholder="Search…"
+                                className="min-w-0 flex-1 rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#00A283]/30"
+                            />
+                            {loading ? <span className="shrink-0 text-[10px] text-alloy-midnight/45">…</span> : null}
+                        </div>
                     </div>
                     <div className="min-h-0 flex-1 overflow-auto px-2.5 py-2.5">
                         {OPERATIONAL_QUEUES.map((q) => {
@@ -288,45 +302,33 @@ export default function CommandCenterShell() {
                     </div>
                 </aside>
 
-                {/* WORKSPACE — full-width header, then two-column body (timeline | composer) */}
+                {/* WORKSPACE — premium compact header, then two-column body */}
                 <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
                     {selected ? (
                         <>
-                            {/* OPERATIONAL HEADER (full-width) */}
-                            <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/20 bg-gradient-to-b from-white to-[#fafbfa] px-4 py-3">
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="flex min-w-0 items-center gap-3">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eafaf3] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/40">
-                                            <Users className="h-5 w-5" />
-                                        </div>
-                                        <div className="min-w-0">
+                            {/* PREMIUM OPERATIONAL HEADER (2 compact rows; assignment lives on the chip row) */}
+                            <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/25 bg-gradient-to-br from-[#eef7f3] via-white to-[#eef6f4] px-4 py-2.5">
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#dff2ea] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/60 shadow-sm">
+                                        <Users className="h-5 w-5" />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-2">
                                             <h3 className="truncate text-[17px] font-semibold leading-tight text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
-                                            <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/55">
-                                                {detail ? `${detail.program} · ${detail.location} · ${detail.stage}` : [selected.channel, `SLA ${selected.sla_state ?? "—"}`].filter(Boolean).join(" · ")}
-                                            </p>
+                                            {childNames.length > 0 ? (
+                                                <span className="flex shrink-0 items-center gap-1">
+                                                    {childNames.map((n) => (
+                                                        <span key={n} className="inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a]">{n}</span>
+                                                    ))}
+                                                </span>
+                                            ) : null}
                                         </div>
+                                        <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/60">
+                                            {detail ? `${detail.program} · ${detail.location} · ${detail.stage}` : [selected.channel, `SLA ${selected.sla_state ?? "—"}`].filter(Boolean).join(" · ")}
+                                        </p>
                                     </div>
-                                    <button
-                                        type="button"
-                                        data-cc-claim
-                                        disabled={assignBusy || selected.assignment_state === "assigned"}
-                                        onClick={() => claim(selected.id)}
-                                        className="shrink-0 rounded-lg bg-[#00A283] px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-[#009276] disabled:opacity-40"
-                                    >
-                                        {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
-                                    </button>
                                 </div>
-
-                                {childNames.length > 0 ? (
-                                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                                        <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">{childNames.length > 1 ? "Children" : "Child"}</span>
-                                        {childNames.map((n) => (
-                                            <span key={n} className="inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a]">{n}</span>
-                                        ))}
-                                    </div>
-                                ) : null}
-
-                                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
                                     <span data-cc-ws-section="health" className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold ${healthChip}`}>
                                         <Activity className="h-3 w-3" />
                                         <span className={`inline-block h-1.5 w-1.5 rounded-full ${healthDot}`} />
@@ -346,10 +348,24 @@ export default function CommandCenterShell() {
                                         <span className={`font-bold ${consentTone(detail ? detail.consent.sms : "unset")}`}>S{consentMark(detail ? detail.consent.sms : "unset")}</span>
                                         <span className={`font-bold ${consentTone(detail ? detail.consent.marketing : "unset")}`}>M{consentMark(detail ? detail.consent.marketing : "unset")}</span>
                                     </span>
+                                    {/* assignment control — compact, top-right of the header */}
+                                    <button
+                                        type="button"
+                                        data-cc-claim
+                                        disabled={assignBusy || selected.assignment_state === "assigned"}
+                                        onClick={() => claim(selected.id)}
+                                        className={`ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold shadow-sm transition ${
+                                            selected.assignment_state === "assigned"
+                                                ? "border border-[#7fc9b6] bg-[#eafaf3] text-[#0f6b4a]"
+                                                : "bg-[#00A283] text-white hover:bg-[#009276]"
+                                        }`}
+                                    >
+                                        <User className="h-3 w-3" />{selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* BODY — two columns: timeline (left) | composer (right) */}
+                            {/* BODY — timeline (left) | persistent composer (right) */}
                             <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(340px,40%)]">
                                 <div data-cc-ws-section="timeline" className="min-h-0 overflow-auto bg-[#f5f6f4] px-4 py-3">
                                     <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Communication timeline</div>
@@ -361,16 +377,25 @@ export default function CommandCenterShell() {
                                                 const e = eventStyle(m);
                                                 const Icon = e.Icon;
                                                 return (
-                                                    <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className={`rounded-xl border border-l-[3px] border-alloy-stone/12 ${e.rail} bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(20,30,25,0.05)]`}>
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="flex items-center gap-1.5">
-                                                                <Icon className={`h-3.5 w-3.5 ${e.dotText}`} />
-                                                                <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${e.badge}`}>{e.label}</span>
-                                                                <span className="text-[10px] font-medium text-alloy-midnight/45">{dirLabel(m.direction)}</span>
-                                                            </span>
-                                                            <span className="shrink-0 text-[10px] tabular-nums text-alloy-midnight/40">{relTime(m.created_at)}</span>
-                                                        </div>
-                                                        <div className="mt-1.5 text-[13px] leading-snug text-alloy-midnight/85">{m.body ?? ""}</div>
+                                                    <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""}>
+                                                        <button
+                                                            type="button"
+                                                            data-cc-thread-open={m.id ?? i}
+                                                            className={`group block w-full cursor-pointer rounded-xl border border-l-[3px] border-alloy-stone/12 ${e.rail} bg-white px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(20,30,25,0.05)] transition hover:border-[#7fc9b6] hover:shadow-[0_2px_8px_rgba(0,162,131,0.10)]`}
+                                                        >
+                                                            <div className="flex items-center justify-between gap-2">
+                                                                <span className="flex items-center gap-1.5">
+                                                                    <Icon className={`h-3.5 w-3.5 ${e.dotText}`} />
+                                                                    <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${e.badge}`}>{e.label}</span>
+                                                                    <span className="text-[10px] font-medium text-alloy-midnight/45">{dirLabel(m.direction)}</span>
+                                                                </span>
+                                                                <span className="flex shrink-0 items-center gap-2">
+                                                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#0f6b4a] opacity-0 transition group-hover:opacity-100">View thread<ChevronRight className="h-3 w-3" /></span>
+                                                                    <span className="text-[10px] tabular-nums text-alloy-midnight/40">{relTime(m.created_at)}</span>
+                                                                </span>
+                                                            </div>
+                                                            <div className="mt-1.5 text-[13px] leading-snug text-alloy-midnight/85">{m.body ?? ""}</div>
+                                                        </button>
                                                     </li>
                                                 );
                                             })}
@@ -426,11 +451,12 @@ export default function CommandCenterShell() {
                                         />
                                     </div>
 
-                                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
-                                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#00A283] px-3.5 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)]"><Send className="h-3.5 w-3.5" />Send now</span>
-                                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Send later</span>
-                                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-2.5 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</span>
-                                        <span className="ml-auto text-[10px] text-alloy-midnight/40">Review-first · no auto-send</span>
+                                    {/* action row — single line */}
+                                    <div className="mt-2.5 flex items-center gap-1.5">
+                                        <button type="button" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)]"><Send className="h-3.5 w-3.5" />Send now</button>
+                                        <button type="button" aria-label="Send later" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Later</button>
+                                        <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-2.5 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</button>
+                                        <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />no auto-send</span>
                                     </div>
                                 </div>
                             </div>
