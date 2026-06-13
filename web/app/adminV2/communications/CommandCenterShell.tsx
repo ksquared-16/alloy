@@ -127,7 +127,10 @@ export default function CommandCenterShell() {
                 {error ? <span className="text-[11px] text-alloy-ember">{error}</span> : null}
             </div>
 
-            <div className="grid min-h-0 flex-1 grid-cols-[280px_1fr] gap-2">
+            {/* UI-1: two-column drawer split — queue ~28% (>=320px readability floor) / workspace ~72%.
+                Width and height inherit from the shell geometry (drawer-computed-width x max-h 920) via flex-1/min-h-0.
+                BOS rail stays shell-owned at 345px. No schema/route/provider/BOS changes. */}
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(320px,28%)_minmax(0,1fr)] gap-2">
                 <aside data-cc-column="queue" aria-label="Operational queues" className="overflow-auto rounded-lg border border-alloy-stone/15 bg-white p-1.5">
                     {OPERATIONAL_QUEUES.map((q) => {
                         const items = grouped[q.key] ?? [];
