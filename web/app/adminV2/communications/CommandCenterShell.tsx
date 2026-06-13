@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    Users, Activity, ShieldCheck, Clock, User, Mail, MessageSquare, Phone, StickyNote, Settings2,
+    Users, Activity, ShieldCheck, Clock, User, UserPlus, ChevronDown,
+    Mail, MessageSquare, Phone, StickyNote, Settings2,
     Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send,
 } from "lucide-react";
 import {
@@ -26,8 +27,9 @@ import {
 /**
  * Communications V2 — Command Center body. Renders INSIDE the existing modal shell
  * (AdminV2WorkspaceBosModalShell); the BOS rail is the shell's and is untouched.
- * UI-4C: premium visual polish only (Alloy color energy, dimension, icons) — no data/
- * route/geometry/BOS change. Fixture mode (NEXT_PUBLIC_COMMS_V2_FIXTURES) renders no backend.
+ * UI-4D: workspace internal composition — full-width operational header, then a two-column
+ * body (timeline | persistent composer). Presentation only; fixture mode kept; no data/route/
+ * outer-geometry/BOS change. Multi-child + multi-contact are visual affordances only (not wired).
  */
 type TimelineMessage = {
     id?: string;
@@ -40,7 +42,6 @@ type TimelineMessage = {
     kind?: string | null;
 };
 
-// SLA chip (priority signal)
 const slaChipClass = (s: string | null | undefined): string =>
     s === "overdue" ? "bg-alloy-ember text-white shadow-sm"
     : s === "due" ? "border border-[#e6c98a] bg-[#fbf6ea] text-[#9a6b16]"
@@ -48,7 +49,6 @@ const slaChipClass = (s: string | null | undefined): string =>
 const slaChipLabel = (s: string | null | undefined): string =>
     s === "overdue" ? "SLA overdue" : s === "due" ? "Due soon" : "On track";
 
-// Attention-state accent (grouping color): left rail + faint card tint + group dot
 const attnAccent = (a: string | null | undefined): { rail: string; tint: string; dot: string } => {
     switch (a) {
         case "awaiting_parent_reply": return { rail: "border-l-[#e0a32e]", tint: "bg-[#fdf9f0]", dot: "bg-[#e0a32e]" };
@@ -164,6 +164,10 @@ export default function CommandCenterShell() {
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
     const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
     const detail: FixtureFamilyDetail | undefined = selected ? FIXTURE_FAMILY_DETAILS[selected.id] : undefined;
+    const childNames = useMemo(
+        () => (detail ? detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean) : []),
+        [detail]
+    );
 
     const health = useMemo(
         () =>
@@ -284,11 +288,11 @@ export default function CommandCenterShell() {
                     </div>
                 </aside>
 
-                {/* WORKSPACE — Family Communication Workspace */}
+                {/* WORKSPACE — full-width header, then two-column body (timeline | composer) */}
                 <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
                     {selected ? (
                         <>
-                            {/* OPERATIONAL HEADER */}
+                            {/* OPERATIONAL HEADER (full-width) */}
                             <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/20 bg-gradient-to-b from-white to-[#fafbfa] px-4 py-3">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="flex min-w-0 items-center gap-3">
@@ -298,9 +302,7 @@ export default function CommandCenterShell() {
                                         <div className="min-w-0">
                                             <h3 className="truncate text-[17px] font-semibold leading-tight text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
                                             <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/55">
-                                                {detail
-                                                    ? `${detail.children} · ${detail.program} · ${detail.location} · ${detail.stage}`
-                                                    : [selected.channel, `SLA ${selected.sla_state ?? "—"}`].filter(Boolean).join(" · ")}
+                                                {detail ? `${detail.program} · ${detail.location} · ${detail.stage}` : [selected.channel, `SLA ${selected.sla_state ?? "—"}`].filter(Boolean).join(" · ")}
                                             </p>
                                         </div>
                                     </div>
@@ -314,7 +316,17 @@ export default function CommandCenterShell() {
                                         {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
                                     </button>
                                 </div>
-                                <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px]">
+
+                                {childNames.length > 0 ? (
+                                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                                        <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">{childNames.length > 1 ? "Children" : "Child"}</span>
+                                        {childNames.map((n) => (
+                                            <span key={n} className="inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a]">{n}</span>
+                                        ))}
+                                    </div>
+                                ) : null}
+
+                                <div className="mt-2.5 flex flex-wrap items-center gap-1.5 text-[10px]">
                                     <span data-cc-ws-section="health" className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold ${healthChip}`}>
                                         <Activity className="h-3 w-3" />
                                         <span className={`inline-block h-1.5 w-1.5 rounded-full ${healthDot}`} />
@@ -324,91 +336,102 @@ export default function CommandCenterShell() {
                                     <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${slaChipClass(selected.sla_state)}`}>
                                         <Clock className="h-3 w-3" />{slaChipLabel(selected.sla_state)}
                                     </span>
-                                    <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1 text-alloy-midnight/65">
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1 font-medium text-alloy-midnight/70">
                                         <User className="h-3 w-3 text-alloy-midnight/45" />{detail ? detail.owner : (selected.assignment_state ?? "—")}
                                     </span>
                                     <span data-cc-ws-section="consent" className="inline-flex items-center gap-1.5 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1">
                                         <ShieldCheck className="h-3 w-3 text-alloy-midnight/45" />
-                                        <span className="text-alloy-midnight/40">Consent</span>
-                                        <span className={`font-semibold ${consentTone(detail ? detail.consent.email : "unset")}`}>E{consentMark(detail ? detail.consent.email : "unset")}</span>
-                                        <span className={`font-semibold ${consentTone(detail ? detail.consent.sms : "unset")}`}>S{consentMark(detail ? detail.consent.sms : "unset")}</span>
-                                        <span className={`font-semibold ${consentTone(detail ? detail.consent.marketing : "unset")}`}>M{consentMark(detail ? detail.consent.marketing : "unset")}</span>
+                                        <span className="font-medium text-alloy-midnight/45">Consent</span>
+                                        <span className={`font-bold ${consentTone(detail ? detail.consent.email : "unset")}`}>E{consentMark(detail ? detail.consent.email : "unset")}</span>
+                                        <span className={`font-bold ${consentTone(detail ? detail.consent.sms : "unset")}`}>S{consentMark(detail ? detail.consent.sms : "unset")}</span>
+                                        <span className={`font-bold ${consentTone(detail ? detail.consent.marketing : "unset")}`}>M{consentMark(detail ? detail.consent.marketing : "unset")}</span>
                                     </span>
                                 </div>
                             </div>
 
-                            {/* TIMELINE — Alloy activity history */}
-                            <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto bg-[#f5f6f4] px-4 py-3">
-                                <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Communication timeline</div>
-                                {messages.length === 0 ? (
-                                    <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
-                                ) : (
-                                    <ol data-cc-timeline className="space-y-2">
-                                        {messages.map((m, i) => {
-                                            const e = eventStyle(m);
-                                            const Icon = e.Icon;
-                                            return (
-                                                <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className={`rounded-xl border border-l-[3px] border-alloy-stone/12 ${e.rail} bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(20,30,25,0.05)]`}>
-                                                    <div className="flex items-center justify-between gap-2">
-                                                        <span className="flex items-center gap-1.5">
-                                                            <Icon className={`h-3.5 w-3.5 ${e.dotText}`} />
-                                                            <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${e.badge}`}>{e.label}</span>
-                                                            <span className="text-[10px] font-medium text-alloy-midnight/45">{dirLabel(m.direction)}</span>
-                                                        </span>
-                                                        <span className="shrink-0 text-[10px] tabular-nums text-alloy-midnight/40">{relTime(m.created_at)}</span>
-                                                    </div>
-                                                    <div className="mt-1.5 text-[13px] leading-snug text-alloy-midnight/85">{m.body ?? ""}</div>
-                                                </li>
-                                            );
-                                        })}
-                                    </ol>
-                                )}
-                            </div>
+                            {/* BODY — two columns: timeline (left) | composer (right) */}
+                            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(340px,40%)]">
+                                <div data-cc-ws-section="timeline" className="min-h-0 overflow-auto bg-[#f5f6f4] px-4 py-3">
+                                    <div className="mb-2 text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Communication timeline</div>
+                                    {messages.length === 0 ? (
+                                        <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
+                                    ) : (
+                                        <ol data-cc-timeline className="space-y-2">
+                                            {messages.map((m, i) => {
+                                                const e = eventStyle(m);
+                                                const Icon = e.Icon;
+                                                return (
+                                                    <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className={`rounded-xl border border-l-[3px] border-alloy-stone/12 ${e.rail} bg-white px-3 py-2.5 shadow-[0_1px_2px_rgba(20,30,25,0.05)]`}>
+                                                        <div className="flex items-center justify-between gap-2">
+                                                            <span className="flex items-center gap-1.5">
+                                                                <Icon className={`h-3.5 w-3.5 ${e.dotText}`} />
+                                                                <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${e.badge}`}>{e.label}</span>
+                                                                <span className="text-[10px] font-medium text-alloy-midnight/45">{dirLabel(m.direction)}</span>
+                                                            </span>
+                                                            <span className="shrink-0 text-[10px] tabular-nums text-alloy-midnight/40">{relTime(m.created_at)}</span>
+                                                        </div>
+                                                        <div className="mt-1.5 text-[13px] leading-snug text-alloy-midnight/85">{m.body ?? ""}</div>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ol>
+                                    )}
+                                </div>
 
-                            {/* COMPOSER — premium email composer */}
-                            <div data-cc-ws-section="composer" className="flex min-h-[288px] shrink-0 flex-col border-t border-alloy-stone/20 bg-gradient-to-b from-[#eef1ee] to-[#e9ece8] px-4 py-3">
-                                <div className="flex items-center justify-between gap-2">
-                                    <div className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-xs shadow-sm">
-                                        <span className="bg-[#00A283] px-3 py-1.5 font-semibold text-white">Email</span>
-                                        <span className="border-l border-alloy-stone/15 px-3 py-1.5 text-alloy-midnight/55">SMS</span>
-                                        <span className="border-l border-alloy-stone/15 px-3 py-1.5 text-alloy-midnight/55">Note</span>
+                                <div data-cc-ws-section="composer" className="flex min-h-0 flex-col border-l border-alloy-stone/15 bg-gradient-to-b from-[#fbfcfb] to-[#f3f5f2] px-3.5 py-3">
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Compose</span>
+                                        <div className="inline-flex overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
+                                            <span className="bg-[#00A283] px-2.5 py-1 font-semibold text-white">Email</span>
+                                            <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">SMS</span>
+                                            <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">Note</span>
+                                        </div>
                                     </div>
-                                    <span className="flex items-center gap-2 text-[10px] text-alloy-midnight/50">
-                                        <span>To <span className="font-medium text-alloy-midnight/75">{detail ? detail.recipient : (selected.family_label ?? "")}</span></span>
-                                        {detail ? <span className={`font-semibold ${consentTone(detail.consent.email)}`}>email {consentMark(detail.consent.email)}</span> : null}
-                                    </span>
-                                </div>
-                                <input
-                                    aria-label="Subject"
-                                    placeholder="Subject"
-                                    className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
-                                />
-                                <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm">
-                                    <div className="flex items-center gap-0.5 border-b border-alloy-stone/12 bg-[#fbfcfb] px-1.5 py-1">
-                                        <button type="button" aria-label="Bold" className={toolbarBtn}><Bold className="h-3.5 w-3.5" /></button>
-                                        <button type="button" aria-label="Italic" className={toolbarBtn}><Italic className="h-3.5 w-3.5" /></button>
-                                        <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
-                                        <button type="button" aria-label="Bulleted list" className={toolbarBtn}><List className="h-3.5 w-3.5" /></button>
-                                        <button type="button" aria-label="Insert link" className={toolbarBtn}><Link2 className="h-3.5 w-3.5" /></button>
-                                        <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
-                                        <span className="ml-auto flex items-center gap-0.5">
-                                            <button type="button" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-alloy-midnight/55 hover:bg-alloy-stone/12"><Paperclip className="h-3.5 w-3.5" />Attach</button>
-                                            <button type="button" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-alloy-midnight/55 hover:bg-alloy-stone/12"><FileText className="h-3.5 w-3.5" />Templates</button>
+
+                                    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 shadow-sm">
+                                        <span className="text-[10px] font-medium text-alloy-midnight/40">To</span>
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-[#eafaf3] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50">
+                                            {detail ? detail.recipient : (selected.family_label ?? "")}
+                                            {detail ? <span className={`font-bold ${consentTone(detail.consent.email)}`}>{consentMark(detail.consent.email)}</span> : null}
                                         </span>
+                                        <button type="button" className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/50 hover:border-[#7fc9b6] hover:text-[#0f6b4a]">
+                                            <UserPlus className="h-3 w-3" />Add contact
+                                        </button>
+                                        <ChevronDown className="ml-auto h-3.5 w-3.5 text-alloy-midnight/35" />
                                     </div>
-                                    <textarea
-                                        aria-label="Message body"
-                                        placeholder={`Write a message to ${selected.family_label ?? "the family"}…`}
-                                        className="w-full min-h-0 flex-1 resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none"
+
+                                    <input
+                                        aria-label="Subject"
+                                        placeholder="Subject"
+                                        className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
                                     />
-                                </div>
-                                <div className="mt-2.5 flex items-center gap-2">
-                                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#00A283] px-4 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)]"><Send className="h-3.5 w-3.5" />Send now</span>
-                                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Send later</span>
-                                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-3 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15">
-                                        <Sparkles className="h-3.5 w-3.5" />BOS Enhance
-                                    </span>
-                                    <span className="ml-auto text-[10px] text-alloy-midnight/40">Review-first · no auto-send</span>
+
+                                    <div className="mt-2 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm">
+                                        <div className="flex items-center gap-0.5 border-b border-alloy-stone/12 bg-[#fbfcfb] px-1.5 py-1">
+                                            <button type="button" aria-label="Bold" className={toolbarBtn}><Bold className="h-3.5 w-3.5" /></button>
+                                            <button type="button" aria-label="Italic" className={toolbarBtn}><Italic className="h-3.5 w-3.5" /></button>
+                                            <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
+                                            <button type="button" aria-label="Bulleted list" className={toolbarBtn}><List className="h-3.5 w-3.5" /></button>
+                                            <button type="button" aria-label="Insert link" className={toolbarBtn}><Link2 className="h-3.5 w-3.5" /></button>
+                                            <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
+                                            <span className="ml-auto flex items-center gap-0.5">
+                                                <button type="button" aria-label="Attach" className={toolbarBtn}><Paperclip className="h-3.5 w-3.5" /></button>
+                                                <button type="button" aria-label="Templates" className={toolbarBtn}><FileText className="h-3.5 w-3.5" /></button>
+                                            </span>
+                                        </div>
+                                        <textarea
+                                            aria-label="Message body"
+                                            placeholder={`Write a message to ${selected.family_label ?? "the family"}…`}
+                                            className="w-full min-h-0 flex-1 resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none"
+                                        />
+                                    </div>
+
+                                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#00A283] px-3.5 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)]"><Send className="h-3.5 w-3.5" />Send now</span>
+                                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Send later</span>
+                                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-2.5 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</span>
+                                        <span className="ml-auto text-[10px] text-alloy-midnight/40">Review-first · no auto-send</span>
+                                    </div>
                                 </div>
                             </div>
                         </>
