@@ -39,7 +39,6 @@ import {
 } from "@/lib/admin/actions/bosWorkspaceShell";
 import {
     DRAWER_BACKDROP_LEFT_CSS_VAR,
-    DRAWER_BACKDROP_RIGHT_CSS_VAR,
     DRAWER_COMPUTED_LEFT_CSS_VAR,
     DRAWER_COMPUTED_WIDTH_CSS_VAR,
     isDrawerGeometryProbeActive,
@@ -286,7 +285,7 @@ export function ActionWorkspaceBosShell({
         const backdropStyle: CSSProperties = {
             zIndex: ADMINV2_DRAWER_BACKDROP_Z,
             left: `var(${DRAWER_BACKDROP_LEFT_CSS_VAR})`,
-            right: `calc(100vw - var(${DRAWER_BACKDROP_RIGHT_CSS_VAR}))`,
+            right: 0,
             ...BOS_WORKSPACE_BAND_BACKDROP_STYLE,
         };
 

@@ -38,6 +38,19 @@ Drawers share one operating shell. Layout configuration owns **content inside** 
 
 **Performance boundary:** Future performance work optimizes **around** this model (fetch, cache, prefetch, render cost) — it does **not** redesign shell ownership, weaken reveal gates, or move overview content back into hardcoded platform sections.
 
+### Drawer shell overlay wash (June 2026)
+
+When a record drawer, workspace BOS modal (Inbox, Tasks), or Action Workspace band is open in AdminV2 workspace shell:
+
+- A **full-bleed pine-forward atmosphere** covers the workspace band from the sidebar through the **entire right edge** (including the BOS gutter and rail column). This is **BOS mode illumination**, not a modal dim layer.
+- **~80% Bend Pine / ~20% Midnight Forge** on a pine-white base (`#f4fbf9`) — self-contained illumination, not transparent-over-page.
+- Drawer and BOS panels stay **bright opaque white** — focused and lit, not darkened.
+- **Does not** change drawer geometry, BOS rail width, or panel layout. **Does not** replace Communications-specific composer modals (`ComposerBosEnhanceModal` centered overlay).
+
+**Platform doctrine:** `docs/system/workspace-atmosphere-doctrine.md` — locked **premium** pine gradient (~4.5% band / ~6.5% radial peak).
+
+CSS tokens: `--adminv2-drawer-shell-overlay-background`, `--adminv2-bos-rail-shell-wash` in `web/app/adminV2/adminV2.css`.
+
 ---
 
 ## Audit snapshot (current architecture — June 2026)

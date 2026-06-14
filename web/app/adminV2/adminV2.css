@@ -25,6 +25,47 @@ html[data-adminv2-workspace-shell="v2"] {
   /* Container hierarchy — border strength (Level 1 drawer > Level 2 rail > Level 3 widgets) */
   --adminv2-container-border-drawer: rgba(39, 63, 82, 0.28);
   --adminv2-container-border-rail: rgba(39, 63, 82, 0.2);
+  /*
+   * Workspace atmosphere (BOS mode) — locked premium pine gradient.
+   * ~80% Bend Pine / ~20% Midnight Forge on a pine-white base (self-contained, not transparent-over-page).
+   * Doctrine: docs/system/workspace-atmosphere-doctrine.md
+   */
+  --adminv2-drawer-shell-overlay-base: #f4fbf9;
+  --adminv2-drawer-shell-overlay-opacity: 0.7;
+  --adminv2-drawer-shell-overlay-background:
+    radial-gradient(
+      ellipse 78% 66% at 56% 42%,
+      rgba(0, 162, 131, 0.14) 0%,
+      rgba(0, 162, 131, 0.09) 38%,
+      rgba(0, 162, 131, 0.045) 64%,
+      rgba(0, 162, 131, 0.02) 100%
+    ),
+    radial-gradient(
+      ellipse 78% 66% at 56% 42%,
+      rgba(39, 63, 82, 0.032) 0%,
+      rgba(39, 63, 82, 0.02) 38%,
+      rgba(39, 63, 82, 0.01) 64%,
+      rgba(39, 63, 82, 0.006) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(0, 162, 131, 0.07) 0%,
+      rgba(0, 162, 131, 0.04) 100%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(39, 63, 82, 0.014) 0%,
+      rgba(39, 63, 82, 0.008) 100%
+    ),
+    var(--adminv2-drawer-shell-overlay-base);
+  --adminv2-bos-rail-shell-wash:
+    linear-gradient(
+      180deg,
+      rgba(0, 162, 131, 0.1) 0%,
+      rgba(0, 162, 131, 0.045) 12%,
+      rgba(255, 255, 255, 1) 20%,
+      #ffffff 100%
+    );
   --adminv2-workspace-rail-height: calc(
     100vh - var(--adminv2-drawer-inset-top) - var(--ws-rail-sticky-top, 10px) -
       var(--adminv2-workspace-scroll-pad-y, 24px)
@@ -145,14 +186,17 @@ html[data-adminv2-workspace-shell="v2"] [data-adminv2-command-surface-layer="rai
 .adminv2-bos-rail-overlay {
   isolation: isolate;
   box-sizing: border-box;
-  background-color: #ffffff;
+  background: var(--adminv2-bos-rail-shell-wash, #ffffff);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
   opacity: 1;
   border-radius: 12px;
   border: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
   overflow: hidden;
-  box-shadow: 0 8px 32px rgba(39, 63, 82, 0.1);
+  box-shadow:
+    0 8px 28px rgba(0, 162, 131, 0.08),
+    0 2px 6px rgba(0, 162, 131, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
 }
 
 .adminv2-bos-rail-overlay .adminv2-ws-command-rail-bos-dock {
@@ -436,30 +480,44 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail.ad
   bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
 }
 
-/* BOS-rail record drawer — backdrop band matches modal framing (not full viewport height) */
+/* BOS-rail drawer — full-bleed atmosphere band (sidebar → viewport right, below shell header) */
 html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-backdrop-band {
-  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
-  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
+  top: var(--adminv2-drawer-inset-top);
+  bottom: 0;
+  right: 0 !important;
+  left: var(--adminv2-drawer-backdrop-left, 0);
+  background: var(--adminv2-drawer-shell-overlay-background);
+  opacity: var(--adminv2-drawer-shell-overlay-opacity);
+  z-index: 60;
 }
 
 /*
- * Record drawer open — light white-tint page dim behind drawer only.
- * Ends at --adminv2-drawer-backdrop-right (not BOS gutter); no blur wash in the seam.
+ * Record drawer open — reinforce atmosphere on dim hit targets (same tokens as band default).
  */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-backdrop-band.adminv2-drawer-modal-dim,
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-backdrop-band.adminv2-drawer-sidebar-dim,
 html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-dim,
 html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-sidebar-dim {
-  background: rgba(248, 250, 252, 0.56);
+  background: var(--adminv2-drawer-shell-overlay-background);
   backdrop-filter: none;
 }
 
-html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-workspace-loading-overlay {
-  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
-  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
-  background: rgba(248, 250, 252, 0.52);
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-loading-overlay {
+  background: var(--adminv2-drawer-shell-overlay-background);
+  opacity: var(--adminv2-drawer-shell-overlay-opacity);
+  top: var(--adminv2-drawer-inset-top);
+  bottom: 0;
+  right: 0 !important;
 }
 
-html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-workspace-ambient-field {
-  opacity: 0.32;
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-workspace-loading-overlay {
+  top: var(--adminv2-drawer-inset-top);
+  bottom: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-persistent-command-rail="true"] {
+  background: transparent;
+  border-left-color: rgba(0, 162, 131, 0.12);
 }
 
 /* Modal entity drawers — positioned via workspace-safe rectangle CSS vars (no viewport fallback) */

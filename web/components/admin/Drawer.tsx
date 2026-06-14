@@ -7,7 +7,6 @@ import { BOS_ACTION_WORKSPACE_OPEN_ATTR } from "@/lib/bos/bosRailPresentationFla
 import {
     DRAWER_AVAILABLE_RIGHT_CSS_VAR,
     DRAWER_BACKDROP_LEFT_CSS_VAR,
-    DRAWER_BACKDROP_RIGHT_CSS_VAR,
     DRAWER_COMPUTED_LEFT_CSS_VAR,
     DRAWER_COMPUTED_WIDTH_CSS_VAR,
     isDrawerGeometryProbeActive,
@@ -226,7 +225,7 @@ export default function Drawer({
     const workspaceDrawerBackdropStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
         {
             left: `var(${DRAWER_BACKDROP_LEFT_CSS_VAR})`,
-            right: `calc(100vw - var(${DRAWER_BACKDROP_RIGHT_CSS_VAR}))`,
+            right: 0,
         }
     :   undefined;
     const cleaningRecordModalTone = isModal && recordModalTone === "cleaning-v2";

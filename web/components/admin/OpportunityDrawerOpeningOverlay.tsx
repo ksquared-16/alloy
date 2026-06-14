@@ -15,7 +15,7 @@ export default function OpportunityDrawerOpeningOverlay(props: {
             className="adminv2-drawer-workspace-loading-overlay adminv2-drawer-shell-inset fixed z-[55] flex items-center justify-center px-4"
             style={{
                 left: "var(--adminv2-drawer-backdrop-left, 0px)",
-                right: "calc(100vw - var(--adminv2-drawer-backdrop-right, var(--adminv2-drawer-available-right, 100vw)))",
+                right: 0,
             }}
             role="status"
             aria-live="polite"

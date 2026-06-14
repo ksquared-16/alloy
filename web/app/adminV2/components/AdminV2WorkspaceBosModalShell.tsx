@@ -98,7 +98,7 @@ export default function AdminV2WorkspaceBosModalShell({
     const backdropStyle: CSSProperties = {
         zIndex: ADMINV2_DRAWER_BACKDROP_Z,
         left: `var(${DRAWER_BACKDROP_LEFT_CSS_VAR})`,
-        right: `calc(100vw - var(${DRAWER_BACKDROP_RIGHT_CSS_VAR}))`,
+        right: 0,
     };
 
     const panelStyle: CSSProperties = {
