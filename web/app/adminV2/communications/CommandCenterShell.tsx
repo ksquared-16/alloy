@@ -46,6 +46,7 @@ type TimelineMessage = {
     replied_at?: string | null;
     kind?: string | null;
     thread_id?: string | null;
+    status?: string | null;
 };
 
 const slaChipClass = (s: string | null | undefined): string =>
@@ -95,6 +96,19 @@ const toolbarBtn = "rounded-md p-1.5 text-alloy-midnight/55 transition hover:bg-
 
 const LIVE_WORKSPACE = isCommsV2FlagEnabled("comms_v2_live_workspace");
 
+// UI-5H — subtle delivery/receipt status label + tone for outbound timeline items.
+function statusDisplay(status: string | null | undefined): { label: string; cls: string } | null {
+    switch (status) {
+        case "failed": return { label: "Failed", cls: "text-red-600" };
+        case "replied": return { label: "Replied", cls: "text-[#0f6b4a]" };
+        case "opened": return { label: "Opened", cls: "text-[#0f6b4a]" };
+        case "delivered": return { label: "Delivered", cls: "text-alloy-midnight/45" };
+        case "sent": return { label: "Sent", cls: "text-alloy-midnight/45" };
+        case "queued": return { label: "Queued", cls: "text-alloy-midnight/40" };
+        default: return null; // received / null -> no badge
+    }
+}
+
 function mapLiveEvents(events: FamilyCommunicationWorkspaceVM["timelineEvents"]): TimelineMessage[] {
     return events.map((e) => ({
         id: e.id,
@@ -106,6 +120,7 @@ function mapLiveEvents(events: FamilyCommunicationWorkspaceVM["timelineEvents"])
         opened_at: e.openedAt,
         replied_at: e.repliedAt,
         thread_id: e.threadId,
+        status: e.status,
     }));
 }
 
@@ -499,6 +514,7 @@ export default function CommandCenterShell() {
                                                                 <Icon className="h-3 w-3" />
                                                                 <span className="font-semibold text-alloy-midnight/60">{sender}</span>
                                                                 <span>· {relTime(m.created_at)}</span>
+                                                                {out && statusDisplay(m.status) ? <span className={statusDisplay(m.status)!.cls}>· {statusDisplay(m.status)!.label}</span> : null}
                                                             </div>
                                                             <div className={`rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm ${out ? "rounded-tr-sm bg-[#e7f5ef] text-alloy-midnight" : "rounded-tl-sm border border-alloy-stone/15 bg-white text-alloy-midnight"}`}>
                                                                 {m.body ?? ""}

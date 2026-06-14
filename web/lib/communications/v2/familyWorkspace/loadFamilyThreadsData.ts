@@ -1,7 +1,7 @@
 // UI-5B — I/O: load all communication threads for a family (customer + family persons + opportunities)
 // and their recent messages. Read-only.
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import type { RawThreadRow, RawMessageRow } from "./aggregateFamilyTimeline";
+import { rollupRecipientReceipts, type RawThreadRow, type RawMessageRow, type RawRecipientReceiptRow } from "./aggregateFamilyTimeline";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 const THREAD_CAP = 50;
@@ -40,12 +40,33 @@ export async function loadFamilyThreadsData(
     const messagesRes = threadIds.length
         ? await supabase
               .from("communication_messages")
-              .select("id, thread_id, direction, channel, body, created_at, delivered_at, metadata")
+              .select("id, thread_id, direction, channel, body, created_at, delivered_at, sent_at, status, metadata")
               .eq("org_id", orgId)
               .in("thread_id", threadIds)
               .order("created_at", { ascending: false })
               .limit(MESSAGE_CAP)
         : { data: [] as RawMessageRow[] };
 
-    return { threads, messages: (messagesRes.data ?? []) as RawMessageRow[] };
+    const messages = (messagesRes.data ?? []) as RawMessageRow[];
+
+    // UI-5H: roll per-recipient receipts (delivered/opened/replied) up onto each message.
+    const messageIds = messages.map((m) => m.id).filter(Boolean);
+    if (messageIds.length > 0) {
+        const receiptsRes = await supabase
+            .from("communication_message_recipients")
+            .select("message_id, status, delivered_at, opened_at, replied_at")
+            .eq("org_id", orgId)
+            .in("message_id", messageIds)
+            .limit(MESSAGE_CAP * 2);
+        const rollup = rollupRecipientReceipts((receiptsRes.data ?? []) as RawRecipientReceiptRow[]);
+        for (const m of messages) {
+            const r = rollup[m.id];
+            if (!r) continue;
+            m.delivered_at = r.deliveredAt ?? m.delivered_at ?? null;
+            m.opened_at = r.openedAt ?? m.opened_at ?? null;
+            m.replied_at = r.repliedAt ?? m.replied_at ?? null;
+        }
+    }
+
+    return { threads, messages };
 }

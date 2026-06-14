@@ -25,7 +25,51 @@ export type RawMessageRow = {
     replied_at?: string | null;
     metadata?: Record<string, unknown> | null;
     unread?: boolean | null;
+    status?: string | null;
+    sent_at?: string | null;
 };
+
+// UI-5H — per-message receipt rollup from communication_message_recipients (a message may have
+// several recipients; take the most-progressed timestamp across them). Pure.
+export type RawRecipientReceiptRow = {
+    message_id?: string | null;
+    status?: string | null;
+    delivered_at?: string | null;
+    opened_at?: string | null;
+    replied_at?: string | null;
+};
+const maxIso = (a: string | null | undefined, b: string | null | undefined): string | null => {
+    const av = a ?? null, bv = b ?? null;
+    if (!av) return bv;
+    if (!bv) return av;
+    return av >= bv ? av : bv;
+};
+export function rollupRecipientReceipts(rows: RawRecipientReceiptRow[]): Record<string, { deliveredAt: string | null; openedAt: string | null; repliedAt: string | null }> {
+    const out: Record<string, { deliveredAt: string | null; openedAt: string | null; repliedAt: string | null }> = {};
+    for (const r of rows) {
+        const mid = r.message_id ?? "";
+        if (!mid) continue;
+        const cur = out[mid] ?? { deliveredAt: null, openedAt: null, repliedAt: null };
+        out[mid] = {
+            deliveredAt: maxIso(cur.deliveredAt, r.delivered_at),
+            openedAt: maxIso(cur.openedAt, r.opened_at),
+            repliedAt: maxIso(cur.repliedAt, r.replied_at),
+        };
+    }
+    return out;
+}
+
+// UI-5H — derive a single display status for a timeline message (most-progressed wins). Pure.
+export function deriveTimelineStatus(m: RawMessageRow, direction: string | null | undefined): string | null {
+    if (direction === "inbound") return "received";
+    if (direction !== "outbound") return null; // notes/system have no delivery status
+    if ((m.status ?? "") === "failed") return "failed";
+    if (m.replied_at) return "replied";
+    if (m.opened_at) return "opened";
+    if (m.delivered_at) return "delivered";
+    if ((m.status ?? "") === "sent" || m.sent_at) return "sent";
+    return "queued";
+}
 
 export type AggregateContext = {
     childPersonIdToMemberId: Record<string, string>; // person_id -> customer_members.id
@@ -60,6 +104,8 @@ export function buildTimelineEvents(messages: RawMessageRow[]): TimelineEventVM[
             deliveredAt: m.delivered_at ?? null,
             openedAt: m.opened_at ?? null,
             repliedAt: m.replied_at ?? null,
+            sentAt: m.sent_at ?? null,
+            status: deriveTimelineStatus(m, m.direction),
         }))
         .sort((a, b) => String(a.createdAt ?? "").localeCompare(String(b.createdAt ?? "")));
 }

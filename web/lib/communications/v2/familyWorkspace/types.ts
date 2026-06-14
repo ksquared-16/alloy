@@ -92,6 +92,8 @@ export type TimelineEventVM = {
     deliveredAt: string | null;
     openedAt: string | null;
     repliedAt: string | null;
+    sentAt: string | null;
+    status: string | null; // derived: received | failed | replied | opened | delivered | sent | queued | null
 };
 
 export type HealthSummary = {
