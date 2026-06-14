@@ -18,6 +18,7 @@ import { computeCommunicationHealth } from "@/lib/communications/v2/communicatio
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import type { FamilyCommunicationWorkspaceVM, RecipientGroup, RecipientVM, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
 import { isRecipientSelected, toggleRecipientSelection, isRecipientEligible, selectionSummary } from "@/lib/communications/v2/familyWorkspace/composerSelection";
+import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import {
     COMMS_FIXTURES_ENABLED,
     FIXTURE_CONVERSATIONS,
@@ -128,6 +129,9 @@ export default function CommandCenterShell() {
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
     const [subjectDraft, setSubjectDraft] = useState("");
     const [bodyDraft, setBodyDraft] = useState("");
+    const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
+    const [sending, setSending] = useState(false);
+    const [sendError, setSendError] = useState<string | null>(null);
 
     const loadLive = useCallback(async (customerId: string, threadId: string | null, resetSelection = false) => {
         try {
@@ -222,6 +226,45 @@ export default function CommandCenterShell() {
             if (cust) await loadLive(cust, threadId);
         },
         [loadLive, selectedId]
+    );
+
+    const runFamilySend = useCallback(
+        async (confirm: boolean) => {
+            if (!LIVE_WORKSPACE) return;
+            const cust = selectedId ? FIXTURE_FAMILY_DETAILS[selectedId]?.customerId : undefined;
+            if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
+            setSending(true);
+            setSendError(null);
+            try {
+                const res = await fetch("/api/admin/communications/family-send", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        customer_id: cust,
+                        recipient_person_ids: selectedRecipientIds,
+                        channel: "email",
+                        subject: subjectDraft,
+                        body: bodyDraft,
+                        reply_to_thread_id: selectedThreadId,
+                        confirm,
+                    }),
+                });
+                const data = (await res.json()) as (FamilySendResult & { error?: string });
+                if (!res.ok) {
+                    setSendError(data.error ?? "Send failed");
+                    return;
+                }
+                setSendResult(data);
+                if (confirm) {
+                    await loadLive(cust, selectedThreadId, false); // refresh timeline after send
+                }
+            } catch {
+                setSendError("Send failed");
+            } finally {
+                setSending(false);
+            }
+        },
+        [loadLive, selectedId, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId]
     );
 
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
@@ -550,8 +593,40 @@ export default function CommandCenterShell() {
                                     />
                                 </div>
 
+                                {LIVE_WORKSPACE && (sendResult || sendError) ? (
+                                    <div data-cc-send-review className="mt-2 rounded-lg border border-alloy-stone/20 bg-white px-2.5 py-2 text-[11px] shadow-sm">
+                                        {sendError ? <div className="text-alloy-ember">{sendError}</div> : null}
+                                        {sendResult ? (
+                                            <>
+                                                <div className="mb-1 font-semibold text-alloy-midnight">
+                                                    {sendResult.mode === "preflight" ? "Review before sending" : "Send results"}
+                                                    <span className="ml-1 font-normal text-alloy-midnight/55">
+                                                        {sendResult.mode === "preflight"
+                                                            ? `${sendResult.summary.ready} ready · ${sendResult.summary.blocked} blocked`
+                                                            : `${sendResult.summary.sent} sent · ${sendResult.summary.blocked} blocked · ${sendResult.summary.failed} failed`}
+                                                    </span>
+                                                </div>
+                                                <ul className="space-y-0.5">
+                                                    {sendResult.results.map((r) => (
+                                                        <li key={r.person_id} className="flex items-center gap-1.5">
+                                                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${r.status === "sent" || r.status === "ready" ? "bg-[#00A283]" : r.status === "blocked" ? "bg-[#e0a32e]" : "bg-red-500"}`} />
+                                                            <span className="font-medium text-alloy-midnight">{r.display_name}</span>
+                                                            <span className="text-alloy-midnight/55">· {r.status}{r.reason ? ` — ${r.reason}` : ""}</span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                                <div className="mt-1.5 flex items-center gap-1.5">
+                                                    {sendResult.mode === "preflight" && sendResult.summary.ready > 0 ? (
+                                                        <button type="button" disabled={sending} onClick={() => void runFamilySend(true)} className="rounded-md bg-[#00A283] px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40">Confirm send ({sendResult.summary.ready})</button>
+                                                    ) : null}
+                                                    <button type="button" onClick={() => { setSendResult(null); setSendError(null); }} className="rounded-md border border-alloy-stone/25 bg-white px-2.5 py-1 text-[11px] text-alloy-midnight">{sendResult.mode === "sent" ? "Done" : "Cancel"}</button>
+                                                </div>
+                                            </>
+                                        ) : null}
+                                    </div>
+                                ) : null}
                                 <div className="mt-2.5 flex items-center gap-1.5">
-                                    <button type="button" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)]"><Send className="h-3.5 w-3.5" />Send now</button>
+                                    <button type="button" disabled={sending || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) void runFamilySend(false); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)] disabled:opacity-40"><Send className="h-3.5 w-3.5" />{sending ? "Working…" : "Send now"}</button>
                                     <button type="button" aria-label="Send later" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Later</button>
                                     <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-2.5 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</button>
                                     <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />no auto-send</span>

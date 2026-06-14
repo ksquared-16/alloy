@@ -8,3 +8,4 @@ export { tierForRoleType } from "./recipientTierPolicy";
 export { buildChannelEligibility } from "./buildChannelEligibility";
 export { stubFamilyWorkspaceTail } from "./stubFamilyWorkspaceTail";
 export { resolveCustomerIdFromWorkspaceEntry } from "./resolveCustomerIdFromWorkspaceEntry";
+export { orchestrateFamilySend, type FamilySendChannel, type FamilySendStatus, type SendRecipientResult, type FamilySendResult, type FamilySendDeps, type FamilySendArgs } from "./orchestrateFamilySend";
