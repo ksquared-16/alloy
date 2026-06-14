@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     Users, UserPlus, ChevronDown,
     Mail, MessageSquare, Phone, StickyNote, Settings2,
-    Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send, Clock,
+    Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send, Clock, Check,
 } from "lucide-react";
 import {
     OPERATIONAL_QUEUES,
@@ -16,7 +16,8 @@ import {
 } from "@/lib/communications/v2/commandCenterViewModel";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import type { FamilyCommunicationWorkspaceVM } from "@/lib/communications/v2/familyWorkspace/types";
+import type { FamilyCommunicationWorkspaceVM, RecipientGroup, RecipientVM, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
+import { isRecipientSelected, toggleRecipientSelection, isRecipientEligible, selectionSummary } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import {
     COMMS_FIXTURES_ENABLED,
     FIXTURE_CONVERSATIONS,
@@ -123,8 +124,12 @@ export default function CommandCenterShell() {
     const [assignBusy, setAssignBusy] = useState(false);
     const [liveChildren, setLiveChildren] = useState<string[] | null>(null);
     const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+    const [liveRecipientGroups, setLiveRecipientGroups] = useState<RecipientGroup[] | null>(null);
+    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+    const [subjectDraft, setSubjectDraft] = useState("");
+    const [bodyDraft, setBodyDraft] = useState("");
 
-    const loadLive = useCallback(async (customerId: string, threadId: string | null) => {
+    const loadLive = useCallback(async (customerId: string, threadId: string | null, resetSelection = false) => {
         try {
             const qs = `customer_id=${encodeURIComponent(customerId)}${threadId ? `&thread_id=${encodeURIComponent(threadId)}` : ""}`;
             const res = await fetch(`/api/admin/communications/family-workspace?${qs}`);
@@ -134,6 +139,8 @@ export default function CommandCenterShell() {
             if (!vm) return;
             setMessages(mapLiveEvents(threadId ? vm.messages : vm.timelineEvents));
             setLiveChildren(vm.children.map((c) => c.name));
+            setLiveRecipientGroups(vm.recipientGroups);
+            if (resetSelection) setSelectedRecipientIds(vm.selectedRecipients);
         } catch {
             /* live workspace best-effort; fixtures remain */
         }
@@ -159,17 +166,19 @@ export default function CommandCenterShell() {
         void loadConversations();
         if (LIVE_WORKSPACE && COMMS_FIXTURES_ENABLED) {
             const c = FIXTURE_FAMILY_DETAILS[FIXTURE_CONVERSATIONS[0]?.id ?? ""]?.customerId;
-            if (c) void loadLive(c, null);
+            if (c) void loadLive(c, null, true);
         }
     }, [loadConversations, loadLive]);
 
     const openConversation = useCallback(async (id: string) => {
         setSelectedId(id);
         setSelectedThreadId(null);
+        setSubjectDraft("");
+        setBodyDraft("");
         if (COMMS_FIXTURES_ENABLED) {
             const liveCustomerId = LIVE_WORKSPACE ? FIXTURE_FAMILY_DETAILS[id]?.customerId : undefined;
             if (liveCustomerId) {
-                await loadLive(liveCustomerId, null);
+                await loadLive(liveCustomerId, null, true);
                 return;
             }
             setMessages(FIXTURE_MESSAGES[id] ?? []);
@@ -229,6 +238,8 @@ export default function CommandCenterShell() {
                   : [],
         [detail, liveChildren]
     );
+    const liveChannel: ComposerChannel = "email";
+    const allLiveRecipients: RecipientVM[] = liveRecipientGroups ? liveRecipientGroups.flatMap((g) => g.recipients) : [];
 
     const health = useMemo(
         () =>
@@ -408,6 +419,12 @@ export default function CommandCenterShell() {
 
                                 {/* conversation history — reads like a chat */}
                                 <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto px-3.5 py-3">
+                                    {LIVE_WORKSPACE && selectedThreadId ? (
+                                        <div className="mb-2 flex items-center justify-between rounded-md border border-[#7fc9b6]/50 bg-[#f0faf6] px-2 py-1 text-[10px] text-[#0f6b4a]">
+                                            <span>Viewing one thread</span>
+                                            <button type="button" onClick={() => { const c = selectedId ? FIXTURE_FAMILY_DETAILS[selectedId]?.customerId : undefined; setSelectedThreadId(null); if (c) void loadLive(c, null, false); }} className="font-semibold underline">All messages</button>
+                                        </div>
+                                    ) : null}
                                     {messages.length === 0 ? (
                                         <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
                                     ) : (
@@ -460,21 +477,54 @@ export default function CommandCenterShell() {
                                     <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">Note</span>
                                 </div>
 
-                                <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 shadow-sm">
-                                    <span className="text-[10px] font-medium text-alloy-midnight/40">To</span>
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#eafaf3] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50">
-                                        {detail ? detail.contactName : (selected.family_label ?? "")}
-                                        {detail ? <span className={`font-bold ${consentTone(detail.consent.email)}`}>{consentMark(detail.consent.email)}</span> : null}
-                                    </span>
-                                    <button type="button" className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/50 hover:border-[#7fc9b6] hover:text-[#0f6b4a]">
-                                        <UserPlus className="h-3 w-3" />Add recipient
-                                    </button>
-                                    <ChevronDown className="ml-auto h-3.5 w-3.5 text-alloy-midnight/35" />
-                                </div>
+                                {LIVE_WORKSPACE && liveRecipientGroups ? (
+                                    <div data-cc-recipient-selector className="mt-2 rounded-lg border border-alloy-stone/20 bg-white px-2 py-2 shadow-sm">
+                                        <div className="mb-1 text-[10px] font-medium text-alloy-midnight/45">To · <span className="text-alloy-midnight/70">{selectionSummary(selectedRecipientIds, allLiveRecipients)}</span></div>
+                                        {liveRecipientGroups.map((g) => (
+                                            <div key={g.tier} className="mb-1.5 last:mb-0">
+                                                <div className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">{g.uiLabel}</div>
+                                                <div className="mt-1 flex flex-wrap gap-1.5">
+                                                    {g.recipients.map((r) => {
+                                                        const elig = isRecipientEligible(r, liveChannel);
+                                                        const sel = isRecipientSelected(selectedRecipientIds, r.id);
+                                                        if (!elig) {
+                                                            const reason = r.channels[liveChannel === "note" ? "email" : liveChannel].unavailableReason ?? "Unavailable";
+                                                            return (
+                                                                <span key={r.id} title={reason} data-cc-recipient-disabled={r.id} className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-alloy-stone/[0.04] px-2 py-0.5 text-[10px] text-alloy-midnight/40">
+                                                                    {r.displayName} · <span className="text-alloy-midnight/35">{reason}</span>
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return (
+                                                            <button key={r.id} type="button" data-cc-recipient={r.id} aria-pressed={sel} onClick={() => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, r.id, true))}
+                                                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition ${sel ? "bg-[#00A283] text-white" : "bg-[#eafaf3] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50 hover:ring-[#00A283]"}`}>
+                                                                {sel ? <Check className="h-3 w-3" /> : null}{r.displayName}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 shadow-sm">
+                                        <span className="text-[10px] font-medium text-alloy-midnight/40">To</span>
+                                        <span className="inline-flex items-center gap-1 rounded-full bg-[#eafaf3] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50">
+                                            {detail ? detail.contactName : (selected.family_label ?? "")}
+                                            {detail ? <span className={`font-bold ${consentTone(detail.consent.email)}`}>{consentMark(detail.consent.email)}</span> : null}
+                                        </span>
+                                        <button type="button" className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/50 hover:border-[#7fc9b6] hover:text-[#0f6b4a]">
+                                            <UserPlus className="h-3 w-3" />Add recipient
+                                        </button>
+                                        <ChevronDown className="ml-auto h-3.5 w-3.5 text-alloy-midnight/35" />
+                                    </div>
+                                )}
 
                                 <input
                                     aria-label="Subject"
                                     placeholder="Subject"
+                                    value={subjectDraft}
+                                    onChange={(e) => setSubjectDraft(e.target.value)}
                                     className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
                                 />
 
@@ -494,6 +544,8 @@ export default function CommandCenterShell() {
                                     <textarea
                                         aria-label="Message body"
                                         placeholder={`Write a message to ${detail ? detail.contactName : (selected.family_label ?? "the family")}…`}
+                                        value={bodyDraft}
+                                        onChange={(e) => setBodyDraft(e.target.value)}
                                         className="w-full min-h-0 flex-1 resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none"
                                     />
                                 </div>
