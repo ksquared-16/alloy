@@ -1394,7 +1394,7 @@ function CommunicationsDrawerSectionLegacy({
 export default function CommunicationsDrawerSection(props: CommunicationsDrawerSectionProps) {
     // PKG-18B: mount the dark RecordCommunicationsTab when comms_v2_record_tab is on; legacy preserved when off.
     if (isCommsV2FlagEnabled("comms_v2_record_tab")) {
-        return <RecordCommunicationsTab />;
+        return <RecordCommunicationsTab entityType={props.apiEntityType} entityId={props.entityId} />;
     }
     return <CommunicationsDrawerSectionLegacy {...props} />;
 }

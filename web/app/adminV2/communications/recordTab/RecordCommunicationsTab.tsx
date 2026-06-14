@@ -1,6 +1,7 @@
 "use client";
 
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
+import FamilyCommunicationWorkspace from "@/app/adminV2/communications/FamilyCommunicationWorkspace";
 import {
     buildRecordCommunicationsModel,
     type RecordTimelineEntry,
@@ -13,12 +14,24 @@ import {
  * Mounting into the live Lead/Person/Child drawers is a real-gate-validated follow-on.
  */
 export default function RecordCommunicationsTab(props: {
+    entityType?: string;
+    entityId?: string;
     messages?: { id: string; channel?: string | null; direction?: string | null; created_at?: string | null; body?: string | null }[];
     notes?: { id: string; created_at?: string | null; body?: string | null }[];
     unread?: number;
     consentStatus?: string | null;
 }) {
     if (!isCommsV2FlagEnabled("comms_v2_record_tab")) return null;
+
+    // UI-6: when the live workspace flag is on and we have a drawer entity, mount the shared Family
+    // Communication Workspace (same structure as the modal, no queue), scoped to this drawer.
+    if (isCommsV2FlagEnabled("comms_v2_live_workspace") && props.entityType && props.entityId) {
+        return (
+            <div data-cc-record-tab="communications" className="bg-white">
+                <FamilyCommunicationWorkspace entity={{ entityType: props.entityType, entityId: props.entityId }} />
+            </div>
+        );
+    }
 
     const model = buildRecordCommunicationsModel({
         messages: props.messages ?? [],

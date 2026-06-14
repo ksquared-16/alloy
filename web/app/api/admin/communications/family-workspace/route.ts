@@ -5,6 +5,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
     resolveFamilyCommunicationWorkspace,
+    resolveCustomerScopeFromEntity,
     FAMILY_WORKSPACE_RESOLVER_VERSION,
     type ComposerChannel,
 } from "@/lib/communications/v2/familyWorkspace";
@@ -25,18 +26,36 @@ export async function GET(req: Request) {
     if (ctx instanceof Response) return ctx;
 
     const url = new URL(req.url);
-    const customerId = (url.searchParams.get("customer_id") ?? "").trim();
-    if (!UUID_RE.test(customerId)) {
-        return NextResponse.json({ error: "customer_id must be a UUID" }, { status: 400 });
-    }
-    const focusChildId = url.searchParams.get("focus_child_id");
-    const focusOpportunityId = url.searchParams.get("focus_opportunity_id");
+    const directCustomerId = (url.searchParams.get("customer_id") ?? "").trim();
+    const entityType = (url.searchParams.get("entity_type") ?? "").trim();
+    const entityId = (url.searchParams.get("entity_id") ?? "").trim();
+    let focusChildId = url.searchParams.get("focus_child_id");
+    let focusOpportunityId = url.searchParams.get("focus_opportunity_id");
+    let focusPersonId = url.searchParams.get("focus_person_id");
     const selectedThreadId = url.searchParams.get("thread_id");
     const channelParamRaw = (url.searchParams.get("composer_channel") ?? "email").toLowerCase();
     const composerChannel: ComposerChannel =
         channelParamRaw === "sms" ? "sms" : channelParamRaw === "note" ? "note" : "email";
 
     const supabase = createAdminClient();
+
+    // UI-6: accept a direct customer_id OR a drawer entity (opportunity/child/person/customer).
+    let customerId = directCustomerId;
+    if (!customerId) {
+        if (!entityType || !UUID_RE.test(entityId)) {
+            return NextResponse.json({ error: "Provide customer_id (UUID) or entity_type + entity_id (UUID)" }, { status: 400 });
+        }
+        const scope = await resolveCustomerScopeFromEntity(supabase, ctx.orgId, entityType, entityId);
+        if (!scope.customerId) return NextResponse.json({ error: "Could not resolve a family for that entity" }, { status: 404 });
+        customerId = scope.customerId;
+        focusChildId = focusChildId || scope.focusChildId;
+        focusOpportunityId = focusOpportunityId || scope.focusOpportunityId;
+        focusPersonId = focusPersonId || scope.focusPersonId;
+    }
+    if (!UUID_RE.test(customerId)) {
+        return NextResponse.json({ error: "customer_id must be a UUID" }, { status: 400 });
+    }
+
     const orgCheck = await assertRowOrg(supabase, "customers", customerId, ctx.orgId);
     if (!orgCheck.ok) {
         return NextResponse.json({ error: "Customer not found" }, { status: 404 });
@@ -47,6 +66,7 @@ export async function GET(req: Request) {
             customerId,
             focusChildId: focusChildId || null,
             focusOpportunityId: focusOpportunityId || null,
+            focusPersonId: focusPersonId || null,
             composerChannel,
             selectedThreadId: selectedThreadId || null,
         });

@@ -15,6 +15,7 @@ export type ResolveFamilyWorkspaceOptions = {
     focusOpportunityId?: string | null;
     composerChannel?: ComposerChannel;
     selectedThreadId?: string | null;
+    focusPersonId?: string | null;
 };
 
 export type FamilyCommsRaw = { threads: RawThreadRow[]; messages: RawMessageRow[] };
@@ -157,7 +158,7 @@ export function assembleFamilyWorkspace(
             customerId: opts.customerId,
             focusChildId: opts.focusChildId ?? null,
             focusOpportunityId: opts.focusOpportunityId ?? null,
-            focusPersonId: null,
+            focusPersonId: opts.focusPersonId ?? null,
         },
         ...buildConversationTail(raw, opts, comms),
     };
