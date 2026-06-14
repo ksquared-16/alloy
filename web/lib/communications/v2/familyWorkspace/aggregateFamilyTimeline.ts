@@ -1,4 +1,6 @@
 // UI-5B — PURE: raw family threads + messages -> ThreadVM[] + aggregated TimelineEventVM[].
+// MERGE POINT for the family-conversation-vs-transport-threads decision — see THREAD_SEMANTICS.md.
+// One unified family timeline is built by unioning all per-recipient/per-channel transport threads.
 import type { ThreadVM, TimelineEventVM } from "./types";
 
 export type RawThreadRow = {
