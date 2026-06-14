@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    Users, Activity, ShieldCheck, Clock, User, UserPlus, ChevronDown, ChevronRight,
+    Users, UserPlus, ChevronDown,
     Mail, MessageSquare, Phone, StickyNote, Settings2,
-    Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send,
+    Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send, Clock,
 } from "lucide-react";
 import {
     OPERATIONAL_QUEUES,
@@ -20,19 +20,17 @@ import {
     FIXTURE_CONVERSATIONS,
     FIXTURE_MESSAGES,
     FIXTURE_FAMILY_DETAILS,
-    FIXTURE_THREADS,
     type FixtureFamilyDetail,
-    type FixtureThread,
     type ConsentState,
 } from "@/app/adminV2/communications/fixtures";
 
 /**
- * Communications V2 — Command Center body. Renders INSIDE the existing modal shell
- * (AdminV2WorkspaceBosModalShell); the BOS rail is the shell's and is untouched.
- * UI-4E: targeted layout compression (compact KPIs, queue-scoped filters, header
- * assignment control, clickable timeline w/ View thread affordance, one-row composer
- * actions, premium header). Presentation only; fixture mode kept; no data/route/outer-
- * geometry/BOS change. Multi-child + multi-contact remain visual affordances (not wired).
+ * Communications V2 — Command Center body (UI-4H final visual lock). Renders INSIDE the
+ * existing modal shell; the BOS rail is the shell's and is untouched.
+ * Layout: Queue (~25%) | Conversation (~32%) | Composer (~43%).
+ *   - Conversation column = compact Family Snapshot band + conversation history (chat).
+ *   - Composer = top-anchored, full-height, message body the dominant surface.
+ * Presentation only; fixture mode kept; no data/route/outer-geometry/BOS/flag change.
  */
 type TimelineMessage = {
     id?: string;
@@ -77,17 +75,15 @@ const relTime = (iso: string | null | undefined): string => {
     if (h < 24) return `${h}h ago`;
     return `${Math.round(h / 24)}d ago`;
 };
-const dirLabel = (d: string | null | undefined): string =>
-    d === "outbound" ? "Sent" : d === "inbound" ? "Received" : "Internal";
 
 type IconType = typeof Mail;
-const eventStyle = (m: TimelineMessage): { label: string; badge: string; rail: string; dotText: string; Icon: IconType } => {
+const channelIcon = (m: TimelineMessage): IconType => {
     const k = m.kind && m.kind !== "message" ? m.kind : null;
-    if (k === "note") return { label: "Note", badge: "border-[#e6c98a] bg-[#fbf3e1] text-[#9a6b16]", rail: "border-l-[#e0a32e]", dotText: "text-[#9a6b16]", Icon: StickyNote };
-    if (k === "system") return { label: "System", badge: "border-alloy-stone/25 bg-alloy-stone/[0.06] text-alloy-midnight/55", rail: "border-l-alloy-stone/30", dotText: "text-alloy-midnight/45", Icon: Settings2 };
-    if (k === "call") return { label: "Call", badge: "border-alloy-stone/25 bg-white text-alloy-midnight/60", rail: "border-l-alloy-stone/30", dotText: "text-alloy-midnight/55", Icon: Phone };
-    if (m.channel === "sms") return { label: "SMS", badge: "border-[#9db7d6] bg-[#eef3f9] text-[#33567f]", rail: m.direction === "outbound" ? "border-l-[#00A283]" : "border-l-[#33567f]", dotText: "text-[#33567f]", Icon: MessageSquare };
-    return { label: "Email", badge: "border-[#7fc9b6] bg-[#eef7f3] text-[#0f6b4a]", rail: m.direction === "outbound" ? "border-l-[#00A283]" : "border-l-alloy-midnight/30", dotText: "text-[#0f6b4a]", Icon: Mail };
+    if (k === "note") return StickyNote;
+    if (k === "system") return Settings2;
+    if (k === "call") return Phone;
+    if (m.channel === "sms") return MessageSquare;
+    return Mail;
 };
 
 const toolbarBtn = "rounded-md p-1.5 text-alloy-midnight/55 transition hover:bg-alloy-stone/12 hover:text-alloy-midnight";
@@ -104,9 +100,6 @@ export default function CommandCenterShell() {
     );
     const [messages, setMessages] = useState<TimelineMessage[]>(
         COMMS_FIXTURES_ENABLED ? (FIXTURE_MESSAGES[FIXTURE_CONVERSATIONS[0]?.id ?? ""] ?? []) : []
-    );
-    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(
-        COMMS_FIXTURES_ENABLED ? (FIXTURE_THREADS[FIXTURE_CONVERSATIONS[0]?.id ?? ""]?.[0]?.id ?? null) : null
     );
     const [assignBusy, setAssignBusy] = useState(false);
 
@@ -134,7 +127,6 @@ export default function CommandCenterShell() {
         setSelectedId(id);
         if (COMMS_FIXTURES_ENABLED) {
             setMessages(FIXTURE_MESSAGES[id] ?? []);
-            setSelectedThreadId(FIXTURE_THREADS[id]?.[0]?.id ?? null);
             return;
         }
         setMessages([]);
@@ -175,7 +167,6 @@ export default function CommandCenterShell() {
         () => (detail ? detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean) : []),
         [detail]
     );
-    const threads: FixtureThread[] = selected && COMMS_FIXTURES_ENABLED ? (FIXTURE_THREADS[selected.id] ?? []) : [];
 
     const health = useMemo(
         () =>
@@ -188,28 +179,25 @@ export default function CommandCenterShell() {
         [messages, selected]
     );
     const healthLabel = health.engagementScore >= 66 ? "Healthy" : health.engagementScore >= 33 ? "At risk" : "Unresponsive";
-    const healthChip =
-        health.engagementScore >= 66 ? "border-[#7fc9b6] bg-[#eafaf3] text-[#0f6b4a]"
-        : health.engagementScore >= 33 ? "border-[#e6c98a] bg-[#fbf6ea] text-[#9a6b16]"
-        : "border-red-200 bg-red-50 text-red-600";
-    const healthDot =
-        health.engagementScore >= 66 ? "bg-[#00A283]" : health.engagementScore >= 33 ? "bg-[#e0a32e]" : "bg-red-500";
+    const healthTone = health.engagementScore >= 66 ? "text-[#0f6b4a]" : health.engagementScore >= 33 ? "text-[#9a6b16]" : "text-red-600";
+    const healthDot = health.engagementScore >= 66 ? "bg-[#00A283]" : health.engagementScore >= 33 ? "bg-[#e0a32e]" : "bg-red-500";
 
-    // Compact, meaningful KPIs (dot + value + label + priority word)
+    const responseRate = metrics.total > 0 ? `${Math.round((100 * (metrics.total - metrics.requiresResponse)) / metrics.total)}%` : "—";
     const kpis = [
-        { label: "Needs reply", value: metrics.requiresResponse, dot: "bg-[#e0a32e]", tone: "text-[#9a6b16]", status: metrics.requiresResponse > 0 ? "awaiting your response" : "all caught up", statusTone: "text-[#9a6b16]" },
-        { label: "Overdue", value: metrics.slaAtRisk, dot: "bg-alloy-ember", tone: "text-alloy-ember", status: metrics.slaAtRisk > 0 ? "SLA breached — act now" : "none overdue", statusTone: metrics.slaAtRisk > 0 ? "text-alloy-ember" : "text-[#0f6b4a]" },
+        { label: "Needs reply", value: metrics.requiresResponse, dot: "bg-[#e0a32e]", tone: "text-[#9a6b16]", status: metrics.requiresResponse > 0 ? "awaiting response" : "all caught up", statusTone: "text-[#9a6b16]" },
+        { label: "Overdue", value: metrics.slaAtRisk, dot: "bg-alloy-ember", tone: "text-alloy-ember", status: metrics.slaAtRisk > 0 ? "act now" : "none overdue", statusTone: metrics.slaAtRisk > 0 ? "text-alloy-ember" : "text-[#0f6b4a]" },
         { label: "Unread", value: metrics.unread, dot: "bg-[#00A283]", tone: "text-[#0f6b4a]", status: "new inbound", statusTone: "text-[#0f6b4a]" },
+        { label: "Response rate", value: responseRate, dot: "bg-[#5b9aa0]", tone: "text-alloy-midnight", status: "replied share", statusTone: "text-alloy-midnight/45" },
     ];
 
     return (
         <div data-cc-shell="communications-command-center" className="flex min-h-0 flex-1 flex-col gap-2.5 bg-[#f2f3ef] p-2.5">
-            {/* KPI row — compact, color-coded, with priority language */}
+            {/* KPI strip — max 4, compact */}
             <div data-cc-metrics className="flex flex-wrap gap-2">
                 {kpis.map((k) => (
-                    <div key={k.label} className="flex min-w-[180px] items-center gap-3 rounded-xl border border-alloy-stone/12 bg-white px-3.5 py-2.5 shadow-[0_1px_2px_rgba(20,30,25,0.05)]">
-                        <span className={`h-9 w-1.5 shrink-0 rounded-full ${k.dot}`} />
-                        <span className={`text-2xl font-semibold leading-none tabular-nums ${k.tone}`}>{k.value}</span>
+                    <div key={k.label} className="flex min-w-[170px] items-center gap-3 rounded-xl border border-alloy-stone/12 bg-white px-3.5 py-2 shadow-[0_1px_2px_rgba(20,30,25,0.05)]">
+                        <span className={`h-8 w-1.5 shrink-0 rounded-full ${k.dot}`} />
+                        <span className={`text-xl font-semibold leading-none tabular-nums ${k.tone}`}>{k.value}</span>
                         <span className="min-w-0 leading-tight">
                             <span className="block text-[12px] font-semibold text-alloy-midnight">{k.label}</span>
                             <span className={`block truncate text-[10px] font-medium ${k.statusTone}`}>{k.status}</span>
@@ -220,9 +208,9 @@ export default function CommandCenterShell() {
 
             {error ? <div className="text-[11px] text-alloy-ember">{error}</div> : null}
 
-            {/* UI-1 geometry: queue ~28% (>=320px floor) / workspace ~72%. BOS rail shell-owned at 345px. */}
+            {/* Outer split — queue ~25% | workspace ~75%. Outer modal/BOS geometry untouched. */}
             <div className="grid min-h-0 flex-1 grid-cols-[minmax(260px,25%)_minmax(0,1fr)] gap-2.5">
-                {/* QUEUE — header carries the (compact) filter + search row */}
+                {/* QUEUE */}
                 <aside data-cc-column="queue" aria-label="Communication queue" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
                     <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2.5">
                         <div className="flex items-center justify-between">
@@ -307,197 +295,155 @@ export default function CommandCenterShell() {
                     </div>
                 </aside>
 
-                {/* WORKSPACE — premium compact header, then two-column body */}
+                {/* WORKSPACE — Conversation (context) | Composer (action) */}
                 <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
                     {selected ? (
-                        <>
-                            {/* PREMIUM OPERATIONAL HEADER (2 compact rows; assignment lives on the chip row) */}
-                            <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/25 bg-gradient-to-br from-[#eef7f3] via-white to-[#eef6f4] px-4 py-2.5">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#dff2ea] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/60 shadow-sm">
-                                        <Users className="h-5 w-5" />
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="truncate text-[17px] font-semibold leading-tight text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
-                                            {childNames.length > 0 ? (
-                                                <span className="flex shrink-0 items-center gap-1">
-                                                    {childNames.map((n) => (
-                                                        <span key={n} className="inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a]">{n}</span>
-                                                    ))}
-                                                </span>
-                                            ) : null}
+                        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(380px,1.35fr)]">
+                            {/* CONVERSATION — compact snapshot band + chat history */}
+                            <div className="flex min-h-0 flex-col bg-[#f6f7f5]">
+                                <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/20 bg-gradient-to-br from-[#eef7f3] via-white to-[#eef6f4] px-3.5 py-2.5">
+                                    <div className="flex items-center gap-2.5">
+                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#dff2ea] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/60">
+                                            <Users className="h-4 w-4" />
                                         </div>
-                                        <p className="mt-0.5 truncate text-[11px] text-alloy-midnight/60">
-                                            {detail ? `${detail.program} · ${detail.location} · ${detail.stage}` : [selected.channel, `SLA ${selected.sla_state ?? "—"}`].filter(Boolean).join(" · ")}
-                                        </p>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <h3 className="truncate text-[15px] font-semibold leading-tight text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
+                                                {childNames.map((n) => (
+                                                    <span key={n} className="inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-1.5 py-px text-[10px] font-medium text-[#0f6b4a]">{n}</span>
+                                                ))}
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-alloy-midnight/60">
+                                                <span data-cc-ws-section="health" className={`inline-flex items-center gap-1 font-semibold ${healthTone}`}>
+                                                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${healthDot}`} />{healthLabel}
+                                                </span>
+                                                <span className="text-alloy-midnight/25">•</span>
+                                                <span><span className="text-alloy-midnight/40">Assigned</span> {detail ? detail.owner : (selected.assignment_state ?? "—")}</span>
+                                                <span className="text-alloy-midnight/25">•</span>
+                                                <span data-cc-ws-section="consent" className="inline-flex items-center gap-1.5">
+                                                    <span className={`font-bold ${consentTone(detail ? detail.consent.email : "unset")}`}>E{consentMark(detail ? detail.consent.email : "unset")}</span>
+                                                    <span className={`font-bold ${consentTone(detail ? detail.consent.sms : "unset")}`}>S{consentMark(detail ? detail.consent.sms : "unset")}</span>
+                                                    <span className={`font-bold ${consentTone(detail ? detail.consent.marketing : "unset")}`}>M{consentMark(detail ? detail.consent.marketing : "unset")}</span>
+                                                </span>
+                                                {detail ? <><span className="text-alloy-midnight/25">•</span><span className="truncate text-alloy-midnight/50">{detail.program} · {detail.stage}</span></> : null}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            data-cc-claim
+                                            disabled={assignBusy || selected.assignment_state === "assigned"}
+                                            onClick={() => claim(selected.id)}
+                                            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm transition ${
+                                                selected.assignment_state === "assigned"
+                                                    ? "border border-[#7fc9b6] bg-[#eafaf3] text-[#0f6b4a]"
+                                                    : "bg-[#00A283] text-white hover:bg-[#009276]"
+                                            }`}
+                                        >
+                                            {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
+                                        </button>
                                     </div>
                                 </div>
-                                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px]">
-                                    <span data-cc-ws-section="health" className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold ${healthChip}`}>
-                                        <Activity className="h-3 w-3" />
-                                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${healthDot}`} />
-                                        {healthLabel}
-                                        <span className="font-normal opacity-70">· eng {health.engagementScore} · resp {health.responseRate === null ? "—" : `${Math.round(health.responseRate * 100)}%`}</span>
-                                    </span>
-                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold ${slaChipClass(selected.sla_state)}`}>
-                                        <Clock className="h-3 w-3" />{slaChipLabel(selected.sla_state)}
-                                    </span>
-                                    <span className="inline-flex items-center gap-1 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1 font-medium text-alloy-midnight/70">
-                                        <User className="h-3 w-3 text-alloy-midnight/45" />{detail ? detail.owner : (selected.assignment_state ?? "—")}
-                                    </span>
-                                    <span data-cc-ws-section="consent" className="inline-flex items-center gap-1.5 rounded-full border border-alloy-stone/20 bg-white px-2.5 py-1">
-                                        <ShieldCheck className="h-3 w-3 text-alloy-midnight/45" />
-                                        <span className="font-medium text-alloy-midnight/45">Consent</span>
-                                        <span className={`font-bold ${consentTone(detail ? detail.consent.email : "unset")}`}>E{consentMark(detail ? detail.consent.email : "unset")}</span>
-                                        <span className={`font-bold ${consentTone(detail ? detail.consent.sms : "unset")}`}>S{consentMark(detail ? detail.consent.sms : "unset")}</span>
-                                        <span className={`font-bold ${consentTone(detail ? detail.consent.marketing : "unset")}`}>M{consentMark(detail ? detail.consent.marketing : "unset")}</span>
-                                    </span>
-                                    {/* assignment control — compact, top-right of the header */}
-                                    <button
-                                        type="button"
-                                        data-cc-claim
-                                        disabled={assignBusy || selected.assignment_state === "assigned"}
-                                        onClick={() => claim(selected.id)}
-                                        className={`ml-auto inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-semibold shadow-sm transition ${
-                                            selected.assignment_state === "assigned"
-                                                ? "border border-[#7fc9b6] bg-[#eafaf3] text-[#0f6b4a]"
-                                                : "bg-[#00A283] text-white hover:bg-[#009276]"
-                                        }`}
-                                    >
-                                        <User className="h-3 w-3" />{selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
-                                    </button>
-                                </div>
-                            </div>
 
-                            {/* BODY — timeline (left) | persistent composer (right) */}
-                            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-                                <div data-cc-ws-section="timeline" className="min-h-0 overflow-auto bg-[#f5f6f4] px-4 py-3">
-                                    <div className="mb-2 flex items-center justify-between">
-                                        <span className="text-[9px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/45">Conversation threads</span>
-                                        {threads.length > 0 ? <span className="text-[10px] tabular-nums text-alloy-midnight/40">{threads.length}</span> : null}
-                                    </div>
-                                    {threads.length > 0 ? (
-                                        <ol data-cc-timeline className="space-y-2">
-                                            {threads.map((t) => {
-                                                const te = eventStyle({ channel: t.channel } as TimelineMessage);
-                                                const isSelThread = selectedThreadId === t.id;
-                                                return (
-                                                    <li key={t.id} data-cc-thread={t.id}>
-                                                        <button
-                                                            type="button"
-                                                            data-cc-thread-open={t.id}
-                                                            onClick={() => setSelectedThreadId(t.id)}
-                                                            className={`group block w-full cursor-pointer rounded-xl border border-l-[3px] ${te.rail} px-3 py-2.5 text-left transition ${isSelThread ? "border-[#00A283] border-l-[#00A283] bg-[#f1faf7] shadow-[0_2px_8px_rgba(0,162,131,0.12)] ring-1 ring-[#00A283]/20" : "border-alloy-stone/12 bg-white shadow-[0_1px_2px_rgba(20,30,25,0.05)] hover:border-[#7fc9b6] hover:shadow-[0_2px_8px_rgba(0,162,131,0.10)]"}`}
-                                                        >
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <span className="flex min-w-0 items-center gap-1.5">
-                                                                    <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${te.badge}`}>{te.label}</span>
-                                                                    <span className="truncate text-[13px] font-semibold text-alloy-midnight">{t.subject}</span>
-                                                                </span>
-                                                                <span className="flex shrink-0 items-center gap-2">
-                                                                    {t.unread ? <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00A283] px-1 text-[9px] font-bold text-white">{t.unread}</span> : null}
-                                                                    <span className="text-[10px] tabular-nums text-alloy-midnight/40">{relTime(t.lastActivityAt)}</span>
-                                                                </span>
-                                                            </div>
-                                                            <div className="mt-1 flex items-center justify-between gap-2">
-                                                                <span className="truncate text-[11px] text-alloy-midnight/55">{t.messageCount} messages · {t.lastPreview}</span>
-                                                                <span className="inline-flex shrink-0 items-center gap-0.5 text-[10px] font-semibold text-[#0f6b4a] opacity-0 transition group-hover:opacity-100">Open thread<ChevronRight className="h-3 w-3" /></span>
-                                                            </div>
-                                                        </button>
-                                                    </li>
-                                                );
-                                            })}
-                                        </ol>
-                                    ) : messages.length === 0 ? (
+                                {/* conversation history — reads like a chat */}
+                                <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto px-3.5 py-3">
+                                    {messages.length === 0 ? (
                                         <div className="text-[11px] text-alloy-midnight/45">No communication yet.</div>
                                     ) : (
-                                        <ol data-cc-timeline className="space-y-2">
+                                        <ol data-cc-timeline className="space-y-3">
                                             {messages.map((m, i) => {
-                                                const e = eventStyle(m);
-                                                const Icon = e.Icon;
+                                                const isSystem = m.kind === "system";
+                                                const isNote = m.kind === "note";
+                                                const out = m.direction === "outbound";
+                                                const Icon = channelIcon(m);
+                                                if (isSystem) {
+                                                    return (
+                                                        <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className="flex items-center justify-center gap-1.5 text-[10px] text-alloy-midnight/45">
+                                                            <Settings2 className="h-3 w-3" /> {m.body ?? ""} · {relTime(m.created_at)}
+                                                        </li>
+                                                    );
+                                                }
+                                                if (isNote) {
+                                                    return (
+                                                        <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className="rounded-lg border border-[#e6c98a]/60 bg-[#fbf6ea] px-3 py-1.5 text-[11px] text-[#9a6b16]">
+                                                            <span className="font-semibold">Internal note</span> · {m.body ?? ""}
+                                                        </li>
+                                                    );
+                                                }
+                                                const sender = out ? (detail?.owner ?? "Staff") : (detail?.contactName ?? selected.family_label ?? "Family");
                                                 return (
-                                                    <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""}>
-                                                        <button
-                                                            type="button"
-                                                            data-cc-thread-open={m.id ?? i}
-                                                            className={`group block w-full cursor-pointer rounded-xl border border-l-[3px] border-alloy-stone/12 ${e.rail} bg-white px-3 py-2.5 text-left shadow-[0_1px_2px_rgba(20,30,25,0.05)] transition hover:border-[#7fc9b6] hover:shadow-[0_2px_8px_rgba(0,162,131,0.10)]`}
-                                                        >
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <span className="flex items-center gap-1.5">
-                                                                    <Icon className={`h-3.5 w-3.5 ${e.dotText}`} />
-                                                                    <span className={`rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide ${e.badge}`}>{e.label}</span>
-                                                                    <span className="text-[10px] font-medium text-alloy-midnight/45">{dirLabel(m.direction)}</span>
-                                                                </span>
-                                                                <span className="flex shrink-0 items-center gap-2">
-                                                                    <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-[#0f6b4a] opacity-0 transition group-hover:opacity-100">View thread<ChevronRight className="h-3 w-3" /></span>
-                                                                    <span className="text-[10px] tabular-nums text-alloy-midnight/40">{relTime(m.created_at)}</span>
-                                                                </span>
+                                                    <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className={`flex ${out ? "justify-end" : "justify-start"}`}>
+                                                        <div className="max-w-[88%]">
+                                                            <div className={`mb-0.5 flex items-center gap-1 text-[10px] text-alloy-midnight/45 ${out ? "justify-end" : ""}`}>
+                                                                <Icon className="h-3 w-3" />
+                                                                <span className="font-semibold text-alloy-midnight/60">{sender}</span>
+                                                                <span>· {relTime(m.created_at)}</span>
                                                             </div>
-                                                            <div className="mt-1.5 text-[13px] leading-snug text-alloy-midnight/85">{m.body ?? ""}</div>
-                                                        </button>
+                                                            <div className={`rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm ${out ? "rounded-tr-sm bg-[#e7f5ef] text-alloy-midnight" : "rounded-tl-sm border border-alloy-stone/15 bg-white text-alloy-midnight"}`}>
+                                                                {m.body ?? ""}
+                                                            </div>
+                                                        </div>
                                                     </li>
                                                 );
                                             })}
                                         </ol>
                                     )}
                                 </div>
+                            </div>
 
-                                <div data-cc-ws-section="composer" className="flex min-h-0 flex-col border-l border-alloy-stone/15 bg-gradient-to-b from-[#fbfcfb] to-[#f3f5f2] px-3.5 py-3">
-                                    <div className="mb-2 inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
-                                        <span className="bg-[#00A283] px-2.5 py-1 font-semibold text-white">Email</span>
-                                        <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">SMS</span>
-                                        <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">Note</span>
-                                    </div>
+                            {/* COMPOSER — top-anchored, full height, body dominant */}
+                            <div data-cc-ws-section="composer" className="flex min-h-0 flex-col border-l border-alloy-stone/15 bg-gradient-to-b from-[#fbfcfb] to-[#f3f5f2] px-4 py-3">
+                                <div className="inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
+                                    <span className="bg-[#00A283] px-2.5 py-1 font-semibold text-white">Email</span>
+                                    <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">SMS</span>
+                                    <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">Note</span>
+                                </div>
 
-                                    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 shadow-sm">
-                                        <span className="text-[10px] font-medium text-alloy-midnight/40">To</span>
-                                        <span className="inline-flex items-center gap-1 rounded-full bg-[#eafaf3] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50">
-                                            {detail ? detail.recipient : (selected.family_label ?? "")}
-                                            {detail ? <span className={`font-bold ${consentTone(detail.consent.email)}`}>{consentMark(detail.consent.email)}</span> : null}
+                                <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 shadow-sm">
+                                    <span className="text-[10px] font-medium text-alloy-midnight/40">To</span>
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#eafaf3] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50">
+                                        {detail ? detail.contactName : (selected.family_label ?? "")}
+                                        {detail ? <span className={`font-bold ${consentTone(detail.consent.email)}`}>{consentMark(detail.consent.email)}</span> : null}
+                                    </span>
+                                    <button type="button" className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/50 hover:border-[#7fc9b6] hover:text-[#0f6b4a]">
+                                        <UserPlus className="h-3 w-3" />Add recipient
+                                    </button>
+                                    <ChevronDown className="ml-auto h-3.5 w-3.5 text-alloy-midnight/35" />
+                                </div>
+
+                                <input
+                                    aria-label="Subject"
+                                    placeholder="Subject"
+                                    className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
+                                />
+
+                                <div className="mt-2 flex min-h-[240px] flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm">
+                                    <div className="flex items-center gap-0.5 border-b border-alloy-stone/12 bg-[#fbfcfb] px-1.5 py-1">
+                                        <button type="button" aria-label="Bold" className={toolbarBtn}><Bold className="h-3.5 w-3.5" /></button>
+                                        <button type="button" aria-label="Italic" className={toolbarBtn}><Italic className="h-3.5 w-3.5" /></button>
+                                        <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
+                                        <button type="button" aria-label="Bulleted list" className={toolbarBtn}><List className="h-3.5 w-3.5" /></button>
+                                        <button type="button" aria-label="Insert link" className={toolbarBtn}><Link2 className="h-3.5 w-3.5" /></button>
+                                        <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
+                                        <span className="ml-auto flex items-center gap-0.5">
+                                            <button type="button" aria-label="Attach" className={toolbarBtn}><Paperclip className="h-3.5 w-3.5" /></button>
+                                            <button type="button" aria-label="Templates" className={toolbarBtn}><FileText className="h-3.5 w-3.5" /></button>
                                         </span>
-                                        <button type="button" className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/50 hover:border-[#7fc9b6] hover:text-[#0f6b4a]">
-                                            <UserPlus className="h-3 w-3" />Add contact
-                                        </button>
-                                        <ChevronDown className="ml-auto h-3.5 w-3.5 text-alloy-midnight/35" />
                                     </div>
-
-                                    <input
-                                        aria-label="Subject"
-                                        placeholder="Subject"
-                                        className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
+                                    <textarea
+                                        aria-label="Message body"
+                                        placeholder={`Write a message to ${detail ? detail.contactName : (selected.family_label ?? "the family")}…`}
+                                        className="w-full min-h-0 flex-1 resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none"
                                     />
+                                </div>
 
-                                    <div className="mt-2 flex min-h-[220px] flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm">
-                                        <div className="flex items-center gap-0.5 border-b border-alloy-stone/12 bg-[#fbfcfb] px-1.5 py-1">
-                                            <button type="button" aria-label="Bold" className={toolbarBtn}><Bold className="h-3.5 w-3.5" /></button>
-                                            <button type="button" aria-label="Italic" className={toolbarBtn}><Italic className="h-3.5 w-3.5" /></button>
-                                            <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
-                                            <button type="button" aria-label="Bulleted list" className={toolbarBtn}><List className="h-3.5 w-3.5" /></button>
-                                            <button type="button" aria-label="Insert link" className={toolbarBtn}><Link2 className="h-3.5 w-3.5" /></button>
-                                            <button type="button" aria-label="Emoji" className={toolbarBtn}><Smile className="h-3.5 w-3.5" /></button>
-                                            <span className="ml-auto flex items-center gap-0.5">
-                                                <button type="button" aria-label="Attach" className={toolbarBtn}><Paperclip className="h-3.5 w-3.5" /></button>
-                                                <button type="button" aria-label="Templates" className={toolbarBtn}><FileText className="h-3.5 w-3.5" /></button>
-                                            </span>
-                                        </div>
-                                        <textarea
-                                            aria-label="Message body"
-                                            placeholder={`Write a message to ${selected.family_label ?? "the family"}…`}
-                                            className="w-full min-h-0 flex-1 resize-none border-0 bg-white px-3.5 py-3 text-sm leading-relaxed text-alloy-midnight placeholder:text-alloy-midnight/35 focus:outline-none"
-                                        />
-                                    </div>
-
-                                    {/* action row — single line */}
-                                    <div className="mt-2.5 flex items-center gap-1.5">
-                                        <button type="button" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)]"><Send className="h-3.5 w-3.5" />Send now</button>
-                                        <button type="button" aria-label="Send later" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Later</button>
-                                        <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-2.5 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</button>
-                                        <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />no auto-send</span>
-                                    </div>
+                                <div className="mt-2.5 flex items-center gap-1.5">
+                                    <button type="button" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)]"><Send className="h-3.5 w-3.5" />Send now</button>
+                                    <button type="button" aria-label="Send later" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Later</button>
+                                    <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-2.5 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</button>
+                                    <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />no auto-send</span>
                                 </div>
                             </div>
-                        </>
+                        </div>
                     ) : (
                         <div className="flex flex-1 items-center justify-center p-6 text-sm text-alloy-midnight/45">Select a family from the queue.</div>
                     )}

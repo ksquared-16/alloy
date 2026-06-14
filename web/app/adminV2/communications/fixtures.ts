@@ -26,6 +26,7 @@ export type FixtureFamilyDetail = {
     stage: string;
     owner: string;
     recipient: string;
+    contactName: string;
     consent: { email: ConsentState; sms: ConsentState; marketing: ConsentState };
 };
 
@@ -41,12 +42,12 @@ export const FIXTURE_CONVERSATIONS: ConversationSummary[] = [
 ];
 
 export const FIXTURE_FAMILY_DETAILS: Record<string, FixtureFamilyDetail> = {
-    "fx-rivera":  { children: "Elena & Mateo", program: "Preschool", location: "North Campus", stage: "Tour complete", owner: "S. Jain",    recipient: "rivera@example.com",  consent: { email: "opted_in",  sms: "opted_in",  marketing: "opted_out" } },
-    "fx-smith":   { children: "Emma & Liam",   program: "Toddlers",  location: "North Campus", stage: "Enrolling",     owner: "K. Kurzman", recipient: "smith@example.com",   consent: { email: "opted_in",  sms: "opted_in",  marketing: "opted_in" } },
-    "fx-johnson": { children: "Mason",         program: "Infants",   location: "South Campus", stage: "Inquiry",       owner: "Unassigned", recipient: "johnson@example.com", consent: { email: "opted_in",  sms: "unset",     marketing: "opted_out" } },
-    "fx-garcia":  { children: "Sofia",         program: "Preschool", location: "North Campus", stage: "Enrolling",     owner: "A. Mehta",   recipient: "(415) 555-0142",      consent: { email: "opted_in",  sms: "opted_in",  marketing: "opted_in" } },
-    "fx-nguyen":  { children: "Lan",           program: "Toddlers",  location: "East Campus",  stage: "Re-enrollment", owner: "Unassigned", recipient: "nguyen@example.com",  consent: { email: "opted_in",  sms: "opted_out", marketing: "opted_out" } },
-    "fx-park":    { children: "Joon",          program: "Waitlist",  location: "North Campus", stage: "Waitlist",      owner: "Unassigned", recipient: "(415) 555-0199",      consent: { email: "unset",     sms: "opted_in",  marketing: "unset" } },
+    "fx-rivera":  { children: "Elena & Mateo", program: "Preschool", location: "North Campus", stage: "Tour complete", owner: "S. Jain",    recipient: "rivera@example.com", contactName: "Sarah Rivera",  consent: { email: "opted_in",  sms: "opted_in",  marketing: "opted_out" } },
+    "fx-smith":   { children: "Emma & Liam",   program: "Toddlers",  location: "North Campus", stage: "Enrolling",     owner: "K. Kurzman", recipient: "smith@example.com", contactName: "Dana Smith",   consent: { email: "opted_in",  sms: "opted_in",  marketing: "opted_in" } },
+    "fx-johnson": { children: "Mason",         program: "Infants",   location: "South Campus", stage: "Inquiry",       owner: "Unassigned", recipient: "johnson@example.com", contactName: "Mark Johnson", consent: { email: "opted_in",  sms: "unset",     marketing: "opted_out" } },
+    "fx-garcia":  { children: "Sofia",         program: "Preschool", location: "North Campus", stage: "Enrolling",     owner: "A. Mehta",   recipient: "(415) 555-0142", contactName: "Lucia Garcia",      consent: { email: "opted_in",  sms: "opted_in",  marketing: "opted_in" } },
+    "fx-nguyen":  { children: "Lan",           program: "Toddlers",  location: "East Campus",  stage: "Re-enrollment", owner: "Unassigned", recipient: "nguyen@example.com", contactName: "Minh Nguyen",  consent: { email: "opted_in",  sms: "opted_out", marketing: "opted_out" } },
+    "fx-park":    { children: "Joon",          program: "Waitlist",  location: "North Campus", stage: "Waitlist",      owner: "Unassigned", recipient: "(415) 555-0199", contactName: "Grace Park",      consent: { email: "unset",     sms: "opted_in",  marketing: "unset" } },
 };
 
 export const FIXTURE_MESSAGES: Record<string, FixtureMessage[]> = {
