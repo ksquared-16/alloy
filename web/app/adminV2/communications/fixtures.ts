@@ -27,6 +27,7 @@ export type FixtureFamilyDetail = {
     owner: string;
     recipient: string;
     contactName: string;
+    customerId?: string; // UI-5B: real customer (household) id to enable live workspace fetch
     consent: { email: ConsentState; sms: ConsentState; marketing: ConsentState };
 };
 

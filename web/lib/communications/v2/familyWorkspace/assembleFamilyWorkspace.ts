@@ -5,6 +5,7 @@ import { trimEmail, smsToOrNull, personLabel } from "./normalizeRecipientContact
 import { tierForRoleType, compareRecipientsForTier, TIER_UI_LABEL } from "./recipientTierPolicy";
 import { buildChannelEligibility } from "./buildChannelEligibility";
 import { stubFamilyWorkspaceTail } from "./stubFamilyWorkspaceTail";
+import { aggregateFamilyThreads, type RawThreadRow, type RawMessageRow } from "./aggregateFamilyTimeline";
 import type { RawFamilyWorkspaceData } from "./loadFamilyWorkspaceData";
 import type { FamilyCommunicationWorkspaceVM, RecipientVM, RecipientGroup, ChildRef, ComposerChannel } from "./types";
 
@@ -13,7 +14,10 @@ export type ResolveFamilyWorkspaceOptions = {
     focusChildId?: string | null;
     focusOpportunityId?: string | null;
     composerChannel?: ComposerChannel;
+    selectedThreadId?: string | null;
 };
+
+export type FamilyCommsRaw = { threads: RawThreadRow[]; messages: RawMessageRow[] };
 
 function ageLabel(dob: string | null | undefined): string | null {
     if (!dob) return null;
@@ -44,7 +48,8 @@ function inThePast(dateStr: string | null | undefined): boolean {
 
 export function assembleFamilyWorkspace(
     raw: RawFamilyWorkspaceData,
-    opts: ResolveFamilyWorkspaceOptions
+    opts: ResolveFamilyWorkspaceOptions,
+    comms?: FamilyCommsRaw
 ): FamilyCommunicationWorkspaceVM {
     const channel: ComposerChannel = opts.composerChannel ?? "email";
     const providerChannels = availableComposerChannels(raw.bindings as unknown as BindingSummary[]);
@@ -154,6 +159,26 @@ export function assembleFamilyWorkspace(
             focusOpportunityId: opts.focusOpportunityId ?? null,
             focusPersonId: null,
         },
-        ...stubFamilyWorkspaceTail(),
+        ...buildConversationTail(raw, opts, comms),
+    };
+}
+
+function buildConversationTail(raw: RawFamilyWorkspaceData, opts: ResolveFamilyWorkspaceOptions, comms?: FamilyCommsRaw) {
+    const base = stubFamilyWorkspaceTail();
+    if (!comms) return base;
+    const childPersonIdToMemberId: Record<string, string> = {};
+    for (const m of raw.members) if (m.person_id) childPersonIdToMemberId[m.person_id] = m.id;
+    const opportunityIds = new Set(raw.opportunities.map((o) => o.id).filter(Boolean));
+    const agg = aggregateFamilyThreads(comms.threads, comms.messages, {
+        childPersonIdToMemberId,
+        opportunityIds,
+        selectedThreadId: opts.selectedThreadId ?? null,
+    });
+    return {
+        ...base,
+        threads: agg.threads,
+        selectedThread: agg.selectedThread,
+        messages: agg.selectedMessages,
+        timelineEvents: agg.timelineEvents,
     };
 }

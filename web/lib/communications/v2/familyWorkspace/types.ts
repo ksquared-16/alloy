@@ -67,6 +67,33 @@ export type WorkspaceScope = {
     focusPersonId: string | null;
 };
 
+export type ThreadVM = {
+    id: string;
+    subject: string | null;
+    channel: string | null;
+    primaryEntity: { type: string; id: string };
+    childId: string | null;        // customer_members.id when the thread is child-scoped
+    opportunityId: string | null;  // opportunity id when opportunity-scoped
+    lastActivityAt: string | null;
+    messageCount: number;
+    unread: number;
+    slaState: string | null;
+    attentionState: string | null;
+};
+
+export type TimelineEventVM = {
+    id: string;
+    threadId: string;
+    direction: "inbound" | "outbound" | "internal" | string | null;
+    channel: string | null;
+    body: string | null;
+    createdAt: string | null;
+    kind: string | null;        // "message" | "note" | "system" | "call"
+    deliveredAt: string | null;
+    openedAt: string | null;
+    repliedAt: string | null;
+};
+
 export type HealthSummary = {
     status: "healthy" | "at_risk" | "unresponsive";
     engagementScore: number;
@@ -99,10 +126,10 @@ export type FamilyCommunicationWorkspaceVM = {
     consentSummary: ConsentSummary;
     composerDraft: ComposerDraftVM;
     scope: WorkspaceScope;
-    // 5B/5C stubs:
-    threads: unknown[];
-    selectedThread: unknown | null;
-    messages: unknown[];
-    timelineEvents: unknown[];
-    healthSummary: HealthSummary;
+    // 5B real conversation data:
+    threads: ThreadVM[];
+    selectedThread: ThreadVM | null;
+    messages: TimelineEventVM[];     // selected thread's events
+    timelineEvents: TimelineEventVM[]; // aggregated across all family threads (chronological asc)
+    healthSummary: HealthSummary;     // 5C
 };

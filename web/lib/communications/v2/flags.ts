@@ -22,6 +22,7 @@ export const COMMS_V2_FLAG_KEYS = [
     "comms_v2_announcements",
     "comms_v2_deliverability",
     "comms_v2_bos",
+    "comms_v2_live_workspace",
 ] as const;
 
 export type CommsV2FlagKey = (typeof COMMS_V2_FLAG_KEYS)[number];
@@ -39,6 +40,7 @@ const ENV_BY_KEY: Record<CommsV2FlagKey, string> = {
     comms_v2_announcements: "NEXT_PUBLIC_COMMS_V2_ANNOUNCEMENTS",
     comms_v2_deliverability: "NEXT_PUBLIC_COMMS_V2_DELIVERABILITY",
     comms_v2_bos: "NEXT_PUBLIC_COMMS_V2_BOS",
+    comms_v2_live_workspace: "NEXT_PUBLIC_COMMS_V2_LIVE_WORKSPACE",
 };
 
 /** Returns the env-var name backing a flag key. */
@@ -82,6 +84,8 @@ export function isCommsV2FlagEnabled(key: CommsV2FlagKey): boolean {
             return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_DELIVERABILITY);
         case "comms_v2_bos":
             return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_BOS);
+        case "comms_v2_live_workspace":
+            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_LIVE_WORKSPACE);
         default:
             return false;
     }

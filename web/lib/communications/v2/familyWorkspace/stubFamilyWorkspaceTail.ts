@@ -1,21 +1,22 @@
-// UI-5A — stable empty defaults for the 5B/5C tail (threads/messages/timeline/health).
-import type { HealthSummary } from "./types";
+// UI-5A/5B — stable empty defaults for the conversation tail (used when no comms data loaded).
+import type { HealthSummary, ThreadVM, TimelineEventVM } from "./types";
 
 export function stubFamilyWorkspaceTail(overrides?: {
-    threads?: unknown[];
-    messages?: unknown[];
-    timelineEvents?: unknown[];
+    threads?: ThreadVM[];
+    selectedThread?: ThreadVM | null;
+    messages?: TimelineEventVM[];
+    timelineEvents?: TimelineEventVM[];
     healthSummary?: Partial<HealthSummary>;
 }): {
-    threads: unknown[];
-    selectedThread: unknown | null;
-    messages: unknown[];
-    timelineEvents: unknown[];
+    threads: ThreadVM[];
+    selectedThread: ThreadVM | null;
+    messages: TimelineEventVM[];
+    timelineEvents: TimelineEventVM[];
     healthSummary: HealthSummary;
 } {
     return {
         threads: overrides?.threads ?? [],
-        selectedThread: null,
+        selectedThread: overrides?.selectedThread ?? null,
         messages: overrides?.messages ?? [],
         timelineEvents: overrides?.timelineEvents ?? [],
         healthSummary: {

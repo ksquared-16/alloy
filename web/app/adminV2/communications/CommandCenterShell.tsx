@@ -15,6 +15,8 @@ import {
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
+import type { FamilyCommunicationWorkspaceVM } from "@/lib/communications/v2/familyWorkspace/types";
 import {
     COMMS_FIXTURES_ENABLED,
     FIXTURE_CONVERSATIONS,
@@ -41,6 +43,7 @@ type TimelineMessage = {
     opened_at?: string | null;
     replied_at?: string | null;
     kind?: string | null;
+    thread_id?: string | null;
 };
 
 const slaChipClass = (s: string | null | undefined): string =>
@@ -88,6 +91,22 @@ const channelIcon = (m: TimelineMessage): IconType => {
 
 const toolbarBtn = "rounded-md p-1.5 text-alloy-midnight/55 transition hover:bg-alloy-stone/12 hover:text-alloy-midnight";
 
+const LIVE_WORKSPACE = isCommsV2FlagEnabled("comms_v2_live_workspace");
+
+function mapLiveEvents(events: FamilyCommunicationWorkspaceVM["timelineEvents"]): TimelineMessage[] {
+    return events.map((e) => ({
+        id: e.id,
+        direction: e.direction,
+        channel: e.channel,
+        body: e.body,
+        created_at: e.createdAt,
+        kind: e.kind,
+        opened_at: e.openedAt,
+        replied_at: e.repliedAt,
+        thread_id: e.threadId,
+    }));
+}
+
 export default function CommandCenterShell() {
     const [conversations, setConversations] = useState<ConversationSummary[]>(
         COMMS_FIXTURES_ENABLED ? FIXTURE_CONVERSATIONS : []
@@ -102,6 +121,23 @@ export default function CommandCenterShell() {
         COMMS_FIXTURES_ENABLED ? (FIXTURE_MESSAGES[FIXTURE_CONVERSATIONS[0]?.id ?? ""] ?? []) : []
     );
     const [assignBusy, setAssignBusy] = useState(false);
+    const [liveChildren, setLiveChildren] = useState<string[] | null>(null);
+    const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+
+    const loadLive = useCallback(async (customerId: string, threadId: string | null) => {
+        try {
+            const qs = `customer_id=${encodeURIComponent(customerId)}${threadId ? `&thread_id=${encodeURIComponent(threadId)}` : ""}`;
+            const res = await fetch(`/api/admin/communications/family-workspace?${qs}`);
+            if (!res.ok) return;
+            const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM };
+            const vm = data.workspace;
+            if (!vm) return;
+            setMessages(mapLiveEvents(threadId ? vm.messages : vm.timelineEvents));
+            setLiveChildren(vm.children.map((c) => c.name));
+        } catch {
+            /* live workspace best-effort; fixtures remain */
+        }
+    }, []);
 
     const loadConversations = useCallback(async () => {
         if (COMMS_FIXTURES_ENABLED) return;
@@ -121,12 +157,23 @@ export default function CommandCenterShell() {
 
     useEffect(() => {
         void loadConversations();
-    }, [loadConversations]);
+        if (LIVE_WORKSPACE && COMMS_FIXTURES_ENABLED) {
+            const c = FIXTURE_FAMILY_DETAILS[FIXTURE_CONVERSATIONS[0]?.id ?? ""]?.customerId;
+            if (c) void loadLive(c, null);
+        }
+    }, [loadConversations, loadLive]);
 
     const openConversation = useCallback(async (id: string) => {
         setSelectedId(id);
+        setSelectedThreadId(null);
         if (COMMS_FIXTURES_ENABLED) {
+            const liveCustomerId = LIVE_WORKSPACE ? FIXTURE_FAMILY_DETAILS[id]?.customerId : undefined;
+            if (liveCustomerId) {
+                await loadLive(liveCustomerId, null);
+                return;
+            }
             setMessages(FIXTURE_MESSAGES[id] ?? []);
+            setLiveChildren(null);
             return;
         }
         setMessages([]);
@@ -138,7 +185,7 @@ export default function CommandCenterShell() {
         } catch {
             /* timeline best-effort */
         }
-    }, []);
+    }, [loadLive]);
 
     const claim = useCallback(
         async (id: string) => {
@@ -158,14 +205,29 @@ export default function CommandCenterShell() {
         [loadConversations]
     );
 
+    const openThread = useCallback(
+        async (threadId: string) => {
+            if (!LIVE_WORKSPACE) return;
+            setSelectedThreadId(threadId);
+            const cust = selectedId ? FIXTURE_FAMILY_DETAILS[selectedId]?.customerId : undefined;
+            if (cust) await loadLive(cust, threadId);
+        },
+        [loadLive, selectedId]
+    );
+
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
     const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
     const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
     const detail: FixtureFamilyDetail | undefined = selected ? FIXTURE_FAMILY_DETAILS[selected.id] : undefined;
     const childNames = useMemo(
-        () => (detail ? detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean) : []),
-        [detail]
+        () =>
+            LIVE_WORKSPACE && liveChildren
+                ? liveChildren
+                : detail
+                  ? detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean)
+                  : [],
+        [detail, liveChildren]
     );
 
     const health = useMemo(
@@ -371,7 +433,7 @@ export default function CommandCenterShell() {
                                                 }
                                                 const sender = out ? (detail?.owner ?? "Staff") : (detail?.contactName ?? selected.family_label ?? "Family");
                                                 return (
-                                                    <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className={`flex ${out ? "justify-end" : "justify-start"}`}>
+                                                    <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} data-cc-thread-open={m.thread_id ?? undefined} onClick={() => { if (LIVE_WORKSPACE && m.thread_id) void openThread(m.thread_id); }} className={`flex ${out ? "justify-end" : "justify-start"} ${LIVE_WORKSPACE && m.thread_id ? "cursor-pointer" : ""}`}>
                                                         <div className="max-w-[88%]">
                                                             <div className={`mb-0.5 flex items-center gap-1 text-[10px] text-alloy-midnight/45 ${out ? "justify-end" : ""}`}>
                                                                 <Icon className="h-3 w-3" />

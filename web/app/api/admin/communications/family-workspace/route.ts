@@ -31,6 +31,7 @@ export async function GET(req: Request) {
     }
     const focusChildId = url.searchParams.get("focus_child_id");
     const focusOpportunityId = url.searchParams.get("focus_opportunity_id");
+    const selectedThreadId = url.searchParams.get("thread_id");
     const channelParamRaw = (url.searchParams.get("composer_channel") ?? "email").toLowerCase();
     const composerChannel: ComposerChannel =
         channelParamRaw === "sms" ? "sms" : channelParamRaw === "note" ? "note" : "email";
@@ -47,6 +48,7 @@ export async function GET(req: Request) {
             focusChildId: focusChildId || null,
             focusOpportunityId: focusOpportunityId || null,
             composerChannel,
+            selectedThreadId: selectedThreadId || null,
         });
         return NextResponse.json({
             workspace,
@@ -58,6 +60,9 @@ export async function GET(req: Request) {
                 child_count: workspace.children.length,
                 eligible_count: workspace.eligibleRecipients.length,
                 disabled_count: workspace.disabledRecipients.length,
+                thread_count: workspace.threads.length,
+                message_count: workspace.timelineEvents.length,
+                selected_thread_id: workspace.selectedThread?.id ?? null,
             },
         });
     } catch (e) {
