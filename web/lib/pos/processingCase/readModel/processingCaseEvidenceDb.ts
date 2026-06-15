@@ -38,6 +38,7 @@ function labelSubmissionValues(schemaJson: unknown, payload: Record<string, unkn
             label: field.label,
             value: stringifyValue(values[field.id]),
             entityType: field.field_source?.entity_type ?? null,
+            fieldKey: field.field_source?.field_key ?? null,
         });
     }
     return out;

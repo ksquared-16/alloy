@@ -189,10 +189,21 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     {proposed.length === 0 ? (
                         <div className="text-sm text-stone-400">No proposed values on these sources.</div>
                     ) : (
-                        <dl className="space-y-1">
+                        <dl className="space-y-1.5">
                             {proposed.map((v, i) => (
                                 <div key={`${v.label}:${i}`} className="flex gap-2 text-[13px]">
-                                    <dt className="w-40 shrink-0 text-stone-500">{v.label}</dt>
+                                    <dt className="w-44 shrink-0">
+                                        <span className="text-stone-600">{v.label}</span>
+                                        <span className="ml-1.5">
+                                            {v.entityType && v.fieldKey ? (
+                                                <span className="rounded bg-stone-100 px-1 py-0.5 text-[10px] text-stone-500">
+                                                    {v.entityType}.{v.fieldKey}
+                                                </span>
+                                            ) : (
+                                                <span className="text-[10px] text-stone-400">unmapped</span>
+                                            )}
+                                        </span>
+                                    </dt>
                                     <dd className="min-w-0 flex-1 text-stone-800">{v.value ?? "—"}</dd>
                                 </div>
                             ))}
@@ -262,6 +273,11 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                                 no silent execution
                             </span>
                         </div>
+                        {approveResult?.kind === "needs_mapping" ? (
+                            <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
+                                Can’t promote yet — {approveResult.note}
+                            </div>
+                        ) : null}
                         {approveErr ? <div className="mb-2 text-[11.5px] text-amber-700">{approveErr}</div> : null}
                         <div className="flex flex-wrap items-center gap-2">
                             <button

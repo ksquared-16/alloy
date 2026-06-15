@@ -14,11 +14,16 @@
 
 import type { ProcessingCaseDetail, ProcessingCaseSourceKind, ProcessingCaseSourceRole } from "./types";
 
-/** A single read-only proposed value from a source. `entityType` = the record type it targets, if known. */
+/**
+ * A single read-only proposed value from a source.
+ * `entityType` + `fieldKey` are the canonical `field_source` mapping
+ * (`entity_type.field_key`, e.g. person.email) — the meaning layer, not a guess.
+ */
 export interface ProposedValue {
     label: string;
     value: string | null;
     entityType: string | null;
+    fieldKey?: string | null;
 }
 
 /** Raw evidence a per-kind loader returns for one source id. */

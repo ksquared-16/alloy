@@ -56,8 +56,15 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
         const source = (src as { source_kind: string; source_id: string } | null) ?? null;
         const operationalResult = await runMinimalDestinationHandoff(supabase, ctx.orgId, source);
-        await dbCompleteProcessingCaseWithResult(supabase, { orgId: ctx.orgId, caseId, result: operationalResult });
 
+        // FP7: a case whose form lacks the required mapping (no person.email binding,
+        // or the bound field was empty) must NOT silently complete. Leave it open so an
+        // operator can fix the mapping and re-approve.
+        if (operationalResult.kind === "needs_mapping") {
+            return jsonData({ caseId, status: row.status, operationalResult, blocked: true });
+        }
+
+        await dbCompleteProcessingCaseWithResult(supabase, { orgId: ctx.orgId, caseId, result: operationalResult });
         return jsonData({ caseId, status: "completed", operationalResult });
     } catch (e) {
         return NextResponse.json(

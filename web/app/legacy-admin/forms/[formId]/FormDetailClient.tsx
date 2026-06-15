@@ -667,6 +667,7 @@ export default function FormDetailClient() {
                         </div>
                         {detail.metadata.pos_connected === true ?
                             <ul className="mt-2 space-y-0.5 border-t border-stone-100 pt-2 text-[11px] text-stone-400">
+                                <li>Cases promote the fields you map to records — map a field to <span className="text-stone-500">person.email</span> (and name) so approval can create a person.</li>
                                 <li>Existing submissions are not backfilled — only new ones.</li>
                                 <li>Submit through the form’s published public link to generate a test case.</li>
                             </ul>
