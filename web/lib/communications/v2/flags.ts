@@ -1,9 +1,10 @@
 /**
  * Communications V2 — feature flags.
  *
- * All flags default OFF for safe, dark rollout. Surfaces gate on these so V2 can
- * land package-by-package without exposing partial UI. Mirrors the env-boolean idiom
- * in `web/lib/communications/communicationsEnabled.ts` (read at call time, not module load).
+ * Core surfaces (command center, record tab, live workspace, composer) default ON so
+ * staging does not require Vercel env vars. Non-core packages stay default OFF for dark
+ * rollout. Explicit env tokens override either way. Mirrors the env-boolean idiom in
+ * `web/lib/communications/communicationsEnabled.ts` (read at call time, not module load).
  *
  * Server- and client-readable: keys map to NEXT_PUBLIC_* env vars so they can gate UI.
  *
@@ -48,14 +49,35 @@ export function commsV2FlagEnvName(key: CommsV2FlagKey): string {
     return ENV_BY_KEY[key];
 }
 
-function envEnabled(value: string | undefined): boolean {
-    const v = (value ?? "").trim().toLowerCase();
-    return v === "1" || v === "true" || v === "yes";
+/** Core V2 surfaces — default ON when env is unset; set env to false/0/no/off to revert to legacy. */
+const CORE_COMMS_V2_FLAGS: ReadonlySet<CommsV2FlagKey> = new Set([
+    "comms_v2_command_center",
+    "comms_v2_record_tab",
+    "comms_v2_composer",
+    "comms_v2_live_workspace",
+]);
+
+function isTruthyEnvToken(value: string): boolean {
+    return value === "1" || value === "true" || value === "yes" || value === "on";
+}
+
+function isFalsyEnvToken(value: string): boolean {
+    return value === "0" || value === "false" || value === "no" || value === "off";
+}
+
+function resolveCommsV2Flag(raw: string | undefined, key: CommsV2FlagKey): boolean {
+    const defaultEnabled = CORE_COMMS_V2_FLAGS.has(key);
+    if (raw === undefined) return defaultEnabled;
+    const v = raw.trim().toLowerCase();
+    if (v === "") return defaultEnabled;
+    if (isTruthyEnvToken(v)) return true;
+    if (isFalsyEnvToken(v)) return false;
+    return false;
 }
 
 /**
- * Whether a Communications V2 flag is enabled. Defaults to false when the backing
- * env var is unset or not a truthy token ("1" | "true" | "yes", case-insensitive).
+ * Whether a Communications V2 flag is enabled. Core flags default ON; non-core default OFF.
+ * Explicit tokens: "1" | "true" | "yes" | "on" enable; "0" | "false" | "no" | "off" disable.
  */
 export function isCommsV2FlagEnabled(key: CommsV2FlagKey): boolean {
     // STATIC process.env.NEXT_PUBLIC_* access is REQUIRED: Next.js only inlines NEXT_PUBLIC_* env into the
@@ -63,29 +85,29 @@ export function isCommsV2FlagEnabled(key: CommsV2FlagKey): boolean {
     // → it is undefined in client components → every client-side flag would read false. Keep this a switch.
     switch (key) {
         case "comms_v2_command_center":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_COMMAND_CENTER);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_COMMAND_CENTER, key);
         case "comms_v2_record_tab":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_RECORD_TAB);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_RECORD_TAB, key);
         case "comms_v2_composer":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_COMPOSER);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_COMPOSER, key);
         case "comms_v2_preferences":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_PREFERENCES);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_PREFERENCES, key);
         case "comms_v2_compliance":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_COMPLIANCE);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_COMPLIANCE, key);
         case "comms_v2_assignment":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_ASSIGNMENT);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_ASSIGNMENT, key);
         case "comms_v2_sla":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_SLA);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_SLA, key);
         case "comms_v2_templates":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_TEMPLATES);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_TEMPLATES, key);
         case "comms_v2_announcements":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_ANNOUNCEMENTS);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_ANNOUNCEMENTS, key);
         case "comms_v2_deliverability":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_DELIVERABILITY);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_DELIVERABILITY, key);
         case "comms_v2_bos":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_BOS);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_BOS, key);
         case "comms_v2_live_workspace":
-            return envEnabled(process.env.NEXT_PUBLIC_COMMS_V2_LIVE_WORKSPACE);
+            return resolveCommsV2Flag(process.env.NEXT_PUBLIC_COMMS_V2_LIVE_WORKSPACE, key);
         default:
             return false;
     }

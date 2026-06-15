@@ -6,9 +6,20 @@ import {
     type CommsV2FlagKey,
 } from "@/lib/communications/v2/flags";
 
+const CORE_FLAGS: CommsV2FlagKey[] = [
+    "comms_v2_command_center",
+    "comms_v2_record_tab",
+    "comms_v2_composer",
+    "comms_v2_live_workspace",
+];
+
+const NON_CORE_FLAGS: CommsV2FlagKey[] = COMMS_V2_FLAG_KEYS.filter(
+    (key) => !CORE_FLAGS.includes(key)
+);
+
 /**
  * PKG-01 — Communications V2 feature flags.
- * Guarantees: every flag defaults OFF; truthy tokens enable; everything else is off.
+ * Core surfaces default ON; non-core packages default OFF; explicit env tokens override.
  */
 describe("Communications V2 feature flags", () => {
     const saved: Record<string, string | undefined> = {};
@@ -28,8 +39,14 @@ describe("Communications V2 feature flags", () => {
         }
     });
 
-    it("defaults every flag OFF when its env var is unset", () => {
-        for (const key of COMMS_V2_FLAG_KEYS) {
+    it("defaults core flags ON when their env var is unset", () => {
+        for (const key of CORE_FLAGS) {
+            expect(isCommsV2FlagEnabled(key)).toBe(true);
+        }
+    });
+
+    it("defaults non-core flags OFF when their env var is unset", () => {
+        for (const key of NON_CORE_FLAGS) {
             expect(isCommsV2FlagEnabled(key)).toBe(false);
         }
     });
@@ -42,8 +59,8 @@ describe("Communications V2 feature flags", () => {
         expect(new Set(names).size).toBe(names.length);
     });
 
-    it.each(["1", "true", "TRUE", "Yes", " yes "])(
-        "enables a flag when its env var is the truthy token %j",
+    it.each(["1", "true", "TRUE", "Yes", " yes ", "on", "ON"])(
+        "enables a core flag when its env var is the truthy token %j",
         (token) => {
             const key: CommsV2FlagKey = "comms_v2_command_center";
             process.env[commsV2FlagEnvName(key)] = token;
@@ -51,8 +68,8 @@ describe("Communications V2 feature flags", () => {
         }
     );
 
-    it.each(["0", "false", "no", "", "off", "enabled?"])(
-        "keeps a flag OFF for non-truthy value %j",
+    it.each(["0", "false", "no", "off"])(
+        "disables a core flag for explicit falsy value %j",
         (token) => {
             const key: CommsV2FlagKey = "comms_v2_composer";
             process.env[commsV2FlagEnvName(key)] = token;
@@ -60,9 +77,15 @@ describe("Communications V2 feature flags", () => {
         }
     );
 
+    it("enables a non-core flag when its env var is explicitly truthy", () => {
+        const key: CommsV2FlagKey = "comms_v2_bos";
+        process.env[commsV2FlagEnvName(key)] = "1";
+        expect(isCommsV2FlagEnabled(key)).toBe(true);
+    });
+
     it("isolates flags from one another", () => {
         process.env[commsV2FlagEnvName("comms_v2_bos")] = "1";
         expect(isCommsV2FlagEnabled("comms_v2_bos")).toBe(true);
-        expect(isCommsV2FlagEnabled("comms_v2_command_center")).toBe(false);
+        expect(isCommsV2FlagEnabled("comms_v2_command_center")).toBe(true);
     });
 });

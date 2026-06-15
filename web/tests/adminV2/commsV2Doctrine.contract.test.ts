@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { extname, join } from "node:path";
-import { COMMS_V2_FLAG_KEYS, isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
+import { COMMS_V2_FLAG_KEYS, commsV2FlagEnvName, isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 
 /**
  * PKG-01 — Communications V2 doctrine guardrails (contract tests).
@@ -13,7 +13,7 @@ import { COMMS_V2_FLAG_KEYS, isCommsV2FlagEnabled } from "@/lib/communications/v
  *  - no BOS panels embedded in V2 content (BOS only via the command rail)
  *  - no provider-specific branching outside the (future) provider adapter dir
  *  - no auto-send path (BOS stays review-first)
- *  - all comms_v2_* flags default OFF
+ *  - core comms_v2_* flags default ON; non-core default OFF
  *
  * Mirrors the scan style of `adminV2BosTerminology.contract.test.ts`.
  */
@@ -86,12 +86,19 @@ describe("Communications V2 doctrine guardrails", () => {
         expect(offenders, `direct BOS panel imports in V2 content: ${offenders.join(", ")}`).toEqual([]);
     });
 
-    it("defaults every comms_v2_* flag OFF without explicit enablement", () => {
+    const CORE_FLAGS = new Set([
+        "comms_v2_command_center",
+        "comms_v2_record_tab",
+        "comms_v2_composer",
+        "comms_v2_live_workspace",
+    ]);
+
+    it("defaults core comms_v2_* flags ON and non-core OFF without explicit env", () => {
         for (const key of COMMS_V2_FLAG_KEYS) {
-            const name = `NEXT_PUBLIC_${key.toUpperCase()}`;
+            const name = commsV2FlagEnvName(key);
             const prev = process.env[name];
             delete process.env[name];
-            expect(isCommsV2FlagEnabled(key)).toBe(false);
+            expect(isCommsV2FlagEnabled(key)).toBe(CORE_FLAGS.has(key));
             if (prev !== undefined) process.env[name] = prev;
         }
     });
