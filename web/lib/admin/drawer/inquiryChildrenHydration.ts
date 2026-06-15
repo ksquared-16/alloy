@@ -27,6 +27,7 @@ export type InquiryChildHydrateRow = {
     dob: string | null;
     age: string | null;
     desired_program_type: string | null;
+    desired_program_category_id: string | null;
     desired_program_label: string | null;
     desired_schedule_type: string | null;
     desired_schedule_label: string | null;
@@ -212,6 +213,7 @@ export function mergeHouseholdActiveChildrenIntoInquiryChildren(
             dob,
             age: age ? age.label : null,
             desired_program_type: desiredProgramType,
+            desired_program_category_id: null,
             desired_program_label:
                 optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", desiredProgramType) ??
                 demoProgramLabel,

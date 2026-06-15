@@ -31,6 +31,7 @@ describe("inquiryChildrenHydration", () => {
                 dob: null,
                 age: null,
                 desired_program_type: "preschool",
+                desired_program_category_id: null,
                 desired_program_label: "Preschool",
                 desired_schedule_type: null,
                 desired_schedule_label: null,
