@@ -628,28 +628,49 @@ export default function FormDetailClient() {
                     {duplicateErr ?
                         <p className="mb-3 text-sm text-alloy-ember" role="alert">{duplicateErr}</p>
                     :   null}
-                    <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-stone-200 bg-white px-3 py-2">
-                        <div className="min-w-0">
-                            <div className="text-sm font-medium text-stone-900">Processing</div>
-                            <div className="text-xs text-stone-500">
-                                Send submissions to Processing for operator review before they update records.
+                    <div className="mb-3 rounded-md border border-stone-200 bg-white px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-stone-900">Processing</span>
+                                    <span
+                                        className={
+                                            detail.metadata.pos_connected === true ?
+                                                "rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-800"
+                                            :   "rounded-full bg-stone-100 px-2 py-0.5 text-[11px] text-stone-500"
+                                        }
+                                    >
+                                        {detail.metadata.pos_connected === true ? "Enabled" : "Disabled"}
+                                    </span>
+                                </div>
+                                <div className="mt-0.5 text-xs text-stone-500">
+                                    {detail.metadata.pos_connected === true ?
+                                        "New submissions to this form create a Processing Case for operator review before any record changes."
+                                    :   "Turn on to send new submissions to Processing for review before they update records."}
+                                </div>
+                                {processingErr ?
+                                    <div className="mt-1 text-xs text-amber-700">{processingErr}</div>
+                                :   null}
                             </div>
-                            {processingErr ?
-                                <div className="mt-1 text-xs text-amber-700">{processingErr}</div>
-                            :   null}
+                            <button
+                                type="button"
+                                disabled={!canMutate || processingBusy}
+                                onClick={() => void toggleProcessingEnabled(detail.metadata.pos_connected !== true)}
+                                className={
+                                    detail.metadata.pos_connected === true ?
+                                        "shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 disabled:opacity-50"
+                                    :   "shrink-0 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                                }
+                            >
+                                {detail.metadata.pos_connected === true ? "Disable" : "Enable processing"}
+                            </button>
                         </div>
-                        <button
-                            type="button"
-                            disabled={!canMutate || processingBusy}
-                            onClick={() => void toggleProcessingEnabled(detail.metadata.pos_connected !== true)}
-                            className={
-                                detail.metadata.pos_connected === true ?
-                                    "shrink-0 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-                                :   "shrink-0 rounded-md border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-700 disabled:opacity-50"
-                            }
-                        >
-                            {detail.metadata.pos_connected === true ? "Processing enabled" : "Enable processing"}
-                        </button>
+                        {detail.metadata.pos_connected === true ?
+                            <ul className="mt-2 space-y-0.5 border-t border-stone-100 pt-2 text-[11px] text-stone-400">
+                                <li>Existing submissions are not backfilled — only new ones.</li>
+                                <li>Submit through the form’s published public link to generate a test case.</li>
+                            </ul>
+                        :   null}
                     </div>
                     <FormLifecycleWorkspaceLayout
                     formId={formId}

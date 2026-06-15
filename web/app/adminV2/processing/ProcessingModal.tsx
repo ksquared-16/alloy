@@ -52,16 +52,19 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                         Close
                     </button>
                 </div>
-                <div className="grid min-h-[min(22rem,65vh)] flex-1 grid-cols-[20rem_1fr] overflow-hidden">
-                    <div className="min-h-0 overflow-y-auto border-r border-stone-200 bg-white p-3">
+                <div className="grid min-h-[min(26rem,68vh)] flex-1 grid-cols-[20rem_1fr] overflow-hidden">
+                    <div className="min-h-0 overflow-y-auto border-r border-stone-200 bg-white">
                         <ProcessingQueueList selectedCaseId={selectedCaseId} onSelectCase={setSelectedCaseId} />
                     </div>
-                    <div className="min-h-0 overflow-y-auto">
+                    <div className="min-h-0 overflow-hidden bg-white">
                         {selectedCaseId ? (
                             <ProcessingCaseDetailContent caseId={selectedCaseId} />
                         ) : (
-                            <div className="p-6 text-sm text-stone-400">
-                                Select a case to view its sources and proposed values.
+                            <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+                                <div className="text-sm font-medium text-stone-600">Select a case to start</div>
+                                <p className="mx-auto mt-1 max-w-[20rem] text-xs leading-relaxed text-stone-400">
+                                    Pick a case from the queue to review its source, proposed values, and destination — then approve the action to hand it off to the record.
+                                </p>
                             </div>
                         )}
                     </div>
