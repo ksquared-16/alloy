@@ -16,6 +16,11 @@ import {
     isSelectLikeFieldType,
 } from "@/lib/admin/fieldDefinitionOptionSetConfig";
 import {
+    listMissingPlacementFieldTemplatesForEntity,
+    type ConfigurablePlacementFieldTemplate,
+} from "@/lib/fields/configurablePlacementFieldCatalog";
+import { shouldIncludeConfigOnFieldDefinitionPatch } from "@/lib/fields/fieldDefinitionConfig";
+import {
     fetchFieldSectionRegistry,
     mergeFieldSectionSelectOptions,
     sectionKeyInOptions,
@@ -167,6 +172,17 @@ export default function EntityFieldsClient({
     const [inlineSaveError, setInlineSaveError] = useState<string | null>(null);
     const [inlineRowErrors, setInlineRowErrors] = useState<Record<string, string>>({});
     const [inlinePresetOverrides, setInlinePresetOverrides] = useState<Record<string, FieldPolicyRequirementPreset>>({});
+    const [ensureSavingKey, setEnsureSavingKey] = useState<string | null>(null);
+    const [ensureError, setEnsureError] = useState<string | null>(null);
+
+    const missingPlacementTemplates = useMemo(
+        () =>
+            listMissingPlacementFieldTemplatesForEntity(
+                entityType,
+                items.map((i) => i.field_key),
+            ),
+        [entityType, items],
+    );
 
     const sortedItems = useMemo(() => sortFieldDefinitionsForAdminList(items), [items]);
 
@@ -378,7 +394,13 @@ export default function EntityFieldsClient({
                 placeholder: editPlaceholder.trim() || null,
                 help_text: editHelpText.trim() || null,
             };
-            if (isSelectLikeFieldType(editRow.field_type)) {
+            if (
+                shouldIncludeConfigOnFieldDefinitionPatch({
+                    fieldType: editRow.field_type,
+                    existingConfig: editRow.config,
+                    optionSetKey: editOptionSetKey,
+                })
+            ) {
                 body.config = buildConfigWithOptionSetKey(editRow.config, editOptionSetKey);
             }
             if (
@@ -457,6 +479,29 @@ export default function EntityFieldsClient({
         const slug = slugifyLabel(createLabel);
         if (slug.length >= 2) setCreateKey(slug);
     }, [createOpen, createLabel]);
+
+    const ensurePlacementField = async (template: ConfigurablePlacementFieldTemplate) => {
+        if (!canMutate) return;
+        setEnsureSavingKey(template.field_key);
+        setEnsureError(null);
+        try {
+            const res = await fetch("/api/admin/field-definitions/ensure-platform-field", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    entity_type: template.entity_type,
+                    field_key: template.field_key,
+                }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not add field");
+            await fetchItems();
+        } catch (e) {
+            setEnsureError((e as Error).message);
+        } finally {
+            setEnsureSavingKey(null);
+        }
+    };
 
     const saveCreate = async () => {
         if (!canMutate) return;
@@ -555,6 +600,43 @@ export default function EntityFieldsClient({
                     title={adminV2Chrome ? "Fields" : `${title} definitions`}
                     surfaceTone={adminV2Chrome ? "settingsPanel" : "default"}
                 >
+                    {ensureError && (
+                        <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                            {ensureError}
+                        </div>
+                    )}
+                    {canMutate && missingPlacementTemplates.length > 0 && (
+                        <div
+                            className="mb-4 rounded-md border border-alloy-pine/20 bg-alloy-pine/[0.04] px-3 py-3"
+                            data-testid="placement-field-templates-panel"
+                        >
+                            <p className="text-xs font-semibold text-alloy-midnight">Placement fields</p>
+                            <p className="mt-0.5 text-xs text-alloy-midnight/60">
+                                Add School, Program, and Room as configurable reference fields with cascade behavior.
+                            </p>
+                            <ul className="mt-2 space-y-2">
+                                {missingPlacementTemplates.map((template) => (
+                                    <li
+                                        key={`${template.entity_type}:${template.field_key}`}
+                                        className="flex flex-wrap items-center justify-between gap-2 text-sm"
+                                    >
+                                        <span>
+                                            <span className="font-medium text-alloy-midnight">{template.operator_label}</span>
+                                            <span className="ml-2 text-xs text-alloy-midnight/50">{template.description}</span>
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => void ensurePlacementField(template)}
+                                            disabled={ensureSavingKey === template.field_key}
+                                            className="shrink-0 rounded border border-alloy-pine/35 px-2 py-1 text-xs font-medium text-alloy-pine hover:bg-alloy-pine/10 disabled:opacity-50"
+                                        >
+                                            {ensureSavingKey === template.field_key ? "Adding…" : "Add field"}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
                     {deleteError && (
                         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{deleteError}</div>
                     )}
