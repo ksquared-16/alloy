@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
     OPERATIONAL_QUEUES,
+    OTHER_QUEUE_KEY,
     groupConversationsByQueue,
     computeCommandCenterMetrics,
     applyQueueFilters,
+    visibleCommandCenterQueues,
     type ConversationSummary,
 } from "@/lib/communications/v2/commandCenterViewModel";
 
@@ -20,11 +22,43 @@ describe("operational queues, not folders", () => {
             "awaiting_parent_reply", "needs_follow_up", "documents_missing", "re_enrollment_outreach", "waitlist_update",
         ]);
     });
-    it("groups by attention_state; unknown → other", () => {
+    it("groups by attention_state; unknown/null → other", () => {
         const g = groupConversationsByQueue(C);
         expect(g.awaiting_parent_reply.map((c) => c.id)).toEqual(["1"]);
         expect(g.needs_follow_up.map((c) => c.id)).toEqual(["2"]);
-        expect(g.other.map((c) => c.id)).toEqual(["4"]);
+        expect(g[OTHER_QUEUE_KEY].map((c) => c.id)).toEqual(["4"]);
+    });
+    it("groups null attention_state into other (live staging threads)", () => {
+        const live: ConversationSummary[] = [
+            { id: "t1", family_label: "Rivera Family", attention_state: null },
+            { id: "t2", family_label: "Smith Family" },
+        ];
+        const g = groupConversationsByQueue(live);
+        expect(g[OTHER_QUEUE_KEY].map((c) => c.id)).toEqual(["t1", "t2"]);
+        expect(OPERATIONAL_QUEUES.every((q) => (g[q.key] ?? []).length === 0)).toBe(true);
+    });
+});
+
+describe("visible queue sections", () => {
+    it("includes the fallback section when rows only land in other", () => {
+        const live: ConversationSummary[] = [
+            { id: "t1", family_label: "Rivera Family" },
+            { id: "t2", family_label: "Smith Family" },
+        ];
+        const grouped = groupConversationsByQueue(live);
+        const sections = visibleCommandCenterQueues(grouped);
+        expect(sections).toHaveLength(1);
+        expect(sections[0]?.key).toBe(OTHER_QUEUE_KEY);
+        expect(sections[0]?.items).toHaveLength(2);
+    });
+    it("keeps count and visible rows consistent for mixed buckets", () => {
+        const grouped = groupConversationsByQueue(C);
+        const sections = visibleCommandCenterQueues(grouped);
+        const visibleCount = sections.reduce((n, s) => n + s.items.length, 0);
+        expect(visibleCount).toBe(C.length);
+    });
+    it("returns no sections when the filtered set is empty", () => {
+        expect(visibleCommandCenterQueues(groupConversationsByQueue([]))).toEqual([]);
     });
 });
 

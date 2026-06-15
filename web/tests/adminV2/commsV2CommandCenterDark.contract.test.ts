@@ -18,7 +18,7 @@ describe("command center replaces inbox modal body", () => {
     it("the body is queue + workspace (operational queues, not folders) and owns NO BOS rail", () => {
         expect(shell).toMatch(/data-cc-column="queue"/);
         expect(shell).toMatch(/data-cc-column="workspace"/);
-        expect(shell).toMatch(/OPERATIONAL_QUEUES/);
+        expect(shell).toMatch(/visibleCommandCenterQueues/);
         expect(shell).not.toMatch(/data-cc-column="bos"/);
         expect(shell).not.toMatch(/CommandRailBosMount/); // BOS is the modal shell's, not the body's
     });

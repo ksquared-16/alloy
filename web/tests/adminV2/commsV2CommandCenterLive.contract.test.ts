@@ -16,11 +16,18 @@ describe("command center live wiring", () => {
     it("renders metrics, filters, queues, and a timeline", () => {
         expect(src).toMatch(/data-cc-metrics/);
         expect(src).toMatch(/data-cc-filters/);
-        expect(src).toMatch(/OPERATIONAL_QUEUES/);
+        expect(src).toMatch(/visibleCommandCenterQueues/);
         expect(src).toMatch(/data-cc-timeline/);
         expect(src).toMatch(/computeCommandCenterMetrics/);
         expect(src).toMatch(/applyQueueFilters/);
         expect(src).toMatch(/groupConversationsByQueue/);
+    });
+    it("renders queue rows from visible sections and loads FamilyCommunicationWorkspace on selection", () => {
+        expect(shellSrc).toMatch(/queueSections\.map/);
+        expect(shellSrc).toMatch(/data-cc-conversation=/);
+        expect(shellSrc).toMatch(/FamilyCommunicationWorkspaceView/);
+        expect(shellSrc).toMatch(/selected \?/);
+        expect(shellSrc).toMatch(/openConversation/);
     });
     it("wires claim/assign via the dark assign route", () => {
         expect(src).toMatch(/data-cc-claim/);

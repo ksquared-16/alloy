@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrgContextLight } from "@/lib/admin/getAdminOrgContextLight";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import type { ConversationSummary } from "@/lib/communications/v2/commandCenterViewModel";
+import { enrichCommandCenterConversations } from "@/lib/communications/v2/commandCenterConversationEnrichment";
 
 /**
  * GET /api/admin/communications/conversations — org-scoped conversation summaries for the
@@ -19,6 +19,9 @@ type ThreadRow = {
     sla_state: string | null;
     last_message_at: string | null;
     metadata: Record<string, unknown> | null;
+    primary_entity_type: string | null;
+    primary_entity_id: string | null;
+    recipient_key: string | null;
 };
 
 export async function GET() {
@@ -31,7 +34,9 @@ export async function GET() {
     const supabase = createAdminClient();
     const { data: threads, error } = await supabase
         .from("communication_threads")
-        .select("id, channel, attention_state, assignment_state, assigned_user_id, location_id, sla_state, last_message_at, metadata")
+        .select(
+            "id, channel, attention_state, assignment_state, assigned_user_id, location_id, sla_state, last_message_at, metadata, primary_entity_type, primary_entity_id, recipient_key"
+        )
         .eq("org_id", ctx.orgId)
         .order("last_message_at", { ascending: false, nullsFirst: false })
         .limit(200);
@@ -66,22 +71,7 @@ export async function GET() {
         }
     }
 
-    const conversations: ConversationSummary[] = rows.map((r) => {
-        const meta = r.metadata ?? {};
-        const label = typeof meta.family_label === "string" ? meta.family_label : null;
-        return {
-            id: r.id,
-            channel: r.channel,
-            attention_state: r.attention_state,
-            assignment_state: r.assignment_state,
-            assigned_user_id: r.assigned_user_id,
-            location_id: r.location_id,
-            sla_state: r.sla_state,
-            last_message_at: r.last_message_at,
-            unread: unreadByThread[r.id] ?? 0,
-            family_label: label,
-        };
-    });
+    const conversations = await enrichCommandCenterConversations(supabase, ctx.orgId, rows, unreadByThread);
 
     return NextResponse.json({ conversations });
 }
