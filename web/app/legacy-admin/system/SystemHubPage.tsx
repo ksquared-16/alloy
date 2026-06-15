@@ -6,7 +6,7 @@ type HubSection = { title: string; description?: string; links: HubLink[] };
 const sections: HubSection[] = [
     {
         title: "Data model",
-        description: "Field registry, option lists, statuses, and pipelines.",
+        description: "Field registry, option sets, statuses, and pipelines.",
         links: [
             { href: "/admin/system/option-sets", label: "Option sets" },
             { href: "/admin/system/field-sections", label: "Field sections" },

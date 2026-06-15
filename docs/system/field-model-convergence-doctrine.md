@@ -39,7 +39,7 @@ Supporting tables:
 | Table | Role |
 |-------|------|
 | `field_section_definitions` | Section labels for Fields catalog |
-| `option_sets` / `option_set_items` | Dropdown vocabulary |
+| `option_sets` / `option_set_items` | Dropdown vocabulary — static items and reference-backed config (`option_sets.config`) |
 | `record_drawer_layouts` | Layout composition + `field_placements_v1` |
 
 ### Not canonical (today — migration targets)

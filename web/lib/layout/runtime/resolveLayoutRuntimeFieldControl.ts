@@ -17,8 +17,9 @@ import {
     type PlacementOptionSource,
 } from "@/lib/fields/inquiryChildPlacementFieldMetadata";
 import { opportunityReferenceMetadataForRefKey } from "@/lib/fields/opportunityReferenceFieldMetadata";
+import { placementCascadeConfigForEntityField } from "@/lib/fields/configurablePlacementFieldCatalog";
 import { resolveSelectFieldBinding } from "@/lib/fields/resolveSelectFieldBinding";
-import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
+import { normalizeRefKeyOnRead, parseLayoutRefKey } from "@/lib/layout/layoutRefKeyAliases";
 
 export type LayoutRuntimeFieldControlType = "text" | "date" | "select";
 
@@ -38,17 +39,24 @@ export function resolveLayoutRuntimeFieldControl(
     } | null,
 ): LayoutRuntimeFieldControlResolution {
     const normalized = normalizeRefKeyOnRead(refKey.trim());
+    const { entityKey, fieldKey } = parseLayoutRefKey(normalized);
     if (normalized === "child.date_of_birth" || normalized === "inquiry_child.desired_start_date") {
         return { controlType: "date" };
     }
 
+    const catalogCascade =
+        entityKey && fieldKey ? placementCascadeConfigForEntityField(entityKey, fieldKey) : null;
     const childPlacement = inquiryChildPlacementMetadataForRefKey(refKey);
     const opportunityReference = opportunityReferenceMetadataForRefKey(refKey);
     const config = fieldDef?.config ?? null;
     const optionSource =
-        getOptionSourceFromConfig(config) ?? childPlacement?.option_source ?? opportunityReference?.option_source;
+        getOptionSourceFromConfig(config)
+        ?? catalogCascade?.option_source
+        ?? childPlacement?.option_source
+        ?? opportunityReference?.option_source;
     const dependsOn =
         (getDependsOnFieldKeyFromConfig(config) as InquiryChildNativeOcmFieldKey | "")
+        || (catalogCascade?.depends_on_field_key as InquiryChildNativeOcmFieldKey | "")
         || childPlacement?.depends_on_field_key;
 
     if (optionSource && optionSource !== "option_set") {

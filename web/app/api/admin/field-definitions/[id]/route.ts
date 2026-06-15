@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
-import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
+import { validateSelectLikeConfig, mergeFieldDefinitionConfigForWrite } from "@/lib/fields/fieldDefinitionConfig";
 import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
 import { resolveDrawerFieldPolicy } from "@/lib/fields/drawerFieldPolicyAdapter";
 
@@ -150,20 +150,15 @@ export async function PATCH(
 
     if (updates.config !== undefined) {
         const ft = String((existing as { field_type?: string }).field_type ?? "text");
-        const existingConfig =
-            (existing as { config?: Record<string, unknown> | null }).config != null
-            && typeof (existing as { config?: Record<string, unknown> | null }).config === "object"
-            && !Array.isArray((existing as { config?: Record<string, unknown> | null }).config)
-                ? ((existing as { config: Record<string, unknown> }).config)
-                : {};
-        const mergedConfig = {
-            ...existingConfig,
-            ...(updates.config as Record<string, unknown>),
-        };
+        const mergedConfig = mergeFieldDefinitionConfigForWrite(
+            (existing as { config?: Record<string, unknown> | null }).config,
+            updates.config,
+        );
         const cfgCheck = validateSelectLikeConfig(ft, mergedConfig);
         if (!cfgCheck.ok) {
             return NextResponse.json({ error: cfgCheck.error }, { status: 400 });
         }
+        updates.config = mergedConfig;
     }
 
     const existingEntityType = String((existing as { entity_type?: string }).entity_type ?? "");

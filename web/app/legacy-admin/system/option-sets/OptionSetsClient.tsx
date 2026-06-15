@@ -8,6 +8,7 @@ import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import PrimaryButton from "@/components/PrimaryButton";
 import type { OptionSetListRow } from "@/app/api/admin/option-sets/route";
+import { getOptionSetMode, optionSetModeLabel } from "@/lib/fields/optionSetConfig";
 import { slugifyAdminKey, uniqueAdminKey } from "@/lib/admin/slugifyAdminKey";
 
 const SET_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -412,14 +413,14 @@ export default function OptionSetsClient({
             {adminV2Chrome ? (
                 <SettingsPageHeader
                     title="Option sets"
-                    subtitle="Org-scoped lists for select fields, booking, and pricing dimensions. Keys are auto-generated from labels unless you use Advanced."
+                    subtitle="Org-scoped selectable vocabulary for fields, booking, and pricing dimensions. Keys are auto-generated from labels unless you use Advanced."
                     actions={newSetAction}
                 />
             ) : (
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                     <AdminPageHeader
                         title="Option sets"
-                        subtitle="Org-scoped lists for select fields, booking, and pricing dimensions. Keys are auto-generated from labels unless you use Advanced."
+                        subtitle="Org-scoped selectable vocabulary for fields, booking, and pricing dimensions. Keys are auto-generated from labels unless you use Advanced."
                     />
                     {newSetAction}
                 </div>
@@ -443,6 +444,7 @@ export default function OptionSetsClient({
                                 <tr className="border-b border-[#e6e8ec] text-[#59678b]">
                                     <th className="pb-2 pr-4 font-semibold">Set key</th>
                                     <th className="pb-2 pr-4 font-semibold">Label</th>
+                                    <th className="pb-2 pr-4 font-semibold">Mode</th>
                                     <th className="pb-2 pr-4 font-semibold">Items</th>
                                     <th className="pb-2 pr-4 font-semibold">Sort</th>
                                     {canMutate && <th className="pb-2 font-semibold">Actions</th>}
@@ -451,7 +453,7 @@ export default function OptionSetsClient({
                             <tbody>
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={canMutate ? 5 : 4} className="py-4 text-[#59678b]">
+                                        <td colSpan={canMutate ? 6 : 5} className="py-4 text-[#59678b]">
                                             No option sets yet. Create one or run database seeds.
                                         </td>
                                     </tr>
@@ -460,7 +462,12 @@ export default function OptionSetsClient({
                                         <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
                                             <td className="py-2 pr-4 font-mono text-[#59678b]">{row.set_key}</td>
                                             <td className="py-2 pr-4 font-medium text-[#31394d]">{row.label}</td>
-                                            <td className="py-2 pr-4 text-[#59678b]">{row.item_count}</td>
+                                            <td className="py-2 pr-4 text-[#59678b]">
+                                                {optionSetModeLabel(getOptionSetMode(row.config))}
+                                            </td>
+                                            <td className="py-2 pr-4 text-[#59678b]">
+                                                {getOptionSetMode(row.config) === "reference" ? "—" : row.item_count}
+                                            </td>
                                             <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
                                             {canMutate && (
                                                 <td className="py-2">
@@ -469,7 +476,7 @@ export default function OptionSetsClient({
                                                             href={`${basePath}/${encodeURIComponent(row.set_key)}`}
                                                             className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20"
                                                         >
-                                                            Edit items
+                                                            Edit
                                                         </Link>
                                                         <button
                                                             type="button"

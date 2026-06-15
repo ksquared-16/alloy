@@ -9,7 +9,11 @@ import {
     type InquiryChildPlacementHierarchyRow,
 } from "@/lib/admin/location/inquiryChildPlacementOptions";
 import { buildInquiryChildRoomOptionsForSite } from "@/lib/admin/drawer/inquiryChildPlacementScope";
-import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
+import {
+    validateSelectLikeConfig,
+    shouldIncludeConfigOnFieldDefinitionPatch,
+    mergeFieldDefinitionConfigForWrite,
+} from "@/lib/fields/fieldDefinitionConfig";
 import { inquiryChildPlacementMetadataForRefKey } from "@/lib/fields/inquiryChildPlacementFieldMetadata";
 import { resolveLayoutRuntimeEnrollmentPlacementContext } from "@/lib/layout/runtime/resolveLayoutRuntimeEnrollmentPlacementContext";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
@@ -61,8 +65,16 @@ describe("placement foundation — field validation", () => {
         expect(validateSelectLikeConfig("select", LEAD_LOCATION_CONFIG)).toEqual({ ok: true });
     });
 
-    it("label-only lead school edit retains valid reference config", () => {
-        expect(validateSelectLikeConfig("select", { ...LEAD_LOCATION_CONFIG })).toEqual({ ok: true });
+    it("label-only PATCH on option_source select succeeds", () => {
+        const merged = mergeFieldDefinitionConfigForWrite(LEAD_LOCATION_CONFIG, {});
+        expect(validateSelectLikeConfig("select", merged)).toEqual({ ok: true });
+        expect(
+            shouldIncludeConfigOnFieldDefinitionPatch({
+                fieldType: "select",
+                existingConfig: LEAD_LOCATION_CONFIG,
+                optionSetKey: "",
+            }),
+        ).toBe(false);
     });
 });
 

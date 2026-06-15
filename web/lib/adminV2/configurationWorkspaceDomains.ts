@@ -40,7 +40,7 @@ export const CONFIGURATION_JOURNEY_STEPS = [
     {
         step: 2,
         label: "Data Model",
-        summary: "Fields and option lists define what you track.",
+        summary: "Fields and option sets define what you track.",
         href: "/admin/settings/fields",
     },
     {
@@ -98,8 +98,8 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
             },
             {
                 href: "/admin/settings/option-sets",
-                label: "Option lists",
-                description: "Dropdown values for fields.",
+                label: "Option sets",
+                description: "Static and reference-backed dropdown vocabulary for fields.",
             },
             {
                 href: "/admin/settings/relationships",

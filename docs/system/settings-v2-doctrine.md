@@ -45,7 +45,7 @@ Records Alloy uses.
 | Fields | `/admin/settings/fields` |
 | Relationships | `/admin/settings/relationships` |
 | Record labels | `/admin/settings/entity-labels` |
-| Option lists | `/admin/settings/option-sets` |
+| Option sets | `/admin/settings/option-sets` |
 | Layouts | `/admin/settings/layouts` |
 
 ### Operations

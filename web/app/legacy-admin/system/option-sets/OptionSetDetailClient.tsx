@@ -11,6 +11,19 @@ import PrimaryButton from "@/components/PrimaryButton";
 import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import type { OptionSetUsageBlocker } from "@/lib/admin/collectOptionSetUsage";
 import { uniqueAdminKey } from "@/lib/admin/slugifyAdminKey";
+import {
+    ALLOWED_FILTER_OPERATORS,
+    ALLOWED_REFERENCE_ENTITIES,
+    getOptionSetMode,
+    normalizeOptionSetConfig,
+    optionSetModeLabel,
+    referenceEntityLabel,
+    type OptionSetCascadeBinding,
+    type OptionSetConfig,
+    type OptionSetMode,
+    type OptionSetReferenceFilter,
+    type ReferenceEntity,
+} from "@/lib/fields/optionSetConfig";
 
 const ITEM_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -34,7 +47,83 @@ type SetRow = {
     set_key: string;
     label: string;
     sort_order: number;
+    config?: OptionSetConfig | Record<string, unknown>;
 };
+
+function emptyFilterRow(): OptionSetReferenceFilter {
+    return { field: "", operator: "eq", value: "" };
+}
+
+function emptyCascadeBinding(): OptionSetCascadeBinding {
+    return { bind_to_filter: "" };
+}
+
+function hydrateConfigForm(config: unknown): {
+    mode: OptionSetMode;
+    refEntity: ReferenceEntity;
+    valueField: string;
+    labelField: string;
+    filters: OptionSetReferenceFilter[];
+    cascadeBindings: OptionSetCascadeBinding[];
+} {
+    const normalized = normalizeOptionSetConfig(config);
+    if (normalized.mode === "static") {
+        return {
+            mode: "static",
+            refEntity: "locations",
+            valueField: "id",
+            labelField: "label",
+            filters: [],
+            cascadeBindings: [],
+        };
+    }
+    return {
+        mode: "reference",
+        refEntity: normalized.reference?.entity ?? "locations",
+        valueField: normalized.reference?.value_field ?? "id",
+        labelField: normalized.reference?.label_field ?? "label",
+        filters: normalized.reference?.filters ? [...normalized.reference.filters] : [],
+        cascadeBindings: normalized.cascade?.depends_on ? [...normalized.cascade.depends_on] : [],
+    };
+}
+
+function buildConfigFromForm(args: {
+    mode: OptionSetMode;
+    refEntity: ReferenceEntity;
+    valueField: string;
+    labelField: string;
+    filters: OptionSetReferenceFilter[];
+    cascadeBindings: OptionSetCascadeBinding[];
+}): OptionSetConfig {
+    if (args.mode === "static") {
+        return { version: 1, mode: "static" };
+    }
+    const reference = {
+        entity: args.refEntity,
+        value_field: args.valueField.trim() || "id",
+        label_field: args.labelField.trim() || "label",
+        ...(args.filters.length > 0
+            ? {
+                  filters: args.filters
+                      .filter((f) => f.field.trim())
+                      .map((f) => ({
+                          field: f.field.trim(),
+                          operator: f.operator,
+                          value: f.value,
+                      })),
+              }
+            : {}),
+    };
+    const cascadeBindings = args.cascadeBindings.filter(
+        (b) => (b.bind_to_filter ?? "").trim() || (b.bind_to_metadata ?? "").trim()
+    );
+    return {
+        version: 1,
+        mode: "reference",
+        reference,
+        ...(cascadeBindings.length > 0 ? { cascade: { depends_on: cascadeBindings } } : {}),
+    };
+}
 
 type ItemRow = {
     id: string;
@@ -63,6 +152,12 @@ export default function OptionSetDetailClient({
 
     const [editLabel, setEditLabel] = useState("");
     const [editSortOrder, setEditSortOrder] = useState(0);
+    const [editMode, setEditMode] = useState<OptionSetMode>("static");
+    const [editRefEntity, setEditRefEntity] = useState<ReferenceEntity>("locations");
+    const [editValueField, setEditValueField] = useState("id");
+    const [editLabelField, setEditLabelField] = useState("label");
+    const [editFilters, setEditFilters] = useState<OptionSetReferenceFilter[]>([]);
+    const [editCascadeBindings, setEditCascadeBindings] = useState<OptionSetCascadeBinding[]>([]);
     const [setSaving, setSetSaving] = useState(false);
     const [setSaveError, setSetSaveError] = useState<string | null>(null);
 
@@ -77,6 +172,21 @@ export default function OptionSetDetailClient({
     const [itemError, setItemError] = useState<string | null>(null);
 
     const encodedKey = encodeURIComponent(setKey);
+
+    const previewConfig = useMemo(
+        () =>
+            buildConfigFromForm({
+                mode: editMode,
+                refEntity: editRefEntity,
+                valueField: editValueField,
+                labelField: editLabelField,
+                filters: editFilters,
+                cascadeBindings: editCascadeBindings,
+            }),
+        [editMode, editRefEntity, editValueField, editLabelField, editFilters, editCascadeBindings]
+    );
+
+    const isReferenceMode = editMode === "reference";
 
     const reservedItemKeys = useMemo(() => new Set(items.map((i) => i.item_key)), [items]);
 
@@ -96,6 +206,13 @@ export default function OptionSetDetailClient({
             setSetRow(s);
             setEditLabel(s.label);
             setEditSortOrder(s.sort_order);
+            const hydrated = hydrateConfigForm(s.config);
+            setEditMode(hydrated.mode);
+            setEditRefEntity(hydrated.refEntity);
+            setEditValueField(hydrated.valueField);
+            setEditLabelField(hydrated.labelField);
+            setEditFilters(hydrated.filters);
+            setEditCascadeBindings(hydrated.cascadeBindings);
             setItems(
                 ((json.items ?? []) as Record<string, unknown>[]).map((r) => ({
                     id: String(r.id),
@@ -128,10 +245,18 @@ export default function OptionSetDetailClient({
         setSetSaving(true);
         setSetSaveError(null);
         try {
+            const config = buildConfigFromForm({
+                mode: editMode,
+                refEntity: editRefEntity,
+                valueField: editValueField,
+                labelField: editLabelField,
+                filters: editFilters,
+                cascadeBindings: editCascadeBindings,
+            });
             const res = await fetch(`/api/admin/option-sets/${encodedKey}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ label: editLabel.trim(), sort_order: editSortOrder }),
+                body: JSON.stringify({ label: editLabel.trim(), sort_order: editSortOrder, config }),
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
@@ -306,13 +431,20 @@ export default function OptionSetDetailClient({
             {adminV2Chrome ? (
                 <SettingsPageHeader
                     title={setRow?.label ?? setKey}
-                    subtitle={`Set key: ${setKey}`}
-                    actions={canMutate ? <PrimaryButton onClick={openCreateItem}>Add item</PrimaryButton> : undefined}
+                    subtitle={`Set key: ${setKey} · ${optionSetModeLabel(getOptionSetMode(setRow?.config))}`}
+                    actions={
+                        canMutate && !isReferenceMode ? (
+                            <PrimaryButton onClick={openCreateItem}>Add item</PrimaryButton>
+                        ) : undefined
+                    }
                 />
             ) : (
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                    <AdminPageHeader title={setRow?.label ?? setKey} subtitle={`Set key: ${setKey}`} />
-                    {canMutate && <PrimaryButton onClick={openCreateItem}>Add item</PrimaryButton>}
+                    <AdminPageHeader
+                        title={setRow?.label ?? setKey}
+                        subtitle={`Set key: ${setKey} · ${optionSetModeLabel(getOptionSetMode(setRow?.config))}`}
+                    />
+                    {canMutate && !isReferenceMode && <PrimaryButton onClick={openCreateItem}>Add item</PrimaryButton>}
                 </div>
             )}
 
@@ -340,41 +472,333 @@ export default function OptionSetDetailClient({
                 </SectionCard>
             )}
 
-            {setRow && canMutate && (
+            {setRow && (
                 <SectionCard title="Set details">
                     <div className="grid max-w-xl gap-3 sm:grid-cols-2">
                         <div className="sm:col-span-2">
                             <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Label</label>
-                            <input
-                                type="text"
-                                value={editLabel}
-                                onChange={(e) => setEditLabel(e.target.value)}
-                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                            />
+                            {canMutate ? (
+                                <input
+                                    type="text"
+                                    value={editLabel}
+                                    onChange={(e) => setEditLabel(e.target.value)}
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                />
+                            ) : (
+                                <p className="text-sm text-[#31394d]">{setRow.label}</p>
+                            )}
                         </div>
                         <div>
                             <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Sort order</label>
-                            <input
-                                type="number"
-                                value={editSortOrder}
-                                onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
-                                className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
-                            />
+                            {canMutate ? (
+                                <input
+                                    type="number"
+                                    value={editSortOrder}
+                                    onChange={(e) => setEditSortOrder(Number(e.target.value) || 0)}
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                />
+                            ) : (
+                                <p className="text-sm text-[#31394d]">{setRow.sort_order}</p>
+                            )}
+                        </div>
+                        <div>
+                            <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Mode</label>
+                            {canMutate ? (
+                                <select
+                                    value={editMode}
+                                    onChange={(e) => setEditMode(e.target.value as OptionSetMode)}
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                >
+                                    <option value="static">Static list</option>
+                                    <option value="reference">Reference-backed</option>
+                                </select>
+                            ) : (
+                                <p className="text-sm text-[#31394d]">{optionSetModeLabel(editMode)}</p>
+                            )}
                         </div>
                     </div>
-                    {setSaveError && <p className="mt-2 text-sm text-red-600">{setSaveError}</p>}
-                    <button
-                        type="button"
-                        onClick={saveSet}
-                        disabled={setSaving}
-                        className="mt-3 rounded bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-                    >
-                        {setSaving ? "Saving…" : "Save set"}
-                    </button>
+
+                    {isReferenceMode && (
+                        <div className="mt-4 space-y-4 rounded-md border border-[#e6e8ec] bg-[#f8f9fb] p-3">
+                            <p className="text-sm text-[#59678b]">
+                                Options resolve from org records at runtime. Fields bind to this set via{" "}
+                                <span className="font-mono">option_set_key</span>.
+                            </p>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Reference entity</label>
+                                    {canMutate ? (
+                                        <select
+                                            value={editRefEntity}
+                                            onChange={(e) => setEditRefEntity(e.target.value as ReferenceEntity)}
+                                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                        >
+                                            {ALLOWED_REFERENCE_ENTITIES.map((entity) => (
+                                                <option key={entity} value={entity}>
+                                                    {referenceEntityLabel(entity)}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : (
+                                        <p className="text-sm text-[#31394d]">{referenceEntityLabel(editRefEntity)}</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Value field</label>
+                                    {canMutate ? (
+                                        <input
+                                            type="text"
+                                            value={editValueField}
+                                            onChange={(e) => setEditValueField(e.target.value)}
+                                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm"
+                                        />
+                                    ) : (
+                                        <p className="font-mono text-sm text-[#31394d]">{editValueField}</p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Label field</label>
+                                    {canMutate ? (
+                                        <input
+                                            type="text"
+                                            value={editLabelField}
+                                            onChange={(e) => setEditLabelField(e.target.value)}
+                                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm"
+                                        />
+                                    ) : (
+                                        <p className="font-mono text-sm text-[#31394d]">{editLabelField}</p>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div className="mb-1 flex items-center justify-between gap-2">
+                                    <span className="text-xs font-medium text-[#59678b]">Filters</span>
+                                    {canMutate && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setEditFilters((prev) => [...prev, emptyFilterRow()])}
+                                            className="text-xs font-medium text-alloy-pine hover:underline"
+                                        >
+                                            Add filter
+                                        </button>
+                                    )}
+                                </div>
+                                {editFilters.length === 0 ? (
+                                    <p className="text-xs text-[#59678b]">No filters — all active records from the entity.</p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {editFilters.map((filter, index) => (
+                                            <div key={`filter-${index}`} className="grid gap-2 sm:grid-cols-4">
+                                                <input
+                                                    type="text"
+                                                    value={filter.field}
+                                                    disabled={!canMutate}
+                                                    onChange={(e) =>
+                                                        setEditFilters((prev) =>
+                                                            prev.map((row, i) =>
+                                                                i === index ? { ...row, field: e.target.value } : row
+                                                            )
+                                                        )
+                                                    }
+                                                    placeholder="field"
+                                                    className="rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm disabled:bg-[#eef0f4]"
+                                                />
+                                                <select
+                                                    value={filter.operator}
+                                                    disabled={!canMutate}
+                                                    onChange={(e) =>
+                                                        setEditFilters((prev) =>
+                                                            prev.map((row, i) =>
+                                                                i === index
+                                                                    ? {
+                                                                          ...row,
+                                                                          operator: e.target.value as OptionSetReferenceFilter["operator"],
+                                                                          value: e.target.value === "in" ? [] : "",
+                                                                      }
+                                                                    : row
+                                                            )
+                                                        )
+                                                    }
+                                                    className="rounded border border-[#e6e8ec] px-2 py-1.5 text-sm disabled:bg-[#eef0f4]"
+                                                >
+                                                    {ALLOWED_FILTER_OPERATORS.map((op) => (
+                                                        <option key={op} value={op}>
+                                                            {op}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                                <input
+                                                    type="text"
+                                                    value={
+                                                        Array.isArray(filter.value)
+                                                            ? filter.value.join(", ")
+                                                            : filter.value
+                                                    }
+                                                    disabled={!canMutate}
+                                                    onChange={(e) =>
+                                                        setEditFilters((prev) =>
+                                                            prev.map((row, i) =>
+                                                                i === index
+                                                                    ? {
+                                                                          ...row,
+                                                                          value:
+                                                                              row.operator === "in"
+                                                                                  ? e.target.value
+                                                                                        .split(",")
+                                                                                        .map((v) => v.trim())
+                                                                                        .filter(Boolean)
+                                                                                  : e.target.value,
+                                                                      }
+                                                                    : row
+                                                            )
+                                                        )
+                                                    }
+                                                    placeholder={filter.operator === "in" ? "a, b, c" : "value"}
+                                                    className="rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm disabled:bg-[#eef0f4] sm:col-span-2"
+                                                />
+                                                {canMutate && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setEditFilters((prev) => prev.filter((_, i) => i !== index))
+                                                        }
+                                                        className="text-xs font-medium text-alloy-ember hover:underline sm:col-span-4 sm:justify-self-start"
+                                                    >
+                                                        Remove filter
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <div className="mb-1 flex items-center justify-between gap-2">
+                                    <span className="text-xs font-medium text-[#59678b]">Cascade bindings</span>
+                                    {canMutate && (
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                setEditCascadeBindings((prev) => [...prev, emptyCascadeBinding()])
+                                            }
+                                            className="text-xs font-medium text-alloy-pine hover:underline"
+                                        >
+                                            Add binding
+                                        </button>
+                                    )}
+                                </div>
+                                {editCascadeBindings.length === 0 ? (
+                                    <p className="text-xs text-[#59678b]">
+                                        No cascade — options load without parent field values.
+                                    </p>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {editCascadeBindings.map((binding, index) => (
+                                            <div key={`cascade-${index}`} className="grid gap-2 sm:grid-cols-3">
+                                                <input
+                                                    type="text"
+                                                    value={binding.bind_to_filter}
+                                                    disabled={!canMutate}
+                                                    onChange={(e) =>
+                                                        setEditCascadeBindings((prev) =>
+                                                            prev.map((row, i) =>
+                                                                i === index
+                                                                    ? { ...row, bind_to_filter: e.target.value }
+                                                                    : row
+                                                            )
+                                                        )
+                                                    }
+                                                    placeholder="bind_to_filter"
+                                                    className="rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm disabled:bg-[#eef0f4]"
+                                                />
+                                                <input
+                                                    type="text"
+                                                    value={binding.bind_to_metadata ?? ""}
+                                                    disabled={!canMutate}
+                                                    onChange={(e) =>
+                                                        setEditCascadeBindings((prev) =>
+                                                            prev.map((row, i) =>
+                                                                i === index
+                                                                    ? {
+                                                                          ...row,
+                                                                          bind_to_metadata: e.target.value || undefined,
+                                                                      }
+                                                                    : row
+                                                            )
+                                                        )
+                                                    }
+                                                    placeholder="bind_to_metadata (optional)"
+                                                    className="rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm disabled:bg-[#eef0f4]"
+                                                />
+                                                <label className="flex items-center gap-2 text-xs text-[#59678b]">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={binding.optional === true}
+                                                        disabled={!canMutate}
+                                                        onChange={(e) =>
+                                                            setEditCascadeBindings((prev) =>
+                                                                prev.map((row, i) =>
+                                                                    i === index
+                                                                        ? { ...row, optional: e.target.checked }
+                                                                        : row
+                                                                )
+                                                            )
+                                                        }
+                                                    />
+                                                    Optional
+                                                </label>
+                                                {canMutate && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setEditCascadeBindings((prev) =>
+                                                                prev.filter((_, i) => i !== index)
+                                                            )
+                                                        }
+                                                        className="text-xs font-medium text-alloy-ember hover:underline sm:col-span-3"
+                                                    >
+                                                        Remove binding
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Config preview</label>
+                                <pre className="max-h-48 overflow-auto rounded border border-[#e6e8ec] bg-white p-2 font-mono text-xs text-[#31394d]">
+                                    {JSON.stringify(previewConfig, null, 2)}
+                                </pre>
+                            </div>
+                        </div>
+                    )}
+
+                    {canMutate && (
+                        <>
+                            {setSaveError && <p className="mt-2 text-sm text-red-600">{setSaveError}</p>}
+                            <button
+                                type="button"
+                                onClick={saveSet}
+                                disabled={setSaving}
+                                className="mt-3 rounded bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                            >
+                                {setSaving ? "Saving…" : "Save set"}
+                            </button>
+                        </>
+                    )}
                 </SectionCard>
             )}
 
-            <SectionCard title="Items">
+            <SectionCard title={isReferenceMode ? "Static items (legacy / unused at runtime)" : "Items"}>
+                {isReferenceMode && (
+                    <p className="mb-3 text-sm text-[#59678b]">
+                        Reference-backed sets resolve options from records. Items below are not used at runtime in Phase 1.
+                    </p>
+                )}
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-[560px] text-left text-sm">
                         <thead>

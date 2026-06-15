@@ -3,6 +3,11 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { collectOptionSetUsage } from "@/lib/admin/collectOptionSetUsage";
 import { logAdminAudit } from "@/lib/adminAuth";
+import {
+    mergeOptionSetConfigForWrite,
+    normalizeOptionSetConfig,
+    validateOptionSetConfig,
+} from "@/lib/fields/optionSetConfig";
 
 function decodeSetKeyParam(raw: string): string {
     try {
@@ -34,7 +39,7 @@ export async function GET(
     const supabase = createAdminClient();
     const { data: setRow, error: setErr } = await supabase
         .from("option_sets")
-        .select("id, org_id, set_key, label, sort_order, created_at, updated_at")
+        .select("id, org_id, set_key, label, sort_order, config, created_at, updated_at")
         .eq("org_id", ctx.orgId)
         .eq("set_key", set_key)
         .maybeSingle();
@@ -60,14 +65,19 @@ export async function GET(
 
     const blockers = await collectOptionSetUsage(supabase, ctx.orgId, set_key);
 
+    const normalizedSet = {
+        ...setRow,
+        config: normalizeOptionSetConfig(setRow.config),
+    };
+
     return NextResponse.json({
-        set: setRow,
+        set: normalizedSet,
         items: items ?? [],
         usage_blockers: blockers,
     });
 }
 
-/** PATCH: update option set label / sort_order only. Admin only. */
+/** PATCH: update option set label / sort_order / config. Admin only. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ setKey: string }> }
@@ -96,6 +106,19 @@ export async function PATCH(
         return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
 
+    const supabase = createAdminClient();
+
+    const { data: existing, error: fetchErr } = await supabase
+        .from("option_sets")
+        .select("id, config")
+        .eq("org_id", ctx.orgId)
+        .eq("set_key", set_key)
+        .maybeSingle();
+
+    if (fetchErr || !existing) {
+        return NextResponse.json({ error: "Option set not found" }, { status: 404 });
+    }
+
     const updates: Record<string, unknown> = {};
     if (body.label !== undefined) {
         const label = typeof body.label === "string" ? body.label.trim() : "";
@@ -108,12 +131,19 @@ export async function PATCH(
         const v = body.sort_order;
         updates.sort_order = typeof v === "number" && !Number.isNaN(v) ? v : Number(v);
     }
-
-    if (Object.keys(updates).length === 0) {
-        return NextResponse.json({ error: "No allowed fields to update (label, sort_order)" }, { status: 400 });
+    if (body.config !== undefined) {
+        const merged = mergeOptionSetConfigForWrite(existing.config, body.config);
+        const validated = validateOptionSetConfig(merged);
+        if (!validated.ok) {
+            return NextResponse.json({ error: validated.error }, { status: 400 });
+        }
+        updates.config = validated.config;
     }
 
-    const supabase = createAdminClient();
+    if (Object.keys(updates).length === 0) {
+        return NextResponse.json({ error: "No allowed fields to update (label, sort_order, config)" }, { status: 400 });
+    }
+
     const { data: updated, error: updateErr } = await supabase
         .from("option_sets")
         .update(updates)
@@ -134,7 +164,10 @@ export async function PATCH(
         role: ctx.role,
     });
 
-    return NextResponse.json(updated);
+    return NextResponse.json({
+        ...updated,
+        config: normalizeOptionSetConfig(updated.config),
+    });
 }
 
 /** DELETE: remove option set (cascades items) if unused. Admin only. */

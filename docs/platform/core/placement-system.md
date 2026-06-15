@@ -110,9 +110,9 @@ Enrollment lifecycle references placement decisions; placement table owns histor
 ## Configuration surfaces
 
 - **Fields:** `field_definitions.label` is canonical for operator labels (School / Location, Program, Room).
-- **Native references:** `config.option_source` + `field_kind: entity_reference` for lead/child school.
-- **Cascade metadata:** `inquiryChildPlacementFieldMetadata` — room depends on `desired_program_category_id`.
-- **Validation:** Select-like fields accept `option_source`; entity_reference requires `target_entity_type` + storage metadata.
+- **Placement field catalog:** `configurablePlacementFieldCatalog.ts` — admins add School/Program/Room via Settings → Fields "Placement fields" panel (`POST /api/admin/field-definitions/ensure-platform-field`).
+- **Native references:** `config.option_source` + `field_kind: entity_reference` + `depends_on_field_key` for cascade.
+- **Validation:** Select-like fields accept `option_source`; label-only PATCH must not strip reference config.
 
 ---
 

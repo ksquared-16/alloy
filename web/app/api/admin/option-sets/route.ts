@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { normalizeOptionSetConfig, validateOptionSetConfig } from "@/lib/fields/optionSetConfig";
 
 const SET_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -11,6 +12,7 @@ export type OptionSetListRow = {
     set_key: string;
     label: string;
     sort_order: number;
+    config: Record<string, unknown>;
     created_at: string;
     updated_at: string | null;
     item_count: number;
@@ -29,7 +31,7 @@ export async function GET() {
     const supabase = createAdminClient();
     const { data: sets, error: setsErr } = await supabase
         .from("option_sets")
-        .select("id, org_id, set_key, label, sort_order, created_at, updated_at")
+        .select("id, org_id, set_key, label, sort_order, config, created_at, updated_at")
         .eq("org_id", ctx.orgId)
         .order("sort_order", { ascending: true })
         .order("set_key", { ascending: true });
@@ -55,16 +57,20 @@ export async function GET() {
         }
     }
 
-    const option_sets: OptionSetListRow[] = list.map((s) => ({
-        id: String(s.id),
-        org_id: String(s.org_id),
-        set_key: String(s.set_key),
-        label: String(s.label),
-        sort_order: typeof s.sort_order === "number" ? s.sort_order : 0,
-        created_at: String(s.created_at),
-        updated_at: s.updated_at != null ? String(s.updated_at) : null,
-        item_count: countBySetId.get(String(s.id)) ?? 0,
-    }));
+    const option_sets: OptionSetListRow[] = list.map((s) => {
+        const normalized = normalizeOptionSetConfig(s.config);
+        return {
+            id: String(s.id),
+            org_id: String(s.org_id),
+            set_key: String(s.set_key),
+            label: String(s.label),
+            sort_order: typeof s.sort_order === "number" ? s.sort_order : 0,
+            config: normalized as unknown as Record<string, unknown>,
+            created_at: String(s.created_at),
+            updated_at: s.updated_at != null ? String(s.updated_at) : null,
+            item_count: countBySetId.get(String(s.id)) ?? 0,
+        };
+    });
 
     return NextResponse.json({ option_sets });
 }
@@ -108,6 +114,15 @@ export async function POST(request: NextRequest) {
     const sort_order =
         typeof body.sort_order === "number" && !Number.isNaN(body.sort_order) ? body.sort_order : 0;
 
+    let config = normalizeOptionSetConfig(null);
+    if (body.config !== undefined) {
+        const validated = validateOptionSetConfig(body.config);
+        if (!validated.ok) {
+            return NextResponse.json({ error: validated.error }, { status: 400 });
+        }
+        config = validated.config;
+    }
+
     const supabase = createAdminClient();
     const { data: dup } = await supabase
         .from("option_sets")
@@ -127,6 +142,7 @@ export async function POST(request: NextRequest) {
             set_key,
             label,
             sort_order,
+            config,
         })
         .select()
         .single();
