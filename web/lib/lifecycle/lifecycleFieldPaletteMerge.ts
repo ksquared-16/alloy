@@ -1,14 +1,17 @@
 /**
  * Merge platform lifecycle field catalog with org field_definitions for Settings palette.
  *
- * Child fields in Lifecycle Builder use entity key `child` (operator label "Child"). Runtime
- * bindings read/write `opportunity_customer_members` (inquiry child) via `value_source: inquiry_child`.
- * Org `field_definitions` with `entity_type: inquiry_child` merge into the same `child` palette;
- * there is no separate "canonical customer_member" field palette today. See
- * `docs/sprints/06_2026/lifecycle_required_info_child_fields_audit.md`.
+ * Registry-first with enrollment operator visibility doctrine (E3).
+ * Org rows and catalog bindings are filtered through isEnrollmentOperatorFieldVisible.
  */
 
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import {
+    CHILDCARE_PROGRAM_FIELD_MODEL,
+    isEnrollmentOperatorFieldVisible,
+    isLegacyChildProgramFieldKey,
+    lifecycleRequirementEntityToFieldDefinitionEntity,
+} from "@/lib/fields/childcareFieldCatalogDoctrine";
 import {
     lifecycleFieldPaletteForStage,
     type LifecycleFieldRequirementDefinition,
@@ -63,6 +66,48 @@ function orgRowToPalette(entity: LifecycleRequirementEntityKey, row: OrgFieldDef
     };
 }
 
+function fieldDefinitionEntityForPalette(
+    entityKey: LifecycleRequirementEntityKey,
+    row?: OrgFieldDefinitionRow | null
+): string {
+    const fromRow = row?.entity_type?.trim();
+    if (fromRow) return fromRow;
+    return lifecycleRequirementEntityToFieldDefinitionEntity(entityKey);
+}
+
+function paletteEntryPassesVisibility(
+    entityKey: LifecycleRequirementEntityKey,
+    fieldKey: string | null,
+    row?: OrgFieldDefinitionRow | null
+): boolean {
+    if (!fieldKey?.trim()) return true;
+    const entityType = fieldDefinitionEntityForPalette(entityKey, row);
+    return isEnrollmentOperatorFieldVisible(entityType, fieldKey, {
+        is_system: row?.is_system ?? true,
+        config: row?.config ?? null,
+    });
+}
+
+function catalogPaletteEntryVisible(entry: LifecycleFieldPaletteEntry): boolean {
+    return paletteEntryPassesVisibility(entry.entity, entry.field_key);
+}
+
+function shouldSkipOrgRow(
+    entityKey: LifecycleRequirementEntityKey,
+    row: OrgFieldDefinitionRow,
+    paletteByFieldKey: Set<string>
+): boolean {
+    if (!paletteEntryPassesVisibility(entityKey, row.field_key, row)) return true;
+    if (isLegacyChildProgramFieldKey(row.field_key)) return true;
+    if (
+        row.field_key === CHILDCARE_PROGRAM_FIELD_MODEL.legacy_alias_field_key &&
+        paletteByFieldKey.has(CHILDCARE_PROGRAM_FIELD_MODEL.canonical_field_key)
+    ) {
+        return true;
+    }
+    return false;
+}
+
 /** Prefer catalog label when org field_definitions still use legacy system labels (e.g. Mobile for phone). */
 export function resolveLifecycleFieldPaletteDisplayLabel(
     catalogLabel: string,
@@ -103,7 +148,9 @@ export function mergeLifecycleFieldPaletteForStage(
 
     for (const entry of catalogPalette) {
         if (isDeprecatedLifecycleFieldRule(entry.rule_id)) continue;
-        byRuleId.set(entry.rule_id, catalogEntryToPalette(entry));
+        const paletteEntry = catalogEntryToPalette(entry);
+        if (!catalogPaletteEntryVisible(paletteEntry)) continue;
+        byRuleId.set(entry.rule_id, paletteEntry);
     }
 
     const org = orgByEntity ?? {};
@@ -118,9 +165,11 @@ export function mergeLifecycleFieldPaletteForStage(
         );
         for (const row of rows) {
             if (catalogKeys.has(row.field_key)) continue;
+            if (shouldSkipOrgRow(entityKey, row, catalogKeys)) continue;
             const custom = orgRowToPalette(entityKey, row);
             if (!byRuleId.has(custom.rule_id)) {
                 byRuleId.set(custom.rule_id, custom);
+                catalogKeys.add(row.field_key);
             }
         }
     }
@@ -131,15 +180,20 @@ export function mergeLifecycleFieldPaletteForStage(
     });
 }
 
+/** Keep only rule ids present in the operator-visible palette (drops hidden legacy selections). */
+export function filterFieldRuleIdsToPalette(
+    ruleIds: readonly string[],
+    palette: readonly LifecycleFieldPaletteEntry[]
+): string[] {
+    const allowed = new Set(palette.map((p) => p.rule_id));
+    return sanitizeLifecycleFieldRuleIds(ruleIds.filter((id) => allowed.has(id)));
+}
+
 export function validateFieldRuleIdsAgainstPalette(
     ruleIds: readonly string[],
     palette: readonly LifecycleFieldPaletteEntry[]
 ): string[] | null {
-    const allowed = new Set(palette.map((p) => p.rule_id));
-    const out: string[] = [];
-    for (const id of ruleIds) {
-        if (!allowed.has(id)) return null;
-        if (!out.includes(id)) out.push(id);
-    }
-    return out;
+    const filtered = filterFieldRuleIdsToPalette(ruleIds, palette);
+    if (filtered.length !== sanitizeLifecycleFieldRuleIds(ruleIds).length) return null;
+    return filtered;
 }

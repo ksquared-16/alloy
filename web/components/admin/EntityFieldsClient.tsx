@@ -178,6 +178,7 @@ export default function EntityFieldsClient({
                     field_key: row.field_key,
                     is_system: row.is_system,
                     label: row.label,
+                    config: row.config,
                 })
         );
     }, [entityType, showSystemFields, sortedItems]);

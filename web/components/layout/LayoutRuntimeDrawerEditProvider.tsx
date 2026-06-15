@@ -24,6 +24,10 @@ import {
     collectLayoutRuntimeChildRepeaterBaselines,
     saveLayoutRuntimeChildRepeaterEdits,
 } from "@/lib/layout/runtime/layoutRuntimeChildFieldEdit";
+import {
+    collectLayoutRuntimeOpportunityNativeBaseline,
+    saveLayoutRuntimeOpportunityNativeEdits,
+} from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import {
     isLayoutRuntimePersonContactRefKey,
@@ -93,6 +97,7 @@ function collectEditableBaseline(record: ProofRuntimeRecord): Record<string, str
     const { rows, rowKeys } = collectRepeaterRows(record);
     return {
         ...collectPersonContactBaseline(record),
+        ...collectLayoutRuntimeOpportunityNativeBaseline(record),
         ...collectLayoutRuntimeChildRepeaterBaselines(record, rowKeys, rows),
     };
 }
@@ -144,6 +149,15 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
             record: record as Record<string, unknown>,
             baseline: personBaseline,
             draft: personDraft,
+        });
+        if (!result.ok) throw new Error(result.error);
+    }, [draft, record]);
+
+    const saveOpportunityNative = useCallback(async () => {
+        const result = await saveLayoutRuntimeOpportunityNativeEdits({
+            record,
+            baseline: baselineRef.current,
+            draft,
         });
         if (!result.ok) throw new Error(result.error);
     }, [draft, record]);
@@ -213,11 +227,12 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
         async (options?: DrawerOperatingSaveSectionOptions) => {
             if (!options?.confirmOnly) {
                 await savePersonContact();
+                await saveOpportunityNative();
                 await saveChildRepeater();
                 baselineRef.current = { ...draft };
                 patchOptimisticRecord(draft);
             } else {
-                await Promise.all([savePersonContact(), saveChildRepeater()]);
+                await Promise.all([savePersonContact(), saveOpportunityNative(), saveChildRepeater()]);
             }
             const opportunityId = String(record.id ?? "").trim();
             if (opportunityId) {
@@ -227,7 +242,7 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
             optimisticRecordRef.current = null;
             onSaved?.();
         },
-        [draft, onSaved, patchOptimisticRecord, record.id, saveChildRepeater, savePersonContact],
+        [draft, onSaved, patchOptimisticRecord, record.id, saveChildRepeater, saveOpportunityNative, savePersonContact],
     );
 
     useEffect(() => {

@@ -102,6 +102,16 @@ const LEAD_PRIMARY_CONTACT_PROJECTION_MANIFEST: PlatformFieldManifestEntry[] = [
 const OPPORTUNITY_MANIFEST: PlatformFieldManifestEntry[] = [
     entry("opportunity.status_key", "Status", "status", "native_entity", "opportunities.status_key", "now", ["case"], ["opportunities"]),
     entry("opportunity.source", "Source", "text", "native_entity", "opportunities.source", "now", ["case"], ["opportunities"]),
+    entry(
+        "opportunity.location_id",
+        "Location",
+        "select",
+        "reference",
+        "opportunities.location_id → locations.id",
+        "now",
+        ["case", "reference"],
+        ["opportunities"],
+    ),
     entry("opportunity.customer_notes", "Notes", "text", "native_entity", "opportunities.customer_notes", "now", ["case"], ["opportunities"]),
     entry("opportunity.job_date", "Requested date", "date", "native_entity", "opportunities.job_date", "now", ["case"], ["opportunities"]),
     entry("opportunity.tour_date", "Tour date", "date", "metadata", "opportunities.metadata.tour_date", "now", ["case"], ["opportunities"]),

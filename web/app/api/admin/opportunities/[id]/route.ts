@@ -194,6 +194,7 @@ export async function PATCH(
                     "assigned_to",
                     "lost_reason",
                     "appointment_id",
+                    "location_id",
                     "discount_code",
                     "external_source",
                     "external_id",

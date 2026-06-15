@@ -13,7 +13,7 @@ import {
     buildBuilderStageFieldRulesResetPatch,
 } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
 import { mergeLifecycleFieldPaletteForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStagePalette";
-import { validateFieldRuleIdsAgainstPalette } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+import { filterFieldRuleIdsToPalette } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 import { loadOrgFieldDefinitionsForLifecycle } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import { deepMergeJsonObjects } from "@/lib/json/deepMergeJsonObjects";
 import {
@@ -34,14 +34,8 @@ export async function persistLifecycleStageFieldRules(
     const stage = params.stageKey.trim();
     const orgFieldDefs = await loadOrgFieldDefinitionsForLifecycle(supabase, params.orgId);
     const mergedPalette = mergeLifecycleFieldPaletteForBuilderStage(stage, orgFieldDefs);
-    const required = validateFieldRuleIdsAgainstPalette(params.fieldRules.required_rule_ids, mergedPalette);
-    const recommended = validateFieldRuleIdsAgainstPalette(
-        params.fieldRules.recommended_rule_ids,
-        mergedPalette
-    );
-    if (!required || !recommended) {
-        throw new Error("Invalid field rules for this stage.");
-    }
+    const required = filterFieldRuleIdsToPalette(params.fieldRules.required_rule_ids, mergedPalette);
+    const recommended = filterFieldRuleIdsToPalette(params.fieldRules.recommended_rule_ids, mergedPalette);
 
     const explicit_rule_levels_v1 = parseRuleLevelsV1(
         "rule_levels_v1" in params.fieldRules ? params.fieldRules.rule_levels_v1 : undefined

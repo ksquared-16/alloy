@@ -27,7 +27,7 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
 import { buildLifecycleRequirementsStageEntry } from "@/lib/lifecycle/lifecycleRequirementsStagePayload";
 import { lifecycleRequirementEntityLabelsFromMap } from "@/lib/lifecycle/lifecycleRequirementEntityLabels";
-import { validateFieldRuleIdsAgainstPalette } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
+import { validateFieldRuleIdsAgainstPalette, filterFieldRuleIdsToPalette } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { parseRuleLevelsV1 } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
@@ -219,11 +219,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                 stage,
                 await loadOrgFieldDefinitionsForLifecycle(createAdminClient(), ctx.orgId)
             );
-            const required = validateFieldRuleIdsAgainstPalette(required_rule_ids, mergedPalette);
-            const recommended = validateFieldRuleIdsAgainstPalette(recommended_rule_ids, mergedPalette);
-            if (!required || !recommended) {
-                return NextResponse.json({ error: "Invalid field rules for this stage." }, { status: 400 });
-            }
+            const required = filterFieldRuleIdsToPalette(required_rule_ids, mergedPalette);
+            const recommended = filterFieldRuleIdsToPalette(recommended_rule_ids, mergedPalette);
             const operator = asOperatorStageKey(stage);
             const explicit_rule_levels_v1 = parseRuleLevelsV1(
                 (fieldRulesRaw as { rule_levels_v1?: unknown }).rule_levels_v1

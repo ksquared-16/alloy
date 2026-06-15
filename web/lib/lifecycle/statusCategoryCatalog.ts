@@ -3,12 +3,11 @@
  */
 
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
-import { personStatusAppliesToProfile, PERSON_STATUS_PROFILE_GENERIC } from "@/lib/admin/person/personStatusApplicability";
 import {
-    ENROLLMENT_TRACK_CHILD_KEY,
-    ENROLLMENT_TRACK_FAMILY_KEY,
-} from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
-import { isGenericEnrollmentCaseContainerStatus } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
+    BP_PICKER_VISIBLE_CATEGORY_KEYS,
+    resolveStatusSettingsCategoryKey,
+    STATUS_SETTINGS_CATEGORY_DISPLAY_ORDER,
+} from "@/lib/lifecycle/statusSettingsCategoryDoctrine";
 import {
     parseStatusRollupV1,
     STATUS_CATEGORY_LABELS,
@@ -17,13 +16,6 @@ import {
     type StatusRollupCategoryKey,
     type StatusRollupV1,
 } from "@/lib/lifecycle/statusRollupV1";
-import { stageTrackKeyFromRecord } from "@/lib/lifecycle/stageStatusRollup";
-
-function rowMetadata(row: StatusDefinitionRow): Record<string, unknown> | null {
-    return row.metadata != null && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-        ? (row.metadata as Record<string, unknown>)
-        : null;
-}
 
 function mapStatusRow(row: StatusDefinitionRow): StatusCategoryStatusRow | null {
     if (row.is_active === false) return null;
@@ -34,40 +26,8 @@ function mapStatusRow(row: StatusDefinitionRow): StatusCategoryStatusRow | null 
         status_key: row.status_key,
         status_label: label,
         sort_order: Number(row.sort_order) ?? 100,
+        entity_type: row.entity_type,
     };
-}
-
-export function resolveStatusCategoryKeyForRow(
-    row: StatusDefinitionRow
-): StatusRollupCategoryKey | null {
-    const meta = rowMetadata(row);
-    const layer = meta?.alloy_layer != null ? String(meta.alloy_layer) : null;
-
-    if (row.entity_type === "opportunities") {
-        if (isGenericEnrollmentCaseContainerStatus(row.status_key, meta)) return "system_statuses";
-        if (layer === "case_status") return "system_statuses";
-        if (layer === "lead_pipeline" || layer === "legacy_case_pipeline" || layer == null) {
-            return "lead_statuses";
-        }
-        return "lead_statuses";
-    }
-
-    if (
-        row.entity_type === "opportunity_customer_members" ||
-        row.entity_type === "opportunity_customer_member"
-    ) {
-        if (layer === "enrollment_disposition" || layer == null) return "enrollment_statuses";
-        return "enrollment_statuses";
-    }
-
-    if (row.entity_type === "persons") {
-        if (personStatusAppliesToProfile(row, PERSON_STATUS_PROFILE_GENERIC)) {
-            return "family_statuses";
-        }
-        return "person_statuses";
-    }
-
-    return null;
 }
 
 function sortRows(rows: StatusCategoryStatusRow[]): StatusCategoryStatusRow[] {
@@ -76,38 +36,88 @@ function sortRows(rows: StatusCategoryStatusRow[]): StatusCategoryStatusRow[] {
     );
 }
 
+function sortEnrollmentCategoryRows(rows: StatusCategoryStatusRow[]): StatusCategoryStatusRow[] {
+    const family = sortRows(rows.filter((r) => r.entity_type === "opportunities"));
+    const child = sortRows(
+        rows.filter(
+            (r) =>
+                r.entity_type === "opportunity_customer_members" ||
+                r.entity_type === "opportunity_customer_member"
+        )
+    );
+    const other = sortRows(
+        rows.filter(
+            (r) =>
+                r.entity_type !== "opportunities" &&
+                r.entity_type !== "opportunity" &&
+                r.entity_type !== "opportunity_customer_members" &&
+                r.entity_type !== "opportunity_customer_member"
+        )
+    );
+    return [...family, ...child, ...other];
+}
+
+/** @deprecated Use resolveStatusSettingsCategoryKey — kept for tests during transition. */
+export function resolveStatusCategoryKeyForRow(
+    row: StatusDefinitionRow
+): StatusRollupCategoryKey | null {
+    return resolveStatusSettingsCategoryKey(row);
+}
+
+export type BuildStatusCategoryCatalogOptions = {
+    /** When false, omit system_statuses (Business Process picker). */
+    includeSystemCategories?: boolean;
+    /** When set, only include these category keys. */
+    categoryKeys?: readonly StatusRollupCategoryKey[];
+};
+
 export function buildStatusCategoryCatalog(
-    rows: readonly StatusDefinitionRow[]
+    rows: readonly StatusDefinitionRow[],
+    options: BuildStatusCategoryCatalogOptions = {}
 ): StatusCategoryGroup[] {
+    const includeSystem = options.includeSystemCategories !== false;
+    const allowedKeys = options.categoryKeys ?? null;
     const buckets = new Map<StatusRollupCategoryKey, StatusCategoryStatusRow[]>();
 
     for (const row of rows) {
-        const category = resolveStatusCategoryKeyForRow(row);
+        const category = resolveStatusSettingsCategoryKey(row);
         if (!category) continue;
+        if (!includeSystem && category === "system_statuses") continue;
+        if (allowedKeys && !allowedKeys.includes(category)) continue;
         const mapped = mapStatusRow(row);
         if (!mapped) continue;
         const list = buckets.get(category) ?? [];
-        if (!list.some((r) => r.status_key === mapped.status_key)) list.push(mapped);
+        const dedupeKey = `${mapped.entity_type}:${mapped.status_key}`;
+        if (!list.some((r) => `${r.entity_type}:${r.status_key}` === dedupeKey)) list.push(mapped);
         buckets.set(category, list);
     }
 
-    const order: StatusRollupCategoryKey[] = [
-        "lead_statuses",
-        "enrollment_statuses",
-        "person_statuses",
-        "family_statuses",
-        "candidate_statuses",
-        "system_statuses",
-    ];
+    const order = allowedKeys ?? STATUS_SETTINGS_CATEGORY_DISPLAY_ORDER;
 
     return order
-        .filter((key) => (buckets.get(key)?.length ?? 0) > 0)
+        .filter((key) => {
+            if (!includeSystem && key === "system_statuses") return false;
+            return (buckets.get(key)?.length ?? 0) > 0;
+        })
         .map((key) => ({
             category_key: key,
             entity_type: entityTypeForCategory(key),
             label: STATUS_CATEGORY_LABELS[key],
-            statuses: sortRows(buckets.get(key) ?? []),
+            statuses:
+                key === "enrollment_statuses"
+                    ? sortEnrollmentCategoryRows(buckets.get(key) ?? [])
+                    : sortRows(buckets.get(key) ?? []),
         }));
+}
+
+/** Catalog for Business Process stage picker — same inventory as Settings, minus system. */
+export function buildBusinessProcessStatusCategoryCatalog(
+    rows: readonly StatusDefinitionRow[]
+): StatusCategoryGroup[] {
+    return buildStatusCategoryCatalog(rows, {
+        includeSystemCategories: false,
+        categoryKeys: BP_PICKER_VISIBLE_CATEGORY_KEYS,
+    });
 }
 
 function entityTypeForCategory(key: StatusRollupCategoryKey): string {
@@ -116,23 +126,49 @@ function entityTypeForCategory(key: StatusRollupCategoryKey): string {
         case "system_statuses":
             return "opportunities";
         case "enrollment_statuses":
-        case "candidate_statuses":
-            return "opportunity_customer_members";
+            return "enrollment_mixed";
         case "person_statuses":
         case "family_statuses":
             return "persons";
+        case "candidate_statuses":
+            return "opportunity_customer_members";
     }
 }
 
-/** Enrollment template default enabled categories per stage track. */
+export function entityTypeForStatusKeyInCatalog(
+    catalog: readonly StatusCategoryGroup[],
+    statusKey: string
+): string | null {
+    const key = statusKey.trim();
+    if (!key) return null;
+    for (const group of catalog) {
+        const row = group.statuses.find((s) => s.status_key === key);
+        if (row) return row.entity_type;
+    }
+    return null;
+}
+
+export function groupSelectedKeysByEntityType(
+    catalog: readonly StatusCategoryGroup[],
+    keys: readonly string[]
+): Map<string, string[]> {
+    const out = new Map<string, string[]>();
+    for (const key of keys) {
+        const entityType = entityTypeForStatusKeyInCatalog(catalog, key);
+        if (!entityType) continue;
+        const list = out.get(entityType) ?? [];
+        list.push(key);
+        out.set(entityType, list);
+    }
+    return out;
+}
+
+/** Enrollment process stages default to Enrollment Statuses only. */
 export function defaultCategoryKeysForEnrollmentStage(
-    stageKey: string,
-    trackKey?: string | null
+    _stageKey: string,
+    _trackKey?: string | null
 ): StatusRollupCategoryKey[] {
-    const track = stageTrackKeyFromRecord(stageKey, trackKey);
-    if (track === ENROLLMENT_TRACK_CHILD_KEY) return ["enrollment_statuses"];
-    if (track === ENROLLMENT_TRACK_FAMILY_KEY) return ["lead_statuses"];
-    return ["lead_statuses"];
+    return ["enrollment_statuses"];
 }
 
 export function assignKeysToCategories(
@@ -159,6 +195,58 @@ export function assignKeysToCategories(
     return { version: 1, categories };
 }
 
+function migrateLegacyRollupCategories(
+    rollup: StatusRollupV1,
+    catalog: readonly StatusCategoryGroup[]
+): StatusRollupV1 {
+    const enrollmentGroup = catalog.find((g) => g.category_key === "enrollment_statuses");
+    const leadGroup = catalog.find((g) => g.category_key === "lead_statuses");
+    if (!enrollmentGroup) return rollup;
+
+    const enrollmentKeySet = new Set(enrollmentGroup.statuses.map((s) => s.status_key));
+    const leadKeySet = new Set(leadGroup?.statuses.map((s) => s.status_key) ?? []);
+    const enabled = new Set(rollup.categories.map((c) => c.category_key));
+    const allSelected = rollup.categories.flatMap((c) => c.selected_status_keys);
+
+    const enrollmentKeys = [
+        ...new Set(allSelected.filter((k) => enrollmentKeySet.has(k))),
+    ];
+    const leadKeys = [
+        ...new Set(allSelected.filter((k) => leadKeySet.has(k) && !enrollmentKeySet.has(k))),
+    ];
+
+    if (enabled.has("lead_statuses") && enrollmentKeys.length) {
+        enabled.add("enrollment_statuses");
+    }
+
+    const otherCategories = rollup.categories.filter(
+        (c) =>
+            c.category_key !== "enrollment_statuses" &&
+            c.category_key !== "lead_statuses" &&
+            c.category_key !== "system_statuses"
+    );
+
+    const categories = [...otherCategories];
+    if (enabled.has("enrollment_statuses")) {
+        categories.push({
+            category_key: "enrollment_statuses",
+            entity_type: enrollmentGroup.entity_type,
+            label: enrollmentGroup.label,
+            selected_status_keys: enrollmentKeys,
+        });
+    }
+    if (enabled.has("lead_statuses")) {
+        categories.push({
+            category_key: "lead_statuses",
+            entity_type: leadGroup?.entity_type ?? "opportunities",
+            label: leadGroup?.label ?? STATUS_CATEGORY_LABELS.lead_statuses,
+            selected_status_keys: leadKeys,
+        });
+    }
+
+    return { version: 1, categories };
+}
+
 export function resolveStatusRollupForStage(params: {
     savedRollup: unknown;
     stageKey: string;
@@ -167,7 +255,9 @@ export function resolveStatusRollupForStage(params: {
     legacySelectedKeys?: readonly string[];
 }): StatusRollupV1 {
     const parsed = parseStatusRollupV1(params.savedRollup);
-    if (parsed?.categories.length) return parsed;
+    if (parsed?.categories.length) {
+        return migrateLegacyRollupCategories(parsed, params.catalog);
+    }
 
     const defaults = defaultCategoryKeysForEnrollmentStage(params.stageKey, params.trackKey);
     const legacyKeys = params.legacySelectedKeys ?? [];

@@ -101,6 +101,7 @@ CSV source: `supabase/reference/*.csv` (8 files)
 | BOS visual identity | `system/bos-identity-doctrine.md` |
 | Routing detail | `system/routing-doctrine.md` |
 | Drawer VM contracts | `system/drawer-doctrine.md`, `drawer-operating-model-v1.md`, `drawer-view-model-runtime-contract.md` |
+| Operating Plan runtime | `system/operating-plan-runtime-doctrine.md` |
 | Legacy inventory | `system/legacy-architecture-inventory.md` |
 
 ---

@@ -80,6 +80,8 @@ const FORMS_SYSTEM_ID_CANONICAL_OVERRIDES: Readonly<Record<string, CanonicalRegi
     program_room_preference: { entity_type: "inquiry_child", field_key: "program_room_cohort_key" },
     child_room_cohort: { entity_type: "inquiry_child", field_key: "program_room_cohort_key" },
     child_site: { entity_type: "inquiry_child", field_key: "location_id" },
+    lead_site: { entity_type: "opportunity", field_key: "location_id" },
+    lead_location_id: { entity_type: "opportunity", field_key: "location_id" },
     opportunity_interest_notes: { entity_type: "opportunity", field_key: "interest_notes" },
     customer_account_name: { entity_type: "customer", field_key: "display_name" },
 };

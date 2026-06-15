@@ -19,7 +19,7 @@ Complete this checklist before running the enrollment walkthrough.
 | **Program** | Per-site offerings configured (e.g. North Campus: Infant, Preschool) |
 | **Room** | Classroom rows under site with program category; required at Enrolling per doctrine |
 | **Schedule** | Org schedule option list configured; Location workspace shows org offerings note |
-| **Fields** | Child has Location, Program, Room, Schedule with operator labels (not internal keys) |
+| **Fields** | Child has Location, Program, Room, Schedule with operator labels (not internal keys); **Lead has Location** (`opportunity.location_id`) |
 | **Forms** | Create Lead / Add Child forms include placement fields |
 | **Layouts** | Drawer layouts present for Opportunity + Child; fields from registry appear |
 | **Business Processes** | Enrollment: Family track (Lead→Decision), Child track (Waitlist→Enrolled); Decision split understood |
@@ -28,7 +28,7 @@ Complete this checklist before running the enrollment walkthrough.
 
 | Phase | Required | Not required |
 |-------|----------|--------------|
-| Lead | Family, Location | Program, Room, Schedule |
+| Lead | Family, **Lead Location** (`opportunity.location_id`) | Program, Room, Schedule (child placement) |
 | Qualification / Tour / Decision | Program | Room, Schedule |
 | Enrolling / Enrolled | Program, Room, Schedule | — |
 
@@ -106,6 +106,26 @@ Complete this checklist before running the enrollment walkthrough.
 
 - [ ] Create a custom field on Child in **Fields**
 - [ ] Confirm it appears in Layouts picker, Forms Builder, BP stage requirements (without catalog edit)
+
+### 11. Lead Location (native reference — June 2026 closeout)
+
+- [ ] **Settings → Fields → Lead** — **Location** visible (`opportunity.location_id`, not hidden integration field)
+- [ ] **Settings → Business Processes → Lead stage** — **Location** available as Off / Recommended / Required (`opportunity:location`); Child Location not forced on Lead stage
+- [ ] **Settings → Layouts** — add **Lead Location** (`opportunity.location_id`) to opportunity drawer layout
+- [ ] Open lead drawer → edit **Location** via site picker → save
+- [ ] Confirm DB: `opportunities.location_id` updated (not `field_values`)
+- [ ] **Add Child** with blank child location → inherits lead location on OCM
+- [ ] **Add Child** with explicit child location → OCM updated; lead `location_id` unchanged
+
+### 12. Work Intent runtime (Operating Plan — June 2026 closeout)
+
+- [ ] Create or open a Lead in Lead stage
+- [ ] **Purpose** appears under lifecycle rail (from stage Operating Plan)
+- [ ] **Work card** appears in drawer body (e.g. Make Contact) — not duplicated in Tasks summary strip
+- [ ] Select **Left Voicemail** (retry outcome) → work stays open; attempt count increments
+- [ ] Select **Reached Family** (close outcome) → work closes; status/stage advances if configured
+- [ ] Advance to **Qualification** → next stage primary work spawns (stage-entry)
+- [ ] Create ad hoc operational task → appears in **Tasks** strip only, not Work card
 
 ## Known interim limitations
 

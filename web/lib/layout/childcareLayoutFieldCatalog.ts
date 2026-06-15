@@ -205,6 +205,7 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     // Lead — case-level only (no per-child enrollment duplicates)
     lead("opportunity.status_key", "Lead status", "status", 10, "status_key"),
     lead("opportunity.source", "Lead source", "text", 20, "source"),
+    lead("opportunity.location_id", "Location", "select", 25, "location_id"),
     lead("opportunity.created_at", "Lead created date", "date", 30, "created_at", { computed: true }),
     lead("opportunity.tour_date", "Tour date", "date", 40, "tour_date"),
     lead("opportunity.tour_time", "Tour time", "text", 50, "tour_time"),
@@ -416,7 +417,6 @@ export const CHILDCARE_HIDDEN_REF_KEYS = new Set<string>([
     "opportunity.opportunity_number",
     "opportunity.job_date",
     "opportunity.location",
-    "opportunity.location_id",
     "person.person_number",
     "person.secondary_contact_name",
     "location.location_number",

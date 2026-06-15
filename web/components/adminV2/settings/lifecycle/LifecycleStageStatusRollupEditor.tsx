@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { useEffect, useImperativeHandle, useMemo, useState } from "react";
 import {
     flattenStatusRollupKeys,
@@ -23,7 +24,7 @@ export type LifecycleStageStatusRollupEditorHandle = {
 export default function LifecycleStageStatusRollupEditor({
     catalog,
     savedRollup,
-    statusesSettingsHref = "/admin/settings/statuses?entity_type=opportunities",
+    statusesSettingsHref = "/admin/settings/statuses",
     onRollupChange,
     editorRef,
 }: {
@@ -34,15 +35,13 @@ export default function LifecycleStageStatusRollupEditor({
     editorRef?: React.RefObject<LifecycleStageStatusRollupEditorHandle | null>;
 }) {
     const [draft, setDraft] = useState<StatusRollupV1 | null>(savedRollup);
+    const [expandedCategories, setExpandedCategories] = useState<Set<StatusRollupCategoryKey>>(
+        () => new Set()
+    );
 
     useEffect(() => {
         setDraft(savedRollup);
     }, [savedRollup]);
-
-    const enabledCategories = useMemo(
-        () => catalog.filter((g) => isCategoryEnabled(draft, g.category_key)),
-        [catalog, draft]
-    );
 
     const multiCategory = (draft?.categories.length ?? 0) > 1;
 
@@ -55,6 +54,15 @@ export default function LifecycleStageStatusRollupEditor({
         getDraftRollup: () => draft,
         isDirty: () => statusRollupDirty(savedRollup, draft),
     }));
+
+    const toggleExpanded = (key: StatusRollupCategoryKey) => {
+        setExpandedCategories((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
 
     if (!catalog.length) {
         return (
@@ -74,13 +82,19 @@ export default function LifecycleStageStatusRollupEditor({
         <div className="space-y-3" data-testid="lifecycle-status-rollup-editor">
             <div data-testid="lifecycle-status-category-selector">
                 <p className="mb-2 text-[11px] font-medium text-alloy-midnight/70">Status categories</p>
-                <ul className="space-y-1">
+                <ul className="space-y-2">
                     {catalog.map((group) => {
                         const enabled = isCategoryEnabled(draft, group.category_key);
-                        const count = selectedCountForCategory(draft, group.category_key);
+                        const selectedCount = selectedCountForCategory(draft, group.category_key);
+                        const totalCount = group.statuses.length;
+                        const expanded = expandedCategories.has(group.category_key);
                         return (
-                            <li key={group.category_key}>
-                                <label className="flex cursor-pointer items-center gap-2 rounded border border-alloy-forge/10 px-2 py-1.5 text-xs hover:bg-alloy-stone/5">
+                            <li
+                                key={group.category_key}
+                                className="rounded-lg border border-alloy-forge/10 bg-white overflow-hidden"
+                                data-testid={`lifecycle-status-category-panel-${group.category_key}`}
+                            >
+                                <div className="flex items-center gap-2 px-2 py-1.5">
                                     <input
                                         type="checkbox"
                                         checked={enabled}
@@ -91,14 +105,91 @@ export default function LifecycleStageStatusRollupEditor({
                                             );
                                         }}
                                         data-testid={`lifecycle-status-category-${group.category_key}`}
+                                        aria-label={`Include ${group.label}`}
                                     />
-                                    <span className="font-medium text-alloy-midnight">{group.label}</span>
-                                    {enabled ?
+                                    <button
+                                        type="button"
+                                        className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs"
+                                        onClick={() => toggleExpanded(group.category_key)}
+                                        aria-expanded={expanded}
+                                    >
+                                        <ChevronDown
+                                            className={`h-3.5 w-3.5 shrink-0 text-alloy-midnight/50 transition-transform ${
+                                                expanded ? "rotate-180" : ""
+                                            }`}
+                                            aria-hidden
+                                        />
+                                        <span className="font-medium text-alloy-midnight">{group.label}</span>
                                         <span className="text-[10px] text-alloy-midnight/50">
-                                            {count} selected
+                                            {totalCount} {totalCount === 1 ? "status" : "statuses"}
+                                            {enabled ? ` · ${selectedCount} selected` : ""}
                                         </span>
-                                    :   null}
-                                </label>
+                                    </button>
+                                </div>
+
+                                {expanded ?
+                                    <div className="border-t border-alloy-forge/10 bg-alloy-stone/5 px-2 py-2">
+                                        {!enabled ?
+                                            <p className="text-xs text-alloy-midnight/50">
+                                                Enable this category to select statuses.
+                                            </p>
+                                        : group.statuses.length === 0 ?
+                                            <p className="text-xs text-alloy-midnight/50">
+                                                No statuses configured for this category.
+                                            </p>
+                                        :   <ul
+                                                className="space-y-1"
+                                                data-testid={`lifecycle-status-list-${group.category_key}`}
+                                            >
+                                                {group.statuses.map((row) => {
+                                                    const cat = draft?.categories.find(
+                                                        (c) => c.category_key === group.category_key
+                                                    );
+                                                    const checked = Boolean(
+                                                        cat?.selected_status_keys.includes(row.status_key)
+                                                    );
+                                                    return (
+                                                        <li key={`${row.entity_type}:${row.status_key}`}>
+                                                            <button
+                                                                type="button"
+                                                                role="checkbox"
+                                                                aria-checked={checked}
+                                                                className={`flex w-full cursor-pointer items-center gap-2 rounded border border-alloy-forge/10 px-2 py-1 text-left text-xs hover:bg-white/60 ${
+                                                                    checked ?
+                                                                        "border-alloy-pine/35 bg-alloy-pine/5"
+                                                                    :   ""
+                                                                }`}
+                                                                data-testid={`lifecycle-status-row-${row.status_key}`}
+                                                                data-status-key={row.status_key}
+                                                                onClick={() => {
+                                                                    if (!draft) return;
+                                                                    emitChange(
+                                                                        toggleStatusInRollup(
+                                                                            draft,
+                                                                            group.category_key,
+                                                                            row.status_key,
+                                                                            !checked
+                                                                        )
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    readOnly
+                                                                    tabIndex={-1}
+                                                                    className="pointer-events-none shrink-0"
+                                                                    checked={checked}
+                                                                    aria-hidden
+                                                                />
+                                                                <span>{row.status_label}</span>
+                                                            </button>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        }
+                                    </div>
+                                :   null}
                             </li>
                         );
                     })}
@@ -112,70 +203,11 @@ export default function LifecycleStageStatusRollupEditor({
                 </p>
             :   null}
 
-            {enabledCategories.length === 0 ?
+            {(draft?.categories.length ?? 0) === 0 ?
                 <p className="text-xs text-alloy-midnight/60" data-testid="lifecycle-status-rollup-no-categories">
                     Select at least one status category.
                 </p>
-            :   enabledCategories.map((group) => (
-                    <section
-                        key={group.category_key}
-                        className="rounded-lg border border-alloy-forge/10 bg-alloy-stone/5 p-2"
-                        data-testid={`lifecycle-status-category-panel-${group.category_key}`}
-                    >
-                        <h5 className="mb-2 text-[11px] font-semibold text-alloy-midnight/80">{group.label}</h5>
-                        {group.statuses.length === 0 ?
-                            <p className="text-xs text-alloy-midnight/50">
-                                No statuses configured for this category.
-                            </p>
-                        :   <ul className="space-y-1" data-testid={`lifecycle-status-list-${group.category_key}`}>
-                                {group.statuses.map((row) => {
-                                    const cat = draft?.categories.find(
-                                        (c) => c.category_key === group.category_key
-                                    );
-                                    const checked = Boolean(
-                                        cat?.selected_status_keys.includes(row.status_key)
-                                    );
-                                    return (
-                                        <li key={row.status_key}>
-                                            <button
-                                                type="button"
-                                                role="checkbox"
-                                                aria-checked={checked}
-                                                className={`flex w-full cursor-pointer items-center gap-2 rounded border border-alloy-forge/10 px-2 py-1 text-left text-xs hover:bg-white/60 ${
-                                                    checked ? "border-alloy-pine/35 bg-alloy-pine/5" : ""
-                                                }`}
-                                                data-testid={`lifecycle-status-row-${row.status_key}`}
-                                                data-status-key={row.status_key}
-                                                onClick={() => {
-                                                    if (!draft) return;
-                                                    emitChange(
-                                                        toggleStatusInRollup(
-                                                            draft,
-                                                            group.category_key,
-                                                            row.status_key,
-                                                            !checked
-                                                        )
-                                                    );
-                                                }}
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    readOnly
-                                                    tabIndex={-1}
-                                                    className="pointer-events-none shrink-0"
-                                                    checked={checked}
-                                                    aria-hidden
-                                                />
-                                                <span>{row.status_label}</span>
-                                            </button>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        }
-                    </section>
-                ))
-            }
+            :   null}
 
             {flattenStatusRollupKeys(draft).length === 0 ?
                 <p className="text-xs text-amber-800" data-testid="lifecycle-status-rollup-hint">

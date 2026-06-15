@@ -16,6 +16,7 @@ import {
     type InquiryChildPlacementFieldMetadata,
     type PlacementOptionSource,
 } from "@/lib/fields/inquiryChildPlacementFieldMetadata";
+import { opportunityReferenceMetadataForRefKey } from "@/lib/fields/opportunityReferenceFieldMetadata";
 import { resolveSelectFieldBinding } from "@/lib/fields/resolveSelectFieldBinding";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 
@@ -41,37 +42,39 @@ export function resolveLayoutRuntimeFieldControl(
         return { controlType: "date" };
     }
 
-    const placementFromMeta = inquiryChildPlacementMetadataForRefKey(refKey);
+    const childPlacement = inquiryChildPlacementMetadataForRefKey(refKey);
+    const opportunityReference = opportunityReferenceMetadataForRefKey(refKey);
     const config = fieldDef?.config ?? null;
-    const optionSource = getOptionSourceFromConfig(config) ?? placementFromMeta?.option_source;
+    const optionSource =
+        getOptionSourceFromConfig(config) ?? childPlacement?.option_source ?? opportunityReference?.option_source;
     const dependsOn =
         (getDependsOnFieldKeyFromConfig(config) as InquiryChildNativeOcmFieldKey | "")
-        || placementFromMeta?.depends_on_field_key;
+        || childPlacement?.depends_on_field_key;
 
-    if (optionSource && optionSource !== "option_set" && placementFromMeta) {
+    if (optionSource && optionSource !== "option_set") {
         return {
             controlType: "select",
-            placement: placementFromMeta,
+            placement: childPlacement ?? undefined,
             option_source: optionSource,
-            depends_on_field_key: dependsOn || placementFromMeta.depends_on_field_key,
+            depends_on_field_key: dependsOn || childPlacement?.depends_on_field_key,
         };
     }
 
-    const ocmKey = placementFromMeta?.ocm_field_key;
+    const ocmKey = childPlacement?.ocm_field_key;
     const fallbackSet =
         ocmKey ? fallbackOptionSetKeyForInquiryChildField(ocmKey)
         : inquiryChildPlacementMetadataForRefKey(refKey)?.option_set_key;
 
     const selectBinding = resolveSelectFieldBinding({
-        field_type: fieldDef?.field_type ?? placementFromMeta?.control_type ?? "select",
+        field_type: fieldDef?.field_type ?? childPlacement?.control_type ?? "select",
         config,
-        fallbackOptionSetKey: fallbackSet ?? placementFromMeta?.option_set_key,
+        fallbackOptionSetKey: fallbackSet ?? childPlacement?.option_set_key,
     });
 
     if (selectBinding.isSelect) {
         return {
             controlType: "select",
-            placement: placementFromMeta ?? undefined,
+            placement: childPlacement ?? undefined,
             option_source: "option_set",
             option_set_key: selectBinding.option_set_key,
         };

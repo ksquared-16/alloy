@@ -59,6 +59,8 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 work_unit_id: "wu-1",
                 queue_definition: def,
                 lifecycle_rail: null,
+                stage_context: null,
+                work_intent_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -90,6 +92,8 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 work_unit_id: "wu-1",
                 queue_definition: RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2,
                 lifecycle_rail: null,
+                stage_context: null,
+                work_intent_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -119,6 +123,8 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 work_unit_id: "wu-1",
                 queue_definition: customDef,
                 lifecycle_rail: null,
+                stage_context: null,
+                work_intent_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -139,6 +145,8 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 work_unit_id: "wu-1",
                 queue_definition: def,
                 lifecycle_rail: null,
+                stage_context: null,
+                work_intent_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -160,6 +168,8 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 work_unit_id: "wu-1",
                 queue_definition: null,
                 lifecycle_rail: null,
+                stage_context: null,
+                work_intent_runtime: null,
             },
         });
         expect(
@@ -193,6 +203,8 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                     ],
                     current_stage_key: "qualification",
                 },
+                stage_context: null,
+                work_intent_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -215,6 +227,8 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 work_unit_id: "wu-1",
                 queue_definition: { version: 1, entity_type: "job", queues: [] },
                 lifecycle_rail: null,
+                stage_context: null,
+                work_intent_runtime: null,
             },
         });
         const model = buildOpportunityVmLifecycleRailModel({

@@ -1,4 +1,9 @@
 import { adminSettingsSubpathHref } from "@/lib/admin/canonicalAdminRoutes";
+import {
+    childcareFieldCatalogClass,
+    isChildcareCanonicalField,
+    isChildcareOperatorPickerVisible,
+} from "@/lib/fields/childcareFieldCatalogDoctrine";
 
 /**
  * Operator-facing field Settings helpers (display filtering + labels).
@@ -86,11 +91,19 @@ export type OperatorFieldRow = {
     field_key: string;
     is_system: boolean;
     label: string | null;
+    config?: Record<string, unknown> | null;
 };
 
 export function isOperatorHiddenField(entityType: string, row: OperatorFieldRow): boolean {
-    if (isAlwaysHiddenFieldKey(row.field_key)) return true;
+    const isCanonicalLocationReference =
+        row.field_key === "location_id"
+        && (entityType === "opportunity" || entityType === "inquiry_child")
+        && isChildcareCanonicalField(entityType, row.field_key);
+
+    if (!isCanonicalLocationReference && isAlwaysHiddenFieldKey(row.field_key)) return true;
     if (!row.is_system) return false;
+
+    if (!isChildcareOperatorPickerVisible(entityType, row.field_key, row)) return true;
 
     if (entityTypeSupportsFieldPolicySettings(entityType)) {
         const resolved = resolveDrawerFieldPolicy(entityType, {
@@ -109,6 +122,11 @@ export function isOperatorHiddenField(entityType: string, row: OperatorFieldRow)
     return false;
 }
 
+/** Catalog class for Fields advanced toggle grouping. */
+export function operatorFieldCatalogClass(entityType: string, row: OperatorFieldRow): string {
+    return childcareFieldCatalogClass(entityType, row.field_key, row.config);
+}
+
 function humanizeFieldKey(fieldKey: string): string {
     return fieldKey
         .replace(/_/g, " ")
@@ -119,6 +137,7 @@ const OPERATOR_LABEL_OVERRIDES: Record<string, Record<string, string>> = {
     opportunity: {
         name: "Inquiry name",
         source: "Lead source",
+        location_id: "Location",
         assigned_to: "Assigned to",
         lost_reason: "Lost reason",
         job_date: "Preferred service date",

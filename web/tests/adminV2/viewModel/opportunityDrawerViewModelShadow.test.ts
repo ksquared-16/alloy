@@ -81,6 +81,8 @@ function minimalViewModel(): OpportunityDrawerViewModel {
             work_unit_id: "wu-1",
             queue_definition: null,
             lifecycle_rail: null,
+            stage_context: null,
+            work_intent_runtime: null,
         },
         header: {
             title: "Test",

@@ -35,6 +35,8 @@ describe("opportunityDrawerViewModelFirstViewport", () => {
                     buckets: [{ key: "new", label: "New", status_keys: ["new"] }],
                 } as never,
                 lifecycle_rail: null,
+                stage_context: null,
+                work_intent_runtime: null,
             },
             first_paint: {
                 settled: true,

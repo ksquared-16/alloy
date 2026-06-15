@@ -11,6 +11,8 @@ import {
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { persistStageStatusAssignments } from "@/lib/lifecycle/persistEnrollmentStageStatusAssignments";
 import type { StageStatusEntityType } from "@/lib/lifecycle/stageStatusRollup";
+import { groupSelectedKeysByEntityType } from "@/lib/lifecycle/statusCategoryCatalog";
+import { loadBusinessProcessStatusCategoryCatalog } from "@/lib/lifecycle/loadStatusCategoryCatalog";
 import {
     parseStatusRollupV1,
     STATUS_ROLLUP_METADATA_KEY,
@@ -74,17 +76,14 @@ export async function persistStatusRollupForLifecycleStageSave(
     }
 
     const sk = params.stageKey.trim();
-    for (const category of parsed.categories) {
-        if (!category.selected_status_keys.length) continue;
-        const entityType = entityTypeForPersist(category.entity_type);
+    const catalog = await loadBusinessProcessStatusCategoryCatalog(supabase, params.orgId);
+    const allSelectedKeys = parsed.categories.flatMap((c) => c.selected_status_keys);
+    const byEntity = groupSelectedKeysByEntityType(catalog, allSelectedKeys);
+    for (const [rawEntityType, keys] of byEntity) {
+        if (!keys.length) continue;
+        const entityType = entityTypeForPersist(rawEntityType);
         if (!entityType) continue;
-        await persistStageStatusAssignments(
-            supabase,
-            params.orgId,
-            sk,
-            category.selected_status_keys,
-            entityType
-        );
+        await persistStageStatusAssignments(supabase, params.orgId, sk, keys, entityType);
     }
 
     const metadata = applyRollupToBuilderStage(params.metadata, sk, parsed);

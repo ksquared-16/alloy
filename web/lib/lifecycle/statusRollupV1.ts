@@ -30,6 +30,8 @@ export type StatusCategoryStatusRow = {
     status_key: string;
     status_label: string;
     sort_order: number;
+    /** Source entity for runtime persistence (enrollment may span opportunities + OCM). */
+    entity_type: string;
 };
 
 export type StatusCategoryGroup = {
@@ -49,9 +51,9 @@ const CATEGORY_KEYS = new Set<string>([
 ]);
 
 export const STATUS_CATEGORY_LABELS: Record<StatusRollupCategoryKey, string> = {
-    lead_statuses: "Lead statuses",
-    enrollment_statuses: "Enrollment statuses",
-    person_statuses: "People statuses",
+    lead_statuses: "Lead / Case Statuses",
+    enrollment_statuses: "Enrollment Statuses",
+    person_statuses: "People Statuses",
     family_statuses: "Family statuses",
     candidate_statuses: "Candidate statuses",
     system_statuses: "Advanced / system statuses",

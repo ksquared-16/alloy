@@ -9,7 +9,9 @@ import {
     activeLifecycleProcess,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { executeStageOperatingOutcome, type StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import { patchLifecycleWorkIntentAttemptMetadata } from "@/lib/lifecycle/patchLifecycleWorkIntentAttemptMetadata";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { shouldCloseWorkAfterStageOutcome } from "@/lib/lifecycle/shouldCloseWorkAfterStageOutcome";
 
 export type CompleteStageWorkWithOutcomeInput = {
     supabase: SupabaseClient;
@@ -25,6 +27,8 @@ export type CompleteStageWorkWithOutcomeInput = {
 export type CompleteStageWorkWithOutcomeResult = {
     ok: boolean;
     error?: string;
+    work_closed?: boolean;
+    attempt_count?: number;
     outcome_execution?: Awaited<ReturnType<typeof executeStageOperatingOutcome>>;
 };
 
@@ -60,13 +64,30 @@ export async function completeStageWorkWithOutcome(
     const outcome = plan.outcomes.find((o) => o.outcome_key === outcomeKey);
     if (!outcome) return { ok: false, error: "Unknown outcome for stage" };
 
-    const completed = await completeWorkInstance({
-        supabase: input.supabase,
-        orgId: input.orgId,
-        workId: input.workId,
-    });
-    if (!completed.ok) {
-        return { ok: false, error: completed.message ?? completed.error };
+    const closeDecision = shouldCloseWorkAfterStageOutcome(plan, outcomeKey);
+    let attempt_count: number | undefined;
+
+    if (closeDecision.shouldClose) {
+        const completed = await completeWorkInstance({
+            supabase: input.supabase,
+            orgId: input.orgId,
+            workId: input.workId,
+        });
+        if (!completed.ok) {
+            return { ok: false, error: completed.message ?? completed.error };
+        }
+    } else {
+        const patched = await patchLifecycleWorkIntentAttemptMetadata({
+            supabase: input.supabase,
+            orgId: input.orgId,
+            workId: input.workId,
+            outcomeKey,
+            outcomeLabel: outcome.label,
+        });
+        if (!patched.ok) {
+            return { ok: false, error: patched.error };
+        }
+        attempt_count = patched.attempt_count;
     }
 
     const outcome_execution = await executeStageOperatingOutcome({
@@ -80,8 +101,19 @@ export async function completeStageWorkWithOutcome(
     });
 
     if (outcome_execution.errors.length) {
-        return { ok: false, error: outcome_execution.errors.join("; "), outcome_execution };
+        return {
+            ok: false,
+            error: outcome_execution.errors.join("; "),
+            work_closed: closeDecision.shouldClose,
+            attempt_count,
+            outcome_execution,
+        };
     }
 
-    return { ok: true, outcome_execution };
+    return {
+        ok: true,
+        work_closed: closeDecision.shouldClose,
+        attempt_count,
+        outcome_execution,
+    };
 }

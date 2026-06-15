@@ -19,8 +19,18 @@ describe("lifecycleFieldPaletteMerge", () => {
                     is_active: true,
                 },
             ],
+            opportunity: [
+                {
+                    field_key: "quote_total",
+                    label: "Quote Total",
+                    entity_type: "opportunity",
+                    is_system: true,
+                    is_active: true,
+                },
+            ],
         });
         expect(palette.some((f) => f.rule_id === customFieldRuleId("person", "preferred_language"))).toBe(true);
+        expect(palette.some((f) => f.field_key === "quote_total")).toBe(false);
         const custom = palette.find((f) => f.rule_id === customFieldRuleId("person", "preferred_language"));
         expect(custom?.field_label).toBe("Preferred Language");
         expect(custom?.config_only).toBe(true);

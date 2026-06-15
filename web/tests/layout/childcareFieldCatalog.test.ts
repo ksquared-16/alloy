@@ -115,6 +115,8 @@ describe("childcare starter field catalog manifest", () => {
         expect(isChildcareHiddenRefKey("person.secondary_phone")).toBe(true);
         expect(isChildcareHiddenRefKey("inquiry_child.location_id")).toBe(false);
         expect(isChildcareCatalogRefKey("inquiry_child.location_id")).toBe(true);
+        expect(isChildcareHiddenRefKey("opportunity.location_id")).toBe(false);
+        expect(isChildcareCatalogRefKey("opportunity.location_id")).toBe(true);
     });
 
     it("every starter entry has a unique refKey", () => {

@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitEvent } from "@/lib/emitEvent";
+import { onStageEntrySpawnWorkIntentFromOpportunityStatusChange } from "@/lib/lifecycle/onStageEntrySpawnWorkIntent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 export type EmitStatusChangedEventParams = {
@@ -60,6 +61,24 @@ export async function emitStatusChangedEvent(params: EmitStatusChangedEventParam
 
     const eventType =
         String(entityType).trim().toLowerCase() === "opportunities" ? "opportunity_status_changed" : "entity_status_changed";
+
+    if (eventType === "opportunity_status_changed") {
+        try {
+            await onStageEntrySpawnWorkIntentFromOpportunityStatusChange({
+                supabase,
+                orgId,
+                userId: actorUserId,
+                opportunityId: entityId,
+                previousStatusKey: oldNorm,
+                nextStatusKey: newNorm,
+            });
+        } catch (e) {
+            console.warn(
+                "[emitStatusChangedEvent] onStageEntrySpawnWorkIntent",
+                e instanceof Error ? e.message : e,
+            );
+        }
+    }
 
     const id = await emitEvent({
         org_id: orgId,

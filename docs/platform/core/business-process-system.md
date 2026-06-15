@@ -46,7 +46,7 @@ A business process defines:
 
 - **Name and catalog entry** — appears on `/workspace` landing and sidebar
 - **Stages** — ordered steps in the operator journey
-- **Stage operating plans** — purpose, expected work, success/off-track criteria
+- **Stage operating plans** — purpose, expected work, success/off-track criteria — see `docs/system/operating-plan-runtime-doctrine.md`
 - **Queue membership** — which records appear in which stage (`queue_membership_v1`)
 - **Status bindings** — platform status keys tied to stage transitions
 - **Required information & actions** — per-stage configuration

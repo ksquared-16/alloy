@@ -75,6 +75,7 @@ const OPPORTUNITY_ENFORCEABLE_NATIVE = new Set([
     "lost_reason",
     "job_date",
     "job_time_window",
+    "location_id",
 ]);
 
 /** `notes` PATCH body key → `opportunities.metadata.notes` (not a top-level column). */
@@ -343,6 +344,9 @@ export function resolveDrawerFieldPolicy(
         };
     }
 
+    const enforceableNative = resolveEnforceableNative(entityType, fieldKey);
+    if (enforceableNative) return enforceableNative;
+
     if (RELATIONSHIP_FK_KEYS.has(fieldKey)) {
         return {
             entityType,
@@ -368,9 +372,6 @@ export function resolveDrawerFieldPolicy(
             reason: "Custom field; persisted via field_values upsert on PATCH.",
         };
     }
-
-    const native = resolveEnforceableNative(entityType, fieldKey);
-    if (native) return native;
 
     return {
         entityType,

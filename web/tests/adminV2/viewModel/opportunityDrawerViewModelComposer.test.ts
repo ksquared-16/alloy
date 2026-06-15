@@ -9,6 +9,11 @@ vi.mock("@/lib/admin/effectiveRecordDrawerLayout", () => ({
 
 vi.mock("@/lib/admin/opportunityEntityRecord", () => ({
     buildOpportunityDrawerVisiblePayload: vi.fn(),
+    attachOpportunityHouseholdCustomerPersonsForDrawer: vi.fn(async () => undefined),
+}));
+
+vi.mock("@/lib/lifecycle/projectWorkIntentRuntime", () => ({
+    projectWorkIntentRuntime: vi.fn(async () => null),
 }));
 
 vi.mock("@/lib/admin/opportunityAttentionSuggestionAttachment", () => ({
@@ -271,6 +276,7 @@ describe("composeOpportunityDrawerViewModel", () => {
             expect(result.viewModel.first_paint.data.tour_bookings).toEqual([]);
             expect(result.viewModel.first_paint.dependencies.some((d) => d.key === "tour_bookings")).toBe(true);
             expect(result.viewModel.workspace.queue_definition).toBeNull();
+            expect(result.viewModel.workspace.work_intent_runtime).toBeNull();
             expect(result.viewModel.above_fold.record._record_surface).toBeUndefined();
             expect(compileOpportunityRecordDrawerShellFromEntity).toBeDefined();
         }

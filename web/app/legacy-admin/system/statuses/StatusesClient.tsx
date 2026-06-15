@@ -39,6 +39,13 @@ import {
 } from "@/components/adminV2/settings/StatusSettingsClarityBadges";
 import StatusSettingsInventoryPanel from "@/components/adminV2/settings/StatusSettingsInventoryPanel";
 import { ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
+import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
+import { buildStatusCategoryCatalog } from "@/lib/lifecycle/statusCategoryCatalog";
+import {
+    BP_PICKER_VISIBLE_CATEGORY_KEYS,
+    STATUS_SETTINGS_CATEGORY_DESCRIPTIONS,
+} from "@/lib/lifecycle/statusSettingsCategoryDoctrine";
+import type { StatusRollupCategoryKey } from "@/lib/lifecycle/statusRollupV1";
 
 /** Canonical admin-configurable workflow statuses (kept in sync with GET /api/admin/status-definitions unscoped list). */
 const ENTITY_TYPES = ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES;
@@ -59,8 +66,29 @@ const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
     subscriptions: "subscriptions",
 };
 
+const STATUS_SETTINGS_ENTITY_TYPES = new Set([
+    "opportunities",
+    "opportunity_customer_members",
+    "persons",
+]);
+
+function statusDefToRow(row: StatusDef): StatusDefinitionRow {
+    return {
+        id: row.id,
+        org_id: row.org_id ?? "",
+        entity_type: row.entity_type,
+        status_key: row.status_key,
+        status_label: row.status_label,
+        sort_order: row.sort_order,
+        is_active: row.is_active,
+        is_system: row.is_system,
+        industry_key: null,
+        metadata: row.metadata,
+    };
+}
+
 const FALLBACK_LABELS: Record<string, string> = {
-    opportunities: "Lead Statuses",
+    opportunities: "Lead / Case Statuses",
     jobs: "Jobs",
     schedules: "Schedules",
     customers: "Customers",
@@ -91,7 +119,7 @@ const STATUSES_DEFAULT_SUBTITLE =
     "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
 
 const STATUSES_ADMINV2_SUBTITLE =
-    "Manage status names and order by entity layer. Lead Statuses, Enrollment Statuses, and People Statuses use the same status_definitions table — each section explains which drawer or queue it powers.";
+    "Manage status names and order by category. Enrollment Statuses carry process movement; Lead / Case Statuses are container state; People Statuses are profile state. Stage rollups are assigned in Business Processes.";
 
 /** Legacy extended hints — merged with STATUS_SETTINGS_SECTION_DESCRIPTIONS where present. */
 const STATUS_ENTITY_EXTENDED_HINTS: Partial<Record<string, string>> = {};
@@ -141,6 +169,7 @@ export default function StatusesClient({
     const [deleteSaving, setDeleteSaving] = useState(false);
 
     const [expandedEntityType, setExpandedEntityType] = useState<string | null>(null);
+    const [expandedCategoryKey, setExpandedCategoryKey] = useState<StatusRollupCategoryKey | null>(null);
     const [modalEntityTypeLocked, setModalEntityTypeLocked] = useState(false);
     const hasAutoExpandedRef = useRef(false);
 
@@ -345,12 +374,30 @@ export default function StatusesClient({
     }, [statusesByEntityType, allowedSet]);
 
     useEffect(() => {
-        if (entityTypeFilter || sortedEntityTypes.length !== 1) return;
+        if (adminV2Chrome || entityTypeFilter || sortedEntityTypes.length !== 1) return;
         if (!hasAutoExpandedRef.current) {
             hasAutoExpandedRef.current = true;
             setExpandedEntityType(sortedEntityTypes[0]);
         }
-    }, [entityTypeFilter, sortedEntityTypes]);
+    }, [adminV2Chrome, entityTypeFilter, sortedEntityTypes]);
+
+    const statusCategorySections = useMemo(() => {
+        if (!adminV2Chrome) return [];
+        const rows = statuses
+            .filter((s) => STATUS_SETTINGS_ENTITY_TYPES.has(s.entity_type))
+            .map(statusDefToRow);
+        const catalog = buildStatusCategoryCatalog(rows, {
+            includeSystemCategories: false,
+            categoryKeys: BP_PICKER_VISIBLE_CATEGORY_KEYS,
+        });
+        const byKey = new Map(statuses.map((s) => [`${s.entity_type}:${s.status_key}`, s] as const));
+        return catalog.map((group) => ({
+            ...group,
+            statusDefs: group.statuses
+                .map((s) => byKey.get(`${s.entity_type}:${s.status_key}`))
+                .filter((s): s is StatusDef => s != null),
+        }));
+    }, [adminV2Chrome, statuses]);
 
     const renderSectionDescription = (entityType: string) => {
         const description = STATUS_SETTINGS_SECTION_DESCRIPTIONS[entityType];
@@ -678,7 +725,102 @@ export default function StatusesClient({
                 </SectionCard>
             )}
 
-            {!loading && !error && !entityTypeFilter && (
+            {!loading && !error && !entityTypeFilter && adminV2Chrome && (
+                <div className="space-y-3" data-status-settings-category-sections="true">
+                    {statusCategorySections.length === 0 ? (
+                        <SectionCard title="Status definitions">
+                            <p className="text-sm text-[#59678b]">No statuses found. Add a status to get started.</p>
+                        </SectionCard>
+                    ) : (
+                        statusCategorySections.map((section) => {
+                            const isExpanded = expandedCategoryKey === section.category_key;
+                            const count = section.statusDefs.length;
+                            const tableEntityType =
+                                section.category_key === "person_statuses" ? "persons"
+                                : section.category_key === "lead_statuses" ? "opportunities"
+                                : undefined;
+                            const description =
+                                STATUS_SETTINGS_CATEGORY_DESCRIPTIONS[
+                                    section.category_key as keyof typeof STATUS_SETTINGS_CATEGORY_DESCRIPTIONS
+                                ];
+                            return (
+                                <section
+                                    key={section.category_key}
+                                    className="rounded-xl border border-[#e6e8ec] bg-white shadow-sm overflow-hidden"
+                                    data-status-settings-category={section.category_key}
+                                >
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            setExpandedCategoryKey((prev) =>
+                                                prev === section.category_key ? null : section.category_key
+                                            )
+                                        }
+                                        className="w-full flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-left border-b border-[#e6e8ec] bg-[#F4F6F9]/50 hover:bg-[#eef0f4] transition-colors"
+                                    >
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <ChevronDown
+                                                className={`h-4 w-4 shrink-0 text-[#59678b] transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                                aria-hidden
+                                            />
+                                            <span className="text-sm font-semibold tracking-wider text-[#31394d]">
+                                                {section.label}
+                                            </span>
+                                            <span className="text-sm text-[#59678b]">
+                                                {count} {count === 1 ? "status" : "statuses"}
+                                            </span>
+                                        </div>
+                                        {canMutate && (
+                                            <span onClick={(e) => e.stopPropagation()}>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        const defaultEntity =
+                                                            section.category_key === "person_statuses"
+                                                                ? "persons"
+                                                                : section.category_key === "enrollment_statuses"
+                                                                  ? "opportunity_customer_members"
+                                                                  : "opportunities";
+                                                        openNewModal(defaultEntity);
+                                                    }}
+                                                    className="shrink-0 px-2 py-1 text-xs font-medium bg-alloy-midnight text-white rounded hover:opacity-90"
+                                                >
+                                                    New Status
+                                                </button>
+                                            </span>
+                                        )}
+                                    </button>
+                                    {isExpanded && (
+                                        <div className="p-5">
+                                            {description ?
+                                                <p className="mb-3 text-xs leading-snug text-[#59678b]">{description}</p>
+                                            :   null}
+                                            <p className="mb-3 text-[11px] leading-snug text-[#59678b]">
+                                                <Link
+                                                    href={ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH}
+                                                    className="font-medium text-alloy-pine hover:underline"
+                                                >
+                                                    Open Business Processes
+                                                </Link>{" "}
+                                                to assign which statuses roll up into each stage.
+                                            </p>
+                                            {renderTable(
+                                                section.statusDefs,
+                                                "No statuses for this category.",
+                                                tableEntityType
+                                            )}
+                                            {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
+                                        </div>
+                                    )}
+                                </section>
+                            );
+                        })
+                    )}
+                </div>
+            )}
+
+            {!loading && !error && !entityTypeFilter && !adminV2Chrome && (
                 <>
                     {sortedEntityTypes.length === 0 ? (
                         <SectionCard title="Status definitions">

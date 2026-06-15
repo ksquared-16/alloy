@@ -4,6 +4,7 @@
 
 import type { LayoutItem } from "@/lib/layout/layoutV2";
 import { isLayoutRuntimeChildEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeChildFieldEdit";
+import { isLayoutRuntimeOpportunityNativeRefKey } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import { isLayoutRuntimePersonContactRefKey } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
 
 export type LayoutRuntimeSurfaceVariant = "proof" | "production" | "preview";
@@ -11,6 +12,7 @@ export type LayoutRuntimeSurfaceVariant = "proof" | "production" | "preview";
 /** RefKeys with a registered layout-runtime save adapter. */
 export function isLayoutRuntimeEditableRefKeySupported(refKey: string): boolean {
     if (isLayoutRuntimePersonContactRefKey(refKey)) return true;
+    if (isLayoutRuntimeOpportunityNativeRefKey(refKey)) return true;
     return isLayoutRuntimeChildEditableRefKey(refKey);
 }
 

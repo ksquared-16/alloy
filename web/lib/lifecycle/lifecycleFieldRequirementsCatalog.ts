@@ -73,7 +73,7 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
     {
         rule_id: "child:program_interest",
         entity: "child",
-        field_label: "Program Interest",
+        field_label: "Program",
         runtime_enforced: true,
     },
     {
@@ -95,6 +95,13 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
         field_label: "Site / Location",
         runtime_enforced: false,
         stages: ["waitlist"],
+    },
+    {
+        rule_id: "opportunity:location",
+        entity: "opportunity",
+        field_label: "Location",
+        runtime_enforced: false,
+        stages: ["lead", "qualification"],
     },
     {
         rule_id: "child:waitlist_priority",
@@ -192,6 +199,7 @@ export function lifecycleFieldPaletteForStage(stage: LifecycleOperatorStage): Li
     return LIFECYCLE_FIELD_REQUIREMENT_CATALOG.filter((f) => {
         if (isDeprecatedLifecycleFieldRule(f.rule_id)) return false;
         if (f.stages?.length && !f.stages.includes(stage)) return false;
+        if (f.stages?.includes(stage)) return true;
         if (entities.size === 0) return true;
         return entities.has(f.entity);
     });

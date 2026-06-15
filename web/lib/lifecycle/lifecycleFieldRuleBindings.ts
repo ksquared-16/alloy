@@ -19,6 +19,7 @@ export type LifecycleFieldRuleBinding = {
         | "last_name"
         | "location_id"
         | "desired_program_type"
+        | "desired_program_category_id"
         | "program_room_cohort_key"
         | "desired_schedule_type"
         | "desired_start_date";
@@ -109,10 +110,16 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
     {
         rule_id: "child:program_interest",
         entity: "child",
-        field_key: "desired_program_type",
+        field_key: "desired_program_category_id",
         value_source: "inquiry_child",
-        ocm_field: "desired_program_type",
-        form_capture_keys: ["desired_program_type", "Desired program", "Program Interest", "Program"],
+        ocm_field: "desired_program_category_id",
+        form_capture_keys: [
+            "desired_program_category_id",
+            "desired_program_type",
+            "Desired program",
+            "Program Interest",
+            "Program",
+        ],
         runtime_enforced: true,
         form_coverage_supported: true,
     },
@@ -123,6 +130,16 @@ export const LIFECYCLE_FIELD_RULE_BINDINGS: readonly LifecycleFieldRuleBinding[]
         value_source: "inquiry_child",
         ocm_field: "location_id",
         form_capture_keys: ["location_id", "child_location_id", "Site", "Location", "School"],
+        runtime_enforced: false,
+        form_coverage_supported: true,
+    },
+    {
+        rule_id: "opportunity:location",
+        entity: "opportunity",
+        field_key: "location_id",
+        value_source: "opportunity",
+        opportunity_field: "location_id",
+        form_capture_keys: ["lead_location_id", "lead_site", "Lead Location", "School / location"],
         runtime_enforced: false,
         form_coverage_supported: true,
     },

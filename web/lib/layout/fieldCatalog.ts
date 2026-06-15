@@ -230,6 +230,7 @@ export const CURATED_FIELDS: Record<LayoutEntityGroupKey, LayoutCatalogField[]> 
     opportunity: [
         field("opportunity", "status_key", "Lead status", "status"),
         field("opportunity", "source", "Lead source", "text"),
+        field("opportunity", "location_id", "Location", "select"),
         field("opportunity", "tour_status", "Tour status", "status"),
         field("opportunity", "tour_date", "Tour date", "date"),
         field("opportunity", "tour_time", "Tour time", "text"),

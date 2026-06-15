@@ -8,6 +8,7 @@ import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext
 
 const WIDGET_OVERLAY_KEYS = [
     "_inquiry_summary_tasks",
+    "_work_intent_runtime",
     "_tasks_preview",
     "_operational_attention",
     "_operational_recommendation",

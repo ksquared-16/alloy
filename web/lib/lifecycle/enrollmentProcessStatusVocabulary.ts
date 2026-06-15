@@ -78,9 +78,10 @@ export function enrollmentStatusVocabularyMetadata(
     row: EnrollmentStatusVocabularyRow
 ): Record<string, unknown> {
     const layer =
-        row.entity_type === "opportunities" ? "lead_pipeline" : "enrollment_disposition";
+        row.entity_type === "opportunities" ? "enrollment_process" : "enrollment_disposition";
     return {
         alloy_layer: layer,
+        status_settings_category: "enrollment_statuses",
         process_key: ENROLLMENT_PROCESS_KEY,
         track_key: row.track_key,
         stage_key: row.stage_key,

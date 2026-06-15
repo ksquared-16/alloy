@@ -221,6 +221,18 @@ export const OPERATIONAL_FORM_SYSTEM_FIELDS: readonly SystemFieldRegistryEntry[]
         default_option_set_key: "childcare_schedule_type",
     },
     {
+        id: "lead_site",
+        entity_type: "opportunity",
+        field_key: "lead_site",
+        shared_value_key: "lead_site",
+        crm_mapping_key: "opportunity.location_id",
+        default_label: "Lead location",
+        default_description: "Site or campus for this lead (opportunities.location_id).",
+        default_required: false,
+        suggested_kind: "select",
+        public_intake_safe: true,
+    },
+    {
         id: "opportunity_interest_notes",
         entity_type: "opportunity",
         field_key: "opportunity_interest_notes",

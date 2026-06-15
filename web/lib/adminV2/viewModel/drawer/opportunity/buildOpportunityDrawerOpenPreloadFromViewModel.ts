@@ -23,6 +23,9 @@ function paintRecordFromViewModel(vm: OpportunityDrawerViewModel): Record<string
         id: vm.entity.id,
         _record_surface: "full",
         _inquiry_summary_tasks: vm.summaries.tasks,
+        ...(vm.workspace.work_intent_runtime != null
+            ? { _work_intent_runtime: vm.workspace.work_intent_runtime }
+            : {}),
     };
     if (vm.summaries.reminders.next_follow_up_iso) {
         paint.next_follow_up_at = vm.summaries.reminders.next_follow_up_iso;

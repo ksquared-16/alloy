@@ -1,4 +1,6 @@
+import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseOperationalWorkViewFromTaskRow } from "@/lib/admin/operationalWork/operationalWorkMetadata";
 
 export type InquirySummaryTaskPreviewRow = {
     id: string;
@@ -6,6 +8,11 @@ export type InquirySummaryTaskPreviewRow = {
     due_at: string;
     status: string;
     source: string;
+    work_intent_key?: string;
+    lifecycle_stage_key?: string;
+    lifecycle_provenance?: string;
+    attempt_count?: number;
+    last_outcome_label?: string;
 };
 
 /** Shell-owned open tasks for inquiry summary right column (drawer_visible / drawer_primary). */
@@ -37,7 +44,7 @@ export async function attachOpportunityInquirySummaryTaskPreview(
     }
     const { data, error } = await supabase
         .from("operational_tasks")
-        .select("id, title, due_at, status, source")
+        .select("id, title, due_at, status, source, metadata")
         .eq("org_id", orgId)
         .eq("entity_type", "opportunities")
         .eq("entity_id", opportunityId)
@@ -48,18 +55,91 @@ export async function attachOpportunityInquirySummaryTaskPreview(
         host._inquiry_summary_tasks = { state: "loaded", open_tasks: [], open_count: 0 } satisfies InquirySummaryTaskPreviewPayload;
         return;
     }
-    const open_tasks = ((data ?? []) as InquirySummaryTaskPreviewRow[]).map((r) => ({
-        id: String(r.id ?? "").trim(),
-        title: trimOrNull(r.title) ?? "Task",
-        due_at: String(r.due_at ?? ""),
-        status: trimOrNull(r.status) ?? "open",
-        source: trimOrNull(r.source) ?? "",
-    })).filter((r) => r.id);
+    const open_tasks = ((data ?? []) as Array<Record<string, unknown>>)
+        .map((r) => mapTaskPreviewRow(r))
+        .filter((r): r is InquirySummaryTaskPreviewRow => Boolean(r?.id));
     host._inquiry_summary_tasks = {
         state: "loaded",
         open_tasks,
         open_count: open_tasks.length,
     };
+}
+
+function readAttemptCount(metadata: Record<string, unknown>): number | undefined {
+    const raw = metadata.attempt_count;
+    if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) {
+        return Math.floor(raw);
+    }
+    return undefined;
+}
+
+function mapTaskPreviewRow(raw: Record<string, unknown>): InquirySummaryTaskPreviewRow | null {
+    const id = trimOrNull(raw.id);
+    if (!id) return null;
+    const metadata =
+        raw.metadata != null && typeof raw.metadata === "object" && !Array.isArray(raw.metadata)
+            ? (raw.metadata as Record<string, unknown>)
+            : {};
+    const taskRow = {
+        id,
+        org_id: "",
+        entity_type: "opportunities",
+        entity_id: null,
+        assigned_to_user_id: null,
+        created_by: "",
+        title: trimOrNull(raw.title) ?? "Task",
+        description: null,
+        due_at: String(raw.due_at ?? ""),
+        status: trimOrNull(raw.status) ?? "open",
+        source: trimOrNull(raw.source) ?? "",
+        proposal_id: null,
+        metadata,
+        created_at: "",
+        updated_at: "",
+    } satisfies OperationalTaskRow;
+    const work = parseOperationalWorkViewFromTaskRow(taskRow);
+    const row: InquirySummaryTaskPreviewRow = {
+        id,
+        title: trimOrNull(raw.title) ?? "Task",
+        due_at: String(raw.due_at ?? ""),
+        status: trimOrNull(raw.status) ?? "open",
+        source: trimOrNull(raw.source) ?? "",
+    };
+    const workIntentKey = trimOrNull(metadata.work_intent_key);
+    if (workIntentKey) row.work_intent_key = workIntentKey;
+    const lifecycleStageKey =
+        trimOrNull(metadata.lifecycle_stage_key) ?? trimOrNull(work.context_snapshot?.lifecycle_stage_key);
+    if (lifecycleStageKey) row.lifecycle_stage_key = lifecycleStageKey;
+    if (work.provenance.source) row.lifecycle_provenance = work.provenance.source;
+    const attemptCount = readAttemptCount(metadata);
+    if (attemptCount != null) row.attempt_count = attemptCount;
+    const lastOutcomeLabel = trimOrNull(metadata.last_outcome_label);
+    if (lastOutcomeLabel) row.last_outcome_label = lastOutcomeLabel;
+    return row;
+}
+
+function mapParsedTaskPreviewRow(row: Record<string, unknown>): InquirySummaryTaskPreviewRow | null {
+    const id = trimOrNull(row.id);
+    if (!id) return null;
+    const mapped: InquirySummaryTaskPreviewRow = {
+        id,
+        title: trimOrNull(row.title) ?? "Task",
+        due_at: String(row.due_at ?? ""),
+        status: trimOrNull(row.status) ?? "open",
+        source: trimOrNull(row.source) ?? "",
+    };
+    const workIntentKey = trimOrNull(row.work_intent_key);
+    if (workIntentKey) mapped.work_intent_key = workIntentKey;
+    const lifecycleStageKey = trimOrNull(row.lifecycle_stage_key);
+    if (lifecycleStageKey) mapped.lifecycle_stage_key = lifecycleStageKey;
+    const lifecycleProvenance = trimOrNull(row.lifecycle_provenance);
+    if (lifecycleProvenance) mapped.lifecycle_provenance = lifecycleProvenance;
+    if (typeof row.attempt_count === "number" && Number.isFinite(row.attempt_count)) {
+        mapped.attempt_count = Math.max(0, Math.floor(row.attempt_count));
+    }
+    const lastOutcomeLabel = trimOrNull(row.last_outcome_label);
+    if (lastOutcomeLabel) mapped.last_outcome_label = lastOutcomeLabel;
+    return mapped;
 }
 
 function readInquirySummaryTasksRaw(record: Record<string, unknown>): unknown {
@@ -84,16 +164,8 @@ export function parseInquirySummaryTaskPreview(
     const open_tasks: InquirySummaryTaskPreviewRow[] = [];
     for (const t of tasks) {
         if (!t || typeof t !== "object") continue;
-        const row = t as Record<string, unknown>;
-        const id = trimOrNull(row.id);
-        if (!id) continue;
-        open_tasks.push({
-            id,
-            title: trimOrNull(row.title) ?? "Task",
-            due_at: String(row.due_at ?? ""),
-            status: trimOrNull(row.status) ?? "open",
-            source: trimOrNull(row.source) ?? "",
-        });
+        const mapped = mapParsedTaskPreviewRow(t as Record<string, unknown>);
+        if (mapped) open_tasks.push(mapped);
     }
     return {
         state: "loaded",

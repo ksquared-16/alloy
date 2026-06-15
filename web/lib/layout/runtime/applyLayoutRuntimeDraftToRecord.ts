@@ -11,6 +11,9 @@ import {
     LAYOUT_RUNTIME_CHILD_EDITABLE_REF_KEYS,
     isLayoutRuntimeChildIdentityRefKey,
 } from "@/lib/layout/runtime/layoutRuntimeChildFieldEdit";
+import {
+    LAYOUT_RUNTIME_OPPORTUNITY_NATIVE_EDITABLE_REF_KEYS,
+} from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import { writeLayoutRuntimeRepeaterFieldRaw } from "@/lib/layout/runtime/writeLayoutRuntimeRepeaterFieldRaw";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -32,6 +35,24 @@ function applyPersonContactDraft(
         if (!isLayoutRuntimePersonContactRefKey(refKey)) continue;
         const value = (draft[refKey] ?? "").trim();
         if (value) next[refKey] = value;
+    }
+    return next;
+}
+
+function applyOpportunityNativeDraft(
+    record: ProofRuntimeRecord,
+    baseline: Record<string, string>,
+    draft: Record<string, string>,
+): ProofRuntimeRecord {
+    const next: ProofRuntimeRecord = { ...record };
+    for (const refKey of LAYOUT_RUNTIME_OPPORTUNITY_NATIVE_EDITABLE_REF_KEYS) {
+        if ((draft[refKey] ?? "") === (baseline[refKey] ?? "")) continue;
+        const value = (draft[refKey] ?? "").trim();
+        next[refKey] = value;
+        if (refKey === "opportunity.location_id") {
+            next.location_id = value || null;
+            next._location_id = value || null;
+        }
     }
     return next;
 }
@@ -83,6 +104,7 @@ export function applyLayoutRuntimeDraftToRecord(input: {
     rows: ProofRuntimeRecord[];
 }): ProofRuntimeRecord {
     let next = applyPersonContactDraft(input.record, input.baseline, input.draft);
+    next = applyOpportunityNativeDraft(next, input.baseline, input.draft);
     next = applyChildRepeaterDraft(next, input.rowKeys, input.rows, input.baseline, input.draft);
     return next;
 }

@@ -3,6 +3,12 @@
  * Palette aliases do not change persisted stage keys (enrolling ≠ enrollment).
  */
 
+import {
+    CHILDCARE_PROGRAM_FIELD_MODEL,
+    isEnrollmentOperatorFieldVisible,
+    isLegacyChildProgramFieldKey,
+    lifecycleRequirementEntityToFieldDefinitionEntity,
+} from "@/lib/fields/childcareFieldCatalogDoctrine";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { asOperatorStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
@@ -11,7 +17,7 @@ import {
     type LifecycleRequirementEntityKey,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import { isDeprecatedLifecycleFieldRule } from "@/lib/lifecycle/lifecycleConfiguration";
-import { customFieldRuleId } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
+import { customFieldRuleId, lifecycleFieldRuleBinding } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import {
     mergeLifecycleFieldPaletteForStage,
     type LifecycleFieldPaletteEntry,
@@ -48,26 +54,56 @@ export function mergeLifecycleFieldPaletteForBuilderStage(
         return mergeLifecycleFieldPaletteForStage(operator, orgByEntity);
     }
     const catalog = customBuilderStagePalette();
-    const byRuleId = new Map<string, LifecycleFieldPaletteEntry>(
-        catalog.map((entry) => [
-            entry.rule_id,
-            {
-                rule_id: entry.rule_id,
-                entity: entry.entity,
-                field_label: entry.field_label,
-                field_key: null,
-                field_source: "catalog" as const,
-                runtime_enforced: entry.runtime_enforced,
-                form_coverage_supported: false,
-                config_only: !entry.runtime_enforced,
-            },
-        ])
-    );
+    const byRuleId = new Map<string, LifecycleFieldPaletteEntry>();
+    for (const entry of catalog) {
+        const binding = lifecycleFieldRuleBinding(entry.rule_id);
+        const fieldKey = binding?.field_key ?? null;
+        const entityType = lifecycleRequirementEntityToFieldDefinitionEntity(entry.entity);
+        if (
+            fieldKey &&
+            !isEnrollmentOperatorFieldVisible(entityType, fieldKey, { is_system: true })
+        ) {
+            continue;
+        }
+        byRuleId.set(entry.rule_id, {
+            rule_id: entry.rule_id,
+            entity: entry.entity,
+            field_label: entry.field_label,
+            field_key: fieldKey,
+            field_source: "catalog" as const,
+            runtime_enforced: entry.runtime_enforced,
+            form_coverage_supported: false,
+            config_only: !entry.runtime_enforced,
+        });
+    }
     const org = orgByEntity ?? {};
     for (const [entityKey, rows] of Object.entries(org) as Array<
         [LifecycleRequirementEntityKey, OrgFieldDefinitionRow[]]
     >) {
+        const catalogKeys = new Set(
+            [...byRuleId.values()]
+                .filter((e) => e.entity === entityKey && e.field_key)
+                .map((e) => e.field_key as string)
+        );
         for (const row of rows) {
+            if (catalogKeys.has(row.field_key)) continue;
+            const entityType =
+                row.entity_type?.trim() || lifecycleRequirementEntityToFieldDefinitionEntity(entityKey);
+            if (
+                !isEnrollmentOperatorFieldVisible(entityType, row.field_key, {
+                    is_system: row.is_system,
+                    config: row.config ?? null,
+                })
+            ) {
+                continue;
+            }
+            if (isLegacyChildProgramFieldKey(row.field_key)) continue;
+            if (
+                row.field_key === CHILDCARE_PROGRAM_FIELD_MODEL.legacy_alias_field_key &&
+                catalogKeys.has(CHILDCARE_PROGRAM_FIELD_MODEL.canonical_field_key)
+            ) {
+                continue;
+            }
             const rule_id = customFieldRuleId(entityKey, row.field_key);
             if (!byRuleId.has(rule_id)) {
                 byRuleId.set(rule_id, {
@@ -80,6 +116,7 @@ export function mergeLifecycleFieldPaletteForBuilderStage(
                     form_coverage_supported: true,
                     config_only: true,
                 });
+                catalogKeys.add(row.field_key);
             }
         }
     }

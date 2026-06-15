@@ -138,7 +138,7 @@ describe("Business Processes Settings V2 — operator UI", () => {
         expect(workspace).toContain("status_category_catalog");
         expect(workspace).toContain("status_rollup_v1");
         expect(workspace).toContain("statusesSettingsHrefForEntity");
-        expect(bootstrap).toContain("loadStatusCategoryCatalog");
+        expect(bootstrap).toContain("loadBusinessProcessStatusCategoryCatalog");
         expect(bootstrap).toContain("status_rollup_v1");
         expect(rollupEditor).toContain("lifecycle-status-category-selector");
         expect(rollupEditor).toContain("{row.status_label}");

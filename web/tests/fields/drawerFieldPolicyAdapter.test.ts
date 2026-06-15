@@ -31,7 +31,7 @@ describe("drawerFieldPolicyAdapter", () => {
     });
 
     it("maps opportunity native safe scalars to column and enforceable", () => {
-        for (const key of ["name", "source", "assigned_to", "lost_reason", "job_date", "job_time_window"]) {
+        for (const key of ["name", "source", "assigned_to", "lost_reason", "job_date", "job_time_window", "location_id"]) {
             const r = resolveDrawerFieldPolicy("opportunity", { field_key: key, is_system: true });
             expect(r?.policyMode).toBe("enforceable");
             expect(r?.storage).toBe("column");
@@ -98,6 +98,10 @@ describe("drawerFieldPolicyAdapter", () => {
         const fk = resolveDrawerFieldPolicy("opportunity", { field_key: "customer_id", is_system: true });
         expect(fk?.policyMode).toBe("never_policy_controlled");
         expect(fk?.storage).toBe("relationship");
+
+        const leadLocation = resolveDrawerFieldPolicy("opportunity", { field_key: "location_id", is_system: true });
+        expect(leadLocation?.policyMode).toBe("enforceable");
+        expect(leadLocation?.storage).toBe("column");
 
         const vendor = resolveDrawerFieldPolicy("job", { field_key: "assigned_vendor_id", is_system: true });
         expect(vendor?.policyMode).toBe("never_policy_controlled");

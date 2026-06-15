@@ -2,6 +2,7 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { RecordManageMenuItem } from "@/lib/admin/recordManage/types";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
+import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type {
@@ -129,6 +130,14 @@ export type OpportunityDrawerViewModel = {
             stages: Array<{ key: string; label: string }>;
             current_stage_key: string | null;
         } | null;
+        /** Operating plan purpose for the current builder stage — read-only context. */
+        stage_context: {
+            stage_key: string;
+            stage_label: string;
+            purpose: string;
+        } | null;
+        /** Operating plan work intent runtime for current builder stage. */
+        work_intent_runtime: WorkIntentRuntimeProjection | null;
     };
     first_paint: OpportunityDrawerFirstPaintContract;
     header: {

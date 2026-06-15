@@ -158,6 +158,7 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
     );
 
     const location = opportunityDisplayLocationFromRecord(vmRecord);
+    const opportunityLocationId = pickDisplay(vmRecord.location_id, vmRecord._location_id);
     const siteLabel =
         location.kind === "single" ? location.label
         : location.kind === "multiple" ? location.label
@@ -208,9 +209,14 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         (vmRecord._inquiry_summary_tasks && typeof vmRecord._inquiry_summary_tasks === "object"
             ? vmRecord._inquiry_summary_tasks
             : null);
+    const workIntentRuntime =
+        vmRecord._work_intent_runtime && typeof vmRecord._work_intent_runtime === "object"
+            ? vmRecord._work_intent_runtime
+            : null;
     const overviewData: Record<string, unknown> = {
         ...vmRecord,
         ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),
+        ...(workIntentRuntime ? { _work_intent_runtime: workIntentRuntime } : {}),
     };
 
     const record: ProofRuntimeRecord = {
@@ -222,6 +228,7 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         _status_display: statusLabel ?? statusKey ?? "",
         "opportunity.status_key": statusKey ?? "",
         "opportunity.location": siteLabel ?? "",
+        "opportunity.location_id": opportunityLocationId ?? "",
         "opportunity.tour_date": tourDate ?? "",
         "opportunity.tour_status": tourStatus ?? "",
         "opportunity.source": source ?? "",
@@ -240,6 +247,7 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         _overview_data: overviewData,
         _attention: attention ?? "",
         ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),
+        ...(workIntentRuntime ? { _work_intent_runtime: workIntentRuntime } : {}),
         enrollment_children: layoutChildren,
         children: layoutChildren,
         tasks: Array.isArray(vmRecord._tasks_preview) ? vmRecord._tasks_preview : [],

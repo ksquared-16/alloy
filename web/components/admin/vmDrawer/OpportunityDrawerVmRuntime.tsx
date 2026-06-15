@@ -5,6 +5,7 @@ import clsx from "clsx";
 import OpportunityDrawerProofLayoutHeader from "@/components/admin/vmDrawer/OpportunityDrawerProofLayoutHeader";
 import EntityDrawerOperatingShell from "@/components/admin/drawer/EntityDrawerOperatingShell";
 import ProofDoctrineLifecycleRail from "@/components/layout/proofShell/ProofDoctrineLifecycleRail";
+import { oppInqEyebrow } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import CommunicationsDrawerBackgroundLoader from "@/components/admin/communications/CommunicationsDrawerBackgroundLoader";
 import OpportunityDrawerOverviewBody from "@/components/admin/vmDrawer/OpportunityDrawerOverviewBody";
 import DrawerLayoutRuntimeShellZoneView from "@/components/admin/vmDrawer/DrawerLayoutRuntimeShellZoneView";
@@ -588,6 +589,31 @@ export default function OpportunityDrawerVmRuntime() {
         return null;
     }, [displayVm, drawer.id]);
 
+    const stagePurposeBlock = useMemo(() => {
+        const stageContext = displayVm?.workspace.stage_context;
+        if (!stageContext?.purpose) return null;
+        return (
+            <>
+                <div className={oppInqEyebrow}>{stageContext.stage_label}</div>
+                <p className="text-[12px] leading-snug text-alloy-midnight/65">{stageContext.purpose}</p>
+            </>
+        );
+    }, [displayVm?.workspace.stage_context]);
+
+    const lifecycleRailForHeader = useMemo(() => {
+        if (!lifecycleRail && !stagePurposeBlock) return null;
+        return (
+            <>
+                {lifecycleRail}
+                {stagePurposeBlock ?
+                    <div className="min-w-0 pt-1" data-opportunity-drawer-stage-purpose="true">
+                        {stagePurposeBlock}
+                    </div>
+                :   null}
+            </>
+        );
+    }, [lifecycleRail, stagePurposeBlock]);
+
     const showColdShell = coldLoading && !displayVm && !suppressFullDrawerLoading;
 
     const onTabSelect = useCallback((tab: DrawerTabKey) => setDrawerTab(tab), []);
@@ -639,7 +665,7 @@ export default function OpportunityDrawerVmRuntime() {
                 tabs={tabs}
                 activeTab={drawerTab}
                 onTabSelect={onTabSelect}
-                lifecycleRail={lifecycleRail}
+                lifecycleRail={lifecycleRailForHeader}
                 onClose={closeDrawer}
                 manageMenuItems={manageMenuItems}
                 onManageSelect={onManageSelect}
@@ -764,6 +790,14 @@ export default function OpportunityDrawerVmRuntime() {
                                             {lifecycleRail}
                                         </div>
                                         : null}
+                                    {stagePurposeBlock ?
+                                        <div
+                                            className="mb-3 min-w-0"
+                                            data-opportunity-drawer-stage-purpose="true"
+                                        >
+                                            {stagePurposeBlock}
+                                        </div>
+                                    :   null}
                                 </>
                                 : null}
                             {drawer.id ?

@@ -24,6 +24,9 @@ import {
     buildOpportunityStatusControlVm,
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
+import { resolveStageOperatingPlanPurpose } from "@/lib/lifecycle/resolveStageOperatingPlanPurpose";
+import { projectWorkIntentRuntime } from "@/lib/lifecycle/projectWorkIntentRuntime";
+import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
 import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
 import { resolveOpportunityDrawerStatusCanMutateFromGate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
@@ -334,6 +337,25 @@ export async function composeOpportunityDrawerViewModel(
         statusDefs,
         workUnitMetadata: wuData?.metadata ?? null,
     });
+    const stage_context = resolveStageOperatingPlanPurpose({
+        departmentMetadata: deptMetadata,
+        builderStageKey: lifecycle_rail?.current_stage_key ?? null,
+    });
+    const work_intent_runtime = await projectWorkIntentRuntime({
+        supabase,
+        orgId,
+        opportunityId,
+        departmentId,
+        departmentMetadata: deptMetadata,
+        builderStageKey: lifecycle_rail?.current_stage_key ?? null,
+    });
+    const rawTasksSummary = parseInquirySummaryTasksFromRecord(record);
+    const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, work_intent_runtime);
+    record._inquiry_summary_tasks = filteredTasksSummary;
+    if (record._overview_data && typeof record._overview_data === "object" && !Array.isArray(record._overview_data)) {
+        (record._overview_data as Record<string, unknown>)._inquiry_summary_tasks = filteredTasksSummary;
+    }
+    record._work_intent_runtime = work_intent_runtime;
     const status_can_mutate = resolveOpportunityDrawerStatusCanMutateFromGate({
         role: gate.role,
         roleKeys: gate.roleKeys,
@@ -359,6 +381,8 @@ export async function composeOpportunityDrawerViewModel(
             /** Raw work-unit JSON (v1/v2) — client lifecycle parser re-coerces via resolveWorkUnitQueueDefinitionForDrawer. */
             queue_definition: wuData?.queue_definition ?? null,
             lifecycle_rail,
+            stage_context,
+            work_intent_runtime,
         },
         first_paint,
         header: {
@@ -391,7 +415,7 @@ export async function composeOpportunityDrawerViewModel(
             record: stripOpportunityDrawerRecordStaging(record),
         },
         summaries: {
-            tasks: parseInquirySummaryTasksFromRecord(record),
+            tasks: filteredTasksSummary,
             active_tour_bookings: activeTourBookings,
             reminders,
             bos: buildOpportunityDrawerBosSummary(record),

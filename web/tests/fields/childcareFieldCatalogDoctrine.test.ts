@@ -146,10 +146,41 @@ describe("childcareFieldCatalogDoctrine", () => {
                     is_system: true,
                     is_active: true,
                 },
+                {
+                    entity_type: "opportunity",
+                    field_key: "quote_total",
+                    field_type: "number",
+                    label: "Quote Total",
+                    is_system: true,
+                    is_active: true,
+                },
             ],
             []
         );
         expect(formsPicker).toHaveLength(0);
+    });
+
+    it("BP stage requirements filters leaked org opportunity fields on lead", () => {
+        const palette = mergeLifecycleFieldPaletteForStage("lead", {
+            opportunity: [
+                {
+                    field_key: "quote_total",
+                    label: "Quote Total",
+                    entity_type: "opportunity",
+                    is_system: true,
+                    is_active: true,
+                },
+                {
+                    field_key: "inquiry_source",
+                    label: "Inquiry source",
+                    entity_type: "opportunity",
+                    is_system: true,
+                    is_active: true,
+                },
+            ],
+        });
+        expect(palette.some((f) => f.field_key === "quote_total")).toBe(false);
+        expect(palette.some((f) => f.field_key === "inquiry_source")).toBe(true);
     });
 
     it("E1 repair migration is idempotent (no deletes, NOT EXISTS inserts)", () => {

@@ -30,7 +30,7 @@ No parallel field catalogs in operator-facing configuration.
 | `field_key`, `field_type`, `label`, `help_text`, `placeholder` | Definition |
 | `entity_type` | Which record the field belongs to |
 | `section_key`, `sort_order` | Catalog grouping (Fields settings) |
-| `config` | Option set keys, catalog keys, placement hints |
+| `config` | Option set keys, catalog keys, placement hints, **native reference metadata** (`field_kind: entity_reference`, `option_source`, `storage_class`, `storage_table`, `storage_column`) |
 | `requirement_policy`, `is_required` | **Global** field requirement policy |
 | `is_visible_in_drawer`, `is_visible_in_public_booking`, … | Visibility flags |
 
@@ -50,7 +50,27 @@ Supporting tables:
 | `LIFECYCLE_FIELD_RULE_BINDINGS` | `web/lib/lifecycle/lifecycleFieldRuleBindings.ts` | Runtime binding layer — should key off `field_definitions.id` / `field_key` |
 | `OPERATIONAL_FORM_SYSTEM_FIELDS` | `web/lib/forms/systemFieldRegistry.ts` | Parallel forms picker — should map to `field_definitions` |
 | `CHILDCARE_LAYOUT_FIELD_CATALOG` / `CURATED_FIELDS` | `web/lib/layout/childcareLayoutFieldCatalog.ts`, `fieldCatalog.ts` | Manifest bootstrap when `field_definitions` empty |
-| Native column registries | `inquiryChildFieldRegistry`, `customerMemberFieldRegistry` | Parity seeds — should converge to `field_definitions` rows |
+| Native column registries | `inquiryChildFieldRegistry`, `customerMemberFieldRegistry`, `opportunityFieldRegistry` | Parity seeds — should converge to `field_definitions` rows |
+
+### Native reference fields (shipped June 2026)
+
+Operator-configurable **entity reference** fields are supported via seeded `field_definitions` rows — not a separate Relationships builder.
+
+| Pattern | Example |
+|---------|---------|
+| `field_type` | `select` with `config.option_source` (e.g. `locations`) |
+| `config.field_kind` | `entity_reference` |
+| Storage | Native column on entity table — **not** `field_values` |
+| Drawer PATCH | Entity route (e.g. `opportunities.location_id`) |
+
+**MVP example — Lead Location:**
+
+- Registry: `entity_type=opportunity`, `field_key=location_id`
+- Storage: `opportunities.location_id` → `locations.id`
+- Surfaces: Fields, Business Processes (Lead stage), Layouts (`opportunity.location_id`), Forms (`lead_site`)
+- Child placement (`inquiry_child.location_id`) remains separate — per-child canonical doctrine unchanged
+
+Migration: `supabase/migrations/20260617120000_opportunity_location_id_field_definition_repair.sql`
 
 ---
 

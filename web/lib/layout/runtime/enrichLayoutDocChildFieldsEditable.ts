@@ -5,6 +5,7 @@
 import type { LayoutCollectionColumn, LayoutDoc, LayoutItem } from "@/lib/layout/layoutV2";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import { enrichLayoutDocPersonContactEditable } from "@/lib/layout/runtime/enrichLayoutDocPersonContactEditable";
+import { enrichLayoutDocOpportunityFieldsEditable } from "@/lib/layout/runtime/enrichLayoutDocOpportunityFieldsEditable";
 import { isLayoutRuntimeChildEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeChildFieldEdit";
 
 function enrichColumn(col: LayoutCollectionColumn): LayoutCollectionColumn {
@@ -55,5 +56,7 @@ export function enrichLayoutDocChildFieldsEditable(doc: LayoutDoc): LayoutDoc {
 }
 
 export function enrichLayoutDocDrawerFieldEditable(doc: LayoutDoc): LayoutDoc {
-    return enrichLayoutDocChildFieldsEditable(enrichLayoutDocPersonContactEditable(doc));
+    return enrichLayoutDocOpportunityFieldsEditable(
+        enrichLayoutDocChildFieldsEditable(enrichLayoutDocPersonContactEditable(doc)),
+    );
 }

@@ -1,0 +1,171 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { completeStageWorkWithOutcome } from "@/lib/lifecycle/completeStageWorkWithOutcome";
+import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+import { LIFECYCLE_BUILDER_METADATA_KEY } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+
+const orgId = "11111111-1111-4111-8111-111111111111";
+const userId = "22222222-2222-4222-8222-222222222222";
+const departmentId = "33333333-3333-4333-8333-333333333333";
+const workId = "44444444-4444-4444-8444-444444444444";
+const opportunityId = "55555555-5555-4555-8555-555555555555";
+
+const mockCompleteWorkInstance = vi.fn();
+const mockPatchAttemptMetadata = vi.fn();
+const mockExecuteStageOperatingOutcome = vi.fn();
+
+vi.mock("@/lib/admin/operationalWork/operationalWorkService", () => ({
+    completeWorkInstance: (...args: unknown[]) => mockCompleteWorkInstance(...args),
+}));
+
+vi.mock("@/lib/lifecycle/patchLifecycleWorkIntentAttemptMetadata", () => ({
+    patchLifecycleWorkIntentAttemptMetadata: (...args: unknown[]) => mockPatchAttemptMetadata(...args),
+}));
+
+vi.mock("@/lib/lifecycle/executeStageOperatingOutcome", () => ({
+    executeStageOperatingOutcome: (...args: unknown[]) => mockExecuteStageOperatingOutcome(...args),
+}));
+
+function departmentMetadataWithPlan(plan: StageOperatingPlanV1): Record<string, unknown> {
+    return {
+        [LIFECYCLE_BUILDER_METADATA_KEY]: {
+            version: 1,
+            active_process_id: "proc-enrollment",
+            processes: [
+                {
+                    id: "proc-enrollment",
+                    key: "enrollment",
+                    name: "Enrollment",
+                    primary_entity: "opportunity",
+                    sort_order: 0,
+                    is_active: true,
+                    stages: [
+                        {
+                            id: "stage-lead",
+                            key: plan.stage_key,
+                            label: "Lead",
+                            sort_order: 0,
+                            is_active: true,
+                            stage_operating_plan_v1: plan,
+                        },
+                    ],
+                },
+            ],
+        },
+    };
+}
+
+function makeSupabase(metadata: Record<string, unknown>) {
+    return {
+        from: vi.fn((table: string) => {
+            if (table !== "departments") throw new Error(`unexpected table ${table}`);
+            return {
+                select: vi.fn().mockReturnThis(),
+                eq: vi.fn().mockReturnThis(),
+                maybeSingle: vi.fn(async () => ({ data: { metadata }, error: null })),
+            };
+        }),
+    };
+}
+
+const baseInput = {
+    supabase: makeSupabase(departmentMetadataWithPlan(defaultStageOperatingPlanForEnrollmentStage("lead")!)) as never,
+    orgId,
+    userId,
+    departmentId,
+    stageKey: "lead",
+    workId,
+    subject: {
+        journey_segment: "family" as const,
+        opportunity_id: opportunityId,
+    },
+};
+
+describe("completeStageWorkWithOutcome", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockCompleteWorkInstance.mockResolvedValue({ ok: true, row: { id: workId, status: "completed" } });
+        mockPatchAttemptMetadata.mockResolvedValue({ ok: true, attempt_count: 1 });
+        mockExecuteStageOperatingOutcome.mockResolvedValue({
+            applied_targets: [],
+            errors: [],
+            queue_refresh_opportunity_id: opportunityId,
+            needs_attention_set: false,
+            status_updated: false,
+        });
+    });
+
+    it("successful outcome (reached_family) closes work and executes outcome", async () => {
+        mockExecuteStageOperatingOutcome.mockResolvedValue({
+            applied_targets: [],
+            errors: [],
+            queue_refresh_opportunity_id: opportunityId,
+            needs_attention_set: false,
+            status_updated: true,
+        });
+
+        const result = await completeStageWorkWithOutcome({
+            ...baseInput,
+            outcomeKey: "reached_family",
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.work_closed).toBe(true);
+        expect(mockCompleteWorkInstance).toHaveBeenCalledWith({
+            supabase: baseInput.supabase,
+            orgId,
+            workId,
+        });
+        expect(mockPatchAttemptMetadata).not.toHaveBeenCalled();
+        expect(mockExecuteStageOperatingOutcome).toHaveBeenCalledWith(
+            expect.objectContaining({ outcomeKey: "reached_family" }),
+        );
+    });
+
+    it("retry outcome (left_voicemail) keeps work open, increments attempts, executes outcome", async () => {
+        mockPatchAttemptMetadata.mockResolvedValue({ ok: true, attempt_count: 2 });
+
+        const result = await completeStageWorkWithOutcome({
+            ...baseInput,
+            outcomeKey: "left_voicemail",
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.work_closed).toBe(false);
+        expect(result.attempt_count).toBe(2);
+        expect(mockCompleteWorkInstance).not.toHaveBeenCalled();
+        expect(mockPatchAttemptMetadata).toHaveBeenCalledWith({
+            supabase: baseInput.supabase,
+            orgId,
+            workId,
+            outcomeKey: "left_voicemail",
+            outcomeLabel: "Left voicemail",
+        });
+        expect(mockExecuteStageOperatingOutcome).toHaveBeenCalledWith(
+            expect.objectContaining({ outcomeKey: "left_voicemail" }),
+        );
+    });
+
+    it("terminal outcome (not_interested) closes work and executes outcome", async () => {
+        mockExecuteStageOperatingOutcome.mockResolvedValue({
+            applied_targets: [],
+            errors: [],
+            queue_refresh_opportunity_id: opportunityId,
+            needs_attention_set: false,
+            status_updated: true,
+        });
+
+        const result = await completeStageWorkWithOutcome({
+            ...baseInput,
+            outcomeKey: "not_interested",
+        });
+
+        expect(result.ok).toBe(true);
+        expect(result.work_closed).toBe(true);
+        expect(mockCompleteWorkInstance).toHaveBeenCalled();
+        expect(mockPatchAttemptMetadata).not.toHaveBeenCalled();
+        expect(mockExecuteStageOperatingOutcome).toHaveBeenCalledWith(
+            expect.objectContaining({ outcomeKey: "not_interested" }),
+        );
+    });
+});

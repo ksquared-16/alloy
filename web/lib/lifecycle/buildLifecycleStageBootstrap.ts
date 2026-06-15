@@ -25,7 +25,7 @@ import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleSt
 import { loadQueueMembershipStatusOptions } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
 import { resolveQueueMembershipForStage } from "@/lib/businessProcesses/resolveQueueMembership";
 import { enrollmentQueueMembershipLegacyFallback } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
-import { loadStatusCategoryCatalog } from "@/lib/lifecycle/loadStatusCategoryCatalog";
+import { loadBusinessProcessStatusCategoryCatalog } from "@/lib/lifecycle/loadStatusCategoryCatalog";
 import { resolveStatusRollupForStage } from "@/lib/lifecycle/statusCategoryCatalog";
 import { queueMembershipSubjectForStatusOptions } from "@/lib/lifecycle/stageStatusRollup";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
@@ -219,7 +219,7 @@ export async function buildLifecycleStageBootstrap(params: {
         trackKey: stageRecord?.track_key ?? null,
         queueMembership: queue_membership,
     });
-    const status_category_catalog = await loadStatusCategoryCatalog(supabase, orgId);
+    const status_category_catalog = await loadBusinessProcessStatusCategoryCatalog(supabase, orgId);
     const legacyRollupKeys = [
         ...(queue_membership?.included_status_keys ?? []),
         ...(queue_membership?.included_disposition_keys ?? []),
