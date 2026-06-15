@@ -39,6 +39,29 @@ CREATE TABLE IF NOT EXISTS public.action_definitions (
     )
 );
 
+-- The CREATE TABLE above is a no-op when action_definitions already exists (created by
+-- 20260427180000 with a CHECK that omits 'open_form'), so its 'open_form'-inclusive CHECK
+-- never takes effect. Explicitly reconcile the constraint so the active CHECK allows
+-- 'open_form' (required by the 20260430220000 seed). Preserves all existing allowed values;
+-- adds only 'open_form'. Idempotent.
+ALTER TABLE public.action_definitions
+  DROP CONSTRAINT IF EXISTS action_definitions_action_type_check;
+ALTER TABLE public.action_definitions
+  ADD CONSTRAINT action_definitions_action_type_check CHECK (
+    action_type = ANY (
+      ARRAY[
+        'navigate'::text,
+        'open_drawer'::text,
+        'open_form'::text,
+        'update_status'::text,
+        'update_field'::text,
+        'start_workflow'::text,
+        'external_link'::text,
+        'ui_intent'::text
+      ]
+    )
+  );
+
 COMMENT ON TABLE public.action_definitions IS
   'Org-scoped or global (org_id null) UI action definitions; executed via admin action executor.';
 

@@ -12,14 +12,14 @@ COMMENT ON COLUMN public.opportunity_customer_members.desired_start_date IS
     'Per-child desired enrollment start (nullable). When null, UI may inherit opportunity-level desired_start_date without copying.';
 
 -- Catalog section for Settings → Field grouping (per org, idempotent)
+-- is_archived added in 20260523120000_field_policy_and_section_v1 (DEFAULT false backfills rows).
 INSERT INTO public.field_section_definitions (
     org_id,
     entity_type,
     section_key,
     label,
     description,
-    sort_order,
-    is_archived
+    sort_order
 )
 SELECT
     o.id,
@@ -27,8 +27,7 @@ SELECT
     'inquiry_participation',
     'Inquiry participation',
     'Fields for each child linked to an inquiry.',
-    50,
-    false
+    50
 FROM public.orgs o
 WHERE NOT EXISTS (
     SELECT 1
