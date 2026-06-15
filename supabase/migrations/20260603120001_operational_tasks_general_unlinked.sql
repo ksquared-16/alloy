@@ -10,12 +10,22 @@ ALTER TABLE public.operational_tasks
 ALTER TABLE public.operational_tasks
     ALTER COLUMN entity_id DROP NOT NULL;
 
-ALTER TABLE public.operational_tasks
-    ADD CONSTRAINT operational_tasks_entity_link_check
-    CHECK (
-        (entity_type IS NULL AND entity_id IS NULL)
-        OR (entity_type = 'opportunities'::text AND entity_id IS NOT NULL)
-    );
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'operational_tasks_entity_link_check'
+          AND conrelid = 'public.operational_tasks'::regclass
+    ) THEN
+        ALTER TABLE public.operational_tasks
+            ADD CONSTRAINT operational_tasks_entity_link_check
+            CHECK (
+                (entity_type IS NULL AND entity_id IS NULL)
+                OR (entity_type = 'opportunities'::text AND entity_id IS NOT NULL)
+            );
+    END IF;
+END $$;
 
 COMMENT ON CONSTRAINT operational_tasks_entity_link_check ON public.operational_tasks IS
     'General tasks have no entity link; linked tasks must reference an opportunity.';
