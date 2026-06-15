@@ -32,9 +32,10 @@ Start here: **`platform/foundation/system-overview.md`**
 
 6. `platform/core/business-process-system.md` — **operator model: Business Process → Stage → Record**
 7. `platform/core/entity-model.md`
-8. `platform/core/navigation-and-workspace-doctrine.md`
-9. `platform/core/record-system.md`
-10. `platform/core/status-and-state-system.md`
+8. `platform/core/placement-system.md` — **School → Program → Room; lead vs child authority**
+9. `platform/core/navigation-and-workspace-doctrine.md`
+10. `platform/core/record-system.md`
+11. `platform/core/status-and-state-system.md`
 
 ### 3. Operator experience
 

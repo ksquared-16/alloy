@@ -232,7 +232,8 @@ describe("inquiry child placement UI wiring", () => {
             resolve(__dirname, "../../../lib/admin/actions/createLeadPlatformGather.ts"),
             "utf8",
         );
-        expect(src).toContain('payload_key: "child_location_id"');
+        expect(src).toContain('payload_key: "location_id"');
+        expect(src).toContain('placement_select: "site"');
         expect(src).toContain('placement_select: "site_program"');
         expect(src).toContain('option_set_key: "childcare_schedule_type"');
     });
@@ -249,8 +250,6 @@ describe("inquiry child placement UI wiring", () => {
         expect(src).not.toMatch(/rowProgramOptions\.map\([\s\S]*programItems/);
         expect(src).toMatch(/rowProgramOptions\.map\(\(i\) =>/);
         expect(src).toContain("buildInquiryChildRoomOptionsForSite");
-        expect(src).toMatch(
-            /buildInquiryChildRoomOptionsForSite\([\s\S]*st\.desired_program_type/,
-        );
+        expect(src).toContain("resolveProgramKeyForRoomCascade");
     });
 });

@@ -89,7 +89,7 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
     {
         field_key: "location_id",
         field_type: "select",
-        label: "Location",
+        label: "School / Location",
         section_key: "inquiry_participation",
         sort_order: 15,
         is_visible_in_drawer: true,
@@ -98,13 +98,24 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
         config: { option_source: "locations" },
     },
     {
-        field_key: "desired_program_type",
+        field_key: "desired_program_category_id",
         field_type: "select",
         label: "Program",
         section_key: "inquiry_participation",
         sort_order: 18,
         is_visible_in_drawer: true,
         is_visible_in_form: true,
+        is_visible_in_table: false,
+        config: { option_source: "programs_for_location", depends_on_field_key: "location_id" },
+    },
+    {
+        field_key: "desired_program_type",
+        field_type: "select",
+        label: "Program",
+        section_key: "inquiry_participation",
+        sort_order: 19,
+        is_visible_in_drawer: false,
+        is_visible_in_form: false,
         is_visible_in_table: false,
         config: { option_source: "programs_for_location", depends_on_field_key: "location_id" },
     },
@@ -119,7 +130,7 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
         is_visible_in_table: false,
         config: {
             option_source: "rooms_for_location_program",
-            depends_on_field_key: "desired_program_type",
+            depends_on_field_key: "desired_program_category_id",
         },
     },
     {

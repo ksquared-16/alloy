@@ -33,6 +33,7 @@ import {
 } from "@/lib/admin/drawer/inquiryChildPlacementScope";
 import { applyInquiryChildPlacementFieldChange } from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
 import { resolveProgramsOfferedForSite } from "@/lib/admin/location/inquiryChildPlacementOptions";
+import { resolveProgramKeyForRoomCascade } from "@/lib/admin/location/inquiryChildLocationMismatch";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
@@ -109,6 +110,7 @@ export type InquiryChildRow = {
     dob: string | null;
     age: string | null;
     desired_program_type: string | null;
+    desired_program_category_id?: string | null;
     desired_program_label: string | null;
     desired_schedule_type: string | null;
     desired_schedule_label: string | null;
@@ -1184,11 +1186,17 @@ export default function OpportunityInquiryChildrenSection({
                         st.desired_program_type,
                         (k) => programLabelByKey.get(k) ?? k,
                     );
+                    const programFilterKey =
+                        resolveProgramKeyForRoomCascade({
+                            desired_program_category_id: r.desired_program_category_id ?? "",
+                            desired_program_type: st.desired_program_type || normalizeKey(r.desired_program_type),
+                            categories: locationProgramCategories,
+                        }) ?? undefined;
                     const rowRoomOptions = placementSelectOptionsWithCurrent(
                         buildInquiryChildRoomOptionsForSite(
                             locationItems,
                             st.location_id,
-                            st.desired_program_type || undefined,
+                            programFilterKey,
                         ).map((opt) => ({ value: opt.cohort_key, label: opt.label })),
                         st.program_room_cohort_key,
                         (k) => roomLabelByKey.get(k) ?? k,

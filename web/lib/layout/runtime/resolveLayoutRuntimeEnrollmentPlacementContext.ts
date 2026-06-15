@@ -6,6 +6,8 @@
 import type { InquiryChildNativeOcmFieldKey } from "@/lib/fields/inquiryChildFieldRegistry";
 import { layoutRefKeyForInquiryChildOcmField } from "@/lib/fields/inquiryChildPlacementFieldMetadata";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import { resolveProgramKeyForRoomCascade } from "@/lib/admin/location/inquiryChildLocationMismatch";
+import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
 
 function readTrimmed(value: unknown): string {
     if (value == null) return "";
@@ -31,7 +33,8 @@ export function resolveLayoutRuntimeEnrollmentPlacementContext(
     anchorRecord: ProofRuntimeRecord,
     getFieldValue: (refKey: string, fallback: string, rowKey?: string) => string,
     rowKey: string,
-): { locationId: string; programKey: string } {
+    categories: ReadonlyArray<LocationProgramCategoryRow> = [],
+): { locationId: string; programCategoryId: string; programType: string; programKey: string } {
     const readDraftOrRow = (ocmKey: InquiryChildNativeOcmFieldKey): string => {
         const refKey = layoutRefKeyForInquiryChildOcmField(ocmKey);
         const draft = getFieldValue(refKey, "", rowKey).trim();
@@ -44,9 +47,16 @@ export function resolveLayoutRuntimeEnrollmentPlacementContext(
         locationId = readAnchorLocationId(anchorRecord);
     }
 
-    const programKey = readDraftOrRow("desired_program_type");
+    const programCategoryId = readDraftOrRow("desired_program_category_id");
+    const programType = readDraftOrRow("desired_program_type");
+    const programKey =
+        resolveProgramKeyForRoomCascade({
+            desired_program_category_id: programCategoryId,
+            desired_program_type: programType,
+            categories,
+        }) ?? "";
 
-    return { locationId, programKey };
+    return { locationId, programCategoryId, programType, programKey };
 }
 
 export function layoutRuntimeEnrollmentPlacementDependentValueReader(
@@ -54,11 +64,19 @@ export function layoutRuntimeEnrollmentPlacementDependentValueReader(
     anchorRecord: ProofRuntimeRecord,
     getFieldValue: (refKey: string, fallback: string, rowKey?: string) => string,
     rowKey: string,
+    categories: ReadonlyArray<LocationProgramCategoryRow> = [],
 ): (dependsOnOcmKey: InquiryChildNativeOcmFieldKey) => string {
-    const ctx = resolveLayoutRuntimeEnrollmentPlacementContext(row, anchorRecord, getFieldValue, rowKey);
+    const ctx = resolveLayoutRuntimeEnrollmentPlacementContext(
+        row,
+        anchorRecord,
+        getFieldValue,
+        rowKey,
+        categories,
+    );
     return (dependsOnOcmKey: InquiryChildNativeOcmFieldKey) => {
         if (dependsOnOcmKey === "location_id") return ctx.locationId;
-        if (dependsOnOcmKey === "desired_program_type") return ctx.programKey;
+        if (dependsOnOcmKey === "desired_program_category_id") return ctx.programCategoryId;
+        if (dependsOnOcmKey === "desired_program_type") return ctx.programType;
         const refKey = layoutRefKeyForInquiryChildOcmField(dependsOnOcmKey);
         const draft = getFieldValue(refKey, "", rowKey).trim();
         if (draft) return draft;

@@ -2,9 +2,11 @@
 
 **Status:** Active — Configuration Workspace V3 (June 2026).
 
+**Canonical platform doc:** `docs/platform/core/placement-system.md` (ownership boundaries, cascade, future placements table).
+
 Canonical operator chain:
 
-**Location → Program → Room → Schedule**
+**School / Location → Program → Room → Schedule**
 
 Internal storage may use `desired_program_category_id`, `program_room_cohort_key`, etc. Operators see **Location**, **Program**, **Room**, **Schedule** only.
 
@@ -12,7 +14,7 @@ Internal storage may use `desired_program_category_id`, `program_room_cohort_key
 
 | Concept | Operator label | MVP storage | Configured in |
 |---------|----------------|-------------|---------------|
-| Location | Location | `location_id` | Lead / Child OCM; default from lead on Add Child |
+| Location | School / Location | `opportunities.location_id` (lead default) · `OCM.location_id` (child authority) | Lead intake / Child OCM |
 | Program | Program | `desired_program_category_id` | **Location** → `location_program_categories` |
 | Room | Room | `program_room_cohort_key` / unit `locations.id` | **Location** hierarchy (unit rows) |
 | Schedule | Schedule | `desired_schedule_type` | Org option set interim; location-owned future |

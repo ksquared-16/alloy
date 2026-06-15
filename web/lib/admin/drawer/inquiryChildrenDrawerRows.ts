@@ -17,6 +17,10 @@ export function mapRawInquiryChildrenToDrawerRows(raw: unknown[]): InquiryChildR
                 r.desired_program_type != null && String(r.desired_program_type).trim()
                     ? String(r.desired_program_type)
                     : null,
+            desired_program_category_id:
+                r.desired_program_category_id != null && String(r.desired_program_category_id).trim()
+                    ? String(r.desired_program_category_id)
+                    : null,
             desired_program_label: r.desired_program_label != null ? String(r.desired_program_label) : null,
             desired_schedule_type:
                 r.desired_schedule_type != null && String(r.desired_schedule_type).trim()

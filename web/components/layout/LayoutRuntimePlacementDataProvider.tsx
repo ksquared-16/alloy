@@ -22,6 +22,7 @@ import {
     type InquiryChildPlacementHierarchyRow,
     type InquiryChildProgramOptionSetItem,
 } from "@/lib/admin/location/inquiryChildPlacementOptions";
+import { resolveProgramKeyForRoomCascade } from "@/lib/admin/location/inquiryChildLocationMismatch";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -33,6 +34,7 @@ type LayoutRuntimePlacementDataContextValue = {
     siteOptions: LayoutRuntimeSelectOption[];
     programOptionsForSite: (siteId: string) => LayoutRuntimeSelectOption[];
     roomOptionsForSiteAndProgram: (siteId: string, programKey: string) => LayoutRuntimeSelectOption[];
+    resolveRoomProgramFilterKey: (programCategoryId: string, programType: string) => string;
     scheduleOptions: LayoutRuntimeSelectOption[];
     optionSetOptions: (setKey: string) => LayoutRuntimeSelectOption[];
 };
@@ -99,6 +101,12 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
                 resolveProgramsOfferedForSite(hierarchy, siteId, programItems, locationCategories),
             roomOptionsForSiteAndProgram: (siteId: string, programKey: string) =>
                 resolveRoomsForSiteAndProgram(hierarchy, siteId, programKey || undefined),
+            resolveRoomProgramFilterKey: (programCategoryId: string, programType: string) =>
+                resolveProgramKeyForRoomCascade({
+                    desired_program_category_id: programCategoryId,
+                    desired_program_type: programType,
+                    categories: locationCategories,
+                }) ?? "",
             scheduleOptions,
             optionSetOptions: (setKey: string) => {
                 const k = setKey.trim();

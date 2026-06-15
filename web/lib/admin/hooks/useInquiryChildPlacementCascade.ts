@@ -8,6 +8,7 @@ import {
     fetchOptionSetItemsBySetKey,
 } from "@/lib/admin/location/locationDrawerFieldOptions";
 import type { LocationProgramCategoryRow } from "@/lib/locations/locationProgramCategories";
+import { resolveProgramKeyForRoomCascade } from "@/lib/admin/location/inquiryChildLocationMismatch";
 import {
     resolveDefaultInquiryChildSiteId,
     resolveProgramsOfferedForSite,
@@ -23,7 +24,10 @@ const HIERARCHY_TTL_MS = 1500;
 
 export function useInquiryChildPlacementCascade(params: {
     locationValue: string;
+    /** Legacy program type key or category id when category-first mode is active. */
     programValue: string;
+    programCategoryId?: string;
+    programType?: string;
 }): {
     siteOptions: { value: string; label: string }[];
     programOptions: { value: string; label: string }[];
@@ -77,7 +81,17 @@ export function useInquiryChildPlacementCascade(params: {
     }, [siteFilter?.bootstrap?.sites, hierarchy]);
 
     const siteId = params.locationValue.trim();
-    const programKey = params.programValue.trim();
+    const programCategoryId = (params.programCategoryId ?? "").trim();
+    const programType = (params.programType ?? params.programValue).trim();
+    const programFilterKey = useMemo(
+        () =>
+            resolveProgramKeyForRoomCascade({
+                desired_program_category_id: programCategoryId,
+                desired_program_type: programType,
+                categories: locationCategories,
+            }) ?? "",
+        [locationCategories, programCategoryId, programType],
+    );
 
     const programOptions = useMemo(
         () => resolveProgramsOfferedForSite(hierarchy, siteId, programItems, locationCategories),
@@ -85,8 +99,8 @@ export function useInquiryChildPlacementCascade(params: {
     );
 
     const roomOptions = useMemo(
-        () => resolveRoomsForSiteAndProgram(hierarchy, siteId, programKey || undefined),
-        [hierarchy, siteId, programKey]
+        () => resolveRoomsForSiteAndProgram(hierarchy, siteId, programFilterKey || undefined),
+        [hierarchy, siteId, programFilterKey]
     );
 
     const defaultSiteId = useMemo(

@@ -8,13 +8,19 @@ import { resolveLayoutRuntimeFieldControl } from "@/lib/layout/runtime/resolveLa
 describe("inquiryChildPlacementFieldMetadata", () => {
     it("maps inquiry_child placement refKeys to cascade option sources", () => {
         expect(inquiryChildPlacementMetadataForRefKey("inquiry_child.location_id")?.option_source).toBe("locations");
-        expect(inquiryChildPlacementMetadataForRefKey("inquiry_child.desired_program_type")?.option_source).toBe(
+        expect(inquiryChildPlacementMetadataForRefKey("inquiry_child.desired_program_category_id")?.option_source).toBe(
             "programs_for_location",
         );
         expect(inquiryChildPlacementMetadataForRefKey("inquiry_child.program_room_cohort_key")?.option_source).toBe(
             "rooms_for_location_program",
         );
         expect(inquiryChildPlacementMetadataForRefKey("child.program")?.option_source).toBe("programs_for_location");
+    });
+
+    it("room cascade depends on program category", () => {
+        expect(
+            inquiryChildPlacementMetadataForRefKey("inquiry_child.program_room_cohort_key")?.depends_on_field_key,
+        ).toBe("desired_program_category_id");
     });
 
     it("normalizes legacy child.program alias to program placement metadata", () => {

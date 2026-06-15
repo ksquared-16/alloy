@@ -267,6 +267,7 @@ type OcmJoinRow = {
   location_id?: string | null;
   program_room_cohort_key?: string | null;
   desired_program_type?: string | null;
+  desired_program_category_id?: string | null;
   desired_schedule_type?: string | null;
   outcome_status_key?: string | null;
   fit_status?: string | null;
@@ -288,6 +289,7 @@ type InquiryHydrateChild = {
   linked_on_inquiry: boolean;
   ocm_id: string | null;
   desired_program_type: string | null;
+  desired_program_category_id: string | null;
   desired_program_label: string | null;
   desired_schedule_type: string | null;
   desired_schedule_label: string | null;
@@ -307,7 +309,7 @@ type InquiryHydrateChild = {
 };
 
 const OCM_INQUIRY_SELECT_COLUMNS =
-  "id, customer_member_id, desired_start_date, location_id, program_room_cohort_key, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at";
+  "id, customer_member_id, desired_start_date, location_id, program_room_cohort_key, desired_program_type, desired_program_category_id, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at";
 
 async function batchLocationLabelsForOrg(
   supabase: AdminSupabase,
@@ -366,6 +368,7 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
     const age = ageFromDobIso(dob);
     const desiredProgramType =
       trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
+    const desiredProgramCategoryId = trimOrNull(r.desired_program_category_id);
     const desiredScheduleType =
       trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
     const outcomeStatusKey = trimOrNull(r.outcome_status_key);
@@ -404,6 +407,7 @@ function mapOcmJoinRowsToInquiryChildrenBlock(
       linked_on_inquiry: true,
       ocm_id: r.id,
       desired_program_type: desiredProgramType,
+      desired_program_category_id: desiredProgramCategoryId,
       desired_program_label: desiredProgramLabel,
       desired_schedule_type: desiredScheduleType,
       desired_schedule_label: desiredScheduleLabel,
@@ -459,6 +463,7 @@ function applyInquiryChildrenMetadataFallbacks(
             typeof row.program_type_key === "string"
               ? trimOrNull(row.program_type_key)
               : null,
+          desired_program_category_id: null,
           desired_program_label:
             typeof row.program_label === "string"
               ? trimOrNull(row.program_label)
@@ -509,6 +514,7 @@ function applyInquiryChildrenMetadataFallbacks(
             typeof md.program_type_key === "string"
               ? trimOrNull(md.program_type_key)
               : null,
+          desired_program_category_id: null,
           desired_program_label:
             typeof md.program_label === "string"
               ? trimOrNull(md.program_label)

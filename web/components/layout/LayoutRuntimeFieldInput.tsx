@@ -100,7 +100,10 @@ export default function LayoutRuntimeFieldInput({
     const selectClass = compact ? COMPACT_SELECT_CLASS : SELECT_CLASS;
 
     const locationId = getDependentValue?.("location_id") ?? "";
-    const programKey = getDependentValue?.("desired_program_type") ?? "";
+    const programCategoryId = getDependentValue?.("desired_program_category_id") ?? "";
+    const programType = getDependentValue?.("desired_program_type") ?? "";
+    const programKey =
+        placementData?.resolveRoomProgramFilterKey(programCategoryId, programType) ?? programType;
 
     const selectMeta = useMemo(
         () =>
