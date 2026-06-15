@@ -199,6 +199,12 @@ export default function CommandCenterShell() {
         [loadConversations]
     );
 
+    const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
+    const selectedCustomerId = useMemo(() => {
+        if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
+        return selected?.customer_id ?? null;
+    }, [selected, selectedId]);
+
     const openThread = useCallback(
         async (threadId: string) => {
             if (!LIVE_WORKSPACE) return;
@@ -252,11 +258,6 @@ export default function CommandCenterShell() {
     const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
     const queueSections = useMemo(() => visibleCommandCenterQueues(grouped), [grouped]);
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
-    const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
-    const selectedCustomerId = useMemo(() => {
-        if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
-        return selected?.customer_id ?? null;
-    }, [selected, selectedId]);
     const detail: FixtureFamilyDetail | undefined = selected ? FIXTURE_FAMILY_DETAILS[selected.id] : undefined;
     const childNames = useMemo(
         () =>
