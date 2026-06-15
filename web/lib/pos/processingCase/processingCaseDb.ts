@@ -53,6 +53,34 @@ export function makeProcessingCaseDbDeps(supabase: SupabaseClient): ProcessingCa
     };
 }
 
+/**
+ * POS-FP5 — complete a Processing Case with a recorded Operational Result.
+ *
+ * Idempotent at the call site (the approve route no-ops when already completed).
+ * Records the handoff result on the existing `metadata` jsonb (no new column) and
+ * flips the lifecycle status to `completed`. Org-scoped; service-role server path.
+ */
+export async function dbCompleteProcessingCaseWithResult(
+    supabase: SupabaseClient,
+    args: { orgId: string; caseId: string; result: object }
+): Promise<void> {
+    const { data: existing, error: readErr } = await supabase
+        .from("processing_cases")
+        .select("metadata")
+        .eq("org_id", args.orgId)
+        .eq("id", args.caseId)
+        .maybeSingle();
+    if (readErr) throw new Error(readErr.message);
+    const baseMeta = ((existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {});
+    const metadata = { ...baseMeta, operational_result: args.result };
+    const { error } = await supabase
+        .from("processing_cases")
+        .update({ status: "completed", status_changed_at: new Date().toISOString(), metadata })
+        .eq("org_id", args.orgId)
+        .eq("id", args.caseId);
+    if (error) throw new Error(error.message);
+}
+
 export interface ProcessingCaseRow {
     id: string;
     org_id: string;

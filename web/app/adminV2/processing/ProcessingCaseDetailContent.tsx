@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/types";
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
+import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
 
 interface DetailResponse {
     data: {
@@ -39,6 +40,9 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
     const [data, setData] = useState<DetailResponse["data"] | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [approving, setApproving] = useState(false);
+    const [approveErr, setApproveErr] = useState<string | null>(null);
+    const [approveResult, setApproveResult] = useState<HandoffResult | null>(null);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -62,6 +66,25 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
         void load();
     }, [load]);
 
+    const approve = useCallback(async () => {
+        setApproving(true);
+        setApproveErr(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/approve`, {
+                method: "POST",
+                credentials: "same-origin",
+            });
+            if (!res.ok) throw new Error(`Request failed (${res.status})`);
+            const body = (await res.json()) as { data?: { operationalResult?: HandoffResult | null } };
+            setApproveResult(body.data?.operationalResult ?? null);
+            await load();
+        } catch (e) {
+            setApproveErr(e instanceof Error ? e.message : "Approve failed");
+        } finally {
+            setApproving(false);
+        }
+    }, [caseId, load]);
+
     const detail = data?.detail ?? null;
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const evidenceFor = (kind: string, id: string): SourceEvidence | undefined =>
@@ -82,6 +105,32 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     {statusLabel(detail.status)} · received {primary?.display.receivedAt ?? detail.createdAt}
                 </div>
             </div>
+
+            {detail.status !== "completed" && detail.status !== "archived" ? (
+                <div className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-emerald-800">Proposed action</div>
+                    <div className="mt-0.5 text-sm text-stone-800">Promote this submission to a CRM record</div>
+                    {approveErr ? <div className="mt-1 text-xs text-amber-700">{approveErr}</div> : null}
+                    <button
+                        type="button"
+                        disabled={approving}
+                        onClick={() => void approve()}
+                        className="mt-2 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                    >
+                        {approving ? "Approving…" : "Approve action"}
+                    </button>
+                </div>
+            ) : (
+                <div className="mb-4 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs text-stone-600">
+                    {statusLabel(detail.status)}
+                    {approveResult?.recordId
+                        ? ` · ${approveResult.created ? "created" : "linked"} ${approveResult.recordType} ${approveResult.recordId}`
+                        : approveResult?.note
+                          ? ` · ${approveResult.note}`
+                          : ""}
+                    .
+                </div>
+            )}
 
             <div className="space-y-5">
                 <section>
