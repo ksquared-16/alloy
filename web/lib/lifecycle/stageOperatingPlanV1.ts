@@ -22,6 +22,8 @@ export type StageWorkTemplateV1 = {
     label: string;
     description?: string;
     required: boolean;
+    /** When true, drives drawer Work card and stage-entry spawn over other required templates. */
+    primary?: boolean;
     due_policy: StageWorkDuePolicy;
     owner_strategy: StageWorkOwnerStrategy;
     /** Optional link to platform work definition catalog key. */
@@ -143,6 +145,7 @@ function parseWorkTemplate(raw: unknown): StageWorkTemplateV1 | null {
         due_policy,
         owner_strategy: ownerRaw as StageWorkOwnerStrategy,
     };
+    if (o.primary === true) tpl.primary = true;
     const desc = trimNonEmpty(o.description);
     if (desc) tpl.description = desc;
     const wdk = trimNonEmpty(o.work_definition_key);

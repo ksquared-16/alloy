@@ -16,7 +16,7 @@ describe("Lifecycle stage operating plan UI", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
         expect(workspace).toContain("BUSINESS_PROCESS_SECTION_EXPECTED_WORK");
         expect(workspace).toContain("LifecycleStageOperatingPlanEditor");
-        expect(workspace).toContain('id="work_plan"');
+        expect(workspace).toContain('id="operating_plan"');
     });
 
     it("unified save includes stage_operating_plan_v1 when dirty", () => {

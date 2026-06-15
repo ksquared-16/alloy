@@ -8,7 +8,6 @@ import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
-import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import { detectBuilderStageTransition } from "@/lib/lifecycle/detectBuilderStageTransition";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import {
@@ -17,7 +16,7 @@ import {
     resolvePrimaryWorkIntentForStage,
 } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
-import type { StageWorkDuePolicy } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { resolveStageOperatingPlanForStage, type StageWorkDuePolicy } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 export type OnStageEntrySpawnWorkIntentResult = {
     action: "spawned" | "deduped" | "skipped";
@@ -133,12 +132,15 @@ export async function onStageEntrySpawnWorkIntent(
         return { action: "skipped", reason: "stage_unchanged" };
     }
 
-    const intent = resolvePrimaryWorkIntentForStage(transition.nextBuilderStageKey);
+    const stageKey = transition.nextBuilderStageKey;
+    const stageRecord = process.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
+    const explicitPlan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
+
+    const intent = resolvePrimaryWorkIntentForStage(stageKey, explicitPlan);
     if (!intent) {
         return { action: "skipped", reason: "no_primary_intent" };
     }
 
-    const stageKey = transition.nextBuilderStageKey;
     const now = input.now ?? new Date();
     const idempotencyKey = buildLifecycleIntentIdempotencyKey({
         orgId,
@@ -162,13 +164,16 @@ export async function onStageEntrySpawnWorkIntent(
         provenance: { source: "lifecycle_template", idempotency_key: idempotencyKey },
         contextSnapshot: { lifecycle_stage_key: stageKey },
         titleOverride: intent.label,
+        description: intent.description ?? null,
         dueAtOverride: dueAtIsoFromPolicy(intent.due_policy, now),
         idempotencyKey,
         metadata: {
             work_intent_key: intent.work_intent_key,
+            template_key: intent.template_key ?? intent.work_intent_key,
             lifecycle_stage_key: stageKey,
             attempt_count: 0,
             department_id: departmentId,
+            operating_plan_template: intent.source === "operating_plan_template",
         },
         resolveParams: { departmentMetadata, stageKey },
         now,

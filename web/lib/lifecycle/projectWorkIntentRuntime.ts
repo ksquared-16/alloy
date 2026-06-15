@@ -122,6 +122,7 @@ function buildProjectionShell(params: {
     stageKey: string;
     workIntentKey: string;
     label: string;
+    description?: string | null;
     journeySegment: "family" | "child";
     departmentId: string;
     opportunityId: string;
@@ -139,6 +140,7 @@ function buildProjectionShell(params: {
         stage_key: params.stageKey,
         work_intent_key: params.workIntentKey,
         label: params.workRow ? trimOrNull(params.workRow.title) ?? params.label : params.label,
+        description: params.description ?? null,
         journey_segment: params.journeySegment,
         work_id: params.workRow ? String(params.workRow.id) : null,
         due_at: dueAt,
@@ -169,9 +171,6 @@ export async function projectWorkIntentRuntime(params: {
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
 
-    const primaryIntent = resolvePrimaryWorkIntentForStage(stageKey);
-    if (!primaryIntent) return null;
-
     const departmentMetadata =
         params.departmentMetadata != null &&
         typeof params.departmentMetadata === "object" &&
@@ -194,15 +193,19 @@ export async function projectWorkIntentRuntime(params: {
     if (!departmentId) return null;
 
     const stageRecord = process.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
-    const plan =
-        resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey) ??
+    const explicitPlan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
+    const planForOutcomes =
+        explicitPlan ??
         (process.key === ENROLLMENT_PROCESS_KEY ?
             defaultStageOperatingPlanForEnrollmentStage(stageKey)
         :   null);
-    if (!plan) return null;
+    if (!planForOutcomes) return null;
 
-    const journeySegment = plan.journey_segment ?? "family";
-    const outcomes = plan.outcomes.map((o) => ({
+    const primaryIntent = resolvePrimaryWorkIntentForStage(stageKey, explicitPlan);
+    if (!primaryIntent) return null;
+
+    const journeySegment = planForOutcomes.journey_segment ?? "family";
+    const outcomes = planForOutcomes.outcomes.map((o) => ({
         outcome_key: o.outcome_key,
         label: o.label,
         ...(o.successful === true ? { successful: true } : {}),
@@ -234,6 +237,7 @@ export async function projectWorkIntentRuntime(params: {
             stageKey,
             workIntentKey: primaryIntent.work_intent_key,
             label: primaryIntent.label,
+            description: primaryIntent.description,
             journeySegment,
             departmentId,
             opportunityId: params.opportunityId,
@@ -258,6 +262,7 @@ export async function projectWorkIntentRuntime(params: {
             stageKey,
             workIntentKey: primaryIntent.work_intent_key,
             label: primaryIntent.label,
+            description: primaryIntent.description,
             journeySegment,
             departmentId,
             opportunityId: params.opportunityId,
@@ -280,6 +285,7 @@ export async function projectWorkIntentRuntime(params: {
             stageKey,
             workIntentKey: primaryIntent.work_intent_key,
             label: primaryIntent.label,
+            description: primaryIntent.description,
             journeySegment,
             departmentId,
             opportunityId: params.opportunityId,
@@ -293,6 +299,7 @@ export async function projectWorkIntentRuntime(params: {
         stageKey,
         workIntentKey: primaryIntent.work_intent_key,
         label: primaryIntent.label,
+        description: primaryIntent.description,
         journeySegment,
         departmentId,
         opportunityId: params.opportunityId,

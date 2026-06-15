@@ -37,6 +37,9 @@ export default function WorkIntentRuntimeCard({ opportunityId, projection, canMu
                 <div className="min-w-0">
                     <div className={oppInqEyebrow}>Work</div>
                     <h3 className="mt-0.5 text-[15px] font-semibold text-alloy-midnight">{projection.label}</h3>
+                    {projection.description ?
+                        <p className="mt-1 text-[12px] text-alloy-midnight/60">{projection.description}</p>
+                    :   null}
                 </div>
                 {showDue ?
                     <span

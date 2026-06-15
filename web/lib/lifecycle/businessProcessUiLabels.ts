@@ -59,23 +59,31 @@ export const BUSINESS_PROCESS_SECTION_WHO_BELONGS_SUMMARY =
 /** Top-level stage section — groups purpose, work, success, and attention rules. */
 export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN = "Operating Plan";
 export const BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY =
-    "What staff should do in this stage: purpose, expected work, success criteria, and when records need attention. Process Actions are configured at the process level below the stage list.";
+    "Purpose, expected work templates, work outcomes, and attention guidance for this stage. Only the primary expected work item drives the drawer Work card today.";
 
 export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK = "Expected work";
 export const BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY =
-    "Tasks and outcomes staff should complete while records are in this stage.";
+    "Work templates for this stage. Mark one as Primary (or mark Required) to drive the drawer Work card and stage-entry task spawn. Additional templates are stored but not spawned yet.";
 
 export const BUSINESS_PROCESS_SECTION_ATTENTION = "Attention";
 export const BUSINESS_PROCESS_SECTION_ATTENTION_SUMMARY =
-    "When records in this stage should surface for follow-up. Off-track rules are edited in Expected work above; org-wide bucket labels are in advanced Attention defaults.";
+    "Stage-specific attention rules are not active in runtime yet. Needs Attention today uses org-wide Attention & SLA rules and optional readiness bridges.";
+export const BUSINESS_PROCESS_SECTION_ATTENTION_INACTIVE_NOTE =
+    "Stage-specific attention rules are not active yet. Use org-wide Attention & SLA rules for runtime attention.";
 export const BUSINESS_PROCESS_SECTION_ATTENTION_ORG_DEFAULTS_LINK = "Org-wide attention defaults";
 
 export const BUSINESS_PROCESS_PROCESS_ACTIONS_GUIDANCE =
     "Enable and restrict actions for this process in Process Actions — not per-stage queue settings.";
 
 export const BUSINESS_PROCESS_SECTION_PURPOSE = "Purpose";
-export const BUSINESS_PROCESS_SECTION_SUCCESS = "Success Criteria";
+export const BUSINESS_PROCESS_SECTION_SUCCESS = "Work outcomes";
+export const BUSINESS_PROCESS_SECTION_SUCCESS_SUMMARY =
+    "Outcomes staff can choose when completing the primary work. Shown on the drawer Work card. Stage-scoped — not per-template yet.";
 export const BUSINESS_PROCESS_SECTION_OFF_TRACK = "Off Track Criteria";
+
+/** Honest runtime note at top of operating plan editor. */
+export const OPERATING_PLAN_EDITOR_RUNTIME_NOTE =
+    "Expected work configures stage work templates. The primary or first required item drives the drawer Work card and stage-entry spawn. Work outcomes appear when completing that work. Attention is driven by org-wide Attention & SLA rules today.";
 
 export const BUSINESS_PROCESS_CROSS_LINK_OPEN = "Open Business Processes";
 

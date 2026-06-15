@@ -27,6 +27,7 @@ export type WorkIntentRuntimeProjection = {
     stage_key: string;
     work_intent_key: string;
     label: string;
+    description?: string | null;
     journey_segment: "family" | "child";
     work_id: string | null;
     due_at: string | null;
