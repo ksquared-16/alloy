@@ -58,9 +58,15 @@ export function fallbackOptionSetKeyForInquiryChildField(fieldKey: string): stri
 }
 
 export type InquiryChildNativeFieldConfig = {
+    operator_catalog_class?: "operator_configurable";
     option_source?: "locations" | "programs_for_location" | "rooms_for_location_program" | "option_set";
+    field_kind?: "entity_reference";
+    target_entity_type?: "location" | "location_program_category";
     depends_on_field_key?: InquiryChildNativeOcmFieldKey;
     option_set_key?: string;
+    storage_class?: "native_column";
+    storage_table?: "opportunity_customer_members";
+    storage_column?: string;
 };
 
 export type InquiryChildNativeFieldManifestRow = {
