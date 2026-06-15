@@ -5,6 +5,7 @@ import {
     type ProviderDeliveryApplyResult,
 } from "@/lib/communications/providerDeliveryPersistence";
 import { verifyTwilioRequestSignature } from "@/lib/communications/twilioWebhookSignature";
+import { twilioStatusToCanonical } from "@/lib/communications/v2/deliveryReceiptMapping";
 
 /**
  * POST /api/webhooks/twilio/sms-status — Twilio status callback (form POST).
@@ -142,17 +143,28 @@ export async function POST(request: NextRequest) {
     logTwilioStatus("parsed", { status: status || null, sid_tail, error_code_present: Boolean(errorCode) });
 
     const supabase = createAdminClient();
+    const canonical = twilioStatusToCanonical(status);
+    const occurredAt = new Date().toISOString();
     const metaEvent = { source: "twilio", status, error_code: errorCode || undefined };
+
+    // Twilio status callbacks carry no unique event id; the helper synthesizes a deterministic
+    // (provider, sid, event) identity so duplicate callbacks for the same status dedupe.
+    const receipt = canonical
+        ? {
+              provider: "twilio",
+              channel: "sms",
+              event_type: canonical,
+              event_status: status,
+              occurred_at: occurredAt,
+              raw_payload: { MessageStatus: status, ErrorCode: errorCode || undefined },
+          }
+        : undefined;
 
     if (status === "delivered") {
         const r = await applyOutboundProviderDeliveryPatch({
             supabase,
             providerMessageId: messageSid,
-            patch: {
-                status: "delivered",
-                delivered_at: new Date().toISOString(),
-                metadata_event: metaEvent,
-            },
+            patch: { status: "delivered", delivered_at: occurredAt, metadata_event: metaEvent, receipt },
         });
         return jsonWebhookResult(r, { sid_tail, status, url_source: sigUrl.source });
     }
@@ -161,10 +173,7 @@ export async function POST(request: NextRequest) {
         const r = await applyOutboundProviderDeliveryPatch({
             supabase,
             providerMessageId: messageSid,
-            patch: {
-                status: "failed",
-                metadata_event: metaEvent,
-            },
+            patch: { status: "failed", metadata_event: metaEvent, receipt },
         });
         return jsonWebhookResult(r, { sid_tail, status, url_source: sigUrl.source });
     }
@@ -172,9 +181,7 @@ export async function POST(request: NextRequest) {
     const r = await applyOutboundProviderDeliveryPatch({
         supabase,
         providerMessageId: messageSid,
-        patch: {
-            metadata_event: metaEvent,
-        },
+        patch: { metadata_event: metaEvent, receipt },
     });
     return jsonWebhookResult(r, { sid_tail, status, url_source: sigUrl.source });
 }
