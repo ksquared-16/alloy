@@ -30,6 +30,7 @@ import {
 } from "@/lib/forms/workflow/formSubmissionEvents";
 import { emitIntakeCaseLifecycleEventsSafe } from "@/lib/forms/workflow/intakeCaseLifecycleEvents";
 import { maybeOpenProcessingCaseFromPacketCompletionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromPacketCompletionSafe";
+import { maybeOpenProcessingCaseFromFormSubmissionSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromFormSubmissionSafe";
 import {
     emitOpportunityEnrollmentPacketCompletedProjectionSafe,
     emitOpportunityEnrollmentPacketOpenedSafe,
@@ -382,6 +383,21 @@ export async function POST(
     await emitFormSubmittedSafe(submittedRow as Parameters<typeof emitFormSubmittedSafe>[0]);
     if (sigRes.inserted > 0) {
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
+    }
+
+    // POS-FP5: best-effort, marker-gated. A POS-connected SINGLE form submitted through
+    // the public UI opens one Processing Case (the submission as primary source) — the
+    // same on-ramp the admin submit route uses. Packet steps are excluded here: packets
+    // open one case on completion (packet producer below). Idempotent at the producer
+    // (findCaseIdByPrimarySource + the unique primary-source index), so finalizing the
+    // same submission later via the admin endpoint will not create a duplicate. Never
+    // throws — submission must not fail if case creation fails. Legacy/unmarked forms no-op.
+    if (!ctx.packet) {
+        await maybeOpenProcessingCaseFromFormSubmissionSafe(supabase, {
+            orgId: ctx.orgId,
+            submissionId,
+            formDefinitionId: String((submittedRow as { form_definition_id?: string }).form_definition_id ?? ""),
+        });
     }
 
     if (linkRequiresLeadCapture(metaRecord)) {

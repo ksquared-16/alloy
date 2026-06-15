@@ -83,6 +83,27 @@ describe("openProcessingCaseFromSource", () => {
         expect(b.created).toBe(false);
         expect(b.processingCaseId).toBe(a.processingCaseId);
     });
+
+    it("public submit then admin finalize of the same form submission opens exactly one case", async () => {
+        // POS-FP5: the public single-form on-ramp and the admin submit on-ramp can both
+        // fire for the same submission. The producer is idempotent on the primary source,
+        // so the second call returns the existing case — no duplicate.
+        const { deps, insertCase } = makeFakeDeps();
+        const publicOpen = await openProcessingCaseFromSource(deps, {
+            orgId: "o1",
+            sourceKind: "form_submission",
+            sourceId: "sub-1",
+        });
+        const adminFinalize = await openProcessingCaseFromSource(deps, {
+            orgId: "o1",
+            sourceKind: "form_submission",
+            sourceId: "sub-1",
+        });
+        expect(publicOpen.created).toBe(true);
+        expect(adminFinalize.created).toBe(false);
+        expect(adminFinalize.processingCaseId).toBe(publicOpen.processingCaseId);
+        expect(insertCase).toHaveLength(1);
+    });
 });
 
 describe("attachRelatedSource", () => {
