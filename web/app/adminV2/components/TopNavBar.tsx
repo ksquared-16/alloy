@@ -18,6 +18,7 @@ import TopNavNotificationsLink from "@/app/adminV2/components/TopNavNotification
 import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import InboxModal from "@/app/adminV2/components/InboxModal";
+import ProcessingModal from "@/app/adminV2/processing/ProcessingModal";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import {
     ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
@@ -105,6 +106,7 @@ export default function TopNavBar() {
   const [quickMessageSeed, setQuickMessageSeed] = useState<QuickMessageModalSeed | null>(null);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
   const [inboxModalOpen, setInboxModalOpen] = useState(false);
+  const [processingModalOpen, setProcessingModalOpen] = useState(false);
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -135,11 +137,14 @@ export default function TopNavBar() {
       setTasksModalOpen(true);
     };
     const onOpenInbox = () => setInboxModalOpen(true);
+    const onOpenProcessing = () => setProcessingModalOpen(true);
     window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
     window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
+    window.addEventListener("adminv2:open-processing-modal", onOpenProcessing);
     return () => {
       window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
       window.removeEventListener("adminv2:open-inbox-modal", onOpenInbox);
+      window.removeEventListener("adminv2:open-processing-modal", onOpenProcessing);
     };
   }, []);
 
@@ -183,6 +188,7 @@ export default function TopNavBar() {
       />
       <MyTasksModal open={tasksModalOpen} onClose={() => setTasksModalOpen(false)} />
       <InboxModal open={inboxModalOpen} onClose={() => setInboxModalOpen(false)} />
+      <ProcessingModal open={processingModalOpen} onClose={() => setProcessingModalOpen(false)} />
     </header>
   );
 }
