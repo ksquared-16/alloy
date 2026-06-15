@@ -16,6 +16,7 @@ export type ResolveFamilyWorkspaceOptions = {
     composerChannel?: ComposerChannel;
     selectedThreadId?: string | null;
     focusPersonId?: string | null;
+    viewerUserId?: string | null;
 };
 
 export type FamilyCommsRaw = { threads: RawThreadRow[]; messages: RawMessageRow[] };
@@ -181,5 +182,10 @@ function buildConversationTail(raw: RawFamilyWorkspaceData, opts: ResolveFamilyW
         selectedThread: agg.selectedThread,
         messages: agg.selectedMessages,
         timelineEvents: agg.timelineEvents,
+        healthSummary: {
+            ...base.healthSummary,
+            unreadCount: agg.familyUnread,
+            lastContactAt: agg.lastFamilyActivityAt ?? base.healthSummary.lastContactAt,
+        },
     };
 }

@@ -59,6 +59,15 @@ export function rollupRecipientReceipts(rows: RawRecipientReceiptRow[]): Record<
     return out;
 }
 
+// P6 — per-recipient/read-model: mark inbound messages unread for a viewer given the set of
+// inbound message ids that viewer has read (communication_message_reads). Pure (mutates in place).
+export function markUnreadFromReads(messages: RawMessageRow[], readMessageIds: ReadonlySet<string>): void {
+    for (const m of messages) {
+        if ((m.direction ?? "") !== "inbound") continue;
+        m.unread = !readMessageIds.has(m.id);
+    }
+}
+
 // UI-5H — derive a single display status for a timeline message (most-progressed wins). Pure.
 export function deriveTimelineStatus(m: RawMessageRow, direction: string | null | undefined): string | null {
     if (direction === "inbound") return "received";
@@ -114,15 +123,28 @@ export function aggregateFamilyThreads(
     threads: RawThreadRow[],
     messages: RawMessageRow[],
     ctx: AggregateContext
-): { threads: ThreadVM[]; timelineEvents: TimelineEventVM[]; selectedThread: ThreadVM | null; selectedMessages: TimelineEventVM[] } {
+): {
+    threads: ThreadVM[];
+    timelineEvents: TimelineEventVM[];
+    selectedThread: ThreadVM | null;
+    selectedMessages: TimelineEventVM[];
+    familyUnread: number;
+    lastFamilyActivityAt: string | null;
+} {
     const events = buildTimelineEvents(messages);
 
     const countByThread = new Map<string, number>();
     const unreadByThread = new Map<string, number>();
+    const lastMessageAtByThread = new Map<string, string>();
     for (const m of messages) {
         const tid = m.thread_id ?? "";
         countByThread.set(tid, (countByThread.get(tid) ?? 0) + 1);
         if (m.direction === "inbound" && m.unread === true) unreadByThread.set(tid, (unreadByThread.get(tid) ?? 0) + 1);
+        const at = m.created_at ?? null;
+        if (at) {
+            const cur = lastMessageAtByThread.get(tid) ?? null;
+            if (!cur || at > cur) lastMessageAtByThread.set(tid, at);
+        }
     }
 
     const dedup = new Map<string, RawThreadRow>();
@@ -141,7 +163,7 @@ export function aggregateFamilyThreads(
                 primaryEntity: { type, id },
                 childId,
                 opportunityId,
-                lastActivityAt: t.last_message_at ?? null,
+                lastActivityAt: t.last_message_at ?? lastMessageAtByThread.get(t.id) ?? null,
                 messageCount: countByThread.get(t.id) ?? 0,
                 unread: unreadByThread.get(t.id) ?? 0,
                 slaState: t.sla_state ?? null,
@@ -154,5 +176,13 @@ export function aggregateFamilyThreads(
         (ctx.selectedThreadId ? threadVms.find((t) => t.id === ctx.selectedThreadId) : null) ?? threadVms[0] ?? null;
     const selectedMessages = selectedThread ? events.filter((e) => e.threadId === selectedThread.id) : [];
 
-    return { threads: threadVms, timelineEvents: events, selectedThread, selectedMessages };
+    // P6 — family-level rollups across all transport threads.
+    const familyUnread = threadVms.reduce((sum, t) => sum + (t.unread ?? 0), 0);
+    let lastFamilyActivityAt: string | null = null;
+    for (const t of threadVms) {
+        const at = t.lastActivityAt;
+        if (at && (!lastFamilyActivityAt || at > lastFamilyActivityAt)) lastFamilyActivityAt = at;
+    }
+
+    return { threads: threadVms, timelineEvents: events, selectedThread, selectedMessages, familyUnread, lastFamilyActivityAt };
 }

@@ -1,7 +1,7 @@
 // UI-5B — I/O: load all communication threads for a family (customer + family persons + opportunities)
 // and their recent messages. Read-only.
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { rollupRecipientReceipts, type RawThreadRow, type RawMessageRow, type RawRecipientReceiptRow } from "./aggregateFamilyTimeline";
+import { rollupRecipientReceipts, markUnreadFromReads, type RawThreadRow, type RawMessageRow, type RawRecipientReceiptRow } from "./aggregateFamilyTimeline";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 const THREAD_CAP = 50;
@@ -11,7 +11,7 @@ const THREAD_COLS = "id, primary_entity_type, primary_entity_id, channel, last_m
 export async function loadFamilyThreadsData(
     supabase: AdminSupabase,
     orgId: string,
-    args: { customerId: string; personIds: string[]; opportunityIds: string[] }
+    args: { customerId: string; personIds: string[]; opportunityIds: string[]; viewerUserId?: string | null }
 ): Promise<{ threads: RawThreadRow[]; messages: RawMessageRow[] }> {
     const personIds = Array.from(new Set(args.personIds.filter(Boolean)));
     const opportunityIds = Array.from(new Set(args.opportunityIds.filter(Boolean)));
@@ -65,6 +65,21 @@ export async function loadFamilyThreadsData(
             m.delivered_at = r.deliveredAt ?? m.delivered_at ?? null;
             m.opened_at = r.openedAt ?? m.opened_at ?? null;
             m.replied_at = r.repliedAt ?? m.replied_at ?? null;
+        }
+    }
+
+    // P6 — per-viewer unread: an inbound message is unread until the viewer has a read receipt.
+    const viewerUserId = (args.viewerUserId ?? "").trim();
+    if (viewerUserId && messages.length > 0) {
+        const inboundIds = messages.filter((m) => (m.direction ?? "") === "inbound").map((m) => m.id).filter(Boolean);
+        if (inboundIds.length > 0) {
+            const readsRes = await supabase
+                .from("communication_message_reads")
+                .select("message_id")
+                .eq("user_id", viewerUserId)
+                .in("message_id", inboundIds);
+            const readSet = new Set(((readsRes.data ?? []) as Array<{ message_id?: string | null }>).map((r) => String(r.message_id ?? "")).filter(Boolean));
+            markUnreadFromReads(messages, readSet);
         }
     }
 

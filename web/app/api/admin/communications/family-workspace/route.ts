@@ -69,6 +69,7 @@ export async function GET(req: Request) {
             focusPersonId: focusPersonId || null,
             composerChannel,
             selectedThreadId: selectedThreadId || null,
+            viewerUserId: ctx.userId,
         });
         return NextResponse.json({
             workspace,

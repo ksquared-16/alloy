@@ -21,6 +21,6 @@ export async function resolveFamilyCommunicationWorkspace(
         ...raw.opportunityPersons.map((o) => o.person_id),
     ].filter((x): x is string => typeof x === "string" && x.length > 0);
     const opportunityIds = raw.opportunities.map((o) => o.id).filter(Boolean);
-    const comms = await loadFamilyThreadsData(supabase, orgId, { customerId: opts.customerId, personIds, opportunityIds });
+    const comms = await loadFamilyThreadsData(supabase, orgId, { customerId: opts.customerId, personIds, opportunityIds, viewerUserId: opts.viewerUserId ?? null });
     return assembleFamilyWorkspace(raw, opts, comms);
 }
