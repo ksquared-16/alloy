@@ -65,6 +65,32 @@ async function deleteByIn(
     return n;
 }
 
+/** Delete by column filter without selecting `id` (tables with composite PK / no id column). */
+async function deleteByInColumnFilter(
+    supabase: SupabaseAdmin,
+    table: string,
+    column: string,
+    ids: string[],
+    orgId?: string
+): Promise<number> {
+    if (!ids.length) return 0;
+    let n = 0;
+    for (const part of chunk(ids, 200)) {
+        let countQuery = supabase.from(table).select("*", { count: "exact", head: true }).in(column, part);
+        if (orgId) countQuery = countQuery.eq("org_id", orgId);
+        const { count, error: countError } = await countQuery;
+        if (countError) throw new Error(`[${table} count ${column}] ${countError.message}`);
+        if (!count) continue;
+
+        let deleteQuery = supabase.from(table).delete().in(column, part);
+        if (orgId) deleteQuery = deleteQuery.eq("org_id", orgId);
+        const { error } = await deleteQuery;
+        if (error) throw new Error(`[${table} delete ${column}] ${error.message}`);
+        n += count;
+    }
+    return n;
+}
+
 async function deleteByOr(supabase: SupabaseAdmin, table: string, orgId: string, orFilter: string): Promise<number> {
     const { data, error } = await supabase.from(table).delete().eq("org_id", orgId).or(orFilter).select("id");
     if (error) throw new Error(`[${table} delete or] ${error.message}`);
@@ -99,9 +125,16 @@ async function executeDeletes(
             if (id) msgIds.push(id);
         }
     }
-    deleted.communication_message_reads = await deleteByIn(supabase, "communication_message_reads", "message_id", msgIds);
+    deleted.communication_message_reads = await deleteByInColumnFilter(
+        supabase,
+        "communication_message_reads",
+        "message_id",
+        msgIds
+    );
     deleted.communication_messages = await deleteByIn(supabase, "communication_messages", "thread_id", threads, orgId);
-    deleted.communication_scheduled_sends = await deleteByIn(supabase, "communication_scheduled_sends", "entity_id", opp, orgId);
+    deleted.communication_scheduled_sends =
+        (await deleteByIn(supabase, "communication_scheduled_sends", "entity_id", opp, orgId)) +
+        (await deleteByIn(supabase, "communication_scheduled_sends", "recipient_person_id", persons, orgId));
     deleted.communication_threads = await deleteByIn(supabase, "communication_threads", "id", threads, orgId);
     deleted.communication_threads += await deleteByOr(supabase, "communication_threads", orgId, orDemo);
 

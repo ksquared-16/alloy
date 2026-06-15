@@ -81,6 +81,40 @@ async function countRows(supabase: SupabaseAdmin, table: string, orgId: string, 
     return count ?? 0;
 }
 
+async function countCommunicationScheduledSendsDemoScope(
+    supabase: SupabaseAdmin,
+    orgId: string,
+    oppIds: string[],
+    personIds: string[]
+): Promise<number> {
+    const ids = new Set<string>();
+    for (const part of chunk(oppIds, 200)) {
+        const { data, error } = await supabase
+            .from("communication_scheduled_sends")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("entity_id", part);
+        if (error) throw new Error(`[communication_scheduled_sends count entity_id] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) ids.add(id);
+        }
+    }
+    for (const part of chunk(personIds, 200)) {
+        const { data, error } = await supabase
+            .from("communication_scheduled_sends")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("recipient_person_id", part);
+        if (error) throw new Error(`[communication_scheduled_sends count recipient_person_id] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) ids.add(id);
+        }
+    }
+    return ids.size;
+}
+
 async function countFieldValuesForEntities(
     supabase: SupabaseAdmin,
     orgId: string,
@@ -290,7 +324,7 @@ export async function buildDemoCleanupCounts(
         counts.communication_message_reads = await countByInNoOrg(supabase, "communication_message_reads", "message_id", msgIds);
     }
 
-    counts.communication_scheduled_sends = await countByIn(supabase, "communication_scheduled_sends", "entity_id", opp, orgId);
+    counts.communication_scheduled_sends = await countCommunicationScheduledSendsDemoScope(supabase, orgId, opp, persons);
     counts.communication_threads = threads.length;
     counts.task_assist_proposals = await countByIn(supabase, "task_assist_proposals", "entity_id", opp, orgId);
     counts.operational_tasks = await countByIn(supabase, "operational_tasks", "entity_id", opp, orgId);
