@@ -3,7 +3,6 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { Zap } from "lucide-react";
 
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import {
     loadCommandRailActionsExpanded,
     persistCommandRailActionsExpanded,
@@ -17,10 +16,9 @@ type Props = {
 };
 
 /**
- * Compact collapsible Actions section above BOS dock (right-rail copilot mode).
+ * Compact collapsible Actions section above BOS dock in the workspace command rail.
  */
 export function CommandRailCollapsibleActionsSection({ actionCount, children, loading = false }: Props) {
-    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
     const [expanded, setExpanded] = useState(() => loadCommandRailActionsExpanded());
 
     const toggle = useCallback(() => {
@@ -30,10 +28,6 @@ export function CommandRailCollapsibleActionsSection({ actionCount, children, lo
             return next;
         });
     }, []);
-
-    if (!bosRailCopilot) {
-        return <>{children}</>;
-    }
 
     const countLabel =
         loading || actionCount == null ? ""

@@ -1,14 +1,21 @@
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
-import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { OpportunityLifecycleKpiCounts } from "@/lib/workspace/computeOpportunityLifecycleKpis";
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
 import { isLifecycleStageWorkUnitKey } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import type { WorkspaceRootDeptTileStats } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 
+export type DepartmentLifecycleStatusBreakdownRow = {
+    status_key: string;
+    status_label?: string;
+    lifecycle_stage?: string | null;
+    count: number;
+};
+
 /** JSON shape from GET `/api/admin/departments/:departmentId/opportunity-lifecycle-kpis`. */
 export type DepartmentLifecycleKpisPayload = {
     counts?: OpportunityLifecycleKpiCounts;
     values?: { openPipeline?: number; pricedInMotion?: number };
+    statusBreakdown?: DepartmentLifecycleStatusBreakdownRow[];
     error?: string;
 };
 
@@ -39,40 +46,99 @@ export function closedCountFromLifecycleCounts(c: OpportunityLifecycleKpiCounts 
     return (c.success ?? 0) + (c.failure ?? 0);
 }
 
-/**
- * Org KPI strip — inquiry pipeline counts from exact Queue Service lane; lifecycle only for USD/closed analytics.
- */
-export function buildWorkspaceRootOrgOpportunityKpis(snapshots: WorkspaceGrowthDeptSnapshot[]): KPIVm[] {
-    let inquiriesInLane = 0;
-    let sawInquiries = false;
-    let closed = 0;
-    let pipeline = 0;
-    for (const { key, pipelineExact, lifecycleAnalytics } of snapshots) {
-        if (!isGrowthSliceDepartmentKey(key)) continue;
-        if (pipelineExact?.total != null) {
-            sawInquiries = true;
-            inquiriesInLane += Math.max(0, pipelineExact.total);
-        }
-        const kpis = lifecycleAnalytics;
-        if (kpis?.counts) {
-            closed += closedCountFromLifecycleCounts(kpis.counts);
-            pipeline += Number(kpis.values?.openPipeline ?? 0);
+function breakdownCountByKey(
+    breakdown: DepartmentLifecycleStatusBreakdownRow[] | undefined,
+    statusKey: string,
+): number {
+    const target = statusKey.trim().toLowerCase();
+    let sum = 0;
+    for (const row of breakdown ?? []) {
+        if (String(row.status_key ?? "").trim().toLowerCase() === target) {
+            sum += Math.max(0, Number(row.count) || 0);
         }
     }
+    return sum;
+}
+
+export type WorkspaceEnrollmentKpiRollup = {
+    activeLeads: number;
+    scheduledTours: number;
+    enrollmentOpportunities: number;
+    waitlistedFamilies: number;
+    sawLifecycleAnalytics: boolean;
+};
+
+/** Sum enrollment-facing KPIs from growth-slice lifecycle analytics already fetched for workspace rollup. */
+export function aggregateWorkspaceEnrollmentKpiRollup(
+    snapshots: WorkspaceGrowthDeptSnapshot[],
+): WorkspaceEnrollmentKpiRollup {
+    let activeLeads = 0;
+    let scheduledTours = 0;
+    let enrollmentOpportunities = 0;
+    let waitlistedFamilies = 0;
+    let sawLifecycleAnalytics = false;
+
+    for (const { key, lifecycleAnalytics } of snapshots) {
+        if (!isGrowthSliceDepartmentKey(key)) continue;
+        const kpis = lifecycleAnalytics;
+        if (!kpis?.counts) continue;
+        sawLifecycleAnalytics = true;
+
+        const enrolled = breakdownCountByKey(kpis.statusBreakdown, "enrolled");
+        const lost = breakdownCountByKey(kpis.statusBreakdown, "lost");
+        const total = Math.max(0, kpis.counts.total ?? 0);
+        activeLeads += Math.max(0, total - enrolled - lost);
+
+        scheduledTours += breakdownCountByKey(kpis.statusBreakdown, "tour_scheduled");
+        enrollmentOpportunities += inMotionCountFromLifecycleCounts(kpis.counts);
+        waitlistedFamilies += breakdownCountByKey(kpis.statusBreakdown, "waitlisted");
+    }
+
+    return {
+        activeLeads,
+        scheduledTours,
+        enrollmentOpportunities,
+        waitlistedFamilies,
+        sawLifecycleAnalytics,
+    };
+}
+
+function formatEnrollmentWorkspaceKpiValue(n: number, sawLifecycleAnalytics: boolean): string {
+    if (!sawLifecycleAnalytics) return "—";
+    return String(Math.max(0, Math.floor(n)));
+}
+
+/**
+ * Org workspace KPI strip — childcare enrollment metrics from lifecycle analytics (no new API).
+ */
+export function buildWorkspaceRootOrgOpportunityKpis(snapshots: WorkspaceGrowthDeptSnapshot[]): KPIVm[] {
+    const roll = aggregateWorkspaceEnrollmentKpiRollup(snapshots);
+    const saw = roll.sawLifecycleAnalytics;
     return [
         {
-            id: "org_in_motion",
-            label: "Inquiries (pipeline lane)",
-            value: sawInquiries ? String(Math.max(0, inquiriesInLane)) : "—",
+            id: "org_enrollment_active_leads",
+            label: "Active Leads",
+            value: formatEnrollmentWorkspaceKpiValue(roll.activeLeads, saw),
             lane: "business",
         },
         {
-            id: "org_pipeline_value",
-            label: "Pipeline value (lifecycle)",
-            value: pipeline > 0 ? formatWorkspaceUsdGrouped(pipeline) : "—",
+            id: "org_enrollment_scheduled_tours",
+            label: "Scheduled Tours",
+            value: formatEnrollmentWorkspaceKpiValue(roll.scheduledTours, saw),
             lane: "business",
         },
-        { id: "org_closed", label: "Closed (lifecycle)", value: String(Math.max(0, closed)), lane: "business" },
+        {
+            id: "org_enrollment_in_motion",
+            label: "Enrollment Opportunities",
+            value: formatEnrollmentWorkspaceKpiValue(roll.enrollmentOpportunities, saw),
+            lane: "business",
+        },
+        {
+            id: "org_enrollment_waitlisted_families",
+            label: "Waitlisted Families",
+            value: formatEnrollmentWorkspaceKpiValue(roll.waitlistedFamilies, saw),
+            lane: "business",
+        },
     ];
 }
 

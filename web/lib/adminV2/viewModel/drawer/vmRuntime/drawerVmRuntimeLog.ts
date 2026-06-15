@@ -23,6 +23,7 @@ export type DrawerVmRuntimeLogEvent =
     | "background_enrich_error"
     | "tab_switch"
     | "swap_hold"
+    | "cold_fetch_error"
     /** @deprecated use cold_fetch_start — no-op (render-loop noise) */
     | "render"
     /** @deprecated use cold_fetch_start */

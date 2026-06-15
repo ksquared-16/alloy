@@ -203,4 +203,18 @@ describe("queue record date field formatting", () => {
         } as never);
         expect(resolved.display).toBe("Mar 15, 2024");
     });
+
+    it("formats child.date_of_birth with year even when date is in the current year", () => {
+        const field = {
+            id: "dob",
+            fieldKey: "child.date_of_birth",
+            display: "muted" as const,
+            inlineWithPrevious: true,
+        };
+        const resolved = resolveQueueRecordField(field, {
+            "child.date_of_birth": "2026-01-01",
+        } as never);
+        expect(resolved.display).toBe("Jan 1, 2026");
+        expect(resolved.display).not.toBe("Jan 1");
+    });
 });

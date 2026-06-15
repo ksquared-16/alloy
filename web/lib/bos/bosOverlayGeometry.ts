@@ -1,5 +1,5 @@
 /** Gutter between entity drawer edge and BOS rail overlay (desktop). */
-export const BOS_RAIL_OVERLAY_GUTTER_PX = 24;
+export const BOS_RAIL_OVERLAY_GUTTER_PX = 16;
 
 export const BOS_OVERLAY_WIDTH_CSS_VAR = "--adminv2-bos-overlay-width";
 export const BOS_OVERLAY_GUTTER_CSS_VAR = "--adminv2-bos-overlay-gutter";

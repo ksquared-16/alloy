@@ -72,7 +72,13 @@ export default function PersonDrawerVmRuntime() {
             recordModalTone="cleaning-v2"
             statusBadge={
                 displayVm ?
-                    <VmPersonStatusControl statusLabel={displayVm.header.status_label} />
+                    <VmPersonStatusControl
+                        personId={String(displayVm.entity.id)}
+                        statusLabel={displayVm.header.status_label}
+                        currentStatusKey={String(record?.status_key ?? "").trim()}
+                        statusControl={displayVm.header.status}
+                        canMutate={!!canMutate}
+                    />
                 :   undefined
             }
         >

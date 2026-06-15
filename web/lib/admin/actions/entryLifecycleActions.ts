@@ -6,11 +6,13 @@ import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolv
 import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
-import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { NEW_LEAD_STATUS_KEY, DEFAULT_LEAD_CASE_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { ENROLLMENT_INTAKE_PERSON_STATUS_KEY } from "@/lib/admin/person/enrollmentPersonDefaultStatus";
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
+import { buildHouseholdLeadDisplayName } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
 
 export type EntryLifecycleActionError = { ok: false; error: string; status: number };
 
@@ -64,27 +66,20 @@ export async function executeCreateLeadAction(
         return { ok: false, error: "Phone or email is required.", status: 400 };
     }
 
-    const verticalId = trim(input.merged.vertical_id) || (await resolveOrgDefaultVerticalId(supabase, ctx.orgId));
-    if (!verticalId) {
-        return {
-            ok: false,
-            error: "No vertical is configured for this organization. Set up a vertical before creating leads.",
-            status: 400,
-        };
-    }
+    const verticalId =
+        trim(input.merged.vertical_id) || (await resolveOrgDefaultVerticalId(supabase, ctx.orgId)) || null;
 
     const departmentId = trim(input.context?.department_id) || trim(input.merged.department_id) || null;
     let workUnitId =
         trim(input.context?.work_unit_id) ||
         trim(input.merged.work_unit_id) ||
         null;
-    let statusKeyForLead = NEW_LEAD_STATUS_KEY;
+    let statusKeyForLead = DEFAULT_LEAD_CASE_STATUS_KEY;
     if (departmentId) {
         const binding = await resolveLifecycleCreateLeadBinding(supabase, ctx.orgId, departmentId);
         if (!workUnitId && binding.work_unit_id) {
             workUnitId = binding.work_unit_id;
         }
-        statusKeyForLead = binding.status_key;
     }
     const locationId = trim(input.merged.location_id) || null;
 
@@ -94,12 +89,18 @@ export async function executeCreateLeadAction(
         last_name: lastName,
         email,
         phone,
+        default_status_key_on_create: ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
     });
     const personId = person?.id?.trim() || null;
     if (!personId) {
         return { ok: false, error: "Could not create or resolve person.", status: 400 };
     }
 
+    const householdDisplayName = buildHouseholdLeadDisplayName({
+        firstName,
+        lastName,
+        fallback: email || phone || "New lead",
+    });
     const { customer_id: customerId } = await ensureCustomerForPersonNative(supabase, personId, {
         org_id: ctx.orgId,
         vertical_id: verticalId,
@@ -107,17 +108,17 @@ export async function executeCreateLeadAction(
         last_name: lastName,
         email,
         phone,
+        household_name: householdDisplayName,
     });
     if (!customerId?.trim()) {
         return { ok: false, error: "Could not create household for this lead.", status: 400 };
     }
     await ensureCustomerPersonsPrimaryLink(supabase, { customerId, personId, orgId: ctx.orgId });
 
-    const displayName = [firstName, lastName].filter(Boolean).join(" ").trim() || email || phone || "New lead";
+    const displayName = householdDisplayName;
     const intakeNotes = trim(input.merged.intake_notes) || null;
     const oppPayload: Record<string, unknown> = {
         org_id: ctx.orgId,
-        vertical_id: verticalId,
         customer_id: customerId,
         primary_person_id: personId,
         primary_contact_id: null,
@@ -132,6 +133,7 @@ export async function executeCreateLeadAction(
             ...(intakeNotes ? { intake_notes: intakeNotes } : {}),
         },
     };
+    if (verticalId) oppPayload.vertical_id = verticalId;
     if (locationId) oppPayload.location_id = locationId;
 
     await normalizeOpportunityWritePayload(supabase, oppPayload, "executeAdminAction:create_lead");

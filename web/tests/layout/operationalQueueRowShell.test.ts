@@ -27,7 +27,7 @@ describe("operationalQueueRowShell", () => {
             ...layout,
             columns: layout.columns.map((col, index) => ({
                 ...col,
-                width: (index === 2 ? "small" : index === 3 ? "large" : "medium") as const,
+                width: (index === 2 ? "small" : index === 3 ? "large" : "medium") as "small" | "medium" | "large",
             })),
         };
         const grid = columnGridTemplate(custom);

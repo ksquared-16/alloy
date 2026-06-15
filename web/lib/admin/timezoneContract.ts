@@ -94,6 +94,12 @@ export async function fetchOperationalTimezoneForOrgWithCache(
     return { ...resolved, cacheHit: false };
 }
 
+const USER_DISPLAY_TZ_TTL_MS = 60_000;
+const USER_DISPLAY_TZ_CACHE = new Map<
+    string,
+    { at: number; iana: string; source: UserDisplayTimezoneSource }
+>();
+
 /**
  * effectiveUserTimeZone for admin UI: user_profiles.timezone → org → UTC.
  */
@@ -117,4 +123,24 @@ export async function fetchEffectiveUserDisplayTimezone(
 
     const orgResolved = await fetchOperationalTimezoneForOrg(supabase, orgId);
     return { iana: orgResolved.iana, source: orgResolved.source };
+}
+
+/** Process-scoped cache for hot queue/bootstrap paths — safe per org+user. */
+export async function fetchEffectiveUserDisplayTimezoneCached(
+    supabase: SupabaseClient,
+    params: { userId: string; orgId: string }
+): Promise<{ iana: string; source: UserDisplayTimezoneSource; cacheHit: boolean }> {
+    const key = `${params.orgId}\u0001${params.userId}`;
+    const now = Date.now();
+    const hit = USER_DISPLAY_TZ_CACHE.get(key);
+    if (hit && now - hit.at < USER_DISPLAY_TZ_TTL_MS) {
+        return { iana: hit.iana, source: hit.source, cacheHit: true };
+    }
+    const resolved = await fetchEffectiveUserDisplayTimezone(supabase, params);
+    USER_DISPLAY_TZ_CACHE.set(key, { at: now, iana: resolved.iana, source: resolved.source });
+    return { ...resolved, cacheHit: false };
+}
+
+export function clearUserDisplayTimezoneCacheForTests(): void {
+    USER_DISPLAY_TZ_CACHE.clear();
 }

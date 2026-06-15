@@ -20,6 +20,8 @@ export type WorkspaceShellLayoutProps = {
   primaryColumn: ReactNode;
   /** Inner rail body only; column chrome is wrapped here. Omit or pass `null` to collapse desktop rail grid. */
   railContent?: ReactNode | null;
+  /** Work-unit layout: telemetry card between Actions and BOS in the command rail. */
+  commandRailTelemetrySlot?: ReactNode | null;
   /** When set, overrides automatic `railContent != null` visibility. */
   showRail?: boolean;
   railAriaLabel?: string;
@@ -38,6 +40,7 @@ export function WorkspaceShellLayout({
   containLead,
   primaryColumn,
   railContent,
+  commandRailTelemetrySlot = null,
   showRail,
   railAriaLabel = "Decisions and actions",
 }: WorkspaceShellLayoutProps) {
@@ -66,7 +69,7 @@ export function WorkspaceShellLayout({
               className="adminv2-ws-dept-v2-command-column adminv2-ws-shell-command-column"
               data-adminv2-workspace-command-column
             >
-              <WorkspaceCommandRailShell ariaLabel={railAriaLabel}>
+              <WorkspaceCommandRailShell ariaLabel={railAriaLabel} telemetrySlot={commandRailTelemetrySlot}>
                 {railContent}
               </WorkspaceCommandRailShell>
             </div>

@@ -1,16 +1,12 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useMemo } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import { WorkspaceKpiOrientationCrossfade } from "@/components/admin/workspace/WorkspaceKpiOrientationCrossfade";
-import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import { WorkspaceRootLifecycleGrid } from "@/components/admin/workspace/WorkspaceRootLifecycleGrid";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceRootActionsRail } from "@/app/adminV2/components/workspace/WorkspaceRootActionsRail";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 
 const companyRootStyle: CSSProperties = {
   backgroundColor: "transparent",
@@ -64,44 +60,19 @@ type Props = {
   lifecycleCardsPending?: boolean;
 };
 
-function buildStructureKpis(lifecycleCount: number): KPIVm[] {
-  return [{ id: "lifecycles", label: "Lifecycles", value: String(lifecycleCount), lane: "business" }];
-}
-
-function filterOperatorWorkspaceKpis(items: KPIVm[], lifecycleCount: number): KPIVm[] {
-  const filtered = items.filter((k) => {
-    const label = String(k.label ?? "").trim().toLowerCase();
-    const id = String(k.id ?? "").trim().toLowerCase();
-    return label !== "departments" && id !== "depts" && label !== "work units" && id !== "wu";
-  });
-  if (filtered.some((k) => k.id === "lifecycles")) return filtered;
-  return [...buildStructureKpis(lifecycleCount), ...filtered];
-}
-
 /**
- * Operator workspace root — lifecycle tiles, KPI strip, orientation rail.
+ * Operator workspace root — lifecycle tiles and orientation rail.
+ * KPI strip hidden until the model is trustworthy; aggregation continues in page.tsx.
  */
 export function WorkspaceRootShell({
   orgName,
-  orgOpportunityKpis,
-  workspaceKpiStrip,
-  kpiStripPlaceholder = false,
   workspaceRollupRefined = false,
-  kpiQuietReserveOnly = false,
   lifecycleCards = [],
   lifecycleCardsPending = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
-  const lifecycleCount = lifecycleCards.length;
 
-  const kpis = useMemo(() => {
-    if (workspaceKpiStrip !== undefined) {
-      return filterOperatorWorkspaceKpis(workspaceKpiStrip, lifecycleCount);
-    }
-    const structure = buildStructureKpis(lifecycleCount);
-    const roll = orgOpportunityKpis?.length ? orgOpportunityKpis : [];
-    return filterOperatorWorkspaceKpis([...structure, ...roll], lifecycleCount);
-  }, [workspaceKpiStrip, orgOpportunityKpis, lifecycleCount]);
+  const defaultDepartmentId = lifecycleCards[0]?.departmentId ?? null;
 
   return (
     <WorkspaceShellLayout
@@ -110,18 +81,8 @@ export function WorkspaceRootShell({
       style={companyRootStyle}
       workspaceRootShell
       railAriaLabel="Decisions and actions"
-      showRail
-      railContent={<WorkspaceRootActionsRail />}
-      containLead={
-        isBosRightRailCopilotEnabledClient() ? null : (
-            <nav
-                className="adminv2-ws-inline-breadcrumb text-alloy-midnight/60 flex flex-wrap items-center gap-0.5 pb-1"
-                aria-label="Breadcrumb"
-            >
-                <span className="text-alloy-midnight/80 font-medium">Workspace</span>
-            </nav>
-        )
-      }
+      railContent={<WorkspaceRootActionsRail defaultDepartmentId={defaultDepartmentId} />}
+      containLead={null}
       primaryColumn={
         <>
           <div className="adminv2-ws-dept-v2-control-deck">
@@ -135,19 +96,10 @@ export function WorkspaceRootShell({
                   className="text-sm mt-2 max-w-3xl adminv2-ws-root-brief-subline"
                   style={{ lineHeight: 1.45 }}
                 >
-                  Command center for your configured lifecycles — open where work is waiting and stay in flow.
+                  Enrollment operations at a glance — track families, manage waitlists, and move children toward enrollment.
                 </p>
               </div>
             </div>
-            {kpiStripPlaceholder && kpiQuietReserveOnly ? (
-              <WorkspaceQuietKpiReserve id="workspace-kpi-quiet-reserve" />
-            ) : (
-              <WorkspaceKpiOrientationCrossfade
-                kpis={kpis}
-                placeholderPending={kpiStripPlaceholder}
-                maxVisible={5}
-              />
-            )}
           </div>
 
           <section

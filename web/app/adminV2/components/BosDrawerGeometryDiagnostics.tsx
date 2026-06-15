@@ -7,22 +7,17 @@ import {
     collectBosDrawerGeometryReport,
     registerBosDrawerGeometryDiagnostics,
 } from "@/lib/bos/bosDrawerGeometryReport";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 
 /**
  * Dev diagnostics — registers `window.__alloyReportBosDrawerGeometry()` for runtime drawer/BOS geometry.
  * No layout changes; measurement only.
  */
 export default function BosDrawerGeometryDiagnostics() {
-    const enabled = isBosRightRailCopilotEnabledClient();
-
     useEffect(() => {
-        if (!enabled) return;
         registerBosDrawerGeometryDiagnostics();
-    }, [enabled]);
+    }, []);
 
     useEffect(() => {
-        if (!enabled) return;
         if (typeof window === "undefined") return;
         if (window.localStorage.getItem(BOS_DRAWER_GEOMETRY_AUTO_REPORT_KEY) !== "1") return;
 
@@ -50,7 +45,7 @@ export default function BosDrawerGeometryDiagnostics() {
             mo.disconnect();
             window.removeEventListener("resize", schedule);
         };
-    }, [enabled]);
+    }, []);
 
     return null;
 }

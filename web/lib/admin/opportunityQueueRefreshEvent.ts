@@ -29,6 +29,7 @@ const QUEUE_MEMBERSHIP_ACTION_KEYS = new Set([
     "person_employee_updated",
     "family_contacts_registry",
     "registry_action",
+    "delete_lead",
 ]);
 
 /**

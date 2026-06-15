@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { MessageSquare, X } from "lucide-react";
 
+import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
 import InboxPanel from "@/app/adminV2/messages/InboxPanel";
+import CommandCenterShell from "@/app/adminV2/communications/CommandCenterShell";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 
 export type InboxModalProps = {
     open: boolean;
@@ -14,32 +17,20 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
     const [composeOpen, setComposeOpen] = useState(false);
 
     useEffect(() => {
-        if (!open) return;
-        const onKey = (e: KeyboardEvent) => {
-            if (e.key === "Escape") onClose();
-        };
-        window.addEventListener("keydown", onKey);
-        return () => window.removeEventListener("keydown", onKey);
-    }, [open, onClose]);
-
-    useEffect(() => {
         if (!open) setComposeOpen(false);
     }, [open]);
 
-    if (!open) return null;
-
     return (
-        <div
-            className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-alloy-midnight/45 px-2 py-4 backdrop-blur-[2px] sm:px-4 sm:py-8"
-            data-adminv2-inbox-modal="true"
+        <AdminV2WorkspaceBosModalShell
+            open={open}
+            onClose={onClose}
+            dataModalAttr="adminv2-inbox-modal"
+            ariaLabelledBy="adminv2-inbox-modal-title"
+            panelClassName="max-h-[min(88vh,42rem)]"
         >
-            <button type="button" className="absolute inset-0 cursor-default" aria-label="Close inbox" onClick={onClose} />
             <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="adminv2-inbox-modal-title"
-                className="relative z-[1] flex max-h-[min(88vh,42rem)] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-alloy-stone/18 bg-[#f7f6f3] shadow-2xl sm:max-w-4xl"
-                onClick={(e) => e.stopPropagation()}
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-[#f7f6f3]"
+                data-adminv2-inbox-modal="true"
             >
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/15 bg-white px-3 py-2.5">
                     <div className="flex min-w-0 items-center gap-2">
@@ -68,14 +59,20 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                     </div>
                 </div>
                 <div className="flex min-h-[min(22rem,65vh)] flex-1 flex-col overflow-hidden">
-                    <InboxPanel
-                        layout="modal"
-                        onClose={onClose}
-                        composeOpen={composeOpen}
-                        onComposeOpenChange={setComposeOpen}
-                    />
+                    {/* Communications V2: replace the inbox panel body with the Command Center; the
+                        AdminV2WorkspaceBosModalShell (current staging BOS rail) is unchanged. Flag off = legacy inbox. */}
+                    {isCommsV2FlagEnabled("comms_v2_command_center") ? (
+                        <CommandCenterShell />
+                    ) : (
+                        <InboxPanel
+                            layout="modal"
+                            onClose={onClose}
+                            composeOpen={composeOpen}
+                            onComposeOpenChange={setComposeOpen}
+                        />
+                    )}
                 </div>
             </div>
-        </div>
+        </AdminV2WorkspaceBosModalShell>
     );
 }

@@ -16,9 +16,10 @@ describe("formatOpportunityInquiryDrawerTitle", () => {
             },
             "Lead"
         );
-        expect(title).toBe("Lead — Mitchell");
+        expect(title).toBe("Mitchell Family");
         expect(title).not.toContain("Kevin");
         expect(title).not.toContain("Enrollment");
+        expect(title).not.toContain("Lead —");
     });
 
     it("strips household suffix from customer name fallback", () => {
@@ -29,11 +30,25 @@ describe("formatOpportunityInquiryDrawerTitle", () => {
             },
             "Lead"
         );
-        expect(title).toBe("Lead — Williams");
+        expect(title).toBe("Williams Family");
     });
 
     it("uses configured singular when no household name hints exist", () => {
         expect(formatOpportunityInquiryDrawerTitle({}, "Lead")).toBe("Lead");
+    });
+
+    it("uses record.name directly when already household-formatted", () => {
+        const title = formatOpportunityInquiryDrawerTitle(
+            {
+                name: "James Family",
+                _identity: {
+                    household: { id: "c1", label: "James Household" },
+                    primary_person: { id: "p1", label: "Lebron James" },
+                },
+            },
+            "Lead",
+        );
+        expect(title).toBe("James Family");
     });
 });
 

@@ -1,5 +1,7 @@
 # Glossary
 
+> **Canonical (June 2026 rebaseline):** [`docs/platform/governance/glossary.md`](../platform/governance/glossary.md)
+
 ## Purpose
 
 Shared vocabulary for Alloy docs and AI context so terms are not overloaded.
@@ -27,10 +29,13 @@ Use these meanings in code review and prompts.
 | **Action link** | Tokenized link consumed via API → emits event → workflows (e.g. cancel/reschedule). |
 | **RRS / resolver** | Record resolution system (e.g. `web/lib/rrs/`) producing **flat** payload for jobs and selected entities. |
 | **Queue / queue definition** | Work-unit-level JSON (`queue_definition`, v1 schema) interpreted by `QueueService` for preview lists. Queues may declare **`grain`** (`case` vs `candidate`/child-primary) for enrollment domains. |
-| **Work unit** | Scoped workspace unit under a department; carries queue config and operational ownership. **Execution domain** — not a lifecycle stage; enrollment uses one **`enrollment_pipeline`** WU with multiple domain queues inside `queue_definition`. |
+| **Business Process** | Operator-facing configurable process (e.g. Enrollment Process). UI label since June 2026; internal APIs may still use `lifecycle`. |
+| **Stage** | Step in a business process — queue membership + expected work. Primary operator execution lens. |
+| **Lifecycle** | Internal/config term for business process catalog (`lifecycles` table). Prefer **Business Process** in operator docs. |
+| **Work unit** | **Implementation construct** — execution domain with **`queue_definition`**. Route `/workspace/work-unit/:slug`. See Business Process System doc. |
 | **Child inquiry lifecycle** | **`opportunity_customer_members.outcome_status_key`** — per-child enrollment disposition (waitlisted, enrolling, enrolled, …). **SoT** for child enrollment state; distinct from case-level **`opportunities.status_key`**. |
 | **Case lifecycle (opportunity)** | **`opportunities.status_key`** — household coordination / pipeline case state (tours, follow-up, broad open/closed). **Not** a substitute for per-child enrollment truth. |
-| **Department** | Grouping of work units for Admin V2 workspace navigation. |
+| **Department** | Org-scoped grouping for **access control**, metadata (attention rules, KPI rollup), and work-unit ownership. **Not** the primary operator navigation spine (use **Business Process** → Stage). Dept UUID routes (`…/dept/…`) are internal/compat. |
 | **Role key** | String on **`user_roles.role`** matching **`role_definitions.role_key`** — membership in an **org role**, one of several inputs to capability checks. |
 | **Permission key** | String granted via **`role_permission_grants`** (unioned into runtime **`permissionKeys`**) — preferred gate for **capabilities**. |
 | **Access profile (CRM)** | Row in **`user_access_profiles`**: per `(user_id, org_id)`, declares **`department_scope`** and **`site_scope`** (`all` or `restricted`). **Visibility**, separate from **permission** union. |

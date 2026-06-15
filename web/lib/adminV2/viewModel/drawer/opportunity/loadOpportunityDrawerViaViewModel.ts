@@ -1,5 +1,9 @@
 import type { OpportunityWorkspaceContext } from "@/contexts/AdminDrawerContext";
 import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
+import {
+    diagnoseOpportunityDrawerComposedRevealReady,
+    opportunityDrawerVmPreloadRevealReady,
+} from "@/lib/admin/drawer/opportunityDrawerComposedRevealDiagnostics";
 import { opportunityDrawerComposedRevealReady } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 import { adminV2DrawerViewModelCutoverEnabled } from "@/lib/adminV2/viewModel/drawer/drawerViewModelCutoverGate";
 import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
@@ -32,6 +36,7 @@ export type LoadOpportunityDrawerViaViewModelResult =
     | {
           ok: false;
           reason: "cutover_disabled" | "fetch_failed" | "skipped" | "not_structure_settled" | "composed_not_ready";
+          missing_fields?: string[];
           skip_reason?: string;
       };
 
@@ -156,8 +161,23 @@ async function loadOpportunityDrawerViaViewModelCold(
     }
 
     const preload = buildOpportunityDrawerOpenPreloadFromViewModel(viewModel);
-    if (!opportunityDrawerComposedRevealReady(preload)) {
-        return { ok: false, reason: "composed_not_ready" };
+    const legacyRevealReady = opportunityDrawerComposedRevealReady(preload);
+    const vmRevealReady = opportunityDrawerVmPreloadRevealReady(preload);
+    if (!legacyRevealReady && !vmRevealReady) {
+        const missing_fields = diagnoseOpportunityDrawerComposedRevealReady(preload);
+        logDrawerVmRuntimeDiagnostic("drawer_vm_composed_not_ready", {
+            entity_type: "opportunities",
+            entity_id: id,
+            missing_fields: missing_fields.join(","),
+        });
+        return { ok: false, reason: "composed_not_ready", missing_fields };
+    }
+    if (!legacyRevealReady && vmRevealReady) {
+        logDrawerVmRuntimeDiagnostic("drawer_vm_composed_legacy_miss_vm_ok", {
+            entity_type: "opportunities",
+            entity_id: id,
+            missing_fields: diagnoseOpportunityDrawerComposedRevealReady(preload).join(","),
+        });
     }
 
     putOpportunityDrawerVmCacheEntry(id, preload, cacheContext);
@@ -208,15 +228,25 @@ export async function loadOpportunityDrawerViaViewModel(
         context,
     });
     if (cached?.entityType === "opportunities") {
-        const durationMs =
-            typeof performance !== "undefined" ? Math.round(performance.now() - resolveStart) : 0;
-        logOpportunityVmOpenResolve("cache_hit", id, durationMs);
-        return {
-            ok: true,
-            preload: cached.preload,
-            compose_ms: 0,
-            open_path: "cache_hit",
-        };
+        const legacyRevealReady = opportunityDrawerComposedRevealReady(cached.preload);
+        const vmRevealReady = opportunityDrawerVmPreloadRevealReady(cached.preload);
+        if (legacyRevealReady || vmRevealReady) {
+            const durationMs =
+                typeof performance !== "undefined" ? Math.round(performance.now() - resolveStart) : 0;
+            logOpportunityVmOpenResolve("cache_hit", id, durationMs);
+            return {
+                ok: true,
+                preload: cached.preload,
+                compose_ms: 0,
+                open_path: "cache_hit",
+            };
+        }
+        logDrawerVmRuntimeDiagnostic("drawer_vm_composed_not_ready", {
+            entity_type: "opportunities",
+            entity_id: id,
+            missing_fields: diagnoseOpportunityDrawerComposedRevealReady(cached.preload).join(","),
+            source: "cache_stale",
+        });
     }
 
     const cacheMissReason = logOpportunityVmScopedCacheMiss(id, cacheKey, context);

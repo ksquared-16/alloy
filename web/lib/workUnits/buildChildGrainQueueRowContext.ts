@@ -1,7 +1,7 @@
 /**
  * Honest QueueRowContext for child/candidate grain queue rows (Phase A).
  *
- * Used when `ALLOY_QUEUE_CHILD_GRAIN_LANES` enables the lane and the row
+ * Used when builder or legacy child-grain routing enables the lane and the row
  * carries ocmrow:/pcrow: ids or explicit row_grain.
  *
  * @see docs/sprints/06_2026/child_grain_queue_conversion_design.md §7
@@ -30,6 +30,7 @@ import {
     resolveBoringCaseStatusLabel,
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
+import { filterQueueRelevantInquiryChildren } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
 
 export type BuildChildGrainQueueRowContextInput = {
     row: Record<string, unknown>;
@@ -239,7 +240,7 @@ function resolveActiveSubjectIds(row: Record<string, unknown>, subjectType: Life
                 "Child",
             statusKey,
             statusLabel: humanizeSnakeCaseToken(statusKey),
-            stageKey: "waitlist",
+            stageKey: trimOrNull((row as { _queue_lane_stage_key?: unknown })._queue_lane_stage_key) ?? "waitlist",
         };
     }
 
@@ -267,47 +268,69 @@ function buildLifecycleSubjectRef(params: {
     return base;
 }
 
+function resolveLaneDispositionKeys(
+    row: Record<string, unknown>,
+    queue: PartialQueueRowContextQueueMeta,
+): readonly string[] | null {
+    const fromRow = row._queue_lane_disposition_keys;
+    if (Array.isArray(fromRow)) {
+        const keys = fromRow.map((k) => trimOrNull(k)).filter((k): k is string => Boolean(k));
+        if (keys.length) return keys;
+    }
+    const fromOcmTrack = row._ocm_enrollment_track_row;
+    if (fromOcmTrack != null && typeof fromOcmTrack === "object" && !Array.isArray(fromOcmTrack)) {
+        const keys = (fromOcmTrack as { disposition_keys?: unknown }).disposition_keys;
+        if (Array.isArray(keys)) {
+            const parsed = keys.map((k) => trimOrNull(k)).filter((k): k is string => Boolean(k));
+            if (parsed.length) return parsed;
+        }
+    }
+    const fromQueue = queue.included_disposition_keys;
+    if (fromQueue?.length) return fromQueue;
+    return null;
+}
+
 function buildRelatedSubjectsSummary(
     row: Record<string, unknown>,
     activeSubjectId: string,
     activeSubjectType: LifecycleSubjectType,
     allowedLocationIds?: readonly string[] | null,
+    queue?: PartialQueueRowContextQueueMeta,
 ): RelatedSubjectSummary[] {
-    const inquiryChildren = readInquiryChildrenFromRow(row);
+    const dispositionKeys = queue ? resolveLaneDispositionKeys(row, queue) : null;
+    const relevant = filterQueueRelevantInquiryChildren({
+        row,
+        activeSubjectId,
+        dispositionKeys,
+    });
+
     const out: RelatedSubjectSummary[] = [];
+    for (const child of relevant) {
+        if (child.subject_id === activeSubjectId && activeSubjectType === "child") continue;
 
-    for (const raw of inquiryChildren) {
-        const rec = raw as Record<string, unknown>;
-        const subjectId = trimOrNull(rec.ocm_id) ?? trimOrNull(rec.id) ?? trimOrNull(rec.customer_member_id);
-        if (!subjectId) continue;
+        const raw = readInquiryChildrenFromRow(row).find((x) => {
+            const rec = x as Record<string, unknown>;
+            const subjectId = trimOrNull(rec.ocm_id) ?? trimOrNull(rec.id) ?? trimOrNull(rec.customer_member_id);
+            return subjectId === child.subject_id;
+        }) as Record<string, unknown> | undefined;
 
-        const subjectType: LifecycleSubjectType = trimOrNull(rec.placement_candidate_id) ? "candidate" : "child";
-        if (subjectId === activeSubjectId && subjectType === activeSubjectType) continue;
-
-        const displayName =
-            trimOrNull(rec.display_name) ??
-            trimOrNull(rec.child_display_name) ??
-            "Child";
-
+        const subjectType: LifecycleSubjectType =
+            raw && trimOrNull(raw.placement_candidate_id) ? "candidate" : "child";
+        const placement = raw ? buildSubjectPlacementFromInquiryChildRaw(raw) : null;
+        const subjectLocationId = placement?.location_id ?? (raw ? trimOrNull(raw.location_id) : null);
         const statusLabel =
-            trimOrNull(rec.outcome_status_label) ??
-            (trimOrNull(rec.outcome_status_key)
-                ? humanizeSnakeCaseToken(trimOrNull(rec.outcome_status_key)!)
-                : "—");
+            child.outcome_status_key ? humanizeSnakeCaseToken(child.outcome_status_key) : "—";
 
-        const placement = buildSubjectPlacementFromInquiryChildRaw(rec);
-
-        const subjectLocationId = placement?.location_id ?? trimOrNull(rec.location_id);
         const summary: RelatedSubjectSummary = {
             subject_type: subjectType,
-            subject_id: subjectId,
-            display_name: displayName,
+            subject_id: child.subject_id,
+            display_name: child.display_name,
             status_label: statusLabel,
             location_id: subjectLocationId,
-            location_label: placement?.location_label ?? trimOrNull(rec.location_label),
+            location_label: placement?.location_label ?? (raw ? trimOrNull(raw.location_label) : null),
             program_label: placement?.program_label ?? null,
-            room_label: placement?.room_label ?? trimOrNull(rec.program_room_cohort_label),
-            schedule_label: placement?.schedule_label ?? trimOrNull(rec.desired_schedule_label),
+            room_label: placement?.room_label ?? (raw ? trimOrNull(raw.program_room_cohort_label) : null),
+            schedule_label: placement?.schedule_label ?? (raw ? trimOrNull(raw.desired_schedule_label) : null),
         };
         const visibility = relatedSubjectVisibilityForLocation(subjectLocationId, allowedLocationIds);
         out.push(applyRelatedSubjectLocationVisibility(summary, visibility));
@@ -324,25 +347,9 @@ function resolveStageLabel(queue: PartialQueueRowContextQueueMeta): string {
     return queue.label.trim() || queue.key;
 }
 
-/** Executable queue key → enrollment operator stage_key for drawer lifecycle visual. */
-const QUEUE_KEY_ENROLLMENT_STAGE: Record<string, string> = {
-    tours: "tour",
-    tours_follow_up: "tour",
-    enrollment_offers: "enrolling",
-    enrollment_completed: "enrolled",
-    waitlist: "waitlist",
-};
-
-function resolveEnrollmentStageKeyFromQueue(queue: PartialQueueRowContextQueueMeta): string | null {
-    const key = queue.key.trim();
-    return QUEUE_KEY_ENROLLMENT_STAGE[key] ?? null;
-}
-
 function resolveStageKey(queue: PartialQueueRowContextQueueMeta, activeStageKey: string): string {
     const fromActive = trimOrNull(activeStageKey);
     if (fromActive) return fromActive;
-    const fromQueueKey = resolveEnrollmentStageKeyFromQueue(queue);
-    if (fromQueueKey) return fromQueueKey;
     return trimOrNull(queue.stage_key) ?? queue.key;
 }
 
@@ -366,12 +373,9 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
     const caseDisplayName = resolveCaseDisplayName(row);
     const lifecycleKey = resolveLifecycleKey(input.queue);
     const stageKey = resolveStageKey(input.queue, active.stageKey);
-    const operatorStageLabel =
+    const rowStage =
         trimOrNull(row.enrollment_track_stage_label) ??
-        (resolveEnrollmentStageKeyFromQueue(input.queue)
-            ? humanizeSnakeCaseToken(resolveEnrollmentStageKeyFromQueue(input.queue)!)
-            : null);
-    const rowStage = operatorStageLabel ?? resolveStageLabel(input.queue);
+        resolveStageLabel(input.queue);
 
     const caseStatusKey =
         trimOrNull(row.opportunity_status_key) ?? trimOrNull(row.status_key) ?? "open";
@@ -428,6 +432,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
             active.subjectId,
             subjectType,
             input.allowedLocationIds,
+            input.queue,
         ),
         attention_summary: buildAttentionSummary(row),
         work_summary: buildWorkSummary(row),

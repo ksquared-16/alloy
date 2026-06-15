@@ -10,13 +10,13 @@ import OpportunityDrawerOpenCoordinator from "@/components/admin/OpportunityDraw
 import ContextualRecordOpenListener from "@/components/adminV2/ContextualRecordOpenListener";
 import GlobalRecordSearchOpenListener from "@/components/adminV2/GlobalRecordSearchOpenListener";
 import AdminV2ClickDebugInstaller from "@/app/adminV2/components/AdminV2ClickDebugInstaller";
+import PlatformSurfacePerfDebugInstaller from "@/app/adminV2/components/PlatformSurfacePerfDebugInstaller";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { AdminOrgOperationalTimezoneProvider } from "@/contexts/AdminOrgOperationalTimezoneContext";
 import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { WorkspaceOrgProvider } from "@/contexts/WorkspaceOrgContext";
 import WorkspaceSiteFilterPersistenceScopeBridge from "@/app/adminV2/workspace/WorkspaceSiteFilterPersistenceScopeBridge";
 import type { CSSProperties, ReactNode } from "react";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 
 interface AdminV2WorkspaceClientProvidersProps {
   children: ReactNode;
@@ -68,11 +68,10 @@ export default function AdminV2WorkspaceClientProviders({
     ? (initialEntityLabels as EntityLabelsMap)
     : undefined;
 
-  const bosRailCopilot = isBosRightRailCopilotEnabledClient();
   const workspaceScrollStyle = {
     "--ws-rail-sticky-top": "10px",
-    "--ws-shell-bottom-safe": bosRailCopilot ? "16px" : "120px",
-    ...(bosRailCopilot ? { "--adminv2-workspace-scroll-pad-y": "24px" } : {}),
+    "--ws-shell-bottom-safe": "16px",
+    "--adminv2-workspace-scroll-pad-y": "24px",
   } as CSSProperties;
 
   return (
@@ -97,17 +96,18 @@ export default function AdminV2WorkspaceClientProviders({
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <AdminDrawerProvider>
                     <DrawerCommandRailActionsProvider>
-                    <AdminV2ClickDebugInstaller />
-                    <div
-                      className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 overflow-auto px-4 py-3 sm:px-5"
-                      style={workspaceScrollStyle}
-                    >
-                      {children}
-                    </div>
-                    <OpportunityDrawerOpenCoordinator />
-                    <ContextualRecordOpenListener />
-                    <GlobalRecordSearchOpenListener />
-                    <AdminEntityDrawer />
+                      <AdminV2ClickDebugInstaller />
+                      <PlatformSurfacePerfDebugInstaller />
+                      <div
+                        className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 px-4 py-3 sm:px-5"
+                        style={workspaceScrollStyle}
+                      >
+                        {children}
+                      </div>
+                      <OpportunityDrawerOpenCoordinator />
+                      <ContextualRecordOpenListener />
+                      <GlobalRecordSearchOpenListener />
+                      <AdminEntityDrawer />
                     </DrawerCommandRailActionsProvider>
                   </AdminDrawerProvider>
                 </div>

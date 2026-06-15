@@ -23,11 +23,12 @@ describe("lifecycleBuilderConfig", () => {
         expect(lifecycleBuilderFromDepartmentMetadata({})).toEqual(emptyLifecycleBuilderV1());
     });
 
-    it("seeds default enrollment lifecycle with six stages (demo helper only)", () => {
+    it("seeds default enrollment process shell without pre-built stages", () => {
         const config = defaultLifecycleBuilderV1();
         const process = config.processes[0]!;
-        expect(process.name).toBe("Enrollment");
-        expect(stageKeysForProcess(process)).toHaveLength(6);
+        expect(process.name).toBe("Enrollment Process");
+        expect(stageKeysForProcess(process)).toHaveLength(0);
+        expect(process.tracks_v1).toBeUndefined();
     });
 
     it("createLifecycleProcess adds a new process with no stages", () => {
@@ -41,7 +42,9 @@ describe("lifecycleBuilderConfig", () => {
     it("rename and reorder stages", () => {
         let config = defaultLifecycleBuilderV1();
         const process = config.processes[0]!;
-        const stage = process.stages[1]!;
+        config = addStageToProcess(config, process.id, "Lead");
+        config = addStageToProcess(config, process.id, "Qualification");
+        const stage = config.processes[0]!.stages[1]!;
         config = renameStage(config, process.id, stage.id, "Qualify");
         config = reorderStage(config, process.id, stage.id, "up");
         const updated = config.processes[0]!.stages.find((s) => s.id === stage.id);
@@ -64,8 +67,9 @@ describe("lifecycleBuilderConfig", () => {
     });
 
     it("round-trips through parseLifecycleBuilderV1", () => {
-        const config = defaultLifecycleBuilderV1();
+        let config = defaultLifecycleBuilderV1();
+        config = addStageToProcess(config, config.processes[0]!.id, "Lead");
         const parsed = parseLifecycleBuilderV1(config);
-        expect(parsed?.processes[0]?.stages.length).toBe(6);
+        expect(parsed?.processes[0]?.stages.length).toBe(1);
     });
 });

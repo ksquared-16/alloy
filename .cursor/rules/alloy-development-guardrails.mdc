@@ -20,11 +20,11 @@ Use audit -> design -> build for substantial work.
 
 ## Before Editing
 
-- Inspect `docs/README.md`, `docs/execution/operating-doctrine.md`, and the relevant system/product docs before implementation.
+- Inspect `docs/README.md`, `docs/platform/governance/design-and-operational-doctrine.md`, and the relevant `docs/platform/**` topic file before implementation.
 - Search with `rg` for nearby patterns, route guards, tests, and migrations.
 - For admin/API work, identify the auth path: `getAdminContextCached`, `getAdminAccessContextCached`, `requireAdmin`, `requireAdminOrOps`, or a permission-specific guard.
 - For schema work, compare migrations with `docs/supabase/reference/*.csv`.
-- For behavior changes, update the matching active doc in the same change.
+- For behavior changes, update the matching **`docs/platform/**`** topic file (or `docs/governance/**` for agent/repo rules) in the same change.
 
 ## Hard Rules
 

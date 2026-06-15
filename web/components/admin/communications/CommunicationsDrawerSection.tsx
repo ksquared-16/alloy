@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import DrawerMessagingComposer from "@/components/adminV2/messaging/DrawerMessagingComposer";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
+import RecordCommunicationsTab from "@/app/adminV2/communications/recordTab/RecordCommunicationsTab";
 import MessagingThreadMessageBubble from "@/components/adminV2/messaging/MessagingThreadMessageBubble";
 import {
     supportsDrawerCommunicationsComposer,
@@ -303,7 +305,7 @@ function TruncatedMessageBody({
 }
 
 /** Canonical threads + messages + drawer composer (Cards 16–17, 26–29). */
-export default function CommunicationsDrawerSection({
+function CommunicationsDrawerSectionLegacy({
     apiEntityType,
     entityId,
     active = true,
@@ -1386,4 +1388,13 @@ export default function CommunicationsDrawerSection({
             </section>
         </div>
     );
+}
+
+
+export default function CommunicationsDrawerSection(props: CommunicationsDrawerSectionProps) {
+    // PKG-18B: mount the dark RecordCommunicationsTab when comms_v2_record_tab is on; legacy preserved when off.
+    if (isCommsV2FlagEnabled("comms_v2_record_tab")) {
+        return <RecordCommunicationsTab entityType={props.apiEntityType} entityId={props.entityId} />;
+    }
+    return <CommunicationsDrawerSectionLegacy {...props} />;
 }

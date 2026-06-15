@@ -5,8 +5,10 @@ import { perfQueueRowsClientSide } from "@/lib/perf/adminV2PerfLog";
  * Does not replace server correctness; TTL + explicit invalidation only.
  */
 
-export const QUEUE_ROW_CLIENT_CACHE_TTL_MS = 90_000;
-const STALE_REFRESH_AFTER_MS = 45_000;
+import { ADMINV2_QUEUE_ROW_CLIENT_CACHE_TTL_MS } from "@/lib/adminV2/runtime/adminV2UiSessionCacheTtl";
+
+export const QUEUE_ROW_CLIENT_CACHE_TTL_MS = ADMINV2_QUEUE_ROW_CLIENT_CACHE_TTL_MS;
+const STALE_REFRESH_AFTER_MS = Math.floor(ADMINV2_QUEUE_ROW_CLIENT_CACHE_TTL_MS / 2);
 
 /**
  * Max logical cache entries per work-unit session (insertion-order eviction).

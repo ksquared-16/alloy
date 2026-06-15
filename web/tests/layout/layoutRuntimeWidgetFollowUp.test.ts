@@ -5,7 +5,7 @@ import { resolveLayoutRuntimeWidgetKey } from "@/lib/layout/runtime/resolveLayou
 import type { LayoutDoc, LayoutItem } from "@/lib/layout/layoutV2";
 
 function widgetItem(refKey: string): LayoutItem {
-    return { kind: "widget", refKey, widget: { widgetKey: refKey } };
+    return { id: refKey, kind: "widget_placeholder" as const, refKey, widget: { widgetKey: refKey } };
 }
 
 describe("resolveLayoutRuntimeWidgetKey", () => {
@@ -17,7 +17,7 @@ describe("resolveLayoutRuntimeWidgetKey", () => {
     it("falls back to widget.widgetKey tail", () => {
         expect(
             resolveLayoutRuntimeWidgetKey({
-                kind: "widget",
+                id: "drawer-attention", kind: "widget_placeholder" as const, refKey: "drawer.attention",
                 widget: { widgetKey: "drawer.attention" },
             }),
         ).toBe("attention");
@@ -40,18 +40,25 @@ describe("mergeOpportunityLayoutRuntimeWidgetRecord", () => {
 describe("enrichLayoutDocPersonContactEditable", () => {
     it("marks person-contact fields editable when omitted from published doc", () => {
         const doc: LayoutDoc = {
+            formatVersion: 1,
+            surface: "drawer",
+            entityType: "opportunities",
             metadata: {},
             sections: [
                 {
+                    id: "main",
                     key: "main",
-                    label: "Main",
+                    title: "Main",
                     rows: [
                         {
+                            id: "row-1",
                             columns: [
                                 {
+                                    id: "col-1",
+                                    width: 12,
                                     items: [
-                                        { kind: "field", refKey: "person.first_name", label: "First" },
-                                        { kind: "field", refKey: "opportunity.source", label: "Source" },
+                                        { id: "person.first_name", kind: "field" as const, refKey: "person.first_name", label: "First" },
+                                        { id: "opportunity.source", kind: "field" as const, refKey: "opportunity.source", label: "Source" },
                                     ],
                                 },
                             ],

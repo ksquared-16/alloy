@@ -7,11 +7,14 @@ import {
     parseLifecycleStageFromMetadata,
 } from "@/lib/admin/statusDefinitionsResolve";
 import {
+    filterPersonStatusDefinitionsForDrawerProfile,
     filterPersonStatusDefinitionsForProfile,
     PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
     PERSON_STATUS_PROFILE_GENERIC,
+    resolvePersonStatusLabelForProfile,
     type PersonStatusProfileKey,
 } from "@/lib/admin/person/personStatusApplicability";
+import { OPPORTUNITY_CASE_STATUS_KEYS } from "@/lib/admin/statusReseed/statusMvpCatalog";
 
 function parsePersonStatusProfileParam(raw: string | null): PersonStatusProfileKey | null {
     const t = String(raw ?? "").trim().toLowerCase();
@@ -49,13 +52,22 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     try {
         const defs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, entityType, { activeOnly: true });
-        const filtered =
+        const profileFiltered =
             normalizedEntity === "persons" && statusProfile
                 ? filterPersonStatusDefinitionsForProfile(defs, statusProfile)
                 : defs;
+        const filtered =
+            normalizedEntity === "persons" && statusProfile
+                ? filterPersonStatusDefinitionsForDrawerProfile(profileFiltered, statusProfile)
+                : normalizedEntity === "opportunities"
+                  ? profileFiltered.filter((d) => d.is_active && OPPORTUNITY_CASE_STATUS_KEYS.has(d.status_key))
+                  : profileFiltered.filter((d) => d.is_active);
         const options = filtered.map((r) => ({
             value: r.status_key,
-            label: (r.status_label && String(r.status_label).trim()) || r.status_key,
+            label:
+                normalizedEntity === "persons" && statusProfile
+                    ? resolvePersonStatusLabelForProfile(r, statusProfile)
+                :   (r.status_label && String(r.status_label).trim()) || r.status_key,
             sort_order: r.sort_order ?? 0,
             lifecycle_stage: parseLifecycleStageFromMetadata(r.metadata),
             metadata: r.metadata ?? null,

@@ -1,9 +1,18 @@
 "use client";
 
-import React, { type CSSProperties, isValidElement, useEffect, useState } from "react";
+import React, { type CSSProperties, isValidElement, useEffect, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { shouldCloseAdminV2DrawerOnOutsideTarget } from "@/lib/adminV2/drawerOutsideClick";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
+import { BOS_ACTION_WORKSPACE_OPEN_ATTR } from "@/lib/bos/bosRailPresentationFlags";
+import {
+    DRAWER_AVAILABLE_RIGHT_CSS_VAR,
+    DRAWER_BACKDROP_LEFT_CSS_VAR,
+    DRAWER_BACKDROP_RIGHT_CSS_VAR,
+    DRAWER_COMPUTED_LEFT_CSS_VAR,
+    DRAWER_COMPUTED_WIDTH_CSS_VAR,
+    isDrawerGeometryProbeActive,
+    measureAndApplyDrawerWorkspaceGeometry,
+} from "@/lib/bos/drawerWorkspaceGeometry";
 import {
     LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
     LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW,
@@ -131,6 +140,28 @@ export default function Drawer({
         setPortalReady(true);
     }, []);
 
+    const isV2Early = variant === "adminV2";
+    const bosWorkspaceDrawerLayoutEarly = isV2Early;
+
+    useLayoutEffect(() => {
+        if (!isOpen || !bosWorkspaceDrawerLayoutEarly || !portalReady) return;
+        if (isDrawerGeometryProbeActive()) return;
+        measureAndApplyDrawerWorkspaceGeometry();
+    }, [isOpen, bosWorkspaceDrawerLayoutEarly, portalReady]);
+
+    useEffect(() => {
+        if (!isOpen || !bosWorkspaceDrawerLayoutEarly) return;
+        const root = document.documentElement;
+        const remeasure = () => {
+            if (isDrawerGeometryProbeActive()) return;
+            if (root.getAttribute(BOS_ACTION_WORKSPACE_OPEN_ATTR) === "true") return;
+            measureAndApplyDrawerWorkspaceGeometry(root);
+        };
+        const mo = new MutationObserver(remeasure);
+        mo.observe(root, { attributes: true, attributeFilter: [BOS_ACTION_WORKSPACE_OPEN_ATTR] });
+        return () => mo.disconnect();
+    }, [isOpen, bosWorkspaceDrawerLayoutEarly]);
+
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden";
@@ -182,21 +213,20 @@ export default function Drawer({
 
     const isV2 = variant === "adminV2";
     const isModal = isV2 && presentation === "modal";
-    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
-    const bosWorkspaceDrawerLayout = bosRailCopilot && isV2;
+    const bosWorkspaceDrawerLayout = isV2;
     const workspaceDrawerPanelStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
         {
-            left: "var(--adminv2-drawer-computed-left, 0px)",
-            width: "var(--adminv2-drawer-computed-width, 100%)",
-            maxWidth: "var(--adminv2-drawer-computed-width, 100%)",
+            left: `var(${DRAWER_COMPUTED_LEFT_CSS_VAR})`,
+            width: `var(${DRAWER_COMPUTED_WIDTH_CSS_VAR})`,
+            maxWidth: `var(${DRAWER_COMPUTED_WIDTH_CSS_VAR})`,
             transform: "none",
             right: "auto",
         }
     :   undefined;
     const workspaceDrawerBackdropStyle: CSSProperties | undefined = bosWorkspaceDrawerLayout ?
         {
-            left: "var(--adminv2-drawer-available-left, 0px)",
-            right: "calc(100vw - var(--adminv2-drawer-available-right, 100vw))",
+            left: `var(${DRAWER_BACKDROP_LEFT_CSS_VAR})`,
+            right: `calc(100vw - var(${DRAWER_BACKDROP_RIGHT_CSS_VAR}))`,
         }
     :   undefined;
     const cleaningRecordModalTone = isModal && recordModalTone === "cleaning-v2";
@@ -208,10 +238,10 @@ export default function Drawer({
               zIndex: zIndexPanel,
               backgroundColor: neutral.surface,
               color: neutral.textPrimary,
-              borderTopColor: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
-              borderRightColor: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
-              borderBottomColor: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
-              borderLeftColor: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
+              borderTopColor: isV2 ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
+              borderRightColor: isV2 ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
+              borderBottomColor: isV2 ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
+              borderLeftColor: isV2 ? LAYOUT_RUNTIME_DRAWER_OUTER_BORDER : derived.border,
               boxShadow: cleaningRecordModalTone ? LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW : derived.cardShadow,
               ...(workspaceDrawerPanelStyle ?? {}),
           }
@@ -222,9 +252,9 @@ export default function Drawer({
                   ? {
                         backgroundColor: neutral.surface,
                         color: neutral.textPrimary,
-                        borderTopColor: derived.border,
-                        borderRightColor: derived.border,
-                        borderBottomColor: derived.border,
+                        borderTopColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
+                        borderRightColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
+                        borderBottomColor: LAYOUT_RUNTIME_DRAWER_OUTER_BORDER,
                         borderLeftColor: leftAccent ?? palette.midnightForge,
                         borderLeftWidth: 4,
                         borderLeftStyle: "solid",
@@ -524,8 +554,10 @@ export default function Drawer({
         isModal ? (
             <>
                 <div
-                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-modal-dim pointer-events-auto fixed bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ${
-                        bosWorkspaceDrawerLayout ? "top-0 bottom-0" : "inset-0"
+                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-modal-dim pointer-events-auto fixed transition-opacity duration-200 ${
+                        bosWorkspaceDrawerLayout ?
+                            "adminv2-drawer-workspace-backdrop-band"
+                        :   "inset-0 bg-black/40 backdrop-blur-[2px]"
                     }`}
                     style={{
                         zIndex: zIndexBackdrop,
@@ -541,7 +573,7 @@ export default function Drawer({
                     data-adminv2-drawer="true"
                     data-adminv2-record-modal="true"
                     data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
-                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${bosModalDrawerLayout ? "adminv2-drawer-modal-panel--bos-rail" : "left-1/2 w-[min(calc(100vw-1.5rem),80rem)] -translate-x-1/2"} ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
+                    className={`adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${bosModalDrawerLayout ? "adminv2-drawer-modal-panel--bos-rail" : "left-1/2 w-[min(calc(100vw-1.5rem),80rem)] -translate-x-1/2"} ${cleaningRecordModalTone ? "min-h-[min(520px,50%)]" : ""} ${bosModalDrawerLayout ? "" : (panelClassName ?? "max-w-5xl")}`}
                     style={
                         cleaningRecordModalTone && recordModalContextStyle
                             ? { ...recordModalContextStyle, ...panelStyle, zIndex: zIndexPanel }
@@ -554,8 +586,10 @@ export default function Drawer({
         ) : (
             <>
                 <div
-                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-sidebar-dim pointer-events-auto fixed bg-black/50 ${
-                        bosWorkspaceDrawerLayout ? "top-0 bottom-0" : "inset-0"
+                    className={`adminv2-drawer-backdrop-hit adminv2-drawer-sidebar-dim pointer-events-auto fixed ${
+                        bosWorkspaceDrawerLayout ?
+                            "adminv2-drawer-workspace-backdrop-band"
+                        :   "inset-0 bg-black/50"
                     }`}
                     style={{
                         zIndex: zIndexBackdrop,

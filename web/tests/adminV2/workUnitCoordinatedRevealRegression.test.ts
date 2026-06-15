@@ -23,16 +23,16 @@ describe("workUnitCoordinatedRevealRegression", () => {
         expect(block).toContain("!queue.rowsHeld");
     });
 
-    it("warm page reveal policy requires settled lane", () => {
+    it("warm page reveal policy requires critical bundle before first paint", () => {
         const policy = readSrc("lib/adminV2/workUnitPageRevealPolicy.ts");
         expect(policy).not.toContain("page_seeded_from_cache");
-        expect(policy).toContain("lane_reveal_settled");
+        expect(policy).toContain("critical_bundle_ready");
     });
 });
 
 describe("drawerCoordinatedRevealRegression (source)", () => {
     it("opportunity releases below-fold lock on primary coordinated reveal", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain(
             "opportunityDrawerOverviewRevealReady && opportunityDrawerPrimaryContractSatisfied"
         );
@@ -40,7 +40,7 @@ describe("drawerCoordinatedRevealRegression (source)", () => {
     });
 
     it("child→opportunity restore reveals below-fold for header actions", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain('prev.type === "persons"');
         expect(drawer).toContain("restoreCanRenderFrame");
         expect(drawer).toContain("setOpportunityDrawerBelowFoldRevealed(true)");

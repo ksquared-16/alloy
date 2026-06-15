@@ -31,19 +31,19 @@ describe("drawer summary strip boundary flag", () => {
     it("defaults off in production deploy signals", () => {
         process.env.NEXT_PUBLIC_APP_ENV = "production";
         process.env.VERCEL_ENV = "production";
-        process.env.NODE_ENV = "test";
+        vi.stubEnv("NODE_ENV", "test");
         expect(isDrawerSummaryStripBoundaryEnabledClient()).toBe(false);
         expect(isDrawerSummaryStripBoundaryEnabledServer()).toBe(false);
     });
 
     it("defaults on for staging and preview deploys", () => {
         process.env.NEXT_PUBLIC_APP_ENV = "staging";
-        process.env.NODE_ENV = "production";
+        vi.stubEnv("NODE_ENV", "production");
         expect(isDrawerSummaryStripBoundaryEnabledClient()).toBe(true);
 
         clearBoundaryFlags();
         process.env.VERCEL_ENV = "preview";
-        process.env.NODE_ENV = "production";
+        vi.stubEnv("NODE_ENV", "production");
         expect(isDrawerSummaryStripBoundaryEnabledServer()).toBe(true);
     });
 

@@ -1,10 +1,9 @@
 /**
- * queue_membership_v1 — lifecycle builder stage queue membership contract (Phase A).
+ * queue_membership_v1 — generic parser and types only.
  *
- * Types + parser + enrollment defaults only. No runtime queue routing or save-path wiring.
+ * Template-specific defaults live under lib/businessProcessTemplates (not imported here).
+ * Resolution from stage metadata: @/lib/businessProcesses/resolveQueueMembership
  */
-
-import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 
 export type QueueMembershipSubjectType = "case" | "child" | "candidate";
 
@@ -54,15 +53,6 @@ const LOCATION_SCOPE_SOURCES = new Set<QueueMembershipLocationScopeSource>([
 const PLACEMENT_SCOPES = new Set<QueueMembershipPlacementScope>([
     "active_only",
     "active_and_paused",
-]);
-
-const ENROLLMENT_DEFAULT_STAGE_KEYS = new Set([
-    "lead",
-    "qualification",
-    "tour",
-    "waitlist",
-    "enrollment",
-    "enrolled",
 ]);
 
 function trimNonEmptyString(value: unknown): string | null {
@@ -167,102 +157,4 @@ export function parseQueueMembershipV1(raw: unknown): QueueMembershipV1 | null {
     }
 
     return membership;
-}
-
-type EnrollmentDefaultSpec = Pick<
-    QueueMembershipV1,
-    | "subject_type"
-    | "count_unit"
-    | "included_disposition_keys"
-    | "included_status_keys"
-    | "location_scope_source"
->;
-
-const ENROLLMENT_STAGE_DEFAULTS: Record<string, EnrollmentDefaultSpec> = {
-    lead: {
-        subject_type: "case",
-        count_unit: "cases",
-        included_disposition_keys: [],
-        included_status_keys: ["new_inquiry"],
-    },
-    qualification: {
-        subject_type: "case",
-        count_unit: "cases",
-        included_disposition_keys: ["needs_qualification", "qualified"],
-    },
-    tour: {
-        subject_type: "child",
-        count_unit: "enrollment_tracks",
-        location_scope_source: "ocm_site",
-        included_disposition_keys: [
-            "tour_requested",
-            "tour_scheduled",
-            "tour_completed",
-            "decision_pending",
-        ],
-    },
-    waitlist: {
-        subject_type: "candidate",
-        count_unit: "candidates",
-        location_scope_source: "placement_site",
-        included_disposition_keys: ["waitlisted", "waitlist_paused"],
-    },
-    enrollment: {
-        subject_type: "child",
-        count_unit: "enrollment_tracks",
-        location_scope_source: "ocm_site",
-        included_disposition_keys: [
-            "offer_pending",
-            "registration_pending",
-            "paperwork_pending",
-            "start_date_scheduled",
-        ],
-    },
-    enrolled: {
-        subject_type: "child",
-        count_unit: "enrollment_tracks",
-        location_scope_source: "ocm_site",
-        included_disposition_keys: ["enrolled"],
-    },
-};
-
-/** Locked default queue_membership_v1 for canonical enrollment builder stages. */
-export function defaultQueueMembershipForEnrollmentStage(stageKey: string): QueueMembershipV1 | null {
-    const normalized = stageKey.trim();
-    if (!normalized || !ENROLLMENT_DEFAULT_STAGE_KEYS.has(normalized)) return null;
-
-    const spec = ENROLLMENT_STAGE_DEFAULTS[normalized];
-    if (!spec) return null;
-
-    return {
-        version: 1,
-        lifecycle_key: ENROLLMENT_PROCESS_KEY,
-        stage_key: normalized,
-        subject_type: spec.subject_type,
-        count_unit: spec.count_unit,
-        included_disposition_keys: [...spec.included_disposition_keys],
-        ...(spec.location_scope_source ? { location_scope_source: spec.location_scope_source } : {}),
-        ...(spec.included_status_keys?.length ?
-            { included_status_keys: [...spec.included_status_keys] }
-        :   {}),
-    };
-}
-
-/**
- * Resolve queue membership for a builder stage record.
- * Prefers explicit valid queue_membership_v1; falls back to enrollment defaults.
- */
-export function resolveQueueMembershipForStage(
-    stageConfig: unknown,
-    fallbackStageKey: string,
-): QueueMembershipV1 | null {
-    if (stageConfig != null && typeof stageConfig === "object" && !Array.isArray(stageConfig)) {
-        const record = stageConfig as Record<string, unknown>;
-        if (record.queue_membership_v1 !== undefined) {
-            const parsed = parseQueueMembershipV1(record.queue_membership_v1);
-            if (parsed) return parsed;
-        }
-    }
-
-    return defaultQueueMembershipForEnrollmentStage(fallbackStageKey);
 }

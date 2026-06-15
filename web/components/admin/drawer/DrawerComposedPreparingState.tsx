@@ -1,6 +1,6 @@
 "use client";
 
-import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
+import { BosExecutionLoader, BOS_EXECUTION_LOADER_PHASES_DRAWER_PREP } from "@/components/admin/actions/BosExecutionLoader";
 import type { ComposedDrawerPreparingCopy } from "@/lib/admin/drawer/composedDrawerPayload";
 
 /** Premium centered preparing state — intentional hold until composed payload is ready. */
@@ -20,13 +20,16 @@ export default function DrawerComposedPreparingState({
             data-drawer-composed-preparing="true"
             data-testid={dataTestId}
         >
-            <AdminV2DrawerLoadingState
-                title={copy.title}
-                description={copy.description}
-                density="panel"
-                tone="record"
-                className="w-full max-w-md shadow-md"
-            />
+            <div className="w-full max-w-md rounded-xl border border-alloy-stone/12 bg-white px-5 py-6 shadow-md">
+                <BosExecutionLoader
+                    variant="drawer"
+                    title={copy.title}
+                    subtitle={copy.description}
+                    steps={BOS_EXECUTION_LOADER_PHASES_DRAWER_PREP}
+                    showProgress
+                    data-testid="drawer-composed-preparing-loader"
+                />
+            </div>
         </div>
     );
 }

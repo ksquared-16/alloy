@@ -132,22 +132,32 @@ export async function persistQueueMembershipForLifecycleStageSave(
         departmentId: string;
         stageKey: string;
         metadata: Record<string, unknown>;
+        explicitMembership?: QueueMembershipV1 | null;
     },
 ): Promise<QueueMembershipPersistenceResult> {
     const stageKey = params.stageKey.trim();
-    const stageRaw = findEnrollmentStageRaw(params.metadata, stageKey);
-    const decision = membershipSeedDecision(stageKey, stageRaw ?? {});
-
     let metadata = params.metadata;
     let builderStageUpdated = false;
     let membership: QueueMembershipV1 | null = null;
+    let stageAction: QueueMembershipSeedStageActionKind;
 
-    if (decision.action === "seeded" && decision.membership) {
-        membership = decision.membership;
+    if (params.explicitMembership) {
+        membership = params.explicitMembership;
         metadata = applyMembershipToBuilderStage(metadata, stageKey, membership);
         builderStageUpdated = true;
-    } else if (decision.action === "skipped_has_explicit" && decision.membership_before) {
-        membership = decision.membership_before;
+        stageAction = "skipped_has_explicit";
+    } else {
+        const stageRaw = findEnrollmentStageRaw(params.metadata, stageKey);
+        const decision = membershipSeedDecision(stageKey, stageRaw ?? {});
+
+        if (decision.action === "seeded" && decision.membership) {
+            membership = decision.membership;
+            metadata = applyMembershipToBuilderStage(metadata, stageKey, membership);
+            builderStageUpdated = true;
+        } else if (decision.action === "skipped_has_explicit" && decision.membership_before) {
+            membership = decision.membership_before;
+        }
+        stageAction = decision.action;
     }
 
     if (builderStageUpdated) {
@@ -162,7 +172,7 @@ export async function persistQueueMembershipForLifecycleStageSave(
     return {
         metadata,
         membership,
-        stageAction: decision.action,
+        stageAction,
         builderStageUpdated,
     };
 }

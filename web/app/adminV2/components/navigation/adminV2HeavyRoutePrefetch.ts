@@ -33,6 +33,7 @@ const HEAVY_ROUTE_PREFIXES = [
     "/adminv2",
     "/admin/opportunities",
     "/admin/system/work-units",
+    "/legacy-admin",
 ] as const;
 
 export function shouldDisableAdminV2LinkPrefetch(href: string): boolean {

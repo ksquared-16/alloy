@@ -14,6 +14,7 @@ import {
     type OperationalProposalFrameVariant,
 } from "@/lib/adminV2/bos/operationalProposalPresentation";
 import type { BosCapabilityKey, BosProposalStatus, BosRiskLevel } from "@/lib/bos/bosCapability";
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import { neutral, semantic } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -173,10 +174,11 @@ export default function OperationalProposalCardFrame(props: OperationalProposalC
             <RegionBlock region="header" className="space-y-1">
                 {showEyebrow ? (
                     <p
-                        className="text-[9px] font-semibold uppercase tracking-[0.12em]"
+                        className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em]"
                         style={{ color: CMD.textLabel }}
                         data-operational-proposal-eyebrow="true"
                     >
+                        <BosMark size="sm" className="h-3 w-3" horizon />
                         Operational proposal
                     </p>
                 ) : null}

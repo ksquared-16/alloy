@@ -42,7 +42,7 @@ export function buildCanonicalWorkUnitOperationalBootstrapUrl(params: WorkUnitBo
         department_id: params.departmentId,
         include_previews: "false",
         count_mode: "exact",
-        summary_mode: "all",
+        summary_mode: "initial",
         limit: "3",
         omit_total_count: "true",
         primary_row_limit: String(WORK_UNIT_QUEUE_ROWS_FETCH_MIN),

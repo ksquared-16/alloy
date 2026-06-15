@@ -13,6 +13,7 @@
  */
 
 import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
+import { DRAWER_OVERVIEW_SHELL_GRID } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -27,9 +28,9 @@ export const LEAD_OVERVIEW_SECTION_KEYS = {
 
 /** Composition shell grid spans (12-col) — placement contract, not field content. */
 export const LEAD_OVERVIEW_SHELL_GRID = {
-    household: 3,
-    enrollment: 7,
-    rightRail: 2,
+    household: DRAWER_OVERVIEW_SHELL_GRID.leftColumn,
+    enrollment: DRAWER_OVERVIEW_SHELL_GRID.mainColumn,
+    rightRail: DRAWER_OVERVIEW_SHELL_GRID.rightRail,
 } as const;
 
 /** Section eyebrow labels for composition cards (presentation only — not field content). */

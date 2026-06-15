@@ -20,7 +20,6 @@ import { WorkUnitAboveFoldActionsRail } from "@/app/adminV2/components/workspace
 import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 
 type Props = {
   model: WorkUnitWorkspaceModel;
@@ -34,7 +33,8 @@ type Props = {
   otherPillSectionKey?: string | null;
   kpiStripPlaceholder: boolean;
   kpiStripSkeletonCellCount?: number;
-  primaryFooterSlot?: ReactNode;
+  /** Workflow telemetry card in the command rail (between Actions and BOS). */
+  commandRailTelemetrySlot?: ReactNode;
   opportunityDrawerWorkspaceContext?: OpportunityDrawerIntentContext | null;
   queueRowOpenPendingOpportunityId?: string | null;
   queuePillPendingKey?: string | null;
@@ -53,7 +53,7 @@ export default function WorkUnitWorkspace({
   otherPillSectionKey = null,
   kpiStripPlaceholder,
   kpiStripSkeletonCellCount: _kpiStripSkeletonCellCount,
-  primaryFooterSlot,
+  commandRailTelemetrySlot = null,
   opportunityDrawerWorkspaceContext = null,
   queueRowOpenPendingOpportunityId = null,
   queuePillPendingKey = null,
@@ -89,8 +89,6 @@ export default function WorkUnitWorkspace({
   const statusLine = li?.laneStatusLine?.trim() ?? "";
   const recLine = li?.recommendedActionLine?.trim() ?? "";
   const hasLaneStrip = Boolean(statusLine || recLine);
-  const bosRailCopilot = isBosRightRailCopilotEnabledClient();
-
   const primaryQueue = useMemo(
     () => ({
       ...model.primaryQueue,
@@ -107,7 +105,8 @@ export default function WorkUnitWorkspace({
       rootClassName="adminv2-ws-work-unit adminv2-ws-wu-v2"
       style={wuShellStyle}
       railAriaLabel="Decisions and actions"
-      showRail={aboveFold.actions_rail.visible || bosRailCopilot}
+      showRail
+      commandRailTelemetrySlot={commandRailTelemetrySlot}
       railContent={
         <WorkUnitAboveFoldActionsRail slot={aboveFold.actions_rail} onAction={onAction} />
       }
@@ -240,11 +239,6 @@ export default function WorkUnitWorkspace({
           {model.workSummary ? (
             <div className="adminv2-ws-dept-v2-workflows-strip">
               <WorkBlock work={model.workSummary} onAction={onAction} mode="summary" surface="work_unit" />
-            </div>
-          ) : null}
-          {primaryFooterSlot ? (
-            <div className="adminv2-ws-dept-v2-workflows-strip" data-ws-lane-kind="automation_workflows">
-              {primaryFooterSlot}
             </div>
           ) : null}
         </>

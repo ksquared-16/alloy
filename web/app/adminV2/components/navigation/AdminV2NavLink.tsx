@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { type CSSProperties, type MouseEvent, type ReactNode } from "react";
+import { type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react";
 import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 
@@ -22,6 +22,8 @@ export type AdminV2NavLinkProps = {
     highlightFromActiveOnly?: boolean;
     "aria-label"?: string;
     onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
+    onMouseEnter?: (e: MouseEvent<HTMLAnchorElement>) => void;
+    onFocus?: (e: FocusEvent<HTMLAnchorElement>) => void;
 };
 
 /**
@@ -37,6 +39,8 @@ export function AdminV2NavLink({
     style,
     title,
     onClick,
+    onMouseEnter,
+    onFocus,
     "aria-label": ariaLabel,
 }: AdminV2NavLinkProps) {
     const pathname = usePathname();
@@ -69,6 +73,8 @@ export function AdminV2NavLink({
             aria-label={ariaLabel}
             aria-current={isHighlighted ? "page" : undefined}
             onClick={handleClick}
+            onMouseEnter={onMouseEnter}
+            onFocus={onFocus}
         >
             <span className="adminv2-nav-link__inner">{children}</span>
         </a>

@@ -1,3 +1,8 @@
+import {
+    formatHouseholdLeadDisplayTitle,
+    isHouseholdFormattedLeadName,
+} from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
+
 function trimOrNull(value: unknown): string | null {
     if (value == null) return null;
     const s = String(value).trim();
@@ -16,13 +21,19 @@ export function stripHouseholdWording(label: string): string {
 }
 
 /**
- * Opportunity inquiry drawer title — `{configured label} — {household name}`.
+ * Opportunity inquiry drawer title — household-oriented (`{LastName} Family`).
  * Uses household/customer identity only (never primary contact person name).
  */
 export function formatOpportunityInquiryDrawerTitle(
     data: Record<string, unknown>,
     opportunitySingular: string
 ): string {
+    const entityLabel = trimOrNull(opportunitySingular) || "Lead";
+    const recordName = trimOrNull(data.name) ?? trimOrNull(data.title);
+    if (recordName && isHouseholdFormattedLeadName(recordName)) {
+        return recordName;
+    }
+
     const ident = (data._identity as Record<string, unknown> | null) ?? null;
     const householdLabel =
         ident?.household && typeof ident.household === "object"
@@ -33,16 +44,12 @@ export function formatOpportunityInquiryDrawerTitle(
         ident?.inquiry && typeof ident.inquiry === "object"
             ? trimOrNull((ident.inquiry as { title?: unknown }).title)
             : null;
-    const recordName = trimOrNull(data.name) ?? trimOrNull(data.title);
 
-    const householdName =
+    const householdBase =
         stripHouseholdWording(householdLabel ?? "") ||
         stripHouseholdWording(customerName ?? "") ||
         stripHouseholdWording(inquiryTitle ?? "") ||
         stripHouseholdWording(recordName ?? "");
 
-    const entityLabel = trimOrNull(opportunitySingular) || "Lead";
-    if (!householdName) return entityLabel;
-    if (householdName.toLowerCase() === entityLabel.toLowerCase()) return entityLabel;
-    return `${entityLabel} — ${householdName}`;
+    return formatHouseholdLeadDisplayTitle(householdBase, entityLabel);
 }

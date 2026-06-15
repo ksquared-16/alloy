@@ -1,6 +1,14 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import {
+    BUSINESS_PROCESS_CREATE_DESCRIPTION_LABEL,
+    BUSINESS_PROCESS_CREATE_NAME_LABEL,
+    BUSINESS_PROCESS_CREATE_NAME_REQUIRED,
+    BUSINESS_PROCESS_CREATE_SUBMIT,
+    BUSINESS_PROCESS_CREATE_SUBTITLE,
+    BUSINESS_PROCESS_CREATE_TITLE,
+} from "@/lib/lifecycle/businessProcessUiLabels";
 import { LIFECYCLE_PRIMARY_ENTITIES } from "@/lib/lifecycle/lifecycleConfiguration";
 import type { LifecyclePrimaryEntityKey } from "@/lib/lifecycle/lifecycleConfiguration";
 import { createLifecycleViaBuilderPath } from "@/lib/lifecycle/clientCreateLifecycleViaBuilder";
@@ -41,7 +49,7 @@ export default function LifecycleCreateForm({
     const submit = useCallback(async () => {
         const trimmed = name.trim();
         if (!trimmed) {
-            setError("Lifecycle name is required");
+            setError(BUSINESS_PROCESS_CREATE_NAME_REQUIRED);
             return;
         }
         if (description.length > LIFECYCLE_DESCRIPTION_MAX_CHARS) {
@@ -111,10 +119,8 @@ export default function LifecycleCreateForm({
             className="mx-auto max-w-lg rounded-xl border border-alloy-forge/12 bg-white/90 p-6 shadow-sm"
             data-testid="lifecycle-create-form"
         >
-            <h2 className="text-base font-semibold text-alloy-midnight">Create a Lifecycle</h2>
-            <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/60">
-                Name the process you are building. You will add stages next.
-            </p>
+            <h2 className="text-base font-semibold text-alloy-midnight">{BUSINESS_PROCESS_CREATE_TITLE}</h2>
+            <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/60">{BUSINESS_PROCESS_CREATE_SUBTITLE}</p>
 
             {error ? (
                 <p className="mt-3 text-xs text-red-700" role="alert">
@@ -124,7 +130,7 @@ export default function LifecycleCreateForm({
 
             <div className="mt-4 space-y-3">
                 <label className="block text-xs font-medium text-alloy-midnight/70">
-                    Lifecycle name
+                    {BUSINESS_PROCESS_CREATE_NAME_LABEL}
                     <input
                         type="text"
                         className="mt-1 w-full rounded-md border border-alloy-forge/20 bg-white px-3 py-2 text-sm"
@@ -135,7 +141,7 @@ export default function LifecycleCreateForm({
                     />
                 </label>
                 <label className="block text-xs font-medium text-alloy-midnight/70">
-                    Lifecycle description (optional)
+                    {BUSINESS_PROCESS_CREATE_DESCRIPTION_LABEL}
                     <textarea
                         className="mt-1 w-full rounded-md border border-alloy-forge/20 bg-white px-3 py-2 text-sm"
                         rows={2}
@@ -174,7 +180,7 @@ export default function LifecycleCreateForm({
                     onClick={() => void submit()}
                     data-testid="lifecycle-create-lifecycle"
                 >
-                    {busy ? "Creating…" : "Create Lifecycle"}
+                    {busy ? "Creating…" : BUSINESS_PROCESS_CREATE_SUBMIT}
                 </button>
                 {showCancel && onCancel ? (
                     <button

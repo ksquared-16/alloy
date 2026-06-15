@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import LifecycleCatalogSelect from "@/components/adminV2/settings/lifecycle/LifecycleCatalogSelect";
+import LifecycleProcessCatalogCards from "@/components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards";
 import LifecycleActivationBoard from "@/components/adminV2/settings/lifecycle/LifecycleActivationBoard";
 import type { LifecycleCatalogEntry } from "@/lib/lifecycle/lifecycleCatalogTypes";
 import { lifecycleCatalogId } from "@/lib/lifecycle/lifecycleCatalog";
@@ -41,7 +41,7 @@ export default function LifecycleBuilderPrimary() {
         try {
             const res = await fetch("/api/admin/lifecycle-catalog", lifecycleCatalogFetchInit());
             const j = (await res.json().catch(() => ({}))) as { items?: LifecycleCatalogEntry[]; error?: string };
-            if (!res.ok) throw new Error(j.error ?? "Failed to load Lifecycles");
+            if (!res.ok) throw new Error(j.error ?? "Failed to load processes");
             const items = j.items ?? [];
             setCatalog(items);
             return items;
@@ -206,16 +206,18 @@ export default function LifecycleBuilderPrimary() {
                 </p>
             ) : null}
 
-            <LifecycleCatalogSelect
-                items={catalog}
-                selectedId={selectedCatalogId}
-                loading={catalogLoading}
-                onSelect={selectCatalogEntry}
-                onCreateNew={() => {
-                    setCreatingNew(true);
-                    setIdentity(null);
-                }}
-            />
+            {!creatingNew && !selectedCatalogEntry ? (
+                <LifecycleProcessCatalogCards
+                    items={catalog}
+                    selectedId={selectedCatalogId}
+                    loading={catalogLoading}
+                    onSelect={selectCatalogEntry}
+                    onCreateNew={() => {
+                        setCreatingNew(true);
+                        setIdentity(null);
+                    }}
+                />
+            ) : null}
 
             {creatingNew || selectedCatalogEntry ? (
                 <LifecycleActivationBoard
@@ -273,6 +275,25 @@ export default function LifecycleBuilderPrimary() {
                             : undefined
                     }
                     repairingVisibility={repairingId === selectedCatalogEntry?.id}
+                    catalogSummary={
+                        selectedCatalogEntry
+                            ? {
+                                  trackCount: selectedCatalogEntry.track_count,
+                                  stageCount: selectedCatalogEntry.stage_count,
+                                  queueCount: selectedCatalogEntry.work_unit_count,
+                              }
+                            : null
+                    }
+                    onBackToCatalog={
+                        creatingNew
+                            ? () => {
+                                  setCreatingNew(false);
+                                  setIdentity(null);
+                              }
+                            : () => {
+                                  setIdentity(null);
+                              }
+                    }
                 />
             ) : null}
 

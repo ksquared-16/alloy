@@ -413,7 +413,7 @@ describe("composedDrawerPayload known-empty doctrine", () => {
 
 describe("composedDrawerPayload wiring", () => {
     it("AdminEntityDrawer uses payload-first preparing state instead of empty body", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain("DrawerComposedPreparingState");
         expect(drawer).toContain("personDrawerComposedPayloadIsReady");
         expect(drawer).toContain("opportunityComposedPreparing");
@@ -424,13 +424,13 @@ describe("composedDrawerPayload wiring", () => {
     });
 
     it("restores opportunity header actions from cache on Back to Lead / Edit on Lead", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain("peekOpportunityDrawerHeaderActionsCache(next.id)");
         expect(drawer).toContain("warmCache?.resolvedSig === actionsUrl");
     });
 
     it("AdminEntityDrawer has composed fetch completion sentinel to stop infinite refetch", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain("personDrawerComposedFetchedRef");
         // Sentinel is now keyed on context key (id + surface + sections), not bare drawer.id
         expect(drawer).toContain("personDrawerComposedContextKey");
@@ -441,7 +441,7 @@ describe("composedDrawerPayload wiring", () => {
     });
 
     it("predictive prefetch is triggered from opportunity for linked persons", () => {
-        const drawer = readSrc("components/admin/AdminEntityDrawer.tsx");
+        const drawer = readSrc("components/admin/AdminEntityDrawerLegacy.tsx");
         expect(drawer).toContain("prefetchLinkedPersonsFromOpportunityRecord");
         const ids = prefetchLinkedPersonsFromOpportunityRecord(
             {

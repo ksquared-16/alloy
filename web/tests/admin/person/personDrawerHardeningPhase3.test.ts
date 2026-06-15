@@ -151,7 +151,7 @@ describe("person drawer hardening phase 3", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).toContain("workUnitPageSeededFromCache");
         expect(page).toContain("workUnitPageContentReady");
-        expect(page).toMatch(/!workUnitPageContentReady[\s\S]*WorkUnitPageLoadingGate/);
+        expect(page).toMatch(/!workUnitPageContentReady[\s\S]*WorkUnitWorkspaceColdShell/);
     });
 
     it("parent summary and employee placement omit doctrine and On file copy", () => {

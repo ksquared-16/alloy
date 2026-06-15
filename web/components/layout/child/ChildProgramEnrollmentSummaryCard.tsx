@@ -25,6 +25,7 @@ type Props = {
 export default function ChildProgramEnrollmentSummaryCard({ record }: Props) {
     const program = pickLine(
         record["inquiry_child.program"],
+        record["child.program"],
         record["inquiry_child.desired_program_type"],
         record.program_label,
     );

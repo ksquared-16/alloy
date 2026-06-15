@@ -86,6 +86,17 @@
 /* Work-unit surface: tighter vertical rhythm; queue records scroll inside lane shell on full route (`.adminv2-ws-work-unit`). */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
   --ws-dept-section-gap: 12px;
+  /*
+   * Right rail edge alignment — reclaim ~16–32px for primary queue without shrinking command rail width.
+   * See work-unit-layout-doctrine.md § Horizontal layout polish.
+   */
+  --ws-wu-contain-padding-inline-end: 0px;
+  --ws-wu-workbench-gutter: 14px;
+  /* Queue record icon doctrine — metadata icons neutral; pine reserved for BOS/actions only. */
+  --ws-wu-queue-icon-primary-size: 16px;
+  --ws-wu-queue-icon-secondary-size: 14px;
+  --ws-wu-queue-icon-muted-color: color-mix(in srgb, var(--d-fg, #273f52) 44%, transparent);
+  --ws-wu-queue-icon-neutral-color: color-mix(in srgb, var(--d-fg, #273f52) 52%, transparent);
 }
 
 /* Collapsed nav frees ~224px — left-align contain and widen cap so KPI/queue uses reclaimed space. */
@@ -108,12 +119,35 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
-  /* Reserve header/control deck + bottom BOS command bar; records scroll inside `.adminv2-ws-wu-queue-list-shell`. */
-  --ws-wu-queue-records-scroll-top-offset: 17rem;
+  /*
+   * Work Unit Layout Doctrine V3 (frozen June 2026) — compact queue density + rail-aligned lane.
+   * See docs/system/work-unit-layout-doctrine.md § Approved Layout Baseline
+   */
+  --ws-wu-queue-row-min-height: 37px;
+  --ws-wu-queue-records-scroll-top-offset: 14rem;
+  --ws-wu-queue-row-stack-estimate: clamp(2.45rem, calc(var(--ws-wu-queue-row-min-height) + 0.5rem), 3.35rem);
+  --ws-wu-queue-row-gap: 5px;
+  --ws-wu-queue-visible-rows-target: 6;
+  --ws-wu-queue-records-scroll-height-cap: 9999px;
   --ws-wu-queue-records-scroll-max-height: min(
-    calc(100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 120px)),
-    640px
+    calc(
+      var(--ws-wu-queue-visible-rows-target) * var(--ws-wu-queue-row-stack-estimate) +
+        (var(--ws-wu-queue-visible-rows-target) - 1) * var(--ws-wu-queue-row-gap)
+    ),
+    calc(100vh - var(--ws-wu-queue-records-scroll-top-offset) - var(--ws-shell-bottom-safe, 16px))
   );
+}
+
+@media (min-width: 1440px) {
+  [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
+    --ws-wu-queue-visible-rows-target: 7;
+  }
+}
+
+@media (min-width: 1280px) and (min-height: 900px) {
+  [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
+    --ws-wu-queue-visible-rows-target: 7;
+  }
 }
 
 /* Work-unit route loading: subtle enrollment/dept pine accent (quieter than department cold shell). */
@@ -294,7 +328,7 @@
 }
 
 .adminv2-ws-paired-oper-panel--attention>.adminv2-ws-queue-header.adminv2-ws-paired-oper-panel__header {
-  border-bottom-color: color-mix(in srgb, #bc4300 22%, var(--d-border));
+  border-bottom: none;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body {
@@ -480,6 +514,10 @@
   box-sizing: border-box;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-contain {
+  padding-inline: var(--ws-dept-contain-padding-x) var(--ws-wu-contain-padding-inline-end, var(--ws-dept-contain-padding-x));
+}
+
 /* Page split: primary (~75%) | command (~25%), full-height stretch */
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-page-split,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-page-split,
@@ -491,6 +529,10 @@
   grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
   column-gap: var(--ws-dept-workbench-gutter);
   align-items: stretch;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-page-split {
+  column-gap: var(--ws-wu-workbench-gutter, var(--ws-dept-workbench-gutter));
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-page-split.adminv2-ws-dept-v2-page-split--no-rail,
@@ -549,7 +591,7 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck {
   flex-shrink: 0;
-  border: 1px solid color-mix(in srgb, var(--d-border) 72%, transparent);
+  border: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
   border-right: 2px solid var(--vc-header-rail-accent, color-mix(in srgb, var(--d-border) 58%, transparent));
   border-radius: 8px;
   background: var(--ws-dept-surface-solid);
@@ -582,7 +624,6 @@
 }
 
 [data-adminv2-workspace-root-shell="true"][data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
-  border-bottom-color: color-mix(in srgb, var(--d-brand) 14%, var(--d-border));
   background: linear-gradient(180deg,
       color-mix(in srgb, #ffffff 99%, var(--d-brand)) 0%,
       transparent 75%);
@@ -602,7 +643,6 @@
 }
 
 [data-production-workspace-bridge="true"][data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
-  border-bottom-color: color-mix(in srgb, var(--d-brand) 12%, color-mix(in srgb, var(--d-border) 55%, transparent));
   background: linear-gradient(180deg,
       color-mix(in srgb, #ffffff 98%, var(--d-brand)) 0%,
       transparent 72%);
@@ -623,7 +663,6 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
-  border-bottom-color: color-mix(in srgb, var(--d-border) 72%, transparent);
   background: linear-gradient(92deg,
       color-mix(in srgb, var(--d-pine) 2.5%, #ffffff) 0%,
       transparent 38%);
@@ -632,7 +671,6 @@
 .adminv2-ws-root-departments-zone {
   margin-top: 1rem;
   padding-top: 10px;
-  border-top: 1px solid color-mix(in srgb, var(--d-brand) 12%, var(--d-border));
 }
 
 .adminv2-ws-root-departments-zone .adminv2-ws-root-zone-kicker {
@@ -666,6 +704,17 @@
   text-decoration: none;
 }
 
+.adminv2-ws-lifecycle-command-card-link:active {
+  transform: scale(0.995) translateY(1px);
+}
+
+.adminv2-ws-lifecycle-command-card-link[data-adminv2-nav-pending="true"] {
+  opacity: 0.92;
+  pointer-events: none;
+  cursor: wait;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--d-accent, #00a283) 28%, transparent);
+}
+
 .adminv2-ws-lifecycle-command-card-link:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--d-pine) 55%, #ffffff);
   outline-offset: 3px;
@@ -674,6 +723,25 @@
 
 .adminv2-ws-lifecycle-command-card {
   position: relative;
+}
+
+.adminv2-ws-lifecycle-command-card--premium {
+  isolation: isolate;
+}
+
+.adminv2-ws-lifecycle-command-card-accent {
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 4px;
+  border-radius: 1.35rem 1.35rem 0 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--d-pine) 88%, #ffffff) 0%,
+    color-mix(in srgb, var(--d-brand) 72%, #ffffff) 52%,
+    color-mix(in srgb, var(--d-pine) 55%, transparent) 100%
+  );
+  pointer-events: none;
 }
 
 .adminv2-ws-lifecycle-command-card::before {
@@ -703,6 +771,14 @@
   100% {
     background-position: -200% 0;
   }
+}
+
+.adminv2-drawer-panel--swap-hold {
+  transition: opacity 140ms ease-out, transform 140ms ease-out;
+}
+
+[data-drawer-vm-transition-hold="true"] [data-entity-drawer-scroll-body="true"] {
+  transition: opacity 120ms ease-out;
 }
 
 .adminv2-ws-lifecycle-command-metrics {
@@ -753,7 +829,7 @@
   margin: 0;
   border: none;
   border-radius: 0;
-  border-bottom: 1px solid color-mix(in srgb, var(--d-border) 82%, transparent);
+  border-bottom: none;
   background: transparent;
   box-shadow: none;
   overflow: visible;
@@ -773,7 +849,6 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
-  border-bottom: 1px solid color-mix(in srgb, var(--d-border) 68%, transparent);
   padding-bottom: 8px;
 }
 
@@ -1157,8 +1232,7 @@
   flex-shrink: 0;
   margin: 0;
   padding: 4px 0 6px;
-  border-top: 1px solid color-mix(in srgb, var(--d-border) 72%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, var(--d-border) 72%, transparent);
+  border: none;
   background: transparent;
   box-shadow: none;
 }
@@ -1167,12 +1241,11 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-kpi-measurement-strip,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-kpi-measurement-strip,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-kpi-measurement-strip {
-  border: none;
-  border-top: 1px solid color-mix(in srgb, var(--d-border) 48%, transparent);
-  border-radius: 0;
-  padding: 8px 16px 7px;
-  margin-top: 0;
-  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
+  border: 1px solid color-mix(in srgb, var(--d-border) 86%, transparent);
+  border-radius: 8px;
+  padding: 8px 12px 7px;
+  margin: 6px 12px 10px;
+  background: color-mix(in srgb, #ffffff 96%, var(--d-surface));
   box-shadow: none;
 }
 
@@ -1205,8 +1278,7 @@
   [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail--business {
     border-right: none;
     padding-right: 0;
-    padding-bottom: 6px;
-    border-bottom: 1px solid color-mix(in srgb, var(--d-border) 65%, transparent);
+    padding-bottom: 0;
   }
 
   [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail--ai,
@@ -1233,7 +1305,6 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail--business,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail--business,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail--business {
-  border-right: 1px solid color-mix(in srgb, var(--d-border) 55%, transparent);
   padding-right: clamp(12px, 2.5vw, 20px);
 }
 
@@ -1569,7 +1640,7 @@
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-cell--placeholder {
   min-height: 36px;
   border: none;
-  border-bottom: 1px dashed color-mix(in srgb, var(--d-border) 75%, transparent);
+  border-bottom: none;
   background: transparent;
   opacity: 0.75;
 }
@@ -2023,6 +2094,13 @@
 /* Work unit — lane height follows queue content; avoid stretching empty/loading states to the viewport */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row {
   align-items: start;
+  column-gap: var(--ws-wu-workbench-gutter, var(--ws-dept-workbench-gutter));
+}
+
+@media (max-width: 1000px) {
+  [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row {
+    align-items: start;
+  }
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-lane--attention--hidden,
@@ -2054,7 +2132,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid color-mix(in srgb, var(--d-border) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--d-border) 86%, transparent);
   border-left: 2px solid color-mix(in srgb, var(--d-pine) 42%, var(--d-border));
   border-radius: 8px;
   overflow: hidden;
@@ -2065,10 +2143,99 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
+  min-height: 0;
   align-self: stretch;
-  border-left-color: color-mix(in srgb, var(--d-brand) 32%, color-mix(in srgb, var(--d-pine) 38%, var(--d-border)));
+  border: 1px solid color-mix(in srgb, var(--vc-section-rail, var(--d-pine)) 24%, var(--d-border));
+  border-left: 2px solid color-mix(in srgb, var(--d-brand) 32%, color-mix(in srgb, var(--d-pine) 38%, var(--d-border)));
   background-color: color-mix(in srgb, var(--d-brand) 2.5%, #fafcfd);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 1px 3px rgba(39, 63, 82, 0.06);
+}
+
+/* Work unit — stretch queue lane to command rail bottom; queue owns vertical scroll */
+@media (min-width: 1001px) {
+  html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface:has([data-ws-surface="work_unit"].adminv2-ws-wu-v2) {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-contain,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-page-split {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-primary-column {
+    display: flex;
+    flex-direction: column;
+    min-height: var(--adminv2-workspace-rail-height, 0);
+    max-height: var(--adminv2-workspace-rail-height, none);
+    height: var(--adminv2-workspace-rail-height, auto);
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck {
+    flex: 0 0 auto;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row {
+    flex: 1 1 0;
+    align-items: stretch;
+    min-height: 0;
+    overflow: hidden;
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane--throughput {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    height: 100%;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-lane-strip,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-record-filter-bar-slot {
+    flex-shrink: 0;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-shell.adminv2-ws-dept-qsec--primary {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    overflow: hidden;
+  }
+
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list-shell {
+    flex: 1 1 0;
+    min-height: 0;
+    height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    scrollbar-gutter: stable;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+    scroll-padding-bottom: 8px;
+  }
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-lane-chrome.adminv2-ws-dept-v2-board-secondary-slot,
@@ -3692,7 +3859,9 @@
   min-height: 0;
   min-width: 0;
   padding: 8px 10px 8px;
-  border-bottom: 1px solid var(--d-border);
+  border: 1px solid color-mix(in srgb, var(--d-border) 84%, transparent);
+  border-radius: 8px;
+  margin-bottom: 8px;
   background: transparent;
 }
 
@@ -3704,6 +3873,9 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome.adminv2-ws-dept-v2-board-secondary-slot .adminv2-ws-dept-qsec,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-lane-chrome.adminv2-ws-dept-v2-board-secondary-slot .adminv2-ws-dept-qsec,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-lane-chrome.adminv2-ws-dept-v2-board-secondary-slot .adminv2-ws-dept-qsec {
+  border: none;
+  border-radius: 0;
+  margin-bottom: 0;
   border-bottom: none;
 }
 
@@ -4454,7 +4626,7 @@
   gap: 8px;
   margin-bottom: 4px;
   padding-bottom: 4px;
-  border-bottom: 1px solid var(--d-border);
+  border-bottom: none;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-header,
@@ -4463,7 +4635,7 @@
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-header {
   margin-bottom: 4px;
   padding-bottom: 6px;
-  border-bottom-color: color-mix(in srgb, #bc4300 22%, var(--d-border));
+  border-bottom: none;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-toolbar,
@@ -4796,9 +4968,13 @@
   box-shadow: none;
   border: none;
   border-radius: 0;
-  border-left: 1px solid color-mix(in srgb, var(--d-border) 58%, transparent);
+  border-left: none;
   background: transparent;
   padding: 0 0 0 var(--ws-dept-workbench-gutter);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-dept-v2-rail--command-shell {
+  padding-left: var(--ws-wu-workbench-gutter, var(--ws-dept-workbench-gutter));
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-command-actions-stack,
@@ -5194,7 +5370,7 @@
   margin: 0;
   padding: 9px 10px 11px;
   border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--d-border) 92%, transparent);
   background: var(--d-surface);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.92),
@@ -5211,8 +5387,7 @@
   text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 18%, var(--d-pine));
   margin-bottom: 6px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid color-mix(in srgb, var(--d-border) 65%, transparent);
+  padding-bottom: 0;
 }
 
 /* Command rail — divider inside a panel (e.g. record secondary + tertiary) */
@@ -5223,7 +5398,6 @@
   height: 0;
   margin: 4px 0 3px;
   border: 0;
-  border-top: 1px solid color-mix(in srgb, var(--d-border) 55%, transparent);
 }
 
 /* Primary + operational action cards — same panel shell (softer edge than context) */
@@ -5235,7 +5409,7 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-command-section--operational.adminv2-ws-actions-rail--dept-panel,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-command-section--operational.adminv2-ws-actions-rail--dept-panel,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-command-section--operational.adminv2-ws-actions-rail--dept-panel {
-  border-color: color-mix(in srgb, var(--d-border) 90%, transparent);
+  border-color: color-mix(in srgb, var(--d-border) 94%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 1px 1px rgba(39, 63, 82, 0.03);
@@ -5253,7 +5427,7 @@
   margin: 0;
   padding: 9px 10px 11px;
   border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 93%, transparent);
+  border: 1px solid color-mix(in srgb, var(--d-border) 94%, transparent);
   background: color-mix(in srgb, var(--d-surface) 92%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
@@ -5277,8 +5451,7 @@
   text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-pine));
   margin-bottom: 6px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid color-mix(in srgb, var(--d-border) 72%, transparent);
+  padding-bottom: 0;
   opacity: 0.9;
 }
 
@@ -5379,7 +5552,7 @@
   padding: 12px 14px;
   border: none;
   border-radius: 0;
-  border-bottom: 1px solid var(--d-rail-hairline);
+  border-bottom: none;
   background: transparent;
 }
 
@@ -6099,7 +6272,9 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-shell.adminv2-ws-dept-qsec--primary {
   display: flex;
   flex-direction: column;
+  flex: 1 1 0;
   min-height: 0;
+  overflow: hidden;
   border-bottom: none;
   padding-bottom: 6px;
 }
@@ -6109,16 +6284,225 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list-shell {
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   max-height: var(--ws-wu-queue-records-scroll-max-height);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   scrollbar-gutter: stable;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 6px;
   scroll-padding-bottom: 8px;
+}
+
+/* Work unit — compact queue row density (V3 frozen baseline; spacing-only) */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row-shell {
+  min-height: 2.05rem;
+  gap: 2px 5px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row {
+  min-height: 1.45rem;
+  gap: 1px 6px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row-shell > .operational-queue-row__content {
+  gap: 2px 6px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck {
+  padding: 1px 3px 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list {
+  gap: 4px;
+  padding: 3px 5px 4px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card {
+  padding: 1px 4px 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--compact {
+  padding: 3px 6px 3px;
+  gap: 6px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview.adminv2-ws-crm-queue-preview {
+  gap: 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__body {
+  gap: 4px 8px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__zone--middle {
+  gap: 2px;
+  padding-left: 5px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview--scan .adminv2-ws-crm-queue-preview__zone--left {
+  gap: 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__attention-headline {
+  margin-top: 1px;
+  padding: 4px 6px 4px 8px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-summary-preview {
+  margin-top: 2px;
+  padding: 2px 6px 3px;
+  gap: 3px 5px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-item-wrap {
+  gap: 4px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-column-grid {
+  column-gap: 28px;
+  row-gap: 4px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-zone {
+  padding: 3px 5px 4px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-grid {
+  column-gap: 12px;
+  row-gap: 1px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__header-band {
+  gap: 4px;
+  padding-bottom: 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__facts-band,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__lifecycle-band {
+  padding: 2px 5px 3px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__lifecycle-band {
+  gap: 3px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__people-band .adminv2-ws-queue-related-record-rows--compact {
+  gap: 1px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record .adminv2-ws-queue-related-record-rows--compact .adminv2-ws-queue-related-record-row {
+  padding: 1px 4px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field {
+  gap: 3px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-widget__task-list {
+  gap: 1px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-widget__task-card,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-widget__task-row {
+  padding: 2px 5px;
+  gap: 5px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__action-rail {
+  gap: 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__action-rail [data-record-drawer-header-action="true"] {
+  min-height: 24px;
+  max-height: 26px;
+  padding: 2px 5px;
+}
+
+/*
+ * Work unit queue — icon + metadata color doctrine (V3 polish).
+ * Pine/green reserved for BOS + explicit action affordances only.
+ */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__household-icon {
+  width: var(--ws-wu-queue-icon-primary-size);
+  height: var(--ws-wu-queue-icon-primary-size);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ws-wu-queue-icon-neutral-color);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__household-icon {
+  color: var(--ws-wu-queue-icon-neutral-color);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__household-icon svg,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-operational-record__household-icon svg {
+  width: var(--ws-wu-queue-icon-primary-size);
+  height: var(--ws-wu-queue-icon-primary-size);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field--link .queue-record-field__icon-wrap {
+  width: var(--ws-wu-queue-icon-secondary-size);
+  height: var(--ws-wu-queue-icon-secondary-size);
+  border: none;
+  background: transparent;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field--link .queue-record-field__icon,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field--link .queue-record-field__icon-wrap svg,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field__icon--muted,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field__icon--muted svg {
+  width: var(--ws-wu-queue-icon-secondary-size);
+  height: var(--ws-wu-queue-icon-secondary-size);
+  color: var(--ws-wu-queue-icon-muted-color);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field--link:not(.queue-record-field--title):not(.queue-record-field--primary-contact) .queue-record-field__icon,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field--link:not(.queue-record-field--title):not(.queue-record-field--primary-contact):hover .queue-record-field__icon,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .queue-record-field--link:not(.queue-record-field--title):not(.queue-record-field--primary-contact):focus-visible .queue-record-field__icon {
+  color: var(--ws-wu-queue-icon-muted-color);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__child-row .queue-record-field--link .queue-record-field__icon {
+  color: var(--ws-wu-queue-icon-muted-color);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__contact-link-icon,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__link-icon-btn,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__linked-field-icon--muted {
+  color: var(--ws-wu-queue-icon-muted-color);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__contact-link:hover .operational-queue-row__contact-link-icon,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__contact-link:focus-visible .operational-queue-row__contact-link-icon {
+  color: var(--ws-wu-queue-icon-neutral-color);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__contact-link:hover .operational-queue-row__record-link-text,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__contact-link:focus-visible .operational-queue-row__record-link-text,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__repeated-row .operational-queue-row__contact-link:hover .operational-queue-row__record-link-text {
+  color: #1b1b27;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__child-link-text,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__child-link .operational-queue-row__contact-link-text {
+  color: color-mix(in srgb, var(--d-midnight, var(--d-text-primary, #273f52)) 84%, var(--d-fg, #273f52) 16%);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-icon svg,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-related-record-row-lead svg {
+  width: var(--ws-wu-queue-icon-secondary-size);
+  height: var(--ws-wu-queue-icon-secondary-size);
+  color: var(--ws-wu-queue-icon-muted-color);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .operational-queue-row__linked-field--pine:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--d-fg, #273f52) 18%, transparent);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-count-badge {
@@ -12499,7 +12883,7 @@
 /* —— Admin V2 cleaning job record modal — premium minimal / cockpit (visual only) —— */
 
 /* Slightly wider modal shell vs. default max-w-5xl — uses horizontal space without touching Drawer TSX */
-[data-adminv2-record-modal-tone="cleaning-v2"][data-adminv2-record-modal="true"] {
+[data-adminv2-record-modal-tone="cleaning-v2"][data-adminv2-record-modal="true"]:not(.adminv2-drawer-modal-panel--bos-rail) {
   max-width: min(76rem, calc(100vw - 1.5rem));
   border-color: rgba(39, 63, 82, 0.12) !important;
   box-shadow: 0 12px 40px rgba(39, 63, 82, 0.08), 0 2px 8px rgba(39, 63, 82, 0.04) !important;
@@ -12830,10 +13214,24 @@
 /*
  * Automations / workflow telemetry strip — same wrapper + rhythm on department (context-lower) and work-unit footer.
  */
-[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"],
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
   padding-top: 12px;
+  border: none;
   border-top: 1px solid color-mix(in srgb, var(--d-brand) 15%, var(--d-border));
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
+  padding-top: 0;
+  border: none;
+  border-top: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row+.adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
@@ -12856,6 +13254,124 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 1px 3px rgba(39, 63, 82, 0.05);
   padding: 18px 14px 14px 13px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry--work-unit-summary {
+  padding: 0;
+  overflow: hidden;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry--work-unit-summary-expanded {
+  padding: 12px 14px 14px 13px;
+}
+
+.adminv2-ws-automation-telemetry__summary-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 64px;
+  max-height: 80px;
+  padding: 10px 14px;
+  border-left: 3px solid color-mix(in srgb, var(--d-brand) 55%, var(--d-border));
+  background: linear-gradient(165deg,
+      color-mix(in srgb, #ffffff 97%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-surface) 94%, var(--d-panel-quiet)) 100%);
+}
+
+.adminv2-ws-automation-telemetry__summary-primary {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+}
+
+.adminv2-ws-automation-telemetry__summary-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--d-text-primary, #18273a) 88%, var(--d-brand));
+  white-space: nowrap;
+}
+
+.adminv2-ws-automation-telemetry__summary-stats {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.adminv2-ws-automation-telemetry__summary-stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.adminv2-ws-automation-telemetry__summary-stat dt {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+}
+
+.adminv2-ws-automation-telemetry__summary-stat dd {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--d-text-primary, #18273a) 90%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__summary-stat--attention dd {
+  color: color-mix(in srgb, #bc4300 78%, var(--d-text-primary, #18273a));
+}
+
+.adminv2-ws-automation-telemetry__summary-toggle {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 24%, var(--d-border));
+  background: color-mix(in srgb, #ffffff 92%, var(--d-brand));
+  color: color-mix(in srgb, var(--d-brand) 82%, var(--d-text-primary, #18273a));
+  cursor: pointer;
+}
+
+.adminv2-ws-automation-telemetry__summary-toggle:hover {
+  background: color-mix(in srgb, var(--d-brand) 8%, #ffffff);
+}
+
+.adminv2-ws-automation-telemetry__summary-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--d-brand) 45%, transparent);
+  outline-offset: 2px;
+}
+
+.adminv2-ws-automation-telemetry__mast-actions--expanded {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  margin: 0 0 12px;
+  padding: 0 2px;
+}
+
+/* Work-unit command rail — telemetry utility (Actions → Telemetry → BOS) */
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: min(34vh, 280px);
+  overflow: hidden;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"] .adminv2-ws-command-rail-bos-host {
+  flex: 1 1 auto;
+  min-height: 14rem;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry__mast,

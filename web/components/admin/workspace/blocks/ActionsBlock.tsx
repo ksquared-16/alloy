@@ -1,9 +1,10 @@
 "use client";
 
 import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
-import Link from "next/link";
-import { resolveWorkspaceActionHref } from "@/lib/workspace/resolveWorkspaceActionHref";
+import { WorkspaceActionRailButton } from "@/app/adminV2/components/workspace/WorkspaceActionRailButton";
+import { resolveWorkspaceActionRailTierClasses } from "@/lib/adminV2/workspace/workspaceActionRailButton";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { resolveWorkspaceActionHref } from "@/lib/workspace/resolveWorkspaceActionHref";
 import type { WorkspaceActionsBlock, WorkspaceActionItem } from "@/lib/workspace/types";
 
 function hrefFor(
@@ -31,15 +32,7 @@ export function ActionsBlock({
     const pf = (u: string) => (shouldDisableAdminV2LinkPrefetch(u) ? false : undefined);
 
     if (presentation === "bridge") {
-        const maxSolid = 2;
-        const solidFlags: boolean[] = [];
-        let solidUsed = 0;
-        for (const a of block.actions) {
-            const wantsSolid = a.variant === "primary" || a.variant === undefined;
-            const useSolid = wantsSolid && solidUsed < maxSolid;
-            solidFlags.push(useSolid);
-            if (useSolid) solidUsed += 1;
-        }
+        const tiers = resolveWorkspaceActionRailTierClasses(block.actions, 2);
         return (
             <section
                 className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-command-section--primary"
@@ -49,18 +42,17 @@ export function ActionsBlock({
                 <h3 className="adminv2-ws-actions-rail-title">{block.title ?? "Actions"}</h3>
                 <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column">
                     {block.actions.map((a, i) => {
-                        const useSolid = solidFlags[i] ?? false;
-                        const cls = useSolid ? "adminv2-ws-actions-rail-primary" : "adminv2-ws-actions-rail-secondary";
                         const h = hrefFor(a, ctx);
                         return (
-                            <Link
+                            <WorkspaceActionRailButton
                                 key={a.id}
+                                as="link"
                                 href={h}
                                 prefetch={pf(h)}
-                                className={`${cls} text-center no-underline rounded-md font-bold text-[11px]`}
+                                tier={tiers[i] ?? "secondary"}
                             >
                                 {a.label}
-                            </Link>
+                            </WorkspaceActionRailButton>
                         );
                     })}
                 </div>
@@ -75,18 +67,20 @@ export function ActionsBlock({
                 {block.actions.map((a) => {
                     const h = hrefFor(a, ctx);
                     return (
-                    <Link
-                        key={a.id}
-                        href={h}
-                        prefetch={pf(h)}
-                        className={
-                            a.variant === "primary"
-                                ? "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md hover:opacity-92 adminv2-ws-btn-primary-solid"
-                                : "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-admin-border text-alloy-midnight hover:bg-alloy-stone/30 adminv2-ws-btn-secondary-outline"
-                        }
-                    >
-                        {a.label}
-                    </Link>
+                        <WorkspaceActionRailButton
+                            key={a.id}
+                            as="link"
+                            href={h}
+                            prefetch={pf(h)}
+                            tier={a.variant === "primary" ? "primary" : "secondary"}
+                            className={
+                                a.variant === "primary" ?
+                                    "inline-flex items-center hover:opacity-92"
+                                :   "inline-flex items-center hover:bg-alloy-stone/30"
+                            }
+                        >
+                            {a.label}
+                        </WorkspaceActionRailButton>
                     );
                 })}
             </div>

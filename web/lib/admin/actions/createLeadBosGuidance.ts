@@ -1,4 +1,10 @@
 import { CREATE_LEAD_GATHER_FIELDS } from "@/lib/admin/actions/createLeadPlatformGather";
+import { buildHouseholdLeadDisplayName } from "@/lib/admin/opportunity/buildHouseholdLeadDisplayName";
+import type { BosRecommendation } from "@/lib/admin/actions/bosRecommendationTypes";
+import { resolveCreateLeadPostCreateRecommendations } from "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations";
+import { mapBosRecommendationsToSuccessActions } from "@/lib/admin/actions/mapBosRecommendationsToSuccessActions";
+
+export type { BosRecommendation } from "@/lib/admin/actions/bosRecommendationTypes";
 
 const LABEL_BY_KEY = Object.fromEntries(
     CREATE_LEAD_GATHER_FIELDS.map((f) => [f.payload_key, f.field_label])
@@ -51,44 +57,20 @@ export function resolveCreateLeadBosGuidance(values: Record<string, string>): Cr
 export function formatCreateLeadHouseholdLabel(values: Record<string, string>): string | null {
     const first = (values.first_name ?? "").trim();
     const last = (values.last_name ?? "").trim();
-    const name = [first, last].filter(Boolean).join(" ");
-    return name ? `${name} Household` : null;
+    if (!first && !last) return null;
+    return buildHouseholdLeadDisplayName({ firstName: first, lastName: last });
 }
 
-export type BosRecommendationTone = "positive" | "recommended" | "warning";
-
-export type BosRecommendation = {
-    id: string;
-    label: string;
-    detail: string;
-    tone: BosRecommendationTone;
-};
-
-/** Presentation-only success recommendations — not functional yet. */
+/** @deprecated Use resolveCreateLeadPostCreateRecommendations */
 export function resolveCreateLeadBosRecommendations(values: Record<string, string>): BosRecommendation[] {
-    const recommendations: BosRecommendation[] = [
-        {
-            id: "schedule-tour",
-            label: "Schedule Tour",
-            detail: "High likelihood",
-            tone: "positive",
-        },
-        {
-            id: "send-welcome",
-            label: "Send Welcome Email",
-            detail: "Recommended",
-            tone: "recommended",
-        },
-    ];
+    return resolveCreateLeadPostCreateRecommendations(values);
+}
 
-    if (!(values.child_date_of_birth ?? "").trim()) {
-        recommendations.push({
-            id: "child-dob",
-            label: "Missing Child DOB",
-            detail: "Follow-up suggested",
-            tone: "warning",
-        });
-    }
+export type CreateLeadSuccessAction = import("@/lib/admin/actions/bosRecommendationTypes").BosRecommendationSuccessAction;
 
-    return recommendations;
+/** @deprecated Use mapBosRecommendationsToSuccessActions */
+export function resolveCreateLeadSuccessActions(values: Record<string, string>): CreateLeadSuccessAction[] {
+    return mapBosRecommendationsToSuccessActions(resolveCreateLeadPostCreateRecommendations(values), {
+        onOpenLead: () => {},
+    });
 }

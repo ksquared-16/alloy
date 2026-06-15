@@ -45,6 +45,11 @@ describe("scheduleTourWorkUnitActions", () => {
                     nextStep: null,
                     lastActivity: null,
                     commercialValue: null,
+                    contactSnippet: null,
+                    roomContext: null,
+                    ageContext: null,
+                    attentionReason: null,
+                    familyNote: null,
                 },
             },
             {
@@ -73,6 +78,11 @@ describe("scheduleTourWorkUnitActions", () => {
                 nextStep: null,
                 lastActivity: null,
                 commercialValue: null,
+                contactSnippet: null,
+                roomContext: null,
+                ageContext: null,
+                attentionReason: null,
+                familyNote: null,
             },
         });
         expect(row?.primaryLabel).toBe("Smith");

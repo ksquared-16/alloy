@@ -1,5 +1,8 @@
 # Record system (RRS & entity API)
 
+> **Canonical summary:** [`docs/platform/core/record-system.md`](../platform/core/record-system.md)  
+> This file retains expanded PATCH/layout enforcement detail as transitional reference.
+
 ## Purpose
 
 Clarify where **authoritative record payloads** come from for admin UI and why **queue list rows** are not equivalent.
@@ -35,7 +38,7 @@ All authoritative reads must come from:
 
 **Never:** Queue → execute logic directly.
 
-Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
+Workspace navigation context for queues: **`docs/platform/operator/queue-system.md`** (canonical); expanded enrollment detail in **`docs/system/workspace-system.md`**.
 
 For **opportunity** queues, **`QueueService.enrichOpportunityRows`** may attach person/contact/customer/member data, **read active `tour_bookings`** for tour preview fields, **`_placement_priority`** when placement is enabled (opt-in), and **`_operational_summary_preview`** for lane hints — while **filters** may still use **`metadata.tour_date`** for historical compatibility. None of that makes the queue row authoritative: **Queue → select entity → entity GET → act** remains mandatory (see **`docs/sprints/05_2026/tour_scheduling_v1.md`** §12).
 
@@ -63,7 +66,7 @@ For **opportunity** queues, **`QueueService.enrichOpportunityRows`** may attach 
 - **Control plane vs runtime:** Settings changes structure/presentation/policies; entity PATCH and `executeAdminAction` execute operational logic. See **`docs/system/configuration-system.md`**.
 - **Mutation access (Card 7):** Server PATCH runs **org row check → CRM scope gate → field policy** (opportunity/job). Out-of-scope targets return **404**. Drawer **`canMutate`** is **admin role_key only** (ops inline edit deferred). Action **`POST /api/admin/actions/execute`** uses the same CRM scope dimensions as entity reads. UI disabled buttons are not a security boundary.
 - **Sprint closeout:** Settings/record UX parity shipped **2026-05-18** — see **`docs/sprints/05_2026/settings_record_ux_parity_sprint.md`** §12 for shipped vs deferred; regression manifest `web/tests/sprints/settingsRecordUxParityRegression.test.ts`.
-- **Drawer runtime (May 2026):** Generic drawer pipeline (`adminv2_drawer_pipeline.md`) with `drawer_primary` reveal gates; opportunity composed open via bootstrap + primary; queue prev/next navigator in drawer header. Performance closeout: **`docs/sprints/05_2026/completed/adminv2_performance_closeout.md`** — late `surface=full` hydrates still land after reveal (**needs verification** on slow networks).
+- **Drawer runtime (June 2026):** Opportunity uses **`OpportunityDrawerVmRuntime`** (VM hard cutover default ON). Person/Child use **`PersonsDrawerVmRuntime`** with layout runtime composition. Canonical index: **`docs/system/drawer-doctrine.md`**. URL sync on operator slug routes without work-unit remount — **`docs/system/routing-doctrine.md`**. Performance: **`docs/system/platform-performance-doctrine.md`**.
 - Other types may still be “select * + hydration” in the same route; check the branch for the type.
 
 ## How it works
@@ -82,6 +85,7 @@ For **opportunity** queues, **`QueueService.enrichOpportunityRows`** may attach 
 | Job resolution | `web/lib/rrs/entities/job.ts`, `web/lib/rrs/resolveRecord.ts` |
 | Surfaces | `web/lib/rrs/surfaces.ts` |
 | Drawer fetch wiring | `web/components/admin/AdminEntityDrawer.tsx` |
+| Drawer doctrine (canonical index) | `docs/system/drawer-doctrine.md` |
 | Inquiry children drawer UI | `web/components/admin/entity/OpportunityInquiryChildrenSection.tsx`, `web/lib/admin/inquiryChildrenHydration.ts`, `web/lib/admin/inquiryChildFieldEdit.ts` |
 | Drawer section chrome | `web/components/admin/entity/EntityDrawerSection.tsx`, `web/lib/entityPresentation.ts` (`contentLayout`) |
 | Queue previews | `web/lib/queues/QueueService.ts` |

@@ -1,0 +1,6 @@
+# --- Communications V2 · ACT-1 (Command Center) local flags ---
+# Paste into web/.env.local, then restart `npm run dev`.
+NEXT_PUBLIC_COMMS_V2_COMMAND_CENTER=1
+NEXT_PUBLIC_COMMS_V2_ASSIGNMENT=1
+NEXT_PUBLIC_COMMS_V2_SLA=1
+# (all other comms_v2 surfaces stay dark/off)

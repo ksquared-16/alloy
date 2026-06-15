@@ -131,7 +131,7 @@ describe("buildOpportunityLayoutRuntimeRecordFromVm", () => {
         });
 
         expect(record["person.primary_contact_name"]).toBe("Jamie Johnson");
-        const children = record.enrollment_children;
+        const children = record.enrollment_children as { "child.name"?: string; "child.program"?: string }[] | undefined;
         expect(Array.isArray(children) && children[0]?.["child.name"]).toBe("Alex Johnson");
         expect(Array.isArray(record.children) && record.children.length).toBe(children?.length ?? 0);
         expect(children?.[0]?.["child.program"]).toBe("Infant AM");

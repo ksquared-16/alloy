@@ -4,10 +4,10 @@
 
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
+import { hasProcessStageMetadataOverride, parseProcessStageKeyFromStatusMetadata } from "@/lib/businessProcesses/processStageMetadata";
 import {
     effectiveEnrollmentOperatorStage,
     effectiveStageKeyAssignment,
-    parseEnrollmentOperatorStageFromMetadata,
     type EnrollmentOperatorStageAssignmentSource,
 } from "@/lib/lifecycle/enrollmentOperatorStage";
 
@@ -49,7 +49,7 @@ function toRow(
         status_label: row.status_label?.trim() || row.status_key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
         sort_order: row.sort_order,
         assignment_source,
-        has_metadata_override: parseEnrollmentOperatorStageFromMetadata(metadata) !== null,
+        has_metadata_override: hasProcessStageMetadataOverride(metadata),
     };
 }
 
@@ -71,7 +71,7 @@ export function buildEnrollmentStatusStagesPayload(
         const item = toRow(row, source);
         if (stage && stages[stage]) {
             stages[stage].statuses.push(item);
-            const metaStage = parseEnrollmentOperatorStageFromMetadata(row.metadata);
+            const metaStage = parseProcessStageKeyFromStatusMetadata(row.metadata);
             if (typeof metaStage === "string" && metaStage !== "unassigned" && metaStage === stage) {
                 stages[stage].has_custom_assignments = true;
             }

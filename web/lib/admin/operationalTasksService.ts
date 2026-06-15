@@ -352,7 +352,7 @@ export async function summarizeOperationalTaskCounts(params: {
     return { ok: true, open: listed.rows.length, due_soon, overdue };
 }
 
-async function getOperationalTaskById(params: {
+export async function getOperationalTaskById(params: {
     supabase: SupabaseClient;
     orgId: string;
     taskId: string;

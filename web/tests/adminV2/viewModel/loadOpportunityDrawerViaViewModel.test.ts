@@ -23,11 +23,12 @@ import { minimalSettledOpportunityDrawerViewModel } from "./fixtures/minimalSett
 function settledVm() {
     return minimalSettledOpportunityDrawerViewModel({
         generation: "gen-1",
-        actions: { header: [], header_menu: [] },
+        actions: { header: [], header_menu: [], manage_menu: [] },
         header: {
             title: "Opp",
             subtitle: null,
             status: { renderAs: "readonly_pill", label: "New" },
+            status_can_mutate: false,
             oper_trust_preview: null,
         },
     });

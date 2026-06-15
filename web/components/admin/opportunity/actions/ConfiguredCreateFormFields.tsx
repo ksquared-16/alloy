@@ -24,6 +24,8 @@ type Props = {
     onChange: (fieldKey: string, value: string) => void;
     disabled?: boolean;
     dataPrefix?: string;
+    /** Lead/opportunity location used for program cascade when location_id field is empty. */
+    inheritedLocationId?: string | null;
 };
 
 function inputTypeForField(field: EntityCreateFormField): string {
@@ -48,13 +50,19 @@ export default function ConfiguredCreateFormFields({
     onChange,
     disabled = false,
     dataPrefix = "configured-create",
+    inheritedLocationId = null,
 }: Props) {
     const setKeys = fields.map((f) => f.option_set_key);
     const { optionsBySetKey } = useOptionSetSelectOptions(setKeys);
 
     const { locationKey, programKey, roomKey } = useMemo(() => placementFieldKeysInValues(values), [values]);
+    const effectiveLocationValue = useMemo(() => {
+        const fromValues = locationKey ? (values[locationKey] ?? "").trim() : "";
+        if (fromValues) return fromValues;
+        return (inheritedLocationId ?? "").trim();
+    }, [inheritedLocationId, locationKey, values]);
     const cascade = useInquiryChildPlacementCascade({
-        locationValue: locationKey ? (values[locationKey] ?? "") : "",
+        locationValue: effectiveLocationValue,
         programValue: programKey ? (values[programKey] ?? "") : "",
     });
 
@@ -68,7 +76,7 @@ export default function ConfiguredCreateFormFields({
 
     useInquiryChildPlacementDefaultSite({
         locationFieldKey: locationKey,
-        locationValue: locationKey ? (values[locationKey] ?? "") : "",
+        locationValue: effectiveLocationValue,
         defaultSiteId: cascade.defaultSiteId,
         siteSelectionReady: cascade.siteSelectionReady,
         onSelectSite: handleDefaultSite,

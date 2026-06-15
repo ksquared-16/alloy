@@ -5,6 +5,7 @@ import {
     applyOutboundProviderDeliveryPatch,
     type ProviderDeliveryApplyResult,
 } from "@/lib/communications/providerDeliveryPersistence";
+import { resendTypeToCanonical } from "@/lib/communications/v2/deliveryReceiptMapping";
 
 function providerMessageIdTail(id: string): string {
     const t = id.trim();
@@ -88,17 +89,50 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+    const canonical = resendTypeToCanonical(type);
+    const occurredAt = typeof data.created_at === "string" && data.created_at.trim() ? data.created_at : new Date().toISOString();
+    const providerEventId = typeof evt.id === "string" && evt.id.trim() ? evt.id.trim() : undefined;
     const metaEvent = { source: "resend", type };
+
+    // Build the provider-neutral receipt (drives append-only event + per-recipient state) when the
+    // event maps to a canonical transition. delivery_delayed and unknown types: metadata only.
+    const receipt = canonical
+        ? {
+              provider: "resend",
+              channel: "email",
+              event_type: canonical,
+              event_status: type,
+              provider_event_id: providerEventId,
+              occurred_at: occurredAt,
+              raw_payload: data,
+          }
+        : undefined;
 
     if (type === "email.delivered") {
         const r = await applyOutboundProviderDeliveryPatch({
             supabase,
             providerMessageId: emailId,
-            patch: {
-                status: "delivered",
-                delivered_at: new Date().toISOString(),
-                metadata_event: metaEvent,
-            },
+            patch: { status: "delivered", delivered_at: occurredAt, metadata_event: metaEvent, receipt },
+        });
+        logResendWebhookDeliveryOutcome(type, emailId, r);
+        return jsonWebhookResult(r);
+    }
+
+    if (type === "email.opened") {
+        const r = await applyOutboundProviderDeliveryPatch({
+            supabase,
+            providerMessageId: emailId,
+            patch: { opened_at: occurredAt, metadata_event: metaEvent, receipt },
+        });
+        logResendWebhookDeliveryOutcome(type, emailId, r);
+        return jsonWebhookResult(r);
+    }
+
+    if (type === "email.clicked") {
+        const r = await applyOutboundProviderDeliveryPatch({
+            supabase,
+            providerMessageId: emailId,
+            patch: { clicked_at: occurredAt, metadata_event: metaEvent, receipt },
         });
         logResendWebhookDeliveryOutcome(type, emailId, r);
         return jsonWebhookResult(r);
@@ -108,10 +142,7 @@ export async function POST(request: NextRequest) {
         const r = await applyOutboundProviderDeliveryPatch({
             supabase,
             providerMessageId: emailId,
-            patch: {
-                status: "bounced",
-                metadata_event: metaEvent,
-            },
+            patch: { status: "bounced", metadata_event: metaEvent, receipt },
         });
         logResendWebhookDeliveryOutcome(type, emailId, r);
         return jsonWebhookResult(r);
@@ -121,10 +152,7 @@ export async function POST(request: NextRequest) {
         const r = await applyOutboundProviderDeliveryPatch({
             supabase,
             providerMessageId: emailId,
-            patch: {
-                status: "failed",
-                metadata_event: metaEvent,
-            },
+            patch: { status: "failed", metadata_event: metaEvent, receipt },
         });
         logResendWebhookDeliveryOutcome(type, emailId, r);
         return jsonWebhookResult(r);
@@ -134,9 +162,7 @@ export async function POST(request: NextRequest) {
         const r = await applyOutboundProviderDeliveryPatch({
             supabase,
             providerMessageId: emailId,
-            patch: {
-                metadata_event: { ...metaEvent, delayed: true },
-            },
+            patch: { metadata_event: { ...metaEvent, delayed: true } },
         });
         return jsonWebhookResult(r);
     }
@@ -145,9 +171,7 @@ export async function POST(request: NextRequest) {
         const r = await applyOutboundProviderDeliveryPatch({
             supabase,
             providerMessageId: emailId,
-            patch: {
-                metadata_event: metaEvent,
-            },
+            patch: { metadata_event: metaEvent, receipt },
         });
         return jsonWebhookResult(r);
     }

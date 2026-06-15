@@ -1,23 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useEffect, type CSSProperties } from "react";
 import { ListTodo } from "lucide-react";
 
-import {
-    ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
-} from "@/lib/adminV2/opportunityDrawerTaskEvents";
-import { ADMIN_V2_OPEN_TASKS_MODAL, fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
-import {
-    readOperationalTasksNavCountsCache,
-    writeOperationalTasksNavCountsCache,
-} from "@/lib/adminV2/operationalTasksNavCountsCache";
+import { ADMIN_V2_OPEN_TASKS_MODAL } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
-import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
+import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { neutral } from "@/styles/tokens/colors";
-import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
-import { isAdminV2SidecarNetworkBlocked } from "@/lib/perf/adminV2PrimarySurfaceGate";
-
-type TaskCounts = { open: number; due_soon: number; overdue: number };
 
 export default function OperationalTasksNavBadge({
     tabStyle,
@@ -28,46 +17,17 @@ export default function OperationalTasksNavBadge({
     buttonClassName?: string;
     onOpenModal: () => void;
 }) {
-    const enabled = isOperationalWorkV1Enabled();
-    const [counts, setCounts] = useState<TaskCounts | null>(() => readOperationalTasksNavCountsCache("open"));
-
-    const load = useCallback(async () => {
-        if (!enabled) return;
-        if (isAdminV2SidecarNetworkBlocked()) return;
-        try {
-            const res = await fetchOperationalTasksSummary();
-            const json = await readJson<{ ok?: boolean; counts?: TaskCounts }>(res);
-            if (res.ok && json.ok && json.counts) {
-                setCounts(json.counts);
-                writeOperationalTasksNavCountsCache("open", json.counts);
-            }
-        } catch {
-            /* non-fatal */
-        }
-    }, [enabled]);
+    const { alertCount, open, enabled } = useOperationalTasksNavCounts();
 
     useEffect(() => {
         if (!enabled) return;
-        const cancelDefer = runWhenAdminV2PrimarySurfaceReady(() => load(), "operational_tasks_nav");
-        const id = window.setInterval(() => {
-            if (!isAdminV2SidecarNetworkBlocked()) void load();
-        }, 120_000);
-        const onRefresh = () => void load();
         const onOpen = () => onOpenModal();
-        window.addEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
         window.addEventListener(ADMIN_V2_OPEN_TASKS_MODAL, onOpen);
-        return () => {
-            cancelDefer();
-            window.clearInterval(id);
-            window.removeEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
-            window.removeEventListener(ADMIN_V2_OPEN_TASKS_MODAL, onOpen);
-        };
-    }, [enabled, load, onOpenModal]);
+        return () => window.removeEventListener(ADMIN_V2_OPEN_TASKS_MODAL, onOpen);
+    }, [enabled, onOpenModal]);
 
     if (!enabled) return null;
 
-    const alertCount = (counts?.overdue ?? 0) + (counts?.due_soon ?? 0);
-    const open = counts?.open ?? 0;
     const title =
         alertCount > 0 ?
             `My tasks — ${alertCount} due soon or overdue (${open} open)`

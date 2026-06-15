@@ -96,10 +96,10 @@ describe("lifecycle catalog explicit config only", () => {
     });
 
     it("UI shows empty state and create button when catalog is empty", () => {
-        const select = read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx");
-        expect(select).toContain("lifecycle-catalog-empty");
-        expect(select).toContain("No lifecycles yet");
-        expect(select).toContain("lifecycle-catalog-create-new");
+        const cards = read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx");
+        expect(cards).toContain("lifecycle-catalog-empty");
+        expect(cards).toContain("BUSINESS_PROCESS_CATALOG_EMPTY");
+        expect(cards).toContain("lifecycle-catalog-create-new");
     });
 
     it("primary builder clears stale identity and hides board without catalog row", () => {

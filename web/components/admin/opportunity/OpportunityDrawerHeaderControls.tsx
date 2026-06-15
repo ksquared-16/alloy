@@ -2,15 +2,14 @@
 
 import BosDrawerAssistCta from "@/components/admin/drawer/BosDrawerAssistCta";
 import { DrawerHeaderAttentionBlock } from "@/components/admin/drawer/DrawerHeaderAttentionBlock";
+import { RecordDrawerManageMenu } from "@/components/admin/drawer/record/RecordDrawerManageMenu";
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
-import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
-import { OpportunityDrawerHeaderActionsMenu } from "@/components/admin/opportunity/OpportunityDrawerHeaderActionsMenu";
 import { ActionPreflightBlockedPanel } from "@/components/admin/opportunity/ActionPreflightBlockedPanel";
 import { OpportunityDrawerRegistryActionFeedbackBanner } from "@/components/admin/opportunity/OpportunityDrawerRegistryActionFeedbackBanner";
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
 import type { OpportunityDrawerRegistryActionFeedback } from "@/lib/admin/actions/useOpportunityDrawerRegistryActionFeedback";
 import { DRAWER_HEADER_ATTENTION_CENTER_COLUMN_CLASS } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
-import { shouldRouteDrawerActionsToCommandRail } from "@/lib/bos/bosRightRailCopilotFlag";
+import type { RecordManageMenuActionKey, RecordManageMenuItem } from "@/lib/admin/recordManage/types";
 
 type Props = {
     opportunityId: string;
@@ -18,16 +17,15 @@ type Props = {
     opportunitySingular?: string;
     queuePreviewSeed?: OpportunityQueuePreviewSeed | null;
     inquiryWorkflow?: boolean;
-    menuActions: ResolvedActionForClient[];
-    showRegistryActions: boolean;
+    manageMenuItems: RecordManageMenuItem[];
     canMutate: boolean;
-    actionLoadingKey?: string | null;
-    onActionSelect: (action: ResolvedActionForClient) => void;
+    manageBusyKey?: RecordManageMenuActionKey | null;
+    onManageSelect: (key: RecordManageMenuActionKey) => void;
     actionPreflightBlocked?: ActionPreflightUiPayload | null;
     onDismissActionPreflightBlocked?: () => void;
     registryActionFeedback?: OpportunityDrawerRegistryActionFeedback | null;
-    /** Explains why the Actions menu is disabled (read-only record, loading, etc.). */
-    actionsDisabledReason?: string | null;
+    /** Explains why the Manage menu is disabled (read-only record, loading, etc.). */
+    manageDisabledReason?: string | null;
     /**
      * `composed` — legacy sidebar: attention + actions in one shrink-0 right column.
      * `modal-attention` / `modal-actions` — AdminV2 center modal three-column header.
@@ -37,17 +35,16 @@ type Props = {
     bosActionVariant?: "default" | "juniper";
 };
 
-function OpportunityDrawerHeaderActionsRow({
+function OpportunityDrawerHeaderManageRow({
     opportunityId,
     overviewData,
     opportunitySingular = "Inquiry",
     queuePreviewSeed = null,
     inquiryWorkflow = false,
-    menuActions,
-    showRegistryActions,
+    manageMenuItems,
     canMutate,
-    actionLoadingKey = null,
-    onActionSelect,
+    manageBusyKey = null,
+    onManageSelect,
     disabledReason = null,
     proofLayoutActions = false,
     bosActionVariant = "default",
@@ -58,15 +55,13 @@ function OpportunityDrawerHeaderActionsRow({
     | "opportunitySingular"
     | "queuePreviewSeed"
     | "inquiryWorkflow"
-    | "menuActions"
-    | "showRegistryActions"
+    | "manageMenuItems"
     | "canMutate"
-    | "actionLoadingKey"
-    | "onActionSelect"
+    | "manageBusyKey"
+    | "onManageSelect"
     | "proofLayoutActions"
     | "bosActionVariant"
 > & { disabledReason?: string | null }) {
-    const routeActionsToRail = shouldRouteDrawerActionsToCommandRail();
     return (
         <div
             className="flex shrink-0 flex-nowrap items-center justify-end gap-2 self-start"
@@ -82,40 +77,37 @@ function OpportunityDrawerHeaderActionsRow({
                 proofLayoutActions={proofLayoutActions}
                 actionVariant={bosActionVariant}
             />
-            {showRegistryActions && !routeActionsToRail ?
-                <OpportunityDrawerHeaderActionsMenu
-                    actions={menuActions}
-                    inquiryWorkflow={inquiryWorkflow}
-                    proofLayoutActions={proofLayoutActions}
-                    disabled={!canMutate || !!actionLoadingKey}
-                    disabledReason={
-                        disabledReason ??
-                        (!canMutate ? "You don't have permission to run actions on this record." : null)
-                    }
-                    busyKey={actionLoadingKey}
-                    onSelect={onActionSelect}
-                />
-            :   null}
+            <RecordDrawerManageMenu
+                items={manageMenuItems}
+                inquiryWorkflow={inquiryWorkflow}
+                proofLayoutActions={proofLayoutActions}
+                disabled={!canMutate || !!manageBusyKey}
+                disabledReason={
+                    disabledReason ??
+                    (!canMutate ? "You don't have permission to manage this record." : null)
+                }
+                busyKey={manageBusyKey}
+                onSelect={onManageSelect}
+            />
         </div>
     );
 }
 
-/** Title rail: modal uses three columns; sidebar keeps composed attention + actions block. */
+/** Title rail: modal uses three columns; sidebar keeps composed attention + manage block. */
 export function OpportunityDrawerHeaderControls({
     opportunityId,
     overviewData,
     opportunitySingular = "Inquiry",
     queuePreviewSeed = null,
     inquiryWorkflow = false,
-    menuActions,
-    showRegistryActions,
+    manageMenuItems,
     canMutate,
-    actionLoadingKey = null,
-    onActionSelect,
+    manageBusyKey = null,
+    onManageSelect,
     actionPreflightBlocked = null,
     onDismissActionPreflightBlocked,
     registryActionFeedback = null,
-    actionsDisabledReason = null,
+    manageDisabledReason = null,
     layout = "composed",
     proofLayoutActions = false,
     bosActionVariant = "default",
@@ -139,18 +131,17 @@ export function OpportunityDrawerHeaderControls({
                 data-opportunity-header-controls="true"
                 data-opportunity-header-controls-layout="modal-actions"
             >
-                <OpportunityDrawerHeaderActionsRow
+                <OpportunityDrawerHeaderManageRow
                     opportunityId={opportunityId}
                     overviewData={overviewData}
                     opportunitySingular={opportunitySingular}
                     queuePreviewSeed={queuePreviewSeed}
                     inquiryWorkflow={inquiryWorkflow}
-                    menuActions={menuActions}
-                    showRegistryActions={showRegistryActions}
+                    manageMenuItems={manageMenuItems}
                     canMutate={canMutate}
-                    actionLoadingKey={actionLoadingKey}
-                    onActionSelect={onActionSelect}
-                    disabledReason={actionsDisabledReason}
+                    manageBusyKey={manageBusyKey}
+                    onManageSelect={onManageSelect}
+                    disabledReason={manageDisabledReason}
                     proofLayoutActions={proofLayoutActions}
                     bosActionVariant={bosActionVariant}
                 />
@@ -181,18 +172,17 @@ export function OpportunityDrawerHeaderControls({
                 <div className="min-w-0 flex-1 self-center" data-opportunity-header-controls-row="attention">
                     <DrawerHeaderAttentionBlock overviewData={overviewData} />
                 </div>
-                <OpportunityDrawerHeaderActionsRow
+                <OpportunityDrawerHeaderManageRow
                     opportunityId={opportunityId}
                     overviewData={overviewData}
                     opportunitySingular={opportunitySingular}
                     queuePreviewSeed={queuePreviewSeed}
                     inquiryWorkflow={inquiryWorkflow}
-                    menuActions={menuActions}
-                    showRegistryActions={showRegistryActions}
+                    manageMenuItems={manageMenuItems}
                     canMutate={canMutate}
-                    actionLoadingKey={actionLoadingKey}
-                    onActionSelect={onActionSelect}
-                    disabledReason={actionsDisabledReason}
+                    manageBusyKey={manageBusyKey}
+                    onManageSelect={onManageSelect}
+                    disabledReason={manageDisabledReason}
                     proofLayoutActions={proofLayoutActions}
                     bosActionVariant={bosActionVariant}
                 />

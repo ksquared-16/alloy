@@ -19,6 +19,7 @@ import { isPersonDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/p
 import { loadPersonDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/person/loadPersonDrawerViaViewModel";
 import type { PersonDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/person/types";
 import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
+import { prefetchDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import {
     peekPersonsDrawerDisplayVm,
     type PersonsDrawerDisplayVm,
@@ -100,6 +101,17 @@ export function usePersonsDrawerVmPayload(): PersonsDrawerVmPayloadState {
                 generation: vm.generation,
                 previousDrawer,
                 stack,
+            });
+            prefetchDrawerLayoutRuntimeBody({
+                apiPath:
+                    vm.surface === "child"
+                        ? "/api/admin/layout-runtime/child-drawer-body"
+                        : "/api/admin/layout-runtime/person-drawer-body",
+                entityId: vm.entity.id,
+                queryParams:
+                    vm.surface === "child"
+                        ? undefined
+                        : { opportunityId: drawer.personDrawerOpenSeed?.opportunity_id ?? null },
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?

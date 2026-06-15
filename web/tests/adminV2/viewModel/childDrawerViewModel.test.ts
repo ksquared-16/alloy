@@ -40,7 +40,7 @@ describe("buildChildDrawerOpenPreloadFromViewModel", () => {
                 deferred: [],
                 background: [],
             },
-            header: { title: "Child", subtitle: null, status_label: null },
+            header: { title: "Child", subtitle: null, status_label: null, status: { renderAs: "hidden" } },
             record: { id: "c-1", _person_name: "Child" },
             layout: { variant_key: "person_child_operating_v1", operating_sections: ["child_summary", "household"] },
             background_refresh: { allowed: ["status_values"] },

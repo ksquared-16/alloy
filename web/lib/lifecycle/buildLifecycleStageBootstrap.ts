@@ -3,7 +3,7 @@ import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsRe
 import { dbListFormDefinitions } from "@/lib/admin/forms/formsAdminDb";
 import { parseLifecycleProgressionRequirementsOverride } from "@/lib/completion/lifecycleProgressionRequirementsConfig";
 import { LIFECYCLE_STAGE_ORDER } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import { asOperatorStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { asOperatorStageKey, lifecycleBuilderFromDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { buildEnrollmentStatusStagesPayload } from "@/lib/lifecycle/enrollmentProcessStatusStageConfig";
 import {
     configuredStageKeysForMetadata,
@@ -22,6 +22,11 @@ import { entityLabelsMapFromEffective } from "@/lib/admin/entityLabelsServer";
 import { lifecycleActivationFromMetadata } from "@/lib/lifecycle/lifecycleActivationConfig";
 import { lifecycleRequirementEntityLabelsFromMap } from "@/lib/lifecycle/lifecycleRequirementEntityLabels";
 import type { LifecycleStageBootstrapPayload } from "@/lib/lifecycle/lifecycleStageBootstrapTypes";
+import { loadQueueMembershipStatusOptions } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
+import { resolveQueueMembershipForStage } from "@/lib/businessProcesses/resolveQueueMembership";
+import { enrollmentQueueMembershipLegacyFallback } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
+import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
     return rows.map((r) => ({
@@ -200,6 +205,25 @@ export async function buildLifecycleStageBootstrap(params: {
         activation?.primary_record_label ?? primaryRecordLabel
     );
 
+    const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
+    const process = builder?.processes.find((p) => p.is_active) ?? null;
+    const stageRecord = process?.stages.find((s) => s.key === builderStageKey && s.is_active) ?? null;
+    const queue_membership =
+        resolveQueueMembershipForStage(stageRecord ?? {}, builderStageKey) ??
+        enrollmentQueueMembershipLegacyFallback(builderStageKey, process?.key ?? "");
+    const subjectForOptions = queue_membership?.subject_type ?? "case";
+    const queue_membership_status_options = await loadQueueMembershipStatusOptions(
+        supabase,
+        orgId,
+        subjectForOptions,
+        builderStageKey,
+    );
+    const stage_operating_plan =
+        resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey) ??
+        (process?.key === "enrollment"
+            ? defaultStageOperatingPlanForEnrollmentStage(builderStageKey)
+            : null);
+
     return {
         department_id: departmentId,
         builder_stage_key: builderStageKey,
@@ -212,6 +236,9 @@ export async function buildLifecycleStageBootstrap(params: {
         forms,
         linkable_forms,
         base_actions,
+        queue_membership,
+        queue_membership_status_options,
+        stage_operating_plan,
     };
 }
 

@@ -29,26 +29,33 @@ describe("action workspace foundation", () => {
         expect(shell).toContain("data-action-workspace-panel");
     });
 
-    it("production create lead uses stable BOS workspace without cloud perimeter", () => {
+    it("production create lead uses locked stadium BOS workspace shell", () => {
         const bos = read("components/admin/actions/ActionWorkspaceBosShell.tsx");
+        const frame = read("components/admin/actions/BosOperationalIntakeShellFrame.tsx");
+        const pathModule = read("lib/bos/bosOperationalIntakeShellPath.ts");
         const constants = read("lib/admin/actions/bosWorkspaceShell.ts");
         const paste = read("components/admin/actions/ActionWorkspacePasteCanvas.tsx");
         const gather = read("components/admin/actions/ActionWorkspaceGatherFields.tsx");
+        expect(bos).toContain("BosOperationalIntakeShellFrame");
+        expect(frame).toContain("buildOperationalIntakeShellPath");
+        expect(pathModule).toContain("BOS_OPERATIONAL_INTAKE_SHELL_SWELL_RATIO");
         expect(bos).toContain("BOS_BACKDROP_STYLE");
-        expect(bos).toContain("BOS_AMBIENT_GLOW_STYLE");
+        expect(frame).toContain("data-bos-shell-outer-haze");
         expect(bos).toContain("BOS_SHELL_MIDNIGHT_FORGE");
         expect(bos).toContain("data-action-workspace-bos-brand");
         expect(bos).toContain("BOS_SHELL_TERRITORY_TITLE");
         expect(bos).toContain('data-action-workspace-shell="bos"');
         expect(bos).toContain("data-action-workspace-bos-workspace");
-        expect(bos).toContain("data-bos-ambient-glow");
+        expect(bos).not.toContain("BOS_AMBIENT_GLOW_STYLE");
+        expect(bos).not.toContain("bos-workspace-shell__atmosphere");
         expect(bos).toContain("ACTION_WORKSPACE_VIEWPORT_INSET");
         expect(bos).toContain("overflow-hidden");
         expect(bos).toContain("BOS_WORKSPACE_PANEL_HEIGHT");
         expect(bos).not.toContain("BosTerritoryShell");
         expect(bos).not.toContain("BosCloudTerritorySvg");
-        expect(bos).not.toContain("clipPath");
-        expect(bos).not.toContain("clip-path");
+        expect(bos).not.toContain("BosSmoke");
+        expect(bos).toContain("BosRevealSequence");
+        expect(bos).toContain('mode="workspace"');
         expect(constants).toContain("BOS_WORKSPACE_WIDTH");
         expect(constants).toContain("min(1200px, 84vw)");
         expect(constants).toContain("BOS_WORKSPACE_TOP_INSET");
@@ -84,7 +91,57 @@ describe("action workspace foundation", () => {
         expect(rail).toContain("action-workspace-step-${step.key}");
         expect(rail).toContain("ACTION_WORKSPACE_STEPS");
         expect(types).toContain('key: "gather"');
+        expect(types).toContain('label: "Review/Edit"');
+        expect(types).toContain('label: "Create"');
         expect(types).toContain('key: "success"');
+    });
+
+    it("canonical BOS execution loader is reusable and documented", () => {
+        const loader = read("components/admin/actions/BosExecutionLoader.tsx");
+        const execute = read("components/admin/actions/ActionWorkspaceExecuteState.tsx");
+        expect(loader).toContain("BosExecutionLoader");
+        expect(loader).toContain("BosExecutionLoaderVariant");
+        expect(loader).toContain('"inline"');
+        expect(loader).toContain('"panel"');
+        expect(loader).toContain('"fullscreen"');
+        expect(loader).toContain('"drawer"');
+        expect(loader).toContain("data-bos-execution-loader");
+        expect(loader).toContain("AlloyIdentityLoader");
+        expect(loader).not.toContain("ActionWorkspaceBosNeuralPulse");
+        expect(loader).toContain("Create Lead");
+        expect(loader).toContain("Schedule Tour");
+        expect(loader).toContain("BOS_EXECUTION_LOADER_PHASES_SEND_WELCOME");
+        expect(loader).toContain("BOS_EXECUTION_LOADER_DEFAULT_TITLE");
+        expect(loader).not.toContain("animate-spin");
+        expect(execute).toContain("BosExecutionLoader");
+        expect(execute).toContain('variant="fullscreen"');
+    });
+
+    it("action execution modals use BosExecutionLoader instead of generic spinners", () => {
+        const addChild = read("components/admin/opportunity/actions/AddInquiryChildModal.tsx");
+        const scheduleTour = read("components/admin/opportunity/actions/ScheduleTourActionFormModal.tsx");
+        const drawerOpening = read("components/admin/OpportunityDrawerOpeningOverlay.tsx");
+        expect(addChild).toContain("BosExecutionLoader");
+        expect(addChild).toContain("BOS_EXECUTION_LOADER_PHASES_ADD_CHILD");
+        expect(scheduleTour).toContain("BosExecutionLoader");
+        expect(scheduleTour).toContain("BOS_EXECUTION_LOADER_PHASES_SCHEDULE_TOUR");
+        expect(drawerOpening).toContain("AlloyCanonicalLoadingSurface");
+        expect(drawerOpening).not.toContain("BosExecutionLoader");
+        expect(drawerOpening).not.toContain("animate-spin");
+    });
+
+    it("BOS action workspace uses BosMark identity not sparkle icons", () => {
+        const shell = read("components/admin/actions/ActionWorkspaceBosShell.tsx");
+        const banner = read("components/admin/actions/ActionWorkspaceBosBanner.tsx");
+        const success = read("components/admin/actions/ActionWorkspaceSuccessState.tsx");
+        const paste = read("components/admin/actions/ActionWorkspacePasteCanvas.tsx");
+        expect(shell).toContain("BosHeader");
+        expect(banner).toContain("BosMark");
+        expect(success).toContain("BosMark");
+        expect(paste).toContain("BosRevealSequence");
+        expect(paste).toContain("BosButton");
+        expect(shell).not.toContain("Sparkles");
+        expect(banner).not.toContain("Sparkles");
     });
 
     it("BOS suggestions require explicit apply with inline edit", () => {
@@ -107,7 +164,10 @@ describe("action workspace foundation", () => {
         expect(modal).not.toContain("fetchActionIntakeSpec");
         expect(modal).toContain("validateCreateLeadPlatformMinimum");
         expect(modal).toContain("gatherPhase");
-        expect(modal).toContain("canFastPathCreateLead");
+        expect(modal).toContain("Create Lead");
+        expect(modal).toContain("Review details");
+        expect(modal).toContain("resolveCreateLeadPostCreateRecommendations");
+        expect(modal).toContain("mapBosRecommendationsToSuccessActions");
         expect(modal).toContain("Tell BOS about the family");
         expect(modal).toContain("onCreated");
         expect(modal).toContain("ActionWorkspaceBosGuidancePanel");
@@ -119,6 +179,20 @@ describe("action workspace foundation", () => {
         const review = read("components/admin/actions/ActionWorkspaceReviewSummary.tsx");
         expect(review).not.toContain("onChange");
         expect(review).toContain("Read-only summary");
+    });
+
+    it("workspace and work-unit actions share command-rail button component", () => {
+        const actionsBlock = read("app/adminV2/components/workspace/blocks/ActionsBlock.tsx");
+        const railButton = read("app/adminV2/components/workspace/WorkspaceActionRailButton.tsx");
+        const railSection = read("app/adminV2/components/workspace/WorkspaceCommandRailActionsSection.tsx");
+        const deptPage = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
+        const wuRail = read("app/adminV2/components/workspace/WorkUnitAboveFoldActionsRail.tsx");
+        expect(actionsBlock).toContain("WorkspaceActionRailButton");
+        expect(railButton).toContain("workspaceActionRailButtonClass");
+        expect(railSection).toContain("WorkspaceCommandRailActionsSection");
+        expect(railSection).toContain("suppressSectionTitles");
+        expect(deptPage).toContain("WorkspaceCommandRailActionsSection");
+        expect(wuRail).toContain("WorkspaceCommandRailActionsSection");
     });
 });
 
@@ -156,15 +230,54 @@ describe("create lead BOS guidance", () => {
         expect(guidance.advisoryItems).toContain("source");
     });
 
-    it("builds presentation-only BOS success recommendations", async () => {
-        const { resolveCreateLeadBosRecommendations } = await import("@/lib/admin/actions/createLeadBosGuidance");
-        const recs = resolveCreateLeadBosRecommendations({
+    it("structures post-create recommendations with readiness and blocking requirements", async () => {
+        const { resolveCreateLeadPostCreateRecommendations } = await import(
+            "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations"
+        );
+        const { mapBosRecommendationsToSuccessActions } = await import(
+            "@/lib/admin/actions/mapBosRecommendationsToSuccessActions"
+        );
+        const sparse = resolveCreateLeadPostCreateRecommendations({
             first_name: "Jordan",
             last_name: "Lee",
             child_date_of_birth: "",
         });
-        expect(recs.some((r) => r.label === "Schedule Tour")).toBe(true);
-        expect(recs.some((r) => r.label === "Missing Child DOB")).toBe(true);
+        const scheduleSparse = sparse.find((r) => r.key === "schedule-tour");
+        expect(scheduleSparse?.reason).toBe("Needs child/program info");
+        expect(scheduleSparse?.readiness).toBe("blocked");
+        expect(scheduleSparse?.blockingRequirements).toContain("Child name");
+        expect(
+            sparse.some(
+                (r) => r.key === "required-info:child_date_of_birth" && r.reason.includes("Required Information")
+            )
+        ).toBe(true);
+
+        const actions = mapBosRecommendationsToSuccessActions(sparse, { onOpenLead: () => {} });
+        expect(actions.find((a) => a.id === "schedule-tour")?.disabled).toBe(true);
+        expect(actions.find((a) => a.id === "send-welcome")?.status).toBe("Template ready soon");
+        expect(actions.find((a) => a.id === "open-lead")?.disabled).toBeFalsy();
+
+        const ready = resolveCreateLeadPostCreateRecommendations({
+            first_name: "Jordan",
+            last_name: "Lee",
+            child_first_name: "Sam",
+            child_program: "prog-1",
+            location_id: "loc-1",
+            child_desired_start_date: "2026-09-01",
+        });
+        expect(ready.find((r) => r.key === "schedule-tour")?.readiness).toBe("ready");
+        expect(ready.find((r) => r.key === "schedule-tour")?.reason).toBe("Available after opening lead");
+        expect(ready.find((r) => r.key === "send-welcome")?.readiness).toBe("coming_soon");
+    });
+
+    it("formats household label with Family naming", async () => {
+        const { formatCreateLeadHouseholdLabel } = await import("@/lib/admin/actions/createLeadBosGuidance");
+        expect(
+            formatCreateLeadHouseholdLabel({
+                first_name: "Lebron",
+                last_name: "James",
+            })
+        ).toBe("James Family");
     });
 });
 
@@ -215,15 +328,13 @@ describe("CreateLeadActionWorkspace render", () => {
         expect(html).toContain('data-testid="create-lead-action-workspace"');
         expect(html).toContain('data-action-workspace-shell="bos"');
         expect(html).toContain('data-action-workspace-bos-workspace="true"');
-        expect(html).toContain('data-bos-ambient-glow="true"');
+        expect(html).toContain('data-bos-shell-outer-haze="true"');
+        expect(html).not.toContain('data-bos-ambient-glow="true"');
         expect(html).not.toContain('data-action-workspace-bos-cloud-territory="true"');
         expect(html).not.toContain("data-bos-cloud-territory-svg");
-        expect(html).toContain('data-testid="create-lead-gather-step"');
-        expect(html).toContain('data-testid="action-workspace-paste-canvas"');
-        expect(html).toContain('data-testid="action-workspace-analyze-button"');
-        expect(html).toContain("Analyze with BOS");
-        expect(html).toContain("Tell BOS about the family");
-        expect(html).toContain('data-testid="action-workspace-step-rail"');
+        expect(html).toContain('data-testid="action-workspace-bos-reveal"');
+        expect(html).toContain('data-bos-reveal-mode="workspace"');
+        expect(html).not.toContain('data-testid="create-lead-gather-step"');
         expect(html).not.toContain('data-testid="create-lead-review-step"');
         expect(html).not.toContain('data-testid="create-lead-gather-fields"');
     });

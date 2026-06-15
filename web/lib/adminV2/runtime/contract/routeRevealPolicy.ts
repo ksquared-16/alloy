@@ -52,13 +52,12 @@ export function adminV2QueueMayShowRowSkeleton(revealState: AdminV2QueueLaneReve
 
 export type AdminV2WorkUnitRouteRevealInput = {
     shell_ready: boolean;
-    initial_lane_reveal_settled: boolean;
-    lane_reveal_state: AdminV2QueueLaneRevealState;
+    critical_bundle_ready: boolean;
+    coordinated_reveal_completed: boolean;
 };
 
 export function adminV2WorkUnitRouteRevealMode(input: AdminV2WorkUnitRouteRevealInput): AdminV2RouteRevealMode {
-    const laneSettled = workUnitQueueLaneRevealSettled(input.lane_reveal_state);
     if (!input.shell_ready) return "full_page_gate";
-    if (!input.initial_lane_reveal_settled && !laneSettled) return "full_page_gate";
+    if (!input.coordinated_reveal_completed && !input.critical_bundle_ready) return "full_page_gate";
     return "composed_page";
 }

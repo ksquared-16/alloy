@@ -9,6 +9,9 @@ import type {
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
 import type { LifecycleBaseActionDefinition } from "@/lib/lifecycle/lifecycleStageBaseActions";
+import type { QueueMembershipStatusOption } from "@/lib/lifecycle/loadQueueMembershipStatusOptions";
+import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 export type LifecycleStageBootstrapFieldPaletteEntry = {
     rule_id: string;
@@ -49,4 +52,7 @@ export type LifecycleStageBootstrapPayload = {
     forms: EnrollmentProcessFormCoverageRow[];
     linkable_forms: { id: string; name: string }[];
     base_actions: LifecycleBaseActionDefinition[];
+    queue_membership: QueueMembershipV1 | null;
+    queue_membership_status_options: QueueMembershipStatusOption[];
+    stage_operating_plan: StageOperatingPlanV1 | null;
 };

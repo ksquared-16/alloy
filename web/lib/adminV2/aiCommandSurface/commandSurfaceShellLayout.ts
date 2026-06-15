@@ -21,13 +21,22 @@ export const COMMAND_SURFACE_RAIL_THREAD_PANEL_MIN_HEIGHT_COLLAPSED_PX = 120;
 /** Rail expanded thread scroll region minimum. */
 export const COMMAND_SURFACE_RAIL_THREAD_SCROLL_MIN_HEIGHT_PX = 120;
 
-export type BosRailStarterIconKey = "summarize" | "missing" | "draft";
+export type BosRailActionIconKey =
+    | "summarize"
+    | "missing"
+    | "draft"
+    | "documents"
+    | "outreach"
+    | "insight";
+
+/** @deprecated Use {@link BosRailActionIconKey} */
+export type BosRailStarterIconKey = BosRailActionIconKey;
 
 export type CommandSurfaceRailStarterSuggestion = {
     title: string;
     description: string;
     prompt: string;
-    icon: BosRailStarterIconKey;
+    icon: BosRailActionIconKey;
 };
 
 export const COMMAND_SURFACE_RAIL_STARTER_SUGGESTIONS: readonly CommandSurfaceRailStarterSuggestion[] = [

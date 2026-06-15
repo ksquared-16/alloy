@@ -5,7 +5,9 @@ import type { CSSProperties } from "react";
 import type { DepartmentWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
-import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
+import { SignalBlock, KPIBlock, QueueBlock, WorkBlock } from "../blocks";
+import { WorkspaceCommandRailActionsSection } from "@/app/adminV2/components/workspace/WorkspaceCommandRailActionsSection";
+import { countActionsVm } from "@/lib/bos/countActionsVm";
 import "../workspace.css";
 
 type Props = {
@@ -41,6 +43,7 @@ export default function DepartmentWorkspace({ model, onAction }: Props) {
   const hasKpis = model.kpis.length > 0;
   const hasTopStack = hasBrief || hasSignals || hasAwareness;
   const hasControlDeck = hasTopStack || hasKpis;
+  const departmentActionCount = countActionsVm(model.actionsRail, "department");
 
   return (
     <div
@@ -138,7 +141,13 @@ export default function DepartmentWorkspace({ model, onAction }: Props) {
               data-adminv2-workspace-command-rail
               aria-label="Decisions and actions"
             >
-              <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="department" />
+              <WorkspaceCommandRailActionsSection
+                model={model.actionsRail}
+                onAction={onAction}
+                surface="department"
+                actionCount={departmentActionCount}
+                title="Actions"
+              />
             </aside>
           </div>
         </div>

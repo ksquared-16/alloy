@@ -21,12 +21,12 @@ import {
     mapCreateLeadGatherToExecutePayload,
     validateCreateLeadPlatformMinimum,
 } from "@/lib/admin/actions/createLeadPlatformGather";
-import { canFastPathCreateLead } from "@/lib/admin/actions/actionWorkspaceGatherFlow";
 import {
     formatCreateLeadHouseholdLabel,
     resolveCreateLeadBosGuidance,
-    resolveCreateLeadBosRecommendations,
 } from "@/lib/admin/actions/createLeadBosGuidance";
+import { mapBosRecommendationsToSuccessActions } from "@/lib/admin/actions/mapBosRecommendationsToSuccessActions";
+import { resolveCreateLeadPostCreateRecommendations } from "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
 import { ActionWorkspaceBosGuidancePanel } from "@/components/admin/actions/ActionWorkspaceBosGuidancePanel";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
@@ -37,6 +37,7 @@ import { ActionWorkspaceReviewSummary } from "@/components/admin/actions/ActionW
 import { ActionWorkspaceExecuteState } from "@/components/admin/actions/ActionWorkspaceExecuteState";
 import { ActionWorkspaceSuccessState } from "@/components/admin/actions/ActionWorkspaceSuccessState";
 import { ActionWorkspaceStepContent } from "@/components/admin/actions/ActionWorkspaceStepContent";
+import { queueActionWorkspaceLeadHandoff } from "@/lib/bos/actionWorkspaceDrawerHandoff";
 
 export type CreateLeadFormPayload = {
     first_name: string;
@@ -79,10 +80,6 @@ export function CreateLeadModal(props: {
     const [values, setValues] = useState<Record<string, string>>(emptyCreateLeadGatherValues());
     const [pasteText, setPasteText] = useState("");
     const [suggestions, setSuggestions] = useState<ActionWorkspaceBosSuggestion[]>([]);
-    const [lastAppliedSuggestions, setLastAppliedSuggestions] = useState<ActionWorkspaceBosSuggestion[]>([]);
-    const [appliedFromBos, setAppliedFromBos] = useState(false);
-    const [valuesEditedAfterApply, setValuesEditedAfterApply] = useState(false);
-    const [suggestionsEdited, setSuggestionsEdited] = useState(false);
     const [analyzing, setAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -90,21 +87,28 @@ export function CreateLeadModal(props: {
     const createdIdRef = useRef<string | null>(null);
     const handoffStartedRef = useRef(false);
 
+    const handoffToCreatedLead = useCallback(
+        (opportunityId: string) => {
+            queueActionWorkspaceLeadHandoff(opportunityId, (id) => onCreated?.(id), onClose);
+        },
+        [onClose, onCreated],
+    );
+
     const sections = useMemo(() => gatherSections(), []);
     const validation = useMemo(() => validateCreateLeadPlatformMinimum(values), [values]);
     const bosGuidance = useMemo(() => resolveCreateLeadBosGuidance(values), [values]);
     const householdLabel = useMemo(() => formatCreateLeadHouseholdLabel(values), [values]);
-    const bosRecommendations = useMemo(() => resolveCreateLeadBosRecommendations(values), [values]);
-    const fastPath = useMemo(
+    const bosRecommendations = useMemo(() => resolveCreateLeadPostCreateRecommendations(values), [values]);
+    const successActions = useMemo(
         () =>
-            canFastPathCreateLead({
-                gatherPhase,
-                values,
-                appliedFromBos,
-                valuesEditedAfterApply: valuesEditedAfterApply || suggestionsEdited,
-                lastAppliedSuggestions,
+            mapBosRecommendationsToSuccessActions(bosRecommendations, {
+                onOpenLead: () => {
+                    const opportunityId = createdIdRef.current;
+                    if (!opportunityId) return;
+                    handoffToCreatedLead(opportunityId);
+                },
             }),
-        [gatherPhase, values, appliedFromBos, valuesEditedAfterApply, suggestionsEdited, lastAppliedSuggestions]
+        [bosRecommendations, handoffToCreatedLead]
     );
 
     const reset = useCallback(() => {
@@ -113,10 +117,6 @@ export function CreateLeadModal(props: {
         setValues(emptyCreateLeadGatherValues());
         setPasteText("");
         setSuggestions([]);
-        setLastAppliedSuggestions([]);
-        setAppliedFromBos(false);
-        setValuesEditedAfterApply(false);
-        setSuggestionsEdited(false);
         setAnalyzing(false);
         setAnalyzeError(null);
         setError(null);
@@ -145,17 +145,15 @@ export function CreateLeadModal(props: {
         const opportunityId = createdIdRef.current;
         const openTimer = window.setTimeout(() => setSuccessDetail("Opening Lead…"), 600);
         const handoffTimer = window.setTimeout(() => {
-            onCreated?.(opportunityId);
-            onClose();
+            handoffToCreatedLead(opportunityId);
         }, SUCCESS_OPEN_DELAY_MS);
         return () => {
             window.clearTimeout(openTimer);
             window.clearTimeout(handoffTimer);
         };
-    }, [step, onCreated, onClose]);
+    }, [step, handoffToCreatedLead]);
 
     const setFieldValue = useCallback((payloadKey: string, next: string) => {
-        setValuesEditedAfterApply(true);
         setValues((prev) => ({ ...prev, [payloadKey]: next }));
     }, []);
 
@@ -173,7 +171,6 @@ export function CreateLeadModal(props: {
                 setGatherPhase("paste");
                 return;
             }
-            setSuggestionsEdited(false);
             setSuggestions(
                 mapped.map((s) => ({
                     id: suggestionId(s.payload_key, s.suggested_value),
@@ -201,9 +198,6 @@ export function CreateLeadModal(props: {
             for (const s of selected) next[s.payload_key] = s.suggested_value;
             return next;
         });
-        setLastAppliedSuggestions(selected);
-        setAppliedFromBos(true);
-        setValuesEditedAfterApply(false);
         setSuggestions([]);
         setGatherPhase("details");
     }, [suggestions]);
@@ -228,7 +222,8 @@ export function CreateLeadModal(props: {
             setSuccessDetail(null);
             setStep("success");
         } catch (e) {
-            setStep("review");
+            setStep("gather");
+            setGatherPhase("details");
             setError(e instanceof Error ? e.message : "Create lead failed");
         }
     }, [departmentId, onSubmit, values]);
@@ -270,43 +265,27 @@ export function CreateLeadModal(props: {
                 >
                     Back
                 </button>
-                {fastPath ?
-                    <>
-                        <button
-                            type="button"
-                            disabled={!validation.ok || !departmentId}
-                            onClick={() => {
-                                setError(null);
-                                setStep("review");
-                            }}
-                            className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/5 disabled:opacity-50"
-                            data-testid="create-lead-review-button"
-                        >
-                            Review first
-                        </button>
-                        <button
-                            type="button"
-                            disabled={!validation.ok || !departmentId}
-                            onClick={() => void runExecute()}
-                            className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                            data-testid="create-lead-fast-create-button"
-                        >
-                            Create lead
-                        </button>
-                    </>
-                :   <button
-                        type="button"
-                        disabled={!validation.ok || !departmentId}
-                        onClick={() => {
-                            setError(null);
-                            setStep("review");
-                        }}
-                        className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                        data-testid="create-lead-review-button"
-                    >
-                        Review lead
-                    </button>
-                }
+                <button
+                    type="button"
+                    disabled={!validation.ok}
+                    onClick={() => {
+                        setError(null);
+                        setStep("review");
+                    }}
+                    className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/5 disabled:opacity-50"
+                    data-testid="create-lead-review-details-button"
+                >
+                    Review details
+                </button>
+                <button
+                    type="button"
+                    disabled={!validation.ok || !departmentId}
+                    onClick={() => void runExecute()}
+                    className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                    data-testid="create-lead-create-button"
+                >
+                    Create Lead
+                </button>
             </>
         : step === "review" ?
             <>
@@ -325,9 +304,9 @@ export function CreateLeadModal(props: {
                     type="button"
                     onClick={() => void runExecute()}
                     className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90"
-                    data-testid="create-lead-confirm-button"
+                    data-testid="create-lead-create-button"
                 >
-                    Confirm & create lead
+                    Create Lead
                 </button>
             </>
         :   null;
@@ -376,7 +355,6 @@ export function CreateLeadModal(props: {
                                 setGatherPhase("paste");
                             }}
                             onSuggestionValueChange={(id, value) => {
-                                setSuggestionsEdited(true);
                                 setSuggestions((prev) =>
                                     prev.map((s) => (s.id === id ? { ...s, suggested_value: value } : s))
                                 );
@@ -420,7 +398,10 @@ export function CreateLeadModal(props: {
             </ActionWorkspaceStepContent>
 
             <ActionWorkspaceStepContent step="execute" activeStep={step}>
-                <ActionWorkspaceExecuteState title="Creating Lead…" detail="Saving person, household, and lead record." />
+                <ActionWorkspaceExecuteState
+                    title="Creating Lead…"
+                    subtitle="Saving person, household, and lead record."
+                />
             </ActionWorkspaceStepContent>
 
             <ActionWorkspaceStepContent step="success" activeStep={step}>
@@ -429,31 +410,7 @@ export function CreateLeadModal(props: {
                     detail={successDetail ?? "Preparing your workspace…"}
                     householdLabel={householdLabel}
                     bosRecommendations={bosRecommendations}
-                    suggestedActions={[
-                        {
-                            id: "schedule-tour",
-                            label: "Schedule Tour",
-                            icon: "calendar",
-                            disabled: true,
-                        },
-                        {
-                            id: "send-welcome",
-                            label: "Send Welcome Email",
-                            icon: "mail",
-                            disabled: true,
-                        },
-                        {
-                            id: "open-lead",
-                            label: "Open Lead",
-                            icon: "open",
-                            onClick: () => {
-                                const opportunityId = createdIdRef.current;
-                                if (!opportunityId) return;
-                                onCreated?.(opportunityId);
-                                onClose();
-                            },
-                        },
-                    ]}
+                    suggestedActions={successActions}
                 />
             </ActionWorkspaceStepContent>
 

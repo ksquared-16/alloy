@@ -9,14 +9,15 @@ function read(rel: string): string {
 }
 
 describe("Lifecycle Builder UX consolidation", () => {
-    it("uses lifecycle dropdown selector without legacy badges", () => {
+    it("uses process catalog cards instead of dropdown selector", () => {
         const primary = read("components/adminV2/settings/lifecycle/LifecycleBuilderPrimary.tsx");
-        const select = read("components/adminV2/settings/lifecycle/LifecycleCatalogSelect.tsx");
-        expect(primary).toContain("LifecycleCatalogSelect");
+        const cards = read("components/adminV2/settings/lifecycle/LifecycleProcessCatalogCards.tsx");
+        expect(primary).toContain("LifecycleProcessCatalogCards");
         expect(primary).not.toContain("LifecycleCatalogList");
         expect(primary).not.toContain("LifecycleCatalogRail");
-        expect(select).toContain("lifecycle-catalog-dropdown");
-        expect(select).not.toContain("lifecycle-catalog-rail");
+        expect(cards).toContain("lifecycle-process-catalog");
+        expect(cards).toContain("lifecycle-process-card-");
+        expect(cards).not.toContain("<select");
     });
 
     it("test cleanup is debug-gated only", () => {
@@ -27,23 +28,25 @@ describe("Lifecycle Builder UX consolidation", () => {
         );
     });
 
-    it("board uses stage tabs and guided configuration grid", () => {
+    it("board uses track-grouped stage nav and process workspace header", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        const nav = read("components/adminV2/settings/lifecycle/LifecycleStageNav.tsx");
+        const trackNav = read("components/adminV2/settings/lifecycle/LifecycleTrackStageNav.tsx");
         const config = read("components/adminV2/settings/lifecycle/LifecycleStageConfiguration.tsx");
+        expect(board).toContain("LifecycleProcessWorkspaceHeader");
+        expect(board).toContain("LifecycleTrackStageNav");
         expect(board).toContain("LifecycleStageNav");
         expect(board).toContain("LifecycleStageConfiguration");
-        expect(config).toContain("LifecycleStageGuidedBoard");
-        expect(nav).toContain("lifecycle-stage-tabs");
+        expect(config).toContain("LifecycleStageWorkspace");
+        expect(trackNav).toContain("lifecycle-track-stage-nav");
         expect(board).not.toContain("lifecycle-activation-card-grid");
         expect(board).not.toContain("LifecycleActivationWizardNav");
         expect(board).not.toContain("lifecycle-legacy-manage-hint");
     });
 
-    it("add stage lives in stage tab rail", () => {
+    it("add stage lives in stage nav", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
-        const nav = read("components/adminV2/settings/lifecycle/LifecycleStageNav.tsx");
-        expect(nav).toContain("lifecycle-stage-tab-add");
+        const trackNav = read("components/adminV2/settings/lifecycle/LifecycleTrackStageNav.tsx");
+        expect(trackNav).toContain("lifecycle-stage-tab-add");
         expect(board).not.toContain("lifecycle-activation-header-add-stage");
     });
 
@@ -51,7 +54,7 @@ describe("Lifecycle Builder UX consolidation", () => {
         const board = read("components/adminV2/settings/lifecycle/LifecycleActivationBoard.tsx");
         expect(board).toContain('data-testid="lifecycle-rename"');
         expect(board).toContain("canDeleteLifecycle");
-        expect(board).toContain('data-testid="lifecycle-activation-delete-disabled"');
+        expect(board).toContain('data-testid="lifecycle-activation-delete"');
         expect(board).toContain("LifecycleRenameModal");
     });
 
@@ -73,13 +76,14 @@ describe("Lifecycle Builder UX consolidation", () => {
         expect(primary).not.toContain("if (!entry.can_delete) return");
     });
 
-    it("stage configuration uses guided cards for each setup area", () => {
-        const guided = read("components/adminV2/settings/lifecycle/LifecycleStageGuidedBoard.tsx");
-        expect(guided).toContain("lifecycle-guided-card-");
-        expect(guided).toContain('stepId="required"');
-        expect(guided).toContain('stepId="statuses"');
-        expect(guided).toContain('stepId="queue"');
-        expect(guided).toContain('stepId="actions"');
-        expect(guided).not.toContain('stepId="forms"');
+    it("stage workspace uses Settings V2 section order", () => {
+        const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
+        expect(workspace).toContain('id="membership"');
+        expect(workspace).toContain('id="required"');
+        expect(workspace).toContain('id="work_plan"');
+        expect(workspace).toContain('id="actions"');
+        expect(workspace).toContain('id="ready_check"');
+        expect(workspace).toContain("lifecycle-stage-section-queue-advanced");
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_MEMBERSHIP");
     });
 });

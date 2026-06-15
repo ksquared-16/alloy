@@ -11,7 +11,13 @@ import {
 } from "@/lib/layout/runtime/personOverviewComposition";
 import { resolvePersonOverviewRightRailSections } from "@/lib/layout/runtime/resolvePersonOverviewRightRailSections";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
-import { DRAWER_OVERVIEW_CANVAS_CLASS } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
+import {
+    DRAWER_OVERVIEW_CANVAS_CLASS,
+    DRAWER_OVERVIEW_LEFT_COLUMN_CLASS,
+    DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
+    DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
+    DRAWER_OVERVIEW_SHELL_GRID_CLASS,
+} from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 type Props = {
@@ -106,7 +112,7 @@ export default function PersonOverviewRuntimeComposition({
                 className={DRAWER_OVERVIEW_CANVAS_CLASS}
                 data-person-overview-composition="true"
             >
-                <div className="grid grid-cols-1 gap-3 lg:grid-cols-12 lg:gap-4">
+                <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
                     {slots.household ?
                         <CompositionSlot
                             slotKey="household_relationships"
@@ -116,7 +122,7 @@ export default function PersonOverviewRuntimeComposition({
                             entityId={entityId}
                             canMutate={canMutate}
                             onAdornmentAction={onAdornmentAction}
-                            className="min-w-0 lg:col-span-3"
+                            className={DRAWER_OVERVIEW_LEFT_COLUMN_CLASS}
                         />
                     :   null}
 
@@ -129,13 +135,13 @@ export default function PersonOverviewRuntimeComposition({
                             entityId={entityId}
                             canMutate={canMutate}
                             onAdornmentAction={onAdornmentAction}
-                            className="min-w-0 lg:col-span-7"
+                            className={DRAWER_OVERVIEW_MAIN_COLUMN_CLASS}
                         />
                     :   null}
 
                     {rightRailSections.length > 0 ?
                         <div
-                            className="flex min-w-0 flex-col gap-3 lg:col-span-2"
+                            className={DRAWER_OVERVIEW_RIGHT_RAIL_CLASS}
                             data-person-overview-slot="right_rail"
                             data-person-overview-right-rail-section-count={String(rightRailSections.length)}
                         >

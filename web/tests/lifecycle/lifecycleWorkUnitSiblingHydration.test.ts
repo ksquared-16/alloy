@@ -7,6 +7,7 @@ import {
     filterSortLifecycleSiblingWorkUnits,
     lifecycleSiblingHeaderPaintReady,
     lifecycleSiblingTotalsFromDeptSummaries,
+    workUnitSummariesFromDepartmentQueueSummariesResponse,
     mapLifecycleSiblingNavRows,
     mergeLifecycleSiblingHydrationBlock,
     sortLifecycleSiblingWorkUnits,
@@ -107,6 +108,22 @@ describe("lifecycleWorkUnitSiblingHydration", () => {
         expect(totals["wu-tour"]).toBe(12);
     });
 
+    it("normalizes department queue summaries API rows for pill totals", () => {
+        const summaries = workUnitSummariesFromDepartmentQueueSummariesResponse([
+            { id: "wu-tour", work_unit_scope_total: 45 },
+            { id: "wu-lead", work_unit_scope_total: 17, queues: [{ key: "needs_attention", count: 2 }] },
+            { id: "wu-bad", error: "fail" },
+        ]);
+        expect(summaries["wu-tour"].total).toBe(45);
+        expect(summaries["wu-lead"].total).toBe(17);
+        expect(summaries["wu-lead"].needs_attention).toBe(2);
+        expect(summaries["wu-bad"]).toBeUndefined();
+        expect(lifecycleSiblingTotalsFromDeptSummaries(summaries)).toEqual({
+            "wu-tour": 45,
+            "wu-lead": 17,
+        });
+    });
+
     it("above-fold uses skeleton header while lifecycle sibling hydration pending", () => {
         const model = buildWorkUnitAboveFoldRenderModel({
             work_unit_shell_ready: true,
@@ -183,5 +200,16 @@ describe("work-unit page lifecycle hydration wiring", () => {
             page.indexOf("lifecycleSiblingWorkUnitsForHeader")
         );
         expect(effectBlock).not.toContain("queueSummaries");
+    });
+
+    it("work-unit page fetches site-scoped department summaries for sibling pill totals", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("work-unit-queue-summaries");
+        expect(page).toContain("summaries_fetch_start");
+        expect(page).toContain("viewScopeFingerprint");
+        expect(page).toContain("selectedSiteId");
+        expect(page).not.toContain(
+            "lifecycleSiblingTotalsFromDeptSummaries(cache?.workUnitSummaries)"
+        );
     });
 });

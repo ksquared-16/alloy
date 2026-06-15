@@ -12,7 +12,7 @@ function read(relPath: string): string {
 }
 
 describe("buildOpportunityDrawerHeaderMenuActions", () => {
-    it("flattens primary and header slots for Actions menu", () => {
+    it("flattens primary and header slots for command rail menu", () => {
         const menu = buildOpportunityDrawerHeaderMenuActions(
             {
                 ...emptyResolvedActionsBySlot(),
@@ -75,20 +75,22 @@ describe("buildOpportunityDrawerHeaderMenuActions", () => {
 describe("Opportunity VM header layout A.4", () => {
     it("places status below title via headerSubtitle, not headerTitleRight", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
-        expect(runtime).toContain("headerSubtitle={headerSubtitleBelowTitle}");
+        expect(runtime).toContain("headerSubtitleBelowTitle");
+        expect(runtime).toMatch(/headerSubtitle=\{layoutCutoverHeader \? undefined : headerSubtitleBelowTitle\}/);
         expect(runtime).toContain("data-opportunity-drawer-header-status-below-title");
         expect(runtime).not.toContain("displayVm?.header.subtitle");
         expect(runtime).toMatch(
-            /headerTitleRight[\s\S]*OpportunityDrawerHeaderControls[\s\S]*header_menu/
+            /headerTitleRight[\s\S]*OpportunityDrawerHeaderControls[\s\S]*manageMenuItems/
         );
         expect(runtime).not.toMatch(
             /headerTitleRight[\s\S]*VmProgressiveStatusDropdown/
         );
     });
 
-    it("uses flattened header_menu for Actions dropdown", () => {
+    it("uses header_menu for command rail and manage menu for header controls", () => {
         const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         expect(runtime).toContain("displayVm.actions.header_menu");
+        expect(runtime).toContain("buildRecordManageMenuForEntity");
         expect(runtime).not.toContain("menuActions={displayVm.actions.header}");
     });
 });

@@ -1,5 +1,7 @@
 "use client";
 
+import { WorkspaceActionRailButton } from "@/app/adminV2/components/workspace/WorkspaceActionRailButton";
+import { WORKSPACE_ACTION_RAIL_LIST_COLUMN_CLASS } from "@/lib/adminV2/workspace/workspaceActionRailButton";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 
 type Props = {
@@ -31,18 +33,15 @@ export function DrawerRegistryActionsRail({
     }
 
     return (
-        <ul
-            className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column flex flex-col gap-1.5"
-            data-drawer-rail-actions-list="true"
-        >
+        <ul className={`${WORKSPACE_ACTION_RAIL_LIST_COLUMN_CLASS} flex flex-col gap-1.5`} data-drawer-rail-actions-list="true">
             {actions.map((action) => {
                 const busy = actionLoadingKey === action.key;
                 const itemDisabled = disabled || busy;
                 return (
                     <li key={action.key}>
-                        <button
-                            type="button"
-                            className="adminv2-ws-actions-rail-primary w-full text-left"
+                        <WorkspaceActionRailButton
+                            tier="primary"
+                            className="w-full text-left"
                             disabled={itemDisabled}
                             title={
                                 busy ? "Action in progress…"
@@ -57,7 +56,7 @@ export function DrawerRegistryActionsRail({
                             }}
                         >
                             {busy ? "…" : action.label}
-                        </button>
+                        </WorkspaceActionRailButton>
                     </li>
                 );
             })}

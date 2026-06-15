@@ -9,12 +9,18 @@ import {
     mergeInquiryChildCreateFormFields,
     type EntityCreateFormField,
 } from "@/lib/admin/actions/entityCreateFormFieldLoader";
+import {
+    BOS_EXECUTION_LOADER_PHASES_ADD_CHILD,
+    BosExecutionLoader,
+} from "@/components/admin/actions/BosExecutionLoader";
 import ConfiguredCreateFormFields from "@/components/admin/opportunity/actions/ConfiguredCreateFormFields";
 import { ActionModalOverlayShell } from "@/components/admin/opportunity/actions/ActionModalOverlayShell";
 
 export type AddInquiryChildModalProps = {
     open: boolean;
     mode: "child" | "sibling";
+    /** Lead location inherited for child enrollment cascade when form omits location_id. */
+    defaultLocationId?: string | null;
     onClose: () => void;
     onSubmit: (payload: AddInquiryChildSubmitPayload) => Promise<void> | void;
 };
@@ -33,14 +39,24 @@ function mapValuesToPayload(values: Record<string, string>): AddInquiryChildSubm
     };
 }
 
-function buildInitialValues(fields: EntityCreateFormField[]): Record<string, string> {
+function buildInitialValues(
+    fields: EntityCreateFormField[],
+    defaultLocationId?: string | null,
+): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const field of fields) out[field.field_key] = "";
+    const inheritedLocation = (defaultLocationId ?? "").trim();
+    for (const field of fields) {
+        if (field.field_key === "location_id" && inheritedLocation) {
+            out[field.field_key] = inheritedLocation;
+        } else {
+            out[field.field_key] = "";
+        }
+    }
     return out;
 }
 
 export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
-    const { open, mode, onClose, onSubmit } = props;
+    const { open, mode, defaultLocationId, onClose, onSubmit } = props;
     const [identityFields, setIdentityFields] = useState<EntityCreateFormField[]>(CHILD_IDENTITY_CREATE_FORM_FALLBACK);
     const [participationFields, setParticipationFields] = useState<EntityCreateFormField[]>([]);
     const [fieldsLoading, setFieldsLoading] = useState(false);
@@ -81,13 +97,18 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                 );
                 setIdentityFields(identity);
                 setParticipationFields(participation);
-                setValues(buildInitialValues([...identity, ...participation]));
+                setValues(buildInitialValues([...identity, ...participation], defaultLocationId));
             } catch (e) {
                 if (!cancelled) {
                     setFieldsError((e as Error).message);
                     setIdentityFields(CHILD_IDENTITY_CREATE_FORM_FALLBACK);
                     setParticipationFields(mergeInquiryChildCreateFormFields([]));
-                    setValues(buildInitialValues([...CHILD_IDENTITY_CREATE_FORM_FALLBACK, ...mergeInquiryChildCreateFormFields([])]));
+                    setValues(
+                        buildInitialValues(
+                            [...CHILD_IDENTITY_CREATE_FORM_FALLBACK, ...mergeInquiryChildCreateFormFields([])],
+                            defaultLocationId,
+                        ),
+                    );
                 }
             } finally {
                 if (!cancelled) setFieldsLoading(false);
@@ -96,7 +117,7 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
         return () => {
             cancelled = true;
         };
-    }, [open, mode]);
+    }, [open, mode, defaultLocationId]);
 
     const payload = useMemo(() => mapValuesToPayload(values), [values]);
 
@@ -128,13 +149,22 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                 </div>
 
                 <div className="space-y-4 px-5 py-4">
-                    {fieldsLoading ?
+                    {submitting ?
+                        <BosExecutionLoader
+                            variant="panel"
+                            title={mode === "sibling" ? "Adding sibling…" : "Adding child…"}
+                            subtitle="Saving child record and inquiry participation."
+                            steps={BOS_EXECUTION_LOADER_PHASES_ADD_CHILD}
+                            data-testid="add-inquiry-child-execute-loader"
+                        />
+                    : null}
+                    {!submitting && fieldsLoading ?
                         <p className="text-sm text-alloy-midnight/60">Loading configured fields…</p>
                     :   null}
                     {fieldsError ?
                         <p className="text-sm text-alloy-midnight/55">{fieldsError}</p>
                     :   null}
-                    {identityFields.length > 0 ?
+                    {!submitting && identityFields.length > 0 ?
                         <div>
                             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                 Child identity
@@ -144,10 +174,11 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                                 values={values}
                                 onChange={onFieldChange}
                                 disabled={submitting}
+                                inheritedLocationId={defaultLocationId}
                             />
                         </div>
                     :   null}
-                    {participationFields.length > 0 ?
+                    {!submitting && participationFields.length > 0 ?
                         <div>
                             <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
                                 Inquiry participation
@@ -157,6 +188,7 @@ export function AddInquiryChildModal(props: AddInquiryChildModalProps) {
                                 values={values}
                                 onChange={onFieldChange}
                                 disabled={submitting}
+                                inheritedLocationId={defaultLocationId}
                             />
                         </div>
                     :   null}

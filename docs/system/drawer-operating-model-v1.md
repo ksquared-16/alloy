@@ -2,7 +2,8 @@
 
 **Path:** `docs/system/drawer-operating-model-v1.md`  
 **Status:** Active — **locked at v1 closeout (June 2026)**  
-**Audience:** Platform convergence, AdminV2 drawer runtime, `/settings/layouts`  
+**Canonical index:** **`drawer-doctrine.md`** — read first for ownership and navigation semantics; this doc retains shell/layout detail.  
+**Audience:** Platform convergence, AdminV2 drawer runtime, `/admin/settings/layouts`  
 **Closeout:** [`../sprints/06_2026/completed/drawer_operating_model_v1_closeout.md`](../sprints/06_2026/completed/drawer_operating_model_v1_closeout.md)  
 **Supersedes:** Nothing — extends and operationalizes existing contracts below.
 

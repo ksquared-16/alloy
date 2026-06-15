@@ -14,19 +14,18 @@ function read(rel: string): string {
 }
 
 describe("lifecycle Settings IA", () => {
-    it("Settings index includes lifecycle tile under Enrollment operations", () => {
+    it("Settings index includes lifecycle tile under Operations", () => {
         const page = read("app/adminV2/settings/page.tsx");
-        expect(page).toContain("Enrollment Operations");
-        expect(page).toContain('title="Lifecycle"');
-        expect(page).toContain("/adminV2/settings/lifecycle");
-        expect(page).toContain('emphasis');
+        expect(page).toContain('label="Operations"');
+        expect(page).toContain('title="Business Processes"');
+        expect(page).toContain("ADMIN_V2_SETTINGS_BUSINESS_PROCESSES_PATH");
     });
 
-    it("lifecycle hub page renders with operator title and test id", () => {
-        const page = read("app/adminV2/settings/lifecycle/page.tsx");
-        expect(page).toContain(">Lifecycle</h1>");
-        expect(page).toContain("settings-lifecycle-page");
-        expect(page).toContain("LifecycleHubClient");
+    it("business-processes hub page renders with operator title and test id", () => {
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_TITLE");
+        expect(page).toContain("settings-business-processes-page");
+        expect(page).toContain("LifecycleSettingsShell");
     });
 
     it("primary hub uses stage-first navigation and field requirements editor", () => {
@@ -68,13 +67,11 @@ describe("lifecycle Settings IA", () => {
         expect(requiredLabels.some((l) => l.includes("_"))).toBe(false);
     });
 
-    it("Record layouts links to lifecycle hub instead of owning the panel", () => {
+    it("layouts page owns drawer and queue presentation", () => {
         const layoutsPage = read("app/adminV2/settings/layouts/page.tsx");
-        const workspace = read("components/adminV2/settings/RecordDrawerCompositionWorkspace.tsx");
-        expect(layoutsPage).toContain("LifecycleSettingsCrossLinkBanner");
-        expect(layoutsPage).toContain('variant="layouts"');
-        expect(workspace).not.toContain("LifecycleProgressionRequirementsSettingsPanel");
-        expect(workspace).not.toContain("LifecycleStagesRequirementsHub");
+        expect(layoutsPage).toContain("settings-layouts-page");
+        expect(layoutsPage).toContain("LayoutConfigClient");
+        expect(layoutsPage).toContain("queue presentation");
     });
 
     it("related Settings pages cross-link to lifecycle hub", () => {

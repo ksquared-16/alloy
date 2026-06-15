@@ -27,8 +27,10 @@ vi.mock("@/lib/adminV2/viewModel/drawer/shadow/logDrawerViewModelShadow", () => 
 
 import { fetchOpportunityDrawerViewModelClient } from "@/lib/adminV2/viewModel/drawer/shadow/fetchOpportunityDrawerViewModelClient";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
+import { minimalSettledOpportunityDrawerViewModel } from "./fixtures/minimalSettledOpportunityDrawerViewModel";
+import type { OpportunityDrawerOpenPreload } from "@/lib/admin/opportunityDrawerOpenCoordinator";
 
-const preload = {
+const preload: OpportunityDrawerOpenPreload = {
     opportunityId: "opp-1",
     bootstrap: {
         entity: { id: "opp-1" },
@@ -65,7 +67,7 @@ const preload = {
         ],
     },
     enrichmentHeldUntilInteraction: true,
-} as const;
+};
 
 function minimalViewModel(): OpportunityDrawerViewModel {
     return {
@@ -73,6 +75,7 @@ function minimalViewModel(): OpportunityDrawerViewModel {
         structureSettled: true,
         compose_version: "1.0.0",
         entity: { type: "opportunity", id: "opp-1" },
+        first_paint: minimalSettledOpportunityDrawerViewModel().first_paint,
         workspace: {
             department_id: "dept-1",
             work_unit_id: "wu-1",
@@ -95,8 +98,9 @@ function minimalViewModel(): OpportunityDrawerViewModel {
             oper_trust_preview: null,
         },
         actions: {
-            header: preload.headerActions.header,
-            header_menu: preload.headerActions.header,
+            header: [...preload.headerActions.header],
+            header_menu: [...preload.headerActions.header],
+            manage_menu: [],
         },
         layout: {
             mode: "workflow_v1",
@@ -197,7 +201,7 @@ describe("diffOpportunityDrawerViewModelShadow", () => {
         const legacy = assembleLegacyDrawerOpenShadowSnapshot(preload);
         const vm = extractOpportunityDrawerViewModelShadowSnapshot({
             ...minimalViewModel(),
-            actions: { header: [], header_menu: [] },
+            actions: { header: [], header_menu: [], manage_menu: [] },
         });
         const diff = diffOpportunityDrawerViewModelShadow(legacy, vm);
         expect(diff.structural_mismatches.some((m) => m.field === "header_action_keys")).toBe(true);
@@ -283,7 +287,7 @@ describe("scheduleOpportunityDrawerViewModelShadow", () => {
 
     it("logs 422 classic layout skip with skip_reason", async () => {
         process.env.NEXT_PUBLIC_ADMINV2_DRAWER_VM_SHADOW = "true";
-        const classicPreload = {
+        const classicPreload: OpportunityDrawerOpenPreload = {
             ...preload,
             bootstrap: {
                 ...preload.bootstrap,
@@ -324,7 +328,7 @@ describe("scheduleOpportunityDrawerViewModelShadow", () => {
             ok: true,
             viewModel: {
                 ...minimalViewModel(),
-                actions: { header: [], header_menu: [] },
+                actions: { header: [], header_menu: [], manage_menu: [] },
             },
         });
 

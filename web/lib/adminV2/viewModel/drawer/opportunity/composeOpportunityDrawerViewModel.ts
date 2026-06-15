@@ -25,6 +25,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
+import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
 import { resolveOpportunityDrawerStatusCanMutateFromGate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import {
     buildOpportunityDrawerAttentionSummary,
@@ -305,6 +306,7 @@ export async function composeOpportunityDrawerViewModel(
         resolvedActions,
         activeTourBookings.length > 0
     );
+    const manageMenu = buildRecordManageMenuForEntity("lead", "Lead");
     const tabs = shell.tabs;
     const default_tab: DrawerTabKey = tabs.includes("overview") ? "overview" : (tabs[0] ?? "overview");
 
@@ -366,6 +368,14 @@ export async function composeOpportunityDrawerViewModel(
                 record,
                 statusDefs,
                 layoutMode: "workflow_v1",
+                configuredStages:
+                    lifecycle_rail?.stages.map((s, index) => ({
+                        id: s.key,
+                        key: s.key,
+                        label: s.label,
+                        sort_order: index,
+                        is_active: true,
+                    })) ?? null,
             }),
             status_can_mutate,
             oper_trust_preview,
@@ -373,6 +383,7 @@ export async function composeOpportunityDrawerViewModel(
         actions: {
             header: headerActions,
             header_menu: headerMenuActions,
+            manage_menu: manageMenu,
         },
         layout,
         above_fold: {

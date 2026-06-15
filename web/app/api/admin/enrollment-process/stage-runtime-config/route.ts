@@ -8,6 +8,8 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { isConfiguredStageKey } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { LifecycleStageQueueFiltersEmptyError } from "@/lib/lifecycle/lifecycleStageQueueFilters";
 import { LifecycleStageWorkUnitIdentityConflictError } from "@/lib/lifecycle/lifecycleStageWorkUnitIdentity";
+import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     saveLifecycleStageRuntimeConfig,
     validateLifecycleStageRuntimeConfigSnapshot,
@@ -58,6 +60,8 @@ export async function POST(request: NextRequest) {
             recommended_rule_ids?: string[];
             rule_levels_v1?: { version?: number; by_rule_id?: Record<string, string> };
         } | null;
+        queue_membership_v1?: unknown;
+        stage_operating_plan_v1?: unknown;
     } = {};
     try {
         body = (await request.json()) as typeof body;
@@ -113,6 +117,24 @@ export async function POST(request: NextRequest) {
               }
             : null;
 
+    const queueMembershipRaw = body.queue_membership_v1;
+    const queueMembership =
+        queueMembershipRaw !== undefined && queueMembershipRaw !== null
+            ? parseQueueMembershipV1(queueMembershipRaw)
+            : null;
+    if (queueMembershipRaw !== undefined && queueMembershipRaw !== null && !queueMembership) {
+        return NextResponse.json({ error: "Invalid queue_membership_v1" }, { status: 400 });
+    }
+
+    const operatingPlanRaw = body.stage_operating_plan_v1;
+    const stageOperatingPlan =
+        operatingPlanRaw !== undefined && operatingPlanRaw !== null
+            ? parseStageOperatingPlanV1(operatingPlanRaw)
+            : null;
+    if (operatingPlanRaw !== undefined && operatingPlanRaw !== null && !stageOperatingPlan) {
+        return NextResponse.json({ error: "Invalid stage_operating_plan_v1" }, { status: 400 });
+    }
+
     const supabase = createAdminClient();
     const deptOk = await assertRowOrg(supabase, "departments", departmentId, ctx.orgId);
     if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
@@ -130,6 +152,8 @@ export async function POST(request: NextRequest) {
             selectedStatusKeys,
             workUnitName,
             fieldRules,
+            ...(queueMembership ? { queueMembership } : {}),
+            ...(stageOperatingPlan ? { stageOperatingPlan } : {}),
         });
 
         const pipelineSnapshot =

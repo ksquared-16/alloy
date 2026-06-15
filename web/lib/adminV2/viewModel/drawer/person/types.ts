@@ -1,4 +1,5 @@
 import type { DrawerFirstPaintContract, DrawerFirstPaintDependencyState } from "@/lib/adminV2/viewModel/drawer/firstPaintTypes";
+import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
 import type { PersonOperatingSectionKey } from "@/lib/admin/person/personDrawerLayoutRuntime";
 
 /** Person drawer VM chrome surface — child is a separate flag/cutover path. */
@@ -39,6 +40,7 @@ export type PersonDrawerViewModel = {
         title: string;
         subtitle: string | null;
         status_label: string | null;
+        status: StatusControlVm;
     };
     record: Record<string, unknown>;
     layout: {

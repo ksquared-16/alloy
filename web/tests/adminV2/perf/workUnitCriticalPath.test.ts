@@ -27,7 +27,7 @@ describe("work-unit critical path", () => {
     it("page uses reveal gate before mounting WorkUnitWorkspace", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).toContain("workUnitRevealGate");
-        expect(page).toContain("WorkUnitPageLoadingGate");
+        expect(page).toContain("WorkUnitWorkspaceColdShell");
         expect(page).toContain("workUnitAboveFoldPageReady");
         expect(page).toContain("aboveFold={workUnitAboveFoldRenderable}");
         expect(page).toContain("buildWorkUnitAboveFoldRenderModel");

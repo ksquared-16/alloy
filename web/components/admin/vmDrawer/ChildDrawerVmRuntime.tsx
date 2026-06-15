@@ -74,8 +74,13 @@ export default function ChildDrawerVmRuntime() {
             statusBadge={
                 displayVm ?
                     <VmPersonStatusControl
+                        personId={String(displayVm.entity.id)}
+                        entityLabel="Child"
                         statusLabel={displayVm.header.status_label}
-                        entityLabel="Child status"
+                        currentStatusKey={String(record?.status_key ?? "").trim()}
+                        statusControl={displayVm.header.status}
+                        canMutate={!!canMutate}
+                        childSurface
                     />
                 :   undefined
             }

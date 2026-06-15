@@ -7,7 +7,10 @@ export function isCreateLeadExecuteRequest(actionKey: string, entityId: string |
     return k === "create_lead" && (id === "" || id === CREATE_LEAD_ACTION_ENTITY_ID);
 }
 
-/** New Lead stage status key (enrollment pipeline). */
+/** Default Lead/Opportunity case container status (not enrollment pipeline). */
+export const DEFAULT_LEAD_CASE_STATUS_KEY = "open";
+
+/** New Lead stage status key (enrollment pipeline / OCM). */
 export const NEW_LEAD_STATUS_KEY = "new_inquiry";
 
 export {

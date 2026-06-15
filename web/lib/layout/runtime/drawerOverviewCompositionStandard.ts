@@ -3,30 +3,43 @@
  *
  * Entity-specific section keys and slot partitioners stay in *OverviewComposition modules;
  * this file owns the cross-drawer placement contract only.
+ *
+ * Layout breakpoints use **container queries** on `.adminv2-drawer-overview-canvas` so overview
+ * grids respond to drawer content width, not the browser viewport.
  */
 
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import { PRESENTATION_EMPTY_STATE } from "@/lib/presentation/presentationTypography";
 
-/** Twelve-column shell: left 3 / main 7 / right rail 2. */
+/** Twelve-column shell: left 4 / main 5 / right rail 3 — relationship cards / enrollment / comms rail. */
 export const DRAWER_OVERVIEW_SHELL_GRID = {
-    leftColumn: 3,
-    mainColumn: 7,
-    rightRail: 2,
+    leftColumn: 4,
+    mainColumn: 5,
+    rightRail: 3,
     columns: 12,
 } as const;
 
-export const DRAWER_OVERVIEW_CANVAS_CLASS = `space-y-3 rounded-lg p-3 ${LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS}`;
+/** Minimum drawer overview canvas width before enabling the 3/7/2 dashboard grid. */
+export const DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX = 1040;
 
-export const DRAWER_OVERVIEW_BODY_GRID_CLASS =
-    "grid grid-cols-1 items-stretch gap-3 lg:grid-cols-12 lg:gap-4";
+export const DRAWER_OVERVIEW_CONTAINER_CLASS = "adminv2-drawer-overview-canvas";
 
-export const DRAWER_OVERVIEW_LEFT_COLUMN_CLASS = "min-w-0 lg:col-span-3 lg:flex lg:flex-col";
+export const DRAWER_OVERVIEW_SHELL_GRID_CLASS = "adminv2-drawer-overview-shell-grid";
 
-export const DRAWER_OVERVIEW_MAIN_COLUMN_CLASS = "min-w-0 lg:col-span-7 lg:flex lg:flex-col";
+export const DRAWER_OVERVIEW_CANVAS_CLASS = `${DRAWER_OVERVIEW_CONTAINER_CLASS} space-y-3 rounded-lg p-3 ${LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS}`;
 
-export const DRAWER_OVERVIEW_RIGHT_RAIL_CLASS =
-    "flex min-w-0 flex-col gap-3 lg:col-span-2 lg:min-w-[11.5rem]";
+/** @deprecated Use DRAWER_OVERVIEW_SHELL_GRID_CLASS — container-aware, not viewport `lg:`. */
+export const DRAWER_OVERVIEW_BODY_GRID_CLASS = DRAWER_OVERVIEW_SHELL_GRID_CLASS;
+
+export const DRAWER_OVERVIEW_LEFT_COLUMN_CLASS = "adminv2-drawer-overview-col-left";
+
+export const DRAWER_OVERVIEW_MAIN_COLUMN_CLASS = "adminv2-drawer-overview-col-main";
+
+export const DRAWER_OVERVIEW_RIGHT_RAIL_CLASS = "adminv2-drawer-overview-col-rail";
+
+export const DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS = "adminv2-drawer-overview-lead-source-grid";
+
+export const DRAWER_OVERVIEW_ENROLLMENT_FIELD_GRID_CLASS = "adminv2-drawer-enrollment-field-grid";
 
 export const DRAWER_OVERVIEW_OVERFLOW_STACK_CLASS = "space-y-3";
 
@@ -62,10 +75,9 @@ export function drawerOverviewShellGridSpans(): {
     main: string;
     rightRail: string;
 } {
-    const { leftColumn, mainColumn, rightRail } = DRAWER_OVERVIEW_SHELL_GRID;
     return {
-        left: `lg:col-span-${leftColumn}`,
-        main: `lg:col-span-${mainColumn}`,
-        rightRail: `lg:col-span-${rightRail}`,
+        left: DRAWER_OVERVIEW_LEFT_COLUMN_CLASS,
+        main: DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
+        rightRail: DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
     };
 }

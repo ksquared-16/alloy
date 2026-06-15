@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Statuses — Phase 1 verification</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f4f6f9; margin: 0; padding: 24px; color: #31394d; }
+    .banner { background: rgba(45, 90, 74, 0.05); border: 1px solid rgba(45, 90, 74, 0.2); border-radius: 12px; padding: 12px 16px; font-size: 12px; margin-bottom: 12px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    .sub { font-size: 12px; color: #59678b; margin-bottom: 20px; }
+    .section { background: #fff; border: 1px solid #e6e8ec; border-radius: 12px; margin-bottom: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+    .head { display: flex; justify-content: space-between; padding: 12px 20px; background: rgba(244,246,249,.5); border-bottom: 1px solid #e6e8ec; font-size: 14px; }
+    .title { font-weight: 600; letter-spacing: .04em; }
+    .count { color: #59678b; margin-left: 8px; font-weight: 400; }
+    .removed { opacity: .45; text-decoration: line-through; border-color: #f5c2c7; background: #fff5f5; }
+    .badge { display: inline-block; font-size: 10px; background: #2d5a4a; color: #fff; border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; }
+    .note { margin-top: 16px; font-size: 11px; color: #59678b; }
+  </style>
+</head>
+<body>
+  <div class="banner">Process stages group statuses into the enrollment pipeline. Open Business Processes to assign statuses to stages.</div>
+  <h1>Statuses</h1>
+  <p class="sub">Manage status names and order by entity layer. Lead Statuses, Enrollment Statuses, and People Statuses use the same status_definitions table.</p>
+
+  <div class="section"><div class="head"><span><span class="title">Lead Statuses</span><span class="count">12 statuses</span></span></div></div>
+  <div class="section"><div class="head"><span><span class="title">Enrollment Statuses</span><span class="count">8 statuses</span></span></div></div>
+  <div class="section"><div class="head"><span><span class="title">People Statuses</span><span class="count">6 statuses</span></span></div></div>
+  <div class="section"><div class="head"><span><span class="title">Customers</span><span class="count">3 statuses</span></span></div></div>
+  <div class="section"><div class="head"><span><span class="title">Jobs</span><span class="count">5 statuses</span></span></div></div>
+
+  <div class="section removed"><div class="head"><span><span class="title">Children</span><span class="count">removed in Phase 1</span><span class="badge">NOT SHOWN</span></span></div></div>
+
+  <p class="note">Phase 1 verification mock — customer_members / Children accordion hidden from operator Settings registry.</p>
+</body>
+</html>

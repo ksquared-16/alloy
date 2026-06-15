@@ -2,6 +2,7 @@
 
 import { CANONICAL_OPERATOR_BASE } from "@/lib/admin/canonicalAdminRoutes";
 import Link from "next/link";
+import { WorkspaceActionRailButton } from "@/app/adminV2/components/workspace/WorkspaceActionRailButton";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -103,40 +104,54 @@ function GrowthWorkspaceActionsInner({
             <p className={presentation === "bridge" ? "text-[10px] tracking-wide opacity-60 mb-1" : "text-[11px] font-semibold text-alloy-midnight/55 mb-1"}>
                 Surface actions
             </p>
-            <div className={presentation === "bridge" ? "space-y-1.5" : "flex flex-wrap gap-2"}>
-                <button
-                    type="button"
-                    onClick={() => openDrawer({ type: "opportunities", id: "new" })}
-                    className={
-                        presentation === "bridge"
-                            ? "adminv2-ws-actions-rail-primary text-center no-underline rounded-md font-bold text-[11px] w-full border-0 cursor-pointer"
-                            : "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md hover:opacity-92 adminv2-ws-btn-primary-solid"
-                    }
-                >
-                    Create opportunity
-                </button>
-                <Link
-                    href="/admin/opportunities"
-                    prefetch={pf("/admin/opportunities")}
-                    className={
-                        presentation === "bridge"
-                            ? "adminv2-ws-actions-rail-secondary text-center no-underline rounded-md font-bold text-[11px] w-full"
-                            : "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-admin-border text-alloy-midnight hover:bg-alloy-stone/30 adminv2-ws-btn-secondary-outline"
-                    }
-                >
-                    All opportunities
-                </Link>
-                <Link
-                    href="/admin/system/work-units"
-                    prefetch={pf("/admin/system/work-units")}
-                    className={
-                        presentation === "bridge"
-                            ? "adminv2-ws-actions-rail-secondary text-center no-underline rounded-md font-bold text-[11px] w-full"
-                            : "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-admin-border text-alloy-midnight hover:bg-alloy-stone/30 adminv2-ws-btn-secondary-outline"
-                    }
-                >
-                    Work unit settings
-                </Link>
+            <div
+                className={
+                    presentation === "bridge" ?
+                        "adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column"
+                    :   "flex flex-wrap gap-2"
+                }
+            >
+                {presentation === "bridge" ?
+                    <>
+                        <WorkspaceActionRailButton tier="primary" onClick={() => openDrawer({ type: "opportunities", id: "new" })}>
+                            Create opportunity
+                        </WorkspaceActionRailButton>
+                        <WorkspaceActionRailButton as="link" href="/admin/opportunities" prefetch={pf("/admin/opportunities")} tier="secondary">
+                            All opportunities
+                        </WorkspaceActionRailButton>
+                        <WorkspaceActionRailButton
+                            as="link"
+                            href="/admin/system/work-units"
+                            prefetch={pf("/admin/system/work-units")}
+                            tier="secondary"
+                        >
+                            Work unit settings
+                        </WorkspaceActionRailButton>
+                    </>
+                :   <>
+                        <button
+                            type="button"
+                            onClick={() => openDrawer({ type: "opportunities", id: "new" })}
+                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md hover:opacity-92 adminv2-ws-btn-primary-solid"
+                        >
+                            Create opportunity
+                        </button>
+                        <Link
+                            href="/admin/opportunities"
+                            prefetch={pf("/admin/opportunities")}
+                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-admin-border text-alloy-midnight hover:bg-alloy-stone/30 adminv2-ws-btn-secondary-outline"
+                        >
+                            All opportunities
+                        </Link>
+                        <Link
+                            href="/admin/system/work-units"
+                            prefetch={pf("/admin/system/work-units")}
+                            className="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-admin-border text-alloy-midnight hover:bg-alloy-stone/30 adminv2-ws-btn-secondary-outline"
+                        >
+                            Work unit settings
+                        </Link>
+                    </>
+                }
             </div>
             <p className={presentation === "bridge" ? "text-[10px] mt-2 opacity-70 leading-snug" : "text-xs text-alloy-midnight/55 mt-3"}>
                 Lane: <strong className="text-alloy-midnight/85">{growthLaneLabel(lane)}</strong> — use queue rows for qualify, quote, won, and lost.

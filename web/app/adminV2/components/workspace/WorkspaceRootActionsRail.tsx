@@ -1,51 +1,164 @@
 "use client";
 
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
-import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
-import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
+import { WorkspaceCommandRailActionsSection } from "@/app/adminV2/components/workspace/WorkspaceCommandRailActionsSection";
+import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
+import WorkUnitScheduleTourRecordPickerModal from "@/components/admin/workspace/WorkUnitScheduleTourRecordPickerModal";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import { executeCreateLeadFromModal } from "@/lib/admin/actions/entryLifecycleActionClient";
+import { countActionsVm } from "@/lib/bos/countActionsVm";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { fetchWorkspaceRootResolvedActions } from "@/lib/workspace/fetchWorkspaceRootResolvedActions";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    mergeEnrollmentRightRailActions,
+    REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX,
+} from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
+import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
+import type { ActionsVm } from "@/lib/ui-v2/workspace-types";
 
-const WORKSPACE_ROOT_ACTIONS = [
-    {
-        id: "forms",
-        href: "/admin/forms",
-        label: "Forms (definitions & submissions)",
-    },
-    {
-        id: "inquiries",
-        href: "/legacy-admin/opportunities",
-        label: "Open inquiries (classic admin)",
-    },
-    {
-        id: "work-units",
-        href: "/legacy-admin/system/work-units",
-        label: "Work unit registry",
-    },
-] as const;
+const EMPTY_ACTIONS: ActionsVm = {
+    primaries: [],
+    systemActions: [],
+    quickOperations: [],
+    overflow: [],
+};
+
+type Props = {
+    /** Default department for create-lead and other org-scoped actions on /workspace. */
+    defaultDepartmentId?: string | null;
+};
 
 /**
- * Workspace root Actions rail — same collapsible pattern as work-unit command column.
+ * Workspace root Actions rail — configured business-process actions (`surface=workspace`).
  */
-export function WorkspaceRootActionsRail() {
+export function WorkspaceRootActionsRail({ defaultDepartmentId = null }: Props) {
+    const router = useRouter();
+    const { openDrawer } = useAdminDrawer();
+    const siteFilter = useWorkspaceSiteFilter();
+    const selectedSiteId = siteFilter?.selectedSiteId ?? null;
+
+    const [resolved, setResolved] = useState<ResolvedActionForClient[] | null>(null);
+    const [settled, setSettled] = useState(false);
+    const [createLeadOpen, setCreateLeadOpen] = useState(false);
+    const [scheduleTourPickerOpen, setScheduleTourPickerOpen] = useState(false);
+
+    useEffect(() => {
+        let cancelled = false;
+        setSettled(false);
+        void fetchWorkspaceRootResolvedActions({ fetchInit: workspaceDataFetchInit() ?? {} })
+            .then((list) => {
+                if (!cancelled) setResolved(Array.isArray(list) ? list : []);
+            })
+            .catch(() => {
+                if (!cancelled) setResolved([]);
+            })
+            .finally(() => {
+                if (!cancelled) setSettled(true);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    const resolvedByKey = useMemo(() => {
+        const m = new Map<string, ResolvedActionForClient>();
+        for (const a of resolved ?? []) m.set(a.key, a);
+        return m;
+    }, [resolved]);
+
+    const model = useMemo(
+        () => mergeEnrollmentRightRailActions(resolved ?? [], EMPTY_ACTIONS),
+        [resolved]
+    );
+
+    const actionCount = useMemo(() => {
+        if (!settled) return null;
+        return countActionsVm(model, "company");
+    }, [model, settled]);
+
+    const openScheduleTourRecordPicker = useCallback(() => {
+        setScheduleTourPickerOpen(true);
+    }, []);
+
+    const openScheduleTourForOpportunity = useCallback(
+        (opportunityId: string) => {
+            setScheduleTourPickerOpen(false);
+            openDrawer({ type: "opportunities", id: opportunityId });
+        },
+        [openDrawer]
+    );
+
+    const onAction = useCallback(
+        async (action: WorkspaceAction) => {
+            if (action.type !== "actions.block") return;
+            if (action.actionId.startsWith(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX)) {
+                const key = action.actionId.slice(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX.length);
+                const resolvedAction = resolvedByKey.get(key);
+                if (!resolvedAction) return;
+                await applyRegistryResolvedActionClient(resolvedAction, {
+                    router,
+                    openDrawer,
+                    openCreateLead: () => setCreateLeadOpen(true),
+                    openScheduleTourRecordPicker,
+                    departmentId: defaultDepartmentId,
+                    workUnitId: null,
+                    context: {
+                        surface: "workspace",
+                        department_id: defaultDepartmentId,
+                        work_unit_id: null,
+                    },
+                });
+                return;
+            }
+            window.alert("Coming next: This action is not configured yet.");
+        },
+        [defaultDepartmentId, openDrawer, openScheduleTourRecordPicker, resolvedByKey, router]
+    );
+
+    if (settled && (actionCount ?? 0) === 0) return null;
+
     return (
-        <CommandRailCollapsibleActionsSection actionCount={WORKSPACE_ROOT_ACTIONS.length}>
-            <section
-                className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel px-1 pb-1"
-                aria-label="Workspace actions"
-            >
-                <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column gap-2">
-                    {WORKSPACE_ROOT_ACTIONS.map((action) => (
-                        <Link
-                            key={action.id}
-                            href={action.href}
-                            prefetch={shouldDisableAdminV2LinkPrefetch(action.href) ? false : undefined}
-                            className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
-                        >
-                            {action.label}
-                        </Link>
-                    ))}
-                </div>
-            </section>
-        </CommandRailCollapsibleActionsSection>
+        <>
+            <WorkspaceCommandRailActionsSection
+                model={model}
+                onAction={onAction}
+                surface="company"
+                actionCount={actionCount}
+                loading={!settled}
+                title="Actions"
+                slotTestId="workspace-root-actions-rail"
+            />
+            {defaultDepartmentId ? (
+                <CreateLeadModal
+                    open={createLeadOpen}
+                    departmentId={defaultDepartmentId}
+                    onClose={() => setCreateLeadOpen(false)}
+                    onSubmit={async (payload) => {
+                        const opportunityId = await executeCreateLeadFromModal({
+                            payload,
+                            departmentId: defaultDepartmentId,
+                            workUnitId: null,
+                            surface: "workspace",
+                        });
+                        return { opportunity_id: opportunityId };
+                    }}
+                    onCreated={(opportunityId) => {
+                        openDrawer({ type: "opportunities", id: opportunityId });
+                        router.refresh();
+                    }}
+                />
+            ) : null}
+            <WorkUnitScheduleTourRecordPickerModal
+                open={scheduleTourPickerOpen}
+                siteId={selectedSiteId}
+                onDismiss={() => setScheduleTourPickerOpen(false)}
+                onSelectOpportunityId={openScheduleTourForOpportunity}
+            />
+        </>
     );
 }

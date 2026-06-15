@@ -93,17 +93,16 @@ export function isPrefetchableWorkUnitQueuePillKey(
     if (isLifecycleWorkUnitNavChipKey(key)) return false;
     if (key === LIFECYCLE_NEEDS_ATTENTION_PLACEHOLDER_CHIP_KEY) return false;
 
-    const resolved = resolveWorkUnitFetchQueueKeyFromPill(
-        key,
-        "",
-        workUnit?.queue_definition != null ? { queue_definition: workUnit.queue_definition } : undefined
-    );
+    if (workUnit?.queue_definition == null) return false;
+
+    const resolved = resolveWorkUnitFetchQueueKeyFromPill(key, "", {
+        queue_definition: workUnit.queue_definition,
+    });
     const apiKey = resolved.queueKey.trim();
     if (!apiKey) return false;
 
-    const validKeys = workUnit ? listExecutableQueueKeysForWorkUnit(workUnit) : [];
-    if (workUnit?.queue_definition != null && validKeys.length === 0) return false;
-    if (validKeys.length === 0) return Boolean(apiKey);
+    const validKeys = listExecutableQueueKeysForWorkUnit(workUnit);
+    if (validKeys.length === 0) return false;
     return validKeys.includes(apiKey);
 }
 
@@ -120,15 +119,17 @@ export function filterPrefetchableWorkUnitQueuePillKeys(
     );
 }
 
-/** Background warm targets: same-WU neighbors + lifecycle sibling primary lanes. */
+/** Background warm targets: same-WU neighbors; lifecycle siblings optional (Pass 3: defer siblings). */
 export function workUnitLanePrefetchTargets(params: {
     visiblePillKeys: readonly string[];
     selectedPillKey: string | null;
     workUnit: WorkUnitRowForPrefetch | null;
     lifecycleSiblings?: ReadonlyArray<WorkUnitRowForPrefetch> | null;
     cap?: number;
+    includeLifecycleSiblings?: boolean;
 }): WorkUnitLanePrefetchTarget[] {
     const cap = params.cap ?? 6;
+    const includeLifecycleSiblings = params.includeLifecycleSiblings ?? false;
     const wu = params.workUnit;
     if (!wu?.id?.trim()) return [];
 
@@ -152,6 +153,10 @@ export function workUnitLanePrefetchTargets(params: {
         if (out.length >= cap) return out;
     }
 
+    if (!includeLifecycleSiblings) {
+        return out.slice(0, cap);
+    }
+
     for (const sibling of params.lifecycleSiblings ?? []) {
         if (!sibling.id?.trim() || sibling.id === wu.id) continue;
         const primary = resolveLifecycleWorkUnitPrimaryQueueKey(sibling);
@@ -165,3 +170,29 @@ export function workUnitLanePrefetchTargets(params: {
 
 /** Max concurrent background row prefetches per scheduling tick. */
 export const WORK_UNIT_QUEUE_PILL_PREFETCH_CONCURRENCY = 2;
+
+/** Prefetch every visible executable pill (excluding active) after above-fold reveal. */
+export function allVisibleWorkUnitLanePrefetchTargets(params: {
+    visiblePillKeys: readonly string[];
+    selectedPillKey: string | null;
+    workUnit: WorkUnitRowForPrefetch | null;
+}): WorkUnitLanePrefetchTarget[] {
+    const wu = params.workUnit;
+    if (!wu?.id?.trim() || wu.queue_definition == null || !params.visiblePillKeys.length) return [];
+
+    const selected = params.selectedPillKey?.trim() || "";
+    const out: WorkUnitLanePrefetchTarget[] = [];
+    const seen = new Set<string>();
+
+    for (const pillKey of params.visiblePillKeys) {
+        const key = pillKey.trim();
+        if (!key || key === selected) continue;
+        const sig = `${wu.id}|${key}`;
+        if (seen.has(sig)) continue;
+        if (!isPrefetchableWorkUnitQueuePillKey(key, wu)) continue;
+        seen.add(sig);
+        out.push({ workUnitId: wu.id, pillKey: key });
+    }
+
+    return out;
+}

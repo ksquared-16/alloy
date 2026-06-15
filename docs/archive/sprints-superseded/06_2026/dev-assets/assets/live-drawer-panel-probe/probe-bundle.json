@@ -1,0 +1,224 @@
+{
+  "audit": {
+    "capturedAt": "2026-06-10T18:32:55.773Z",
+    "panelCount": 1,
+    "visiblePanelIndex": 0,
+    "panels": [
+      {
+        "index": 0,
+        "selector": ".adminv2-drawer-modal-panel",
+        "className": "adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 adminv2-drawer-modal-panel--bos-rail min-h-[min(520px,50%)] ",
+        "inlineStyle": "z-index: 70; background-color: rgb(255, 255, 255); color: rgb(39, 63, 82); border-color: rgba(39, 63, 82, 0.12); box-shadow: rgba(39, 63, 82, 0.08) 0px 12px 40px, rgba(39, 63, 82, 0.04) 0px 2px 8px; left: var(--adminv2-drawer-computed-left); width: var(--adminv2-drawer-computed-width); max-width: var(--adminv2-drawer-computed-width); transform: none; right: auto;",
+        "dataAttributes": {
+          "data-adminv2-drawer": "true",
+          "data-adminv2-record-modal": "true",
+          "data-adminv2-record-modal-tone": "cleaning-v2"
+        },
+        "visible": true,
+        "rect": {
+          "left": 72,
+          "right": 1201,
+          "top": 60,
+          "bottom": 980,
+          "width": 1129,
+          "height": 920,
+          "centerX": 637,
+          "centerY": 520
+        },
+        "computedPosition": "fixed",
+        "computedLeft": "72px",
+        "computedRight": "399px",
+        "computedWidth": "1129px",
+        "computedMaxWidth": "1129px",
+        "computedTransform": "none",
+        "computedZIndex": "70",
+        "inlineWidth": "var(--adminv2-drawer-computed-width)",
+        "inlineMaxWidth": "var(--adminv2-drawer-computed-width)",
+        "inlineLeft": "var(--adminv2-drawer-computed-left)",
+        "inlineTransform": "none",
+        "hasBosRailClass": true,
+        "isDrawerTsxModalPanel": true
+      }
+    ],
+    "htmlInlineCssVars": {
+      "computedLeft": "72px",
+      "computedWidth": "1129px",
+      "computedRight": "1201px",
+      "availableWidth": "1129px",
+      "bosOverlayEffectiveWidth": null,
+      "bosOverlayWidth": "345px"
+    },
+    "widthVarResolvesOnPanel": true,
+    "widthVarValuePx": 1129,
+    "computedMatchesCssVar": true
+  },
+  "probe700": {
+    "probeWidthPx": 700,
+    "before": {
+      "left": 72,
+      "right": 1201,
+      "top": 60,
+      "bottom": 980,
+      "width": 1129,
+      "height": 920,
+      "centerX": 637,
+      "centerY": 520
+    },
+    "after": {
+      "left": 72,
+      "right": 772,
+      "top": 60,
+      "bottom": 980,
+      "width": 700,
+      "height": 920,
+      "centerX": 422,
+      "centerY": 520
+    },
+    "beforeComputedWidth": "1129px",
+    "afterComputedWidth": "700px",
+    "cssVarAfter": "700px",
+    "visibleWidthChanged": true,
+    "deltaWidthPx": -429
+  },
+  "probe1100": {
+    "probeWidthPx": 1100,
+    "before": {
+      "left": 72,
+      "right": 772,
+      "top": 60,
+      "bottom": 980,
+      "width": 700,
+      "height": 920,
+      "centerX": 422,
+      "centerY": 520
+    },
+    "after": {
+      "left": 72,
+      "right": 1172,
+      "top": 60,
+      "bottom": 980,
+      "width": 1100,
+      "height": 920,
+      "centerX": 622,
+      "centerY": 520
+    },
+    "beforeComputedWidth": "700px",
+    "afterComputedWidth": "1100px",
+    "cssVarAfter": "1100px",
+    "visibleWidthChanged": true,
+    "deltaWidthPx": 400
+  },
+  "restore": {
+    "sidebarRight": 56,
+    "bosOverlayLeft": 1225,
+    "effectiveBosOverlayLeft": 1225,
+    "effectiveBosOverlayWidth": 345,
+    "backdropLeft": 56,
+    "availableLeft": 72,
+    "availableRight": 1201,
+    "availableWidth": 1129,
+    "computedDrawerLeft": 72,
+    "computedDrawerRight": 1201,
+    "computedDrawerWidth": 1129
+  },
+  "cssOwnership": {
+    "width": {
+      "prop": "width",
+      "inline": "var(--adminv2-drawer-computed-width)",
+      "inlinePriority": null,
+      "computed": "1100px",
+      "matchedAuthorRule": "html[data-bos-right-rail-copilot=\"true\"] .adminv2-drawer-modal-panel--bos-rail { width: var(--adminv2-drawer-computed-width) !important }",
+      "expectedBosRailRule": "html[data-bos-right-rail-copilot=\"true\"] .adminv2-drawer-modal-panel--bos-rail { width: var(--adminv2-drawer-computed-width) !important }",
+      "htmlDataBosCopilot": "true",
+      "hasBosRailClass": true,
+      "cssVarOnHtmlInline": "1129px",
+      "cssVarOnHtmlComputed": "1129px",
+      "inlineUsesWidthVar": true,
+      "panelRect": {
+        "left": 72,
+        "right": 1172,
+        "width": 1100
+      },
+      "parentChain": [
+        {
+          "tag": "body",
+          "className": "poppins_b9471a19-module__dm-O8q__variable font-sans antialiased",
+          "overflowX": "hidden",
+          "overflow": "hidden",
+          "width": "1600px",
+          "maxWidth": "none",
+          "clipPath": "none",
+          "rectWidth": 1600
+        },
+        {
+          "tag": "html",
+          "className": "",
+          "overflowX": "visible",
+          "overflow": "visible",
+          "width": "1600px",
+          "maxWidth": "none",
+          "clipPath": "none",
+          "rectWidth": 1600
+        }
+      ],
+      "allModalPanels": [
+        {
+          "index": 0,
+          "className": "adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 adminv2-drawer-modal-panel--bos-rail min-h-[min(520px,50%)] ",
+          "visible": true,
+          "width": 1100,
+          "dataDrawer": "true"
+        }
+      ]
+    },
+    "maxWidth": {
+      "prop": "max-width",
+      "inline": "var(--adminv2-drawer-computed-width)",
+      "inlinePriority": null,
+      "computed": "1100px",
+      "matchedAuthorRule": "html[data-bos-right-rail-copilot=\"true\"] .adminv2-drawer-modal-panel--bos-rail[data-adminv2-record-modal-tone=\"cleaning-v2\"] { max-width: var(--adminv2-drawer-computed-width) !important }",
+      "expectedBosRailRule": "html[data-bos-right-rail-copilot=\"true\"] .adminv2-drawer-modal-panel--bos-rail { max-width: var(--adminv2-drawer-computed-width) !important }",
+      "htmlDataBosCopilot": "true",
+      "hasBosRailClass": true,
+      "cssVarOnHtmlInline": "1129px",
+      "cssVarOnHtmlComputed": "1129px",
+      "inlineUsesWidthVar": true,
+      "panelRect": {
+        "left": 72,
+        "right": 1172,
+        "width": 1100
+      },
+      "parentChain": [
+        {
+          "tag": "body",
+          "className": "poppins_b9471a19-module__dm-O8q__variable font-sans antialiased",
+          "overflowX": "hidden",
+          "overflow": "hidden",
+          "width": "1600px",
+          "maxWidth": "none",
+          "clipPath": "none",
+          "rectWidth": 1600
+        },
+        {
+          "tag": "html",
+          "className": "",
+          "overflowX": "visible",
+          "overflow": "visible",
+          "width": "1600px",
+          "maxWidth": "none",
+          "clipPath": "none",
+          "rectWidth": 1600
+        }
+      ],
+      "allModalPanels": [
+        {
+          "index": 0,
+          "className": "adminv2-drawer-modal-panel adminv2-drawer-shell-inset pointer-events-auto fixed flex max-h-[min(920px,100%)] flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 adminv2-drawer-modal-panel--bos-rail min-h-[min(520px,50%)] ",
+          "visible": true,
+          "width": 1100,
+          "dataDrawer": "true"
+        }
+      ]
+    }
+  }
+}

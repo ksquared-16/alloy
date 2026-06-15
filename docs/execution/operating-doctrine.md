@@ -1,5 +1,7 @@
 # Operating doctrine
 
+> **Canonical (June 2026 rebaseline):** Documentation rules → [`docs/platform/governance/documentation-governance.md`](../platform/governance/documentation-governance.md). Operational doctrine → [`docs/platform/governance/design-and-operational-doctrine.md`](../platform/governance/design-and-operational-doctrine.md). This file retains expanded deployment/tenancy detail during transition.
+
 ## Purpose
 
 Normative rules for **documentation**, **GPT/Cursor source-pack usage**, **deployment/tenancy**, and **operational performance** so `docs/` and runtime context stay aligned with code. **This file is the documentation doctrine** (the former standalone `documentation-doctrine.md` was consolidated here).
@@ -35,13 +37,13 @@ Normative rules for **documentation**, **GPT/Cursor source-pack usage**, **deplo
 - scheduling lifecycle,
 - deployment / tenancy / env contracts,
 
-must update the **matching topic file** in `docs/core`, `docs/system`, `docs/product`, or `docs/execution` in the **same PR/commit**.
+must update the matching topic file in **`docs/platform/**`**, **`docs/governance/**`**, or transitional **`docs/core` / `docs/system` / `docs/product` / `docs/execution`** in the **same PR/commit**.
 
 ## Source-pack rules (AI / GPT / Cursor)
 
-- Load files in the order given in **`docs/README.md`**. Prefer **`core/system-overview.md`** and **`system/actions-and-workflows.md`** before guessing.
-- For merges that change behavior, include **`docs/execution/operating-doctrine.md`** in context.
-- Prefer **active markdown + `docs/supabase/reference/*.csv`** over archived markdown for schema truth; CSVs reflect whatever database was used when `export:supabase-schema` last ran.
+- Load files in the order given in **`docs/README.md`** and **`.cursor/rules/alloy-project-context.mdc`**. Prefer **`docs/platform/foundation/system-overview.md`** before guessing.
+- For merges that change behavior, include **`docs/platform/governance/design-and-operational-doctrine.md`** in context.
+- Prefer **active platform docs + `docs/supabase/reference/*.csv`** over archived markdown for schema truth; CSVs reflect whatever database was used when `export:supabase-schema` last ran.
 
 ## Anti-patterns
 

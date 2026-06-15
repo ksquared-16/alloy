@@ -116,8 +116,13 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
-    if (tail === "/lifecycle" || tail.startsWith("/lifecycle/")) {
-        base.push({ label: "Lifecycle", href: null });
+    if (
+        tail === "/business-processes" ||
+        tail.startsWith("/business-processes/") ||
+        tail === "/lifecycle" ||
+        tail.startsWith("/lifecycle/")
+    ) {
+        base.push({ label: "Business Processes", href: null });
         return base;
     }
 

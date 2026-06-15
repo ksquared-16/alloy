@@ -1,12 +1,18 @@
 "use client";
 
-import { Sparkles, X } from "lucide-react";
-import type { ReactNode } from "react";
+import { X } from "lucide-react";
+import { useLayoutEffect, useState, type ReactNode } from "react";
+
+import { BosHeader } from "@/app/adminV2/components/bos/identity/BosHeader";
+import { BosRevealSequence } from "@/app/adminV2/components/bos/identity/BosRevealSequence";
+import "@/app/adminV2/components/bos/identity/bosIdentity.css";
+import { BosOperationalIntakeShellFrame } from "@/components/admin/actions/BosOperationalIntakeShellFrame";
+import { measureActionWorkspacePanelLayout } from "@/lib/bos/bosRailPresentationFlags";
+import { useActionWorkspaceOpenDocumentFlag } from "@/lib/bos/useActionWorkspaceOpenDocumentFlag";
 import type { ActionWorkspaceStep } from "@/lib/admin/actions/actionWorkspaceTypes";
 import { ACTION_WORKSPACE_LAYER_Z } from "@/lib/admin/actions/actionWorkspaceLayer";
 import { ACTION_WORKSPACE_VIEWPORT_INSET } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import {
-    BOS_AMBIENT_GLOW_STYLE,
     BOS_BACKDROP_STYLE,
     BOS_CANVAS_CONTENT_MAX_WIDTH,
     BOS_CANVAS_CONTENT_PADDING_X,
@@ -34,12 +40,14 @@ type Props = {
     footer?: ReactNode;
     busy?: boolean;
     presentation?: "overlay" | "embedded";
+    /** Dev-only — legacy rounded rectangle for before/after capture. */
+    shellVariant?: "locked" | "legacy-rect";
     "data-testid"?: string;
 };
 
 /**
- * Production BOS Action Workspace — premium stable shell for Create Lead.
- * No cloud SVG or mint frame.
+ * Production BOS Action Workspace — locked horizontal stadium shell for Create Lead.
+ * @see docs/system/bos-operational-intake-shell-doctrine.md
  */
 export function ActionWorkspaceBosShell({
     open,
@@ -51,16 +59,46 @@ export function ActionWorkspaceBosShell({
     footer,
     busy = false,
     presentation = "overlay",
+    shellVariant = "locked",
     "data-testid": dataTestId = "action-workspace-bos",
 }: Props) {
+    const embedded = presentation === "embedded";
+    useActionWorkspaceOpenDocumentFlag(open, presentation);
+
+    const [panelLayout, setPanelLayout] = useState<{ left: number; width: number } | null>(null);
+    const [revealComplete, setRevealComplete] = useState(false);
+
+    useLayoutEffect(() => {
+        if (open) setRevealComplete(presentation === "embedded");
+    }, [open, presentation]);
+
+    useLayoutEffect(() => {
+        if (!open || embedded) {
+            setPanelLayout(null);
+            return;
+        }
+
+        const measure = () => {
+            setPanelLayout(measureActionWorkspacePanelLayout(window.innerWidth));
+        };
+
+        measure();
+        window.addEventListener("resize", measure);
+        const t = window.setTimeout(measure, 0);
+
+        return () => {
+            window.removeEventListener("resize", measure);
+            window.clearTimeout(t);
+        };
+    }, [open, embedded]);
+
     if (!open) return null;
 
-    const embedded = presentation === "embedded";
     const tagline = description?.trim() || BOS_SHELL_TERRITORY_TAGLINE;
 
     const overlayClass = embedded ?
         "relative flex w-full items-center justify-center"
-    :   "fixed inset-x-0 top-0 flex items-center justify-center overflow-hidden px-4";
+    :   "fixed inset-x-0 top-0 overflow-hidden";
 
     const overlayStyle = embedded ?
         undefined
@@ -82,16 +120,13 @@ export function ActionWorkspaceBosShell({
     const panelHeight = embedded ? BOS_WORKSPACE_EMBEDDED_HEIGHT : BOS_WORKSPACE_PANEL_HEIGHT;
 
     const panelStyle = {
-        width: BOS_WORKSPACE_WIDTH,
+        width: "100%",
         height: panelHeight,
         maxHeight: "100%",
-        borderRadius: BOS_WORKSPACE_RADIUS,
+        ...(shellVariant === "legacy-rect" ?
+            { borderRadius: BOS_WORKSPACE_RADIUS }
+        :   {}),
         ...BOS_WORKSPACE_PANEL_SHADOW,
-    };
-
-    const headerRadius = {
-        borderTopLeftRadius: BOS_WORKSPACE_RADIUS,
-        borderTopRightRadius: BOS_WORKSPACE_RADIUS,
     };
 
     return (
@@ -112,99 +147,106 @@ export function ActionWorkspaceBosShell({
 
             <div
                 className="relative shrink-0"
-                style={{ width: BOS_WORKSPACE_WIDTH, maxHeight: "100%" }}
+                style={
+                    embedded ?
+                        { width: BOS_WORKSPACE_WIDTH, maxHeight: "100%" }
+                    :   {
+                            width: panelLayout ? `${panelLayout.width}px` : BOS_WORKSPACE_WIDTH,
+                            maxWidth: panelLayout ? `${panelLayout.width}px` : BOS_WORKSPACE_WIDTH,
+                            maxHeight: "100%",
+                            ...(panelLayout ?
+                                { marginLeft: `${panelLayout.left}px`, marginRight: "auto" }
+                            :   {}),
+                        }
+                }
                 onClick={(e) => e.stopPropagation()}
             >
-                <div
-                    className="pointer-events-none absolute inset-0 -z-10 scale-105"
-                    style={BOS_AMBIENT_GLOW_STYLE}
-                    aria-hidden
-                    data-bos-ambient-glow="true"
-                />
-
-                <div
-                    role="dialog"
-                    aria-modal={!embedded}
-                    aria-label={title ? `${BOS_SHELL_TERRITORY_TITLE} — ${title}` : BOS_SHELL_TERRITORY_TITLE}
-                    className="relative z-10 flex min-h-0 flex-col overflow-hidden bg-white"
-                    style={panelStyle}
-                    data-action-workspace-panel="true"
-                    data-action-workspace-bos-workspace="true"
-                >
-                    <header
-                        className="relative shrink-0 text-white"
-                        style={{
-                            padding: BOS_SHELL_HEADER_PADDING,
-                            background: BOS_SHELL_MIDNIGHT_FORGE,
-                            ...headerRadius,
-                        }}
-                        data-action-workspace-territory-header="true"
-                    >
-                        <div style={contentWrapStyle}>
-                            <div className="flex items-start justify-between gap-4">
-                                <div
-                                    className="flex min-w-0 items-center gap-3.5"
-                                    data-action-workspace-bos-brand="true"
-                                >
-                                    <span
-                                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#00A283]/20 text-[#7EEBD4]"
-                                        aria-hidden
-                                    >
-                                        <Sparkles className="h-5 w-5" strokeWidth={2.2} />
-                                    </span>
-                                    <div className="min-w-0">
-                                        <h2 className="text-xl font-bold tracking-tight text-white">
-                                            {BOS_SHELL_TERRITORY_TITLE}
-                                        </h2>
-                                        <p className="mt-0.5 text-[12px] leading-snug text-white/48">
-                                            {tagline}
-                                        </p>
-                                    </div>
-                                </div>
-                                <button
-                                    type="button"
-                                    disabled={busy}
-                                    onClick={onClose}
-                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/55 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white/90 disabled:opacity-50"
-                                    data-testid="action-workspace-close"
-                                    aria-label="Close"
-                                >
-                                    <X className="h-3.5 w-3.5" strokeWidth={2} />
-                                </button>
-                            </div>
-                            <div className="mt-3.5">
-                                <ActionWorkspaceStepRail activeStep={step} onDark />
-                            </div>
-                        </div>
-                    </header>
-
+                <BosOperationalIntakeShellFrame variant={shellVariant} style={panelStyle}>
                     <div
-                        className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white"
-                        data-action-workspace-content="true"
-                        data-action-workspace-step={step}
+                        role="dialog"
+                        aria-modal={!embedded}
+                        aria-label={title ? `${BOS_SHELL_TERRITORY_TITLE} — ${title}` : BOS_SHELL_TERRITORY_TITLE}
+                        className="bos-workspace-shell relative flex min-h-0 flex-1 flex-col overflow-hidden bg-white"
+                        data-action-workspace-panel="true"
+                        data-action-workspace-bos-workspace="true"
+                        data-bos-operational-intake-shell-variant={shellVariant}
                     >
-                        <div
-                            className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-3 pb-4"
-                            style={contentWrapStyle}
-                        >
-                            {children}
+                        <div className="relative z-[1] flex min-h-0 flex-1 flex-col">
+                            {!revealComplete ?
+                                <BosRevealSequence
+                                    mode="workspace"
+                                    autoPlay
+                                    fill
+                                    onComplete={() => setRevealComplete(true)}
+                                    data-testid="action-workspace-bos-reveal"
+                                />
+                            :   <>
+                                    <header
+                                        className="relative shrink-0 text-white"
+                                        style={{
+                                            padding: BOS_SHELL_HEADER_PADDING,
+                                            background: BOS_SHELL_MIDNIGHT_FORGE,
+                                        }}
+                                        data-action-workspace-territory-header="true"
+                                    >
+                                        <div style={contentWrapStyle}>
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="min-w-0" data-action-workspace-bos-brand="true">
+                                                    <BosHeader
+                                                        title={BOS_SHELL_TERRITORY_TITLE}
+                                                        subtitle={tagline}
+                                                        size="lg"
+                                                        onDark
+                                                    />
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    disabled={busy}
+                                                    onClick={onClose}
+                                                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06] text-white/55 transition-colors hover:border-white/20 hover:bg-white/10 hover:text-white/90 disabled:opacity-50"
+                                                    data-testid="action-workspace-close"
+                                                    aria-label="Close"
+                                                >
+                                                    <X className="h-3.5 w-3.5" strokeWidth={2} />
+                                                </button>
+                                            </div>
+                                            <div className="mt-3.5">
+                                                <ActionWorkspaceStepRail activeStep={step} onDark />
+                                            </div>
+                                        </div>
+                                    </header>
+
+                                    <div
+                                        className="flex min-h-0 flex-1 flex-col overflow-hidden bg-white"
+                                        data-action-workspace-content="true"
+                                        data-action-workspace-step={step}
+                                    >
+                                        <div
+                                            className="flex min-h-0 flex-1 flex-col overflow-y-auto pt-3 pb-4"
+                                            style={contentWrapStyle}
+                                        >
+                                            {children}
+                                        </div>
+                                    </div>
+
+                                    {footer ?
+                                        <footer
+                                            className="shrink-0 border-t border-alloy-stone/10 bg-white px-8 py-3.5"
+                                            data-action-workspace-footer="true"
+                                        >
+                                            <div
+                                                className="flex items-center justify-end gap-3"
+                                                style={contentWrapStyle}
+                                            >
+                                                {footer}
+                                            </div>
+                                        </footer>
+                                    :   null}
+                                </>
+                            }
                         </div>
                     </div>
-
-                    {footer ?
-                        <footer
-                            className="shrink-0 border-t border-alloy-stone/10 bg-white px-8 py-3.5"
-                            data-action-workspace-footer="true"
-                        >
-                            <div
-                                className="flex items-center justify-end gap-3"
-                                style={contentWrapStyle}
-                            >
-                                {footer}
-                            </div>
-                        </footer>
-                    :   null}
-                </div>
+                </BosOperationalIntakeShellFrame>
             </div>
         </div>
     );

@@ -12,13 +12,19 @@ describe("enrollmentOperatorStage", () => {
         expect(effectiveEnrollmentOperatorStage("new_inquiry", {}).source).toBe("canonical");
     });
 
-    it("metadata override wins over canonical", () => {
+    it("metadata override wins over canonical (legacy read fallback)", () => {
         expect(
             effectiveEnrollmentOperatorStage("contacted", { enrollment_operator_stage: "lead" }).stage
         ).toBe("lead");
         expect(
             effectiveEnrollmentOperatorStage("contacted", { enrollment_operator_stage: "lead" }).source
         ).toBe("metadata");
+    });
+
+    it("process_stage_key metadata override wins over canonical", () => {
+        expect(effectiveEnrollmentOperatorStage("contacted", { process_stage_key: "lead" }).stage).toBe(
+            "lead",
+        );
     });
 
     it("unassigned metadata clears stage bucket", () => {
@@ -29,10 +35,11 @@ describe("enrollmentOperatorStage", () => {
         ).toBeNull();
     });
 
-    it("mergeEnrollmentOperatorStageMetadata sets and clears key", () => {
-        expect(mergeEnrollmentOperatorStageMetadata({}, "tour").enrollment_operator_stage).toBe("tour");
+    it("mergeEnrollmentOperatorStageMetadata writes process_stage_key", () => {
+        expect(mergeEnrollmentOperatorStageMetadata({}, "tour").process_stage_key).toBe("tour");
+        expect(mergeEnrollmentOperatorStageMetadata({}, "tour")).not.toHaveProperty("enrollment_operator_stage");
         expect(mergeEnrollmentOperatorStageMetadata({ enrollment_operator_stage: "lead" }, null)).not.toHaveProperty(
-            "enrollment_operator_stage"
+            "process_stage_key"
         );
     });
 

@@ -12,7 +12,6 @@ export const ENTITY_TYPES_WITH_UNIFIED_DRAWER_STATUS: ReadonlySet<EntityPresenta
   "locations",
   "documents",
   "contacts",
-  "customer_members",
   "subscriptions",
 ]);
 

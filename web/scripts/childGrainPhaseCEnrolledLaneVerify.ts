@@ -59,12 +59,12 @@ async function enrolledLaneSnapshot(orgId: string, workUnitId: string, label: st
         limit: 50,
         offset: 0,
     });
-    const summary = summarizeItems((result.items ?? []) as unknown[]);
+    const summary = summarizeItems((result.result.items ?? []) as unknown[]);
     console.log(`\n--- ${label} ---`);
-    console.log(`count (total): ${result.total}`);
+    console.log(`count (total): ${result.result.total}`);
     console.log(`items returned: ${summary.total} (ocmrow: ${summary.ocmrowCount}, bare opp: ${summary.oppCount})`);
     console.log("sample:", JSON.stringify(summary.sample, null, 2));
-    return { total: result.total, ...summary };
+    return { ...summary, total: result.result.total };
 }
 
 async function laneCounts(orgId: string, workUnitId: string, label: string) {

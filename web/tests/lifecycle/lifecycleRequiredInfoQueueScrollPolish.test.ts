@@ -53,6 +53,6 @@ describe("lifecycle required info queue scroll polish", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
         expect(workspace).toContain("StageSection");
         expect(workspace).toContain("lifecycle-stage-section-");
-        expect(workspace).toContain("Fields to collect before work moves forward.");
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_REQUIRED_SUMMARY");
     });
 });

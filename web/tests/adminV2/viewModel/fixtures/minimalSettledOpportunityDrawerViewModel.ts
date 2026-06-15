@@ -136,6 +136,9 @@ export function minimalSettledOpportunityDrawerViewModel(
                     workflow_id: null,
                 },
             ],
+            manage_menu: [
+                { kind: "action", key: "delete_lead", label: "Delete Lead", enabled: true },
+            ],
         },
         layout: {
             mode: "workflow_v1",
@@ -167,8 +170,9 @@ export function minimalSettledOpportunityDrawerViewModel(
                     show_right_column: true,
                     family_contacts: {
                         use_full_panel: false,
-                        reserved: true,
-                        value_phase: "value",
+                        shell_reserved_additional_count: 0,
+                        relationships_full_hydrate_failed: false,
+                        relationships_pending: false,
                     },
                     right_column: {
                         tasks: {
@@ -179,8 +183,9 @@ export function minimalSettledOpportunityDrawerViewModel(
                                 {
                                     id: "task-1",
                                     title: "Call family",
-                                    due_at: null,
-                                    urgency: "normal",
+                                    due_at: "2026-06-01T12:00:00.000Z",
+                                    status: "open",
+                                    source: "task_assist",
                                 },
                             ],
                         },

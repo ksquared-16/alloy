@@ -78,7 +78,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
                 desired_schedule_type: "full_day",
                 desired_start_date: "2026-09-01",
             },
-            fetchFn: fetchFn as typeof fetch,
+            fetchFn: fetchFn as unknown as typeof fetch,
         });
 
         expect(result.person_id).toBe("person-new");
@@ -104,7 +104,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
         const fetchFn = vi.fn(async () => ({
             ok: true,
             json: async () => ({ id: "cm-new", person_id: "person-new" }),
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
 
         await submitAddInquiryChildFromDrawer({
             opportunityId: "opp-1",
@@ -134,7 +134,7 @@ describe("submitAddInquiryChildFromDrawer", () => {
         const fetchFn = vi.fn(async () => ({
             ok: true,
             json: async () => ({ id: "cm-new" }),
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
 
         await expect(
             submitAddInquiryChildFromDrawer({
@@ -148,6 +148,34 @@ describe("submitAddInquiryChildFromDrawer", () => {
                 fetchFn,
             })
         ).rejects.toThrow(/missing a linked person identity/);
+    });
+
+    it("inherits opportunity location when child payload omits location_id", async () => {
+        const fetchFn = vi.fn(async () => ({
+            ok: true,
+            json: async () => ({ id: "cm-new", person_id: "person-new" }),
+        })) as unknown as typeof fetch;
+
+        await submitAddInquiryChildFromDrawer({
+            opportunityId: "opp-1",
+            customerId: "cust-1",
+            opportunityLocationId: "11111111-1111-4111-8111-111111111111",
+            payload: {
+                first_name: "Sam",
+                last_name: "Lee",
+                age_group: "toddler",
+                program: "preschool",
+            },
+            fetchFn,
+        });
+
+        expect(patchOpportunityCustomerMemberFromInquiryChild).toHaveBeenCalledWith(
+            "ocm-1",
+            expect.objectContaining({
+                desired_program_type: "preschool",
+                location_id: "11111111-1111-4111-8111-111111111111",
+            }),
+        );
     });
 
     it("blocks duplicate children on the inquiry", async () => {

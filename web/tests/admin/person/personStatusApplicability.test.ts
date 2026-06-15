@@ -5,12 +5,14 @@ import {
     appendLegacyPersonStatusOption,
     buildPersonStatusApplicabilityMetadata,
     filterPersonStatusDefinitionsForProfile,
+    filterPersonStatusDefinitionsForDrawerProfile,
     PERSON_CHILD_LIFECYCLE_STATUS_KEYS,
     PERSON_CHILD_ONLY_STATUS_KEYS,
     PERSON_STATUS_PROFILE_CHILD_LIFECYCLE,
     PERSON_STATUS_PROFILE_GENERIC,
     personStatusAppliesToProfile,
     resolvePersonDrawerStatusProfile,
+    resolvePersonStatusLabelForProfile,
 } from "@/lib/admin/person/personStatusApplicability";
 
 const childLifecycleRows = PERSON_CHILD_LIFECYCLE_STATUS_KEYS.map((status_key) => ({
@@ -31,12 +33,51 @@ describe("personStatusApplicability", () => {
         );
     });
 
+    it("drawer profile filter excludes legacy keys such as future_start", () => {
+        const rows = [
+            ...PERSON_CHILD_LIFECYCLE_STATUS_KEYS.map((status_key) => ({
+                status_key,
+                metadata: buildPersonStatusApplicabilityMetadata("both"),
+                is_active: true,
+            })),
+            {
+                status_key: "future_start",
+                metadata: buildPersonStatusApplicabilityMetadata("child_lifecycle"),
+                is_active: true,
+            },
+        ];
+        const filtered = filterPersonStatusDefinitionsForDrawerProfile(
+            rows,
+            PERSON_STATUS_PROFILE_CHILD_LIFECYCLE
+        );
+        expect(filtered.map((r) => r.status_key).sort()).toEqual(
+            [...PERSON_CHILD_LIFECYCLE_STATUS_KEYS].sort()
+        );
+    });
+
     it("parent/guardian profile excludes withdrawn and graduated", () => {
+        const rowsWithLegacy = [
+            ...childLifecycleRows,
+            {
+                status_key: "withdrawn",
+                metadata: buildPersonStatusApplicabilityMetadata("child_lifecycle"),
+            },
+            {
+                status_key: "graduated",
+                metadata: buildPersonStatusApplicabilityMetadata("child_lifecycle"),
+            },
+            {
+                status_key: "future_start",
+                metadata: buildPersonStatusApplicabilityMetadata("child_lifecycle"),
+            },
+        ];
         const filtered = filterPersonStatusDefinitionsForProfile(
-            childLifecycleRows,
+            rowsWithLegacy,
             PERSON_STATUS_PROFILE_GENERIC
         );
-        expect(filtered.map((r) => r.status_key).sort()).toEqual(["active", "archived", "inactive"]);
+        expect(filtered.map((r) => r.status_key).sort()).toEqual(
+            ["active", "archived", "inactive", "pre_enrolled"].sort()
+        );
         expect(filtered.some((r) => r.status_key === "withdrawn")).toBe(false);
         expect(filtered.some((r) => r.status_key === "graduated")).toBe(false);
         expect(filtered.some((r) => r.status_key === "future_start")).toBe(false);
@@ -62,6 +103,39 @@ describe("personStatusApplicability", () => {
         expect(next[0]?.status_label).toContain("legacy");
     });
 
+    it("resolvePersonStatusLabelForProfile uses labels_by_profile metadata", () => {
+        expect(
+            resolvePersonStatusLabelForProfile(
+                {
+                    status_key: "active",
+                    status_label: "Active",
+                    metadata: {
+                        labels_by_profile: {
+                            person_generic: "Active Family",
+                            child_lifecycle: "Active",
+                        },
+                    },
+                },
+                PERSON_STATUS_PROFILE_GENERIC
+            )
+        ).toBe("Active Family");
+        expect(
+            resolvePersonStatusLabelForProfile(
+                {
+                    status_key: "active",
+                    status_label: "Active",
+                    metadata: {
+                        labels_by_profile: {
+                            person_generic: "Active Family",
+                            child_lifecycle: "Active",
+                        },
+                    },
+                },
+                PERSON_STATUS_PROFILE_CHILD_LIFECYCLE
+            )
+        ).toBe("Active");
+    });
+
     it("resolvePersonDrawerStatusProfile maps child vs parent profiles", () => {
         expect(
             resolvePersonDrawerStatusProfile({ profiles: ["child"], display: "child" }, { childChrome: true })
@@ -77,16 +151,26 @@ describe("personStatusApplicability", () => {
 
 describe("person drawer status wiring", () => {
     it("child drawer fetches persons status options with child_lifecycle profile", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("status_profile=${encodeURIComponent(personDrawerStatusProfile)}");
-        expect(drawer).toContain("personDrawerStatusProfile");
-        expect(drawer).toContain("appendLegacyPersonStatusOption");
+        const statusSelect = readFileSync(
+            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
+            "utf8"
+        );
+        expect(statusSelect).toContain("status_profile=${encodeURIComponent(statusProfile)}");
+        expect(statusSelect).toContain('entityKind === "persons" && statusProfile');
+        const runtime = readFileSync(
+            join(process.cwd(), "components/admin/vmDrawer/PersonsDrawerVmRuntime.tsx"),
+            "utf8"
+        );
+        expect(runtime).toContain("resolvePersonDrawerStatusProfile");
     });
 
-    it("parent drawer header status excludes child-only fetch path duplication", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("personDrawerParentHeaderStatus");
-        expect(drawer).toContain('data-person-drawer-parent-header-status="true"');
+    it("parent drawer header status uses VM status control marker", () => {
+        const statusSelect = readFileSync(
+            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
+            "utf8"
+        );
+        expect(statusSelect).toContain("data-person-drawer-vm-status-control");
+        expect(statusSelect).toContain("person-drawer-child-header-status");
     });
 
     it("status-options API filters persons by status_profile", () => {
@@ -97,7 +181,7 @@ describe("person drawer status wiring", () => {
 
     it("settings can create People status with child applicability metadata", () => {
         const settings = readFileSync(
-            join(process.cwd(), "app/admin/system/statuses/StatusesClient.tsx"),
+            join(process.cwd(), "app/legacy-admin/system/statuses/StatusesClient.tsx"),
             "utf8"
         );
         expect(settings).toContain("buildPersonStatusApplicabilityMetadata");
@@ -107,7 +191,7 @@ describe("person drawer status wiring", () => {
 
     it("status key auto-generates from label in settings", () => {
         const settings = readFileSync(
-            join(process.cwd(), "app/admin/system/statuses/StatusesClient.tsx"),
+            join(process.cwd(), "app/legacy-admin/system/statuses/StatusesClient.tsx"),
             "utf8"
         );
         expect(settings).toContain("uniqueStatusKey(label, reserved)");
@@ -115,15 +199,21 @@ describe("person drawer status wiring", () => {
     });
 
     it("child status persists via persons PATCH — not customer_members", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain('fetch(`/api/admin/persons/${encodeURIComponent(drawer.id)}`');
-        expect(drawer).toContain("status_key: nextKey");
-        expect(drawer).not.toContain("opportunity_customer_members");
+        const statusSelect = readFileSync(
+            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
+            "utf8"
+        );
+        expect(statusSelect).toContain("/api/admin/persons/${encodeURIComponent(entityId)}");
+        expect(statusSelect).toContain("status_key: nextKey");
+        expect(statusSelect).not.toContain("opportunity_customer_members");
     });
 
     it("opportunity entity types are not used for person drawer status fetch", () => {
-        const drawer = readFileSync(join(process.cwd(), "components/admin/AdminEntityDrawer.tsx"), "utf8");
-        expect(drawer).toContain("PERSON_DRAWER_CHILD_STATUS_ENTITY_TYPE");
+        const statusSelect = readFileSync(
+            join(process.cwd(), "components/admin/vmDrawer/VmDrawerHeaderStatusSelect.tsx"),
+            "utf8"
+        );
+        expect(statusSelect).toContain('entityKind === "persons"');
         const entityType = readFileSync(
             join(process.cwd(), "lib/admin/person/personDrawerChildStatusEntityType.ts"),
             "utf8"

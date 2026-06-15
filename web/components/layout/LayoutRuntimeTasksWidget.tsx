@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import LayoutRuntimeTaskDetailPopover, {
+    formatQueueTaskDueMiniCard,
     formatQueueTaskDueShort,
 } from "@/components/layout/queueRecord/LayoutRuntimeTaskDetailPopover";
 import type { InquirySummaryTaskPreviewRow } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
@@ -45,6 +46,7 @@ export default function LayoutRuntimeTasksWidget({ record, title = "Tasks", comp
     const openTasks = toTaskRows(record);
     const visibleTasks = compact ? openTasks.slice(0, 2) : openTasks;
     const overflowCount = compact && openTasks.length > 2 ? openTasks.length - 2 : 0;
+    const denseTaskRow = compact || chromeless;
     const [activeTask, setActiveTask] = useState<InquirySummaryTaskPreviewRow | null>(null);
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
@@ -98,8 +100,10 @@ export default function LayoutRuntimeTasksWidget({ record, title = "Tasks", comp
             >
                 {visibleTasks.length > 0 ?
                     visibleTasks.map((t) => {
-                        const chipStyle = layoutRuntimeTaskChipStyle(t);
+                        const chipStyle = layoutRuntimeTaskChipStyle(t, { compact: denseTaskRow });
                         const active = activeTask?.id === t.id;
+                        const dueLabel =
+                            denseTaskRow ? formatQueueTaskDueMiniCard(t.due_at) : formatQueueTaskDueShort(t.due_at);
                         return (
                             <button
                                 key={t.id}
@@ -110,11 +114,30 @@ export default function LayoutRuntimeTasksWidget({ record, title = "Tasks", comp
                                 aria-expanded={active}
                                 onClick={(e) => onTaskClick(t, e.currentTarget)}
                             >
-                                <span className="truncate font-semibold text-alloy-midnight">{t.title}</span>
-                                <span className={chipStyle.badgeClassName}>{chipStyle.label}</span>
-                                {t.due_at ?
-                                    <span className="shrink-0 text-[10px] text-alloy-muted">· {formatQueueTaskDueShort(t.due_at)}</span>
-                                :   null}
+                                <span
+                                    className={
+                                        denseTaskRow ?
+                                            "min-w-0 flex-1 truncate font-semibold text-alloy-midnight"
+                                        :   "truncate font-semibold text-alloy-midnight"
+                                    }
+                                >
+                                    {t.title}
+                                </span>
+                                <span className="inline-flex shrink-0 items-center gap-0.5">
+                                    <span className={chipStyle.badgeClassName}>{chipStyle.label}</span>
+                                    {t.due_at ?
+                                        <span
+                                            className={
+                                                denseTaskRow ?
+                                                    "shrink-0 text-[9px] text-alloy-muted"
+                                                :   "shrink-0 text-[10px] text-alloy-muted"
+                                            }
+                                            title={formatQueueTaskDueShort(t.due_at)}
+                                        >
+                                            · {dueLabel}
+                                        </span>
+                                    :   null}
+                                </span>
                             </button>
                         );
                     })

@@ -1,7 +1,9 @@
 "use client";
 
-import { Check, ChevronRight, Sparkles, X } from "lucide-react";
+import { Check, ChevronRight, X } from "lucide-react";
 import type { ReactNode } from "react";
+
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import type { FindingGroup, FindingStatus } from "./fixtures";
 
 const PHASES = ["Intake", "Findings", "Fill Gaps", "Ready To Create"] as const;
@@ -131,7 +133,7 @@ export function MockupDeck({
                                     type="button"
                                     className="inline-flex items-center gap-1.5 rounded-lg border border-alloy-gold-dark/50 bg-alloy-gold/90 px-3.5 py-2 text-[13px] font-semibold text-alloy-midnight"
                                 >
-                                    <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+                                    <BosMark size="sm" />
                                     Analyze with BOS
                                 </button>
                             </div>
@@ -142,7 +144,7 @@ export function MockupDeck({
                     <main className="flex min-w-0 flex-1 flex-col bg-alloy-stone/50">
                         <div className="flex items-center gap-2 border-b border-alloy-gold/25 bg-gradient-to-r from-alloy-gold/12 via-white to-alloy-gold/6 px-4 py-2.5">
                             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-alloy-gold/35 text-alloy-midnight">
-                                <Sparkles className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
+                                <BosMark size="sm" />
                             </div>
                             <div className="min-w-0 flex-1">{rightHeader}</div>
                         </div>

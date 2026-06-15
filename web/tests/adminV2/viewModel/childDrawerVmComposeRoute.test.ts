@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { NextRequest } from "next/server";
 
 const composeChildDrawerViewModel = vi.fn();
 
@@ -39,7 +40,12 @@ describe("child drawer VM route", () => {
                 entity: { type: "person", id: "child-1" },
                 surface: "child",
                 first_paint: { settled: true, viewport_slots: [], dependencies: [], data: {}, deferred: [], background: [] },
-                header: { title: "Mia", subtitle: null, status_label: "Active" },
+                header: {
+                    title: "Mia",
+                    subtitle: null,
+                    status_label: "Active",
+                    status: { renderAs: "hidden" },
+                },
                 record: { id: "child-1", _household_adult_links: [] },
                 layout: { variant_key: "child", operating_sections: ["child_summary", "household"] },
                 background_refresh: { allowed: ["status_values"] },
@@ -49,7 +55,7 @@ describe("child drawer VM route", () => {
 
         const { GET } = await import("@/app/api/admin/view-models/drawer/child/[id]/route");
         const res = await GET(
-            new Request("http://localhost/api/admin/view-models/drawer/child/child-1?compose_depth=first_paint"),
+            new Request("http://localhost/api/admin/view-models/drawer/child/child-1?compose_depth=first_paint") as unknown as NextRequest,
             { params: Promise.resolve({ id: "child-1" }) }
         );
         expect(res.status).toBe(200);

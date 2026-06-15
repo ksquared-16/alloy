@@ -1,4 +1,5 @@
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
+import { markWorkspaceTileClickIntent } from "@/lib/perf/workspaceContinuityPerf";
 import {
     adminV2RouteLoadingVocabulary,
     type AdminV2RouteLoadingVariant,
@@ -10,6 +11,7 @@ export const DEFAULT_ADMIN_V2_NAVIGATION_TRANSITION_TIMEOUT_MS = 1500;
 export type AdminV2NavigationTransitionCommitReason =
     | "no_prepare"
     | "prepare_ok"
+    | "commit_first"
     | "timeout"
     | "prepare_failed";
 
@@ -108,6 +110,11 @@ export type RunAdminV2NavigationTransitionOpts = {
     ribbonLabel?: string;
     /** Perf marker — default true. */
     markNavigationStart?: boolean;
+    /**
+     * Commit route immediately; run `prepare` in background (instant tile click).
+     * Default false — department tiles still wait for prepare/timeout.
+     */
+    commitFirst?: boolean;
 };
 
 function resolveLabels(
@@ -153,6 +160,9 @@ export async function runAdminV2NavigationTransition(
     if (opts.markNavigationStart !== false) {
         markWorkUnitNavigationStart();
     }
+    if (opts.variant === "work_unit") {
+        markWorkspaceTileClickIntent({ href, clicked_key: clickedKey });
+    }
 
     setSnapshot({
         phase: "preparing",
@@ -184,7 +194,17 @@ export async function runAdminV2NavigationTransition(
             opts.commit();
         } finally {
             activeRunId = null;
-            setSnapshot(IDLE_SNAPSHOT);
+            // Defer idle reset one microtask so pending tile CSS can paint before route commit.
+            void Promise.resolve().then(() => {
+                const snap = getAdminV2NavigationTransitionSnapshot();
+                if (
+                    snap.isTransitioning &&
+                    snap.href === href &&
+                    snap.clickedKey === clickedKey
+                ) {
+                    setSnapshot(IDLE_SNAPSHOT);
+                }
+            });
         }
         return reason;
     };
@@ -198,6 +218,16 @@ export async function runAdminV2NavigationTransition(
 
     if (!opts.prepare) {
         return finishCommit("no_prepare");
+    }
+
+    if (opts.commitFirst) {
+        const reason = finishCommit("commit_first");
+        void Promise.resolve()
+            .then(() => opts.prepare!())
+            .catch(() => {
+                /* background warm — navigation already committed */
+            });
+        return reason;
     }
 
     const timeoutMs = opts.timeoutMs ?? DEFAULT_ADMIN_V2_NAVIGATION_TRANSITION_TIMEOUT_MS;

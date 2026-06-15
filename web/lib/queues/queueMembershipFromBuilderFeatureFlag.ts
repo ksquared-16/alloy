@@ -1,73 +1,57 @@
 /**
- * Phase C/D — read queue_membership_v1 in QueueService when enabled.
+ * Business Process queue routing — metadata-first, env kill-switch only.
  *
- * `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=1` — builder metadata may drive lane routing
- * when valid config exists and lane is allowlisted.
- *
- * `ALLOY_QUEUE_MEMBERSHIP_BUILDER_LANES` — optional stage-key allowlist
- * (e.g. `enrolled,enrollment,tour,waitlist`). When unset, defaults to child/candidate
- * enrollment stages only — not Lead/Qualification case lanes.
+ * Default ON when department metadata has active `tracks_v1`.
+ * Emergency disable: `ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER=0` (or `false`).
  */
 
+import { businessProcessTracksConfigured } from "@/lib/businessProcesses/businessProcessConfigReader";
 import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 
-/** Stages that may use builder-backed OCM/candidate routing (not case-grain). */
-export const DEFAULT_BUILDER_MEMBERSHIP_STAGE_KEYS = [
-    "tour",
-    "enrollment",
-    "enrolled",
-    "waitlist",
-] as const;
+const BUILDER_RUNTIME_KILL_SWITCH_ENV = "ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER";
 
-export type BuilderMembershipStageKey = (typeof DEFAULT_BUILDER_MEMBERSHIP_STAGE_KEYS)[number];
-
-const STAGE_KEY_ALIASES: Record<string, string> = {
-    enrolling: "enrollment",
-};
-
-function parseBuilderLanesEnv(): Set<string> | null {
-    const raw = process.env.ALLOY_QUEUE_MEMBERSHIP_BUILDER_LANES;
-    if (raw == null) return null;
-    const trimmed = raw.trim();
-    if (!trimmed) return null;
-
-    const keys = trimmed
-        .split(/[,;\s]+/)
-        .map((k) => STAGE_KEY_ALIASES[k.trim().toLowerCase()] ?? k.trim().toLowerCase())
-        .filter(Boolean);
-    return new Set(keys);
-}
-
-export function isQueueMembershipFromBuilderEnabled(): boolean {
-    const raw = process.env.ALLOY_QUEUE_MEMBERSHIP_FROM_BUILDER;
+function readBuilderRuntimeKillSwitch(): boolean {
+    const raw = process.env[BUILDER_RUNTIME_KILL_SWITCH_ENV];
     if (raw == null) return false;
     const trimmed = raw.trim().toLowerCase();
-    return trimmed === "1" || trimmed === "true";
+    return trimmed === "0" || trimmed === "false";
+}
+
+/** True when builder-backed queue membership routing is active for this department. */
+export function isQueueMembershipFromBuilderEnabled(departmentMetadata?: unknown): boolean {
+    if (readBuilderRuntimeKillSwitch()) return false;
+    if (departmentMetadata !== undefined && businessProcessTracksConfigured(departmentMetadata)) {
+        return true;
+    }
+    return false;
 }
 
 /** Env snapshot for tests. */
 export function readQueueMembershipFromBuilderFlagFromEnv(): boolean {
-    return isQueueMembershipFromBuilderEnabled();
+    return !readBuilderRuntimeKillSwitch();
 }
 
-export function normalizeBuilderMembershipStageKey(stageKey: string): string {
-    const key = stageKey.trim().toLowerCase();
-    return STAGE_KEY_ALIASES[key] ?? key;
-}
-
-/** Whether this membership stage may use builder routing (excludes case-grain Lead/Qualification). */
-export function isBuilderMembershipStageAllowed(stageKey: string): boolean {
-    const normalized = normalizeBuilderMembershipStageKey(stageKey);
-    const allowlist = parseBuilderLanesEnv();
-    if (allowlist) return allowlist.has(normalized);
-    return (DEFAULT_BUILDER_MEMBERSHIP_STAGE_KEYS as readonly string[]).includes(normalized);
-}
-
+/** Whether parsed queue_membership_v1 is complete enough to drive routing. */
 export function isBuilderMembershipLaneAllowed(membership: QueueMembershipV1): boolean {
-    if (membership.subject_type === "case") return false;
-    return isBuilderMembershipStageAllowed(membership.stage_key);
+    return Boolean(
+        membership.version === 1 &&
+            membership.stage_key?.trim() &&
+            membership.subject_type?.trim() &&
+            membership.lifecycle_key?.trim(),
+    );
 }
 
+/** @deprecated Stage allowlists removed — any valid membership stage may route. */
+export function isBuilderMembershipStageAllowed(stageKey: string): boolean {
+    return Boolean(stageKey.trim());
+}
+
+/** @deprecated Builder lane allowlist env removed. */
 export function readBuilderMembershipLaneAllowlistFromEnv(): Set<string> | null {
-    return parseBuilderLanesEnv();
+    return null;
+}
+
+/** @deprecated Alias retained for callers — no stage normalization gate. */
+export function normalizeBuilderMembershipStageKey(stageKey: string): string {
+    return stageKey.trim().toLowerCase();
 }

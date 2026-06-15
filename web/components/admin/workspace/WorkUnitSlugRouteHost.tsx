@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import AdminV2OpportunityWorkUnitPage from "@/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page";
+import { WorkUnitWorkspaceColdShell } from "@/components/admin/workspace/WorkUnitWorkspaceColdShell";
 import { WorkUnitSlugRouteProvider, type WorkUnitSlugRouteValue } from "@/contexts/WorkUnitSlugRouteContext";
 import {
     normalizeOperatorPathname,
@@ -10,39 +11,21 @@ import {
 } from "@/lib/admin/canonicalOperatorRoutes";
 import { syncOperatorWorkUnitUrlInBrowser } from "@/lib/admin/operatorWorkUnitDrawerUrlSync";
 import {
+    humanizeWorkUnitRouteSlug,
+    warmWorkUnitSlugRoute,
+} from "@/lib/admin/operatorWorkUnitEntryWarm";
+import {
     peekWorkUnitSlugRouteCache,
-    putWorkUnitSlugRouteCache,
     type WorkUnitSlugRouteCacheEntry,
 } from "@/lib/admin/workUnitSlugRouteCache";
-import { tracePlatformDrawerVm, tracePlatformRouteLoad } from "@/lib/perf/platformSurfacePerfTrace";
+import { tracePlatformDrawerVm } from "@/lib/perf/platformSurfacePerfTrace";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { workUnitRouteSlugToKey } from "@/lib/admin/workUnitRouteSlug";
-
-type ResolvedPayload = {
-    kind: "work_unit_key" | "queue_lane_key";
-    route_slug: string;
-    work_unit_id: string;
-    department_id: string;
-    work_unit_key: string;
-    work_unit_name: string;
-    initial_queue_key: string | null;
-};
 
 type HostState =
     | { phase: "loading" }
     | { phase: "error"; message: string }
     | { phase: "ready"; value: WorkUnitSlugRouteValue };
-
-function cacheEntryFromPayload(json: ResolvedPayload): WorkUnitSlugRouteCacheEntry {
-    return {
-        routeSlug: json.route_slug,
-        departmentId: json.department_id,
-        workUnitId: json.work_unit_id,
-        workUnitKey: json.work_unit_key,
-        workUnitName: json.work_unit_name,
-        initialQueueKey: json.initial_queue_key,
-    };
-}
 
 function readyStateFromCache(entry: WorkUnitSlugRouteCacheEntry): HostState {
     return {
@@ -73,52 +56,20 @@ export default function WorkUnitSlugRouteHost({ workUnitSlug }: { workUnitSlug: 
         let cancelled = false;
         const cached = peekWorkUnitSlugRouteCache(workUnitSlug);
         if (cached) {
-            tracePlatformRouteLoad("wu_slug_cache_hit", { work_unit_slug: workUnitSlug });
             setState(readyStateFromCache(cached));
             return;
         }
 
-        tracePlatformRouteLoad("wu_slug_fetch_start", { work_unit_slug: workUnitSlug });
         setState({ phase: "loading" });
 
-        void (async () => {
-            try {
-                const res = await fetch(
-                    `/api/admin/work-units/by-slug/${encodeURIComponent(workUnitSlug)}`,
-                    { credentials: "include" },
-                );
-                if (cancelled) return;
-
-                if (res.status === 404) {
-                    setState({ phase: "error", message: "Work unit not found." });
-                    return;
-                }
-                if (res.status === 409) {
-                    setState({
-                        phase: "error",
-                        message: "This work unit name exists in more than one department. Contact an admin to rename or disambiguate.",
-                    });
-                    return;
-                }
-                if (!res.ok) {
-                    setState({ phase: "error", message: "Could not load work unit." });
-                    return;
-                }
-
-                const json = (await res.json()) as ResolvedPayload;
-                const entry = cacheEntryFromPayload(json);
-                putWorkUnitSlugRouteCache(workUnitSlug, entry);
-                tracePlatformRouteLoad("wu_slug_fetch_ready", {
-                    work_unit_slug: workUnitSlug,
-                    work_unit_id: entry.workUnitId,
-                });
+    void warmWorkUnitSlugRoute(workUnitSlug, "route_host").then(({ entry, errorMessage }) => {
+            if (cancelled) return;
+            if (entry) {
                 setState(readyStateFromCache(entry));
-            } catch {
-                if (!cancelled) {
-                    setState({ phase: "error", message: "Could not load work unit." });
-                }
+                return;
             }
-        })();
+            setState({ phase: "error", message: errorMessage ?? "Could not load work unit." });
+        });
 
         return () => {
             cancelled = true;
@@ -153,10 +104,13 @@ export default function WorkUnitSlugRouteHost({ workUnitSlug }: { workUnitSlug: 
     }, [routeRecordIdFromPath, state]);
 
     if (state.phase === "loading") {
+        const cached = peekWorkUnitSlugRouteCache(workUnitSlug);
         return (
-            <div className="flex min-h-[12rem] items-center justify-center text-sm text-alloy-midnight/60">
-                Loading work unit…
-            </div>
+            <WorkUnitWorkspaceColdShell
+                workUnitTitle={cached?.workUnitName ?? humanizeWorkUnitRouteSlug(workUnitSlug)}
+                departmentId={cached?.departmentId}
+                reserveActionsRail
+            />
         );
     }
 

@@ -14,6 +14,7 @@ import {
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import AdminV2ProfileMenu from "@/app/adminV2/components/AdminV2ProfileMenu";
+import TopNavNotificationsLink from "@/app/adminV2/components/TopNavNotificationsLink";
 import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import InboxModal from "@/app/adminV2/components/InboxModal";
@@ -133,8 +134,13 @@ export default function TopNavBar() {
       prefetchWorkspaceOperationalTasks("open");
       setTasksModalOpen(true);
     };
+    const onOpenInbox = () => setInboxModalOpen(true);
     window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
-    return () => window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
+    window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
+    return () => {
+      window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
+      window.removeEventListener("adminv2:open-inbox-modal", onOpenInbox);
+    };
   }, []);
 
   useEffect(() => {
@@ -163,6 +169,7 @@ export default function TopNavBar() {
 
       <div className="flex shrink-0 items-center gap-3">
         <WorkspaceSiteFilterStrip normalizedPath={normalizedPath} />
+        <TopNavNotificationsLink />
         <AdminV2ProfileMenu />
       </div>
 

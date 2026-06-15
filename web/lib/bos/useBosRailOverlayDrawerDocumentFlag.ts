@@ -10,7 +10,9 @@ export function useBosRailOverlayDrawerDocumentFlag(enabled: boolean) {
         }
 
         const sync = () => {
-            const drawerOpen = document.querySelector("[data-adminv2-drawer=\"true\"]") != null;
+            const drawerOpen =
+                document.querySelector("[data-adminv2-drawer=\"true\"]") != null ||
+                document.querySelector("[data-opportunity-drawer-opening-overlay=\"true\"]") != null;
             if (drawerOpen) {
                 document.documentElement.setAttribute("data-adminv2-bos-rail-overlay-drawer", "true");
             } else {
@@ -23,7 +25,7 @@ export function useBosRailOverlayDrawerDocumentFlag(enabled: boolean) {
         mo.observe(document.body, {
             subtree: true,
             attributes: true,
-            attributeFilter: ["data-adminv2-drawer"],
+            attributeFilter: ["data-adminv2-drawer", "data-opportunity-drawer-opening-overlay"],
             childList: true,
         });
 

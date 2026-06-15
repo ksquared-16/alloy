@@ -16,16 +16,15 @@ function read(rel: string): string {
 }
 
 describe("opportunity drawer header controls presentation", () => {
-    it("title rail renders Work with BOS and Actions via header controls", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+    it("title rail renders Work with BOS and Manage via header controls", () => {
+        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
-        expect(drawer).toContain("OpportunityDrawerHeaderControls");
-        expect(drawer).toContain("actionPreflightBlocked");
-        expect(drawer).toContain("useOpportunityDrawerActionPreflight");
+        expect(runtime).toContain("OpportunityDrawerHeaderControls");
+        expect(runtime).toContain("actionPreflightBlocked");
+        expect(runtime).toContain("useOpportunityDrawerActionPreflight");
         expect(controls).toContain("ActionPreflightBlockedPanel");
-        expect(drawer).toContain("data-opportunity-header-actions-rail");
         expect(controls).toContain("BosDrawerAssistCta");
-        expect(controls).toContain("OpportunityDrawerHeaderActionsMenu");
+        expect(controls).toContain("RecordDrawerManageMenu");
         expect(controls).toContain('data-opportunity-header-controls="true"');
         expect(controls).toContain('data-opportunity-header-controls-row="actions"');
     });
@@ -36,7 +35,7 @@ describe("opportunity drawer header controls presentation", () => {
         expect(controls).toContain('data-opportunity-header-controls-row="composed"');
         expect(controls).toContain('data-opportunity-header-controls-row="attention"');
         expect(controls).toMatch(
-            /data-opportunity-header-controls-row="composed"[\s\S]*flex-1[\s\S]*OpportunityDrawerHeaderActionsRow/
+            /data-opportunity-header-controls-row="composed"[\s\S]*flex-1[\s\S]*OpportunityDrawerHeaderManageRow/
         );
     });
 
@@ -56,11 +55,11 @@ describe("opportunity drawer header controls presentation", () => {
         expect(strip).not.toContain("bosAssistSlot");
     });
 
-    it("Actions menu enforces single-line labels", () => {
-        const menu = read("components/admin/opportunity/OpportunityDrawerHeaderActionsMenu.tsx");
+    it("Manage menu enforces single-line labels", () => {
+        const menu = read("components/admin/drawer/record/RecordDrawerManageMenu.tsx");
         expect(menu).toContain("whitespace-nowrap");
         expect(menu).toContain("truncate");
-        expect(menu).toContain(">Actions<");
+        expect(menu).toContain("RECORD_DRAWER_MANAGE_MENU_LABEL");
         expect(menu).toContain('aria-haspopup="menu"');
         expect(menu).toContain('ev.key === "Escape"');
     });
@@ -73,10 +72,13 @@ describe("opportunity drawer header controls presentation", () => {
         expect(controls).not.toContain("OpportunityDrawerHeaderActionsPanel");
     });
 
-    it("registry action routing unchanged in drawer", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("handleResolvedOpportunityHeaderAction");
-        expect(drawer).toContain("flattenOpportunityRecordHeaderActionsForMenu");
+    it("registry action routing remains in VM runtime command rail", () => {
+        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
+        const legacy = read("components/admin/AdminEntityDrawerLegacy.tsx");
+        expect(runtime).toContain("displayVm.actions.header_menu");
+        expect(runtime).toContain("DrawerCommandRailActionsRegistrar");
+        expect(legacy).toContain("handleResolvedOpportunityHeaderAction");
+        expect(legacy).toContain("flattenOpportunityRecordHeaderActionsForMenu");
     });
 
     it("BOS label remains Work with BOS", () => {
@@ -87,7 +89,7 @@ describe("opportunity drawer header controls presentation", () => {
         const strip = read("components/admin/drawer/DrawerHeaderAttentionBlock.tsx");
         const tokens = read("lib/admin/drawer/drawerHeaderAttentionPresentation.ts");
         const controls = read("components/admin/opportunity/OpportunityDrawerHeaderControls.tsx");
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
+        const runtime = read("components/admin/vmDrawer/OpportunityDrawerVmRuntime.tsx");
         const shell = read("components/admin/Drawer.tsx");
         expect(strip).toContain("buildDrawerHeaderMoreGuidance");
         expect(strip).toContain("buildReadinessDrawerHeaderMoreGuidance");
@@ -99,10 +101,9 @@ describe("opportunity drawer header controls presentation", () => {
         expect(tokens).toContain("max-w-[600px]");
         expect(controls).toContain('layout="modal-attention"');
         expect(controls).toContain('data-opportunity-header-controls-layout="modal-attention"');
-        expect(drawer).toContain('"modal-actions"');
-        expect(drawer).toContain("headerTitleCenterForDrawer");
-        expect(drawer).toContain("opportunityHeaderUsesModalThreeColumn");
-        expect(drawer).toContain('data-opportunity-drawer-header-subtitle="modal-compact"');
+        expect(runtime).toContain('layout="modal-actions"');
+        expect(runtime).toContain("headerTitleRight");
+        expect(runtime).toContain('data-opportunity-drawer-header-title-right="true"');
         expect(shell).toContain("headerTitleCenter");
         expect(shell).toContain("usesThreeColumnHeader");
         expect(shell).toContain("three-column");
@@ -258,9 +259,10 @@ describe("DrawerHeaderAttentionBlock", () => {
 
 describe("person drawer header controls presentation", () => {
     it("person title rail uses PersonDrawerHeaderControls with BOS on actions row", () => {
-        const drawer = read("components/admin/AdminEntityDrawer.tsx");
-        expect(drawer).toContain("PersonDrawerHeaderControls");
+        const proofHeader = read("components/admin/vmDrawer/PersonDrawerProofLayoutHeader.tsx");
+        expect(proofHeader).toContain("PersonDrawerHeaderControls");
         const controls = read("components/admin/entity/PersonDrawerHeaderControls.tsx");
+        expect(controls).toContain("RecordDrawerManageMenu");
         expect(controls).toContain("BosDrawerAssistCta");
         expect(controls).toContain('data-person-header-controls-row="actions"');
     });

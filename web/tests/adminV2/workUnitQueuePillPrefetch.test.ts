@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    allVisibleWorkUnitLanePrefetchTargets,
     filterPrefetchableWorkUnitQueuePillKeys,
     isPrefetchableWorkUnitQueuePillKey,
     workUnitLanePrefetchTargets,
@@ -27,6 +28,17 @@ const waitlistRaw = buildLifecycleWaitlistStageQueueDefinition({
 const waitlistPrimaryKey = loadQueueDefinitionBundle(waitlistRaw).normalized.queues[0]!.key;
 
 describe("workUnitQueuePillPrefetch", () => {
+    it("allVisibleWorkUnitLanePrefetchTargets warms every visible executable pill except selected", () => {
+        const visible = ["new_inquiry", "follow_up", "all_records"];
+        expect(
+            allVisibleWorkUnitLanePrefetchTargets({
+                visiblePillKeys: visible,
+                selectedPillKey: "new_inquiry",
+                workUnit: { id: "wu-1", queue_definition: enrollmentRaw },
+            }).map((t) => t.pillKey)
+        ).toEqual(["follow_up", "all_records"]);
+    });
+
     it("workUnitQueuePillPrefetchTargets warms neighbors including NA buckets", () => {
         const visible = [
             "enrolled",
@@ -65,6 +77,19 @@ describe("workUnitQueuePillPrefetch", () => {
         ).toBe(true);
     });
 
+    it("fails closed without parseable queue_definition", () => {
+        expect(isPrefetchableWorkUnitQueuePillKey("new_inquiry", null)).toBe(false);
+        expect(isPrefetchableWorkUnitQueuePillKey("new_inquiry", {})).toBe(false);
+    });
+
+    it("fails closed when executable key list is empty", () => {
+        expect(
+            isPrefetchableWorkUnitQueuePillKey("new_inquiry", {
+                queue_definition: { version: 2, entity_type: "opportunity", queues: [] },
+            })
+        ).toBe(false);
+    });
+
     it("filterPrefetchableWorkUnitQueuePillKeys drops invalid lanes", () => {
         const visible = [
             "new_inquiry",
@@ -89,6 +114,7 @@ describe("workUnitQueuePillPrefetch", () => {
                     metadata: { lifecycle_stage_key: "waitlist" },
                 },
             ],
+            includeLifecycleSiblings: true,
             cap: 4,
         });
         expect(targets.some((t) => t.workUnitId === "wu-1" && t.pillKey === "follow_up")).toBe(true);

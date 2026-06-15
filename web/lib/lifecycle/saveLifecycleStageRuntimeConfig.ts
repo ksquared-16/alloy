@@ -39,7 +39,10 @@ import { isLifecycleDebugUiEnabled } from "@/lib/lifecycle/lifecycleDebugUi";
 import type { LifecycleStageFieldRules } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import { persistLifecycleStageFieldRules } from "@/lib/lifecycle/persistLifecycleStageFieldRules";
 import { persistQueueMembershipForLifecycleStageSave } from "@/lib/lifecycle/persistQueueMembershipV1";
+import { persistStageOperatingPlanForLifecycleStageSave } from "@/lib/lifecycle/persistStageOperatingPlanV1";
 import type { LifecycleStageFieldRulesStored } from "@/lib/lifecycle/lifecycleStageRequirementLevels";
+import { parseQueueMembershipV1, type QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
+import { parseStageOperatingPlanV1, type StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 
 export type SaveLifecycleStageRuntimeConfigInput = {
     orgId: string;
@@ -51,6 +54,8 @@ export type SaveLifecycleStageRuntimeConfigInput = {
     workUnitName?: string | null;
     /** When set, persisted in the same transaction before status/queue setup. */
     fieldRules?: LifecycleStageFieldRules | LifecycleStageFieldRulesStored | null;
+    queueMembership?: QueueMembershipV1 | unknown | null;
+    stageOperatingPlan?: StageOperatingPlanV1 | unknown | null;
 };
 
 function mapStatusRows(rows: Awaited<ReturnType<typeof fetchEffectiveStatusDefinitions>>) {
@@ -194,13 +199,32 @@ export async function saveLifecycleStageRuntimeConfig(
         selectedStatusKeys
     );
 
+    const explicitMembership =
+        input.queueMembership !== undefined && input.queueMembership !== null
+            ? parseQueueMembershipV1(input.queueMembership)
+            : null;
+    const explicitOperatingPlan =
+        input.stageOperatingPlan !== undefined && input.stageOperatingPlan !== null
+            ? parseStageOperatingPlanV1(input.stageOperatingPlan)
+            : null;
+
     const membershipPersist = await persistQueueMembershipForLifecycleStageSave(supabase, {
         orgId: input.orgId,
         departmentId: input.departmentId,
         stageKey,
         metadata,
+        ...(explicitMembership ? { explicitMembership } : {}),
     });
     metadata = membershipPersist.metadata;
+
+    const operatingPlanPersist = await persistStageOperatingPlanForLifecycleStageSave(supabase, {
+        orgId: input.orgId,
+        departmentId: input.departmentId,
+        stageKey,
+        metadata,
+        ...(explicitOperatingPlan ? { explicitPlan: explicitOperatingPlan } : {}),
+    });
+    metadata = operatingPlanPersist.metadata;
 
     const statusStagesPayload = await loadLifecycleStageStatusStagesPayload(
         supabase,

@@ -1,0 +1,434 @@
+/**
+ * BOS smoke — soft cloud of possibility above the mark; never originates from Alloy geometry.
+ * Uncertainty condenses toward clarity (not streams, lanes, or process graphics).
+ */
+
+@keyframes bos-smoke-think-upper {
+    0%,
+    100% {
+        transform: translate(-50%, 0) scale(1);
+        opacity: 0.34;
+    }
+    50% {
+        transform: translate(calc(-50% + 2px), -4px) scale(1.07);
+        opacity: 0.42;
+    }
+}
+
+@keyframes bos-smoke-think-mid {
+    0%,
+    100% {
+        transform: translate(-50%, 0) scale(0.98);
+        opacity: 0.38;
+    }
+    50% {
+        transform: translate(calc(-50% - 2px), -3px) scale(1.05);
+        opacity: 0.46;
+    }
+}
+
+@keyframes bos-smoke-think-lower {
+    0%,
+    100% {
+        transform: translate(-50%, 0) scale(0.96);
+        opacity: 0.4;
+    }
+    50% {
+        transform: translate(-50%, -2px) scale(1.03);
+        opacity: 0.48;
+    }
+}
+
+@keyframes bos-smoke-think-near {
+    0%,
+    100% {
+        transform: translate(-50%, 0) scale(0.94);
+        opacity: 0.42;
+    }
+    50% {
+        transform: translate(calc(-50% + 1px), -1px) scale(1.02);
+        opacity: 0.5;
+    }
+}
+
+@keyframes bos-smoke-converge-upper {
+    0%,
+    100% {
+        transform: translate(-50%, 0) scale(1);
+        opacity: 0.36;
+    }
+    58% {
+        transform: translate(-50%, 16px) scale(0.34);
+        opacity: 0.54;
+    }
+}
+
+@keyframes bos-smoke-converge-mid {
+    0%,
+    100% {
+        transform: translate(-50%, 0) scale(0.98);
+        opacity: 0.38;
+    }
+    58% {
+        transform: translate(-50%, 12px) scale(0.38);
+        opacity: 0.52;
+    }
+}
+
+@keyframes bos-smoke-converge-lower {
+    0%,
+    100% {
+        transform: translate(-50%, 0) scale(0.96);
+        opacity: 0.4;
+    }
+    58% {
+        transform: translate(-50%, 8px) scale(0.42);
+        opacity: 0.5;
+    }
+}
+
+@keyframes bos-smoke-converge-near {
+    0%,
+    100% {
+        transform: translate(-50%, 0) scale(0.94);
+        opacity: 0.42;
+    }
+    58% {
+        transform: translate(-50%, 4px) scale(0.46);
+        opacity: 0.48;
+    }
+}
+
+@keyframes bos-smoke-complete {
+    0% {
+        transform: translate(-50%, -4px) scale(0.85);
+        opacity: 0.42;
+    }
+    100% {
+        transform: translate(-50%, -18px) scale(0.35);
+        opacity: 0;
+    }
+}
+
+.bos-smoke {
+    position: relative;
+    width: 100%;
+    height: 4rem;
+    pointer-events: none;
+    overflow: visible;
+}
+
+.bos-smoke__cloud {
+    position: absolute;
+    left: 50%;
+    border-radius: 50%;
+    transform: translateX(-50%);
+    background: radial-gradient(
+        ellipse 100% 100% at 50% 58%,
+        rgba(0, 162, 131, 0.44) 0%,
+        rgba(0, 162, 131, 0.24) 44%,
+        rgba(0, 162, 131, 0) 74%
+    );
+    filter: blur(8px);
+    will-change: transform, opacity;
+}
+
+.bos-smoke__cloud--upper {
+    bottom: 2.35rem;
+    width: 5.5rem;
+    height: 2rem;
+}
+
+.bos-smoke__cloud--mid {
+    bottom: 1.55rem;
+    width: 4.25rem;
+    height: 1.65rem;
+}
+
+.bos-smoke__cloud--lower {
+    bottom: 0.85rem;
+    width: 3.25rem;
+    height: 1.35rem;
+}
+
+.bos-smoke__cloud--near {
+    bottom: 0.1rem;
+    width: 2.35rem;
+    height: 1.05rem;
+}
+
+.bos-smoke--thinking .bos-smoke__cloud--upper {
+    animation: bos-smoke-think-upper 5.2s ease-in-out infinite;
+}
+
+.bos-smoke--thinking .bos-smoke__cloud--mid {
+    animation: bos-smoke-think-mid 5.6s ease-in-out infinite;
+    animation-delay: -0.8s;
+}
+
+.bos-smoke--thinking .bos-smoke__cloud--lower {
+    animation: bos-smoke-think-lower 5s ease-in-out infinite;
+    animation-delay: -1.6s;
+}
+
+.bos-smoke--thinking .bos-smoke__cloud--near {
+    animation: bos-smoke-think-near 4.8s ease-in-out infinite;
+    animation-delay: -2.4s;
+}
+
+.bos-smoke--converging .bos-smoke__cloud--upper {
+    animation: bos-smoke-converge-upper 4.4s ease-in-out infinite;
+}
+
+.bos-smoke--converging .bos-smoke__cloud--mid {
+    animation: bos-smoke-converge-mid 4.4s ease-in-out infinite;
+    animation-delay: -0.5s;
+}
+
+.bos-smoke--converging .bos-smoke__cloud--lower {
+    animation: bos-smoke-converge-lower 4.4s ease-in-out infinite;
+    animation-delay: -1s;
+}
+
+.bos-smoke--converging .bos-smoke__cloud--near {
+    animation: bos-smoke-converge-near 4.4s ease-in-out infinite;
+    animation-delay: -1.5s;
+}
+
+.bos-smoke--complete .bos-smoke__cloud {
+    animation: bos-smoke-complete 0.85s ease-out forwards;
+}
+
+.bos-smoke--complete .bos-smoke__cloud--upper {
+    animation-delay: 0s;
+}
+
+.bos-smoke--complete .bos-smoke__cloud--mid {
+    animation-delay: 0.05s;
+}
+
+.bos-smoke--complete .bos-smoke__cloud--lower {
+    animation-delay: 0.08s;
+}
+
+.bos-smoke--complete .bos-smoke__cloud--near {
+    animation-delay: 0.11s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bos-smoke__cloud {
+        animation: none !important;
+        opacity: 0.42;
+        transform: translateX(-50%);
+    }
+
+    .bos-smoke--complete .bos-smoke__cloud {
+        opacity: 0;
+    }
+}
+
+/** BOS reveal sequence — cloud condenses into mark; workspace perimeter emerges. */
+.bos-reveal {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.bos-reveal--fill {
+    min-height: 100%;
+    width: 100%;
+}
+
+.bos-reveal__stage {
+    position: relative;
+    display: flex;
+    width: 100%;
+    max-width: 14rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+}
+
+.bos-reveal--workspace .bos-reveal__stage {
+    max-width: 100%;
+    min-height: 12rem;
+}
+
+.bos-reveal__smoke-stack {
+    position: relative;
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: center;
+}
+
+.bos-reveal__smoke-veil {
+    width: 100%;
+    transition: opacity 0.55s ease, filter 0.55s ease;
+}
+
+.bos-reveal__smoke-veil--clearing {
+    opacity: 0.72;
+    filter: brightness(1.05);
+    mask-image: radial-gradient(circle at 50% 88%, transparent 0%, transparent 16%, black 38%);
+    -webkit-mask-image: radial-gradient(circle at 50% 88%, transparent 0%, transparent 16%, black 38%);
+}
+
+.bos-reveal--phase-complete .bos-reveal__smoke-veil,
+.bos-reveal--phase-environment.bos-reveal--workspace .bos-reveal__smoke-veil {
+    opacity: 0;
+}
+
+.bos-reveal__mark {
+    margin-top: -0.35rem;
+    opacity: 0;
+    transform: scale(0.9);
+    transition:
+        opacity 0.55s ease,
+        transform 0.55s ease;
+}
+
+.bos-reveal__mark--visible {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.bos-reveal__message {
+    margin-top: 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.4;
+    color: rgba(39, 63, 82, 0.85);
+}
+
+.bos-reveal__environment {
+    pointer-events: none;
+    position: absolute;
+    inset: 0.75rem;
+    border-radius: 1.35rem;
+    opacity: 0;
+    transform: scale(0.78);
+    animation: bos-reveal-environment-emerge 0.95s ease-out forwards;
+}
+
+.bos-reveal__environment-perimeter {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+        radial-gradient(ellipse 120% 55% at 50% 0%, rgba(0, 162, 131, 0.08), transparent 58%),
+        radial-gradient(ellipse 90% 40% at 50% 100%, rgba(0, 162, 131, 0.06), transparent 52%);
+}
+
+.bos-reveal__environment-atmosphere {
+    pointer-events: none;
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 162, 131, 0.1),
+        inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+@keyframes bos-reveal-environment-emerge {
+    0% {
+        opacity: 0;
+        transform: scale(0.72);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.bos-reveal--workspace.bos-reveal--revealed {
+    width: 100%;
+    height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .bos-reveal__mark {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+
+    .bos-reveal__environment {
+        animation: none;
+        opacity: 1;
+        transform: none;
+    }
+
+    .bos-reveal__smoke-veil {
+        opacity: 0;
+    }
+}
+
+/** Cloud workspace — atmospheric field discovered at the edge, not illustrated. */
+.bos-workspace-shell {
+    position: relative;
+    isolation: isolate;
+}
+
+.bos-workspace-shell__perimeter {
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: none;
+    background:
+        radial-gradient(ellipse 120% 55% at 50% 0%, rgba(0, 162, 131, 0.05), transparent 58%),
+        radial-gradient(ellipse 90% 40% at 50% 100%, rgba(0, 162, 131, 0.035), transparent 52%);
+    opacity: 0.9;
+}
+
+.bos-workspace-shell__atmosphere {
+    pointer-events: none;
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    background: transparent;
+    box-shadow:
+        inset 0 0 0 1px rgba(0, 162, 131, 0.07),
+        inset 0 1px 0 rgba(255, 255, 255, 0.85);
+}
+
+/** Canonical Alloy loader — mark, horizon, atmospheric smoke. No blur blobs. */
+.alloy-identity-loader__smoke .bos-smoke {
+    height: 100%;
+}
+
+.alloy-identity-loader__smoke .bos-smoke__cloud {
+    opacity: 0.22;
+}
+
+.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--upper {
+    animation: bos-smoke-think-upper 6.4s ease-in-out infinite;
+}
+
+.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--mid {
+    animation: bos-smoke-think-mid 6.8s ease-in-out infinite;
+    animation-delay: -0.8s;
+}
+
+.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--lower {
+    animation: bos-smoke-think-lower 6.2s ease-in-out infinite;
+    animation-delay: -1.4s;
+}
+
+.alloy-identity-loader__smoke .bos-smoke--thinking .bos-smoke__cloud--near {
+    animation: bos-smoke-think-near 6s ease-in-out infinite;
+    animation-delay: -0.4s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .alloy-identity-loader__smoke .bos-smoke__cloud {
+        animation: none !important;
+        opacity: 0.16;
+    }
+}

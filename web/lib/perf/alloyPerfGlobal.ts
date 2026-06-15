@@ -9,7 +9,7 @@ import { reportAdminV2SurfaceReady } from "@/lib/perf/adminV2NavResponsiveness";
 export const ALLOY_PERF_TICK_EVENT = "alloy-perf-tick";
 
 const PRIMARY_SURFACE_CLEAR_MARKS = new Set([
-    "work_unit_primary_lane_ready",
+    "wu_reveal_above_fold_ready",
     "department_ready",
     "drawer_primary_ready",
     "drawer_primary_ready_at",
@@ -73,6 +73,8 @@ export function isAdminV2WuPrimaryPaintPending(maxAgeMs = 20_000): boolean {
     const nav = alloyPerfGet("work_unit_navigation_start");
     if (nav == null) return false;
     if (performance.now() - nav >= maxAgeMs) return false;
+    const aboveFold = alloyPerfGet("wu_reveal_above_fold_ready");
+    if (aboveFold != null) return false;
     const primary = alloyPerfGet("work_unit_primary_lane_ready");
     const bootstrap = alloyPerfGet("work_unit_bootstrap_ready");
     if (primary != null || bootstrap != null) return false;

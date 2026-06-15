@@ -2,6 +2,7 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
+import LeadHouseholdPrimaryContactConfirmModal from "@/components/layout/lead/LeadHouseholdPrimaryContactConfirmModal";
 import {
     oppInqEyebrow,
     oppInqInnerCardCompact,
@@ -47,72 +48,52 @@ function RoleChip({ label }: { label: string }) {
     );
 }
 
-function HouseholdPrimaryContactControl({
-    customerId,
-    personId,
+function HouseholdMakePrimaryContactButton({
     displayName,
     isPrimary,
     canMutate,
     guardianCount,
-    onPrimarySet,
-    dataViewingPerson = false,
+    isSaving,
+    onRequestMakePrimary,
 }: {
-    customerId: string;
-    personId: string;
     displayName: string;
     isPrimary: boolean;
     canMutate: boolean;
     guardianCount: number;
-    onPrimarySet: (customerId: string, personId: string) => Promise<void>;
-    dataViewingPerson?: boolean;
+    isSaving: boolean;
+    onRequestMakePrimary: () => void;
 }) {
-    const [saving, setSaving] = useState(false);
-
-    const setPrimary = useCallback(async () => {
-        if (isPrimary || !canMutate || saving) return;
-        setSaving(true);
-        try {
-            await onPrimarySet(customerId, personId);
-        } finally {
-            setSaving(false);
-        }
-    }, [canMutate, customerId, isPrimary, onPrimarySet, personId, saving]);
-
     if (!householdShowsPrimaryContactControl({ guardianCount, isPrimary, canMutate })) return null;
 
     return (
-        <label
-            className="mt-1.5 flex cursor-pointer items-center gap-1.5 text-[11px] text-alloy-midnight/55"
+        <button
+            type="button"
+            onClick={(e) => {
+                e.stopPropagation();
+                onRequestMakePrimary();
+            }}
+            disabled={isSaving}
+            className="mt-1.5 text-left text-[11px] font-medium text-alloy-blue hover:underline disabled:opacity-50"
             data-person-drawer-primary-contact-control="true"
-            data-person-drawer-viewing-person-primary={dataViewingPerson ? "true" : undefined}
-            onClick={(e) => e.stopPropagation()}
+            data-drawer-household-make-primary-contact="true"
         >
-            <input
-                type="radio"
-                name={`household-primary-${customerId}`}
-                checked={isPrimary}
-                disabled={saving || isPrimary}
-                onChange={() => void setPrimary()}
-                className="h-3 w-3 border-alloy-stone/40 text-alloy-blue focus:ring-alloy-blue/30"
-                aria-label={`Set ${displayName} as primary contact`}
-            />
-            <span>Set as primary contact</span>
-        </label>
+            {isSaving ? "Saving…" : "Make primary contact"}
+        </button>
     );
 }
 
 function ViewingPersonPrimaryContactCard({
     row,
-    customerId,
     canMutate,
     guardianCount,
-    onPrimarySet,
+    savingPersonId,
+    onRequestMakePrimary,
 }: {
     row: PersonDrawerHouseholdMember;
-    customerId: string;
     canMutate: boolean;
     guardianCount: number;
-    onPrimarySet: (customerId: string, personId: string) => Promise<void>;
+    savingPersonId: string | null;
+    onRequestMakePrimary: (personId: string, displayName: string) => void;
 }) {
     const personId = row.person_id;
     if (!personId) return null;
@@ -136,15 +117,13 @@ function ViewingPersonPrimaryContactCard({
                             <RoleChip label="Primary" />
                         </div>
                     ) : null}
-                    <HouseholdPrimaryContactControl
-                        customerId={customerId}
-                        personId={personId}
+                    <HouseholdMakePrimaryContactButton
                         displayName={row.display_name}
                         isPrimary={row.is_primary}
                         canMutate={canMutate}
                         guardianCount={guardianCount}
-                        onPrimarySet={onPrimarySet}
-                        dataViewingPerson
+                        isSaving={savingPersonId === personId}
+                        onRequestMakePrimary={() => onRequestMakePrimary(personId, row.display_name)}
                     />
                 </div>
             </div>
@@ -154,32 +133,31 @@ function ViewingPersonPrimaryContactCard({
 
 function GuardianCard({
     row,
-    customerId,
     canMutate,
     guardianCount,
+    savingPersonId,
     onOpenPerson,
-    onPrimarySet,
+    onRequestMakePrimary,
 }: {
     row: PersonDrawerHouseholdMember;
-    customerId: string;
     canMutate: boolean;
     guardianCount: number;
+    savingPersonId: string | null;
     onOpenPerson: (id: string) => void;
-    onPrimarySet: (customerId: string, personId: string) => Promise<void>;
+    onRequestMakePrimary: (personId: string, displayName: string) => void;
 }) {
     const isPrimary = row.is_primary;
     const personId = row.person_id;
 
     const primaryControl =
         personId ? (
-            <HouseholdPrimaryContactControl
-                customerId={customerId}
-                personId={personId}
+            <HouseholdMakePrimaryContactButton
                 displayName={row.display_name}
                 isPrimary={isPrimary}
                 canMutate={canMutate}
                 guardianCount={guardianCount}
-                onPrimarySet={onPrimarySet}
+                isSaving={savingPersonId === personId}
+                onRequestMakePrimary={() => onRequestMakePrimary(personId, row.display_name)}
             />
         ) : null;
 
@@ -384,16 +362,45 @@ export default function PersonDrawerHouseholdSection({
     const openChild = (personId: string) => openPerson(personId);
     const isParentDrawer = dataDrawerVariant === "parent";
 
-    const handlePrimarySet = useCallback(
-        async (customerId: string, personId: string) => {
-            await patchHouseholdPrimaryContact(customerId, personId);
-            const next = applyHouseholdPrimaryContactToRecord(record, customerId, personId);
-            onRecordUpdated?.(next);
+    const [pendingPrimary, setPendingPrimary] = useState<{
+        customerId: string;
+        personId: string;
+        displayName: string;
+    } | null>(null);
+    const [savingPersonId, setSavingPersonId] = useState<string | null>(null);
+    const [primaryContactError, setPrimaryContactError] = useState<string | null>(null);
+
+    const requestMakePrimary = useCallback(
+        (customerId: string, personId: string, displayName: string) => {
+            if (!canMutate || savingPersonId) return;
+            setPrimaryContactError(null);
+            setPendingPrimary({ customerId, personId, displayName });
         },
-        [onRecordUpdated, record]
+        [canMutate, savingPersonId]
     );
 
+    const handleConfirmPrimary = useCallback(async () => {
+        if (!pendingPrimary) return;
+        setSavingPersonId(pendingPrimary.personId);
+        setPrimaryContactError(null);
+        try {
+            await patchHouseholdPrimaryContact(pendingPrimary.customerId, pendingPrimary.personId);
+            const next = applyHouseholdPrimaryContactToRecord(
+                record,
+                pendingPrimary.customerId,
+                pendingPrimary.personId
+            );
+            onRecordUpdated?.(next);
+            setPendingPrimary(null);
+        } catch (e) {
+            setPrimaryContactError(e instanceof Error ? e.message : "Could not update primary contact");
+        } finally {
+            setSavingPersonId(null);
+        }
+    }, [onRecordUpdated, pendingPrimary, record]);
+
     return (
+        <>
         <section
             className={`${oppInqLeadSummaryShellClassName} mb-2`}
             data-person-drawer-household="true"
@@ -475,21 +482,25 @@ export default function PersonDrawerHouseholdSection({
                                                         <ViewingPersonPrimaryContactCard
                                                             key={`viewing-${viewingGuardian.person_id}`}
                                                             row={viewingGuardian}
-                                                            customerId={group.customer_id}
                                                             canMutate={canMutate}
                                                             guardianCount={guardianCount}
-                                                            onPrimarySet={handlePrimarySet}
+                                                            savingPersonId={savingPersonId}
+                                                            onRequestMakePrimary={(personId, displayName) =>
+                                                                requestMakePrimary(group.customer_id, personId, displayName)
+                                                            }
                                                         />
                                                     ) : null}
                                                     {guardiansDisplayed.map((row) => (
                                                         <GuardianCard
                                                             key={row.person_id ?? row.display_name}
                                                             row={row}
-                                                            customerId={group.customer_id}
                                                             canMutate={canMutate}
                                                             guardianCount={guardianCount}
+                                                            savingPersonId={savingPersonId}
                                                             onOpenPerson={openPerson}
-                                                            onPrimarySet={handlePrimarySet}
+                                                            onRequestMakePrimary={(personId, displayName) =>
+                                                                requestMakePrimary(group.customer_id, personId, displayName)
+                                                            }
                                                         />
                                                     ))}
                                                 </>
@@ -522,11 +533,11 @@ export default function PersonDrawerHouseholdSection({
                                         <GuardianCard
                                             key={row.person_id ?? row.display_name}
                                             row={row}
-                                            customerId={group.customer_id}
                                             canMutate={false}
                                             guardianCount={0}
+                                            savingPersonId={null}
                                             onOpenPerson={openPerson}
-                                            onPrimarySet={handlePrimarySet}
+                                            onRequestMakePrimary={() => {}}
                                         />
                                     ))}
                                 </BelowRowSection>
@@ -538,11 +549,11 @@ export default function PersonDrawerHouseholdSection({
                                         <GuardianCard
                                             key={row.person_id ?? row.display_name}
                                             row={row}
-                                            customerId={group.customer_id}
                                             canMutate={false}
                                             guardianCount={0}
+                                            savingPersonId={null}
                                             onOpenPerson={openPerson}
-                                            onPrimarySet={handlePrimarySet}
+                                            onRequestMakePrimary={() => {}}
                                         />
                                     ))}
                                 </BelowRowSection>
@@ -551,6 +562,22 @@ export default function PersonDrawerHouseholdSection({
                     );
                 })}
             </div>
+            {primaryContactError ?
+                <p className="mt-2 text-[12px] text-alloy-ember" data-drawer-household-primary-contact-error="true">
+                    {primaryContactError}
+                </p>
+            :   null}
         </section>
+        <LeadHouseholdPrimaryContactConfirmModal
+            isOpen={pendingPrimary != null}
+            personName={pendingPrimary?.displayName ?? "this person"}
+            isLoading={savingPersonId != null}
+            onClose={() => {
+                if (savingPersonId) return;
+                setPendingPrimary(null);
+            }}
+            onConfirm={handleConfirmPrimary}
+        />
+        </>
     );
 }

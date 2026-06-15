@@ -113,6 +113,36 @@ export function buildLifecycleSiblingHeaderSkeletonSections(): import("@/lib/adm
     ];
 }
 
+/** Normalize department `work-unit-queue-summaries` API rows for cache + pill totals. */
+export function workUnitSummariesFromDepartmentQueueSummariesResponse(
+    workUnits: Array<{
+        id?: string;
+        error?: string;
+        work_unit_scope_total?: number | null;
+        queues?: Array<{ key?: string; count?: number; counts_deferred?: boolean }>;
+    }>
+): Record<string, { total: number; needs_attention: number | null }> {
+    const out: Record<string, { total: number; needs_attention: number | null }> = {};
+    for (const row of workUnits) {
+        const id = typeof row.id === "string" ? row.id.trim() : "";
+        if (!id || row.error) continue;
+        const total =
+            typeof row.work_unit_scope_total === "number" && Number.isFinite(row.work_unit_scope_total)
+                ? Math.max(0, Math.floor(row.work_unit_scope_total))
+                : null;
+        if (total == null) continue;
+        const needsRow = (row.queues ?? []).find(
+            (q) => (q.key ?? "").trim().toLowerCase() === "needs_attention"
+        );
+        const needs =
+            needsRow && needsRow.counts_deferred !== true && typeof needsRow.count === "number"
+                ? Math.max(0, Math.floor(needsRow.count))
+                : null;
+        out[id] = { total, needs_attention: needs };
+    }
+    return out;
+}
+
 export function lifecycleSiblingTotalsFromDeptSummaries(
     workUnitSummaries: Record<string, { total: number; needs_attention: number | null }> | undefined
 ): Record<string, number> {

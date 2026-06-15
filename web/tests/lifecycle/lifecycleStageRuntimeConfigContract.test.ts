@@ -232,8 +232,10 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
     beforeEach(() => {
         store = createContractStore();
         supabase = createContractSupabase(store);
-        vi.mocked(fetchEffectiveStatusDefinitions).mockImplementation(async () => [
+        vi.mocked(fetchEffectiveStatusDefinitions).mockImplementation(async () => ([
             {
+                id: "sd-enrolling",
+                industry_key: null,
                 status_key: "enrolling",
                 status_label: "Enrolling",
                 sort_order: 10,
@@ -243,7 +245,7 @@ describe("Lifecycle Builder — enrolling stage runtime config contract", () => 
                 entity_type: "opportunities",
                 org_id: ORG,
             },
-        ]);
+        ]) as import("@/lib/admin/statusDefinitionsResolve").StatusDefinitionRow[]);
     });
 
     const activation: LifecycleActivationV1 = {

@@ -10,7 +10,7 @@ function read(rel: string): string {
 }
 
 describe("work-unit above-fold reveal gate (page)", () => {
-    it("page uses cold/warm content gate for WorkUnitPageLoadingGate", () => {
+    it("page uses cold/warm content gate for WorkUnitWorkspaceColdShell", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).toContain("workUnitRevealGate");
         expect(page).toContain("workUnitAboveFoldPageReady");
@@ -20,8 +20,8 @@ describe("work-unit above-fold reveal gate (page)", () => {
         expect(page).toContain("queueItemsForDisplay");
         expect(page).toContain("workUnitPageContentReady");
         expect(page).toContain("resolveWorkUnitPageContentReady");
-        expect(page).toContain("WorkUnitPageLoadingGate");
-        expect(page).toMatch(/!workUnitPageContentReady[\s\S]*WorkUnitPageLoadingGate/);
+        expect(page).not.toContain("WorkUnitPageLoadingGate");
+        expect(page).toMatch(/!workUnitPageContentReady[\s\S]*WorkUnitWorkspaceColdShell/);
         expect(page).toContain("markWorkUnitRevealGateStart");
         expect(page).toContain("markWorkUnitRevealGatePhases");
     });
@@ -41,5 +41,28 @@ describe("work-unit above-fold reveal gate (page)", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(page).toContain("startParallelPrimaryRowFetchFromCache");
         expect(page).toContain("fetchWorkUnitOperationalBootstrapSession");
+    });
+
+    it("warm navigation retains lane authority and restores session lane rows", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        expect(page).toContain("restoreWarmWorkUnitLaneRows");
+        expect(page).toMatch(/if \(warmLaneRetain\) \{[\s\S]*setWuQueueLaneAuthorityReady\(true\)/);
+        expect(page).toMatch(/if \(!warmLaneRetain\) \{[\s\S]*clearWorkUnitBootstrapSessionForEntity/);
+        expect(page).toContain("initialLaneReveal: true");
+        expect(page).toContain('qs.set("row_mode", "reveal")');
+    });
+
+    it("bootstrap primary lane never blocks first paint on full queue_list", () => {
+        const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
+        const inlineIdx = page.indexOf("if (inlineIncomplete)");
+        const inlineBlock = page.slice(inlineIdx, page.indexOf("} else {", inlineIdx));
+        expect(inlineBlock).toContain("initialLaneReveal: true");
+        expect(inlineBlock).not.toContain("force: true");
+        expect(page).toMatch(
+            /!bootstrapPrimaryRowFetchScheduledRef\.current[\s\S]*?initialLaneReveal: true/
+        );
+        expect(page).toMatch(/!primaryLaneRowsSettledOnceRef\.current\) return/);
+        expect(page).toContain("bootstrapPrimaryRowFetchScheduledRef.current = true");
+        expect(page).toContain("suppressQueueFetchEffectOnceRef.current = true");
     });
 });

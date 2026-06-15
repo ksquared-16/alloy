@@ -5,29 +5,30 @@ import type { ReactNode } from "react";
 import { useCommandRailBosHostRef } from "@/app/adminV2/components/CommandRailBosMount";
 import { CommandRailCollapsibleActionsSection } from "@/app/adminV2/components/workspace/CommandRailCollapsibleActionsSection";
 import { DrawerRegistryActionsRail } from "@/app/adminV2/components/workspace/DrawerRegistryActionsRail";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import { useDrawerCommandRailActionsOptional } from "@/contexts/DrawerCommandRailActionsContext";
 
 type Props = {
     children: ReactNode;
     ariaLabel: string;
     className?: string;
+    /** Work-unit command rail: Workflow Telemetry card between Actions and BOS. */
+    telemetrySlot?: ReactNode;
 };
 
 /**
- * Workspace right command column — actions scroll region with optional BOS dock host at bottom.
+ * Workspace right command column — Actions, optional telemetry, BOS dock host at bottom.
  */
 export function WorkspaceCommandRailShell({
     children,
     ariaLabel,
     className = "adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell",
+    telemetrySlot = null,
 }: Props) {
     const bosHostRef = useCommandRailBosHostRef();
-    const bosRailCopilot = isBosRightRailCopilotEnabledClient();
     const drawerRailActions = useDrawerCommandRailActionsOptional()?.registration;
 
     const actionsContent =
-        bosRailCopilot && drawerRailActions ?
+        drawerRailActions ?
             <CommandRailCollapsibleActionsSection
                 actionCount={drawerRailActions.actionCount}
                 loading={false}
@@ -48,18 +49,6 @@ export function WorkspaceCommandRailShell({
             </CommandRailCollapsibleActionsSection>
         :   children;
 
-    if (!bosRailCopilot) {
-        return (
-            <aside
-                className={className}
-                data-adminv2-workspace-command-rail
-                aria-label={ariaLabel}
-            >
-                {children}
-            </aside>
-        );
-    }
-
     return (
         <aside
             className={`${className} adminv2-ws-command-rail-with-bos`}
@@ -69,6 +58,14 @@ export function WorkspaceCommandRailShell({
             <div className="adminv2-ws-command-rail-actions min-h-0 shrink-0 overflow-y-auto overscroll-contain">
                 {actionsContent}
             </div>
+            {telemetrySlot ?
+                <div
+                    className="adminv2-ws-command-rail-telemetry min-h-0 shrink-0"
+                    data-command-rail-telemetry="true"
+                >
+                    {telemetrySlot}
+                </div>
+            :   null}
             <div
                 ref={bosHostRef}
                 data-adminv2-command-rail-bos-host

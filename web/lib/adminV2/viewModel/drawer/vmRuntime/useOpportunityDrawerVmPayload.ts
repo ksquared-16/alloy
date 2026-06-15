@@ -4,7 +4,11 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { shouldShowVmDrawerColdShell } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerTransitionCoordinator";
 import { isOpportunityDrawerViewModelPreload } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
-import { loadOpportunityDrawerViaViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import {
+    loadOpportunityDrawerViaViewModel,
+    type LoadOpportunityDrawerViaViewModelResult,
+} from "@/lib/adminV2/viewModel/drawer/opportunity/loadOpportunityDrawerViaViewModel";
+import { opportunityDrawerViewModelHardCutoverFailureMessage } from "@/lib/adminV2/viewModel/drawer/opportunity/opportunityDrawerViewModelHardCutover";
 import {
     buildPrepareParamsFromOpenDrawer,
     peekDrawerViewModelPreloadSync,
@@ -15,6 +19,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/drawerRuntimePhase";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import { scheduleWarmRelatedDrawerTargetsAfterVmApply } from "@/lib/adminV2/viewModel/drawer/vmRuntime/drawerVmPayloadWarmRelated";
+import { prefetchDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 import { buildOpportunityDrawerOpenPreloadFromViewModel } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerOpenPreloadFromViewModel";
 import { putDrawerViewModelCacheEntry, invalidateDrawerViewModelCacheForEntity } from "@/lib/adminV2/viewModel/drawer/drawerViewModelSessionCache";
 import { peekOpportunityDrawerDisplayVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/vmDrawerPayloadPeekSeed";
@@ -44,6 +49,15 @@ export type OpportunityDrawerVmPayloadState = {
     ) => void;
     reloadOpportunityDisplayVm: () => Promise<void>;
 };
+
+function formatOpportunityDrawerVmLoadError(
+    result: Extract<LoadOpportunityDrawerViaViewModelResult, { ok: false }>
+): string {
+    if (result.reason === "composed_not_ready" && result.missing_fields?.length) {
+        return `Drawer is preparing required fields: ${result.missing_fields.join(", ")}.`;
+    }
+    return opportunityDrawerViewModelHardCutoverFailureMessage(result);
+}
 
 export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState {
     const {
@@ -100,6 +114,20 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
                 generation: vm.generation,
                 previousDrawer,
                 stack,
+            });
+            prefetchDrawerLayoutRuntimeBody({
+                apiPath: "/api/admin/layout-runtime/opportunity-drawer-body",
+                entityId: vm.entity.id,
+                queryParams: {
+                    departmentId:
+                        vm.workspace.department_id ??
+                        drawer.opportunityWorkspaceContext?.department_id ??
+                        null,
+                    workUnitId:
+                        vm.workspace.work_unit_id ??
+                        drawer.opportunityWorkspaceContext?.work_unit_id ??
+                        null,
+                },
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?
@@ -208,7 +236,15 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
                 :   0;
             if (!result.ok) {
                 setColdLoading(false);
-                setError(result.reason);
+                setError(formatOpportunityDrawerVmLoadError(result));
+                logDrawerVmRuntime("cold_fetch_error", {
+                    opportunity_id: drawer.id,
+                    reason: result.reason,
+                    missing_fields:
+                        result.reason === "composed_not_ready"
+                            ? (result.missing_fields ?? []).join(",")
+                            : undefined,
+                });
                 return;
             }
             if (!isOpportunityDrawerViewModelPreload(result.preload)) {
@@ -251,27 +287,29 @@ export function useOpportunityDrawerVmPayload(): OpportunityDrawerVmPayloadState
 
     const reloadOpportunityDisplayVm = useCallback(async () => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        const id = drawer.id.trim();
-        invalidateDrawerViewModelCacheForEntity("opportunities", id, {
+        const expectedId = drawer.id.trim();
+        const reloadGen = ++fetchGenRef.current;
+        invalidateDrawerViewModelCacheForEntity("opportunities", expectedId, {
             departmentId: drawer.opportunityWorkspaceContext?.department_id ?? null,
             workUnitId: drawer.opportunityWorkspaceContext?.work_unit_id ?? null,
         });
         invalidateDrawerLayoutRuntimeBodyCacheForEntity(
             "/api/admin/layout-runtime/opportunity-drawer-body",
-            id,
+            expectedId,
         );
         dispatchDrawerLayoutRuntimeBodyInvalidate({
             entityType: "opportunities",
-            entityId: id,
+            entityId: expectedId,
         });
         const result = await loadOpportunityDrawerViaViewModel(
-            id,
+            expectedId,
             drawer.opportunityWorkspaceContext ?? null,
             workspaceDataFetchInit(),
         );
-        if (result.ok && isOpportunityDrawerViewModelPreload(result.preload)) {
-            applyVm(result.preload.viewModel, "inquiry_child_reload");
-        }
+        if (reloadGen !== fetchGenRef.current) return;
+        if (!result.ok || !isOpportunityDrawerViewModelPreload(result.preload)) return;
+        if (String(result.preload.viewModel.entity.id) !== expectedId) return;
+        applyVm(result.preload.viewModel, "inquiry_child_reload");
     }, [applyVm, drawer.id, drawer.opportunityWorkspaceContext, drawer.type]);
 
     useEffect(() => {

@@ -36,8 +36,8 @@ describe("buildPartialQueueRowContext", () => {
         expect(ctx.case_context.display_name).toBe("Smith Household");
         expect(ctx.primary_contact?.display_name).toBe("Sarah Smith");
         expect(ctx.drawer_open.entity_id).toBe("opp-1");
-        expect(ctx.drawer_open.active_subject.subject_type).toBe("case");
-        expect(ctx.drawer_open.active_subject.stage_key).toBe("tour");
+        expect(ctx.drawer_open.active_subject!.subject_type).toBe("case");
+        expect(ctx.drawer_open.active_subject!.stage_key).toBe("tour");
     });
 
     it("maps boring case label for open-like keys", () => {

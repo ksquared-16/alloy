@@ -1,16 +1,17 @@
-/** Work-unit page reveal — no warm bypass that exposes row skeleton under loaded pills. */
+/** Work-unit page reveal — one cold shell, then full critical surface together (Pass 3). */
 
 export type WorkUnitPageRevealInput = {
     shell_ready: boolean;
-    /** First selected lane has reached a settled display state at least once this visit. */
-    initial_lane_reveal_settled: boolean;
-    /** Current selected lane may paint rows / empty / error (not skeleton). */
-    lane_reveal_settled: boolean;
+    /** Header, KPI strip, selected queue rows, and actions rail are ready together. */
+    critical_bundle_ready: boolean;
+    /** After the first coordinated reveal, stay mounted during pill switches. */
+    coordinated_reveal_completed: boolean;
 };
 
 export function workUnitPageContentReady(input: WorkUnitPageRevealInput): boolean {
     if (!input.shell_ready) return false;
-    return input.initial_lane_reveal_settled || input.lane_reveal_settled;
+    if (input.coordinated_reveal_completed) return true;
+    return input.critical_bundle_ready;
 }
 
 export function workUnitPageShowsLoadingGate(input: WorkUnitPageRevealInput): boolean {

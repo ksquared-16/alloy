@@ -9,13 +9,14 @@ import {
 } from "@/lib/adminV2/workUnitRevealGate";
 
 describe("workUnitRevealGate", () => {
-    it("above_fold_ready requires all four lanes", () => {
+    it("above_fold_ready requires all five lanes including KPI", () => {
         expect(
             computeWorkUnitRevealGate({
                 shell_ready: true,
                 summaries_ready: true,
                 actions_ready: true,
                 rows_ready: true,
+                kpi_ready: true,
             }).above_fold_ready
         ).toBe(true);
 
@@ -24,9 +25,20 @@ describe("workUnitRevealGate", () => {
             summaries_ready: true,
             actions_ready: false,
             rows_ready: true,
+            kpi_ready: true,
         });
         expect(blocked.above_fold_ready).toBe(false);
         expect(blocked.reason_if_blocked).toEqual(["actions"]);
+
+        const kpiBlocked = computeWorkUnitRevealGate({
+            shell_ready: true,
+            summaries_ready: true,
+            actions_ready: true,
+            rows_ready: true,
+            kpi_ready: false,
+        });
+        expect(kpiBlocked.above_fold_ready).toBe(false);
+        expect(kpiBlocked.reason_if_blocked).toEqual(["kpi"]);
     });
 
     it("shell_ready waits for bootstrap loading to finish", () => {

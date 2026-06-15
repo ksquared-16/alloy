@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { departmentIdAllowed } from "@/lib/admin/accessScope";
+import { readProcessTracks } from "@/lib/businessProcesses/businessProcessConfigReader";
 import {
     activeStagesForProcess,
     lifecycleBuilderFromDepartmentMetadata,
@@ -49,6 +50,7 @@ export function catalogEntriesFromDepartmentRows(
         for (const process of config.processes) {
             if (!process.is_active) continue;
             const stage_count = activeStagesForProcess(process).length;
+            const track_count = readProcessTracks(process)?.tracks.length ?? 0;
             const lifecycle_name = process.name.trim();
             const name_matches_tile =
                 !activationOwned ||
@@ -74,6 +76,7 @@ export function catalogEntriesFromDepartmentRows(
                 lifecycle_name,
                 source,
                 stage_count,
+                track_count,
                 work_unit_count: opts.wuCountByDept.get(dept.id) ?? 0,
                 activation_owned: activationOwned,
                 can_delete,

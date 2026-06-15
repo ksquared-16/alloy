@@ -27,6 +27,103 @@ import type { MetricKey, ResolveKpisResult, WorkspaceKpiPlacementRow } from "@/l
 
 const FACET_MAX_WORK_UNITS = 12;
 
+/** Legacy CRM pipeline placement keys mapped to canonical enrollment KPI ids. */
+const LEGACY_PIPELINE_PLACEMENT_KEYS = new Set<string>([
+    "org.pipeline.active_in_motion",
+    "org.pipeline.pipeline_value_open",
+    "org.pipeline.closed_outcomes",
+]);
+
+const MODERN_ENROLLMENT_PLACEMENT_KEYS = new Set<string>([
+    "org.enrollment.active_leads",
+    "org.enrollment.scheduled_tours",
+    "org.enrollment.in_motion",
+    "org.enrollment.waitlisted_families",
+]);
+
+const LEGACY_TO_CANONICAL_ENROLLMENT_ID: Record<string, string> = {
+    "org.pipeline.active_in_motion": "org_enrollment_active_leads",
+    "org.pipeline.pipeline_value_open": "org_enrollment_in_motion",
+    "org.pipeline.closed_outcomes": "org_enrollment_waitlisted_families",
+};
+
+const MODERN_ENROLLMENT_CANONICAL_INDEX: Partial<Record<MetricKey, number>> = {
+    "org.enrollment.active_leads": 0,
+    "org.enrollment.scheduled_tours": 1,
+    "org.enrollment.in_motion": 2,
+    "org.enrollment.waitlisted_families": 3,
+};
+
+function usesModernEnrollmentPlacements(rows: WorkspaceKpiPlacementRow[]): boolean {
+    return rows.some((r) => MODERN_ENROLLMENT_PLACEMENT_KEYS.has(r.metric_key));
+}
+
+function usesLegacyPipelinePlacements(rows: WorkspaceKpiPlacementRow[]): boolean {
+    return rows.some((r) => LEGACY_PIPELINE_PLACEMENT_KEYS.has(r.metric_key));
+}
+
+function applyLegacyEnrollmentLabelOverrides(
+    canonical: KPIVm[],
+    visibleRows: WorkspaceKpiPlacementRow[],
+): KPIVm[] {
+    const labelByCanonicalId = new Map<string, string>();
+    for (const row of visibleRows) {
+        const canonicalId = LEGACY_TO_CANONICAL_ENROLLMENT_ID[row.metric_key];
+        if (canonicalId && row.label_override?.trim()) {
+            labelByCanonicalId.set(canonicalId, row.label_override.trim());
+        }
+    }
+    return canonical.map((k) => ({
+        ...k,
+        label: labelByCanonicalId.get(k.id) ?? k.label,
+    }));
+}
+
+/**
+ * Legacy workspace placements mapped CRM pipeline keys to a subset of enrollment KPIs.
+ * Expand to the full canonical childcare strip unless modern enrollment keys are configured.
+ */
+function finalizeWorkspaceEnrollmentKpiStrip(
+    items: KPIVm[],
+    visibleRows: WorkspaceKpiPlacementRow[],
+    canonical: KPIVm[],
+): KPIVm[] {
+    if (usesModernEnrollmentPlacements(visibleRows)) {
+        return items;
+    }
+    if (!usesLegacyPipelinePlacements(visibleRows)) {
+        return items;
+    }
+
+    const legacyPlacementKeysOnly = visibleRows.every((r) => LEGACY_PIPELINE_PLACEMENT_KEYS.has(r.metric_key));
+    const resolvedLegacyItemsOnly =
+        items.length > 0 && items.every((k) => LEGACY_PIPELINE_PLACEMENT_KEYS.has(k.id));
+
+    if (legacyPlacementKeysOnly || (resolvedLegacyItemsOnly && items.length < canonical.length)) {
+        return applyLegacyEnrollmentLabelOverrides(canonical, visibleRows);
+    }
+
+    return items;
+}
+
+function enrollmentCellFromCanonical(
+    orgPipeline: KPIVm[],
+    metricKey: MetricKey,
+    row: WorkspaceKpiPlacementRow,
+): KPIVm | null {
+    const idx = MODERN_ENROLLMENT_CANONICAL_INDEX[metricKey];
+    if (idx == null || idx < 0 || idx >= orgPipeline.length) return null;
+    const src = orgPipeline[idx];
+    if (!src) return null;
+    return {
+        id: metricKey,
+        label: row.label_override?.trim() || src.label,
+        value: src.value,
+        lane: (row.lane_override ?? src.lane ?? "business") as KPIVm["lane"],
+        unit: src.unit,
+    };
+}
+
 function formatInt(n: number | null | undefined): string {
     if (n == null || Number.isNaN(n)) return "—";
     return String(Math.max(0, Math.floor(n)));
@@ -44,13 +141,13 @@ function vmFromRow(metricKey: MetricKey, value: string, row: WorkspaceKpiPlaceme
 }
 
 function mapPipelineCellToMetricKey(orgKpis: KPIVm[], metricKey: MetricKey): KPIVm | null {
-    const order = [
-        "org.pipeline.active_in_motion",
-        "org.pipeline.pipeline_value_open",
-        "org.pipeline.closed_outcomes",
-    ] as const;
-    const idx = order.indexOf(metricKey as (typeof order)[number]);
-    if (idx < 0 || idx >= orgKpis.length) return null;
+    const legacyIndexByKey: Partial<Record<MetricKey, number>> = {
+        "org.pipeline.active_in_motion": 0,
+        "org.pipeline.pipeline_value_open": 2,
+        "org.pipeline.closed_outcomes": 3,
+    };
+    const idx = legacyIndexByKey[metricKey];
+    if (idx == null || idx < 0 || idx >= orgKpis.length) return null;
     const src = orgKpis[idx];
     if (!src) return null;
     return {
@@ -135,6 +232,18 @@ export function resolveKpisForWorkspace(params: {
                 items.push(cell);
                 break;
             }
+            case "org.enrollment.active_leads":
+            case "org.enrollment.scheduled_tours":
+            case "org.enrollment.in_motion":
+            case "org.enrollment.waitlisted_families": {
+                const cell = enrollmentCellFromCanonical(orgPipeline, mk, row);
+                if (!cell) {
+                    warnings.push(`enrollment_cell_missing:${mk}`);
+                    continue;
+                }
+                items.push(cell);
+                break;
+            }
             default:
                 warnings.push(`unhandled_workspace_metric:${mk}`);
         }
@@ -146,7 +255,10 @@ export function resolveKpisForWorkspace(params: {
         }
         return { items: [], warnings };
     }
-    return { items, warnings };
+    return {
+        items: finalizeWorkspaceEnrollmentKpiStrip(items, visible, orgPipeline),
+        warnings,
+    };
 }
 
 export function resolveKpisForDepartment(params: {

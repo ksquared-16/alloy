@@ -34,6 +34,7 @@ describe("opportunityDrawerViewModelFirstViewport", () => {
                     version: 1,
                     buckets: [{ key: "new", label: "New", status_keys: ["new"] }],
                 } as never,
+                lifecycle_rail: null,
             },
             first_paint: {
                 settled: true,
@@ -85,6 +86,7 @@ describe("opportunityDrawerViewModelFirstViewport", () => {
     it("maps preload with queue_definition and paint record task/reminder seeds", () => {
         const vm = minimalSettledOpportunityDrawerViewModel({
             summaries: {
+                active_tour_bookings: [],
                 tasks: {
                     state: "loaded",
                     open_count: 1,

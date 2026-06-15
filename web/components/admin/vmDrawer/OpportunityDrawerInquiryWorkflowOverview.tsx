@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import OpportunityInquiryChildrenSection from "@/components/admin/entity/OpportunityInquiryChildrenSection";
+import OpportunityDecisionSplitPanel from "@/components/admin/opportunity/OpportunityDecisionSplitPanel";
 import { FamilyContactsPanel } from "@/components/admin/opportunity/FamilyContactsPanel";
 import { OpportunityInquirySummaryActivity } from "@/components/admin/opportunity/OpportunityInquirySummaryActivity";
 import { OpportunityInquirySummaryRightColumn } from "@/components/admin/opportunity/OpportunityInquirySummaryRightColumn";
@@ -98,6 +99,9 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
     const showInquiryChildren =
         shellContract.section_slots.some((s) => s.section_key === "inquiry_children") ||
         drawerChildRows.length > 0;
+
+    const showDecisionSplit =
+        displayVm.workspace.lifecycle_rail?.current_stage_key === "decision" && drawerChildRows.length > 0;
 
     const refreshVm = useCallback(() => {
         void loadOpportunityDrawerViaViewModel(drawerId, drawer.opportunityWorkspaceContext ?? null);
@@ -239,6 +243,14 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                     :   null}
                 </div>
             </div>
+            {showDecisionSplit ?
+                <OpportunityDecisionSplitPanel
+                    opportunityId={drawerId}
+                    children={drawerChildRows}
+                    canMutate={!!canMutate}
+                    onApplied={refreshVm}
+                />
+            :   null}
             {showInquiryChildren ?
                 <div
                     className={oppInqLeadSummaryShellClassName}
@@ -268,6 +280,15 @@ export default function OpportunityDrawerInquiryWorkflowOverview({
                         shellReservedRowCount={expectedRowCount}
                         opportunityDisplayLocationKind={opportunityDisplayLocationKind ?? undefined}
                         onChildrenMutated={refreshVm}
+                        configuredLifecycleStages={
+                            displayVm.workspace.lifecycle_rail?.stages.map((s, index) => ({
+                                id: s.key,
+                                key: s.key,
+                                label: s.label,
+                                sort_order: index,
+                                is_active: true,
+                            })) ?? null
+                        }
                         opportunityRecord={record}
                         opportunityWorkspaceContext={drawer.opportunityWorkspaceContext ?? null}
                         linkPending={drawerLinkPending}

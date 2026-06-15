@@ -30,6 +30,7 @@ import {
     updateStageDescription,
     type LifecycleBuilderV1,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { applyEnrollmentTemplateInConfig } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import { syncWorkUnitSortOrderFromBuilderStages } from "@/lib/lifecycle/syncWorkUnitSortOrderFromBuilder";
 import { logLifecycleBuilderSaveTiming } from "@/lib/lifecycle/lifecycleBuilderSaveTiming";
 import {
@@ -290,6 +291,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
                     return NextResponse.json({ error: "process_id and stage_id are required" }, { status: 400 });
                 }
                 config = removeStageFromProcess(config, pid, stageId);
+                break;
+            }
+            case "apply_enrollment_v2_template": {
+                const processId = typeof body.process_id === "string" ? body.process_id.trim() : "";
+                const pid = processId || config.active_process_id || "";
+                if (!pid) return NextResponse.json({ error: "process_id is required" }, { status: 400 });
+                const missingProcess = requireProcessInConfig(config, pid, departmentId, row.metadata);
+                if (missingProcess) return missingProcess;
+                try {
+                    config = applyEnrollmentTemplateInConfig(config, pid);
+                } catch (e) {
+                    return NextResponse.json(
+                        { error: e instanceof Error ? e.message : "Template apply failed" },
+                        { status: 400 },
+                    );
+                }
                 break;
             }
             default:

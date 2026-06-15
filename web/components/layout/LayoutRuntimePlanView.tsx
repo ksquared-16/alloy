@@ -165,6 +165,10 @@ type LayoutRuntimeHostContextValue = {
 
 const LayoutRuntimeHostContext = createContext<LayoutRuntimeHostContextValue>({});
 
+export function useLayoutRuntimeHostContext(): LayoutRuntimeHostContextValue {
+    return useContext(LayoutRuntimeHostContext);
+}
+
 function isLayoutRuntimeChildrenRepeater(item: LayoutItem): boolean {
     const keys = [item.source, item.refKey].filter(Boolean).map(String);
     return keys.some((key) => CHILDREN_REPEATER_KEYS.has(key));
@@ -494,12 +498,17 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         sectionKey === "connected_children" &&
         composition.personOverviewComposition &&
         (item.displayMode ?? "table") === "table";
-    const useChildFamilyTable =
+    const useChildFamilySection =
         operatorSurfaces &&
         isChildrenRepeater &&
         sectionKey === "family_relationships" &&
-        composition.childOverviewComposition &&
+        composition.childOverviewComposition;
+    const useChildFamilyCardList = Boolean(useChildFamilySection && composition.childFamilyCardList);
+    const useChildFamilyTable =
+        useChildFamilySection &&
+        !composition.childFamilyCardList &&
         (item.displayMode ?? "table") === "table";
+    const useChildFamilyPresentation = useChildFamilyCardList || useChildFamilyTable;
     const filterColumnsForComposition = composition.childOverviewComposition ?
         filterChildRelatedListColumnsForComposition
     : composition.personOverviewComposition ?
@@ -513,15 +522,15 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
                 composition.enrollmentPrimaryColumnsOnly &&
                 !composition.leadEnrollmentCardList)
             || (usePersonConnectedChildrenTable && composition.connectedChildrenPrimaryColumnsOnly)
-            || (useChildFamilyTable && composition.familyPrimaryColumnsOnly),
+            || (useChildFamilyPresentation && composition.familyPrimaryColumnsOnly),
         ),
     );
-    const hideInnerHeader = useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyTable;
+    const hideInnerHeader = useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyPresentation;
     const rowLimit =
         useEnrollmentReadTable && maxEnrollmentRows != null && !enrollmentExpanded ? maxEnrollmentRows
         : usePersonConnectedChildrenTable && maxConnectedChildrenRows != null && !enrollmentExpanded ?
             maxConnectedChildrenRows
-        : useChildFamilyTable && maxFamilyRows != null && !enrollmentExpanded ?
+        : useChildFamilyPresentation && maxFamilyRows != null && !enrollmentExpanded ?
             maxFamilyRows
         :   null;
     const rows = rowLimit != null ? allRows.slice(0, rowLimit) : allRows;
@@ -667,10 +676,10 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
     const collectionMarkup =
         useEnrollmentReadTable ? enrollmentGridMarkup
         : usePersonConnectedChildrenTable ? personConnectedChildrenMarkup
-        : useChildFamilyTable ? childFamilyMarkup
+        : useChildFamilyPresentation ? childFamilyMarkup
         : legacyTableMarkup;
 
-    if (useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyTable) {
+    if (useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyPresentation) {
         return (
             <>
                 {isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null}
@@ -807,6 +816,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     const variant = useContext(LayoutRuntimeVariantContext);
     const composition = useLayoutRuntimeCompositionHints();
     const onAdornmentAction = useContext(AdornmentActionContext);
+    const host = useContext(LayoutRuntimeHostContext);
     const { onSelectDrawerTab, activityTabKey } = useLayoutRuntimeDrawerHost();
     const widgetKey = resolveLayoutRuntimeWidgetKey(item);
     const title = operatorLabel(item, variant) || "Details";
@@ -857,7 +867,13 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     }
 
     if (widgetKey === "household_contacts" && composition.leadOverviewComposition) {
-        return <LeadHouseholdContactsWidget record={record} onAdornmentAction={onAdornmentAction} />;
+        return (
+            <LeadHouseholdContactsWidget
+                record={record}
+                onAdornmentAction={onAdornmentAction}
+                canMutate={host.canMutate}
+            />
+        );
     }
 
     if (widgetKey === "related_people" && composition.personOverviewComposition) {
@@ -1143,6 +1159,7 @@ function SectionView({
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const composition = useLayoutRuntimeCompositionHints();
     const onAdornmentAction = useContext(AdornmentActionContext);
+    const host = useContext(LayoutRuntimeHostContext);
     const sectionContext = {
         sectionPresentation,
         sectionKey: section.key,
@@ -1180,6 +1197,7 @@ function SectionView({
             variant={section.key === "household_contact" ? "lead" : "person"}
             onAdornmentAction={onAdornmentAction}
             showContactsList={showHouseholdContactsList}
+            canMutate={host.canMutate}
         />
     :   (
             <LayoutRuntimeSectionContext.Provider value={sectionContext}>
@@ -1210,7 +1228,9 @@ function SectionView({
             isEnrollmentSection
             || section.key === "connected_children"
             || section.key === "program_enrollment"
-            || section.key === "family_relationships" ?
+            || section.key === "family_relationships"
+            || section.key === "household_relationships"
+            || section.key === "household_contact" ?
                 DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS
             :   DRAWER_OVERVIEW_PANEL_BODY_CLASS;
 

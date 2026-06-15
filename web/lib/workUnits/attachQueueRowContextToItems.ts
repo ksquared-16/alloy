@@ -66,6 +66,7 @@ export function queueRowContextMetaFromLane(
             subject_grain: membership.subject_type,
             count_unit: queueRowCountUnitFromMembership(membership.count_unit),
             location_scope_source: membership.location_scope_source ?? undefined,
+            included_disposition_keys: membership.included_disposition_keys,
         };
     }
 

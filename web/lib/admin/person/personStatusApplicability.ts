@@ -12,10 +12,8 @@ export type PersonStatusProfileKey =
 
 /** Canonical child lifecycle keys seeded for person drawer. */
 export const PERSON_CHILD_LIFECYCLE_STATUS_KEYS = [
+    "pre_enrolled",
     "active",
-    "future_start",
-    "withdrawn",
-    "graduated",
     "inactive",
     "archived",
 ] as const;
@@ -27,8 +25,18 @@ export const PERSON_CHILD_ONLY_STATUS_KEYS = new Set<string>([
     "graduated",
 ]);
 
-/** Generic person keys shared by child and parent/guardian profiles. */
-export const PERSON_GENERIC_STATUS_KEYS = new Set<string>(["active", "inactive", "archived"]);
+/** MVP keys allowed in drawer dropdowns (Settings authority + reseed). */
+export const PERSON_MVP_STATUS_KEYS = new Set<string>(PERSON_CHILD_LIFECYCLE_STATUS_KEYS);
+
+/** Generic person keys — same MVP set as child lifecycle for parent/guardian drawers. */
+export const PERSON_GENERIC_STATUS_KEYS = PERSON_MVP_STATUS_KEYS;
+
+/** Legacy person keys superseded by MVP — excluded from drawer unless current value. */
+export const PERSON_LEGACY_DRAWER_STATUS_KEYS = new Set<string>([
+    "future_start",
+    "withdrawn",
+    "graduated",
+]);
 
 export type PersonStatusApplicabilityRow = {
     status_key: string;
@@ -90,7 +98,7 @@ export function resolvePersonStatusApplicabilityProfiles(
     if (PERSON_GENERIC_STATUS_KEYS.has(key) || PERSON_CHILD_LIFECYCLE_STATUS_KEYS.includes(key as (typeof PERSON_CHILD_LIFECYCLE_STATUS_KEYS)[number])) {
         return [...ALL_PERSON_STATUS_PROFILES];
     }
-    return [...ALL_PERSON_STATUS_PROFILES];
+    return [];
 }
 
 export function personStatusAppliesToProfile(
@@ -108,6 +116,18 @@ export function filterPersonStatusDefinitionsForProfile<T extends PersonStatusAp
     profile: PersonStatusProfileKey | string
 ): T[] {
     return rows.filter((row) => personStatusAppliesToProfile(row, profile));
+}
+
+/** Drawer dropdown — active MVP keys only; Settings `status_definitions` is sole source. */
+export function filterPersonStatusDefinitionsForDrawerProfile<
+    T extends PersonStatusApplicabilityRow & { is_active?: boolean },
+>(rows: T[], profile: PersonStatusProfileKey): T[] {
+    return rows.filter((row) => {
+        if (row.is_active === false) return false;
+        const key = String(row.status_key ?? "").trim().toLowerCase();
+        if (!PERSON_MVP_STATUS_KEYS.has(key)) return false;
+        return personStatusAppliesToProfile(row, profile);
+    });
 }
 
 export type PersonStatusOptionRow = {
@@ -175,6 +195,21 @@ export function formatPersonStatusApplicabilityLabel(
     if (hasChild) return "Child lifecycle";
     if (hasGeneric) return "All people";
     return "All people";
+}
+
+/** Profile-specific operator label when metadata.labels_by_profile is set. */
+export function resolvePersonStatusLabelForProfile(
+    row: PersonStatusApplicabilityRow & { status_label?: string | null },
+    profile: PersonStatusProfileKey
+): string {
+    const labelsByProfile = row.metadata?.labels_by_profile;
+    if (labelsByProfile && typeof labelsByProfile === "object" && !Array.isArray(labelsByProfile)) {
+        const raw = (labelsByProfile as Record<string, unknown>)[profile];
+        const label = typeof raw === "string" ? raw.trim() : "";
+        if (label) return label;
+    }
+    const fallback = row.status_label != null ? String(row.status_label).trim() : "";
+    return fallback || row.status_key;
 }
 
 export type PersonDrawerStatusProfileInput = {

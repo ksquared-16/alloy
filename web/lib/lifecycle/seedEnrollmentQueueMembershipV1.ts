@@ -12,11 +12,8 @@ import {
     type LifecycleStageWorkUnitRow,
 } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
-import {
-    defaultQueueMembershipForEnrollmentStage,
-    parseQueueMembershipV1,
-    type QueueMembershipV1,
-} from "@/lib/lifecycle/queueMembershipV1";
+import { defaultEnrollmentQueueMembershipForStage } from "@/lib/businessProcessTemplates/enrollmentQueueMembershipDefaults";
+import { parseQueueMembershipV1, type QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 
 export const QUEUE_MEMBERSHIP_METADATA_KEY = "queue_membership_v1" as const;
 
@@ -110,7 +107,7 @@ export function membershipSeedDecision(
         };
     }
 
-    const defaultMembership = defaultQueueMembershipForEnrollmentStage(stageKey);
+    const defaultMembership = defaultEnrollmentQueueMembershipForStage(stageKey);
     if (!defaultMembership) {
         const action: QueueMembershipSeedStageActionKind =
             stageKey === "enrolling" ? "skipped_unknown_stage" : "skipped_no_default";

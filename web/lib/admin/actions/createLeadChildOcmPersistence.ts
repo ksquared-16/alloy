@@ -4,6 +4,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { findOrCreateChildPersonInOrg } from "@/lib/admin/person/findOrCreateChildPersonInOrg";
 import { enrichOcmProgramCategoryFields } from "@/lib/locations/resolveOcmProgramCategoryFields";
 
@@ -107,6 +108,7 @@ export function buildCreateLeadOcmInsertRow(args: {
         org_id: orgId,
         opportunity_id: opportunityId,
         customer_member_id: customerMemberId,
+        outcome_status_key: NEW_LEAD_STATUS_KEY,
         metadata: { source: "create_lead" },
         ...(ocm.location_id ? { location_id: ocm.location_id } : {}),
         ...(ocm.desired_program_type ? { desired_program_type: ocm.desired_program_type } : {}),

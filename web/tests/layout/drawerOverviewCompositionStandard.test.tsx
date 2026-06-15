@@ -11,7 +11,11 @@ import PersonConnectedChildrenCardList from "@/components/layout/person/PersonCo
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
 import {
     DRAWER_OVERVIEW_CANVAS_CLASS,
+    DRAWER_OVERVIEW_CONTAINER_CLASS,
+    DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX,
     DRAWER_OVERVIEW_PANEL_SURFACE,
+    DRAWER_OVERVIEW_SHELL_GRID,
+    DRAWER_OVERVIEW_SHELL_GRID_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import { LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS } from "@/lib/layout/runtime/layoutRuntimeSurfaceStyles";
 import {
@@ -35,12 +39,29 @@ describe("drawerOverviewCompositionStandard", () => {
         expect(DRAWER_OVERVIEW_CANVAS_CLASS).toContain("bg-white");
     });
 
+    it("uses container-query overview shell classes instead of viewport lg grid", () => {
+        expect(DRAWER_OVERVIEW_CANVAS_CLASS).toContain(DRAWER_OVERVIEW_CONTAINER_CLASS);
+        expect(DRAWER_OVERVIEW_SHELL_GRID_CLASS).toBe("adminv2-drawer-overview-shell-grid");
+        expect(DRAWER_OVERVIEW_CANVAS_CLASS).not.toContain("lg:grid-cols-12");
+        expect(DRAWER_OVERVIEW_DASHBOARD_MIN_WIDTH_PX).toBe(1040);
+    });
+
+    it("defines balanced 4/5/3 shell grid spans", () => {
+        expect(DRAWER_OVERVIEW_SHELL_GRID.leftColumn + DRAWER_OVERVIEW_SHELL_GRID.mainColumn + DRAWER_OVERVIEW_SHELL_GRID.rightRail).toBe(
+            DRAWER_OVERVIEW_SHELL_GRID.columns,
+        );
+        expect(DRAWER_OVERVIEW_SHELL_GRID.leftColumn).toBe(4);
+        expect(DRAWER_OVERVIEW_SHELL_GRID.mainColumn).toBe(5);
+        expect(DRAWER_OVERVIEW_SHELL_GRID.rightRail).toBe(3);
+    });
+
     it("panel surface includes pine left accent", () => {
         expect(DRAWER_OVERVIEW_PANEL_SURFACE).toContain("border-l-alloy-juniper");
     });
 
     it("uses neutral outer drawer shell tokens", () => {
         expect(LAYOUT_RUNTIME_DRAWER_OUTER_BORDER).toContain("39, 63, 82");
+        expect(LAYOUT_RUNTIME_DRAWER_OUTER_BORDER).toContain("0.28");
         expect(LAYOUT_RUNTIME_DRAWER_OUTER_SHADOW).toContain("rgba");
     });
 });
@@ -218,7 +239,7 @@ describe("PersonConnectedChildrenCardList person links", () => {
     it("renders child avatar link affordance on connected child rows", () => {
         const html = renderToStaticMarkup(
             <PersonConnectedChildrenCardList
-                item={{ id: "connected-children", kind: "collection", refKey: "connected_children", columns: [] }}
+                item={{ id: "connected-children", kind: "related_list", refKey: "connected_children", columns: [] }}
                 columns={[
                     { label: "Child", refKey: "child.name", width: "medium", adornment: { position: "left", icon: "child", action: { type: "open_drawer", entity: "child", idPath: "child.id" } } },
                 ]}

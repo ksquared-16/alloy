@@ -14,13 +14,17 @@
   height: auto;
 }
 
-/* BOS right-rail copilot — docked in workspace Actions column (NEXT_PUBLIC_BOS_RIGHT_RAIL_COPILOT=1) */
-html[data-bos-right-rail-copilot="true"] {
+/* AdminV2 workspace shell — BOS docked in workspace Actions column (canonical) */
+html[data-adminv2-workspace-shell="v2"] {
   --adminv2-drawer-inset-bottom: 1rem;
+  --adminv2-drawer-outer-margin: 24px;
   --ws-shell-bottom-safe: 16px;
   --adminv2-workspace-scroll-pad-y: 24px;
-  --adminv2-bos-overlay-gutter: 24px;
+  --adminv2-bos-overlay-gutter: 16px;
   --adminv2-bos-overlay-width: 0px;
+  /* Container hierarchy — border strength (Level 1 drawer > Level 2 rail > Level 3 widgets) */
+  --adminv2-container-border-drawer: rgba(39, 63, 82, 0.28);
+  --adminv2-container-border-rail: rgba(39, 63, 82, 0.2);
   --adminv2-workspace-rail-height: calc(
     100vh - var(--adminv2-drawer-inset-top) - var(--ws-rail-sticky-top, 10px) -
       var(--adminv2-workspace-scroll-pad-y, 24px)
@@ -30,7 +34,7 @@ html[data-bos-right-rail-copilot="true"] {
 /* Drawer inset applied inline in Drawer.tsx when flag is on — avoids Tailwind inset-0 / right-0 override */
 
 @media (min-width: 1001px) {
-  html[data-bos-right-rail-copilot="true"] [data-adminv2-workspace-command-column] {
+  html[data-adminv2-workspace-shell="v2"] [data-adminv2-workspace-command-column] {
     position: sticky;
     top: var(--ws-rail-sticky-top, 10px);
     z-index: 90;
@@ -42,20 +46,20 @@ html[data-bos-right-rail-copilot="true"] {
     isolation: isolate;
   }
 
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column] {
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column] {
     overflow: hidden;
     height: var(--adminv2-workspace-rail-height);
     max-height: var(--adminv2-workspace-rail-height);
     align-self: start;
   }
 
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
-  html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos {
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos,
+  html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-command-column .adminv2-ws-dept-v2-rail.adminv2-ws-command-rail-with-bos {
     flex: 1 1 auto;
     height: 100%;
     max-height: 100%;
@@ -65,7 +69,7 @@ html[data-bos-right-rail-copilot="true"] {
   }
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-with-bos {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -73,14 +77,14 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-with-bos {
   flex: 1;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions {
   flex: 0 0 auto;
   max-height: min(38vh, 280px);
   overflow-y: auto;
   overscroll-behavior: contain;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-bos-host {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-bos-host {
   flex: 1 1 auto;
   width: 100%;
   min-height: 0;
@@ -97,7 +101,7 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-bos-host {
   height: 100%;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-command-surface-layer="rail"] {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-command-surface-layer="rail"] {
   flex: 1 1 auto;
   min-height: 0;
   height: 100%;
@@ -113,7 +117,7 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-command-surface-layer="ra
   -webkit-backdrop-filter: none;
   opacity: 1;
   border-radius: 12px;
-  border: 1px solid rgba(39, 63, 82, 0.1);
+  border: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(39, 63, 82, 0.1);
 }
@@ -124,7 +128,7 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-command-surface-layer="ra
   background-color: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-adminv2-command-surface-layer="rail"] {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-adminv2-command-surface-layer="rail"] {
   background: #ffffff !important;
   background-color: #ffffff !important;
   backdrop-filter: none !important;
@@ -132,32 +136,32 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] 
   opacity: 1 !important;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-recent-operational-activity-strip="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-recent-operational-activity-strip="true"] {
   background-color: #ffffff !important;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-starters="true"] .bos-rail-starter-card {
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-rail-starters="true"] .bos-rail-starter-card {
   background-color: #ffffff !important;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-with-bos {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-with-bos {
   gap: 10px;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section {
   margin-bottom: 0;
-  border: 1px solid rgba(39, 63, 82, 0.14);
+  border: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
   border-radius: 10px;
   background: #ffffff;
   box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section--expanded {
-  border-color: rgba(39, 63, 82, 0.16);
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded {
+  border-color: var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2));
   background: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -173,28 +177,130 @@ html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigge
   transition: background-color 120ms ease;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-section--expanded .adminv2-ws-command-rail-actions-trigger {
   border-radius: 9px 9px 0 0;
-  border-bottom: 1px solid rgba(39, 63, 82, 0.1);
+  border-bottom: none;
   background: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger:hover {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger:hover {
   background: rgba(39, 63, 82, 0.04);
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-trigger-chevron {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-trigger-chevron {
   font-size: 11px;
   line-height: 1;
   color: rgba(39, 63, 82, 0.45);
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-command-rail-actions-body {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-actions-body {
   padding: 8px 8px 10px;
   background: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
+/* Workflow Telemetry — same rail shell as Actions; operator-focused expand body */
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-section {
+  margin-bottom: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-attention-badge {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #bc4300;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.9);
+  flex-shrink: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-body {
+  max-height: min(28vh, 240px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-panel + .adminv2-ws-command-rail-telemetry-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(39, 63, 82, 0.08);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-panel-title {
+  margin: 0 0 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(39, 63, 82, 0.52);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-health {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #273f52;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-health--attention {
+  color: #bc4300;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-health-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  color: rgba(39, 63, 82, 0.78);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-activity-list {
+  margin: 0;
+  padding: 0 0 0 14px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: rgba(39, 63, 82, 0.82);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-empty {
+  margin: 0;
+  font-size: 11px;
+  color: rgba(39, 63, 82, 0.55);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(39, 63, 82, 0.16);
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  color: #273f52;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-action:hover {
+  background: rgba(39, 63, 82, 0.04);
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-command-rail-telemetry-action--secondary {
+  background: rgba(39, 63, 82, 0.03);
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
   background-color: #ffffff !important;
 }
 
@@ -202,21 +308,287 @@ html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay
   z-index: 90;
 }
 
-/* Modal entity drawers — positioned via workspace-safe rectangle CSS vars */
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-modal-panel--bos-rail {
-  left: var(--adminv2-drawer-computed-left, 0px);
-  width: var(--adminv2-drawer-computed-width, 100%);
-  max-width: var(--adminv2-drawer-computed-width, 100%);
-  transform: none !important;
-  right: auto !important;
+html[data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
+  width: var(--adminv2-bos-overlay-effective-width, var(--adminv2-bos-overlay-width)) !important;
+  max-width: var(--adminv2-bos-overlay-effective-width, var(--adminv2-bos-overlay-width)) !important;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-drawer-sidebar-panel.adminv2-drawer-shell-inset {
-  left: var(--adminv2-drawer-computed-left, auto);
-  width: var(--adminv2-drawer-computed-width, min(100vw, 42rem));
-  max-width: var(--adminv2-drawer-computed-width, 42rem);
+/* BOS Action Workspace — suppress persistent rail (modal is the BOS experience) */
+html[data-adminv2-action-workspace-open="true"] [data-adminv2-bos-rail-overlay="true"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+  opacity: 0 !important;
+  width: 0 !important;
+  max-width: 0 !important;
+  overflow: hidden !important;
+}
+
+/* BOS-rail drawer — modal framing (outer margin) + unified workspace edge toward BOS */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail.adminv2-drawer-shell-inset {
+  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
+  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
+}
+
+/* BOS-rail record drawer — backdrop band matches modal framing (not full viewport height) */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-workspace-backdrop-band {
+  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
+  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
+}
+
+/*
+ * Record drawer open — light white-tint page dim behind drawer only.
+ * Ends at --adminv2-drawer-backdrop-right (not BOS gutter); no blur wash in the seam.
+ */
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-dim,
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-sidebar-dim {
+  background: rgba(248, 250, 252, 0.56);
+  backdrop-filter: none;
+}
+
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-workspace-loading-overlay {
+  top: calc(var(--adminv2-drawer-inset-top) + var(--adminv2-drawer-outer-margin, 24px));
+  bottom: calc(var(--adminv2-drawer-inset-bottom) + var(--adminv2-drawer-outer-margin, 24px));
+  background: rgba(248, 250, 252, 0.52);
+}
+
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-workspace-ambient-field {
+  opacity: 0.32;
+}
+
+/* Modal entity drawers — positioned via workspace-safe rectangle CSS vars (no viewport fallback) */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail {
+  left: var(--adminv2-drawer-computed-left) !important;
+  width: var(--adminv2-drawer-computed-width) !important;
+  max-width: var(--adminv2-drawer-computed-width) !important;
+  transform: none !important;
+  right: auto !important;
+  border: 1px solid var(--adminv2-container-border-drawer, rgba(39, 63, 82, 0.28)) !important;
+  box-shadow:
+    0 12px 40px rgba(39, 63, 82, 0.08),
+    0 2px 8px rgba(39, 63, 82, 0.04);
+}
+
+/* Drawer + BOS — drawer shell (L1) adjacent to BOS rail shell (L2) */
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] .adminv2-drawer-modal-panel--bos-rail {
+  border: 1px solid var(--adminv2-container-border-drawer, rgba(39, 63, 82, 0.28)) !important;
+  box-shadow:
+    0 12px 40px rgba(39, 63, 82, 0.06),
+    0 2px 8px rgba(39, 63, 82, 0.03);
+}
+
+html[data-adminv2-workspace-shell="v2"][data-adminv2-bos-rail-overlay-drawer="true"] [data-adminv2-bos-rail-overlay="true"] {
+  border-left: 1px solid var(--adminv2-container-border-rail, rgba(39, 63, 82, 0.2)) !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail[data-adminv2-record-modal-tone="cleaning-v2"] {
+  max-width: var(--adminv2-drawer-computed-width) !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-drawer-shell-inset {
+  left: var(--adminv2-drawer-computed-left) !important;
+  width: var(--adminv2-drawer-computed-width) !important;
+  max-width: var(--adminv2-drawer-computed-width) !important;
   right: auto !important;
   transform: none !important;
+}
+
+/* Drawer overview — container-aware layout (drawer width, not viewport lg) */
+.adminv2-drawer-overview-canvas {
+  container-type: inline-size;
+  container-name: drawer-overview;
+}
+
+.adminv2-drawer-overview-shell-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.adminv2-drawer-overview-col-left,
+.adminv2-drawer-overview-col-main,
+.adminv2-drawer-overview-col-rail {
+  min-width: 0;
+}
+
+.adminv2-drawer-overview-col-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.adminv2-drawer-overview-lead-source-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
+.adminv2-drawer-enrollment-field-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+}
+
+@container drawer-overview (min-width: 1040px) {
+  .adminv2-drawer-overview-shell-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  .adminv2-drawer-overview-col-left {
+    grid-column: span 4;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .adminv2-drawer-overview-col-main {
+    grid-column: span 5;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .adminv2-drawer-overview-col-rail {
+    grid-column: span 3;
+    min-width: 12rem;
+  }
+
+  .adminv2-drawer-overview-lead-source-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.25rem;
+  }
+
+  .adminv2-drawer-enrollment-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* BOS rail drawer — never rely on viewport lg for overview shell (safety net) */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+@container drawer-overview (min-width: 1040px) {
+  html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail .adminv2-drawer-overview-shell-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 1rem;
+  }
+}
+
+/*
+ * BOS-rail drawer — internal density (outer panel geometry unchanged).
+ * Reclaims horizontal space by trimming nested padding/gutters while keeping ≥16px breathing room
+ * from the drawer panel edge to primary content.
+ */
+html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail {
+  /* Scroll body: default cleaning-v2 uses px-4/sm:px-5 — cap at 16px sides */
+  [data-adminv2-record-modal-scroll] {
+    padding-inline: 16px !important;
+    padding-top: 10px !important;
+  }
+
+  [data-entity-drawer-scroll-body="true"] {
+    gap: 0.375rem;
+  }
+
+  /* Header chrome — Proof shell + Lead command header */
+  [data-proof-layout-header-row="title-actions"] {
+    padding-inline: 16px !important;
+    gap: 0.75rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  [data-proof-layout-header-row="tabs"],
+  [data-proof-layout-header-row="lifecycle"],
+  [data-proof-layout-header-row="attention"] {
+    padding-inline: 16px !important;
+  }
+
+  [data-proof-layout-header-row="tabs"] {
+    padding-bottom: 0.25rem !important;
+  }
+
+  [data-proof-layout-header-row="lifecycle"] {
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.5rem !important;
+  }
+
+  [data-lead-drawer-command-header="true"] {
+    padding: 0.5rem 0.75rem !important;
+    gap: 0.625rem !important;
+    border-radius: 0.75rem !important;
+    box-shadow: 0 1px 4px rgba(24, 39, 58, 0.05) !important;
+  }
+
+  [data-lead-drawer-command-avatar="true"] {
+    width: 2.25rem !important;
+    height: 2.25rem !important;
+  }
+
+  [data-proof-layout-header-controls="true"] {
+    padding-top: 0 !important;
+  }
+
+  /* Overview canvas — drop duplicate horizontal inset (scroll body owns side breathing room) */
+  .adminv2-drawer-overview-canvas {
+    padding-inline: 0 !important;
+    padding-block: 0.5rem !important;
+    gap: 0.625rem;
+  }
+
+  .adminv2-drawer-overview-shell-grid {
+    gap: 0.5rem !important;
+  }
+
+  .adminv2-drawer-overview-col-rail {
+    gap: 0.5rem !important;
+  }
+
+  .adminv2-drawer-overview-lead-source-grid {
+    gap: 0.75rem !important;
+  }
+
+  /* Layout runtime section stack inside overview slots */
+  [data-lead-overview-composition] [data-layout-surface],
+  [data-person-overview-composition] [data-layout-surface],
+  [data-child-overview-composition] [data-layout-surface] {
+    gap: 0.75rem !important;
+  }
+
+  /* Section / card interiors */
+  [data-drawer-overview-panel="true"] header {
+    padding-inline: 0.625rem !important;
+    padding-block: 0.375rem !important;
+  }
+
+  [data-drawer-overview-panel="true"] > div:not(header) {
+    padding-inline: 0.625rem !important;
+  }
+
+  [data-drawer-overview-panel-section="children_enrollment"] > div:not(header),
+  [data-drawer-overview-panel-section="program_enrollment"] > div:not(header) {
+    padding-inline: 0 !important;
+  }
+
+  [data-drawer-household-profile-section="true"] {
+    padding: 0.5rem !important;
+  }
+
+  [data-lead-enrollment-card-list="true"] ul {
+    padding: 0.375rem !important;
+    gap: 0.375rem !important;
+  }
+
+  [data-lead-enrollment-card-row="true"] {
+    padding-inline: 0.625rem !important;
+    padding-block: 0.5rem !important;
+  }
+
+  [data-drawer-overview-empty-state="true"] {
+    padding-inline: 0.75rem !important;
+    padding-block: 0.75rem !important;
+  }
 }
 
 /* Drawer loading — center inside panel, not viewport */
@@ -241,93 +613,126 @@ html[data-bos-right-rail-copilot="true"] .adminv2-drawer-sidebar-panel.adminv2-d
   padding: 0 2px;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-inline-breadcrumb {
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-inline-breadcrumb {
   margin-bottom: 2px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack {
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack {
   gap: 3px;
   padding: 6px 12px 4px;
 }
 
 /* V3 — white workspace canvas; cards keep borders */
-html[data-bos-right-rail-copilot="true"] .adminv2-workspace-scroll-surface {
+html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface {
   background-color: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] .adminv2-ws-root {
+/* Work unit — trim trailing scroll-surface padding so command rail sits closer to viewport edge */
+@media (min-width: 640px) {
+  html[data-adminv2-workspace-shell="v2"] .adminv2-workspace-scroll-surface:has([data-ws-surface="work_unit"].adminv2-ws-wu-v2) {
+    padding-right: 12px !important;
+  }
+}
+
+html[data-adminv2-workspace-shell="v2"] .adminv2-ws-root {
   --ws-dept-surface-solid: #ffffff;
   --ws-dept-surface-raised: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck,
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck {
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck {
+  background: #ffffff !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
+  background: transparent !important;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-paired-oper-panel,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-paired-oper-panel {
   background: #ffffff;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child),
-html[data-bos-right-rail-copilot="true"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
-  background: transparent;
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-qsec--summary,
+html[data-adminv2-workspace-shell="v2"] [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--summary {
+  background: #ffffff;
 }
 
 /* BOS rail — tighter vertical rhythm; composer + preview stay visible */
-html[data-bos-right-rail-copilot="true"] [data-command-surface-presentation="rail"] > div {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-presentation="rail"] > div {
   display: flex;
   flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-header {
-  padding: 6px 12px 6px;
+html[data-adminv2-workspace-shell="v2"] .bos-rail-header {
+  padding: 6px 8px 6px;
   flex-shrink: 0;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-header [data-command-surface-rail-context="true"] {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-header [data-command-surface-rail-context="true"] {
   margin-top: 6px;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-scroll {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: hidden !important;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-starters="true"] {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-attention {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-attention {
   margin-bottom: 6px;
-  padding: 8px 10px;
+  padding: 8px 8px;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-starters {
+html[data-adminv2-workspace-shell="v2"] .bos-rail-starters {
   padding-bottom: 4px;
 }
 
-html[data-bos-right-rail-copilot="true"] .bos-rail-starter-card {
-  padding: 7px 10px;
+html[data-adminv2-workspace-shell="v2"] .bos-rail-starter-card {
+  padding: 7px 8px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-starters="true"] .flex-col {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-starters="true"] .flex-col {
   gap: 4px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-conversation-preview="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-conversation-preview="true"] {
   flex-shrink: 0;
   padding-top: 2px;
   padding-bottom: 2px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-command-surface-rail-composer="true"] {
+html[data-adminv2-workspace-shell="v2"] [data-command-surface-rail-composer="true"] {
   flex-shrink: 0;
   padding-top: 2px;
   padding-bottom: 6px;
 }
 
-html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] > div {
-  max-height: min(22vh, 132px);
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] {
+  flex-shrink: 1;
+  min-height: 0;
+}
+
+html[data-adminv2-workspace-shell="v2"] [data-adminv2-bos-rail-overlay="true"] [data-command-surface-thread-panel="true"] > div {
+  max-height: min(20vh, 120px);
 }
 
 @keyframes adminv2-ambient-orbit {
@@ -1991,6 +2396,7 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] 
   min-height: 40px;
   border-radius: 8px;
   color: rgba(255, 255, 255, 0.82);
+  overflow: visible;
   transition:
     background-color 120ms ease,
     color 120ms ease,
@@ -2010,6 +2416,82 @@ html[data-bos-right-rail-copilot="true"] [data-adminv2-bos-rail-overlay="true"] 
   background-color: rgba(255, 255, 255, 0.1);
   color: #fff;
   box-shadow: inset 3px 0 0 #00a283;
+}
+
+.adminv2-sidebar-rail-link > .adminv2-sidebar-nav-badge-anchor {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Collapsed rail: nudge icon away from the badge corner. */
+.adminv2-sidebar-rail-icon-with-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-5px, 4px);
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1rem;
+  height: 1rem;
+  padding-inline: 0.22rem;
+  border-radius: 9999px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  box-shadow: 0 0 0 2px #273f52;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--alert {
+  background-color: rgba(251, 191, 36, 0.96);
+  color: #273f52;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--neutral {
+  background-color: rgba(255, 255, 255, 0.24);
+  color: #fff;
+}
+
+.adminv2-sidebar-rail-link .adminv2-sidebar-nav-badge--inbox {
+  background-color: rgba(0, 162, 131, 0.96);
+  color: #fff;
+}
+
+/* Expanded sidebar: badge sits after label, not over icon. */
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding-inline: 0.3rem;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--alert {
+  background-color: rgba(251, 191, 36, 0.95);
+  color: #273f52;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--neutral {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.adminv2-sidebar-primary-link .adminv2-sidebar-nav-badge--inbox {
+  background-color: rgba(0, 162, 131, 0.95);
+  color: #fff;
 }
 
 .adminv2-sidebar-queue-list {

@@ -9,10 +9,10 @@ function read(rel: string): string {
 }
 
 describe("Lifecycle settings UX coherence", () => {
-    it("page uses compact operator helper copy", () => {
-        const page = read("app/adminV2/settings/lifecycle/page.tsx");
-        expect(page).toContain("lifecycle-page-compact-helper");
-        expect(page).toContain("Choose what must be complete before a family moves forward");
+    it("business-processes page uses compact operator subtitle", () => {
+        const page = read("app/adminV2/settings/business-processes/page.tsx");
+        expect(page).toContain("BUSINESS_PROCESS_SETTINGS_PAGE_SUBTITLE");
+        expect(page).toContain("business-processes-page-subtitle");
         expect(page).not.toContain("Platform defaults (view only)");
     });
 

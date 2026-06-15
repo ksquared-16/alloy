@@ -169,6 +169,7 @@ describe("layout runtime record mappers", () => {
                 siblingLabel: null,
                 siblingCohorts: [],
                 siblingContextLines: [],
+                siblingContextDiagnostics: null,
             },
         };
         const record = buildOpportunityQueueRowRecordFromPreview(item);

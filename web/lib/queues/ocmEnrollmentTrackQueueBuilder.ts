@@ -1,6 +1,6 @@
 /**
  * Phase A — OCM enrollment-track queue row builder (Tour, Enrolling, Enrolled).
- * Gated by `ALLOY_QUEUE_CHILD_GRAIN_LANES` at QueueService routing layer.
+ * Legacy fallback when tracks_v1 is absent; builder routing handles configured processes.
  *
  * @see docs/sprints/06_2026/child_grain_queue_conversion_design.md
  */
@@ -11,12 +11,8 @@ import {
     enrollmentOffersChildQueueRowId,
     type ChildGrainOcmQueryRow,
 } from "@/lib/queues/childGrainEnrollmentQueue";
-import {
-    enrollmentOperatorStageLabel,
-    ocmStatusKeysForEnrollmentTrackStage,
-    resolveOcmEnrollmentTrackStageForQueueKey,
-    type OcmEnrollmentTrackStage,
-} from "@/lib/queues/ocmEnrollmentTrackStageKeys";
+import { legacyChildTrackLaneForQueueKey, legacyOcmDispositionKeysForStage } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
+import type { ProcessChildTrackLaneContext } from "@/lib/businessProcesses/resolveChildTrackLaneFromMembership";
 import { isChildGrainLaneBuildersEnabled } from "@/lib/queues/childGrainLanesFeatureFlag";
 import type {
     QueueMembershipCountUnit,
@@ -26,6 +22,7 @@ import {
     applyOcmLocationScopeToQuery,
     filterOcmEnrollmentTrackRowsByLocationScope,
 } from "@/lib/queues/queueMembershipLocationScope";
+import { buildQueueRelevantCrmCompactChildren } from "@/lib/workUnits/filterQueueRelevantInquiryChildren";
 
 type OpportunityPreview = {
     id: string;
@@ -100,7 +97,7 @@ async function queryOcmEnrollmentTrackRows(params: {
     supabase: SupabaseClient;
     orgId: string;
     workUnitId: string;
-    stage: OcmEnrollmentTrackStage;
+    stageKey: string;
     dispositionKeys?: readonly string[];
     recordScopeConstraints: RecordScopeConstraints | null;
     locationScopeSource: QueueMembershipLocationScopeSource;
@@ -108,7 +105,8 @@ async function queryOcmEnrollmentTrackRows(params: {
     const statusKeys =
         params.dispositionKeys?.length ?
             [...params.dispositionKeys]
-        :   [...ocmStatusKeysForEnrollmentTrackStage(params.stage)];
+        :   [...legacyOcmDispositionKeysForStage(params.stageKey)];
+    if (!statusKeys.length) return [];
     let q = params.supabase
         .from("opportunity_customer_members")
         .select(
@@ -159,29 +157,17 @@ function opportunityPreviewFromOcmRow(row: OcmEnrollmentTrackQueryRow) {
     };
 }
 
-export type OcmEnrollmentTrackLaneContext = {
-    enabled: true;
-    queueKey: string;
-    stage: OcmEnrollmentTrackStage;
-    stageLabel: string;
-    /** When set (builder Phase C), overrides hardcoded stage disposition lists. */
-    dispositionKeys?: readonly string[];
-    countUnit?: QueueMembershipCountUnit;
-    membershipSource?: "builder" | "child_grain_flag";
-    locationScopeSource?: QueueMembershipLocationScopeSource | null;
-};
+/** @deprecated Use ProcessChildTrackLaneContext — kept for import stability. */
+export type OcmEnrollmentTrackLaneContext = ProcessChildTrackLaneContext;
 
 export function resolveOcmEnrollmentTrackLaneContext(params: {
     executableQueueKey: string;
-}): OcmEnrollmentTrackLaneContext | null {
+}): ProcessChildTrackLaneContext | null {
     if (!isChildGrainLaneBuildersEnabled(params.executableQueueKey)) return null;
-    const stage = resolveOcmEnrollmentTrackStageForQueueKey(params.executableQueueKey);
-    if (!stage) return null;
+    const legacy = legacyChildTrackLaneForQueueKey(params.executableQueueKey);
+    if (!legacy) return null;
     return {
-        enabled: true,
-        queueKey: params.executableQueueKey.trim(),
-        stage,
-        stageLabel: enrollmentOperatorStageLabel(stage),
+        ...legacy,
         membershipSource: "child_grain_flag",
         locationScopeSource: "ocm_site",
     };
@@ -190,7 +176,7 @@ export function resolveOcmEnrollmentTrackLaneContext(params: {
 export function buildOcmEnrollmentTrackQueueRow(
     row: OcmEnrollmentTrackQueryRow,
     enrichedOpp: Record<string, unknown> | null,
-    lane: OcmEnrollmentTrackLaneContext,
+    lane: ProcessChildTrackLaneContext,
 ): Record<string, unknown> {
     const opp = readOpportunity(row);
     const cm = readCustomerMember(row);
@@ -211,15 +197,26 @@ export function buildOcmEnrollmentTrackQueueRow(
         queue_grain: "child",
         child_lifecycle_status: lifecycleStatus,
         opportunity_status_key: opp.status_key,
-        enrollment_track_stage_key: lane.stage,
-        enrollment_track_stage_label: lane.stageLabel,
+            enrollment_track_stage_key: lane.stageKey,
+            enrollment_track_stage_label: lane.stageLabel,
         _child_display_name: childDisplayName,
-        _crm_compact_children: [
-            {
-                primary: childDisplayName,
-                secondary: programLine,
+        _crm_compact_children: buildQueueRelevantCrmCompactChildren({
+            row: {
+                ...base,
+                _inquiry_children:
+                    base._inquiry_children ??
+                    (base.metadata != null &&
+                    typeof base.metadata === "object" &&
+                    !Array.isArray(base.metadata)
+                        ? (base.metadata as { inquiry_children?: unknown }).inquiry_children
+                        : undefined),
             },
-        ],
+            activeSubjectId: row.id,
+            activeDisplayName: childDisplayName,
+            activeProgramLine: programLine,
+            dispositionKeys: lane.dispositionKeys,
+        }),
+        _queue_lane_disposition_keys: lane.dispositionKeys ?? null,
         _child_lifecycle_grain_row: {
             row_projection: "opportunity_customer_member",
             opportunity_customer_member_id: row.id,
@@ -230,13 +227,14 @@ export function buildOcmEnrollmentTrackQueueRow(
             child_lifecycle_status: lifecycleStatus,
             opportunity_status_key: opp.status_key,
             program_line: programLine,
-            enrollment_track_stage_key: lane.stage,
+            enrollment_track_stage_key: lane.stageKey,
         },
         _ocm_enrollment_track_row: {
             opportunity_customer_member_id: row.id,
             opportunity_id: row.opportunity_id,
-            stage_key: lane.stage,
+            stage_key: lane.stageKey,
             stage_label: lane.stageLabel,
+            disposition_keys: lane.dispositionKeys ?? null,
             outcome_status_key: lifecycleStatus,
             location_id: ocmLocationId,
             program_room_cohort_key: row.program_room_cohort_key?.trim() || null,
@@ -283,7 +281,7 @@ export async function countOcmEnrollmentTrackQueueItems(params: {
         supabase: params.supabase,
         orgId: params.orgId,
         workUnitId: params.workUnitId,
-        stage: params.ctx.stage,
+        stageKey: params.ctx.stageKey,
         dispositionKeys: params.ctx.dispositionKeys,
         recordScopeConstraints: params.recordScopeConstraints,
         locationScopeSource,
@@ -316,7 +314,7 @@ export async function loadOcmEnrollmentTrackQueueItems(params: {
         supabase: params.supabase,
         orgId: params.orgId,
         workUnitId: params.workUnitId,
-        stage: params.ctx.stage,
+        stageKey: params.ctx.stageKey,
         dispositionKeys: params.ctx.dispositionKeys,
         recordScopeConstraints: params.recordScopeConstraints,
         locationScopeSource,

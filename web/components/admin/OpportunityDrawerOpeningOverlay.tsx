@@ -1,20 +1,21 @@
 "use client";
 
-/** External first-paint gate — drawer modal does not mount until bootstrap + primary are ready. */
+import { AlloyCanonicalLoadingSurface } from "@/lib/adminV2/runtime/alloyCanonicalLoadingSurface";
+
+/** Canonical BOS loading gate — drawer modal does not mount until VM + body are ready. */
 export default function OpportunityDrawerOpeningOverlay(props: {
     onCancel: () => void;
     errorMessage?: string | null;
     recordLabel?: string;
 }) {
     const { onCancel, errorMessage, recordLabel = "record" } = props;
-    const openingCopy = `Opening ${recordLabel}…`;
 
     return (
         <div
-            className="adminv2-drawer-workspace-loading-overlay fixed top-[var(--adminv2-drawer-inset-top,3.75rem)] bottom-[var(--adminv2-drawer-inset-bottom,8rem)] z-[55] flex items-center justify-center bg-alloy-midnight/20 px-4"
+            className="adminv2-drawer-workspace-loading-overlay adminv2-drawer-shell-inset fixed z-[55] flex items-center justify-center px-4"
             style={{
-                left: "var(--adminv2-drawer-available-left, 0px)",
-                right: "calc(100vw - var(--adminv2-drawer-available-right, 100vw))",
+                left: "var(--adminv2-drawer-backdrop-left, 0px)",
+                right: "calc(100vw - var(--adminv2-drawer-backdrop-right, var(--adminv2-drawer-available-right, 100vw)))",
             }}
             role="status"
             aria-live="polite"
@@ -22,7 +23,7 @@ export default function OpportunityDrawerOpeningOverlay(props: {
             data-opportunity-drawer-opening-overlay="true"
         >
             <div className="flex max-w-sm flex-col items-center gap-3 rounded-xl border border-alloy-stone/20 bg-white px-5 py-4 shadow-lg">
-                {errorMessage ? (
+                {errorMessage ?
                     <>
                         <p className="text-center text-sm font-medium text-alloy-ember">{errorMessage}</p>
                         <button
@@ -33,15 +34,11 @@ export default function OpportunityDrawerOpeningOverlay(props: {
                             Dismiss
                         </button>
                     </>
-                ) : (
-                    <>
-                        <div
-                            className="h-5 w-5 animate-spin rounded-full border-2 border-alloy-stone/25 border-t-alloy-pine"
-                            aria-hidden
-                        />
-                        <p className="text-center text-sm font-medium text-alloy-midnight/85">{openingCopy}</p>
-                    </>
-                )}
+                :   <AlloyCanonicalLoadingSurface
+                        message={`Preparing ${recordLabel}…`}
+                        data-testid="opportunity-drawer-opening-loader"
+                    />
+                }
             </div>
         </div>
     );

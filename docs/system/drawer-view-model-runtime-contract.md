@@ -1,6 +1,7 @@
 # Drawer View Model runtime contract
 
-**Status:** Active — Opportunity validated on staging; Person/Child extend the same pattern.
+**Status:** Active — Opportunity validated on staging; Person/Child extend the same pattern.  
+**Canonical index:** **`drawer-doctrine.md`** — ownership and navigation; this doc is VM compose detail.
 
 ## Purpose
 

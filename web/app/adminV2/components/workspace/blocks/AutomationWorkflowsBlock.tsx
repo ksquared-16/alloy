@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+import { GitBranch } from "lucide-react";
 import { ADMIN_WORKFLOWS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import Link from "next/link";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
@@ -31,6 +33,158 @@ function humanTrigger(eventType: string | null): string {
     const key = (eventType ?? "").trim().toLowerCase();
     if (key === "opportunity_schedule_tour_followup") return "Runs when a tour is scheduled";
     return "Runs on configured trigger";
+}
+
+function collectScopedWorkflowRows(
+    partitions: WorkflowScopePartitionV1 | null,
+    workflows: AutomationWorkflowSummaryRow[] | null,
+): AutomationWorkflowSummaryRow[] {
+    if (partitions) {
+        return [
+            ...(partitions.scoped_work_unit ?? []),
+            ...(partitions.scoped_department ?? []),
+            ...(partitions.org_wide ?? []),
+            ...(partitions.uses_heuristic_fallback ? (partitions.heuristic ?? []) : []),
+        ];
+    }
+    return workflows ?? [];
+}
+
+function recentWorkflowActivityRows(rows: AutomationWorkflowSummaryRow[], limit = 5): AutomationWorkflowSummaryRow[] {
+    return [...rows]
+        .filter((row) => row.last_run?.started_at)
+        .sort((a, b) => Date.parse(b.last_run!.started_at) - Date.parse(a.last_run!.started_at))
+        .slice(0, limit);
+}
+
+function workflowHealthLabel(kpis: AutomationWorkflowKpis, kpisLoading: boolean): string {
+    if (kpisLoading) return "Checking…";
+    if (kpis.failed_last_7d > 0) return "Needs attention";
+    if (kpis.success_rate_last_7d != null && kpis.success_rate_last_7d < 0.92) return "Needs attention";
+    return "Healthy";
+}
+
+/** Runs today — canonical collapsed-rail count (activity, not failures). */
+export function workflowTelemetryActivityCount(
+    kpis: AutomationWorkflowKpis,
+    kpisLoading: boolean,
+): number | null {
+    if (kpisLoading) return null;
+    return kpis.runs_today;
+}
+
+function workflowTelemetryCountLabel(kpis: AutomationWorkflowKpis, kpisLoading: boolean): string {
+    const count = workflowTelemetryActivityCount(kpis, kpisLoading);
+    if (count == null) return "";
+    return ` (${count})`;
+}
+
+function WorkUnitRailTelemetryBlock(props: {
+    kpis: AutomationWorkflowKpis;
+    kpisLoading: boolean;
+    partitions: WorkflowScopePartitionV1 | null;
+    workflows: AutomationWorkflowSummaryRow[] | null;
+    href: string;
+    onWorkflowDiagnostics: (() => void) | null;
+}) {
+    const { kpis, kpisLoading, partitions, workflows, href, onWorkflowDiagnostics } = props;
+    const [expanded, setExpanded] = useState(false);
+
+    const healthLabel = workflowHealthLabel(kpis, kpisLoading);
+    const healthNeedsAttention = healthLabel === "Needs attention";
+    const activityCountLabel = workflowTelemetryCountLabel(kpis, kpisLoading);
+    const recentActivity = recentWorkflowActivityRows(collectScopedWorkflowRows(partitions, workflows));
+
+    const runsTodayLabel = kpisLoading ? "—" : String(kpis.runs_today);
+    const successRateLabel =
+        kpisLoading ? "—" : kpis.success_rate_last_7d == null ? "—" : `${Math.round(kpis.success_rate_last_7d * 100)}%`;
+    const failuresLabel = kpisLoading ? "—" : String(kpis.failed_last_7d);
+
+    return (
+        <section
+            className={`adminv2-ws-command-rail-actions-section adminv2-ws-command-rail-telemetry-section${expanded ? " adminv2-ws-command-rail-actions-section--expanded" : ""}${healthNeedsAttention ? " adminv2-ws-command-rail-telemetry-section--attention" : ""}`}
+            data-adminv2-command-rail-telemetry-section="true"
+            data-ws-component="automation_telemetry"
+            data-ws-automation-telemetry-expanded={expanded ? "true" : "false"}
+            aria-label="Workflow Telemetry"
+        >
+            <button
+                type="button"
+                className="adminv2-ws-command-rail-actions-trigger"
+                aria-expanded={expanded}
+                onClick={() => setExpanded((open) => !open)}
+                data-command-rail-telemetry-toggle="true"
+            >
+                <span className="adminv2-ws-command-rail-actions-trigger-label inline-flex items-center gap-1.5">
+                    <GitBranch className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden strokeWidth={2.2} />
+                    Workflow Telemetry{activityCountLabel}
+                    {healthNeedsAttention ?
+                        <span
+                            className="adminv2-ws-command-rail-telemetry-attention-badge"
+                            aria-label="Workflow health needs attention"
+                        />
+                    :   null}
+                </span>
+                <span className="adminv2-ws-command-rail-actions-trigger-chevron" aria-hidden>
+                    {expanded ? "▼" : "▶"}
+                </span>
+            </button>
+            {expanded ?
+                <div
+                    className="adminv2-ws-command-rail-actions-body adminv2-ws-command-rail-telemetry-body"
+                    data-command-rail-telemetry-body="true"
+                >
+                    <section className="adminv2-ws-command-rail-telemetry-panel" aria-label="Workflow health">
+                        <h4 className="adminv2-ws-command-rail-telemetry-panel-title">Workflow Health</h4>
+                        <p
+                            className={`adminv2-ws-command-rail-telemetry-health${healthNeedsAttention ? " adminv2-ws-command-rail-telemetry-health--attention" : ""}`}
+                        >
+                            {healthLabel}
+                        </p>
+                        <ul className="adminv2-ws-command-rail-telemetry-health-lines" role="list">
+                            <li>{runsTodayLabel} runs today</li>
+                            <li>{successRateLabel} success</li>
+                            <li>{failuresLabel} failures</li>
+                        </ul>
+                    </section>
+
+                    <section className="adminv2-ws-command-rail-telemetry-panel" aria-label="Recent workflow activity">
+                        <h4 className="adminv2-ws-command-rail-telemetry-panel-title">Recent Workflow Activity</h4>
+                        {recentActivity.length ?
+                            <ul className="adminv2-ws-command-rail-telemetry-activity-list" role="list">
+                                {recentActivity.map((row) => (
+                                    <li key={row.id}>{row.name ?? row.id}</li>
+                                ))}
+                            </ul>
+                        :   <p className="adminv2-ws-command-rail-telemetry-empty">No recent workflow runs in scope.</p>}
+                    </section>
+
+                    <section className="adminv2-ws-command-rail-telemetry-panel" aria-label="Workflow actions">
+                        <h4 className="adminv2-ws-command-rail-telemetry-panel-title">Actions</h4>
+                        <div className="adminv2-ws-command-rail-telemetry-actions">
+                            <Link
+                                href={href}
+                                prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
+                                className="adminv2-ws-command-rail-telemetry-action"
+                            >
+                                Open Automations
+                            </Link>
+                            {onWorkflowDiagnostics ?
+                                <button
+                                    type="button"
+                                    className="adminv2-ws-command-rail-telemetry-action adminv2-ws-command-rail-telemetry-action--secondary"
+                                    data-ws-workflow-diagnostics="true"
+                                    onClick={onWorkflowDiagnostics}
+                                >
+                                    Workflow Diagnostics
+                                </button>
+                            : null}
+                        </div>
+                    </section>
+                </div>
+            :   null}
+        </section>
+    );
 }
 
 function WorkflowListSection(props: {
@@ -109,6 +263,14 @@ export function AutomationWorkflowsBlock(props: {
     workflowAssistHref?: string | null;
     /** Focus command surface with seeded Workflow Assist prompt (preferred). */
     onAskWorkflowAssist?: (() => void) | null;
+    /** Work-unit rail: BOS diagnostics prompt for operator troubleshooting. */
+    onWorkflowDiagnostics?: (() => void) | null;
+    /**
+     * `full` — department context-lower card (default).
+     * `work_unit_summary` — legacy below-queue banner (deprecated; use `work_unit_rail`).
+     * `work_unit_rail` — compact collapsible utility in work-unit command rail.
+     */
+    presentation?: "full" | "work_unit_summary" | "work_unit_rail";
 }) {
     const {
         kpis,
@@ -120,7 +282,27 @@ export function AutomationWorkflowsBlock(props: {
         metadataAssociationNote = null,
         workflowAssistHref = null,
         onAskWorkflowAssist = null,
+        onWorkflowDiagnostics = null,
+        presentation = "full",
     } = props;
+
+    const isWorkUnitRail = presentation === "work_unit_rail";
+    if (isWorkUnitRail) {
+        return (
+            <WorkUnitRailTelemetryBlock
+                kpis={kpis}
+                kpisLoading={kpisLoading}
+                partitions={partitions}
+                workflows={workflows}
+                href={href}
+                onWorkflowDiagnostics={onWorkflowDiagnostics ?? onAskWorkflowAssist}
+            />
+        );
+    }
+
+    const isWorkUnitSummary = presentation === "work_unit_summary";
+    const isWorkUnitCompact = isWorkUnitSummary;
+    const [summaryExpanded, setSummaryExpanded] = useState(false);
 
     const scopedWu = partitions?.scoped_work_unit ?? [];
     const scopedDept = partitions?.scoped_department ?? [];
@@ -138,52 +320,73 @@ export function AutomationWorkflowsBlock(props: {
         kpis.success_rate_last_7d < 0.92 &&
         kpis.success_rate_last_7d >= 0;
 
-    return (
-        <div className="adminv2-ws-automation-telemetry" data-ws-component="automation_telemetry">
-            <header className="adminv2-ws-automation-telemetry__mast">
-                <div className="adminv2-ws-automation-telemetry__mast-primary">
-                    <p className="adminv2-ws-automation-telemetry__kicker">Workflow telemetry</p>
-                    <h3 className="adminv2-ws-automation-telemetry__title">{title}</h3>
-                    <p className="adminv2-ws-automation-telemetry__subtitle">
-                        Live runs, reliability, and workflows scoped to this workspace surface.
-                    </p>
-                </div>
-                <div className="adminv2-ws-automation-telemetry__mast-actions">
-                    <Link
-                        href={href}
-                        prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
-                        className="adminv2-ws-automation-telemetry__review"
-                    >
-                        Open Automations
-                        <span aria-hidden> →</span>
-                    </Link>
-                    {onAskWorkflowAssist ?
-                        <button
-                            type="button"
-                            className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
-                            data-ws-ask-workflow-assist="true"
-                            onClick={onAskWorkflowAssist}
-                        >
-                            Ask Workflow Assist
-                        </button>
-                    : workflowAssistHref ?
-                        <Link
-                            href={workflowAssistHref}
-                            prefetch={shouldDisableAdminV2LinkPrefetch(workflowAssistHref) ? false : undefined}
-                            className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
-                            data-ws-ask-workflow-assist="true"
-                        >
-                            Ask Workflow Assist
-                        </Link>
-                    : null}
-                </div>
-            </header>
+    const runsTodayLabel = kpisLoading ? "—" : String(kpis.runs_today);
+    const successRateLabel =
+        kpisLoading ? "—" : kpis.success_rate_last_7d == null ? "—" : `${Math.round(kpis.success_rate_last_7d * 100)}%`;
+    const failuresLabel = kpisLoading ? "—" : String(kpis.failed_last_7d);
+
+    const showFullDetails = !isWorkUnitCompact || summaryExpanded;
+
+    const summaryStats = (
+        <dl className="adminv2-ws-automation-telemetry__summary-stats">
+            <div className="adminv2-ws-automation-telemetry__summary-stat">
+                <dt>Runs Today</dt>
+                <dd>{runsTodayLabel}</dd>
+            </div>
+            <div className="adminv2-ws-automation-telemetry__summary-stat">
+                <dt>Success Rate</dt>
+                <dd>{successRateLabel}</dd>
+            </div>
+            <div
+                className={`adminv2-ws-automation-telemetry__summary-stat${failuresHot ? " adminv2-ws-automation-telemetry__summary-stat--attention" : ""}`}
+            >
+                <dt>Failures</dt>
+                <dd>{failuresLabel}</dd>
+            </div>
+        </dl>
+    );
+
+    const expandedActions = (
+        <div className="adminv2-ws-automation-telemetry__mast-actions adminv2-ws-automation-telemetry__mast-actions--expanded">
+            <Link
+                href={href}
+                prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
+                className="adminv2-ws-automation-telemetry__review"
+            >
+                Open Automations
+                <span aria-hidden> →</span>
+            </Link>
+            {onAskWorkflowAssist ?
+                <button
+                    type="button"
+                    className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
+                    data-ws-ask-workflow-assist="true"
+                    onClick={onAskWorkflowAssist}
+                >
+                    Ask Workflow Assist
+                </button>
+            : workflowAssistHref ?
+                <Link
+                    href={workflowAssistHref}
+                    prefetch={shouldDisableAdminV2LinkPrefetch(workflowAssistHref) ? false : undefined}
+                    className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
+                    data-ws-ask-workflow-assist="true"
+                >
+                    Ask Workflow Assist
+                </Link>
+            : null}
+        </div>
+    );
+
+    const fullDetailsBody = (
+        <>
+            {isWorkUnitCompact ? expandedActions : null}
 
             {associationNote ?
                 <p className="adminv2-ws-automation-telemetry__association-note" data-ws-automation-metadata-gap="true">
                     {associationNote}
                 </p>
-            : null}
+            :   null}
 
             <div className="adminv2-ws-automation-telemetry__groups" role="group" aria-label="Automation metrics">
                 <section className="adminv2-ws-automation-telemetry__group" aria-label="Throughput">
@@ -260,6 +463,51 @@ export function AutomationWorkflowsBlock(props: {
             : workflows?.length ?
                 <WorkflowListSection kicker="In scope" hint="Workflow list" rows={workflows} />
             : null}
+        </>
+    );
+
+    return (
+        <div
+            className={`adminv2-ws-automation-telemetry${isWorkUnitSummary ? " adminv2-ws-automation-telemetry--work-unit-summary" : ""}${isWorkUnitSummary && summaryExpanded ? " adminv2-ws-automation-telemetry--work-unit-summary-expanded" : ""}`}
+            data-ws-component="automation_telemetry"
+            data-ws-automation-telemetry-expanded={isWorkUnitCompact ? (summaryExpanded ? "true" : "false") : undefined}
+        >
+            {isWorkUnitSummary ?
+                <div
+                    className="adminv2-ws-automation-telemetry__summary-banner"
+                    role="region"
+                    aria-label="Workflow telemetry summary"
+                >
+                    <div className="adminv2-ws-automation-telemetry__summary-primary">
+                        <span className="adminv2-ws-automation-telemetry__summary-title">Workflow Telemetry</span>
+                        {summaryStats}
+                    </div>
+                    <button
+                        type="button"
+                        className="adminv2-ws-automation-telemetry__summary-toggle"
+                        aria-expanded={summaryExpanded}
+                        onClick={() => setSummaryExpanded((open) => !open)}
+                    >
+                        {summaryExpanded ? "Collapse" : "Expand"}
+                    </button>
+                </div>
+            :   <header className="adminv2-ws-automation-telemetry__mast">
+                    <div className="adminv2-ws-automation-telemetry__mast-primary">
+                        <p className="adminv2-ws-automation-telemetry__kicker">Workflow telemetry</p>
+                        <h3 className="adminv2-ws-automation-telemetry__title">{title}</h3>
+                        <p className="adminv2-ws-automation-telemetry__subtitle">
+                            Live runs, reliability, and workflows scoped to this workspace surface.
+                        </p>
+                    </div>
+                    {expandedActions}
+                </header>
+            }
+
+            {!isWorkUnitCompact ?
+                fullDetailsBody
+            : showFullDetails ?
+                fullDetailsBody
+            :   null}
         </div>
     );
 }

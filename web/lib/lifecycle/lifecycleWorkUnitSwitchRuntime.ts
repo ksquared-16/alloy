@@ -64,6 +64,7 @@ function sessionKey(orgId: string, departmentId: string, fingerprint: string, su
 export function markLifecycleSiblingListStable(params: {
     orgId: string;
     departmentId: string;
+    /** Pass `workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId)`. */
     accessScopeFingerprint: string;
     siblings: LifecycleSiblingWorkUnitNavRow[];
     totalsByWorkUnitId: Record<string, number>;
@@ -89,6 +90,7 @@ export function markLifecycleSiblingListStable(params: {
 export function readLifecycleSiblingListStable(params: {
     orgId: string;
     departmentId: string;
+    /** Pass `workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId)`. */
     accessScopeFingerprint: string;
 }): {
     siblings: LifecycleSiblingWorkUnitNavRow[];

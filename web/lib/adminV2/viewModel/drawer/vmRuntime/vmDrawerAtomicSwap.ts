@@ -10,12 +10,12 @@ export type DrawerVmSwapTarget = {
     entityId: string;
 };
 
-/** Visible drawer record — unchanged during swap_preparing until VM payload is ready. */
+/** Visible drawer record — source stays mounted until VM + body swap commits. */
 export function resolveDrawerVmRenderDrawer(
     drawer: AdminDrawerState,
     phase: DrawerRuntimePhaseState
 ): AdminDrawerState {
-    if (phase.phase === "swap_preparing") {
+    if (phase.phase === "swap_preparing" || phase.phase === "applying_vm") {
         return drawer;
     }
     return drawer;

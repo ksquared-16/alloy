@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
@@ -20,6 +20,24 @@ import {
     buildPersonStatusApplicabilityMetadata,
     formatPersonStatusApplicabilityLabel,
 } from "@/lib/admin/person/personStatusApplicability";
+import {
+    filterPersonStatusRowsForSettingsProfile,
+    parsePersonProfileFilterParam,
+    personProfileFilterChipHref,
+    personStatusDrawerPreviewNotes,
+    STATUS_SETTINGS_SECTION_DESCRIPTIONS,
+    STATUS_SETTINGS_SECTION_TITLES,
+    statusDrawerSourceTagsForEntityType,
+    statusDrawerSourceTagsForOcmRow,
+    statusDrawerSourceTagsForOpportunityRow,
+    statusDrawerSourceTagsForPersonRow,
+    type PersonProfileFilterParam,
+} from "@/lib/admin/statusSettingsClarity";
+import {
+    PersonStatusPreviewNotes,
+    StatusDrawerSourceBadgeList,
+} from "@/components/adminV2/settings/StatusSettingsClarityBadges";
+import StatusSettingsInventoryPanel from "@/components/adminV2/settings/StatusSettingsInventoryPanel";
 import { ADMIN_V2_SETTINGS_LIFECYCLE_PATH } from "@/lib/adminV2/settings/lifecycleSettingsPaths";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import {
@@ -45,7 +63,6 @@ const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
     service_plan_templates: "service_plan_templates",
     persons: "persons",
     contacts: "contacts",
-    customer_members: "customer_members",
     locations: "locations",
     documents: "documents",
     payments: "payments",
@@ -53,16 +70,15 @@ const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
 };
 
 const FALLBACK_LABELS: Record<string, string> = {
-    opportunities: "Opportunities",
+    opportunities: "Lead Statuses",
     jobs: "Jobs",
     schedules: "Schedules",
     customers: "Customers",
-    opportunity_customer_members: "Opportunity Sub Statuses",
+    opportunity_customer_members: "Enrollment Statuses",
     vendors: "Vendors",
     service_plan_templates: "Plan templates",
-    persons: "People",
+    persons: "People Statuses",
     contacts: "Contacts",
-    customer_members: "Customer members",
     locations: "Locations",
     documents: "Documents",
     payments: "Payments",
@@ -73,6 +89,8 @@ function entityTypeDisplayLabel(
     entityType: string,
     labels: Record<string, { singular: string | null; plural: string | null }> | null
 ): string {
+    const settingsTitle = STATUS_SETTINGS_SECTION_TITLES[entityType];
+    if (settingsTitle) return settingsTitle;
     const key = ENTITY_TYPE_TO_LABEL_KEY[entityType] ?? entityType;
     const entry = labels?.[key];
     const plural = entry?.plural ?? entry?.singular;
@@ -83,16 +101,18 @@ const STATUSES_DEFAULT_SUBTITLE =
     "Display names for status keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here. Which status changes are allowed is not configured here — see Status transition rules under Settings diagnostics (read-only) or a future Workflow Status Configuration sprint.";
 
 const STATUSES_ADMINV2_SUBTITLE =
-    "Manage status names and order. For opportunities, Enrollment Stage shows which lifecycle stage owns each status — edit mapping in Lifecycle when needed.";
+    "Manage status names and order by entity layer. Lead Statuses, Enrollment Statuses, and People Statuses use the same status_definitions table — each section explains which drawer or queue it powers.";
 
-/** Operator hints — disambiguate childcare labels (Children vs People). */
-const STATUS_ENTITY_HINTS: Partial<Record<string, string>> = {
-    persons:
-        "Person lifecycle status on persons.status_key. Use Applicability to target child vs parent/guardian drawers — not customer_members roster or opportunity sub-statuses.",
-    customer_members:
-        "Member roster status on customer_members — not the person drawer status (configure under People / persons).",
-    opportunity_customer_members:
-        "Per-child inquiry sub-status on an opportunity — not the person drawer status.",
+/** Legacy extended hints — merged with STATUS_SETTINGS_SECTION_DESCRIPTIONS where present. */
+const STATUS_ENTITY_EXTENDED_HINTS: Partial<Record<string, string>> = {
+    opportunities:
+        "Enrollment Stage maps each status into lifecycle queue context — edit stage mapping in Lifecycle when needed.",
+};
+
+const PERSON_PROFILE_CHIP_LABELS: Record<PersonProfileFilterParam, string> = {
+    all: "All People",
+    person_generic: "Parent/Guardian",
+    child_lifecycle: "Child",
 };
 
 type PersonStatusApplicabilityMode = "child_lifecycle" | "person_generic" | "both";
@@ -102,7 +122,9 @@ export default function StatusesClient({
     adminV2Chrome = false,
 }: { basePath?: string; adminV2Chrome?: boolean } = {}) {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const entityTypeFilter = searchParams.get("entity_type")?.trim() ?? "";
+    const personProfileFilter = parsePersonProfileFilterParam(searchParams.get("profile"));
     const { labels } = useEntityLabels();
     const { canMutate } = useAdminAuth();
 
@@ -159,6 +181,18 @@ export default function StatusesClient({
     useEffect(() => {
         fetchStatuses();
     }, [fetchStatuses]);
+
+    useEffect(() => {
+        if (entityTypeFilter === "customer_members") {
+            router.replace(basePath);
+        }
+    }, [entityTypeFilter, basePath, router]);
+
+    useEffect(() => {
+        if (entityTypeFilter) {
+            setExpandedEntityType(entityTypeFilter);
+        }
+    }, [entityTypeFilter]);
 
     const openNewModal = (forEntityType?: string) => {
         if (forEntityType != null) {
@@ -354,26 +388,93 @@ export default function StatusesClient({
         }
     }, [entityTypeFilter, sortedEntityTypes]);
 
+    const renderSectionDescription = (entityType: string) => {
+        const description = STATUS_SETTINGS_SECTION_DESCRIPTIONS[entityType];
+        const extended = STATUS_ENTITY_EXTENDED_HINTS[entityType];
+        const tags = statusDrawerSourceTagsForEntityType(entityType);
+        if (!description && !extended && !tags.length) return null;
+        return (
+            <div className="mb-3 space-y-2" data-status-settings-section-description={entityType}>
+                {description ?
+                    <p className="text-xs leading-snug text-[#59678b]">{description}</p>
+                :   null}
+                {extended ?
+                    <p className="text-[11px] leading-snug text-[#59678b]">{extended}</p>
+                :   null}
+                {tags.length ?
+                    <StatusDrawerSourceBadgeList tags={tags} />
+                :   null}
+            </div>
+        );
+    };
+
+    const renderPersonProfileChips = () => (
+        <div
+            className="mb-4 flex flex-wrap items-center gap-2"
+            data-status-settings-person-profile-chips="true"
+        >
+            <span className="text-xs font-medium text-[#59678b]">Filter by drawer profile:</span>
+            {(Object.keys(PERSON_PROFILE_CHIP_LABELS) as PersonProfileFilterParam[])
+                .filter((profile) => !adminV2Chrome || profile !== "child_lifecycle")
+                .map((profile) => {
+                const active = personProfileFilter === profile;
+                return (
+                    <Link
+                        key={profile}
+                        href={personProfileFilterChipHref(basePath, profile)}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                            active ?
+                                "border-alloy-midnight/30 bg-alloy-midnight text-white"
+                            :   "border-[#e6e8ec] bg-white text-[#59678b] hover:bg-[#eef0f4]"
+                        }`}
+                        data-status-settings-profile-chip={profile}
+                        aria-current={active ? "true" : undefined}
+                    >
+                        {PERSON_PROFILE_CHIP_LABELS[profile]}
+                    </Link>
+                );
+            })}
+        </div>
+    );
+
     const renderTable = (rows: StatusDef[], emptyMessage: string, entityType?: string) => {
         const showEnrollmentStage = entityType === "opportunities";
+        const showPersonColumns = entityType === "persons";
+        const showDrawerColumn =
+            entityType === "persons" ||
+            entityType === "opportunities" ||
+            entityType === "opportunity_customer_members";
+        const displayRows =
+            showPersonColumns ? filterPersonStatusRowsForSettingsProfile(rows, personProfileFilter) : rows;
         const colSpan =
             5 +
-            (entityType === "persons" ? 1 : 0) +
+            (showPersonColumns ? 2 : 0) +
+            (showDrawerColumn && !showPersonColumns ? 1 : 0) +
             (showEnrollmentStage ? 1 : 0) +
             (canMutate ? 1 : 0);
         return (
         <div className="overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm" data-testid={showEnrollmentStage ? "statuses-opportunities-table" : undefined}>
+            {showPersonColumns ? renderPersonProfileChips() : null}
+            {showPersonColumns && personProfileFilter !== "all" ?
+                <p className="mb-3 text-xs text-[#59678b]" data-status-settings-profile-filter-note="true">
+                    Showing People statuses for{" "}
+                    <strong>{PERSON_PROFILE_CHIP_LABELS[personProfileFilter]}</strong> drawer profile.
+                </p>
+            :   null}
+            <table className="w-full min-w-[520px] text-left text-sm" data-testid={showEnrollmentStage ? "statuses-opportunities-table" : entityType === "persons" ? "statuses-persons-table" : undefined}>
                 <thead>
                     <tr className="border-b border-[#e6e8ec] text-[#59678b]">
                         <th className="pb-2 pr-4 font-semibold">Label</th>
                         <th className="pb-2 pr-4 font-semibold">Key</th>
-                        {entityType === "persons" ? (
+                        {showPersonColumns ?
                             <th className="pb-2 pr-4 font-semibold">Applicability</th>
-                        ) : null}
-                        {showEnrollmentStage ? (
+                        :   null}
+                        {showDrawerColumn ?
+                            <th className="pb-2 pr-4 font-semibold">Drawer / pipeline</th>
+                        :   null}
+                        {showEnrollmentStage ?
                             <th className="pb-2 pr-4 font-semibold">Enrollment Stage</th>
-                        ) : null}
+                        :   null}
                         <th className="pb-2 pr-4 font-semibold">Sort</th>
                         <th className="pb-2 pr-4 font-semibold">Active</th>
                         <th className="pb-2 pr-4 font-semibold">System</th>
@@ -381,14 +482,13 @@ export default function StatusesClient({
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.length === 0 ? (
+                    {displayRows.length === 0 ?
                         <tr>
                             <td colSpan={colSpan} className="py-4 text-[#59678b]">
                                 {emptyMessage}
                             </td>
                         </tr>
-                    ) : (
-                        rows.map((row) => (
+                    :   displayRows.map((row) => (
                             <tr key={row.id} className="border-b border-[#e6e8ec] align-middle">
                                 {editingId === row.id ? (
                                     <>
@@ -401,12 +501,15 @@ export default function StatusesClient({
                                             />
                                         </td>
                                         <td className="py-2 pr-4 text-[#59678b]">{row.status_key}</td>
-                                        {entityType === "persons" ? (
+                                        {showPersonColumns ?
                                             <td className="py-2 pr-4 text-[#59678b]">
                                                 {formatPersonStatusApplicabilityLabel(row.metadata, row.status_key)}
                                             </td>
-                                        ) : null}
-                                        {showEnrollmentStage ? (
+                                        :   null}
+                                        {showDrawerColumn ?
+                                            <td className="py-2 pr-4 text-[#59678b]">—</td>
+                                        :   null}
+                                        {showEnrollmentStage ?
                                             <td className="py-2 pr-4">
                                                 {row.org_id ? (
                                                     <select
@@ -429,7 +532,7 @@ export default function StatusesClient({
                                                     <span className="text-xs text-[#59678b]">Platform default</span>
                                                 )}
                                             </td>
-                                        ) : null}
+                                        : null}
                                         <td className="py-2 pr-4">
                                             <input
                                                 type="number"
@@ -470,12 +573,33 @@ export default function StatusesClient({
                                             {row.status_label ?? "—"}
                                         </td>
                                         <td className="py-2 pr-4 text-[#59678b]">{row.status_key}</td>
-                                        {entityType === "persons" ? (
+                                        {showPersonColumns ?
                                             <td className="py-2 pr-4 text-[#59678b]">
                                                 {formatPersonStatusApplicabilityLabel(row.metadata, row.status_key)}
                                             </td>
-                                        ) : null}
-                                        {showEnrollmentStage ? (
+                                        :   null}
+                                        {showDrawerColumn ?
+                                            <td className="py-2 pr-4">
+                                                {entityType === "persons" ?
+                                                    <>
+                                                        <StatusDrawerSourceBadgeList
+                                                            tags={statusDrawerSourceTagsForPersonRow(row)}
+                                                        />
+                                                        <PersonStatusPreviewNotes
+                                                            notes={personStatusDrawerPreviewNotes(row)}
+                                                        />
+                                                    </>
+                                                : entityType === "opportunity_customer_members" ?
+                                                    <StatusDrawerSourceBadgeList
+                                                        tags={statusDrawerSourceTagsForOcmRow(row.is_active)}
+                                                    />
+                                                :   <StatusDrawerSourceBadgeList
+                                                        tags={statusDrawerSourceTagsForOpportunityRow(row.is_active)}
+                                                    />
+                                                }
+                                            </td>
+                                        :   null}
+                                        {showEnrollmentStage ?
                                             <td className="py-2 pr-4" data-testid="statuses-enrollment-stage-cell">
                                                 <span className="inline-block rounded-md border border-alloy-forge/15 bg-alloy-stone/10 px-2 py-0.5 text-xs font-medium text-alloy-midnight">
                                                     {enrollmentProcessStageDisplayLabel(row.status_key, row.metadata)}
@@ -489,7 +613,7 @@ export default function StatusesClient({
                                                     </Link>
                                                 ) : null}
                                             </td>
-                                        ) : null}
+                                        : null}
                                         <td className="py-2 pr-4 text-[#59678b]">{row.sort_order}</td>
                                         <td className="py-2 pr-4">{row.is_active ? "Yes" : "No"}</td>
                                         <td className="py-2 pr-4">{row.is_system ? "Yes" : "—"}</td>
@@ -538,7 +662,7 @@ export default function StatusesClient({
                                 )}
                             </tr>
                         ))
-                    )}
+                    }
                 </tbody>
             </table>
         </div>
@@ -597,6 +721,7 @@ export default function StatusesClient({
 
             {!loading && !error && entityTypeFilter && (
                 <SectionCard title="Status definitions">
+                    {renderSectionDescription(entityTypeFilter)}
                     {renderTable(statuses, "No statuses found. Try clearing the filter or add a new status.", entityTypeFilter)}
                     {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                 </SectionCard>
@@ -655,11 +780,7 @@ export default function StatusesClient({
                                         </button>
                                         {isExpanded && (
                                             <div className="p-5">
-                                                {STATUS_ENTITY_HINTS[entityType] ? (
-                                                    <p className="mb-3 text-xs leading-snug text-[#59678b]">
-                                                        {STATUS_ENTITY_HINTS[entityType]}
-                                                    </p>
-                                                ) : null}
+                                                {renderSectionDescription(entityType)}
                                                 {renderTable(rows, "No statuses for this entity type.", entityType)}
                                                 {editError && <p className="mt-2 text-sm text-red-600">{editError}</p>}
                                             </div>
@@ -671,6 +792,8 @@ export default function StatusesClient({
                     )}
                 </>
             )}
+
+            {!loading && !error && adminV2Chrome ? <StatusSettingsInventoryPanel /> : null}
 
             {modalOpen && (
                 <div
@@ -717,7 +840,7 @@ export default function StatusesClient({
                                     </select>
                                     <p className="mt-1 text-[11px] leading-snug text-[#59678b]">
                                         Creates a <strong>People</strong> status on persons.status_key — not
-                                        customer_members roster or opportunity enrollment sub-statuses.
+                                        opportunity enrollment sub-statuses.
                                     </p>
                                 </div>
                             ) : null}

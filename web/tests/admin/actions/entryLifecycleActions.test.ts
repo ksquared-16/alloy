@@ -43,6 +43,7 @@ vi.mock("@/lib/admin/actions/createLeadChildOcmPersistence", () => ({
 }));
 
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
+import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
 
 describe("isCreateLeadExecuteRequest", () => {
     it("accepts create_lead with sentinel or empty entity id", () => {
@@ -149,7 +150,8 @@ describe("executeCreateLeadAction validation", () => {
                 single: vi.fn().mockResolvedValue({ data: { id: "ocm-child" }, error: null }),
             }),
         });
-        return {
+        let capturedOppInsert: Record<string, unknown> | null = null;
+        const sb = {
             from: vi.fn((table: string) => {
                 if (table === "verticals") {
                     return {
@@ -166,13 +168,15 @@ describe("executeCreateLeadAction validation", () => {
                     };
                 }
                 if (table === "opportunities") {
-                    return {
-                        insert: vi.fn().mockReturnValue({
+                    const insert = vi.fn((payload: Record<string, unknown>) => {
+                        capturedOppInsert = payload;
+                        return {
                             select: vi.fn().mockReturnValue({
                                 single: vi.fn().mockResolvedValue({ data: { id: "opp-new" }, error: null }),
                             }),
-                        }),
-                    };
+                        };
+                    });
+                    return { insert, getCapturedInsert: () => capturedOppInsert };
                 }
                 if (table === "opportunity_persons") {
                     return {
@@ -198,7 +202,9 @@ describe("executeCreateLeadAction validation", () => {
                 }
                 return { select: vi.fn(), insert: vi.fn() };
             }),
+            getCapturedOppInsert: () => capturedOppInsert,
         };
+        return sb;
     }
 
     const ctx = { orgId: "org-1", userId: "user-1", accessScope: null };
@@ -227,7 +233,7 @@ describe("executeCreateLeadAction validation", () => {
         }
     });
 
-    it("creates lead when minimum fields present", async () => {
+    it("creates lead when minimum fields present and org has a vertical", async () => {
         const sb = supabaseForCreate("vert-1");
         const res = await executeCreateLeadAction(sb as never, ctx as never, {
             merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
@@ -238,6 +244,12 @@ describe("executeCreateLeadAction validation", () => {
             expect(res.opportunity_id).toBe("opp-new");
             expect(res.person_id).toBe("person-1");
         }
+        expect(sb.getCapturedOppInsert()?.vertical_id).toBe("vert-1");
+        expect(ensureCustomerForPersonNative).toHaveBeenCalledWith(
+            sb,
+            "person-1",
+            expect.objectContaining({ vertical_id: "vert-1" })
+        );
         expect(applyCreateLeadChildParticipation).toHaveBeenCalledWith(
             sb,
             expect.objectContaining({
@@ -245,6 +257,45 @@ describe("executeCreateLeadAction validation", () => {
                 opportunityId: "opp-new",
                 customerId: "cust-1",
             })
+        );
+    });
+
+    it("creates lead when org has no configured vertical", async () => {
+        const sb = supabaseForCreate(null);
+        const res = await executeCreateLeadAction(sb as never, ctx as never, {
+            merged: { first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
+            context: { department_id: "dept-1", work_unit_id: "wu-1" },
+        });
+        expect(res.ok).toBe(true);
+        if (res.ok) {
+            expect(res.opportunity_id).toBe("opp-new");
+            expect(res.person_id).toBe("person-1");
+            expect(res.customer_id).toBe("cust-1");
+        }
+        expect(sb.getCapturedOppInsert()?.vertical_id).toBeUndefined();
+        expect(ensureCustomerForPersonNative).toHaveBeenCalledWith(
+            sb,
+            "person-1",
+            expect.objectContaining({ vertical_id: null })
+        );
+    });
+
+    it("prefers explicit merged vertical_id over org default", async () => {
+        const sb = supabaseForCreate("org-default-vert");
+        const res = await executeCreateLeadAction(sb as never, ctx as never, {
+            merged: {
+                first_name: "Ada",
+                last_name: "Lovelace",
+                email: "ada@example.com",
+                vertical_id: "explicit-vert",
+            },
+        });
+        expect(res.ok).toBe(true);
+        expect(sb.getCapturedOppInsert()?.vertical_id).toBe("explicit-vert");
+        expect(ensureCustomerForPersonNative).toHaveBeenCalledWith(
+            sb,
+            "person-1",
+            expect.objectContaining({ vertical_id: "explicit-vert" })
         );
     });
 

@@ -1,9 +1,38 @@
 import { describe, expect, it } from "vitest";
 
 import { buildWorkUnitAboveFoldRenderModel } from "@/lib/adminV2/routeShellPipeline/adapters/workUnit/buildWorkUnitAboveFoldRenderModel";
-import { resolveWorkUnitQueueRowsRefreshing } from "@/lib/workspace/workUnitQueueLaneDisplay";
+import {
+    resolveWorkUnitQueueRowsRefreshing,
+    shouldSuppressQueueLoadingOnPillSwitch,
+} from "@/lib/workspace/workUnitQueueLaneDisplay";
 
 describe("workUnitQueueLaneDisplay", () => {
+    it("suppresses refresh shimmer during pill-switch row retain", () => {
+        expect(
+            resolveWorkUnitQueueRowsRefreshing({
+                lane_reveal_settled: true,
+                queue_items_loading: true,
+                bootstrap_loading: false,
+                pill_switch_retain_rows: true,
+            })
+        ).toBe(false);
+    });
+
+    it("suppresses loading shell when user pill switch retains prior rows", () => {
+        expect(
+            shouldSuppressQueueLoadingOnPillSwitch({
+                user_initiated: true,
+                retain_prior_rows: true,
+            })
+        ).toBe(true);
+        expect(
+            shouldSuppressQueueLoadingOnPillSwitch({
+                user_initiated: false,
+                retain_prior_rows: true,
+            })
+        ).toBe(false);
+    });
+
     it("rows refresh shimmer only when lane already settled", () => {
         expect(
             resolveWorkUnitQueueRowsRefreshing({

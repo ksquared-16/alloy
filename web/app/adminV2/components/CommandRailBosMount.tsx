@@ -14,7 +14,6 @@ import AICommandBar from "./AICommandBar";
 import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
 import { ADMINV2_COMMAND_SURFACE_Z } from "@/components/admin/Drawer";
 import { isWorkspaceCommandRailBosHost } from "@/lib/bos/bosRailOverlayAnchor";
-import { isBosRightRailCopilotEnabledClient } from "@/lib/bos/bosRightRailCopilotFlag";
 import { useBosRailOverlayAnchorStyle } from "@/lib/bos/useBosRailOverlayAnchorStyle";
 import { useBosRailOverlayDrawerDocumentFlag } from "@/lib/bos/useBosRailOverlayDrawerDocumentFlag";
 
@@ -49,7 +48,6 @@ function CommandRailBosDockContent() {
  * Workspace routes use a fixed body overlay aligned to the rail anchor so BOS stays above drawers.
  */
 export function CommandRailBosMount({ children }: { children: ReactNode }) {
-    const enabled = isBosRightRailCopilotEnabledClient();
     const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
     const [bodyOverlay, setBodyOverlay] = useState(false);
     const [portalReady, setPortalReady] = useState(false);
@@ -63,16 +61,16 @@ export function CommandRailBosMount({ children }: { children: ReactNode }) {
         setPortalReady(true);
     }, []);
 
-    useBosRailOverlayDrawerDocumentFlag(enabled && bodyOverlay);
+    useBosRailOverlayDrawerDocumentFlag(bodyOverlay);
 
-    const overlayStyle = useBosRailOverlayAnchorStyle(anchorEl, enabled && bodyOverlay);
+    const overlayStyle = useBosRailOverlayAnchorStyle(anchorEl, bodyOverlay);
 
     const dockContent = <CommandRailBosDockContent />;
 
     return (
         <CommandRailBosHostContext.Provider value={registerHost}>
             {children}
-            {enabled && portalReady && anchorEl && bodyOverlay ?
+            {portalReady && anchorEl && bodyOverlay ?
                 createPortal(
                     <div
                         data-adminv2-bos-rail-overlay="true"
@@ -83,7 +81,7 @@ export function CommandRailBosMount({ children }: { children: ReactNode }) {
                     </div>,
                     document.body
                 )
-            : enabled && portalReady && anchorEl && !bodyOverlay ?
+            : portalReady && anchorEl && !bodyOverlay ?
                 createPortal(dockContent, anchorEl)
             :   null}
         </CommandRailBosHostContext.Provider>

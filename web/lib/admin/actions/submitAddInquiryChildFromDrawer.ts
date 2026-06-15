@@ -69,6 +69,8 @@ export type SubmitAddInquiryChildInput = {
     opportunityId: string;
     customerId: string;
     payload: AddInquiryChildSubmitPayload;
+    /** Lead/opportunity location — inherited when child form omits location_id. */
+    opportunityLocationId?: string | null;
     existingChildren?: InquiryChildRowForDuplicateCheck[];
     fetchFn?: typeof fetch;
 };
@@ -154,7 +156,8 @@ export async function submitAddInquiryChildFromDrawer(
 
     const ocmPatch: InquiryChildOcmPatch = {};
     if (program) ocmPatch.desired_program_type = program;
-    const locationId = input.payload.location_id?.trim();
+    const locationId =
+        input.payload.location_id?.trim() || input.opportunityLocationId?.trim() || "";
     if (locationId) ocmPatch.location_id = locationId;
     const roomKey = input.payload.program_room_cohort_key?.trim();
     if (roomKey) ocmPatch.program_room_cohort_key = roomKey;

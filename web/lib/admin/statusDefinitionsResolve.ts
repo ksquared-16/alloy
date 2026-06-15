@@ -385,6 +385,19 @@ export async function fetchEffectiveStatusDefinitionsTagged(
 }
 
 /**
+ * Effective definitions without Next/process caches — for CLI inventory and other non-request contexts.
+ */
+export async function fetchEffectiveStatusDefinitionsDirect(
+    supabase: SupabaseClient,
+    orgId: string,
+    entityType: string,
+    opts?: { activeOnly?: boolean }
+): Promise<StatusDefinitionRow[]> {
+    const normalized = normalizeEffectiveStatusEntityType(entityType);
+    return fetchEffectiveStatusDefinitionsUncached(supabase, orgId, normalized, opts);
+}
+
+/**
  * Effective definitions for admin UI: org overrides first; if none, industry defaults (merged for schedules/opportunities).
  * Short TTL in-process cache (org + entity + activeOnly); disabled in test to avoid cross-example staleness.
  */

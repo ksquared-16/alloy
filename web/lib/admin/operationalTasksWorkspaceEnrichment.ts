@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { applyEntityLabelToOperatorCopy } from "@/lib/admin/resolveEntityDisplayLabel";
-import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
+import { resolveEntityLabelsForOrgCached } from "@/lib/admin/entityLabelsResolve";
 import { personDisplayName } from "@/lib/adminFormatters";
 import { humanizeGlobalSearchStatusLabel } from "@/lib/admin/globalSearch/globalRecordSearchStatusLabel";
 import {
@@ -162,7 +162,7 @@ export async function enrichOperationalTasksForWorkspace(params: {
             .eq("org_id", orgId)
             .eq("is_active", true),
         fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true }),
-        resolveEntityLabelsForOrg(supabase, orgId),
+        resolveEntityLabelsForOrgCached(supabase, orgId),
     ]);
 
     if (customerRes.error) console.error("[enrichOperationalTasksForWorkspace] customers", customerRes.error);

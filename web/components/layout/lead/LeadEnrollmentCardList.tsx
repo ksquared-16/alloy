@@ -174,7 +174,7 @@ export default function LeadEnrollmentCardList({
                                     </div>
                                 </div>
                                 {isEditing && edit ?
-                                    <div className="mt-2 grid grid-cols-1 gap-2 border-t border-alloy-stone/8 pt-2 sm:grid-cols-2">
+                                    <div className="adminv2-drawer-enrollment-field-grid mt-2 border-t border-alloy-stone/8 pt-2">
                                         {columns
                                             .filter((col) => col !== nameColumn && enrollmentGridColumnIsEditable(col))
                                             .map((col) => (

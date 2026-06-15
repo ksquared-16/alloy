@@ -1,8 +1,18 @@
 # Sprint documentation index
 
-**Purpose:** Navigation for `docs/sprints/` — **not** part of the GPT/Cursor active source pack (see `docs/README.md`).
+**Purpose:** Navigation for `docs/sprints/` — **not** part of the default AI source pack (see `docs/README.md`).
 
-**May 2026 closeout:** Operational completion wave — child lifecycle + work-unit convergence, waitlist pilot readiness, tour Phase 2 Band A, forms MVP productization, lifecycle action alignment, person/location drawer convergence. **June 2026 active execution** lives under **`06_2026/`**.
+**New structure (June 2026 rebaseline):**
+
+| Folder | Purpose |
+|--------|---------|
+| **`active/`** | In-flight initiatives — [`active/README.md`](./active/README.md) |
+| **`completed/`** | Shipped closeout index — [`completed/README.md`](./completed/README.md) |
+| **`archive/`** | Historical artifacts — [`archive/README.md`](./archive/README.md) |
+
+**Completed work index:** **[`COMPLETED_SPRINTS_SUMMARY.md`](./COMPLETED_SPRINTS_SUMMARY.md)**
+
+**Canonical platform docs:** **`docs/platform/`** — sprint docs are execution history only.
 
 ---
 
@@ -10,48 +20,57 @@
 
 | Folder | Contents |
 |--------|----------|
-| **`06_2026/`** | **Active June execution** — planning and in-flight sprints only |
-| **`06_2026/completed/`** | June closeouts (assist routing, UX refinement) |
-| **`05_2026/completed/`** | May shipped closeouts (performance, child lifecycle, waitlist, tour Band A, forms MVP, global search, lifecycle alignment, …) |
-| **`05_2026/later-phase/`** | Deferred from May — enrollment Phase 2 remainder, tour Band B+, waitlist Phase 2 continuation, record experience builder, UX hardening cards |
-| **`05_2026/`** (root) | Audits, design packages, historical cards, and reference material not yet archived |
+| **`06_2026/`** | Active June execution — planning and in-flight sprints |
+| **`06_2026/completed/`** | June closeouts (authoritative shipped docs) |
+| **`05_2026/completed/`** | May shipped closeouts |
+| **`05_2026/later-phase/`** | Deferred from May — enrollment Phase 2 remainder, tour Band B+, waitlist Phase 2, record experience builder |
+| **`05_2026/`** (root) | Reference material not yet archived (communications.txt, task assist, agent layer, …) |
 | **`future/`** | Paused / post-operational planning (BOS Phase 2–4, autonomous agents) |
+| **`COMPLETED_SPRINTS_SUMMARY.md`** | **Start here for “what shipped”** |
 
 ---
 
-## Active June 2026 (start here)
+## Active June 2026 (in flight)
 
 | Sprint | Path | Status |
 |--------|------|--------|
-| Lifecycle runtime & configuration alignment | [`06_2026/lifecycle_runtime_configuration_alignment_sprint.md`](./06_2026/lifecycle_runtime_configuration_alignment_sprint.md) | **Planning** — audit/backlog only |
-| Lifecycle runtime alignment matrix | [`06_2026/lifecycle_runtime_alignment_matrix_v1.md`](./06_2026/lifecycle_runtime_alignment_matrix_v1.md) | **Reference** |
-| Action button configuration UX | [`06_2026/action_button_configuration_ux_sprint.md`](./06_2026/action_button_configuration_ux_sprint.md) | **Active** |
-| AdminV2 backend query & payload optimization | [`06_2026/adminv2_backend_query_payload_optimization_phase.md`](./06_2026/adminv2_backend_query_payload_optimization_phase.md) | **Backlog** — next performance phase |
-| Child-grain queue conversion (design gate) | [`06_2026/child_grain_queue_conversion_design.md`](./06_2026/child_grain_queue_conversion_design.md) | **Frozen** — architecture before membership/count changes |
-| Child-grain Phase C preflight | [`06_2026/child_grain_phase_c_preflight.md`](./06_2026/child_grain_phase_c_preflight.md) | **Complete** — lane comparison before first flip |
-| Child-grain Phase C Enrolled staging | [`06_2026/completed/child_grain_phase_c_enrolled_staging_flip.md`](./06_2026/completed/child_grain_phase_c_enrolled_staging_flip.md) | **Staging** — `enrollment_completed` only |
-
----
-
-## May 2026 closeouts (representative)
-
-| Area | Closeout |
-|------|----------|
-| Child lifecycle + WU convergence | [`05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`](./05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md) |
-| Lifecycle action alignment | [`05_2026/completed/lifecycle_closeout.md`](./05_2026/completed/lifecycle_closeout.md) |
-| Waitlist demo + ranking | [`05_2026/completed/waitlist_demo_readiness_final_pass.md`](./05_2026/completed/waitlist_demo_readiness_final_pass.md), [`waitlist_ranking_validation_position_controls.md`](./05_2026/completed/waitlist_ranking_validation_position_controls.md) |
-| Tour Scheduling Phase 2 Band A | [`05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`](./05_2026/completed/tour_scheduling_phase2_band_a_closeout.md) |
-| Forms MVP productization | [`05_2026/completed/forms_mvp_productization.md`](./05_2026/completed/forms_mvp_productization.md) |
-| Global search V1 | [`05_2026/completed/global_search_v1_closeout.md`](./05_2026/completed/global_search_v1_closeout.md) |
-| AdminV2 performance | [`05_2026/completed/adminv2_performance_closeout.md`](./05_2026/completed/adminv2_performance_closeout.md) |
-| AdminV2 runtime consistency (June 2026) | [`06_2026/completed/adminv2_runtime_performance_consistency_closeout.md`](./06_2026/completed/adminv2_runtime_performance_consistency_closeout.md) |
-| BOS operational assist | [`06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](./06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) |
-| Forms lifecycle requirement coverage | [`06_2026/completed/forms_lifecycle_requirement_coverage.md`](./06_2026/completed/forms_lifecycle_requirement_coverage.md) |
+| Messaging V2 platform | [`06_2026/messaging_v2_audit.md`](./06_2026/messaging_v2_audit.md) (+ design, architecture, implementation plan) | Planning / partial ship — see `product/communications.md` |
+| Lifecycle runtime alignment | [`06_2026/lifecycle_runtime_configuration_alignment_sprint.md`](./06_2026/lifecycle_runtime_configuration_alignment_sprint.md) | Planning — audit/backlog |
+| Lifecycle alignment matrix | [`06_2026/lifecycle_runtime_alignment_matrix_v1.md`](./06_2026/lifecycle_runtime_alignment_matrix_v1.md) | Reference |
+| Status / lifecycle grain expansion | [`06_2026/status_ownership_and_lifecycle_grain_expansion.md`](./06_2026/status_ownership_and_lifecycle_grain_expansion.md) | Active |
+| Business processes V1 | [`06_2026/business_processes_v1_sprint_report.md`](./06_2026/business_processes_v1_sprint_report.md) | Active |
+| Child-grain queue conversion | [`06_2026/child_grain_queue_conversion_design.md`](./06_2026/child_grain_queue_conversion_design.md) | Frozen design gate |
+| Child-grain Phase C preflight | [`06_2026/child_grain_phase_c_preflight.md`](./06_2026/child_grain_phase_c_preflight.md) | Complete — see enrolled staging closeout |
+| Backend query/payload optimization | [`06_2026/adminv2_backend_query_payload_optimization_phase.md`](./06_2026/adminv2_backend_query_payload_optimization_phase.md) | Backlog |
+| Tasks V2 framework | [`06_2026/tasks_v2_operational_work_framework.md`](./06_2026/tasks_v2_operational_work_framework.md) | Planning |
 
 Full roadmap sequencing: **`docs/execution/roadmap-and-gaps.md`**.
 
 ---
 
+## May 2026 closeouts (representative — full list in summary)
+
+| Area | Closeout |
+|------|----------|
+| Child lifecycle + WU convergence | [`05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md`](./05_2026/completed/child_lifecycle_work_unit_convergence_closeout.md) |
+| Communications V1 | [`05_2026/communications.txt`](./05_2026/communications.txt) |
+| Tour Scheduling Phase 2 Band A | [`05_2026/completed/tour_scheduling_phase2_band_a_closeout.md`](./05_2026/completed/tour_scheduling_phase2_band_a_closeout.md) |
+| BOS operational assist | [`06_2026/completed/bos_assist_routing_communication_drafting_closeout.md`](./06_2026/completed/bos_assist_routing_communication_drafting_closeout.md) |
+| Operational work + actions | [`06_2026/completed/operational_work_and_action_execution_closeout.md`](./06_2026/completed/operational_work_and_action_execution_closeout.md) |
+
+See **[`COMPLETED_SPRINTS_SUMMARY.md`](./COMPLETED_SPRINTS_SUMMARY.md)** for the full table.
+
+---
+
+## Export packs
+
+| Pack | Path |
+|------|------|
+| Communications & messaging handoff | **`docs/export/comms-messaging-handoff-pack/`** (folder) or **`docs/export/comms-messaging-handoff-pack.zip`** |
+| Forms & documents handoff | **`docs/export/forms-handoff-pack/`** (folder) or **`docs/export/forms-handoff-pack.zip`** |
+
+---
+
 ## When to update this index
 
-New month folder (`07_2026/`), sprint closeout, or active execution lane change.
+New month folder (`07_2026/`), sprint closeout, archive pass, or active execution lane change.

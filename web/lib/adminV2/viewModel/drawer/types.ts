@@ -1,4 +1,5 @@
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import type { RecordManageMenuItem } from "@/lib/admin/recordManage/types";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import type { OperationalSummaryRiskHint } from "@/lib/ai/enrichmentContracts";
@@ -57,12 +58,19 @@ export type StatusOptionVm = {
     sort_order: number;
 };
 
+export type StatusMenuItemVm =
+    | { kind: "status"; status_key: string; label: string; sort_order: number }
+    | { kind: "separator"; label: string }
+    | { kind: "stage_heading"; stage_key: string; label: string };
+
 export type StatusControlVm =
     | {
           renderAs: "dropdown";
           status_key: string;
           label: string;
           options: StatusOptionVm[];
+          /** When set, drawer shows current-stage statuses first with stage jump groups. */
+          progressive_menu?: StatusMenuItemVm[];
       }
     | {
           renderAs: "readonly_pill";
@@ -134,8 +142,10 @@ export type OpportunityDrawerViewModel = {
     actions: {
         /** Raw `record_header` slot from resolver (generation / parity). */
         header: ResolvedActionForClient[];
-        /** Flattened primary + secondary + overflow + header — Actions dropdown menu. */
+        /** Flattened registry actions — BOS command rail when copilot flag is on. */
         header_menu: ResolvedActionForClient[];
+        /** Platform Manage menu — administrative record operations. */
+        manage_menu: RecordManageMenuItem[];
     };
     layout: {
         mode: "workflow_v1";

@@ -7,39 +7,39 @@ import {
 } from "@/lib/adminV2/workUnitPageRevealPolicy";
 
 describe("workUnitPageRevealPolicy", () => {
-    it("holds page gate until first lane reveal settles", () => {
+    it("holds page gate until critical bundle is ready", () => {
         expect(
             workUnitPageShowsLoadingGate({
                 shell_ready: true,
-                initial_lane_reveal_settled: false,
-                lane_reveal_settled: false,
+                critical_bundle_ready: false,
+                coordinated_reveal_completed: false,
             })
         ).toBe(true);
         expect(
             workUnitPageContentReady({
                 shell_ready: true,
-                initial_lane_reveal_settled: false,
-                lane_reveal_settled: false,
+                critical_bundle_ready: false,
+                coordinated_reveal_completed: false,
             })
         ).toBe(false);
     });
 
-    it("reveals page when lane reaches settled state", () => {
+    it("reveals page when critical bundle is ready", () => {
         expect(
             workUnitPageContentReady({
                 shell_ready: true,
-                initial_lane_reveal_settled: false,
-                lane_reveal_settled: true,
+                critical_bundle_ready: true,
+                coordinated_reveal_completed: false,
             })
         ).toBe(true);
     });
 
-    it("keeps page visible after first lane settle during pill switch hold", () => {
+    it("keeps page visible after first coordinated reveal during pill switch hold", () => {
         expect(
             workUnitPageContentReady({
                 shell_ready: true,
-                initial_lane_reveal_settled: true,
-                lane_reveal_settled: false,
+                critical_bundle_ready: false,
+                coordinated_reveal_completed: true,
             })
         ).toBe(true);
     });
@@ -48,8 +48,8 @@ describe("workUnitPageRevealPolicy", () => {
         expect(
             workUnitPageContentReady({
                 shell_ready: false,
-                initial_lane_reveal_settled: true,
-                lane_reveal_settled: true,
+                critical_bundle_ready: true,
+                coordinated_reveal_completed: true,
             })
         ).toBe(false);
     });

@@ -1,4 +1,4 @@
-/** Canonical operator action flow: Gather → Review → Execute → Success/Continue */
+/** Canonical operator action flow: Gather → (optional Preview) → Create → Continue */
 export type ActionWorkspaceStep = "gather" | "review" | "execute" | "success";
 
 /** BOS-first gather sub-flow inside the Gather step. */
@@ -9,8 +9,8 @@ export const ACTION_WORKSPACE_STEPS: ReadonlyArray<{
     label: string;
 }> = [
     { key: "gather", label: "Gather" },
-    { key: "review", label: "Review" },
-    { key: "execute", label: "Execute" },
+    { key: "review", label: "Review/Edit" },
+    { key: "execute", label: "Create" },
     { key: "success", label: "Continue" },
 ] as const;
 

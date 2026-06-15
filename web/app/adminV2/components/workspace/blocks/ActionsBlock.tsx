@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
+import { WorkspaceActionRailButton } from "@/app/adminV2/components/workspace/WorkspaceActionRailButton";
 import type { ActionsVm, PrimaryActionVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
+import {
+    resolveWorkspaceActionRailTier,
+    WORKSPACE_ACTION_RAIL_LIST_COLUMN_CLASS,
+} from "@/lib/adminV2/workspace/workspaceActionRailButton";
 
 const PRIMARY_SOLID_CAP = 2;
 
@@ -16,19 +21,8 @@ type Props = {
   suppressSectionTitles?: boolean;
 };
 
-function actionButtonClass(a: PrimaryActionVm) {
-  return a.variant === "secondary" ? "adminv2-ws-actions-rail-secondary" : "adminv2-ws-actions-rail-primary";
-}
-
-/** Primary tier: at most `maxSolid` solid blues; remainder outlined. Secondary variant always outlined. */
-function primaryTierButtonClass(a: PrimaryActionVm, solidUsed: { n: number }, maxSolid: number) {
-  if (a.variant === "secondary") return "adminv2-ws-actions-rail-secondary";
-  const wantsSolid = a.variant === "primary" || a.variant === undefined;
-  if (wantsSolid && solidUsed.n < maxSolid) {
-    solidUsed.n += 1;
-    return "adminv2-ws-actions-rail-primary";
-  }
-  return "adminv2-ws-actions-rail-secondary";
+function actionButtonTier(a: PrimaryActionVm, solidUsed: { n: number }, maxSolid: number) {
+  return resolveWorkspaceActionRailTier(a, solidUsed, maxSolid);
 }
 
 /** Lower-priority actions — own section, collapsed by default (not inside operational / AI). */
@@ -194,17 +188,16 @@ function PrimaryActionsPanel({
       aria-label={sectionTitle}
     >
       {suppressSectionTitle ? null : <h3 className="adminv2-ws-actions-rail-title">{sectionTitle}</h3>}
-      <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column">
+      <div className={WORKSPACE_ACTION_RAIL_LIST_COLUMN_CLASS}>
         {actions.map((a) => (
-          <button
+          <WorkspaceActionRailButton
             key={a.id}
-            type="button"
-            className={primaryTierButtonClass(a, solidUsed, maxSolidButtons)}
-            style={a.emphasized ? { boxShadow: "0 0 0 2px rgba(0, 162, 131, 0.5)" } : undefined}
+            tier={actionButtonTier(a, solidUsed, maxSolidButtons)}
+            emphasized={a.emphasized}
             onClick={() => onAction({ type: "actions.block", actionId: a.id })}
           >
             {a.label}
-          </button>
+          </WorkspaceActionRailButton>
         ))}
       </div>
     </section>
@@ -332,15 +325,14 @@ export default function ActionsBlock({
           {suppressSectionTitles ? null : <div className="adminv2-ws-actions-rail-title">{title}</div>}
           <div className="adminv2-ws-actions-rail-list">
             {model.primaries.map((a) => (
-              <button
+              <WorkspaceActionRailButton
                 key={a.id}
-                type="button"
-                className={actionButtonClass(a)}
-                style={a.emphasized ? { boxShadow: "0 0 0 2px rgba(0, 162, 131, 0.5)" } : undefined}
+                tier={a.variant === "secondary" ? "secondary" : "primary"}
+                emphasized={a.emphasized}
                 onClick={() => onAction({ type: "actions.block", actionId: a.id })}
               >
                 {a.label}
-              </button>
+              </WorkspaceActionRailButton>
             ))}
           </div>
         </div>

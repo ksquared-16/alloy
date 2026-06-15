@@ -130,7 +130,8 @@ export function buildChildLayoutRuntimeRecordFromVm(input: {
             vmRecord.schedule_type,
             vmRecord["inquiry_child.desired_schedule_type"],
         ) ?? "",
-        "inquiry_child.program": pickDisplay(mirror?.program_label, vmRecord.program_label, vmRecord["inquiry_child.program"]) ?? "",
+        "child.program": pickDisplay(mirror?.program_label, vmRecord.program_label, vmRecord["child.program"], vmRecord["inquiry_child.program"]) ?? "",
+        "inquiry_child.program": pickDisplay(mirror?.program_label, vmRecord.program_label, vmRecord["inquiry_child.program"], vmRecord["child.program"]) ?? "",
         "inquiry_child.desired_start_date": pickDisplay(
             vmRecord.desired_start_date,
             vmRecord["inquiry_child.desired_start_date"],

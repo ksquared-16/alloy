@@ -37,6 +37,11 @@ _UUID_RE = re.compile(
 _JSON_HEADERS = {"Content-Type": "application/json", "Prefer": "return=representation"}
 
 
+def _utcnow_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
 def recipient_key_normalize_sms(raw: str) -> str:
     n = normalize_phone((raw or "").strip())
     return n or ""
@@ -175,6 +180,136 @@ def _row_exists_or_create_thread(
     return None
 
 
+def _find_canonical_sms_thread(
+    base_url: str,
+    headers: Dict[str, str],
+    *,
+    org_id: str,
+    recipient_key: str,
+) -> Optional[str]:
+    """
+    G4 — the conversation is the relationship, not the originating business object.
+    Reuse the existing SMS thread for this contact (recipient_key) regardless of its anchor so an
+    inbound reply joins the one canonical family/person conversation instead of forking a parallel
+    thread. Preference: persons/customers-anchored (canonical) first, else most recent.
+    Returns a thread id or None when no thread exists for this contact yet.
+    """
+    rkey = (recipient_key or "").strip()
+    if not rkey:
+        return None
+    url = f"{base_url}/communication_threads"
+    params = {
+        "org_id": f"eq.{org_id}",
+        "channel": "eq.sms",
+        "recipient_key": f"eq.{rkey}",
+        "select": "id,primary_entity_type,last_message_at,created_at",
+        "order": "last_message_at.desc.nullslast,created_at.desc",
+        "limit": "50",
+    }
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=15)
+        if not r.ok:
+            return None
+        rows = r.json()
+        if not isinstance(rows, list) or not rows:
+            return None
+    except Exception:
+        return None
+    canonical = [
+        row for row in rows
+        if str(row.get("primary_entity_type") or "").strip().lower() in ("persons", "customers")
+    ]
+    pick = (canonical or rows)[0]
+    rid = pick.get("id")
+    return str(rid) if rid else None
+
+
+def _patch_thread_inbound_state(
+    base_url: str,
+    headers: Dict[str, str],
+    *,
+    thread_id: str,
+    last_message_at: Optional[str],
+) -> None:
+    """G2 + G6 — bump last activity and enter the attention workflow on inbound (needs_response)."""
+    h = dict(headers)
+    h.update(_JSON_HEADERS)
+    patch: Dict[str, Any] = {"attention_state": "needs_response"}
+    if last_message_at:
+        patch["last_message_at"] = last_message_at
+    try:
+        requests.patch(
+            f"{base_url}/communication_threads?id=eq.{thread_id}",
+            headers=h,
+            json=patch,
+            timeout=15,
+        )
+    except Exception as e:
+        logger.warning("inbound_comm thread state patch skipped %s", e)
+
+
+def _mark_latest_outbound_replied(
+    base_url: str,
+    headers: Dict[str, str],
+    *,
+    org_id: str,
+    thread_id: str,
+    replied_at: str,
+) -> None:
+    """
+    G1 — stamp the most recent prior outbound message (and its recipient rows) as replied so the
+    timeline reply indicator (UI-5H) lights up. No-op when already replied or no outbound exists.
+    """
+    try:
+        rget = requests.get(
+            f"{base_url}/communication_messages",
+            headers=headers,
+            params={
+                "org_id": f"eq.{org_id}",
+                "thread_id": f"eq.{thread_id}",
+                "direction": "eq.outbound",
+                "select": "id,replied_at",
+                "order": "created_at.desc",
+                "limit": "1",
+            },
+            timeout=15,
+        )
+        if not rget.ok:
+            return
+        rows = rget.json()
+        if not isinstance(rows, list) or not rows:
+            return
+        msg = rows[0]
+        if msg.get("replied_at"):
+            return
+        mid = msg.get("id")
+        if not mid:
+            return
+    except Exception:
+        return
+
+    h = dict(headers)
+    h.update(_JSON_HEADERS)
+    try:
+        requests.patch(
+            f"{base_url}/communication_messages?id=eq.{mid}",
+            headers=h,
+            json={"replied_at": replied_at},
+            timeout=15,
+        )
+    except Exception as e:
+        logger.warning("inbound_comm replied_at message patch skipped %s", e)
+    try:
+        requests.patch(
+            f"{base_url}/communication_message_recipients?message_id=eq.{mid}",
+            headers=h,
+            json={"replied_at": replied_at, "status": "replied", "last_event_at": replied_at},
+            timeout=15,
+        )
+    except Exception as e:
+        logger.warning("inbound_comm replied_at recipient patch skipped %s", e)
+
+
 def persist_inbound_communication_sms(
     *,
     org_id: str,
@@ -211,16 +346,20 @@ def persist_inbound_communication_sms(
         )
 
     rkey = recipient_key_normalize_sms(from_num)
-    thread_id = _row_exists_or_create_thread(
-        base_url,
-        headers,
-        org_id=org_id,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        channel="sms",
-        recipient_key=rkey,
-        metadata=thread_meta,
-    )
+    # G4 — reuse the canonical conversation for this contact when one exists (any anchor); the
+    # originating business object stays attached as context. Only create when there is no thread yet.
+    thread_id = _find_canonical_sms_thread(base_url, headers, org_id=org_id, recipient_key=rkey)
+    if not thread_id:
+        thread_id = _row_exists_or_create_thread(
+            base_url,
+            headers,
+            org_id=org_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            channel="sms",
+            recipient_key=rkey,
+            metadata=thread_meta,
+        )
     if not thread_id:
         return None
 
@@ -268,6 +407,19 @@ def persist_inbound_communication_sms(
                     "communication_provider_binding_id": bid,
                     "inbound_resolution": msg_meta.get("inbound_resolution"),
                 },
+            )
+            inbound_created_at = row.get("created_at") if isinstance(row, dict) else None
+            # G2 + G6 — bump last activity and enter the attention workflow.
+            _patch_thread_inbound_state(
+                base_url, headers, thread_id=thread_id, last_message_at=inbound_created_at,
+            )
+            # G1 — mark the prior outbound in this thread as replied.
+            _mark_latest_outbound_replied(
+                base_url,
+                headers,
+                org_id=org_id,
+                thread_id=thread_id,
+                replied_at=inbound_created_at or _utcnow_iso(),
             )
             return row if isinstance(row, dict) else None
     except Exception as e:

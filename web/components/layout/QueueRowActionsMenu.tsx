@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { Zap } from "lucide-react";
-import { BosGenieLampIcon } from "@/app/adminV2/components/bos/BosGenieLampIcon";
+import { BosMark } from "@/app/adminV2/components/bos/identity/BosMark";
 import type { QueueItemQuickActionVm } from "@/lib/ui-v2/workspace-types";
 import {
     partitionQueueRowActions,
@@ -71,7 +71,7 @@ export default function QueueRowActionRail({
                     inquiryWorkflow
                     proofLayoutActions
                     disabled={pending}
-                    leadingIcon={<BosGenieLampIcon size="sm" />}
+                    leadingIcon={<BosMark size="sm" color="#ffffff" />}
                     className="operational-queue-row__drawer-action-btn operational-queue-row__bos-btn shrink-0"
                     data-queue-row-bos-button="true"
                     data-record-drawer-header-action="true"

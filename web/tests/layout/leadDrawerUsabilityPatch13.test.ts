@@ -81,7 +81,7 @@ describe("formatLayoutRuntimeOperatorDate", () => {
 
 describe("formatLeadEnrollmentCardMetaLine", () => {
     it("shows configured column values and labeled placeholders for empty fields", () => {
-        const row = buildProofOpportunityRecord().enrollment_children![0] as Record<string, string>;
+        const row = (buildProofOpportunityRecord().enrollment_children as Record<string, string>[])[0]!;
         const metaColumns: LayoutCollectionColumn[] = [
             { refKey: "child.program", label: "Preschool" },
             { refKey: "inquiry_child.desired_start_date", label: "Desired start", renderHint: "date" },

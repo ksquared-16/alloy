@@ -205,6 +205,9 @@ if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
 TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID")
 TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
 TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID")
+# P3.1: public origin Twilio uses to reach the Next.js status-callback route (scheme+host, no path).
+# When unset, no per-message statusCallback is sent and delivery status relies on Messaging Service console config.
+PUBLIC_TWILIO_STATUS_CALLBACK_BASE = os.getenv("PUBLIC_TWILIO_STATUS_CALLBACK_BASE", "").strip()
 
 # Inbound SMS webhook (Card 24). Default: enabled when unset (backward compatible).
 _COMM_SMS_IN = os.getenv("COMMUNICATIONS_SMS_INBOUND_ENABLED", "").strip().lower()

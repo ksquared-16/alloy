@@ -98,6 +98,8 @@ describe("inquiryChildOcmPlacementDisplay", () => {
                 opportunity_id: "opp-1",
                 customer_member_id: "cm-1",
                 desired_program_type: "infant",
+                location_id: null,
+                desired_program_category_id: null,
             },
             optionLabelLookup: lookup,
         });

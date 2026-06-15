@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import { ACTION_WORKSPACE_VIEWPORT_INSET } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 
-/** Production Create Lead — large centered BOS workspace (no cloud perimeter). */
+/** Production Create Lead — locked horizontal stadium shell. @see bos-operational-intake-shell-doctrine.md */
 export const BOS_WORKSPACE_WIDTH = "min(1200px, 84vw)";
 
 /** Max panel height when viewport allows; shrinks inside the header–command band. */

@@ -127,6 +127,7 @@ export function normalizeInquiryChildBlockToLayoutRuntimeRow(
         program_room_cohort_key: roomKey,
         desired_schedule_type: scheduleKey,
         outcome_status_key: statusKey,
+        "inquiry_child.program": programLabel ?? "",
         "inquiry_child.desired_program_type": programKey,
         "inquiry_child.desired_start_date": row.desired_start_date ?? "",
         "inquiry_child.location_id": locationId,
@@ -172,6 +173,7 @@ export function normalizeLayoutRuntimeChildRow(row: unknown, index: number): Pro
                 "child.program": pickDisplay(rec["child.program"], nested.program) ?? "",
                 "child.status": pickDisplay(rec["child.status"], nested.status) ?? "",
                 "child.age_band": pickDisplay(rec["child.age_band"], nested.age) ?? "",
+                "inquiry_child.program": pickDisplay(rec["inquiry_child.program"], rec["child.program"], nested.program) ?? "",
                 "inquiry_child.desired_program_type":
                     pickDisplay(rec["inquiry_child.desired_program_type"], rec.desired_program_type) ?? "",
                 "inquiry_child.desired_start_date":
@@ -212,6 +214,7 @@ export function normalizeLayoutRuntimeChildRow(row: unknown, index: number): Pro
             "child.program": pickDisplay(rec["child.program"]) ?? "",
             "child.status": pickDisplay(rec["child.status"]) ?? "",
             "child.age_band": pickDisplay(rec["child.age_band"]) ?? "",
+            "inquiry_child.program": pickDisplay(rec["inquiry_child.program"], rec["child.program"]) ?? "",
             "inquiry_child.desired_program_type": pickDisplay(rec["inquiry_child.desired_program_type"]) ?? "",
             "inquiry_child.desired_start_date": pickDisplay(rec["inquiry_child.desired_start_date"]) ?? "",
             "inquiry_child.outcome_status_key": pickDisplay(rec["inquiry_child.outcome_status_key"]) ?? "",
@@ -259,6 +262,8 @@ export function normalizeLayoutRuntimeChildRow(row: unknown, index: number): Pro
         "child.program": pickDisplay(rec["child.program"], rec.desired_program_label, rec.program_label) ?? "",
         "child.status": pickDisplay(rec["child.status"], rec.status_label, rec.status_key) ?? "",
         "child.age_band": pickDisplay(rec["child.age_band"], rec.age) ?? "",
+        "inquiry_child.program":
+            pickDisplay(rec["inquiry_child.program"], rec["child.program"], rec.desired_program_label, rec.program_label) ?? "",
         "inquiry_child.desired_program_type":
             pickDisplay(rec["inquiry_child.desired_program_type"], rec.desired_program_type) ?? "",
         "inquiry_child.desired_start_date":
