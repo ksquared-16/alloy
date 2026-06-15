@@ -6,6 +6,8 @@ import {
     computeCommandCenterMetrics,
     applyQueueFilters,
     visibleCommandCenterQueues,
+    flattenVisibleConversationIds,
+    resolveCommandCenterSelection,
     type ConversationSummary,
 } from "@/lib/communications/v2/commandCenterViewModel";
 
@@ -59,6 +61,21 @@ describe("visible queue sections", () => {
     });
     it("returns no sections when the filtered set is empty", () => {
         expect(visibleCommandCenterQueues(groupConversationsByQueue([]))).toEqual([]);
+    });
+});
+
+describe("auto-selection", () => {
+    it("selects the first visible row when nothing is selected", () => {
+        expect(resolveCommandCenterSelection(null, ["a", "b"])).toBe("a");
+    });
+    it("keeps manual selection while the row remains visible", () => {
+        expect(resolveCommandCenterSelection("b", ["a", "b", "c"])).toBe("b");
+    });
+    it("falls back to the first visible row when the selected row disappears", () => {
+        expect(resolveCommandCenterSelection("gone", ["a", "c"])).toBe("a");
+    });
+    it("returns null when there are no visible rows", () => {
+        expect(resolveCommandCenterSelection("gone", [])).toBeNull();
     });
 });
 

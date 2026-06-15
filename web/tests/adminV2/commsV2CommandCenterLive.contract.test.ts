@@ -29,6 +29,12 @@ describe("command center live wiring", () => {
         expect(shellSrc).toMatch(/selected \?/);
         expect(shellSrc).toMatch(/openConversation/);
     });
+    it("auto-selects the first visible conversation on load", () => {
+        expect(shellSrc).toMatch(/resolveCommandCenterSelection/);
+        expect(shellSrc).toMatch(/flattenVisibleConversationIds/);
+        expect(shellSrc).toMatch(/Loading first conversation/);
+        expect(shellSrc).not.toMatch(/Select a family from the queue/);
+    });
     it("wires claim/assign via the dark assign route", () => {
         expect(src).toMatch(/data-cc-claim/);
         expect(src).toMatch(/\/assign/);

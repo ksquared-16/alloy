@@ -83,6 +83,21 @@ export function visibleCommandCenterQueues(
     return sections.filter((s) => s.items.length > 0);
 }
 
+/** Flatten visible queue row ids in render order (for auto-selection). */
+export function flattenVisibleConversationIds(sections: CommandCenterQueueSection[]): string[] {
+    return sections.flatMap((s) => s.items.map((c) => c.id));
+}
+
+/** Keep current selection when still visible; otherwise pick the first visible row. */
+export function resolveCommandCenterSelection(
+    selectedId: string | null,
+    visibleIds: string[]
+): string | null {
+    if (visibleIds.length === 0) return null;
+    if (selectedId && visibleIds.includes(selectedId)) return selectedId;
+    return visibleIds[0] ?? null;
+}
+
 /** Deterministic metrics for the Command Center strip. */
 export function computeCommandCenterMetrics(conversations: ConversationSummary[]): {
     total: number;

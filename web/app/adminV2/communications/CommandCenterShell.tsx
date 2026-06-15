@@ -7,6 +7,8 @@ import {
     computeCommandCenterMetrics,
     applyQueueFilters,
     visibleCommandCenterQueues,
+    flattenVisibleConversationIds,
+    resolveCommandCenterSelection,
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
@@ -108,6 +110,7 @@ export default function CommandCenterShell() {
     const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState<string | null>(null);
+    const [hydratingWorkspace, setHydratingWorkspace] = useState(false);
 
     const loadLive = useCallback(async (customerId: string, threadId: string | null, resetSelection = false) => {
         try {
@@ -155,29 +158,34 @@ export default function CommandCenterShell() {
         setSelectedThreadId(null);
         setSubjectDraft("");
         setBodyDraft("");
-        if (COMMS_FIXTURES_ENABLED) {
-            const liveCustomerId = LIVE_WORKSPACE ? FIXTURE_FAMILY_DETAILS[id]?.customerId : undefined;
+        setHydratingWorkspace(true);
+        try {
+            if (COMMS_FIXTURES_ENABLED) {
+                const liveCustomerId = LIVE_WORKSPACE ? FIXTURE_FAMILY_DETAILS[id]?.customerId : undefined;
+                if (liveCustomerId) {
+                    await loadLive(liveCustomerId, null, true);
+                    return;
+                }
+                setMessages(FIXTURE_MESSAGES[id] ?? []);
+                setLiveChildren(null);
+                return;
+            }
+            setMessages([]);
+            const liveCustomerId = LIVE_WORKSPACE ? conversations.find((c) => c.id === id)?.customer_id : undefined;
             if (liveCustomerId) {
                 await loadLive(liveCustomerId, null, true);
                 return;
             }
-            setMessages(FIXTURE_MESSAGES[id] ?? []);
-            setLiveChildren(null);
-            return;
-        }
-        setMessages([]);
-        const liveCustomerId = LIVE_WORKSPACE ? conversations.find((c) => c.id === id)?.customer_id : undefined;
-        if (liveCustomerId) {
-            await loadLive(liveCustomerId, null, true);
-            return;
-        }
-        try {
-            const res = await fetch(`/api/admin/communications/threads/${id}/messages`);
-            if (!res.ok) return;
-            const data = (await res.json()) as { messages?: TimelineMessage[] } | TimelineMessage[];
-            setMessages(Array.isArray(data) ? data : (data.messages ?? []));
-        } catch {
-            /* timeline best-effort */
+            try {
+                const res = await fetch(`/api/admin/communications/threads/${id}/messages`);
+                if (!res.ok) return;
+                const data = (await res.json()) as { messages?: TimelineMessage[] } | TimelineMessage[];
+                setMessages(Array.isArray(data) ? data : (data.messages ?? []));
+            } catch {
+                /* timeline best-effort */
+            }
+        } finally {
+            setHydratingWorkspace(false);
         }
     }, [loadLive, conversations]);
 
@@ -257,6 +265,7 @@ export default function CommandCenterShell() {
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
     const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
     const queueSections = useMemo(() => visibleCommandCenterQueues(grouped), [grouped]);
+    const visibleIds = useMemo(() => flattenVisibleConversationIds(queueSections), [queueSections]);
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
     const detail: FixtureFamilyDetail | undefined = selected ? FIXTURE_FAMILY_DETAILS[selected.id] : undefined;
     const childNames = useMemo(
@@ -269,6 +278,19 @@ export default function CommandCenterShell() {
         [detail, liveChildren]
     );
     const liveChannel: ComposerChannel = "email";
+
+    useEffect(() => {
+        if (loading) return;
+        const nextId = resolveCommandCenterSelection(selectedId, visibleIds);
+        if (nextId && nextId !== selectedId) {
+            void openConversation(nextId);
+        } else if (!nextId && selectedId) {
+            setSelectedId(null);
+            setMessages([]);
+            setLiveChildren(null);
+            setLiveRecipientGroups(null);
+        }
+    }, [loading, visibleIds, selectedId, openConversation]);
 
     const health = useMemo(
         () =>
@@ -428,9 +450,19 @@ export default function CommandCenterShell() {
                             onConfirmSend={() => void runFamilySend(true)}
                             onDismissSend={() => { setSendResult(null); setSendError(null); }}
                         />
-                    ) : (
-                        <div className="flex flex-1 items-center justify-center p-6 text-sm text-alloy-midnight/45">Select a family from the queue.</div>
-                    )}
+                    ) : filtered.length > 0 && (loading || hydratingWorkspace || !selectedId) ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+                            <p className="text-sm font-medium text-alloy-midnight/60">Loading first conversation…</p>
+                            <p className="max-w-sm text-xs text-alloy-midnight/45">Preparing the workspace for the most recent thread.</p>
+                        </div>
+                    ) : !loading ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
+                            <p className="text-sm font-medium text-alloy-midnight/60">No conversations yet</p>
+                            <p className="max-w-sm text-xs leading-relaxed text-alloy-midnight/45">
+                                Conversations appear here when messages are sent or received.
+                            </p>
+                        </div>
+                    ) : null}
                 </section>
             </div>
         </div>
