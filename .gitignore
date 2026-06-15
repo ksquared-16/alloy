@@ -32,3 +32,24 @@ node_modules/
 **/.vercel/
 
 web/.next/
+
+# Generated / cache
+*.tsbuildinfo
+.DS_Store
+web/test-results/
+
+# Local handoff artifacts
+*.bundle
+
+# Local SQL dumps / baselines at repo root only
+/*.sql
+
+# Communications WIP artifacts should live on comms/* branches, not staging
+/comunications_wip/
+/communications_wip/
+/UI*.md
+/THREAD_SEMANTICS.md
+/Messaging_*.md
+/SMS_*.md
+/comms-v2-*
+/communications-v2-*
