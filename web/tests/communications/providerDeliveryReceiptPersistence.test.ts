@@ -146,6 +146,8 @@ describe("applyOutboundProviderDeliveryPatch — receipt persistence", () => {
                     channel: "email",
                     event_type: "opened",
                     provider_event_id: "evt_open_1",
+                    // canonical: recipient timestamps use the provider event time, not local processing time
+                    occurred_at: "2026-06-13T11:00:00.000Z",
                 },
             },
         });
