@@ -11,6 +11,7 @@ import {
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
+import FamilyCommunicationWorkspaceView from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import type { FamilyCommunicationWorkspaceVM, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
