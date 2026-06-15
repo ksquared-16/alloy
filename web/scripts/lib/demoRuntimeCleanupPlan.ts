@@ -1,0 +1,423 @@
+/**
+ * Shared ID resolution + count planning for demo/runtime cleanup scripts.
+ * @see docs/governance/demo-runtime-cleanup-schema-audit.md
+ */
+
+import type { createAdminClient } from "@/lib/supabaseAdmin";
+import {
+    chunk,
+    PROTECTED_LOCATIONS_TABLE_KEY,
+    type DemoCleanupScope,
+    type ResolvedDemoIds,
+} from "./demoRuntimeCleanupScope";
+
+type SupabaseAdmin = ReturnType<typeof createAdminClient>;
+
+async function selectIds(
+    supabase: SupabaseAdmin,
+    table: string,
+    orgId: string,
+    orFilter: string,
+    idColumn = "id"
+): Promise<string[]> {
+    const all: string[] = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+            .from(table)
+            .select(idColumn)
+            .eq("org_id", orgId)
+            .or(orFilter)
+            .order(idColumn, { ascending: true })
+            .range(from, from + pageSize - 1);
+        if (error) throw new Error(`[${table} select] ${error.message}`);
+        for (const r of data ?? []) {
+            const row = r as unknown as Record<string, string | undefined>;
+            const id = row[idColumn];
+            if (id) all.push(id);
+        }
+        if (!data?.length || data.length < pageSize) break;
+    }
+    return all;
+}
+
+async function countByIn(
+    supabase: SupabaseAdmin,
+    table: string,
+    column: string,
+    ids: string[],
+    orgId?: string
+): Promise<number> {
+    if (!ids.length) return 0;
+    let total = 0;
+    for (const part of chunk(ids, 200)) {
+        let q = supabase.from(table).select("*", { count: "exact", head: true }).in(column, part);
+        if (orgId) q = q.eq("org_id", orgId);
+        const { count, error } = await q;
+        if (error) throw new Error(`[${table} count ${column}] ${error.message}`);
+        total += count ?? 0;
+    }
+    return total;
+}
+
+async function countByInNoOrg(supabase: SupabaseAdmin, table: string, column: string, ids: string[]): Promise<number> {
+    if (!ids.length) return 0;
+    let total = 0;
+    for (const part of chunk(ids, 200)) {
+        const { count, error } = await supabase.from(table).select("*", { count: "exact", head: true }).in(column, part);
+        if (error) throw new Error(`[${table} count ${column}] ${error.message}`);
+        total += count ?? 0;
+    }
+    return total;
+}
+
+async function countRows(supabase: SupabaseAdmin, table: string, orgId: string, orFilter: string): Promise<number> {
+    const { count, error } = await supabase
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", orgId)
+        .or(orFilter);
+    if (error) throw new Error(`[${table} count] ${error.message}`);
+    return count ?? 0;
+}
+
+async function countFieldValuesForEntities(
+    supabase: SupabaseAdmin,
+    orgId: string,
+    entityType: string,
+    entityIds: string[]
+): Promise<number> {
+    if (!entityIds.length) return 0;
+    let total = 0;
+    for (const part of chunk(entityIds, 150)) {
+        const { count, error } = await supabase
+            .from("field_values")
+            .select("*", { count: "exact", head: true })
+            .eq("org_id", orgId)
+            .eq("entity_type", entityType)
+            .in("entity_id", part);
+        if (error) throw new Error(`[field_values count ${entityType}] ${error.message}`);
+        total += count ?? 0;
+    }
+    return total;
+}
+
+async function countDocumentsForEntities(
+    supabase: SupabaseAdmin,
+    orgId: string,
+    entityIds: string[],
+    orDemo: string
+): Promise<number> {
+    const ids = new Set<string>();
+    for (const part of chunk(entityIds, 150)) {
+        const { data, error } = await supabase
+            .from("documents")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("entity_id", part);
+        if (error) throw new Error(`[documents select entity_id] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) ids.add(id);
+        }
+    }
+    const metaCount = await countRows(supabase, "documents", orgId, orDemo);
+    return ids.size + metaCount;
+}
+
+export async function resolveDemoIds(
+    supabase: SupabaseAdmin,
+    scope: DemoCleanupScope,
+    orDemo: string
+): Promise<ResolvedDemoIds> {
+    const opportunityIds = await selectIds(supabase, "opportunities", scope.orgId, orDemo);
+    const customerIds = new Set<string>(await selectIds(supabase, "customers", scope.orgId, orDemo));
+    const personIds = new Set<string>(await selectIds(supabase, "persons", scope.orgId, orDemo));
+    const customerMemberIds = new Set<string>(await selectIds(supabase, "customer_members", scope.orgId, orDemo));
+
+    for (const part of chunk(opportunityIds, 200)) {
+        const { data, error } = await supabase
+            .from("opportunities")
+            .select("customer_id, primary_person_id")
+            .eq("org_id", scope.orgId)
+            .in("id", part);
+        if (error) throw new Error(`[opportunities expand] ${error.message}`);
+        for (const r of data ?? []) {
+            const row = r as { customer_id?: string | null; primary_person_id?: string | null };
+            if (row.customer_id) customerIds.add(row.customer_id);
+            if (row.primary_person_id) personIds.add(row.primary_person_id);
+        }
+    }
+
+    const custList = [...customerIds];
+    for (const part of chunk(custList, 200)) {
+        const { data: members, error: mErr } = await supabase
+            .from("customer_members")
+            .select("id, person_id")
+            .eq("org_id", scope.orgId)
+            .in("customer_id", part);
+        if (mErr) throw new Error(`[customer_members expand] ${mErr.message}`);
+        for (const r of members ?? []) {
+            const row = r as { id?: string; person_id?: string | null };
+            if (row.id) customerMemberIds.add(row.id);
+            if (row.person_id) personIds.add(row.person_id);
+        }
+        const { data: cps, error: cpErr } = await supabase
+            .from("customer_persons")
+            .select("person_id")
+            .eq("org_id", scope.orgId)
+            .in("customer_id", part);
+        if (cpErr) throw new Error(`[customer_persons expand] ${cpErr.message}`);
+        for (const r of cps ?? []) {
+            const pid = (r as { person_id?: string }).person_id;
+            if (pid) personIds.add(pid);
+        }
+    }
+
+    const jobIds = new Set<string>();
+    for (const part of chunk(opportunityIds, 200)) {
+        const { data, error } = await supabase.from("jobs").select("id").eq("org_id", scope.orgId).in("opportunity_id", part);
+        if (error) throw new Error(`[jobs by opp] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) jobIds.add(id);
+        }
+    }
+    const { data: metaJobs } = await supabase.from("jobs").select("id").eq("org_id", scope.orgId).or(orDemo);
+    for (const r of metaJobs ?? []) {
+        const id = (r as { id?: string }).id;
+        if (id) jobIds.add(id);
+    }
+
+    const scheduleIds = new Set<string>();
+    for (const part of chunk([...jobIds], 200)) {
+        const { data, error } = await supabase.from("schedules").select("id").eq("org_id", scope.orgId).in("job_id", part);
+        if (error) throw new Error(`[schedules by job] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) scheduleIds.add(id);
+        }
+    }
+
+    const threadIds = new Set<string>();
+    for (const part of chunk(opportunityIds, 200)) {
+        const { data, error } = await supabase
+            .from("communication_threads")
+            .select("id")
+            .eq("org_id", scope.orgId)
+            .eq("primary_entity_type", "opportunities")
+            .in("primary_entity_id", part);
+        if (error) throw new Error(`[communication_threads by opp] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) threadIds.add(id);
+        }
+    }
+    const threadMeta = await selectIds(supabase, "communication_threads", scope.orgId, orDemo);
+    for (const id of threadMeta) threadIds.add(id);
+
+    const formSubmissionIds = new Set<string>();
+    for (const part of chunk(opportunityIds, 200)) {
+        const { data, error } = await supabase
+            .from("form_submissions")
+            .select("id")
+            .eq("org_id", scope.orgId)
+            .in("opportunity_id", part);
+        if (error) throw new Error(`[form_submissions by opp] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) formSubmissionIds.add(id);
+        }
+    }
+    const fsMeta = await selectIds(supabase, "form_submissions", scope.orgId, orDemo);
+    for (const id of fsMeta) formSubmissionIds.add(id);
+
+    const documentIds = new Set<string>();
+    const entityIdsForDocs = [...opportunityIds, ...personIds, ...customerIds];
+    for (const part of chunk(entityIdsForDocs, 150)) {
+        const { data, error } = await supabase.from("documents").select("id").eq("org_id", scope.orgId).in("entity_id", part);
+        if (error) throw new Error(`[documents by entity] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) documentIds.add(id);
+        }
+    }
+
+    return {
+        opportunityIds,
+        customerIds: custList,
+        personIds: [...personIds],
+        customerMemberIds: [...customerMemberIds],
+        jobIds: [...jobIds],
+        scheduleIds: [...scheduleIds],
+        threadIds: [...threadIds],
+        formSubmissionIds: [...formSubmissionIds],
+        documentIds: [...documentIds],
+    };
+}
+
+export async function buildDemoCleanupCounts(
+    supabase: SupabaseAdmin,
+    scope: DemoCleanupScope,
+    ids: ResolvedDemoIds,
+    orDemo: string
+): Promise<Record<string, number>> {
+    const { orgId } = scope;
+    const opp = ids.opportunityIds;
+    const cust = ids.customerIds;
+    const persons = ids.personIds;
+    const members = ids.customerMemberIds;
+    const jobs = ids.jobIds;
+    const schedules = ids.scheduleIds;
+    const threads = ids.threadIds;
+    const formSubs = ids.formSubmissionIds;
+    const entityIdsForWorkflow = [...new Set([...opp, ...cust, ...jobs])];
+
+    const counts: Record<string, number> = {};
+
+    counts.communication_messages = await countByIn(supabase, "communication_messages", "thread_id", threads, orgId);
+    counts.communication_message_reads = 0;
+    if (threads.length) {
+        const msgIds: string[] = [];
+        for (const part of chunk(threads, 150)) {
+            const { data, error } = await supabase.from("communication_messages").select("id").eq("org_id", orgId).in("thread_id", part);
+            if (error) throw new Error(`[communication_messages ids] ${error.message}`);
+            for (const r of data ?? []) {
+                const id = (r as { id?: string }).id;
+                if (id) msgIds.push(id);
+            }
+        }
+        counts.communication_message_reads = await countByInNoOrg(supabase, "communication_message_reads", "message_id", msgIds);
+    }
+
+    counts.communication_scheduled_sends = await countByIn(supabase, "communication_scheduled_sends", "entity_id", opp, orgId);
+    counts.communication_threads = threads.length;
+    counts.task_assist_proposals = await countByIn(supabase, "task_assist_proposals", "entity_id", opp, orgId);
+    counts.operational_tasks = await countByIn(supabase, "operational_tasks", "entity_id", opp, orgId);
+
+    counts.placement_candidates = await countByIn(supabase, "placement_candidates", "opportunity_id", opp, orgId);
+    const pcIds: string[] = [];
+    for (const part of chunk(opp, 200)) {
+        const { data } = await supabase.from("placement_candidates").select("id").eq("org_id", orgId).in("opportunity_id", part);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) pcIds.push(id);
+        }
+    }
+    counts.placement_overrides = await countByIn(supabase, "placement_overrides", "placement_candidate_id", pcIds, orgId);
+    counts.placement_link_group_members = await countByIn(supabase, "placement_link_group_members", "placement_candidate_id", pcIds, orgId);
+    counts.placement_link_groups = await countByIn(supabase, "placement_link_groups", "opportunity_id", opp, orgId);
+
+    counts.tour_public_booking_links = await countByIn(supabase, "tour_public_booking_links", "opportunity_id", opp, orgId);
+    counts.tour_bookings = await countByIn(supabase, "tour_bookings", "opportunity_id", opp, orgId);
+
+    counts.opportunity_tags = await countByIn(supabase, "opportunity_tags", "opportunity_id", opp);
+    counts.opportunity_persons = await countByIn(supabase, "opportunity_persons", "opportunity_id", opp, orgId);
+    counts.opportunity_customer_members = await countByIn(supabase, "opportunity_customer_members", "opportunity_id", opp, orgId);
+
+    counts.quotes = await countByIn(supabase, "quotes", "opportunity_id", opp, orgId);
+    counts.discount_redemptions =
+        (await countByIn(supabase, "discount_redemptions", "opportunity_id", opp)) +
+        (await countByIn(supabase, "discount_redemptions", "job_id", jobs));
+    counts.discount_applications = await countByIn(supabase, "discount_applications", "opportunity_id", opp, orgId);
+
+    counts.messages =
+        (await countByIn(supabase, "messages", "opportunity_id", opp)) + (await countByIn(supabase, "messages", "job_id", jobs));
+
+    const eventIds = new Set<string>();
+    for (const part of chunk(entityIdsForWorkflow, 150)) {
+        const { data, error } = await supabase.from("workflow_events").select("id").eq("org_id", orgId).in("entity_id", part);
+        if (error) throw new Error(`[workflow_events] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) eventIds.add(id);
+        }
+    }
+    const runIds = new Set<string>();
+    for (const part of chunk([...eventIds], 150)) {
+        const { data, error } = await supabase.from("workflow_runs").select("id").eq("org_id", orgId).in("event_id", part);
+        if (error) throw new Error(`[workflow_runs] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) runIds.add(id);
+        }
+    }
+    counts.workflow_events = eventIds.size;
+    counts.workflow_runs = runIds.size;
+    counts.workflow_action_runs = await countByIn(supabase, "workflow_action_runs", "workflow_run_id", [...runIds], orgId);
+    counts.messages_outbox = await countByIn(supabase, "messages_outbox", "workflow_run_id", [...runIds], orgId);
+
+    counts.action_links = await countByIn(supabase, "action_links", "entity_id", entityIdsForWorkflow, orgId);
+    counts.schedule_tags = schedules.length ? await countByInNoOrg(supabase, "schedule_tags", "schedule_id", schedules) : 0;
+    counts.payments = await countByIn(supabase, "payments", "job_id", jobs, orgId);
+    counts.assignments = await countByIn(supabase, "assignments", "job_id", jobs, orgId);
+    counts.schedules = await countByIn(supabase, "schedules", "job_id", jobs, orgId);
+    counts.jobs = jobs.length;
+
+    const sessionIds: string[] = [];
+    for (const part of chunk(formSubs, 150)) {
+        const { data, error } = await supabase
+            .from("form_packet_session_items")
+            .select("packet_session_id")
+            .eq("org_id", orgId)
+            .in("form_submission_id", part);
+        if (error) throw new Error(`[form_packet_session_items] ${error.message}`);
+        for (const r of data ?? []) {
+            const id = (r as { packet_session_id?: string }).packet_session_id;
+            if (id) sessionIds.push(id);
+        }
+    }
+    const uniqueSessions = [...new Set(sessionIds)];
+    counts.form_packet_session_items = formSubs.length
+        ? await countByIn(supabase, "form_packet_session_items", "form_submission_id", formSubs, orgId)
+        : 0;
+    counts.form_packet_sessions = uniqueSessions.length
+        ? await countByIn(supabase, "form_packet_sessions", "id", uniqueSessions, orgId)
+        : await countRows(supabase, "form_packet_sessions", orgId, orDemo);
+
+    counts.form_submission_signatures = await countByIn(supabase, "form_submission_signatures", "form_submission_id", formSubs, orgId);
+    counts.form_submission_documents = await countByIn(supabase, "form_submission_documents", "form_submission_id", formSubs, orgId);
+    counts.form_submissions = formSubs.length;
+
+    const docIds = [...ids.documentIds];
+    counts.document_field_values = await countByIn(supabase, "document_field_values", "document_id", docIds, orgId);
+    counts.document_versions = await countByIn(supabase, "document_versions", "document_id", docIds, orgId);
+    counts.documents = await countDocumentsForEntities(supabase, orgId, [...opp, ...persons, ...cust], orDemo);
+
+    counts.field_values =
+        (await countFieldValuesForEntities(supabase, orgId, "opportunity", opp)) +
+        (await countFieldValuesForEntities(supabase, orgId, "person", persons)) +
+        (await countFieldValuesForEntities(supabase, orgId, "customer", cust)) +
+        (await countFieldValuesForEntities(
+            supabase,
+            orgId,
+            "location",
+            await selectIds(supabase, "locations", orgId, orDemo)
+        ));
+
+    counts.opportunities = opp.length;
+    counts.customer_member_contacts =
+        (await countByIn(supabase, "customer_member_contacts", "customer_member_id", members, orgId)) +
+        (await countByIn(supabase, "customer_member_contacts", "customer_id", cust, orgId));
+    counts.customer_tags = cust.length ? await countByInNoOrg(supabase, "customer_tags", "customer_id", cust) : 0;
+    counts.customer_subscriptions = await countByIn(supabase, "customer_subscriptions", "customer_id", cust, orgId);
+    counts.customer_payment_methods = cust.length ? await countByInNoOrg(supabase, "customer_payment_methods", "customer_id", cust) : 0;
+    counts.customer_members = members.length + (await countRows(supabase, "customer_members", orgId, orDemo));
+    counts.customer_persons =
+        (await countByIn(supabase, "customer_persons", "customer_id", cust, orgId)) +
+        (await countRows(supabase, "customer_persons", orgId, orDemo));
+    counts.contacts = await countRows(supabase, "contacts", orgId, orDemo);
+    counts.person_locations =
+        (await countRows(supabase, "person_locations", orgId, orDemo)) +
+        (await countByIn(supabase, "person_locations", "person_id", persons, orgId));
+    counts.person_relationships =
+        (await countByIn(supabase, "person_relationships", "from_person_id", persons, orgId)) +
+        (await countByIn(supabase, "person_relationships", "to_person_id", persons, orgId));
+    counts.customers = cust.length;
+    counts.persons = persons.length + (await countRows(supabase, "persons", orgId, orDemo));
+    counts[PROTECTED_LOCATIONS_TABLE_KEY] = await countRows(supabase, "locations", orgId, orDemo);
+    counts.work_units = await countRows(supabase, "work_units", orgId, orDemo);
+    counts.departments = await countRows(supabase, "departments", orgId, orDemo);
+
+    return counts;
+}
