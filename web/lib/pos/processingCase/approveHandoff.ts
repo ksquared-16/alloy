@@ -25,6 +25,7 @@ export interface HandoffResult {
 
 export interface BoundPerson {
     email: string | null;
+    phone: string | null;
     firstName: string | null;
     lastName: string | null;
     /** True when the form schema binds a field to person.email (regardless of value). */
@@ -38,9 +39,10 @@ export interface BoundPerson {
  */
 export function extractBoundPerson(schemaJson: unknown, values: Record<string, unknown>): BoundPerson {
     const parsed = safeParseFormSchema(schemaJson);
-    if (!parsed.success) return { email: null, firstName: null, lastName: null, hasEmailBinding: false };
+    if (!parsed.success) return { email: null, phone: null, firstName: null, lastName: null, hasEmailBinding: false };
 
     let email: string | null = null;
+    let phone: string | null = null;
     let firstName: string | null = null;
     let lastName: string | null = null;
     let hasEmailBinding = false;
@@ -64,6 +66,8 @@ export function extractBoundPerson(schemaJson: unknown, values: Record<string, u
                 hasEmailBinding = true;
                 const v = valueFor(f.id);
                 if (v) email = v.toLowerCase();
+            } else if (src.field_key === "phone") {
+                phone = valueFor(f.id) ?? phone;
             } else if (src.field_key === "first_name") {
                 firstName = valueFor(f.id) ?? firstName;
             } else if (src.field_key === "last_name") {
@@ -73,7 +77,7 @@ export function extractBoundPerson(schemaJson: unknown, values: Record<string, u
     };
     walk(parsed.data.fields);
 
-    return { email, firstName, lastName, hasEmailBinding };
+    return { email, phone, firstName, lastName, hasEmailBinding };
 }
 
 /**
