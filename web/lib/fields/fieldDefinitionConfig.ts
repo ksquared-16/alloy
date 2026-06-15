@@ -2,6 +2,8 @@
  * Validation for field_definitions.config (select / multiselect options, catalog refs, placement sources).
  */
 
+import { isSelectLikeFieldType } from "@/lib/admin/fieldDefinitionOptionSetConfig";
+
 export const ALLOWED_CATALOG_KEYS = ["home_types", "pricing_sqft_tiers"] as const;
 export type CatalogKey = (typeof ALLOWED_CATALOG_KEYS)[number];
 
@@ -158,6 +160,45 @@ export function validateSelectLikeConfig(
         }
     }
     return { ok: true };
+}
+
+function readConfigRecord(config: unknown | null | undefined): Record<string, unknown> {
+    if (config != null && typeof config === "object" && !Array.isArray(config)) {
+        return { ...(config as Record<string, unknown>) };
+    }
+    return {};
+}
+
+/** Merge stored field_definitions.config with a PATCH/create payload. */
+export function mergeFieldDefinitionConfigForWrite(
+    existing: unknown | null | undefined,
+    incoming: unknown | null | undefined,
+): Record<string, unknown> {
+    return {
+        ...readConfigRecord(existing),
+        ...readConfigRecord(incoming),
+    };
+}
+
+/** True when config uses placement option_source or native entity_reference metadata. */
+export function isConfigurableReferenceOrPlacementConfig(
+    config: unknown | null | undefined,
+): boolean {
+    const obj = readConfigRecord(config);
+    const optionSource = typeof obj.option_source === "string" ? obj.option_source.trim() : "";
+    if (optionSource) return true;
+    return obj.field_kind === "entity_reference";
+}
+
+/** Whether a select-like PATCH should include config (vs label-only omit). */
+export function shouldIncludeConfigOnFieldDefinitionPatch(args: {
+    fieldType: string;
+    existingConfig: unknown | null | undefined;
+    optionSetKey: string;
+}): boolean {
+    if (!isSelectLikeFieldType(args.fieldType)) return false;
+    if (args.optionSetKey.trim()) return true;
+    return !isConfigurableReferenceOrPlacementConfig(args.existingConfig);
 }
 
 /**
