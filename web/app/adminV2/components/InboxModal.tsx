@@ -5,6 +5,8 @@ import { MessageSquare, X } from "lucide-react";
 
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
 import InboxPanel from "@/app/adminV2/messages/InboxPanel";
+import CommandCenterShell from "@/app/adminV2/communications/CommandCenterShell";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 
 export type InboxModalProps = {
     open: boolean;
@@ -57,12 +59,18 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                     </div>
                 </div>
                 <div className="flex min-h-[min(22rem,65vh)] flex-1 flex-col overflow-hidden">
-                    <InboxPanel
-                        layout="modal"
-                        onClose={onClose}
-                        composeOpen={composeOpen}
-                        onComposeOpenChange={setComposeOpen}
-                    />
+                    {/* Communications V2: replace the inbox panel body with the Command Center; the
+                        AdminV2WorkspaceBosModalShell (current staging BOS rail) is unchanged. Flag off = legacy inbox. */}
+                    {isCommsV2FlagEnabled("comms_v2_command_center") ? (
+                        <CommandCenterShell />
+                    ) : (
+                        <InboxPanel
+                            layout="modal"
+                            onClose={onClose}
+                            composeOpen={composeOpen}
+                            onComposeOpenChange={setComposeOpen}
+                        />
+                    )}
                 </div>
             </div>
         </AdminV2WorkspaceBosModalShell>

@@ -16,6 +16,8 @@ from ..integrations.twilio_client import send_sms, send_sms_with_credentials
 from ..supabase_client import _get_base_url, _get_headers
 from .communication_workflow_events import emit_for_communication_message
 from .communications.binding_resolver import find_binding_by_id, resolve_outbound_binding
+from .communications.status_callback import build_sms_status_callback_url
+from ..settings import PUBLIC_TWILIO_STATUS_CALLBACK_BASE
 from .communications.secret_ref import (
     is_legacy_global_twilio_binding,
     resolve_secret_plaintext,
@@ -205,6 +207,7 @@ def process_communication_messages(
 
         bound_id = str(binding.get("id")) if isinstance(binding, dict) and binding.get("id") else None
         cfg = binding.get("config") if isinstance(binding, dict) and isinstance(binding.get("config"), dict) else {}
+        sms_status_callback = build_sms_status_callback_url(PUBLIC_TWILIO_STATUS_CALLBACK_BASE, bound_id)
 
         try:
             if channel == "sms":
@@ -213,7 +216,7 @@ def process_communication_messages(
                 sid_result: Dict[str, Any]
                 secret_ref = (binding.get("secret_ref") or "unconfigured") if binding else "unconfigured"
                 if binding and is_legacy_global_twilio_binding(secret_ref):
-                    sid_result = send_sms(to_addr, body)
+                    sid_result = send_sms(to_addr, body, status_callback=sms_status_callback)
                 elif binding:
                     sid_val = str(cfg.get("twilio_account_sid") or "").strip()
                     svc_sid = str(cfg.get("messaging_service_sid") or "").strip()
@@ -229,6 +232,7 @@ def process_communication_messages(
                         account_sid=sid_val,
                         auth_token=token_plain,
                         messaging_service_sid=svc_sid,
+                        status_callback=sms_status_callback,
                     )
                 else:
                     raise RuntimeError("no SMS provider binding")
