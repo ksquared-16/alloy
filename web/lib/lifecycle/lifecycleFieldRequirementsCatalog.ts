@@ -92,14 +92,14 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
     {
         rule_id: "child:location",
         entity: "child",
-        field_label: "Site / Location",
+        field_label: "School / Location",
         runtime_enforced: false,
         stages: ["waitlist"],
     },
     {
         rule_id: "opportunity:location",
         entity: "opportunity",
-        field_label: "Location",
+        field_label: "School / Location",
         runtime_enforced: false,
         stages: ["lead", "qualification"],
     },
@@ -113,7 +113,7 @@ export const LIFECYCLE_FIELD_REQUIREMENT_CATALOG: readonly LifecycleFieldRequire
     {
         rule_id: "child:classroom",
         entity: "child",
-        field_label: "Classroom or Room",
+        field_label: "Room",
         runtime_enforced: true,
     },
     {

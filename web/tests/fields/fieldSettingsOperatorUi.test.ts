@@ -37,6 +37,16 @@ describe("fieldSettingsOperatorUi", () => {
         ).toBe("Inquiry name");
     });
 
+    it("prefers stored field_definitions label over catalog overrides for location_id", () => {
+        expect(
+            operatorFieldDisplayLabel("opportunity", {
+                field_key: "location_id",
+                is_system: true,
+                label: "School",
+            })
+        ).toBe("School");
+    });
+
     it("maps policy column to operator language", () => {
         const enforceable = buildFieldPolicySettingsView("opportunity", {
             field_key: "campus_pref",

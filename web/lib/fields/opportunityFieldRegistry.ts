@@ -34,7 +34,7 @@ export const OPPORTUNITY_NATIVE_REFERENCE_FIELD_MANIFEST: readonly OpportunityNa
     {
         field_key: "location_id",
         field_type: "select",
-        label: "Location",
+        label: "School",
         section_key: "inquiry_context",
         sort_order: 25,
         is_visible_in_drawer: true,

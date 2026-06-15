@@ -16,8 +16,8 @@ Business Processes **consumes** platform definitions. It does not recreate them.
 
 | Surface | Owns | Does **not** own |
 |---------|------|------------------|
-| **Fields** (`/admin/settings/fields`) | Field definitions, types, labels, help text, option bindings, **native reference fields** (seeded `field_definitions` with `entity_reference` config) | Drawer placement, stage requiredness, queue layout, human relationship vocabulary |
-| **Relationships** (`/admin/settings/relationships`) | **Person/family relationship vocabulary** — customer ↔ person roles, person ↔ person types | Native FK / entity reference authoring (use Fields) |
+| **Fields** (`/admin/settings/fields`) | Field definitions, types, **editable labels**, help text, option bindings, **native reference fields** (`option_source`, `field_kind: entity_reference`) | Drawer placement, stage requiredness, queue layout, human relationship vocabulary |
+| **Relationships** (`/admin/settings/relationships`) | **Person/family relationship vocabulary** — customer ↔ person roles, person ↔ person types | Native FK / entity reference authoring (use **Fields**) |
 | **Layouts** (`/admin/settings/layouts`) | Drawer/queue **presentation**: section order, field placement (`field_placements_v1`), queue row layout (`metadata.queue_record_layout`), **editable native reference fields when placed** (e.g. `opportunity.location_id`) | Field definitions, stage rollups, action definitions |
 | **Statuses** (`/admin/settings/statuses`) | Status **vocabulary**: label, color, sort order, active/inactive | Which stage a status rolls up into |
 | **Business Processes** (`/admin/settings/business-processes`) | Process/stage structure, **stage status rollups**, stage requiredness/recommendation (e.g. Lead → Location via `opportunity:location`), action availability & stage restrictions, membership subject/count, **Operating Plan per stage** | Status labels, field definitions, queue row layout, action handler semantics |

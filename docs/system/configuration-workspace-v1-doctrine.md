@@ -72,14 +72,18 @@ Process-level (not per-stage):
 
 ## Placement model (E2 + V2)
 
-Operator labels: **Location → Program → Room → Schedule**
+Operator labels: **School → Program → Room → Schedule** (Location is acceptable; orgs may rename via Fields).
 
-| Concept | Operator label | Storage (MVP) | Owner |
-|---------|----------------|---------------|-------|
-| Location | Location | `location_id` | Lead / Child OCM |
+| Concept | Operator label | Storage (MVP) | Resolves to |
+|---------|----------------|---------------|-------------|
+| School | School / Location | `location_id` | `locations.id` (site/campus row) — Lead + Child OCM |
 | Program | Program | `desired_program_category_id` | `location_program_categories` per site |
-| Room | Room | `program_room_cohort_key` / unit `locations` | Location hierarchy (required at placement) |
-| Schedule | Schedule | `desired_schedule_type` | Org option set interim; location-owned future |
+| Room | Room | `program_room_cohort_key` | Child `locations.id` (room/classroom unit under site); legacy column name |
+| Schedule | Schedule | `desired_schedule_type` | Org option set interim |
+
+**Cascade:** Child School → Program (`programs_for_location`) → Room (`rooms_for_location_program`, filtered by school + program). Lead School is intake default; child may inherit or override.
+
+**Fields validation:** Native reference / placement selects validate with `config.option_source` — not static `options`.
 
 Internal keys (`desired_program_type`, etc.) are compatibility only — hidden from default operator pickers.
 

@@ -61,14 +61,17 @@ Operator-configurable **entity reference** fields are supported via seeded `fiel
 | `field_type` | `select` with `config.option_source` (e.g. `locations`) |
 | `config.field_kind` | `entity_reference` |
 | Storage | Native column on entity table — **not** `field_values` |
+| Validation | `option_source` satisfies select-like validation (no static `options` required) |
 | Drawer PATCH | Entity route (e.g. `opportunities.location_id`) |
 
-**MVP example — Lead Location:**
+**Placement chain (childcare):** School (`location_id`) → Program (`desired_program_category_id`) → Room (`program_room_cohort_key` stores child `locations.id` under site). Labels are editable in Fields; `field_definitions.label` is canonical where F1 applies.
+
+**MVP example — Lead School/Location:**
 
 - Registry: `entity_type=opportunity`, `field_key=location_id`
-- Storage: `opportunities.location_id` → `locations.id`
+- Storage: `opportunities.location_id` → `locations.id` (site/campus row)
 - Surfaces: Fields, Business Processes (Lead stage), Layouts (`opportunity.location_id`), Forms (`lead_site`)
-- Child placement (`inquiry_child.location_id`) remains separate — per-child canonical doctrine unchanged
+- Child `inquiry_child.location_id` is separate placement — may inherit lead school on Add Child
 
 Migration: `supabase/migrations/20260617120000_opportunity_location_id_field_definition_repair.sql`
 

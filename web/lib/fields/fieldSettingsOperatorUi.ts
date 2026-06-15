@@ -137,7 +137,6 @@ const OPERATOR_LABEL_OVERRIDES: Record<string, Record<string, string>> = {
     opportunity: {
         name: "Inquiry name",
         source: "Lead source",
-        location_id: "Location",
         assigned_to: "Assigned to",
         lost_reason: "Lost reason",
         job_date: "Preferred service date",
@@ -168,11 +167,11 @@ const OPERATOR_LABEL_OVERRIDES: Record<string, Record<string, string>> = {
 export function operatorFieldDisplayLabel(entityType: string, row: OperatorFieldRow): string {
     const key = row.field_key.trim();
     const stored = row.label?.trim();
-    const override = OPERATOR_LABEL_OVERRIDES[entityType.trim().toLowerCase()]?.[key];
-    if (override) return override;
-    if (stored && stored.toLowerCase() !== key.toLowerCase() && !looksLikeRawKey(stored)) {
+    if (stored && !looksLikeRawKey(stored)) {
         return stored;
     }
+    const override = OPERATOR_LABEL_OVERRIDES[entityType.trim().toLowerCase()]?.[key];
+    if (override) return override;
     if (stored && !looksLikeRawKey(stored)) return stored;
     return humanizeFieldKey(key);
 }

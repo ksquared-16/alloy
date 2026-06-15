@@ -89,7 +89,7 @@ export const INQUIRY_CHILD_NATIVE_FIELD_MANIFEST: InquiryChildNativeFieldManifes
     {
         field_key: "location_id",
         field_type: "select",
-        label: "Location",
+        label: "School",
         section_key: "inquiry_participation",
         sort_order: 15,
         is_visible_in_drawer: true,

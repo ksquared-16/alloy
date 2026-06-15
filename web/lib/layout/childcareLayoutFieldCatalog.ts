@@ -205,7 +205,7 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     // Lead — case-level only (no per-child enrollment duplicates)
     lead("opportunity.status_key", "Lead status", "status", 10, "status_key"),
     lead("opportunity.source", "Lead source", "text", 20, "source"),
-    lead("opportunity.location_id", "Location", "select", 25, "location_id"),
+    lead("opportunity.location_id", "School / Location", "select", 25, "location_id"),
     lead("opportunity.created_at", "Lead created date", "date", 30, "created_at", { computed: true }),
     lead("opportunity.tour_date", "Tour date", "date", 40, "tour_date"),
     lead("opportunity.tour_time", "Tour time", "text", 50, "tour_time"),
@@ -297,7 +297,7 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
         storageColumn: "program_room_cohort_key",
         enrollmentDetail: true,
     }),
-    childField("inquiry_child.location_id", "Location / school", "select", 145, {
+    childField("inquiry_child.location_id", "School / Location", "select", 145, {
         entityType: "inquiry_child",
         fieldKey: "location_id",
         storageTable: "opportunity_customer_members",

@@ -104,7 +104,7 @@ const OPPORTUNITY_MANIFEST: PlatformFieldManifestEntry[] = [
     entry("opportunity.source", "Source", "text", "native_entity", "opportunities.source", "now", ["case"], ["opportunities"]),
     entry(
         "opportunity.location_id",
-        "Location",
+        "School / Location",
         "select",
         "reference",
         "opportunities.location_id → locations.id",

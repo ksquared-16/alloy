@@ -1,0 +1,2140 @@
+{
+  "missingTables": [
+    "placement_candidates",
+    "placement_link_group_members",
+    "placement_link_groups",
+    "placement_overrides"
+  ],
+  "missingFuncs": [
+    "validate_placement_candidates_consistency",
+    "validate_placement_link_group_members_consistency",
+    "validate_placement_link_groups_consistency",
+    "validate_placement_overrides_consistency"
+  ],
+  "missingIndexes": [
+    "access_methods_key_key",
+    "access_methods_pkey",
+    "action_definitions_pkey",
+    "action_links_entity_idx",
+    "action_links_pkey",
+    "action_links_short_code_key",
+    "action_links_short_code_uidx",
+    "action_links_token_key",
+    "action_placements_pkey",
+    "activity_log_pkey",
+    "idx_activity_entity",
+    "addon_frequencies_key_key",
+    "addon_frequencies_pkey",
+    "addon_types_key_key",
+    "addon_types_pkey",
+    "idx_addon_types_vertical_id",
+    "agent_v0_apply_audit_pkey",
+    "ux_agent_v0_apply_audit_result_id",
+    "agent_v0_proposals_pkey",
+    "ux_agent_v0_proposals_proposal_id",
+    "agent_v1_record_layout_apply_audit_pkey",
+    "ux_agent_v1_rl_apply_result_id",
+    "agent_v1_record_layout_proposals_pkey",
+    "ux_agent_v1_rl_proposals_proposal_id",
+    "agent_v2_field_visibility_apply_audit_pkey",
+    "ux_agent_v2_fv_apply_result_id",
+    "agent_v2_field_visibility_proposals_pkey",
+    "ux_agent_v2_fv_proposals_proposal_id",
+    "app_users_auth_user_id_key",
+    "app_users_pkey",
+    "idx_app_users_org_id",
+    "assignment_statuses_key_key",
+    "assignment_statuses_pkey",
+    "assignments_pkey",
+    "idx_assignments_job",
+    "idx_assignments_org_id",
+    "idx_assignments_schedule",
+    "idx_assignments_status",
+    "idx_assignments_status_key",
+    "idx_assignments_vendor",
+    "campaigns_pkey",
+    "charge_line_items_pkey",
+    "idx_charge_line_items_org_charge",
+    "idx_charge_line_items_org_job_line_item_id_partial",
+    "charges_pkey",
+    "idx_charges_org_charge_type",
+    "idx_charges_org_due_date",
+    "idx_charges_org_job",
+    "idx_charges_org_job_status",
+    "idx_charges_org_schedule_id_partial",
+    "idx_charges_org_source_charge_id_partial",
+    "idx_charges_org_status",
+    "idx_charges_org_subscription_id_partial",
+    "cleaning_job_addons_pkey",
+    "cleaning_job_details_pkey",
+    "cleaning_service_types_key_key",
+    "cleaning_service_types_pkey",
+    "communication_message_reads_pkey",
+    "communication_messages_pkey",
+    "communication_provider_bindings_pkey",
+    "communication_scheduled_sends_pkey",
+    "communication_threads_identity_uq",
+    "communication_threads_pkey",
+    "config_layout_assist_proposals_pkey",
+    "contact_tags_pkey",
+    "contacts_email_unique",
+    "contacts_org_status_idx",
+    "contacts_phone_unique",
+    "contacts_pkey",
+    "idx_contacts_archived",
+    "idx_contacts_customer_id",
+    "idx_contacts_email",
+    "idx_contacts_external",
+    "idx_contacts_org_id",
+    "idx_contacts_person_id",
+    "idx_contacts_phone",
+    "idx_contacts_postal_code",
+    "idx_contacts_vendor_id",
+    "ux_contacts_email_not_null",
+    "ux_contacts_phone_not_null",
+    "customer_member_contact_roles_org_active_idx",
+    "customer_member_contact_roles_pkey",
+    "customer_member_contact_roles_unique",
+    "customer_member_contacts_org_contact_idx",
+    "customer_member_contacts_org_customer_idx",
+    "customer_member_contacts_org_member_idx",
+    "customer_member_contacts_pkey",
+    "customer_member_contacts_unique",
+    "customer_member_relationship_types_org_key_unique",
+    "customer_member_relationship_types_org_sort_idx",
+    "customer_member_relationship_types_pkey",
+    "customer_member_relationship_types_unique",
+    "customer_members_org_customer_idx",
+    "customer_members_org_name_idx",
+    "customer_members_org_status_idx",
+    "customer_members_pkey",
+    "idx_customer_members_person_id",
+    "customer_payment_methods_customer_id_stripe_payment_method__key",
+    "customer_payment_methods_pkey",
+    "customer_person_role_types_pkey",
+    "idx_customer_person_role_types_active",
+    "idx_customer_person_role_types_industry_id",
+    "idx_customer_person_role_types_org_id",
+    "idx_customer_person_role_types_vertical_id",
+    "uq_customer_person_role_types_scope_key",
+    "customer_persons_pkey",
+    "idx_customer_persons_customer_id",
+    "idx_customer_persons_org_id",
+    "idx_customer_persons_person_id",
+    "uq_customer_persons_unique",
+    "customer_subscriptions_customer_id_idx",
+    "customer_subscriptions_customer_idx",
+    "customer_subscriptions_pkey",
+    "customer_subscriptions_status_idx",
+    "idx_customer_subscriptions_org_customer",
+    "uq_customer_subscriptions_active",
+    "customer_tags_pkey",
+    "customer_vertical_job_counters_pkey",
+    "uniq_counter_per_customer_vertical",
+    "customers_org_status_idx",
+    "customers_pkey",
+    "customers_stripe_customer_unique",
+    "idx_customers_external",
+    "idx_customers_org_id",
+    "idx_customers_primary_contact",
+    "idx_customers_vertical_id",
+    "ux_customers_org_customer_number",
+    "ux_customers_stripe_customer_id_not_null",
+    "departments_pkey",
+    "idx_departments_org_active_sort",
+    "idx_departments_org_id",
+    "uq_departments_org_key",
+    "discount_applications_commitment_idx",
+    "discount_applications_customer_idx",
+    "discount_applications_legacy_discount_code_id_idx",
+    "discount_applications_legacy_discount_redemption_id_uidx",
+    "discount_applications_org_target_idx",
+    "discount_applications_pkey",
+    "discount_applications_program_idx",
+    "discount_codes_code_key",
+    "discount_codes_code_unique",
+    "discount_codes_pkey",
+    "idx_discount_codes_active",
+    "idx_discount_codes_code",
+    "uniq_discount_codes_code",
+    "discount_commitments_org_customer_idx",
+    "discount_commitments_pkey",
+    "discount_commitments_program_idx",
+    "discount_commitments_status_idx",
+    "discount_program_benefits_org_idx",
+    "discount_program_benefits_pkey",
+    "discount_program_benefits_program_idx",
+    "discount_program_commitment_rules_org_idx",
+    "discount_program_commitment_rules_pkey",
+    "discount_program_commitment_rules_program_idx",
+    "discount_program_commitment_rules_program_unique",
+    "discount_program_qualifiers_org_idx",
+    "discount_program_qualifiers_pkey",
+    "discount_program_qualifiers_program_idx",
+    "discount_programs_legacy_discount_code_id_uidx",
+    "discount_programs_org_code_unique_active_idx",
+    "discount_programs_org_program_type_idx",
+    "discount_programs_org_status_idx",
+    "discount_programs_pkey",
+    "discount_redemptions_pkey",
+    "discount_redemptions_unique_code",
+    "discount_redemptions_unique_program",
+    "idx_discount_redemptions_code",
+    "idx_discount_redemptions_contact",
+    "idx_discount_redemptions_created",
+    "idx_discount_redemptions_discount_code",
+    "idx_discount_redemptions_job",
+    "idx_discount_redemptions_opportunity",
+    "uniq_redemption_per_contact_code",
+    "uniq_redemption_per_customer_code",
+    "discounts_code_key",
+    "discounts_pkey",
+    "document_field_definitions_org_doc_type_field_key_key",
+    "document_field_definitions_pkey",
+    "idx_document_field_definitions_org_doc_type",
+    "idx_document_field_definitions_org_id",
+    "document_field_values_document_id_field_key_key",
+    "document_field_values_pkey",
+    "idx_document_field_values_document_id",
+    "idx_document_field_values_field_definition_id",
+    "idx_document_field_values_org_id",
+    "document_versions_document_id_version_number_key",
+    "document_versions_pkey",
+    "idx_document_versions_document_id",
+    "idx_document_versions_org_id",
+    "documents_pkey",
+    "idx_documents_created_at",
+    "idx_documents_doc_type",
+    "idx_documents_entity",
+    "idx_documents_extraction_status",
+    "idx_documents_generated_from_document_id",
+    "idx_documents_org_id",
+    "entity_labels_entity_type_idx",
+    "entity_labels_org_id_idx",
+    "entity_labels_pkey",
+    "entity_labels_unique",
+    "external_mappings_pkey",
+    "external_mappings_source_entity_type_external_id_key",
+    "idx_external_mappings_internal",
+    "ux_external_mappings_unique",
+    "field_definitions_pkey",
+    "ux_field_definitions_org_entity_key",
+    "field_section_definitions_org_entity_section_key",
+    "field_section_definitions_pkey",
+    "idx_field_section_definitions_org_entity",
+    "field_values_pkey",
+    "idx_field_values_entity",
+    "idx_field_values_org_entity",
+    "ux_field_values_field_entity",
+    "form_definition_versions_pkey",
+    "uq_form_definition_versions_definition_version",
+    "form_definitions_pkey",
+    "uq_form_definitions_org_key",
+    "form_packet_definitions_pkey",
+    "uq_form_packet_definitions_org_key",
+    "form_packet_items_pkey",
+    "uq_form_packet_items_packet_sequence",
+    "form_packet_session_items_pkey",
+    "uq_form_packet_session_items_session_packet_item",
+    "uq_form_packet_session_items_session_sequence",
+    "form_packet_sessions_pkey",
+    "form_public_links_pkey",
+    "uq_form_public_links_token_hash",
+    "form_submission_documents_pkey",
+    "uq_form_submission_documents_sub_doc",
+    "form_submission_signatures_pkey",
+    "uq_form_submission_signatures_field_instance",
+    "form_submissions_pkey",
+    "gl_account_mappings_org_key_uq",
+    "gl_account_mappings_pkey",
+    "ux_gl_account_mappings_org_key_active",
+    "gl_accounts_org_code_uq",
+    "gl_accounts_org_type_idx",
+    "gl_accounts_pkey",
+    "ux_gl_accounts_org_code",
+    "ux_gl_accounts_org_code_active",
+    "gl_journal_entries_org_date_idx",
+    "gl_journal_entries_org_source_idx",
+    "gl_journal_entries_pkey",
+    "ux_gl_journal_entries_source",
+    "gl_journal_lines_entry_idx",
+    "gl_journal_lines_org_account_idx",
+    "gl_journal_lines_org_job_idx",
+    "gl_journal_lines_pkey",
+    "ux_gl_journal_lines_entry_line",
+    "home_types_key_key",
+    "home_types_pkey",
+    "industries_is_active_idx",
+    "industries_key_unique",
+    "industries_pkey",
+    "industry_default_entity_labels_entity_type_idx",
+    "industry_default_entity_labels_industry_id_idx",
+    "industry_default_entity_labels_pkey",
+    "industry_default_entity_labels_unique",
+    "idx_job_line_items_active",
+    "idx_job_line_items_job_id",
+    "idx_job_line_items_line_type",
+    "idx_job_line_items_org_job",
+    "job_line_items_pkey",
+    "idx_job_pricing_snapshots_job_id",
+    "idx_job_pricing_snapshots_org_job",
+    "job_pricing_snapshots_pkey",
+    "job_statuses_key_key",
+    "job_statuses_org_id_idx",
+    "job_statuses_pkey",
+    "job_tags_pkey",
+    "idx_jobs_archived",
+    "idx_jobs_customer",
+    "idx_jobs_customer_vertical_completed",
+    "idx_jobs_customer_vertical_created",
+    "idx_jobs_external",
+    "idx_jobs_is_recurring",
+    "idx_jobs_opportunity",
+    "idx_jobs_org_id",
+    "idx_jobs_org_location",
+    "idx_jobs_primary_person",
+    "idx_jobs_status",
+    "idx_jobs_work_unit_id",
+    "jobs_assigned_vendor_id_idx",
+    "jobs_discount_program_id_idx",
+    "jobs_org_status_idx",
+    "jobs_pkey",
+    "ux_jobs_org_job_number",
+    "ledger_transactions_pkey",
+    "ledger_tx_org_job_idx",
+    "ledger_tx_org_occurred_idx",
+    "ux_ledger_transactions_provider_ref",
+    "location_tags_pkey",
+    "location_types_is_active_idx",
+    "location_types_org_id_idx",
+    "location_types_pkey",
+    "location_types_unique",
+    "idx_locations_customer_id",
+    "idx_locations_external",
+    "idx_locations_org_customer",
+    "idx_locations_org_id",
+    "idx_locations_org_parent",
+    "idx_locations_org_status_key",
+    "idx_locations_org_type",
+    "idx_locations_org_vendor",
+    "locations_location_type_id_idx",
+    "locations_pkey",
+    "ux_locations_org_location_number",
+    "idx_messages_contact",
+    "idx_messages_contact_created",
+    "idx_messages_created_at",
+    "idx_messages_customer",
+    "idx_messages_job",
+    "idx_messages_opportunity",
+    "idx_messages_related",
+    "idx_messages_status",
+    "idx_messages_workflow_run",
+    "messages_pkey",
+    "messages_outbox_dedupe_key_uq",
+    "messages_outbox_org_created_idx",
+    "messages_outbox_pkey",
+    "messages_outbox_status_idx",
+    "operational_tasks_pkey",
+    "idx_opportunities_org_id",
+    "idx_opportunities_primary_person",
+    "idx_opps_contact",
+    "idx_opps_customer",
+    "idx_opps_external",
+    "idx_opps_stage",
+    "opportunities_discount_program_id_idx",
+    "opportunities_org_status_idx",
+    "opportunities_pkey",
+    "ux_opportunities_org_opportunity_number",
+    "opportunity_customer_members_pkey",
+    "uq_opportunity_customer_members_unique",
+    "opportunity_persons_pkey",
+    "uq_opportunity_persons_opp_person",
+    "opportunity_tags_pkey",
+    "option_set_items_pkey",
+    "option_set_items_set_item_key",
+    "option_sets_org_set_key",
+    "option_sets_pkey",
+    "org_settings_org_id_key",
+    "org_settings_org_idx",
+    "org_settings_pkey",
+    "orgs_industry_id_idx",
+    "orgs_pkey",
+    "orgs_slug_key",
+    "idx_payment_allocations_org_allocated_at",
+    "idx_payment_allocations_org_charge_id_partial",
+    "idx_payment_allocations_org_payment",
+    "idx_payment_allocations_org_status_target",
+    "idx_payment_allocations_org_target",
+    "payment_allocations_pkey",
+    "payment_statuses_key_key",
+    "payment_statuses_pkey",
+    "idx_payments_customer",
+    "idx_payments_job",
+    "idx_payments_org_customer_received_at",
+    "idx_payments_org_id",
+    "idx_payments_org_payer_entity",
+    "idx_payments_org_posted_at",
+    "idx_payments_org_status_received_at",
+    "idx_payments_posted_to_ledger",
+    "idx_payments_processor_transaction",
+    "idx_payments_provider",
+    "idx_payments_status",
+    "payments_org_status_idx",
+    "payments_pkey",
+    "permission_definitions_group_key_idx",
+    "permission_definitions_is_active_idx",
+    "permission_definitions_key_key",
+    "permission_definitions_pkey",
+    "permission_keys_pkey",
+    "permissions_pkey",
+    "idx_person_locations_location",
+    "idx_person_locations_org",
+    "idx_person_locations_person",
+    "person_locations_pkey",
+    "uq_person_locations_person_location",
+    "idx_person_relationship_type_settings_active",
+    "idx_person_relationship_type_settings_industry_id",
+    "idx_person_relationship_type_settings_org_id",
+    "idx_person_relationship_type_settings_vertical_id",
+    "person_relationship_type_settings_pkey",
+    "uq_person_relationship_type_settings_scope_key",
+    "idx_person_relationships_from_person_id",
+    "idx_person_relationships_org_id",
+    "idx_person_relationships_to_person_id",
+    "person_relationships_pkey",
+    "uq_person_relationships_unique",
+    "idx_persons_email",
+    "idx_persons_full_name",
+    "idx_persons_org_id",
+    "idx_persons_phone",
+    "persons_pkey",
+    "ux_persons_org_person_number",
+    "pipeline_stages_org_id_idx",
+    "pipeline_stages_pipeline_id_ghl_stage_uuid_key",
+    "pipeline_stages_pkey",
+    "pipelines_ghl_pipeline_id_key",
+    "pipelines_org_id_idx",
+    "pipelines_pkey",
+    "idx_placement_candidates_org_cohort_status",
+    "idx_placement_candidates_org_customer_member",
+    "idx_placement_candidates_org_ocm",
+    "idx_placement_candidates_org_opportunity",
+    "idx_placement_candidates_org_status",
+    "placement_candidates_pkey",
+    "ux_placement_candidates_ocm_cohort_active",
+    "ux_placement_candidates_org_seed_key",
+    "ux_placement_candidates_synthetic_cohort_active",
+    "idx_placement_link_group_members_org_candidate",
+    "idx_placement_link_group_members_org_group",
+    "placement_link_group_members_pkey",
+    "uq_placement_link_group_members_group_candidate",
+    "idx_placement_link_groups_org_opportunity",
+    "placement_link_groups_pkey",
+    "idx_placement_overrides_org_candidate",
+    "idx_placement_overrides_org_cohort_active",
+    "placement_overrides_pkey",
+    "ux_placement_overrides_one_active_pin",
+    "idx_addons_unique",
+    "pricing_addons_pkey",
+    "pricing_addons_vertical_key_uniq",
+    "ux_pricing_addons_vertical_addon_key",
+    "pricing_dimension_values_pkey",
+    "ux_pricing_dimension_values_key",
+    "pricing_dimensions_pkey",
+    "ux_pricing_dimensions_vertical_key",
+    "idx_first_clean_unique",
+    "pricing_first_clean_prices_pkey",
+    "pricing_first_clean_unique",
+    "ux_first_clean_prices",
+    "ux_first_clean_vertical_service_sqft",
+    "ux_pricing_first_clean_unique",
+    "idx_pricing_freq_unique",
+    "pricing_frequencies_pkey",
+    "pricing_frequencies_recur_idx",
+    "ux_pricing_freq_vertical_key",
+    "pricing_matrix_dimension_idx",
+    "pricing_matrix_mode_idx",
+    "pricing_matrix_org_idx",
+    "pricing_matrix_pkey",
+    "pricing_matrix_plan_idx",
+    "pricing_matrix_vertical_idx",
+    "uq_pricing_matrix_lookup",
+    "uq_pricing_matrix_source",
+    "ux_pricing_matrix_rule",
+    "pricing_modes_pkey",
+    "ux_pricing_modes_vertical_key",
+    "idx_recurring_unique",
+    "pricing_recurring_prices_pkey",
+    "ux_pricing_recurring_unique",
+    "ux_recurring_prices",
+    "ux_recurring_vertical_frequency_sqft",
+    "idx_pricing_services_unique",
+    "pricing_services_pkey",
+    "pricing_services_unique_vertical_service",
+    "pricing_square_footage_tiers_pkey",
+    "idx_quotes_job",
+    "idx_quotes_opp",
+    "idx_quotes_org_id",
+    "quotes_pkey",
+    "record_actions_pkey",
+    "record_drawer_layouts_pkey",
+    "ux_record_drawer_layouts_org_entity_surface_key",
+    "record_layouts_pkey",
+    "record_overview_layouts_pkey",
+    "recurrence_plans_job_id_key",
+    "recurrence_plans_pkey",
+    "role_definitions_org_role_key_uk",
+    "role_definitions_org_role_key_uq",
+    "role_definitions_pkey",
+    "role_permission_grants_org_idx",
+    "role_permission_grants_org_role_idx",
+    "role_permission_grants_org_role_perm_uk",
+    "role_permission_grants_org_role_perm_uq",
+    "role_permission_grants_permission_idx",
+    "role_permission_grants_pkey",
+    "role_permission_grants_unique",
+    "schedule_statuses_key_key",
+    "schedule_statuses_pkey",
+    "schedule_tags_pkey",
+    "idx_schedules_job",
+    "idx_schedules_org_id",
+    "idx_schedules_org_id_start_at",
+    "idx_schedules_org_location",
+    "idx_schedules_start_at",
+    "idx_schedules_status",
+    "idx_schedules_subscription",
+    "schedules_job_status_idx",
+    "schedules_job_vendor_status_idx",
+    "schedules_org_assigned_vendor_idx",
+    "schedules_org_job_start_idx",
+    "schedules_org_job_status_idx",
+    "schedules_org_job_vendor_status_idx",
+    "schedules_org_status_idx",
+    "schedules_pkey",
+    "schedules_subscription_idx",
+    "ux_schedules_org_schedule_number",
+    "service_offerings_org_active_idx",
+    "service_offerings_org_key_uidx",
+    "service_offerings_pkey",
+    "service_plan_templates_org_active_idx",
+    "service_plan_templates_org_key_uidx",
+    "service_plan_templates_pkey",
+    "service_price_dimensions_pkey",
+    "service_price_dimensions_rule_idx",
+    "service_pricing_rules_offering_idx",
+    "service_pricing_rules_org_active_idx",
+    "service_pricing_rules_org_idx",
+    "service_pricing_rules_pkey",
+    "service_pricing_rules_plan_idx",
+    "sqft_bands_key_key",
+    "sqft_bands_pkey",
+    "status_definitions_org_entity_sort_idx",
+    "status_definitions_pkey",
+    "status_definitions_unique_scope",
+    "status_transition_rules_pkey",
+    "tags_name_key",
+    "tags_pkey",
+    "task_assist_proposals_pkey",
+    "tour_availability_rules_pkey",
+    "tour_bookings_pkey",
+    "tour_public_booking_links_pkey",
+    "ux_tour_public_booking_links_token_hash",
+    "uq_user_access_profiles_user_org",
+    "user_access_profiles_pkey",
+    "uq_user_department_access_user_org_dept",
+    "user_department_access_pkey",
+    "user_profiles_pkey",
+    "idx_user_roles_role",
+    "user_roles_org_user_idx",
+    "user_roles_pkey",
+    "uq_user_site_access_user_org_location",
+    "user_site_access_pkey",
+    "vendor_statuses_key_key",
+    "vendor_statuses_pkey",
+    "vendor_tags_pkey",
+    "idx_vendor_users_external",
+    "idx_vendor_users_org_id",
+    "idx_vendor_users_vendor_id",
+    "vendor_users_pkey",
+    "vendor_users_vendor_id_contact_id_key",
+    "idx_vendor_verticals_vertical_id",
+    "vendor_verticals_pkey",
+    "idx_vendors_company_name",
+    "idx_vendors_days_available_gin",
+    "idx_vendors_external",
+    "idx_vendors_org_id",
+    "idx_vendors_service_area_zip_codes_gin",
+    "idx_vendors_status",
+    "idx_vendors_submitted_at",
+    "ux_vendors_org_vendor_number",
+    "vendors_drivers_license_doc_path_idx",
+    "vendors_insurance_doc_path_idx",
+    "vendors_org_payout_override_idx",
+    "vendors_org_status_idx",
+    "vendors_pkey",
+    "verticals_pkey",
+    "verticals_slug_key",
+    "idx_work_units_department_id",
+    "idx_work_units_org_department_active_sort",
+    "idx_work_units_org_id",
+    "uq_work_units_department_key",
+    "work_units_pkey",
+    "workflow_action_runs_org_run_idx",
+    "workflow_action_runs_org_status_idx",
+    "workflow_action_runs_pkey",
+    "idx_workflow_actions_order",
+    "idx_workflow_actions_workflow",
+    "uniq_workflow_action_order",
+    "uniq_workflow_actions_order",
+    "workflow_actions_org_id_idx",
+    "workflow_actions_pkey",
+    "idx_workflow_conditions_workflow",
+    "workflow_conditions_org_id_idx",
+    "workflow_conditions_pkey",
+    "workflow_events_entity_idx",
+    "workflow_events_event_type_idx",
+    "workflow_events_org_entity_idx",
+    "workflow_events_org_event_occurred_idx",
+    "workflow_events_org_occurred_idx",
+    "workflow_events_payload_gin_idx",
+    "workflow_events_pkey",
+    "idx_workflow_runs_workflow",
+    "workflow_runs_event_id_idx",
+    "workflow_runs_failed_idx",
+    "workflow_runs_org_completed_idx",
+    "workflow_runs_org_id_idx",
+    "workflow_runs_org_started_desc",
+    "workflow_runs_org_started_idx",
+    "workflow_runs_org_status_started_idx",
+    "workflow_runs_org_workflow_started_idx",
+    "workflow_runs_pkey",
+    "workflow_runs_status_idx",
+    "idx_workflows_enabled",
+    "idx_workflows_entity",
+    "idx_workflows_trigger",
+    "workflows_org_id_idx",
+    "workflows_org_id_name_uniq",
+    "workflows_pkey",
+    "workspace_kpi_placement_pkey"
+  ],
+  "violations": [
+    {
+      "kind": "forward_table",
+      "object": "discount_programs",
+      "createdIn": "20260329165048_remote_schema",
+      "referencedIn": "20260328120000_firstfree4x120_discount_program",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "tables",
+      "referencedIn": "20260329165048_remote_schema",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "job_number",
+      "referencedIn": "20260329165048_remote_schema",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "fn_job_split_bps",
+      "referencedIn": "20260329165048_remote_schema",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "department",
+      "referencedIn": "20260329165048_remote_schema",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "target_entity",
+      "referencedIn": "20260329165048_remote_schema",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "email",
+      "referencedIn": "20260329165048_remote_schema",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "phone",
+      "referencedIn": "20260329165048_remote_schema",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "stripe_customer_id",
+      "referencedIn": "20260329165048_remote_schema",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "target_entity_type",
+      "referencedIn": "20260329210000_payments_payment_allocations",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "legacy",
+      "referencedIn": "20260329210000_payments_payment_allocations",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "edge",
+      "referencedIn": "20260329210000_payments_payment_allocations",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "currency",
+      "referencedIn": "20260329210000_payments_payment_allocations",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "baseline",
+      "referencedIn": "20260329210000_payments_payment_allocations",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pa",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "coalesce",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pa1",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "jl",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "posted_alloc",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "best_schedule",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "service_date_q",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "has_payment",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "has_any_alloc",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "candidates",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "to_insert",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "ws",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "with_status",
+      "referencedIn": "20260331130000_charges_receivables_backfill",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "job_number_for_customer",
+      "referencedIn": "20260402103000_field_registry_batch1_record_numbers",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "customer",
+      "referencedIn": "20260402103000_field_registry_batch1_record_numbers",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "mx",
+      "referencedIn": "20260402103000_field_registry_batch1_record_numbers",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "numbered",
+      "referencedIn": "20260402103000_field_registry_batch1_record_numbers",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "dup_ids",
+      "referencedIn": "20260402103000_field_registry_batch1_record_numbers",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "baseline",
+      "referencedIn": "20260402140000_field_sections_public_visibility",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "next_org_scoped_record_number",
+      "referencedIn": "20260402150000_org_record_number_insert_triggers",
+      "refType": "query"
+    },
+    {
+      "kind": "forward_table",
+      "object": "option_sets",
+      "createdIn": "20260404130000_option_sets_location_fields_sqft_tier_key",
+      "referencedIn": "20260403120000_quote_intake_option_sets_specialty_opportunity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "legacy",
+      "referencedIn": "20260404160000_workflow_conditions_location_field_remap",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "job",
+      "referencedIn": "20260404160000_workflow_conditions_location_field_remap",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "items",
+      "referencedIn": "20260404180000_needs_a_quote_stage_and_public_beds_baths",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "running",
+      "referencedIn": "20260404210000_workflow_quote_started_specialty_and_sms_canonical_paths",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "org",
+      "referencedIn": "20260404220000_booking_notify_vendor_sms_sqft_label_and_payout",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "m",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "svc",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "tier",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "prereq_vertical",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "prereq_service",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "prereq_tiers",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "first_clean",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "recurring",
+      "referencedIn": "20260407120000_audit_cleaning_quote_pricing_matrix_legacy_parity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "w_org",
+      "referencedIn": "20260408140000_jobs_work_unit_org_integrity_trigger",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "p_expected_version",
+      "referencedIn": "20260412200000_agent_v0_atomic_commit_rpc",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "p_expected_version",
+      "referencedIn": "20260413100000_agent_v1_record_overview_layout_audit",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "exp_ts",
+      "referencedIn": "20260414100000_agent_v2_field_visibility_audit",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "os",
+      "referencedIn": "20260421143000_cleaning_type_unified_option_set",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "definitions",
+      "referencedIn": "20260422100000_opportunity_status_lifecycle_stage_metadata",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "body",
+      "referencedIn": "20260424190000_childcare_opportunity_inquiry_drawer_workflow_layout",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "childcare_orgs",
+      "referencedIn": "20260424190000_childcare_opportunity_inquiry_drawer_workflow_layout",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "d",
+      "referencedIn": "20260425180000_status_definitions_entity_type_opportunity_normalize",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "w_org",
+      "referencedIn": "20260427173000_opportunities_work_unit_id",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v",
+      "referencedIn": "20260427180000_action_definitions_and_placements",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "lifecycle",
+      "referencedIn": "20260429120000_action_placements_section_key",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment",
+      "referencedIn": "20260430120000_childcare_program_type_consolidate_age_group",
+      "refType": "fk"
+    },
+    {
+      "kind": "missing_table",
+      "object": "_childcare_mvp_seed_target_orgs",
+      "referencedIn": "20260430120000_childcare_program_type_consolidate_age_group",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "program_sets",
+      "referencedIn": "20260430120000_childcare_program_type_consolidate_age_group",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "table",
+      "referencedIn": "20260430133000_opportunity_customer_members_foundation",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "may",
+      "referencedIn": "20260430133000_opportunity_customer_members_foundation",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "is",
+      "referencedIn": "20260430133000_opportunity_customer_members_foundation",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "_childcare_mvp_seed_target_orgs",
+      "referencedIn": "20260430140000_record_drawer_layouts_org_scoped",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "existing",
+      "referencedIn": "20260430143000_opportunity_customer_members_outcome_status_key",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "_childcare_mvp_seed_target_orgs",
+      "referencedIn": "20260430143000_opportunity_customer_members_outcome_status_key",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "childcare_orgs",
+      "referencedIn": "20260430203000_childcare_opportunity_drawer_workflow_v3_layout",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "old_wo",
+      "referencedIn": "20260430210000_opportunities_metadata_only_preserve_updated_at",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "_childcare_mvp_seed_target_orgs",
+      "referencedIn": "20260430211000_childcare_mvp_control_plane_seed",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v",
+      "referencedIn": "20260430215000_repair_action_registry_foundation",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "the",
+      "referencedIn": "20260430217000_enrollment_schedule_tour_workflow",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "record_section",
+      "referencedIn": "20260430219000_enrollment_opportunity_action_placements_cleanup",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "lifecycle",
+      "referencedIn": "20260430219000_enrollment_opportunity_action_placements_cleanup",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "record_header",
+      "referencedIn": "20260430219000_enrollment_opportunity_action_placements_cleanup",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "record_section",
+      "referencedIn": "20260430220000_enrollment_registry_actions_only",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v",
+      "referencedIn": "20260430220000_enrollment_registry_actions_only",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "opportunity",
+      "referencedIn": "20260430222000_enrollment_demo_seed_cleanup_bad_contacts",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "metadata",
+      "referencedIn": "20260430222000_enrollment_demo_seed_cleanup_bad_contacts",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260430224000_enrollment_mvp_action_set",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "defs",
+      "referencedIn": "20260430224000_enrollment_mvp_action_set",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "primary_wu",
+      "referencedIn": "20260430224000_enrollment_mvp_action_set",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "def_ids",
+      "referencedIn": "20260430224000_enrollment_mvp_action_set",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_wus",
+      "referencedIn": "20260430224000_enrollment_mvp_action_set",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "desired_placements",
+      "referencedIn": "20260430224000_enrollment_mvp_action_set",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "dp",
+      "referencedIn": "20260430224000_enrollment_mvp_action_set",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260430226000_enrollment_queue_quick_action_update_status_add_note",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "def",
+      "referencedIn": "20260430226000_enrollment_queue_quick_action_update_status_add_note",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_wus",
+      "referencedIn": "20260430226000_enrollment_queue_quick_action_update_status_add_note",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "def_ids",
+      "referencedIn": "20260430226000_enrollment_queue_quick_action_update_status_add_note",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "desired_placements",
+      "referencedIn": "20260430226000_enrollment_queue_quick_action_update_status_add_note",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "dp",
+      "referencedIn": "20260430226000_enrollment_queue_quick_action_update_status_add_note",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260430230000_fix_update_status_add_note_queue_placement",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_wus",
+      "referencedIn": "20260430230000_fix_update_status_add_note_queue_placement",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "def_ids",
+      "referencedIn": "20260430230000_fix_update_status_add_note_queue_placement",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "desired_placements",
+      "referencedIn": "20260430230000_fix_update_status_add_note_queue_placement",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "dp",
+      "referencedIn": "20260430230000_fix_update_status_add_note_queue_placement",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "d",
+      "referencedIn": "20260430231000_status_transition_rules_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "wu",
+      "referencedIn": "20260430231000_status_transition_rules_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "d",
+      "referencedIn": "20260430232000_enrollment_contact_attempted_action",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "wu",
+      "referencedIn": "20260430232000_enrollment_contact_attempted_action",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_orgs",
+      "referencedIn": "20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "desired",
+      "referencedIn": "20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pipeline_wus",
+      "referencedIn": "20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_wus",
+      "referencedIn": "20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "def_ids",
+      "referencedIn": "20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "desired_placements",
+      "referencedIn": "20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "dp",
+      "referencedIn": "20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260430234000_enrollment_pipeline_queue_definition_grouped_buckets",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pipeline_wus",
+      "referencedIn": "20260430234000_enrollment_pipeline_queue_definition_grouped_buckets",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "opp_org",
+      "referencedIn": "20260430240000_opportunity_persons_family_contacts",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "person_org",
+      "referencedIn": "20260430240000_opportunity_persons_family_contacts",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "childcare_orgs",
+      "referencedIn": "20260430240000_opportunity_persons_family_contacts",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "merged",
+      "referencedIn": "20260430240000_opportunity_persons_family_contacts",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "appearing",
+      "referencedIn": "20260430241000_right_rail_workspace_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260430241000_right_rail_workspace_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "primary_wu",
+      "referencedIn": "20260430241000_right_rail_workspace_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "def_row",
+      "referencedIn": "20260430241000_right_rail_workspace_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_wus",
+      "referencedIn": "20260430241000_right_rail_workspace_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "desired",
+      "referencedIn": "20260430241000_right_rail_workspace_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "d",
+      "referencedIn": "20260430241000_right_rail_workspace_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "key_order",
+      "referencedIn": "20260430241000_right_rail_workspace_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260430253000_enrollment_right_rail_dept_scope",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "def_rows",
+      "referencedIn": "20260430253000_enrollment_right_rail_dept_scope",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "key_order",
+      "referencedIn": "20260430253000_enrollment_right_rail_dept_scope",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "ed",
+      "referencedIn": "20260430253000_enrollment_right_rail_dept_scope",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "ts",
+      "referencedIn": "20260501193000_workspace_kpi_placement",
+      "refType": "fk"
+    },
+    {
+      "kind": "missing_table",
+      "object": "childcare_orgs",
+      "referencedIn": "20260501193000_workspace_kpi_placement",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "childcare_orgs",
+      "referencedIn": "20260502100000_kpi_v1_context_placement_seeds",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "an",
+      "referencedIn": "20260504103000_user_access_scope_tables_v1",
+      "refType": "fk"
+    },
+    {
+      "kind": "missing_table",
+      "object": "org",
+      "referencedIn": "20260504103000_user_access_scope_tables_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pre",
+      "referencedIn": "20260505120000_user_roles_composite_primary_key",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "baseline",
+      "referencedIn": "20260505120000_user_roles_composite_primary_key",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "form_submission_canonical_capture",
+      "referencedIn": "20260509134500_forms_submissions_operator_intake_metadata_and_fk_updates",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "item_def",
+      "referencedIn": "20260510120000_forms_packet_foundation",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "next",
+      "referencedIn": "20260511143000_tour_scheduling_v1_foundation",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "opp_org",
+      "referencedIn": "20260511143000_tour_scheduling_v1_foundation",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "tour",
+      "referencedIn": "20260513103000_childcare_opportunity_drawer_append_tour_scheduling",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "childcare_orgs",
+      "referencedIn": "20260513103000_childcare_opportunity_drawer_append_tour_scheduling",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pilot_orgs",
+      "referencedIn": "20260513103000_childcare_opportunity_drawer_append_tour_scheduling",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "target_orgs",
+      "referencedIn": "20260513103000_childcare_opportunity_drawer_append_tour_scheduling",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "target_rows",
+      "referencedIn": "20260513103000_childcare_opportunity_drawer_append_tour_scheduling",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "picked",
+      "referencedIn": "20260522140000_claim_due_communication_scheduled_sends",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "updated",
+      "referencedIn": "20260522140000_claim_due_communication_scheduled_sends",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "remain",
+      "referencedIn": "20260523120000_field_policy_and_section_v1",
+      "refType": "fk"
+    },
+    {
+      "kind": "missing_table",
+      "object": "is_required",
+      "referencedIn": "20260523120000_field_policy_and_section_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pipeline_wus",
+      "referencedIn": "20260526153000_action_buttons_phase2_message_ask_bos",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "orgs_active",
+      "referencedIn": "20260526153000_action_buttons_phase2_message_ask_bos",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "defs",
+      "referencedIn": "20260526153000_action_buttons_phase2_message_ask_bos",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v",
+      "referencedIn": "20260527120000_action_buttons_ask_bos_quick_message_platform",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pipeline_wus",
+      "referencedIn": "20260527130000_queue_row_preview_open_only",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v",
+      "referencedIn": "20260529180000_send_enrollment_packet_action",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v",
+      "referencedIn": "20260529200000_send_form_action",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "_childcare_mvp_seed_target_orgs",
+      "referencedIn": "20260531140000_person_drawer_layout_runtime_v1",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_orgs",
+      "referencedIn": "20260601100000_child_lifecycle_status_definitions_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "new_statuses",
+      "referencedIn": "20260601100000_child_lifecycle_status_definitions_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_orgs",
+      "referencedIn": "20260601110000_opportunity_case_status_definitions_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "case_statuses",
+      "referencedIn": "20260601110000_opportunity_case_status_definitions_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260601130000_enrollment_pipeline_queue_definition_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v2_def",
+      "referencedIn": "20260601130000_enrollment_pipeline_queue_definition_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pipeline_wus",
+      "referencedIn": "20260601130000_enrollment_pipeline_queue_definition_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260601140000_deactivate_legacy_enrollment_work_units_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "legacy_keys",
+      "referencedIn": "20260601140000_deactivate_legacy_enrollment_work_units_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "legacy_wus",
+      "referencedIn": "20260601140000_deactivate_legacy_enrollment_work_units_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "legacy_domain_map",
+      "referencedIn": "20260601140000_deactivate_legacy_enrollment_work_units_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "canonical_wu",
+      "referencedIn": "20260601140000_deactivate_legacy_enrollment_work_units_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "ocm_counts",
+      "referencedIn": "20260601150000_backfill_safe_ocm_lifecycle_statuses",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "safe_updates",
+      "referencedIn": "20260601150000_backfill_safe_ocm_lifecycle_statuses",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "updated",
+      "referencedIn": "20260601150000_backfill_safe_ocm_lifecycle_statuses",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260602100000_enrollment_pipeline_queue_definition_v2_14a",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v2_def",
+      "referencedIn": "20260602100000_enrollment_pipeline_queue_definition_v2_14a",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pipeline_wus",
+      "referencedIn": "20260602100000_enrollment_pipeline_queue_definition_v2_14a",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "alloy",
+      "referencedIn": "20260602150000_demo_kurzman_cleanup_person_gender_options",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "v_kevin_id",
+      "referencedIn": "20260602150000_demo_kurzman_cleanup_person_gender_options",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "waitlist",
+      "referencedIn": "20260602160000_canonical_action_catalog_v1_stubs",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "the",
+      "referencedIn": "20260602160000_canonical_action_catalog_v1_stubs",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "care",
+      "referencedIn": "20260602160000_canonical_action_catalog_v1_stubs",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "catalog_seed",
+      "referencedIn": "20260602160000_canonical_action_catalog_v1_stubs",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "catalog_payload",
+      "referencedIn": "20260602160000_canonical_action_catalog_v1_stubs",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "inserted",
+      "referencedIn": "20260602160000_canonical_action_catalog_v1_stubs",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "updated",
+      "referencedIn": "20260602160000_canonical_action_catalog_v1_stubs",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_orgs",
+      "referencedIn": "20260602170000_phase1a_entry_lifecycle_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_depts",
+      "referencedIn": "20260602170000_phase1a_entry_lifecycle_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "def",
+      "referencedIn": "20260602170000_phase1a_entry_lifecycle_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "ed",
+      "referencedIn": "20260602170000_phase1a_entry_lifecycle_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "defs",
+      "referencedIn": "20260602170000_phase1a_entry_lifecycle_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_orgs",
+      "referencedIn": "20260602180000_phase1b_qualification_status_and_universal_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "pipeline_wus",
+      "referencedIn": "20260602180000_phase1b_qualification_status_and_universal_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "patched",
+      "referencedIn": "20260602180000_phase1b_qualification_status_and_universal_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "defs",
+      "referencedIn": "20260602180000_phase1b_qualification_status_and_universal_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "upload_status",
+      "referencedIn": "20260602180000_phase1b_qualification_status_and_universal_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "universal_status",
+      "referencedIn": "20260602180000_phase1b_qualification_status_and_universal_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "placement_plan",
+      "referencedIn": "20260602180000_phase1b_qualification_status_and_universal_actions",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "defs",
+      "referencedIn": "20260602190000_tour_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "tour_schedule_status",
+      "referencedIn": "20260602190000_tour_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "tour_active_status",
+      "referencedIn": "20260602190000_tour_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "tour_packet_status",
+      "referencedIn": "20260602190000_tour_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "plan",
+      "referencedIn": "20260602190000_tour_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "defs",
+      "referencedIn": "20260602200000_phase3_enrollment_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "review_status",
+      "referencedIn": "20260602200000_phase3_enrollment_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "placement_status",
+      "referencedIn": "20260602200000_phase3_enrollment_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "plan",
+      "referencedIn": "20260602200000_phase3_enrollment_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "p",
+      "referencedIn": "20260602200000_phase3_enrollment_canonical_action_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "approval_status",
+      "referencedIn": "20260602220000_phase3b_approve_enrollment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "approve_def",
+      "referencedIn": "20260602220000_phase3b_approve_enrollment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "waitlist_def",
+      "referencedIn": "20260603100000_activate_move_to_waitlist_lifecycle",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "waitlist_from_status",
+      "referencedIn": "20260603100000_activate_move_to_waitlist_lifecycle",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "plan",
+      "referencedIn": "20260603100000_activate_move_to_waitlist_lifecycle",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "my",
+      "referencedIn": "20260603100500_operational_tasks_source_manual",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "default",
+      "referencedIn": "20260603110000_lifecycle_action_placement_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_approve_status",
+      "referencedIn": "20260603110000_lifecycle_action_placement_alignment",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "layouts",
+      "referencedIn": "20260603120000_entity_layouts_v2",
+      "refType": "fk"
+    },
+    {
+      "kind": "missing_table",
+      "object": "web",
+      "referencedIn": "20260603120000_entity_layouts_v2",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "existing",
+      "referencedIn": "20260604100000_inbox_foundation_thread_columns",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "placement_candidates",
+      "referencedIn": "20260605100000_waitlist_queue_lane_query_indexes",
+      "refType": "index_on"
+    },
+    {
+      "kind": "missing_table",
+      "object": "prior",
+      "referencedIn": "20260608120000_childcare_layout_field_catalog_seed",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_orgs",
+      "referencedIn": "20260610140000_enrollment_status_matrix_seed_metadata",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "case_statuses",
+      "referencedIn": "20260610140000_enrollment_status_matrix_seed_metadata",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "ocm_dispositions",
+      "referencedIn": "20260610140000_enrollment_status_matrix_seed_metadata",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "operator",
+      "referencedIn": "20260611120000_childcare_field_catalog_e1_repair",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment_orgs",
+      "referencedIn": "20260612120000_enrollment_process_status_vocabulary_repair",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "family_vocab",
+      "referencedIn": "20260612120000_enrollment_process_status_vocabulary_repair",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "child_vocab",
+      "referencedIn": "20260612120000_enrollment_process_status_vocabulary_repair",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment",
+      "referencedIn": "20260612120000_enrollment_process_status_vocabulary_repair",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "enrollment",
+      "referencedIn": "20260613120000_status_settings_category_repair",
+      "refType": "query"
+    }
+  ],
+  "realViolations": [
+    {
+      "kind": "forward_table",
+      "object": "discount_programs",
+      "createdIn": "20260329165048_remote_schema",
+      "referencedIn": "20260328120000_firstfree4x120_discount_program",
+      "refType": "query"
+    },
+    {
+      "kind": "forward_table",
+      "object": "option_sets",
+      "createdIn": "20260404130000_option_sets_location_fields_sqft_tier_key",
+      "referencedIn": "20260403120000_quote_intake_option_sets_specialty_opportunity",
+      "refType": "query"
+    },
+    {
+      "kind": "missing_table",
+      "object": "placement_candidates",
+      "referencedIn": "20260605100000_waitlist_queue_lane_query_indexes",
+      "refType": "index_on"
+    }
+  ],
+  "hardFailures": [
+    {
+      "file": "20260402143000_public_booking_field_config_seed.sql",
+      "pattern": "org_not_found_raise_exception"
+    },
+    {
+      "file": "20260423143000_opportunity_identity_seed_childcare_org.sql",
+      "pattern": "org_not_found_raise_exception"
+    }
+  ],
+  "orgSeeds": [
+    {
+      "file": "20260402143000_public_booking_field_config_seed.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": false,
+      "usesException": true
+    },
+    {
+      "file": "20260403100000_pipeline_stages_semantic_key_backfill.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260408170000_record_overview_layouts_cleaning_org_jobs.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260408180000_cleaning_org_operations_unassigned_work_unit_seed.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260409090000_cleaning_org_departments_and_work_units_seed.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260414140000_growth_work_unit_opportunity_queue_definitions.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260423143000_opportunity_identity_seed_childcare_org.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": false,
+      "usesException": true
+    },
+    {
+      "file": "20260427153000_promote_system_field_registry_bend_to_target_org.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": true,
+      "usesException": false
+    },
+    {
+      "file": "20260430211000_childcare_mvp_control_plane_seed.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": true,
+      "usesException": false
+    },
+    {
+      "file": "20260430216000_childcare_org_delete_cleaning_location_field_definitions.sql",
+      "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "usesSkip": true,
+      "usesException": false
+    },
+    {
+      "file": "20260501200000_seed_staging_communication_provider_bindings.sql",
+      "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260501201000_activate_staging_org_resend_binding.sql",
+      "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260506120000_forms_medication_authorization_demo_seed.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": true,
+      "usesException": false
+    },
+    {
+      "file": "20260507130000_forms_medication_demo_option_sets.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": true,
+      "usesException": false
+    },
+    {
+      "file": "20260513103000_childcare_opportunity_drawer_append_tour_scheduling.sql",
+      "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql",
+      "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260523170000_staging_demo_org_ai_policy_workflow_assist_draft.sql",
+      "org": "93667019-bd28-49b5-a688-acc9bb1e0a19",
+      "usesSkip": false,
+      "usesException": false
+    },
+    {
+      "file": "20260602150000_demo_kurzman_cleanup_person_gender_options.sql",
+      "org": "7803388d-cdee-4afb-89cf-23a137f39423",
+      "usesSkip": true,
+      "usesException": false
+    }
+  ]
+}
