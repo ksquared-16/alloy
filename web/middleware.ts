@@ -22,6 +22,7 @@ export async function middleware(request: NextRequest) {
      */
     if (
         pathname === "/api/webhooks/twilio/sms-status" ||
+        pathname.startsWith("/api/webhooks/twilio/sms-status/") ||
         pathname === "/api/webhooks/resend"
     ) {
         return NextResponse.next();
