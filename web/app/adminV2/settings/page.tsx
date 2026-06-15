@@ -60,6 +60,18 @@ export default function AdminV2SettingsIndexPage() {
                         </SettingsLink>
                     </SettingsGroup>
 
+                    <SettingsGroup
+                        label="Sources"
+                        description="Where information enters Alloy. Sources feed Processing (Information → Action)."
+                    >
+                        <SettingsLink href="/admin/forms" title="Forms" mode="editable">
+                            Form definitions, fields, and Processing connection.
+                        </SettingsLink>
+                        <SettingsLink href="/admin/forms/packets" title="Packets" mode="editable">
+                            Multi-step packet definitions.
+                        </SettingsLink>
+                    </SettingsGroup>
+
                     <SettingsGroup label="Data Model" description="Fields, labels, and how records appear in drawers.">
                         <SettingsLink href="/admin/settings/fields" title="Fields" mode="editable">
                             Field labels, visibility, and help text.
