@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import {
-    OPERATIONAL_QUEUES,
     groupConversationsByQueue,
     computeCommandCenterMetrics,
     applyQueueFilters,
+    visibleCommandCenterQueues,
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
@@ -166,6 +166,11 @@ export default function CommandCenterShell() {
             return;
         }
         setMessages([]);
+        const liveCustomerId = LIVE_WORKSPACE ? conversations.find((c) => c.id === id)?.customer_id : undefined;
+        if (liveCustomerId) {
+            await loadLive(liveCustomerId, null, true);
+            return;
+        }
         try {
             const res = await fetch(`/api/admin/communications/threads/${id}/messages`);
             if (!res.ok) return;
@@ -174,7 +179,7 @@ export default function CommandCenterShell() {
         } catch {
             /* timeline best-effort */
         }
-    }, [loadLive]);
+    }, [loadLive, conversations]);
 
     const claim = useCallback(
         async (id: string) => {
@@ -194,20 +199,26 @@ export default function CommandCenterShell() {
         [loadConversations]
     );
 
+    const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
+    const selectedCustomerId = useMemo(() => {
+        if (COMMS_FIXTURES_ENABLED && selectedId) return FIXTURE_FAMILY_DETAILS[selectedId]?.customerId ?? null;
+        return selected?.customer_id ?? null;
+    }, [selected, selectedId]);
+
     const openThread = useCallback(
         async (threadId: string) => {
             if (!LIVE_WORKSPACE) return;
             setSelectedThreadId(threadId);
-            const cust = selectedId ? FIXTURE_FAMILY_DETAILS[selectedId]?.customerId : undefined;
+            const cust = selectedCustomerId;
             if (cust) await loadLive(cust, threadId);
         },
-        [loadLive, selectedId]
+        [loadLive, selectedCustomerId]
     );
 
     const runFamilySend = useCallback(
         async (confirm: boolean) => {
             if (!LIVE_WORKSPACE) return;
-            const cust = selectedId ? FIXTURE_FAMILY_DETAILS[selectedId]?.customerId : undefined;
+            const cust = selectedCustomerId;
             if (!cust || selectedRecipientIds.length === 0 || !bodyDraft.trim()) return;
             setSending(true);
             setSendError(null);
@@ -240,13 +251,13 @@ export default function CommandCenterShell() {
                 setSending(false);
             }
         },
-        [loadLive, selectedId, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId]
+        [loadLive, selectedCustomerId, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId]
     );
 
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
     const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
+    const queueSections = useMemo(() => visibleCommandCenterQueues(grouped), [grouped]);
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
-    const selected = useMemo(() => conversations.find((c) => c.id === selectedId) ?? null, [conversations, selectedId]);
     const detail: FixtureFamilyDetail | undefined = selected ? FIXTURE_FAMILY_DETAILS[selected.id] : undefined;
     const childNames = useMemo(
         () =>
@@ -333,9 +344,8 @@ export default function CommandCenterShell() {
                         </div>
                     </div>
                     <div className="min-h-0 flex-1 overflow-auto px-2.5 py-2.5">
-                        {OPERATIONAL_QUEUES.map((q) => {
-                            const items = grouped[q.key] ?? [];
-                            if (items.length === 0) return null;
+                        {queueSections.map((q) => {
+                            const items = q.items;
                             const acc = attnAccent(q.key);
                             return (
                                 <div key={q.key} data-cc-queue={q.key} className="mb-3.5">
@@ -409,7 +419,7 @@ export default function CommandCenterShell() {
                             sending={sending}
                             assignBusy={assignBusy}
                             onClaim={(id) => claim(id)}
-                            onAllMessages={() => { const c = selectedId ? FIXTURE_FAMILY_DETAILS[selectedId]?.customerId : undefined; setSelectedThreadId(null); if (c) void loadLive(c, null, false); }}
+                            onAllMessages={() => { setSelectedThreadId(null); if (selectedCustomerId) void loadLive(selectedCustomerId, null, false); }}
                             onOpenThread={(t) => void openThread(t)}
                             onToggleRecipient={(id) => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, id, true))}
                             onSubjectChange={setSubjectDraft}

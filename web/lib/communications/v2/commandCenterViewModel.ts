@@ -26,6 +26,21 @@ export type ConversationSummary = {
     last_message_at?: string | null;
     unread?: number | null;
     family_label?: string | null;
+    /** Resolved household id for live Family Communication Workspace (when thread anchors a family). */
+    customer_id?: string | null;
+};
+
+export const OTHER_QUEUE_KEY = "other" as const;
+
+export const FALLBACK_QUEUE = {
+    key: OTHER_QUEUE_KEY,
+    label: "All conversations",
+} as const;
+
+export type CommandCenterQueueSection = {
+    key: string;
+    label: string;
+    items: ConversationSummary[];
 };
 
 export type CommandCenterFilters = {
@@ -36,17 +51,36 @@ export type CommandCenterFilters = {
     search?: string | null;
 };
 
-/** Group conversations into the operational queues (unknown attention_state → "other"). */
+/** Group conversations into the operational queues (unknown/null attention_state → "other"). */
 export function groupConversationsByQueue(
     conversations: ConversationSummary[]
 ): Record<string, ConversationSummary[]> {
-    const out: Record<string, ConversationSummary[]> = { other: [] };
+    const out: Record<string, ConversationSummary[]> = { [OTHER_QUEUE_KEY]: [] };
     for (const q of OPERATIONAL_QUEUES) out[q.key] = [];
     for (const c of conversations) {
-        const key = typeof c.attention_state === "string" && out[c.attention_state] ? c.attention_state : "other";
+        const key =
+            typeof c.attention_state === "string" && c.attention_state.length > 0 && out[c.attention_state]
+                ? c.attention_state
+                : OTHER_QUEUE_KEY;
         out[key].push(c);
     }
     return out;
+}
+
+/** Operational queue sections plus the unclassified fallback when it has rows. */
+export function visibleCommandCenterQueues(
+    grouped: Record<string, ConversationSummary[]>
+): CommandCenterQueueSection[] {
+    const sections: CommandCenterQueueSection[] = OPERATIONAL_QUEUES.map((q) => ({
+        key: q.key,
+        label: q.label,
+        items: grouped[q.key] ?? [],
+    }));
+    const otherItems = grouped[OTHER_QUEUE_KEY] ?? [];
+    if (otherItems.length > 0) {
+        sections.push({ key: FALLBACK_QUEUE.key, label: FALLBACK_QUEUE.label, items: otherItems });
+    }
+    return sections.filter((s) => s.items.length > 0);
 }
 
 /** Deterministic metrics for the Command Center strip. */
