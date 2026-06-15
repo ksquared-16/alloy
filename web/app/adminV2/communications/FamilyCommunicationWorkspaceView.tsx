@@ -161,14 +161,21 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 const sender = out ? (detail?.owner ?? "Staff") : (detail?.contactName ?? selected.family_label ?? "Family");
                                 return (
                                     <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} data-cc-thread-open={m.thread_id ?? undefined} onClick={() => { if (LIVE_WORKSPACE && m.thread_id) onOpenThread(m.thread_id); }} className={`flex ${out ? "justify-end" : "justify-start"} ${LIVE_WORKSPACE && m.thread_id ? "cursor-pointer" : ""}`}>
-                                        <div className="max-w-[88%]">
+                                        <div className="max-w-[88%] min-w-0">
                                             <div className={`mb-0.5 flex items-center gap-1 text-[10px] text-alloy-midnight/45 ${out ? "justify-end" : ""}`}>
-                                                <Icon className="h-3 w-3" />
+                                                <Icon className="h-3 w-3 shrink-0" />
                                                 <span className="font-semibold text-alloy-midnight/60">{sender}</span>
                                                 <span>· {relTime(m.created_at)}</span>
                                                 {out && statusDisplay(m.status) ? <span className={statusDisplay(m.status)!.cls}>· {statusDisplay(m.status)!.label}</span> : null}
                                             </div>
-                                            <div className={`rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm ${out ? "rounded-tr-sm bg-[#e7f5ef] text-alloy-midnight" : "rounded-tl-sm border border-alloy-stone/15 bg-white text-alloy-midnight"}`}>
+                                            <div
+                                                data-cc-msg-bubble
+                                                className={`max-w-full break-words rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm [overflow-wrap:anywhere] whitespace-pre-wrap ${
+                                                    out
+                                                        ? "rounded-tr-sm bg-[#e7f5ef] text-alloy-midnight"
+                                                        : "rounded-tl-sm border border-alloy-stone/15 bg-white text-alloy-midnight"
+                                                }`}
+                                            >
                                                 {m.body ?? ""}
                                             </div>
                                         </div>

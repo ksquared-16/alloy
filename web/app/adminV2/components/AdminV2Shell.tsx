@@ -7,6 +7,7 @@ import {
 } from "@/lib/adminV2/navigation/adminV2SidebarCollapsed";
 import { prefetchWorkspaceNavTree } from "@/lib/adminV2/navigation/workspaceNavTreeCache";
 import { scheduleInboxWarmLoad } from "@/lib/adminV2/inboxWarmLoadCache";
+import { scheduleCommandCenterPrefetch } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { usePathname } from "next/navigation";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
@@ -113,6 +114,7 @@ export default function AdminV2Shell({
       () => {
         prefetchWorkspaceNavTree();
         scheduleInboxWarmLoad();
+        scheduleCommandCenterPrefetch();
       },
       { idleTimeoutMs: 4500, fallbackMs: 2800 },
     );

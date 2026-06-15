@@ -32,8 +32,21 @@ describe("command center live wiring", () => {
     it("auto-selects the first visible conversation on load", () => {
         expect(shellSrc).toMatch(/resolveCommandCenterSelection/);
         expect(shellSrc).toMatch(/flattenVisibleConversationIds/);
-        expect(shellSrc).toMatch(/Loading first conversation/);
+        expect(shellSrc).toMatch(/data-cc-loading-overlay/);
         expect(shellSrc).not.toMatch(/Select a family from the queue/);
+    });
+    it("prefetches conversations from shell mount and inbox open", () => {
+        const shell = readFileSync(join(process.cwd(), "app", "adminV2", "components", "AdminV2Shell.tsx"), "utf8");
+        const nav = readFileSync(join(process.cwd(), "app", "adminV2", "components", "TopNavBar.tsx"), "utf8");
+        expect(shell).toMatch(/scheduleCommandCenterPrefetch/);
+        expect(nav).toMatch(/prefetchCommandCenterConversations/);
+        expect(shellSrc).toMatch(/commandCenterPrefetchCache/);
+    });
+    it("wraps timeline message bodies inside bubble borders", () => {
+        expect(workspaceSrc).toMatch(/data-cc-msg-bubble/);
+        expect(workspaceSrc).toMatch(/\[overflow-wrap:anywhere\]/);
+        expect(workspaceSrc).toMatch(/whitespace-pre-wrap/);
+        expect(workspaceSrc).toMatch(/break-words/);
     });
     it("wires claim/assign via the dark assign route", () => {
         expect(src).toMatch(/data-cc-claim/);

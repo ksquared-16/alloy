@@ -9,9 +9,23 @@ import {
     visibleCommandCenterQueues,
     flattenVisibleConversationIds,
     resolveCommandCenterSelection,
+    conversationDisplayTitle,
+    conversationDisplayRecipient,
+    conversationDisplaySubtitle,
+    conversationUnreadCount,
+    conversationQueueStatusPill,
+    queueStatusPillClass,
+    OTHER_QUEUE_KEY,
+    FALLBACK_QUEUE_EXPLANATION,
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
+import {
+    getCommandCenterCacheSnapshot,
+    prefetchCommandCenterConversations,
+    subscribeCommandCenterCache,
+} from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import FamilyCommunicationWorkspaceView from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
@@ -47,12 +61,15 @@ type TimelineMessage = {
     status?: string | null;
 };
 
-const slaChipClass = (s: string | null | undefined): string =>
-    s === "overdue" ? "bg-alloy-ember text-white shadow-sm"
-    : s === "due" ? "border border-[#e6c98a] bg-[#fbf6ea] text-[#9a6b16]"
-    : "border border-[#7fc9b6] bg-[#edf7f2] text-[#0f6b4a]";
-const slaChipLabel = (s: string | null | undefined): string =>
-    s === "overdue" ? "SLA overdue" : s === "due" ? "Due soon" : "On track";
+function initialConversations(): ConversationSummary[] {
+    if (COMMS_FIXTURES_ENABLED) return FIXTURE_CONVERSATIONS;
+    return getCommandCenterCacheSnapshot()?.conversations ?? [];
+}
+
+function initialLoading(): boolean {
+    if (COMMS_FIXTURES_ENABLED) return false;
+    return !getCommandCenterCacheSnapshot();
+}
 
 const attnAccent = (a: string | null | undefined): { rail: string; tint: string; dot: string } => {
     switch (a) {
@@ -88,10 +105,8 @@ function mapLiveEvents(events: FamilyCommunicationWorkspaceVM["timelineEvents"])
 }
 
 export default function CommandCenterShell() {
-    const [conversations, setConversations] = useState<ConversationSummary[]>(
-        COMMS_FIXTURES_ENABLED ? FIXTURE_CONVERSATIONS : []
-    );
-    const [loading, setLoading] = useState(!COMMS_FIXTURES_ENABLED);
+    const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
+    const [loading, setLoading] = useState(initialLoading);
     const [error, setError] = useState<string | null>(null);
     const [filters, setFilters] = useState<CommandCenterFilters>({});
     const [selectedId, setSelectedId] = useState<string | null>(
@@ -129,24 +144,34 @@ export default function CommandCenterShell() {
         }
     }, []);
 
-    const loadConversations = useCallback(async () => {
+    const loadConversations = useCallback(async (opts?: { background?: boolean }) => {
         if (COMMS_FIXTURES_ENABLED) return;
-        setLoading(true);
-        setError(null);
+        if (!opts?.background) {
+            setLoading(true);
+            setError(null);
+        }
         try {
-            const res = await fetch("/api/admin/communications/conversations");
-            if (!res.ok) throw new Error(`conversations ${res.status}`);
-            const data = (await res.json()) as { conversations?: ConversationSummary[] };
-            setConversations(data.conversations ?? []);
+            const snap = await prefetchCommandCenterConversations();
+            setConversations(snap.conversations);
+            if (snap.error) setError(snap.error);
+            else setError(null);
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load conversations");
         } finally {
-            setLoading(false);
+            if (!opts?.background) setLoading(false);
         }
     }, []);
 
     useEffect(() => {
-        void loadConversations();
+        if (COMMS_FIXTURES_ENABLED) return;
+        return subscribeCommandCenterCache(() => {
+            const snap = getCommandCenterCacheSnapshot();
+            if (snap) setConversations(snap.conversations);
+        });
+    }, []);
+
+    useEffect(() => {
+        void loadConversations({ background: !!getCommandCenterCacheSnapshot() });
         if (LIVE_WORKSPACE && COMMS_FIXTURES_ENABLED) {
             const c = FIXTURE_FAMILY_DETAILS[FIXTURE_CONVERSATIONS[0]?.id ?? ""]?.customerId;
             if (c) void loadLive(c, null, true);
@@ -314,8 +339,26 @@ export default function CommandCenterShell() {
         { label: "Response rate", value: responseRate, dot: "bg-[#5b9aa0]", tone: "text-alloy-midnight", status: "replied share", statusTone: "text-alloy-midnight/45" },
     ];
 
+    const revealReady =
+        COMMS_FIXTURES_ENABLED ||
+        (!loading && !hydratingWorkspace && (filtered.length === 0 || selected != null));
+
     return (
-        <div data-cc-shell="communications-command-center" className="flex min-h-0 flex-1 flex-col gap-2.5 bg-[#f2f3ef] p-2.5">
+        <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-2.5 bg-[#f2f3ef] p-2.5">
+            {!revealReady ? (
+                <div
+                    data-cc-loading-overlay
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-[#f2f3ef]/95 backdrop-blur-[1px]"
+                    aria-busy="true"
+                    aria-label="Loading Command Center"
+                >
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#00A283]/25 border-t-[#00A283]" />
+                    <div className="text-center">
+                        <p className="text-sm font-semibold text-alloy-midnight">Loading Command Center</p>
+                        <p className="mt-1 max-w-xs text-xs text-alloy-midnight/50">Preparing queue and first conversation…</p>
+                    </div>
+                </div>
+            ) : null}
             {/* KPI strip — max 4, compact */}
             <div data-cc-metrics className="flex flex-wrap gap-2">
                 {kpis.map((k) => (
@@ -369,6 +412,7 @@ export default function CommandCenterShell() {
                         {queueSections.map((q) => {
                             const items = q.items;
                             const acc = attnAccent(q.key);
+                            const isFallback = q.key === OTHER_QUEUE_KEY;
                             return (
                                 <div key={q.key} data-cc-queue={q.key} className="mb-3.5">
                                     <div className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
@@ -376,11 +420,22 @@ export default function CommandCenterShell() {
                                         <span>{q.label}</span>
                                         <span className="ml-auto tabular-nums">{items.length}</span>
                                     </div>
+                                    {isFallback ? (
+                                        <p className="mb-2 px-0.5 text-[10px] leading-relaxed text-alloy-midnight/45">{FALLBACK_QUEUE_EXPLANATION}</p>
+                                    ) : null}
                                     <ul className="space-y-1.5">
                                         {items.map((c) => {
                                             const d = FIXTURE_FAMILY_DETAILS[c.id];
                                             const isSel = selectedId === c.id;
                                             const a = attnAccent(c.attention_state);
+                                            const title = d ? (c.family_label ?? "Family") : conversationDisplayTitle(c);
+                                            const subtitle = d ? `${d.children} · ${d.program}` : conversationDisplaySubtitle(c);
+                                            const recipient = d ? null : conversationDisplayRecipient(c);
+                                            const preview = d ? null : (c.last_message_preview ?? null);
+                                            const unread = conversationUnreadCount(c);
+                                            const statusPill = conversationQueueStatusPill(c);
+                                            const activityAt = c.last_activity_at ?? c.last_message_at;
+                                            const channelLabel = (c.channel ?? "").toLowerCase() === "sms" ? "SMS" : (c.channel ?? "").toLowerCase() === "email" ? "Email" : (c.channel ?? "");
                                             return (
                                                 <li key={c.id}>
                                                     <button
@@ -393,17 +448,26 @@ export default function CommandCenterShell() {
                                                                 : `border-alloy-stone/15 ${a.rail} ${a.tint} hover:border-alloy-stone/30 hover:shadow-sm`
                                                         }`}
                                                     >
-                                                        <div className="flex items-center justify-between gap-2">
-                                                            <span className="truncate text-[13px] font-semibold leading-tight text-alloy-midnight">{c.family_label ?? "Family"}</span>
-                                                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${slaChipClass(c.sla_state)}`}>{slaChipLabel(c.sla_state)}</span>
+                                                        <div className="flex items-start justify-between gap-2">
+                                                            <span className="min-w-0 flex-1 truncate text-[13px] font-semibold leading-tight text-alloy-midnight">{title}</span>
+                                                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold ${queueStatusPillClass(statusPill.tone)}`}>{statusPill.label}</span>
                                                         </div>
-                                                        <div className="mt-1 truncate text-[11px] text-alloy-midnight/55">{d ? `${d.children} · ${d.program}` : (c.channel ?? "")}</div>
+                                                        {recipient ? (
+                                                            <div className="mt-0.5 truncate text-[10px] text-alloy-midnight/45">{recipient}</div>
+                                                        ) : null}
+                                                        <div className="mt-1 truncate text-[11px] text-alloy-midnight/55">{subtitle}</div>
+                                                        {preview ? (
+                                                            <div className="mt-1 line-clamp-2 text-[10px] leading-snug text-alloy-midnight/50">{preview}</div>
+                                                        ) : null}
                                                         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-alloy-midnight/45">
                                                             <span className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${a.dot}`} />
-                                                            <span className="truncate">{d ? d.stage : ""}</span>
+                                                            <span className="truncate">
+                                                                {[channelLabel, activityAt ? relTime(activityAt) : null].filter(Boolean).join(" · ")}
+                                                            </span>
                                                             <span className="ml-auto flex shrink-0 items-center gap-1.5">
-                                                                <span className="truncate text-alloy-midnight/50">{d ? d.owner : (c.assignment_state ?? "")}</span>
-                                                                {c.unread ? <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00A283] px-1 text-[9px] font-bold text-white shadow-sm">{c.unread}</span> : null}
+                                                                {unread ? (
+                                                                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00A283] px-1 text-[9px] font-bold text-white shadow-sm">{unread}</span>
+                                                                ) : null}
                                                             </span>
                                                         </div>
                                                     </button>

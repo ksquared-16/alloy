@@ -99,3 +99,25 @@ describe("filters", () => {
         expect(applyQueueFilters(C, { assignmentState: "assigned" }).map((c) => c.id)).toEqual(["2", "3"]);
     });
 });
+
+describe("queue card presentation", () => {
+    it("prefers household label over raw email for title", async () => {
+        const { conversationDisplayTitle } = await import("@/lib/communications/v2/commandCenterViewModel");
+        expect(
+            conversationDisplayTitle({
+                id: "1",
+                family_label: "user@example.com",
+                primary_contact_name: "Jamie Rivera",
+            })
+        ).toBe("Jamie Rivera");
+        expect(conversationDisplayTitle({ id: "2", family_label: "Rivera Family" })).toBe("Rivera Family");
+        expect(conversationDisplayTitle({ id: "3", family_label: "unknown@example.com" })).toBe("Family");
+    });
+
+    it("labels unclassified threads without faking on track", async () => {
+        const { conversationQueueStatusPill } = await import("@/lib/communications/v2/commandCenterViewModel");
+        expect(conversationQueueStatusPill({ id: "1", attention_state: null, sla_state: null }).label).toBe("Unclassified");
+        expect(conversationQueueStatusPill({ id: "2", attention_state: "awaiting_parent_reply" }).label).toBe("Needs reply");
+        expect(conversationQueueStatusPill({ id: "3", attention_state: "needs_follow_up", sla_state: "on_track" }).label).toBe("Follow up");
+    });
+});

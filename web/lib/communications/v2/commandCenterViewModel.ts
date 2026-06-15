@@ -24,11 +24,23 @@ export type ConversationSummary = {
     location_id?: string | null;
     sla_state?: string | null;
     last_message_at?: string | null;
+    last_activity_at?: string | null;
     unread?: number | null;
+    unread_count?: number | null;
     family_label?: string | null;
+    recipient_key?: string | null;
+    last_message_preview?: string | null;
+    last_message_direction?: string | null;
+    primary_contact_name?: string | null;
+    child_names?: string[] | null;
+    stage_label?: string | null;
+    program_label?: string | null;
     /** Resolved household id for live Family Communication Workspace (when thread anchors a family). */
     customer_id?: string | null;
 };
+
+export const FALLBACK_QUEUE_EXPLANATION =
+    "These are live communication threads that have not been classified into an operational queue yet.";
 
 export const OTHER_QUEUE_KEY = "other" as const;
 
@@ -98,6 +110,78 @@ export function resolveCommandCenterSelection(
     return visibleIds[0] ?? null;
 }
 
+export function conversationDisplayTitle(c: ConversationSummary): string {
+    const label = (c.family_label ?? "").trim();
+    if (label && !label.includes("@")) return label;
+    const contact = (c.primary_contact_name ?? "").trim();
+    if (contact) return contact;
+    return "Family";
+}
+
+export function conversationDisplayRecipient(c: ConversationSummary): string | null {
+    const recipient = (c.recipient_key ?? "").trim();
+    const title = conversationDisplayTitle(c);
+    if (!recipient || recipient.toLowerCase() === title.toLowerCase()) return null;
+    return recipient;
+}
+
+export function conversationChannelLabel(channel: string | null | undefined): string {
+    const c = (channel ?? "").trim().toLowerCase();
+    if (c === "email") return "Email";
+    if (c === "sms") return "SMS";
+    if (c === "in_app") return "In-app";
+    return c ? c.charAt(0).toUpperCase() + c.slice(1) : "";
+}
+
+export function conversationDisplaySubtitle(c: ConversationSummary): string {
+    const parts: string[] = [];
+    if (c.child_names?.length) parts.push(c.child_names.join(", "));
+    if (c.stage_label) parts.push(c.stage_label);
+    else if (c.program_label) parts.push(c.program_label);
+    if (parts.length > 0) return parts.join(" · ");
+    return conversationChannelLabel(c.channel);
+}
+
+export function conversationUnreadCount(c: ConversationSummary): number {
+    const n = c.unread_count ?? c.unread;
+    return typeof n === "number" && n > 0 ? n : 0;
+}
+
+export function isUnclassifiedConversation(c: ConversationSummary): boolean {
+    const attn = (c.attention_state ?? "").trim();
+    if (!attn) return true;
+    return !OPERATIONAL_QUEUES.some((q) => q.key === attn);
+}
+
+export type QueueStatusPill = { label: string; tone: "neutral" | "warn" | "danger" | "brand" };
+
+/** Status pill from real attention/SLA fields — never fake "On track" for unclassified rows. */
+export function conversationQueueStatusPill(c: ConversationSummary): QueueStatusPill {
+    const sla = (c.sla_state ?? "").trim().toLowerCase();
+    if (sla === "overdue") return { label: "Overdue", tone: "danger" };
+    if (sla === "due" || sla === "first_response_due") return { label: "Due soon", tone: "warn" };
+    const attn = (c.attention_state ?? "").trim();
+    if (attn === "awaiting_parent_reply") return { label: "Needs reply", tone: "warn" };
+    if (attn === "needs_follow_up") return { label: "Follow up", tone: "warn" };
+    if (attn === "documents_missing") return { label: "Docs missing", tone: "warn" };
+    if (isUnclassifiedConversation(c)) return { label: "Unclassified", tone: "neutral" };
+    if (sla === "on_track") return { label: "On track", tone: "brand" };
+    return { label: "Active", tone: "neutral" };
+}
+
+export function queueStatusPillClass(tone: QueueStatusPill["tone"]): string {
+    switch (tone) {
+        case "danger":
+            return "bg-alloy-ember text-white";
+        case "warn":
+            return "border border-[#e6c98a] bg-[#fbf6ea] text-[#9a6b16]";
+        case "brand":
+            return "border border-[#7fc9b6] bg-[#edf7f2] text-[#0f6b4a]";
+        default:
+            return "border border-alloy-stone/20 bg-alloy-stone/[0.06] text-alloy-midnight/55";
+    }
+}
+
 /** Deterministic metrics for the Command Center strip. */
 export function computeCommandCenterMetrics(conversations: ConversationSummary[]): {
     total: number;
@@ -134,7 +218,20 @@ export function applyQueueFilters(
         if (filters.assignmentState && (c.assignment_state ?? "unassigned") !== filters.assignmentState) return false;
         if (filters.locationId && c.location_id !== filters.locationId) return false;
         if (filters.ownerUserId && c.assigned_user_id !== filters.ownerUserId) return false;
-        if (search && !(c.family_label ?? "").toLowerCase().includes(search)) return false;
+        if (search) {
+            const haystack = [
+                c.family_label,
+                c.recipient_key,
+                c.primary_contact_name,
+                c.last_message_preview,
+                c.stage_label,
+                ...(c.child_names ?? []),
+            ]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase();
+            if (!haystack.includes(search)) return false;
+        }
         return true;
     });
 }

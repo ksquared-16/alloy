@@ -18,6 +18,8 @@ import TopNavNotificationsLink from "@/app/adminV2/components/TopNavNotification
 import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import InboxModal from "@/app/adminV2/components/InboxModal";
+import { prefetchCommandCenterConversations } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import {
     ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
@@ -134,7 +136,12 @@ export default function TopNavBar() {
       prefetchWorkspaceOperationalTasks("open");
       setTasksModalOpen(true);
     };
-    const onOpenInbox = () => setInboxModalOpen(true);
+    const onOpenInbox = () => {
+      if (isCommsV2FlagEnabled("comms_v2_command_center")) {
+        void prefetchCommandCenterConversations();
+      }
+      setInboxModalOpen(true);
+    };
     window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
     window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
     return () => {
