@@ -11,6 +11,16 @@
 -- - Status duplicate removed from body via `suppress_body_status` (UI reads this flag)
 -- =============================================================================
 
+-- Guard: public.record_drawer_layouts is first created in a later migration
+-- (20260430140000). On a fresh `supabase db reset` it does not exist yet, so this
+-- block no-ops (childcare orgs don't exist on a fresh DB either -> 0 rows regardless).
+DO $$
+BEGIN
+  IF to_regclass('public.record_drawer_layouts') IS NULL THEN
+    RAISE NOTICE 'record_drawer_layouts absent; skipping childcare drawer layout update (table created later in 20260430140000).';
+    RETURN;
+  END IF;
+
 WITH childcare_orgs AS (
     SELECT o.id AS org_id
     FROM public.orgs o
@@ -114,3 +124,4 @@ WHERE r.org_id = c.org_id
   AND r.surface = 'drawer'
   AND r.key = 'default'
   AND COALESCE(r.is_active, true) = true;
+END $$;
