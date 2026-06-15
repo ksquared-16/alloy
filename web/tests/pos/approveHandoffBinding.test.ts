@@ -4,6 +4,8 @@ import { extractBoundPerson } from "@/lib/pos/processingCase/approveHandoff";
 /** Minimal POS-bound schema: email/first/last mapped to person; one unmapped field. */
 const schema = {
     schema_version: 1,
+    title: "Binding test form",
+    sections: [],
     fields: [
         { id: "f_email", label: "Email", type: "text", field_source: { entity_type: "person", field_key: "email" } },
         { id: "f_first", label: "First name", type: "text", field_source: { entity_type: "person", field_key: "first_name" } },
@@ -24,7 +26,12 @@ describe("extractBoundPerson — meaning layer, not guessing", () => {
     });
 
     it("does NOT guess an email from an unmapped field when there is no person.email binding", () => {
-        const noEmail = { schema_version: 1, fields: [{ id: "f_note", label: "Notes", type: "text" }] };
+        const noEmail = {
+            schema_version: 1,
+            title: "No email form",
+            sections: [],
+            fields: [{ id: "f_note", label: "Notes", type: "text" }],
+        };
         const r = extractBoundPerson(noEmail, { f_note: "reach me at someone@example.com" });
         expect(r.hasEmailBinding).toBe(false);
         expect(r.email).toBeNull();
