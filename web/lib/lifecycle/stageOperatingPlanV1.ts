@@ -24,6 +24,8 @@ export type StageWorkTemplateV1 = {
     required: boolean;
     due_policy: StageWorkDuePolicy;
     owner_strategy: StageWorkOwnerStrategy;
+    /** When true, drives primary Work Intent runtime for this stage. Only one should be set. */
+    primary?: boolean;
     /** Optional link to platform work definition catalog key. */
     work_definition_key?: string | null;
 };
@@ -31,6 +33,8 @@ export type StageWorkTemplateV1 = {
 export type StageCompletionOutcomeV1 = {
     outcome_key: string;
     label: string;
+    /** When set, outcome is scoped to a work item in the operating plan editor. */
+    work_template_key?: string | null;
     /** When true, counts toward successful-progress SLA rules. */
     successful?: boolean;
 };
@@ -63,15 +67,30 @@ export type StageOutcomeRuleV1 = {
 };
 
 export type StageAttentionRuleKind =
+    | "work_overdue"
+    | "stage_age_exceeded"
+    | "missing_required_fields"
+    | "no_contact_attempt"
+    | "waiting_on_family"
+    | "waiting_on_provider"
+    /** @deprecated Prefer no_contact_attempt */
     | "tasks_without_success"
+    /** @deprecated Prefer stage_age_exceeded */
     | "days_without_success"
-    | "required_work_overdue"
-    | "missing_required_fields";
+    /** @deprecated Prefer work_overdue */
+    | "required_work_overdue";
+
+export type StageAttentionSeverity = "low" | "medium" | "high";
 
 export type StageAttentionRuleV1 = {
     rule_key: string;
     kind: StageAttentionRuleKind;
+    /** Operator label shown in Business Process editor. */
+    label?: string;
+    severity?: StageAttentionSeverity;
     threshold?: number;
+    /** Optional work item scope for work_overdue rules. */
+    template_key?: string | null;
     targets: StageOutcomeRuleTargetV1[];
 };
 
@@ -100,11 +119,17 @@ const TARGET_KINDS = new Set<StageOutcomeRuleTargetKind>([
     "no_movement",
 ]);
 const ATTENTION_KINDS = new Set<StageAttentionRuleKind>([
+    "work_overdue",
+    "stage_age_exceeded",
+    "missing_required_fields",
+    "no_contact_attempt",
+    "waiting_on_family",
+    "waiting_on_provider",
     "tasks_without_success",
     "days_without_success",
     "required_work_overdue",
-    "missing_required_fields",
 ]);
+const ATTENTION_SEVERITIES = new Set<StageAttentionSeverity>(["low", "medium", "high"]);
 const CANDIDATE_STATUSES = new Set<string>(["active", "paused", "withdrawn", "placed"]);
 
 function trimNonEmpty(value: unknown): string | null {
@@ -147,6 +172,7 @@ function parseWorkTemplate(raw: unknown): StageWorkTemplateV1 | null {
     if (desc) tpl.description = desc;
     const wdk = trimNonEmpty(o.work_definition_key);
     if (wdk) tpl.work_definition_key = wdk;
+    if (o.primary === true) tpl.primary = true;
     return tpl;
 }
 
@@ -159,6 +185,7 @@ function parseOutcome(raw: unknown): StageCompletionOutcomeV1 | null {
     return {
         outcome_key,
         label,
+        ...(trimNonEmpty(o.work_template_key) ? { work_template_key: trimNonEmpty(o.work_template_key) } : {}),
         ...(o.successful === true ? { successful: true } : {}),
     };
 }
@@ -209,21 +236,29 @@ function parseAttentionRule(raw: unknown): StageAttentionRuleV1 | null {
     const rule_key = trimNonEmpty(o.rule_key);
     const kind = trimNonEmpty(o.kind);
     if (!rule_key || !kind || !ATTENTION_KINDS.has(kind as StageAttentionRuleKind)) return null;
-    if (!Array.isArray(o.targets)) return null;
     const targets: StageOutcomeRuleTargetV1[] = [];
-    for (const t of o.targets) {
-        const parsed = parseTarget(t);
-        if (parsed) targets.push(parsed);
+    if (Array.isArray(o.targets)) {
+        for (const t of o.targets) {
+            const parsed = parseTarget(t);
+            if (parsed) targets.push(parsed);
+        }
     }
-    if (!targets.length) return null;
     const rule: StageAttentionRuleV1 = {
         rule_key,
         kind: kind as StageAttentionRuleKind,
         targets,
     };
+    const label = trimNonEmpty(o.label);
+    if (label) rule.label = label;
+    const severity = trimNonEmpty(o.severity);
+    if (severity && ATTENTION_SEVERITIES.has(severity as StageAttentionSeverity)) {
+        rule.severity = severity as StageAttentionSeverity;
+    }
     if (typeof o.threshold === "number" && Number.isFinite(o.threshold)) {
         rule.threshold = Math.max(0, Math.floor(o.threshold));
     }
+    const template_key = trimNonEmpty(o.template_key);
+    if (template_key) rule.template_key = template_key;
     return rule;
 }
 

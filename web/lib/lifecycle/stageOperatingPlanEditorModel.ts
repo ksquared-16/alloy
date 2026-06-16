@@ -8,6 +8,7 @@ import type {
     StageWorkTemplateV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { normalizeOperatingPlanDraftForPersist } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 
 export type StageOperatingPlanEditorDraft = {
@@ -54,17 +55,19 @@ export function stageOperatingPlanDraftToPersisted(
     const sk = stageKey.trim();
     if (!sk) return null;
 
+    const normalized = normalizeOperatingPlanDraftForPersist(draft);
+
     const plan: StageOperatingPlanV1 = {
         version: 1,
         lifecycle_key: lifecycleKey,
         stage_key: sk,
-        journey_segment: draft.journey_segment,
-        work_templates: draft.work_templates.map((t) => structuredClone(t)),
-        outcomes: draft.outcomes.map((o) => structuredClone(o)),
-        outcome_rules: draft.outcome_rules.map((r) => structuredClone(r)),
-        attention_rules: draft.attention_rules.map((r) => structuredClone(r)),
+        journey_segment: normalized.journey_segment,
+        work_templates: normalized.work_templates.map((t) => structuredClone(t)),
+        outcomes: normalized.outcomes.map((o) => structuredClone(o)),
+        outcome_rules: normalized.outcome_rules.map((r) => structuredClone(r)),
+        attention_rules: normalized.attention_rules.map((r) => structuredClone(r)),
     };
-    const purpose = draft.purpose.trim();
+    const purpose = normalized.purpose.trim();
     if (purpose) plan.purpose = purpose;
 
     return parseStageOperatingPlanV1(plan);
@@ -90,9 +93,15 @@ export function newWorkTemplateDraft(index: number): StageWorkTemplateV1 {
     };
 }
 
-export function newOutcomeDraft(index: number): StageCompletionOutcomeV1 {
+export function newOutcomeDraft(
+    index: number,
+    options?: { work_template_key?: string | null },
+): StageCompletionOutcomeV1 {
     return {
         outcome_key: `outcome_${index + 1}`,
         label: `Outcome ${index + 1}`,
+        ...(options?.work_template_key?.trim() ?
+            { work_template_key: options.work_template_key.trim() }
+        :   {}),
     };
 }

@@ -169,9 +169,6 @@ export async function projectWorkIntentRuntime(params: {
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
 
-    const primaryIntent = resolvePrimaryWorkIntentForStage(stageKey);
-    if (!primaryIntent) return null;
-
     const departmentMetadata =
         params.departmentMetadata != null &&
         typeof params.departmentMetadata === "object" &&
@@ -183,6 +180,17 @@ export async function projectWorkIntentRuntime(params: {
     const process = activeLifecycleProcess(builder);
     if (!process?.is_active) return null;
 
+    const stageRecord = process.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
+    const explicitOperatingPlan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
+    const plan =
+        explicitOperatingPlan ??
+        (process.key === ENROLLMENT_PROCESS_KEY ?
+            defaultStageOperatingPlanForEnrollmentStage(stageKey)
+        :   null);
+
+    const primaryIntent = resolvePrimaryWorkIntentForStage(stageKey, explicitOperatingPlan);
+    if (!primaryIntent) return null;
+
     let departmentId = trimOrNull(params.departmentId);
     if (!departmentId) {
         departmentId = await resolveEnrollmentDepartmentForOpportunity({
@@ -191,15 +199,7 @@ export async function projectWorkIntentRuntime(params: {
             opportunityId: params.opportunityId,
         });
     }
-    if (!departmentId) return null;
-
-    const stageRecord = process.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
-    const plan =
-        resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey) ??
-        (process.key === ENROLLMENT_PROCESS_KEY ?
-            defaultStageOperatingPlanForEnrollmentStage(stageKey)
-        :   null);
-    if (!plan) return null;
+    if (!departmentId || !plan) return null;
 
     const journeySegment = plan.journey_segment ?? "family";
     const outcomes = plan.outcomes.map((o) => ({

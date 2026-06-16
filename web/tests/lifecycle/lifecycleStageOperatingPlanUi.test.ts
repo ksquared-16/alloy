@@ -12,11 +12,14 @@ function read(rel: string): string {
 }
 
 describe("Lifecycle stage operating plan UI", () => {
-    it("stage workspace exposes Expected Work section", () => {
+    it("stage workspace exposes operating plan editor with work items", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
-        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_EXPECTED_WORK");
+        expect(workspace).toContain("BUSINESS_PROCESS_SECTION_OPERATING_PLAN");
         expect(workspace).toContain("LifecycleStageOperatingPlanEditor");
-        expect(workspace).toContain('id="work_plan"');
+        expect(workspace).toContain('id="operating_plan"');
+        const editor = read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx");
+        expect(editor).toContain("Work items");
+        expect(editor).toContain("LifecycleStageAttentionRulesEditor");
     });
 
     it("unified save includes stage_operating_plan_v1 when dirty", () => {

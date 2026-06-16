@@ -5,11 +5,12 @@ import {
 } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 
 describe("resolvePrimaryWorkIntentForStage", () => {
-    it("maps lead to Make Contact / contact_family", () => {
+    it("maps lead to Make Contact / contact_family when no operating plan", () => {
         expect(resolvePrimaryWorkIntentForStage("lead")).toMatchObject({
             work_intent_key: "make_contact",
             label: "Make Contact",
             work_definition_key: "contact_family",
+            provenance: "legacy_stage_map",
         });
     });
 

@@ -122,7 +122,9 @@ describe("Configuration Workspace V2 — workflow QA readiness", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
         expect(workspace).toContain('id="operating_plan"');
         expect(workspace).toContain("BUSINESS_PROCESS_SECTION_OPERATING_PLAN");
-        expect(workspace).toContain("LifecycleStageAttentionSection");
+        expect(read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx")).toContain(
+            "LifecycleStageAttentionRulesEditor",
+        );
         expect(workspace).not.toContain('id="work_plan"');
         expect(workspace).not.toContain('id="attention"');
     });

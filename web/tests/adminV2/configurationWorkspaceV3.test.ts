@@ -68,7 +68,9 @@ describe("Configuration Workspace V3 — enrollment workflow readiness", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
         expect(workspace).toContain('id="operating_plan"');
         expect(workspace).toContain("LifecycleStageOperatingPlanEditor");
-        expect(workspace).toContain("LifecycleStageAttentionSection");
+        expect(read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx")).toContain(
+            "LifecycleStageAttentionRulesEditor",
+        );
         expect(workspace).toContain("defaultOpen");
     });
 

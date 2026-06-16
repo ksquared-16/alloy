@@ -10,14 +10,10 @@ import {
 } from "react";
 import {
     BUSINESS_PROCESS_SAVE_STAGE,
-    BUSINESS_PROCESS_SECTION_ATTENTION,
-    BUSINESS_PROCESS_SECTION_ATTENTION_SUMMARY,
-    BUSINESS_PROCESS_SECTION_EXPECTED_WORK,
-    BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY,
-    BUSINESS_PROCESS_SECTION_OPERATING_PLAN,
-    BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY,
     BUSINESS_PROCESS_SECTION_MEMBERSHIP,
     BUSINESS_PROCESS_SECTION_MEMBERSHIP_SUMMARY,
+    BUSINESS_PROCESS_SECTION_OPERATING_PLAN,
+    BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY,
     BUSINESS_PROCESS_SECTION_READY,
     BUSINESS_PROCESS_SECTION_READY_SUMMARY,
     BUSINESS_PROCESS_SECTION_REQUIRED,
@@ -38,7 +34,6 @@ import LifecycleStageFieldRequirementsEditor, {
 import LifecycleStageQueueMembershipEditor, {
     type LifecycleStageQueueMembershipEditorHandle,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageQueueMembershipEditor";
-import LifecycleStageAttentionSection from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionSection";
 import LifecycleStageOperatingPlanEditor, {
     type LifecycleStageOperatingPlanEditorHandle,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor";
@@ -401,31 +396,13 @@ export default function LifecycleStageWorkspace({
                     summary={BUSINESS_PROCESS_SECTION_OPERATING_PLAN_SUMMARY}
                 >
                     {stageKey.trim() ?
-                        <div className="space-y-4">
-                            <div>
-                                <h5 className="mb-1 text-[11px] font-semibold text-alloy-midnight/75">
-                                    {BUSINESS_PROCESS_SECTION_EXPECTED_WORK}
-                                </h5>
-                                <p className="mb-2 text-[11px] text-alloy-midnight/50">
-                                    {BUSINESS_PROCESS_SECTION_EXPECTED_WORK_SUMMARY}
-                                </p>
-                                <LifecycleStageOperatingPlanEditor
-                                    ref={operatingPlanRef}
-                                    stageKey={stageKey}
-                                    savedPlan={bootstrap?.stage_operating_plan ?? null}
-                                    onDirtyChange={setOperatingPlanDirty}
-                                />
-                            </div>
-                            <div className="border-t border-alloy-forge/8 pt-3">
-                                <h5 className="mb-1 text-[11px] font-semibold text-alloy-midnight/75">
-                                    {BUSINESS_PROCESS_SECTION_ATTENTION}
-                                </h5>
-                                <LifecycleStageAttentionSection
-                                    stageLabel={stageLabel || stageKey}
-                                    operatingPlan={bootstrap?.stage_operating_plan ?? null}
-                                />
-                            </div>
-                        </div>
+                        <LifecycleStageOperatingPlanEditor
+                            ref={operatingPlanRef}
+                            stageKey={stageKey}
+                            stageLabel={stageLabel}
+                            savedPlan={bootstrap?.stage_operating_plan ?? null}
+                            onDirtyChange={setOperatingPlanDirty}
+                        />
                     :   <p className="text-xs text-alloy-midnight/50">Select a stage first.</p>}
                 </StageSection>
 

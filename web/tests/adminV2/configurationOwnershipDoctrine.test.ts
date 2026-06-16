@@ -33,7 +33,9 @@ describe("configuration ownership doctrine — drift prevention", () => {
         expect(workspace).toContain("stage-membership-included-statuses");
         expect(workspace).toContain("STAGE_MEMBERSHIP_INCLUDED_STATUSES_LABEL");
         expect(workspace).toContain('id="operating_plan"');
-        expect(workspace).toContain("LifecycleStageAttentionSection");
+        expect(read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx")).toContain(
+            "LifecycleStageAttentionRulesEditor",
+        );
         expect(workspace).not.toContain('id="actions"');
         expect(workspace).not.toContain("lifecycle-stage-section-queue-advanced");
         expect(workspace).not.toContain("BUSINESS_PROCESS_SECTION_ACTIONS");

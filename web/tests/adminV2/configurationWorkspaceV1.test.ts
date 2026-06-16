@@ -76,7 +76,9 @@ describe("Configuration Workspace V1", () => {
 
     it("Business Processes stage workspace owns Operating Plan with attention", () => {
         const workspace = read("components/adminV2/settings/lifecycle/LifecycleStageWorkspace.tsx");
-        expect(workspace).toContain("LifecycleStageAttentionSection");
+        expect(read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx")).toContain(
+            "LifecycleStageAttentionRulesEditor",
+        );
         expect(workspace).toContain('id="operating_plan"');
         expect(workspace).toContain("BUSINESS_PROCESS_SECTION_OPERATING_PLAN");
     });

@@ -115,7 +115,9 @@ describe("Business Processes Settings V2 — operator UI", () => {
         expect(workspace).toContain("BUSINESS_PROCESS_SECTION_READY");
         expect(workspace).toContain('id="operating_plan"');
         expect(workspace).toContain("lifecycle-stage-section-${id}");
-        expect(workspace).toContain("LifecycleStageAttentionSection");
+        expect(read("components/adminV2/settings/lifecycle/LifecycleStageOperatingPlanEditor.tsx")).toContain(
+            "LifecycleStageAttentionRulesEditor",
+        );
 
         expect(workspace).not.toContain("BUSINESS_PROCESS_SECTION_ACTIONS");
         expect(workspace).not.toContain("BUSINESS_PROCESS_SECTION_QUEUE_ADVANCED");

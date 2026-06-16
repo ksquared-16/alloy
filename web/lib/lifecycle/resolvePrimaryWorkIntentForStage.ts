@@ -1,17 +1,22 @@
 /**
- * Explicit V1 primary work intent per builder stage — does not iterate work_templates.
+ * Explicit V1 primary work intent per builder stage.
+ * When a saved operating plan exists, primary work template drives runtime (with legacy fallback).
  */
 
-import type { StageWorkDuePolicy } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { StageOperatingPlanV1, StageWorkDuePolicy, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { resolveEffectivePrimaryWorkTemplate } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 
 export type PrimaryWorkIntentV1 = {
     work_intent_key: string;
     label: string;
     work_definition_key: string;
     due_policy: StageWorkDuePolicy;
+    /** Set when resolved from operating plan work template. */
+    template_key?: string;
+    provenance: "operating_plan" | "legacy_stage_map";
 };
 
-const PRIMARY_WORK_INTENT_BY_STAGE: Record<string, PrimaryWorkIntentV1> = {
+const PRIMARY_WORK_INTENT_BY_STAGE: Record<string, Omit<PrimaryWorkIntentV1, "provenance">> = {
     lead: {
         work_intent_key: "make_contact",
         label: "Make Contact",
@@ -40,10 +45,30 @@ const PRIMARY_WORK_INTENT_BY_STAGE: Record<string, PrimaryWorkIntentV1> = {
 
 const NO_SPAWN_STAGES = new Set(["enrolled", "waitlist", "decision", "closed", "closed_withdrawn"]);
 
-export function resolvePrimaryWorkIntentForStage(builderStageKey: string): PrimaryWorkIntentV1 | null {
+function primaryIntentFromWorkTemplate(template: StageWorkTemplateV1): PrimaryWorkIntentV1 {
+    return {
+        work_intent_key: template.template_key,
+        label: template.label,
+        work_definition_key: template.work_definition_key?.trim() || template.template_key,
+        due_policy: template.due_policy,
+        template_key: template.template_key,
+        provenance: "operating_plan",
+    };
+}
+
+export function resolvePrimaryWorkIntentForStage(
+    builderStageKey: string,
+    operatingPlan?: Pick<StageOperatingPlanV1, "work_templates"> | null,
+): PrimaryWorkIntentV1 | null {
     const key = builderStageKey.trim();
     if (!key || NO_SPAWN_STAGES.has(key)) return null;
-    return PRIMARY_WORK_INTENT_BY_STAGE[key] ?? null;
+
+    const fromPlan = resolveEffectivePrimaryWorkTemplate(operatingPlan ?? null);
+    if (fromPlan) return primaryIntentFromWorkTemplate(fromPlan);
+
+    const legacy = PRIMARY_WORK_INTENT_BY_STAGE[key];
+    if (!legacy) return null;
+    return { ...legacy, provenance: "legacy_stage_map" };
 }
 
 export function buildLifecycleIntentIdempotencyKey(params: {
