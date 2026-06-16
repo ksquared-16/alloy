@@ -11,6 +11,12 @@ import {
 } from "@/lib/admin/canonicalAdminRoutes";
 import { OPERATOR_WORKSPACE_HREF } from "@/lib/admin/canonicalOperatorRoutes";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import {
+    fetchWorkflowsNavKpis,
+    fetchWorkflowsNavSummary,
+    peekWorkflowsNavKpisBody,
+    peekWorkflowsNavSummaryBody,
+} from "@/lib/adminV2/workflowsNavSessionCache";
 import { derived } from "@/styles/tokens/colors";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
@@ -224,9 +230,21 @@ export default function AdminV2WorkflowsPage() {
 
     useEffect(() => {
         let cancelled = false;
-        setWorkflowsLoading(true);
+        const cachedBody = peekWorkflowsNavSummaryBody();
+        if (cachedBody) {
+            try {
+                const j = JSON.parse(cachedBody) as { workflows?: WorkflowSummaryRow[]; error?: string };
+                const list = Array.isArray(j?.workflows) ? j.workflows : [];
+                setWorkflows(list);
+                setWorkflowsLoading(false);
+            } catch {
+                /* fall through to network */
+            }
+        } else {
+            setWorkflowsLoading(true);
+        }
         setWorkflowsError(null);
-        fetch("/api/admin/workflows/summary", init)
+        fetchWorkflowsNavSummary(init)
             .then((r) => r.json().then((j) => ({ r, j })))
             .then(({ r, j }) => {
                 if (cancelled) return;
@@ -266,9 +284,20 @@ export default function AdminV2WorkflowsPage() {
 
     useEffect(() => {
         let cancelled = false;
-        setKpisLoading(true);
+        const cachedBody = peekWorkflowsNavKpisBody();
+        if (cachedBody) {
+            try {
+                const j = JSON.parse(cachedBody) as { kpis?: WorkflowKpis };
+                setKpis(j.kpis ?? DEFAULT_KPIS);
+                setKpisLoading(false);
+            } catch {
+                /* fall through to network */
+            }
+        } else {
+            setKpisLoading(true);
+        }
         setKpisError(null);
-        fetch("/api/admin/workflow-runs?list=kpis", init)
+        fetchWorkflowsNavKpis(init)
             .then((r) => r.json().then((j) => ({ r, j })))
             .then(({ r, j }) => {
                 if (cancelled) return;

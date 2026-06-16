@@ -1,8 +1,8 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type CSSProperties, type FocusEvent, type MouseEvent, type ReactNode } from "react";
-import { adminV2CommitNavigation } from "@/lib/adminV2/shellNavigation";
+import { commitAdminV2NavLinkNavigation } from "@/lib/adminV2/navigation/adminV2SoftNavLinkCommit";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 
 function normalizeNavPath(path: string): string {
@@ -27,8 +27,8 @@ export type AdminV2NavLinkProps = {
 };
 
 /**
- * Shell navigation — `adminV2CommitNavigation` (full document load).
- * Avoids dead UI from cancelled `router.push` / soft `<Link>` transitions during heavy RSC work.
+ * Shell navigation — soft orchestrated transition when `NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV=1`
+ * and the target is an eligible workspace route; otherwise `adminV2CommitNavigation` (full document load).
  */
 export function AdminV2NavLink({
     className,
@@ -44,6 +44,7 @@ export function AdminV2NavLink({
     "aria-label": ariaLabel,
 }: AdminV2NavLinkProps) {
     const pathname = usePathname();
+    const router = useRouter();
     const adminDrawer = useAdminDrawerOptional();
     const hrefPath = href.split(/[?#]/)[0] ?? href;
     const isCurrentRoute = normalizeNavPath(pathname) === normalizeNavPath(hrefPath);
@@ -61,7 +62,7 @@ export function AdminV2NavLink({
         if (e.defaultPrevented) return;
         if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         e.preventDefault();
-        adminV2CommitNavigation(href, { closeDrawer: adminDrawer?.closeDrawer });
+        commitAdminV2NavLinkNavigation(href, { closeDrawer: adminDrawer?.closeDrawer, router });
     };
 
     return (

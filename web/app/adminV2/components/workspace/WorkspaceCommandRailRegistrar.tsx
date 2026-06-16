@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, type ReactNode } from "react";
 
 import { useWorkspaceCommandRailRegistryOptional } from "@/contexts/WorkspaceCommandRailRegistryContext";
 
@@ -12,17 +12,12 @@ type Props = {
 /** Registers page-owned Actions / Workflow Telemetry bodies with the shell-level command rail. */
 export function WorkspaceCommandRailRegistrar({ actions = null, telemetry = null }: Props) {
     const register = useWorkspaceCommandRailRegistryOptional()?.register;
-    const unregister = useWorkspaceCommandRailRegistryOptional()?.unregister;
     const latestRef = useRef({ actions, telemetry });
     latestRef.current = { actions, telemetry };
 
     useLayoutEffect(() => {
         register?.(latestRef.current);
     });
-
-    useEffect(() => {
-        return () => unregister?.();
-    }, [unregister]);
 
     return null;
 }

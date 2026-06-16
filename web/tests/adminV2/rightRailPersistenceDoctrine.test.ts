@@ -39,6 +39,14 @@ describe("Right rail persistence doctrine", () => {
         expect(registrar).not.toContain("[actions, telemetry, ctx]");
     });
 
+    it("keeps last registered rail content during route transition (unregister is no-op)", () => {
+        const ctx = read("contexts/WorkspaceCommandRailRegistryContext.tsx");
+        expect(ctx).toContain("intentional no-op");
+        expect(ctx).toContain("avoid empty Actions/Telemetry flash during route transitions");
+        const registrar = read("app/adminV2/components/workspace/WorkspaceCommandRailRegistrar.tsx");
+        expect(registrar).not.toContain("unregister");
+    });
+
     it("always renders Actions, Workflow Telemetry, and BOS slots in persistent rail", () => {
         const rail = read("app/adminV2/components/AdminV2PersistentCommandRail.tsx");
         expect(rail).toContain("CommandRailDefaultEmptyActions");

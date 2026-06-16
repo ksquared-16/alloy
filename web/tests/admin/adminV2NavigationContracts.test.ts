@@ -161,19 +161,22 @@ describe("Work-unit queue tab shallow routing", () => {
         expect(src).not.toContain("AI log");
     });
 
-    it("AdminV2NavLink commits navigation via location.assign", () => {
+    it("AdminV2NavLink uses hard nav by default and soft nav when flag enabled", () => {
         const src = read("app/adminV2/components/navigation/AdminV2NavLink.tsx");
-        expect(src).toContain("adminV2CommitNavigation");
-        expect(src).not.toMatch(/\brouter\.push\s*\(/);
-        expect(src).not.toMatch(/\buseLinkStatus\s*\(/);
-        expect(src).not.toMatch(/\bfrom \"next\/link\"/);
+        expect(src).toContain("commitAdminV2NavLinkNavigation");
+        const commit = read("lib/adminV2/navigation/adminV2SoftNavLinkCommit.ts");
+        expect(commit).toContain("adminV2SoftSidebarNavEnabled");
+        expect(commit).toContain("adminV2CommitNavigation");
+        expect(commit).toContain("router.push");
+        const shell = read("lib/adminV2/shellNavigation.ts");
+        expect(shell).toContain("NEXT_PUBLIC_ADMIN_V2_SOFT_SIDEBAR_NAV");
+        expect(shell).toContain("isAdminV2SoftNavEligibleHref");
     });
 
-    it("shell navigation uses location.assign (no router.push)", () => {
+    it("shell navigation uses location.assign as hard-nav fallback", () => {
         const src = read("lib/adminV2/shellNavigation.ts");
         expect(src).toContain("window.location.assign");
         expect(src).not.toContain("queueMicrotask");
-        expect(src).not.toMatch(/\brouter\.push\s*\(/);
     });
 });
 

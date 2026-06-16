@@ -46,6 +46,11 @@ import {
 } from "@/lib/adminV2/bos/activeOperationalContext";
 import { operationalContextSwitchNoticeText } from "@/lib/adminV2/bos/operationalContextSwitchNotice";
 import { fetchAdminV2Sidecar } from "@/lib/adminV2/adminV2SidecarSession";
+import {
+    fetchWorkflowsNavKpis,
+    fetchWorkflowsNavRuns7d,
+    fetchWorkflowsNavSummary,
+} from "@/lib/adminV2/workflowsNavSessionCache";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
 import { useEntityLabelsOptional } from "@/contexts/EntityLabelsContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
@@ -1260,10 +1265,7 @@ export default function AICommandSurfaceShell({
         let summaryJson: unknown = { workflows: [] };
 
         if (needsSummary) {
-          const sRes = await fetch("/api/admin/workflows/summary", {
-            credentials: "include",
-            headers: { Accept: "application/json" },
-          });
+          const sRes = await fetchWorkflowsNavSummary();
           summaryJson = await sRes.json().catch(() => ({}));
           if (!sRes.ok) {
             const msg =
@@ -1286,14 +1288,8 @@ export default function AICommandSurfaceShell({
         let kpisJson: unknown | null = null;
         if (needsRuns) {
           const [runsRes, kpisRes] = await Promise.all([
-            fetch("/api/admin/workflow-runs?range=7d&limit=100", {
-              credentials: "include",
-              headers: { Accept: "application/json" },
-            }),
-            fetch("/api/admin/workflow-runs?list=kpis", {
-              credentials: "include",
-              headers: { Accept: "application/json" },
-            }),
+            fetchWorkflowsNavRuns7d(),
+            fetchWorkflowsNavKpis(),
           ]);
           runs7dJson = await runsRes.json().catch(() => ({}));
           kpisJson = await kpisRes.json().catch(() => ({}));

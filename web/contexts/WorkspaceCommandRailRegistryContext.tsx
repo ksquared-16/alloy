@@ -63,10 +63,10 @@ export function WorkspaceCommandRailRegistryProvider({ children }: { children: R
         [notify]
     );
 
+    /** No-op — last registered rail content stays visible until the next page registers (stale-while-revalidate). */
     const unregister = useCallback(() => {
-        registrationRef.current = EMPTY_REGISTRATION;
-        notify();
-    }, [notify]);
+        /* intentional no-op: avoid empty Actions/Telemetry flash during route transitions */
+    }, []);
 
     const value = useMemo(
         () => ({ register, unregister, subscribe, getSnapshot }),

@@ -97,3 +97,33 @@ export async function fetchOpportunityDrawerPrimaryEntity(
 
     return promise;
 }
+
+/** Seed primary warm cache from bootstrap entity when contract-ready — avoids redundant drawer_primary GET. */
+export function seedOpportunityDrawerPrimaryFromBootstrap(
+    opportunityId: string,
+    bootEntity: Record<string, unknown> | null | undefined
+): boolean {
+    const cacheKey = drawerPrimaryCacheKey(opportunityId);
+    if (!cacheKey) return false;
+    if (!opportunityDrawerPrimaryContractReady(bootEntity, cacheKey)) return false;
+
+    const primaryFromBootstrap: Record<string, unknown> = {
+        ...bootEntity!,
+        _record_surface:
+            String(bootEntity!._record_surface ?? "").trim() === "drawer_visible"
+                ? "drawer_primary"
+                : bootEntity!._record_surface,
+    };
+    putDrawerEntitySnapshot("opportunities", cacheKey, primaryFromBootstrap);
+
+    const promise = Promise.resolve(primaryFromBootstrap);
+    drawerPrimaryByOpportunityId.set(cacheKey, { promise });
+    void promise.finally(() => {
+        setTimeout(() => {
+            if (drawerPrimaryByOpportunityId.get(cacheKey)?.promise === promise) {
+                drawerPrimaryByOpportunityId.delete(cacheKey);
+            }
+        }, DRAWER_PRIMARY_CACHE_TTL_MS);
+    });
+    return true;
+}

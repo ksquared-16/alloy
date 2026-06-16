@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { fetchCommunicationsBindingsChannelsCached } from "@/lib/communications/communicationsBindingsCache";
 import DrawerMessagingComposer from "@/components/adminV2/messaging/DrawerMessagingComposer";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import RecordCommunicationsTab from "@/app/adminV2/communications/recordTab/RecordCommunicationsTab";
@@ -802,14 +803,7 @@ function CommunicationsDrawerSectionLegacy({
                     return;
                 }
 
-                const r = await fetch(`/api/admin/communications/bindings`, { credentials: "include" });
-                const j = await r.json().catch(() => ({}));
-                if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
-                const ch = (j as { channels_available?: string[] }).channels_available;
-                const pb = {
-                    channels: Array.isArray(ch) ? ch : [],
-                    error: null as string | null,
-                };
+                const pb = await fetchCommunicationsBindingsChannelsCached();
                 if (!cancelled) applyBindingsPayload(pb, { event: "network_fallback", path: "direct" });
             } catch (e) {
                 if (!cancelled) setBindingsErr(e instanceof Error ? e.message : "Failed to load bindings");

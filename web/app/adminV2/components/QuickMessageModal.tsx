@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchCommunicationsBindingsCached } from "@/lib/communications/communicationsBindingsCache";
 import { launchAdminV2OpenOpportunityFromContext } from "@/lib/adminV2/contextualRecordOpen";
 import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
 import ComposerScheduleSendModal from "@/components/adminV2/messaging/ComposerScheduleSendModal";
@@ -142,10 +143,9 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
         setBindingsErr(null);
         (async () => {
             try {
-                const r = await fetch("/api/admin/communications/bindings", { credentials: "include" });
-                const j = await r.json().catch(() => ({}));
-                if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
-                const ch = (j as { channels_available?: string[] }).channels_available;
+                const { ok, status, json } = await fetchCommunicationsBindingsCached();
+                if (!ok) throw new Error(json.error ?? `HTTP ${status}`);
+                const ch = json.channels_available;
                 if (!cancelled) setChannelsAvailable(Array.isArray(ch) ? ch : []);
             } catch (e) {
                 if (!cancelled) {

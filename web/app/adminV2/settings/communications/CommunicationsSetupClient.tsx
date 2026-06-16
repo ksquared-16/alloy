@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import {
+    fetchCommunicationsBindingsCached,
+    invalidateCommunicationsBindingsCache,
+} from "@/lib/communications/communicationsBindingsCache";
 
 type BindingRow = {
     id: string;
@@ -39,19 +43,18 @@ export default function CommunicationsSetupClient() {
     const [savingId, setSavingId] = useState<string | null>(null);
     const [drafts, setDrafts] = useState<Record<string, { display_label: string; status: string; is_primary: boolean }>>({});
 
-    const load = useCallback(async () => {
+    const load = useCallback(async (options?: { force?: boolean }) => {
         setLoading(true);
         setErr(null);
         try {
-            const r = await fetch("/api/admin/communications/bindings", { credentials: "include" });
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
-            const list = (j as { bindings?: BindingRow[] }).bindings;
-            const ch = (j as { channels_available?: string[] }).channels_available;
-            setBindings(Array.isArray(list) ? list : []);
+            const { ok, status, json } = await fetchCommunicationsBindingsCached({ force: options?.force });
+            if (!ok) throw new Error(json.error ?? `HTTP ${status}`);
+            const list = (Array.isArray(json.bindings) ? json.bindings : []) as BindingRow[];
+            const ch = json.channels_available;
+            setBindings(list);
             setChannelsAvailable(Array.isArray(ch) ? ch : []);
             const d: Record<string, { display_label: string; status: string; is_primary: boolean }> = {};
-            for (const b of Array.isArray(list) ? list : []) {
+            for (const b of list) {
                 d[b.id] = {
                     display_label: b.display_label ?? "",
                     status: (b.status ?? "active").toLowerCase(),
@@ -89,7 +92,8 @@ export default function CommunicationsSetupClient() {
             });
             const j = await r.json().catch(() => ({}));
             if (!r.ok) throw new Error((j as { error?: string }).error ?? `Save failed (${r.status})`);
-            await load();
+            invalidateCommunicationsBindingsCache();
+            await load({ force: true });
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Save failed");
         } finally {

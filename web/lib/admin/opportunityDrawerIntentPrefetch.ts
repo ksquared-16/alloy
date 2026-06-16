@@ -6,7 +6,10 @@ import { opportunityDrawerHardCutoverEnabled } from "@/lib/adminV2/viewModel/dra
 import { warmQueueRowOpportunityVm } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
 import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import { prefetchOpportunityDrawerFull } from "@/lib/admin/opportunityDrawerFullPrefetch";
-import { prefetchOpportunityDrawerPrimary } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
+import {
+    prefetchOpportunityDrawerPrimary,
+    seedOpportunityDrawerPrimaryFromBootstrap,
+} from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import { warmVisibleQueueRowOpportunityVms } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
 import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
@@ -62,10 +65,17 @@ export function prefetchOpportunityDrawerPrimaryLaneOnRowIntent(
         return;
     }
 
-    void fetchOpportunityDrawerOperationalBootstrap(id, workspaceContext ?? null, init).catch(() => {
-        /* non-fatal — drawer open will reuse in-flight or retry */
-    });
-    prefetchOpportunityDrawerPrimary(id, init, workspaceContext ?? null, _queuePreviewSeed ?? null);
+    void fetchOpportunityDrawerOperationalBootstrap(id, workspaceContext ?? null, init)
+        .then((boot) => {
+            const bootEntity = boot?.entity as Record<string, unknown> | null | undefined;
+            if (seedOpportunityDrawerPrimaryFromBootstrap(id, bootEntity)) {
+                return;
+            }
+            prefetchOpportunityDrawerPrimary(id, init, workspaceContext ?? null, _queuePreviewSeed ?? null);
+        })
+        .catch(() => {
+            /* non-fatal — drawer open will reuse in-flight or retry */
+        });
 }
 
 /** Pointer-down intent — warm surface=full without blocking active queue lane work on hover. */

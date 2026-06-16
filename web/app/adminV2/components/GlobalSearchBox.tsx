@@ -23,6 +23,7 @@ import {
     launchGlobalRecordSearchOpen,
 } from "@/lib/adminV2/globalRecordSearchOpen";
 import GlobalSearchStatusPill from "@/app/adminV2/components/GlobalSearchResultPills";
+import { warmGlobalSearchHitDrawerIntent } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
 
 function useGlobalSearchFocusShortcut(focusInput: () => void): void {
     useEffect(() => {
@@ -236,7 +237,10 @@ export default function GlobalSearchBox() {
                 index={index}
                 active={index === activeIndex}
                 inCluster={inCluster}
-                onHover={() => setActiveIndex(index)}
+                onHover={() => {
+                    setActiveIndex(index);
+                    warmGlobalSearchHitDrawerIntent(hit);
+                }}
                 onSelect={() => selectHit(hit)}
             />
         );

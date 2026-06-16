@@ -5,6 +5,8 @@
  * Actual HTTP work starts after paint (rAF + idle / short timeout) so the drawer does not compete with critical work.
  */
 
+import { fetchCommunicationsBindingsChannelsCached } from "@/lib/communications/communicationsBindingsCache";
+
 type ThreadsResult = { threads: unknown[]; error: string | null };
 type BindingsResult = { channels: string[]; error: string | null };
 type RecipientsResult = { recipients: unknown[]; error: string | null };
@@ -180,17 +182,12 @@ export function scheduleDeferredCommunicationsDrawerPrefetch(apiEntityType: stri
                     })(),
                     (async (): Promise<BindingsResult> => {
                         try {
-                            const r = await fetch(`/api/admin/communications/bindings`, { credentials: "include", signal });
-                            const j = (await readJsonSafely(r)) as { channels_available?: string[]; error?: string };
+                            const result = await fetchCommunicationsBindingsChannelsCached({ signal });
                             tBindingsEnd =
                                 typeof performance !== "undefined" && typeof performance.now === "function"
                                     ? performance.now()
                                     : Date.now();
-                            if (!r.ok) {
-                                return { channels: [], error: j.error ?? `HTTP ${r.status}` };
-                            }
-                            const ch = j.channels_available;
-                            return { channels: Array.isArray(ch) ? ch : [], error: null };
+                            return result;
                         } catch (e) {
                             tBindingsEnd =
                                 typeof performance !== "undefined" && typeof performance.now === "function"

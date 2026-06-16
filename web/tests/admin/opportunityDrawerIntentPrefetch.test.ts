@@ -31,9 +31,13 @@ vi.mock("@/lib/admin/opportunityDrawerBootstrapClient", () => ({
     fetchOpportunityDrawerOperationalBootstrap,
 }));
 
-vi.mock("@/lib/admin/opportunityDrawerPrimaryPrefetch", () => ({
-    prefetchOpportunityDrawerPrimary,
-}));
+vi.mock("@/lib/admin/opportunityDrawerPrimaryPrefetch", async (importOriginal) => {
+    const actual = await importOriginal<typeof import("@/lib/admin/opportunityDrawerPrimaryPrefetch")>();
+    return {
+        ...actual,
+        prefetchOpportunityDrawerPrimary,
+    };
+});
 
 vi.mock("@/lib/admin/opportunityDrawerFullPrefetch", () => ({
     prefetchOpportunityDrawerFull,
@@ -64,6 +68,9 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
             "@/lib/admin/opportunityDrawerIntentPrefetch"
         );
         prefetchOpportunityDrawerOnRowIntent("opp-abc");
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
         expect(scheduleDeferredCommunicationsDrawerPrefetch).not.toHaveBeenCalled();
         expect(fetchOpportunityDrawerOperationalBootstrap).toHaveBeenCalledWith(
             "opp-abc",
@@ -121,5 +128,20 @@ describe("prefetchOpportunityDrawerOnRowIntent", () => {
             { work_unit_id: "wu-1", department_id: "dept-1" },
             expect.anything()
         );
+    });
+
+    it("skips drawer_primary when bootstrap entity is contract-ready", async () => {
+        fetchOpportunityDrawerOperationalBootstrap.mockResolvedValueOnce({
+            entity: { id: "opp-abc", _record_surface: "drawer_visible" },
+        } as Awaited<ReturnType<typeof fetchOpportunityDrawerOperationalBootstrap>>);
+        const { prefetchOpportunityDrawerOnRowIntent } = await import(
+            "@/lib/admin/opportunityDrawerIntentPrefetch"
+        );
+        prefetchOpportunityDrawerOnRowIntent("opp-abc");
+        await new Promise<void>((resolve) => {
+            setTimeout(resolve, 0);
+        });
+        expect(fetchOpportunityDrawerOperationalBootstrap).toHaveBeenCalled();
+        expect(prefetchOpportunityDrawerPrimary).not.toHaveBeenCalled();
     });
 });
