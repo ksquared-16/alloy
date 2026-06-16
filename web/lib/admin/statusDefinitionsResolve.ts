@@ -10,6 +10,18 @@ const STATUS_EFFECTIVE_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
 const STATUS_EFFECTIVE_UNSTABLE_TAGS = ["status-definitions-effective"];
 
+export const STATUS_EFFECTIVE_UNSTABLE_CACHE_TAGS = STATUS_EFFECTIVE_UNSTABLE_TAGS;
+
+/** Clear in-process effective status cache entries for an org (all entity types / active flags). */
+export function invalidateProcessStatusDefinitionsCache(orgId: string): void {
+    const prefix = `${orgId.trim()}\u0001`;
+    for (const key of [...STATUS_EFFECTIVE_CACHE.keys()]) {
+        if (key.startsWith(prefix)) {
+            STATUS_EFFECTIVE_CACHE.delete(key);
+        }
+    }
+}
+
 /** Canonical branch names for caches + Postgres merge logic (singular/plural tolerated at call sites). */
 export function normalizeEffectiveStatusEntityType(entityType: string): string {
     const t = String(entityType ?? "").trim().toLowerCase();

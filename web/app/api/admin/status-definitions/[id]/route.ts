@@ -3,6 +3,13 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
+import {
+    planStatusDefinitionDelete,
+    statusDefinitionDeleteMessage,
+    type StatusDefinitionDeleteAction,
+} from "@/lib/admin/statusDefinitionDeletePlan";
+import { logDbTiming } from "@/lib/admin/dbQueryTiming";
 
 const ALLOWED_PATCH_KEYS = ["status_label", "sort_order", "is_active", "metadata"] as const;
 
@@ -85,6 +92,8 @@ export async function PATCH(
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    revalidateEffectiveStatusDefinitionsCache(ctx.orgId);
+
     logAdminAudit({
         entity: "status_definitions",
         id,
@@ -96,11 +105,22 @@ export async function PATCH(
     return NextResponse.json(updated);
 }
 
-/** DELETE: hard delete if !is_system; if is_system set is_active=false. Admin only. */
+export type StatusDefinitionDeleteResponse = {
+    action: StatusDefinitionDeleteAction;
+    message: string;
+    warnings: string[];
+    status?: Record<string, unknown>;
+};
+
+/**
+ * DELETE: hard delete when unused and not referenced in BP config;
+ * inactivate when used or system; block hard delete when referenced in BP config only.
+ */
 export async function DELETE(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
+    const t0 = Date.now();
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
@@ -118,7 +138,7 @@ export async function DELETE(
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("status_definitions")
-        .select("id, org_id, is_system")
+        .select("id, org_id, entity_type, status_key, is_system, is_active")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -127,9 +147,41 @@ export async function DELETE(
         return NextResponse.json({ error: "Status definition not found" }, { status: 404 });
     }
 
-    const is_system = Boolean((existing as { is_system: boolean }).is_system);
+    const row = existing as {
+        id: string;
+        org_id: string;
+        entity_type: string;
+        status_key: string;
+        is_system: boolean;
+        is_active: boolean;
+    };
 
-    if (is_system) {
+    const tPlan0 = Date.now();
+    const plan = await planStatusDefinitionDelete({
+        supabase,
+        orgId: ctx.orgId,
+        row,
+    });
+    logDbTiming("status_definitions.delete_plan", Date.now() - tPlan0, {
+        orgId: ctx.orgId,
+        statusKey: row.status_key,
+        action: plan.action,
+        inUse: plan.inUse,
+        configRefs: plan.configReferences.length,
+    });
+
+    if (plan.blockHardDelete && plan.action === "deleted") {
+        logDbTiming("status_definitions.delete_blocked", Date.now() - t0, { orgId: ctx.orgId, id });
+        return NextResponse.json(
+            {
+                error: plan.blockReason,
+                warnings: plan.warnings,
+            },
+            { status: 409 },
+        );
+    }
+
+    if (plan.action === "inactivated") {
         const { data: updated, error: updateErr } = await supabase
             .from("status_definitions")
             .update({ is_active: false })
@@ -141,6 +193,9 @@ export async function DELETE(
         if (updateErr) {
             return NextResponse.json({ error: updateErr.message }, { status: 400 });
         }
+
+        revalidateEffectiveStatusDefinitionsCache(ctx.orgId);
+
         logAdminAudit({
             entity: "status_definitions",
             id,
@@ -148,7 +203,16 @@ export async function DELETE(
             actor_user_id: ctx.userId,
             role: ctx.role,
         });
-        return NextResponse.json(updated);
+
+        logDbTiming("status_definitions.delete_inactivated", Date.now() - t0, { orgId: ctx.orgId, id });
+
+        const response: StatusDefinitionDeleteResponse = {
+            action: "inactivated",
+            message: statusDefinitionDeleteMessage("inactivated", plan.inUse),
+            warnings: plan.warnings,
+            status: updated as Record<string, unknown>,
+        };
+        return NextResponse.json(response);
     }
 
     const { error: deleteErr } = await supabase
@@ -161,6 +225,8 @@ export async function DELETE(
         return NextResponse.json({ error: deleteErr.message }, { status: 400 });
     }
 
+    revalidateEffectiveStatusDefinitionsCache(ctx.orgId);
+
     logAdminAudit({
         entity: "status_definitions",
         id,
@@ -169,5 +235,12 @@ export async function DELETE(
         role: ctx.role,
     });
 
-    return NextResponse.json({ ok: true });
+    logDbTiming("status_definitions.delete_hard", Date.now() - t0, { orgId: ctx.orgId, id });
+
+    const response: StatusDefinitionDeleteResponse = {
+        action: "deleted",
+        message: statusDefinitionDeleteMessage("deleted", false),
+        warnings: plan.warnings,
+    };
+    return NextResponse.json(response);
 }

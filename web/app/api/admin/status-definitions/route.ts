@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
-    fetchEffectiveStatusDefinitions,
+    fetchEffectiveStatusDefinitionsDirect,
     fetchOrgStatusDefinitions,
 } from "@/lib/admin/statusDefinitionsResolve";
 import { ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES } from "@/lib/admin/statusDefinitionsAdminEntityTypes";
 import { normalizeStatusDefinitionMetadata } from "@/lib/admin/normalizeStatusMetadata";
+import { revalidateEffectiveStatusDefinitionsCache } from "@/lib/admin/statusDefinitionsCache";
 
 const STATUS_KEY_REGEX = /^[a-z0-9_]{2,32}$/;
 
@@ -36,14 +37,21 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const entityType = searchParams.get("entity_type")?.trim() || null;
+    const includeInactive = searchParams.get("include_inactive") === "1";
 
     const supabase = createAdminClient();
+    const activeOnly = !includeInactive;
 
     try {
         if (entityType) {
-            const orgRows = await fetchOrgStatusDefinitions(supabase, ctx.orgId, entityType, { activeOnly: true });
+            const orgRows = await fetchOrgStatusDefinitions(supabase, ctx.orgId, entityType, { activeOnly });
             const source: "org" | "industry_defaults" = orgRows.length > 0 ? "org" : "industry_defaults";
-            const rows = orgRows.length > 0 ? orgRows : await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, entityType, { activeOnly: true });
+            const rows =
+                orgRows.length > 0
+                    ? orgRows
+                    : await fetchEffectiveStatusDefinitionsDirect(supabase, ctx.orgId, entityType, {
+                          activeOnly: true,
+                      });
             const statuses: StatusDef[] = rows.map((r) => ({
                 id: r.id,
                 org_id: r.org_id,
@@ -74,8 +82,8 @@ export async function GET(request: NextRequest) {
          */
         const rowsNested = await Promise.all(
             ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES.map((entityType) =>
-                fetchEffectiveStatusDefinitions(supabase, ctx.orgId, entityType, { activeOnly: true })
-            )
+                fetchEffectiveStatusDefinitionsDirect(supabase, ctx.orgId, entityType, { activeOnly }),
+            ),
         );
         const merged = rowsNested.flat();
 
@@ -175,6 +183,8 @@ export async function POST(request: NextRequest) {
         }
         return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    revalidateEffectiveStatusDefinitionsCache(ctx.orgId);
 
     return NextResponse.json(created);
 }

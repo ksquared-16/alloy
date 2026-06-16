@@ -146,6 +146,9 @@ export default function StatusesClient({
     const [statuses, setStatuses] = useState<StatusDef[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showInactive, setShowInactive] = useState(false);
+    const [actionMessage, setActionMessage] = useState<string | null>(null);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
 
     const [modalOpen, setModalOpen] = useState(false);
     const [modalEntityType, setModalEntityType] = useState("");
@@ -173,24 +176,36 @@ export default function StatusesClient({
     const [modalEntityTypeLocked, setModalEntityTypeLocked] = useState(false);
     const hasAutoExpandedRef = useRef(false);
 
-    const fetchStatuses = useCallback(async () => {
-        setLoading(true);
+    const fetchStatuses = useCallback(async (opts?: { silent?: boolean }) => {
+        if (!opts?.silent) {
+            setLoading(true);
+        }
         setError(null);
         try {
-            const url = entityTypeFilter
-                ? `/api/admin/status-definitions?entity_type=${encodeURIComponent(entityTypeFilter)}`
-                : "/api/admin/status-definitions";
+            const params = new URLSearchParams();
+            if (entityTypeFilter) {
+                params.set("entity_type", entityTypeFilter);
+            }
+            if (showInactive) {
+                params.set("include_inactive", "1");
+            }
+            const qs = params.toString();
+            const url = qs ? `/api/admin/status-definitions?${qs}` : "/api/admin/status-definitions";
             const res = await fetch(url);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Failed to load statuses");
             setStatuses((json as { statuses?: StatusDef[] }).statuses ?? []);
         } catch (e) {
             setError((e as Error).message);
-            setStatuses([]);
+            if (!opts?.silent) {
+                setStatuses([]);
+            }
         } finally {
-            setLoading(false);
+            if (!opts?.silent) {
+                setLoading(false);
+            }
         }
-    }, [entityTypeFilter]);
+    }, [entityTypeFilter, showInactive]);
 
     useEffect(() => {
         fetchStatuses();
@@ -325,15 +340,47 @@ export default function StatusesClient({
 
     const handleDelete = async (row: StatusDef) => {
         if (!canMutate) return;
+        if (!row.org_id) {
+            setDeleteError("Industry default statuses cannot be deleted here. Add an org override or deactivate via Edit.");
+            return;
+        }
         setDeleteSaving(true);
+        setDeleteError(null);
+        setActionMessage(null);
+        const previousStatuses = statuses;
+        setStatuses((prev) =>
+            showInactive
+                ? prev.map((s) => (s.id === row.id ? { ...s, is_active: false } : s))
+                : prev.filter((s) => s.id !== row.id),
+        );
+        setDeleteConfirmId(null);
         try {
             const res = await fetch(`/api/admin/status-definitions/${row.id}`, { method: "DELETE" });
-            const json = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Delete failed");
-            setDeleteConfirmId(null);
-            await fetchStatuses();
+            const json = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                message?: string;
+                action?: "deleted" | "inactivated";
+                warnings?: string[];
+            };
+            if (!res.ok) {
+                setStatuses(previousStatuses);
+                throw new Error(json.error ?? "Delete failed");
+            }
+            const message =
+                json.message ??
+                (json.action === "inactivated"
+                    ? "Status is used by records, so it was inactivated instead."
+                    : "Status deleted.");
+            setActionMessage(message);
+            if (json.warnings?.length) {
+                setActionMessage(`${message} ${json.warnings[0] ?? ""}`.trim());
+            }
+            if (json.action === "inactivated" && !showInactive) {
+                setStatuses((prev) => prev.filter((s) => s.id !== row.id));
+            }
+            void fetchStatuses({ silent: true });
         } catch (e) {
-            setEditError((e as Error).message);
+            setDeleteError((e as Error).message);
         } finally {
             setDeleteSaving(false);
         }
@@ -624,7 +671,9 @@ export default function StatusesClient({
                                                 >
                                                     Edit
                                                 </button>
-                                                {deleteConfirmId === row.id ? (
+                                                {!row.org_id ?
+                                                    <span className="text-[10px] text-[#59678b]">Default</span>
+                                                : deleteConfirmId === row.id ? (
                                                     <>
                                                         <span className="text-xs text-[#59678b]">
                                                             {row.is_system ? "Deactivate?" : "Delete?"}
@@ -683,18 +732,57 @@ export default function StatusesClient({
         </button>
     ) : null;
 
+    const showInactiveToggle = (
+        <label className="flex items-center gap-2 text-xs text-[#59678b]">
+            <input
+                type="checkbox"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+                data-testid="status-settings-show-inactive"
+            />
+            Show inactive
+        </label>
+    );
+
     return (
         <>
             {adminV2Chrome ? (
-                <SettingsPageHeader title={statusTitle} subtitle={statusSubtitle} actions={newStatusBtn} />
+                <SettingsPageHeader
+                    title={statusTitle}
+                    subtitle={statusSubtitle}
+                    actions={
+                        <div className="flex flex-wrap items-center gap-3">
+                            {showInactiveToggle}
+                            {newStatusBtn}
+                        </div>
+                    }
+                />
             ) : (
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                     <div>
                         <AdminPageHeader title={statusTitle} subtitle={statusSubtitle} />
                     </div>
-                    {newStatusBtn}
+                    <div className="flex flex-wrap items-center gap-3">
+                        {showInactiveToggle}
+                        {newStatusBtn}
+                    </div>
                 </div>
             )}
+
+            {actionMessage ?
+                <div
+                    className="mb-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+                    data-testid="status-settings-action-message"
+                >
+                    {actionMessage}
+                </div>
+            :   null}
+
+            {deleteError ?
+                <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+                    {deleteError}
+                </div>
+            :   null}
 
             {entityTypeFilter && (
                 <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-[#e6e8ec] bg-[#F4F6F9] px-4 py-3 text-sm">
