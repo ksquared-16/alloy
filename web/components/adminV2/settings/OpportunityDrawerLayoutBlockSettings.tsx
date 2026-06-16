@@ -25,7 +25,10 @@ import {
     type LayoutEditorContactRole,
 } from "@/lib/layout/layoutEditorContactRoles";
 import type { LayoutEditorBlockNode } from "@/lib/layout/layoutEditorCompositionModel";
+import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
+import type { LayoutDoc, LayoutItem } from "@/lib/layout/layoutV2";
 import type { listCustomBlockRows } from "@/lib/layout/layoutEditorFreeformBlocks";
+import OpportunityDrawerLayoutBlockRowEditor from "@/components/adminV2/settings/OpportunityDrawerLayoutBlockRowEditor";
 import {
     LAYOUT_EDITOR_ROW_ACTIONS,
     LAYOUT_EDITOR_ROW_ACTION_LABELS,
@@ -52,6 +55,13 @@ type Props = {
     onAddRow?: (columnCount: 1 | 2 | 3) => void;
     onRemoveRow?: (rowIndex: number) => void;
     onSetRowColumns?: (rowIndex: number, columnCount: 1 | 2 | 3) => void;
+    blockItem?: LayoutItem;
+    doc?: LayoutDoc;
+    sectionKey?: string;
+    fieldPickerGroups?: LayoutCatalogGroup[];
+    validationOk?: boolean;
+    applyDoc?: (doc: LayoutDoc) => void;
+    onFieldAddError?: (message: string | null) => void;
     onClose: () => void;
 };
 
@@ -69,6 +79,13 @@ export default function OpportunityDrawerLayoutBlockSettings({
     onAddRow,
     onRemoveRow,
     onSetRowColumns,
+    blockItem,
+    doc,
+    sectionKey,
+    fieldPickerGroups = [],
+    validationOk = true,
+    applyDoc,
+    onFieldAddError,
     onClose,
 }: Props) {
     const blockConfig = readLayoutEditorBlockConfig(blockItemMetadata);
@@ -209,7 +226,22 @@ export default function OpportunityDrawerLayoutBlockSettings({
                             </span>
                         :   null}
                     </div>
-                    {rows.map((row) => (
+                    {blockItem && applyDoc && sectionKey ?
+                        <OpportunityDrawerLayoutBlockRowEditor
+                            doc={doc!}
+                            sectionKey={sectionKey}
+                            blockItemId={block.itemId}
+                            blockItem={blockItem}
+                            fieldPickerGroups={fieldPickerGroups}
+                            validationOk={validationOk}
+                            applyDoc={applyDoc}
+                            onFieldAddError={onFieldAddError ?? (() => undefined)}
+                            supportsAction={blockItem.kind === "field_group"}
+                            supportsText={blockItem.kind === "field_group"}
+                            onSetRowColumns={onSetRowColumns}
+                            onRemoveRow={onRemoveRow}
+                        />
+                    :   rows.map((row) => (
                         <div
                             key={row.rowId}
                             className="rounded border border-alloy-forge/10 bg-white/80 px-2 py-1.5"

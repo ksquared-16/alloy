@@ -355,6 +355,27 @@ export function groupMoveItemVertical(doc: LayoutDoc, loc: GroupLoc, gr: number,
     [items[i], items[t]] = [items[t], items[i]];
     return next;
 }
+
+export function groupMoveItemHorizontal(
+    doc: LayoutDoc,
+    loc: GroupLoc,
+    gr: number,
+    gc: number,
+    itemId: string,
+    dir: -1 | 1,
+): LayoutDoc {
+    const next = clone(doc);
+    const row = groupOf(next, loc)?.rows?.[gr];
+    if (!row) return doc;
+    const t = gc + dir;
+    if (t < 0 || t >= row.columns.length) return doc;
+    const i = row.columns[gc]?.items.findIndex((it) => it.id === itemId);
+    if (i === undefined || i < 0) return doc;
+    const [moved] = row.columns[gc]!.items.splice(i, 1);
+    row.columns[t]!.items.push(moved);
+    return next;
+}
+
 export function groupPatchItem(doc: LayoutDoc, loc: GroupLoc, gr: number, gc: number, itemId: string, patch: Partial<LayoutItem>): LayoutDoc {
     const next = clone(doc);
     const col = groupOf(next, loc)?.rows?.[gr]?.columns[gc];

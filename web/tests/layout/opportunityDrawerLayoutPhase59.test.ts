@@ -133,10 +133,10 @@ describe("row builder inside blocks", () => {
             dataContext: "child",
         });
         const rows = listCustomBlockRows(block);
-        const refs = rows[0]?.fields.map((f) => f.refKey) ?? [];
-        expect(refs).toContain("child.program");
-        expect(refs).toContain("child.desired_start_date");
-        expect(refs).toContain("child.dob_age");
+        const detailRow = rows[1];
+        expect(detailRow?.columnCount).toBe(3);
+        const refs = detailRow?.fields.map((f) => f.refKey) ?? [];
+        expect(refs).toEqual(["child.program", "child.desired_start_date", "child.dob_age"]);
     });
 
     it("supports multi-field row via column count patch", () => {

@@ -6,15 +6,25 @@ import {
     addItem,
     groupAddItem,
     groupAddRow,
+    groupMoveItemHorizontal,
+    groupMoveItemVertical,
+    groupRemoveItem,
     groupRemoveRow,
     makeFieldItem,
     makeId,
+    makeTemplateItem,
     relatedAddColumn,
+    relatedMoveColumn,
+    relatedRemoveColumn,
     type GroupLoc,
 } from "@/lib/layout/builderOps";
 import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc, LayoutItem, LayoutRow } from "@/lib/layout/layoutV2";
 import { LAYOUT_GRID_COLUMNS } from "@/lib/layout/layoutV2";
+import {
+    makeLayoutEditorActionButtonItem,
+    type LayoutEditorActionButtonConfig,
+} from "@/lib/layout/layoutEditorActionButton";
 import {
     blockRefKeyForType,
     blockVisibilityCondition,
@@ -25,6 +35,7 @@ import {
     type LayoutEditorBlockConfig,
     type LayoutEditorBlockEditMode,
     type LayoutEditorBlockType,
+    type LayoutEditorChildRowGroup,
     type LayoutEditorDataContext,
 } from "@/lib/layout/layoutEditorBlockConfig";
 import {
@@ -116,7 +127,18 @@ export function buildCustomLayoutBlock(input: CreateCustomBlockInput): LayoutIte
             displayMode: "table",
             related: { entityType: "child" },
             visibleWhen: blockVisibilityCondition(visibilityRule, metadata),
-            metadata,
+            metadata: writeLayoutEditorBlockConfig(
+                writeLayoutEditorRowTemplateConfig(undefined, DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG),
+                {
+                    blockType: "child_row_template",
+                    dataContext: "child",
+                    childRowGroups: [
+                        { columnIndices: [0], columnCount: 1 },
+                        { columnIndices: [1, 2, 3], columnCount: 3 },
+                        { columnIndices: [4], columnCount: 1 },
+                    ],
+                },
+            ),
             columns: [
                 { label: "Child", refKey: "child.name", width: "medium" },
                 { label: "Program", refKey: "child.program", width: "medium" },
@@ -201,9 +223,14 @@ export function addRowToCustomBlock(
 ): LayoutDoc {
     const loc = findLayoutBlockLocation(doc, blockItemId);
     if (!loc) return doc;
+    const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    if (item?.kind === "related_list") {
+        const groups = readChildRowGroups(item);
+        return writeChildRowGroups(doc, loc, [...groups, { columnIndices: [], columnCount }]);
+    }
     let next = groupAddRow(doc, loc, columnCount);
-    const item = next.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
-    const rowId = item?.rows?.[item.rows.length - 1]?.id;
+    const updated = next.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    const rowId = updated?.rows?.[updated.rows.length - 1]?.id;
     if (rowId) {
         next = patchCustomBlockConfig(next, blockItemId, {
             rowConfigs: {
@@ -217,6 +244,26 @@ export function addRowToCustomBlock(
 export function removeRowFromCustomBlock(doc: LayoutDoc, blockItemId: string, rowIndex: number): LayoutDoc {
     const loc = findLayoutBlockLocation(doc, blockItemId);
     if (!loc) return doc;
+    const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    if (item?.kind === "related_list") {
+        const groups = readChildRowGroups(item);
+        if (rowIndex < 0 || rowIndex >= groups.length) return doc;
+        const removed = groups[rowIndex]!;
+        const nextGroups = groups.filter((_, i) => i !== rowIndex);
+        let next = writeChildRowGroups(doc, loc, nextGroups);
+        for (const colIdx of [...removed.columnIndices].sort((a, b) => b - a)) {
+            next = relatedRemoveColumn(next, loc, colIdx);
+            const updated = next.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+            const remapped = readChildRowGroups(updated!).map((g) => ({
+                ...g,
+                columnIndices: g.columnIndices
+                    .filter((idx) => idx !== colIdx)
+                    .map((idx) => (idx > colIdx ? idx - 1 : idx)),
+            }));
+            next = writeChildRowGroups(next, loc, remapped);
+        }
+        return next;
+    }
     return groupRemoveRow(doc, loc, rowIndex);
 }
 
@@ -230,6 +277,17 @@ export function setCustomBlockRowColumnCount(
     if (!loc) return doc;
     const next = JSON.parse(JSON.stringify(doc)) as LayoutDoc;
     const item = next.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    if (item?.kind === "related_list") {
+        const groups = readChildRowGroups(item);
+        const group = groups[rowIndex];
+        if (!group) return doc;
+        group.columnCount = columnCount;
+        if (group.columnIndices.length > columnCount) {
+            group.columnIndices = group.columnIndices.slice(0, columnCount);
+        }
+        item.metadata = writeLayoutEditorBlockConfig(item.metadata, { childRowGroups: groups });
+        return next;
+    }
     const row = item?.rows?.[rowIndex];
     if (!row) return doc;
     const existingItems = row.columns.flatMap((col) => col.items);
@@ -254,7 +312,7 @@ export function addFieldToCustomBlockRow(
     rowIndex: number,
     columnIndex: number,
     field: LayoutCatalogField,
-): { ok: true; doc: LayoutDoc } | { ok: false; error: string } {
+): AddBlockFieldResult {
     if (!isAllowedOpportunityDrawerFieldRefKey(field.refKey)) {
         return { ok: false, error: `"${field.refKey}" is not allowed on the opportunity drawer.` };
     }
@@ -262,41 +320,222 @@ export function addFieldToCustomBlockRow(
     if (!loc) return { ok: false, error: "Block not found." };
     const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
     if (item?.kind === "related_list") {
-        return {
-            ok: true,
-            doc: relatedAddColumn(doc, loc, {
-                label: field.fieldLabel,
-                refKey: field.refKey,
-                width: "medium",
-                renderHint: field.fieldType === "status" ? "status" : field.fieldType === "date" ? "date" : "text",
-            }),
-        };
+        const groups = readChildRowGroups(item);
+        while (groups.length <= rowIndex) groups.push({ columnIndices: [] });
+        const next = relatedAddColumn(doc, loc, {
+            label: field.fieldLabel,
+            refKey: field.refKey,
+            width: "medium",
+            renderHint: field.fieldType === "status" ? "status" : field.fieldType === "date" ? "date" : "text",
+        });
+        const updated = next.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+        const colIdx = (updated?.columns?.length ?? 1) - 1;
+        const rowGroup = groups[rowIndex]!;
+        rowGroup.columnIndices[columnIndex] = colIdx;
+        const withGroups = writeChildRowGroups(next, loc, groups);
+        return { ok: true, doc: withGroups, fieldId: `${blockItemId}-col-${colIdx}` };
     }
     if (item?.kind !== "field_group") return { ok: false, error: "Add field is supported on layout blocks only." };
+    const rows = item.rows ?? [];
+    if (!rows[rowIndex]) return { ok: false, error: "Block row not found." };
+    if (!rows[rowIndex]!.columns[columnIndex]) return { ok: false, error: "Block column not found." };
     const fieldItem = makeFieldItem(field.refKey, field.fieldLabel, field.fieldType);
-    return { ok: true, doc: groupAddItem(doc, loc, rowIndex, columnIndex, fieldItem) };
+    return { ok: true, doc: groupAddItem(doc, loc, rowIndex, columnIndex, fieldItem), fieldId: fieldItem.id };
 }
 
-export function listCustomBlockRows(item: LayoutItem): Array<{ rowIndex: number; rowId: string; columnCount: number; fields: LayoutItem[] }> {
+export function addTextToCustomBlockRow(
+    doc: LayoutDoc,
+    blockItemId: string,
+    rowIndex: number,
+    columnIndex: number,
+    template = "Display text",
+    label = "Text",
+): AddBlockFieldResult {
+    const loc = findLayoutBlockLocation(doc, blockItemId);
+    if (!loc) return { ok: false, error: "Block not found." };
+    const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    if (item?.kind !== "field_group") return { ok: false, error: "Text items are supported inside layout blocks only." };
+    const textItem = makeTemplateItem(template, label);
+    return { ok: true, doc: groupAddItem(doc, loc, rowIndex, columnIndex, textItem), fieldId: textItem.id };
+}
+
+export function addActionToCustomBlockRow(
+    doc: LayoutDoc,
+    blockItemId: string,
+    rowIndex: number,
+    columnIndex: number,
+    config?: Partial<LayoutEditorActionButtonConfig>,
+): AddBlockFieldResult {
+    const loc = findLayoutBlockLocation(doc, blockItemId);
+    if (!loc) return { ok: false, error: "Block not found." };
+    const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    if (item?.kind !== "field_group") return { ok: false, error: "Action items are supported inside layout blocks only." };
+    const actionItem = makeLayoutEditorActionButtonItem(config);
+    return { ok: true, doc: groupAddItem(doc, loc, rowIndex, columnIndex, actionItem), fieldId: actionItem.id };
+}
+
+export function removeCustomBlockNestedField(
+    doc: LayoutDoc,
+    blockItemId: string,
+    rowIndex: number,
+    columnIndex: number,
+    fieldId: string,
+): LayoutDoc {
+    const loc = findLayoutBlockLocation(doc, blockItemId);
+    if (!loc) return doc;
+    const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    if (item?.kind === "related_list") {
+        const match = fieldId.match(/-col-(\d+)$/);
+        const colIdx = match ? Number(match[1]) : Number.NaN;
+        if (Number.isNaN(colIdx)) return doc;
+        let next = relatedRemoveColumn(doc, loc, colIdx);
+        const updated = next.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+        const groups = readChildRowGroups(updated!).map((g) => ({
+            columnIndices: g.columnIndices
+                .filter((idx) => idx !== colIdx)
+                .map((idx) => (idx > colIdx ? idx - 1 : idx)),
+        }));
+        return writeChildRowGroups(next, loc, groups);
+    }
+    return groupRemoveItem(doc, loc, rowIndex, columnIndex, fieldId);
+}
+
+export function moveCustomBlockNestedField(
+    doc: LayoutDoc,
+    blockItemId: string,
+    rowIndex: number,
+    columnIndex: number,
+    fieldId: string,
+    direction: -1 | 1,
+    axis: "vertical" | "horizontal" = "vertical",
+): LayoutDoc {
+    const loc = findLayoutBlockLocation(doc, blockItemId);
+    if (!loc) return doc;
+    const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    if (item?.kind === "related_list") {
+        const groups = readChildRowGroups(item);
+        const group = groups[rowIndex];
+        if (!group) return doc;
+        if (axis === "horizontal") {
+            const targetSlot = columnIndex + direction;
+            if (targetSlot < 0 || targetSlot >= childRowGroupColumnCount(group)) return doc;
+            const nextGroups = groups.map((g, i) => {
+                if (i !== rowIndex) return g;
+                const indices = [...g.columnIndices];
+                const current = indices[columnIndex];
+                indices[columnIndex] = indices[targetSlot];
+                indices[targetSlot] = current;
+                return { ...g, columnIndices: indices };
+            });
+            return writeChildRowGroups(doc, loc, nextGroups);
+        }
+        const match = fieldId.match(/-col-(\d+)$/);
+        const colIdx = match ? Number(match[1]) : Number.NaN;
+        if (Number.isNaN(colIdx)) return doc;
+        return relatedMoveColumn(doc, loc, colIdx, direction);
+    }
+    if (axis === "horizontal") {
+        return groupMoveItemHorizontal(doc, loc, rowIndex, columnIndex, fieldId, direction);
+    }
+    return groupMoveItemVertical(doc, loc, rowIndex, columnIndex, fieldId, direction);
+}
+
+export type CustomBlockRowColumn = {
+    colIndex: number;
+    colId: string;
+    items: LayoutItem[];
+    /** Related-list column index when kind is related_list. */
+    relatedColumnIndex?: number;
+};
+
+export type CustomBlockRowLayout = {
+    rowIndex: number;
+    rowId: string;
+    columnCount: number;
+    columns: CustomBlockRowColumn[];
+};
+
+export type BlockFieldTarget = {
+    blockItemId: string;
+    rowIndex: number;
+    columnIndex: number;
+};
+
+export type AddBlockFieldResult = { ok: true; doc: LayoutDoc; fieldId: string } | { ok: false; error: string };
+
+function childRowGroupColumnCount(group: LayoutEditorChildRowGroup): number {
+    return Math.max(1, group.columnCount ?? (group.columnIndices.length || 1));
+}
+
+function defaultChildRowGroups(columnCount: number): LayoutEditorChildRowGroup[] {
+    if (columnCount <= 1) return [{ columnIndices: [0] }];
+    return [{ columnIndices: [0] }, { columnIndices: Array.from({ length: columnCount - 1 }, (_, i) => i + 1) }];
+}
+
+function readChildRowGroups(item: LayoutItem): LayoutEditorChildRowGroup[] {
+    const fromConfig = readLayoutEditorBlockConfig(item.metadata).childRowGroups;
+    if (fromConfig?.length) return fromConfig;
+    const count = item.columns?.length ?? 0;
+    if (count === 0) return [{ columnIndices: [] }];
+    return defaultChildRowGroups(count);
+}
+
+function writeChildRowGroups(doc: LayoutDoc, loc: GroupLoc, groups: LayoutEditorChildRowGroup[]): LayoutDoc {
+    const next = JSON.parse(JSON.stringify(doc)) as LayoutDoc;
+    const item = next.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === loc.itemId);
+    if (!item) return doc;
+    item.metadata = writeLayoutEditorBlockConfig(item.metadata, { childRowGroups: groups });
+    return next;
+}
+
+export function listCustomBlockRowLayout(item: LayoutItem): CustomBlockRowLayout[] {
     if (item.kind === "related_list") {
-        return [
-            {
-                rowIndex: 0,
-                rowId: `${item.id}-columns`,
-                columnCount: Math.max(1, item.columns?.length ?? 1),
-                fields: (item.columns ?? []).map((col, idx) => ({
-                    id: `${item.id}-col-${idx}`,
-                    kind: "field" as const,
-                    refKey: col.refKey,
-                    label: col.label,
-                })),
-            },
-        ];
+        const groups = readChildRowGroups(item);
+        const columns = item.columns ?? [];
+        return groups.map((group, rowIndex) => {
+            const columnCount = childRowGroupColumnCount(group);
+            return {
+                rowIndex,
+                rowId: `${item.id}-row-${rowIndex}`,
+                columnCount,
+                columns: Array.from({ length: columnCount }, (_, slot) => {
+                    const colIdx = group.columnIndices[slot];
+                    const col = colIdx != null && colIdx >= 0 ? columns[colIdx] : undefined;
+                    return {
+                        colIndex: slot,
+                        colId: `${item.id}-row-${rowIndex}-col-${slot}`,
+                        relatedColumnIndex: colIdx != null && colIdx >= 0 ? colIdx : undefined,
+                        items: col ?
+                            [{
+                                id: `${item.id}-col-${colIdx}`,
+                                kind: "field" as const,
+                                refKey: col.refKey,
+                                label: col.label,
+                            }]
+                        :   [],
+                    };
+                }),
+            };
+        });
     }
     return (item.rows ?? []).map((row, rowIndex) => ({
         rowIndex,
         rowId: row.id,
         columnCount: Math.max(1, row.columns.length),
+        columns: row.columns.map((col, colIndex) => ({
+            colIndex,
+            colId: col.id,
+            items: col.items,
+        })),
+    }));
+}
+
+/** @deprecated use listCustomBlockRowLayout */
+export function listCustomBlockRows(item: LayoutItem): Array<{ rowIndex: number; rowId: string; columnCount: number; fields: LayoutItem[] }> {
+    return listCustomBlockRowLayout(item).map((row) => ({
+        rowIndex: row.rowIndex,
+        rowId: row.rowId,
+        columnCount: row.columnCount,
         fields: row.columns.flatMap((col) => col.items),
     }));
 }

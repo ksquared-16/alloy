@@ -14,6 +14,8 @@ import {
     type LayoutEditorActionStyleIntent,
 } from "@/lib/layout/layoutEditorActionButton";
 import { findLayoutBlockLocation, patchLayoutBlockRowTemplateConfig } from "@/lib/layout/layoutEditorBlockRegistry";
+import { buildBlockContextFieldPickerGroups } from "@/lib/layout/layoutEditorBlockFieldCatalog";
+import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfig";
 import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
     patchLayoutEditorFieldDisplay,
@@ -298,7 +300,10 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                 doc={doc}
                                 sectionKey={sectionKey}
                                 entry={selectedItem}
+                                fieldPickerGroups={fieldPickerGroups}
+                                validationOk={validationOk}
                                 applyDoc={applyDoc}
+                                onFieldAddError={onFieldAddError}
                                 onClose={() => onSelectItemId(null)}
                             />
                         </div>
@@ -388,13 +393,19 @@ function InlineItemSettings({
     doc,
     sectionKey,
     entry,
+    fieldPickerGroups,
+    validationOk,
     applyDoc,
+    onFieldAddError,
     onClose,
 }: {
     doc: LayoutDoc;
     sectionKey: string;
     entry: SectionCompositionItem;
+    fieldPickerGroups: LayoutCatalogGroup[];
+    validationOk: boolean;
     applyDoc: (next: LayoutDoc) => void;
+    onFieldAddError: (message: string | null) => void;
     onClose: () => void;
 }) {
     if (entry.kind === "text") {
@@ -499,6 +510,15 @@ function InlineItemSettings({
     }
 
     if (entry.kind === "block" || entry.kind === "list") {
+        const blockConfig = readLayoutEditorBlockConfig(entry.item.metadata);
+        const blockFieldPickerGroups = buildBlockContextFieldPickerGroups({
+            dataContext: blockConfig.dataContext,
+            contactRole:
+                entry.item.refKey === "contact_block" ?
+                    readLayoutEditorContactRole(entry.item.metadata)
+                :   undefined,
+            isChildRowTemplate: blockConfig.blockType === "child_row_template" || entry.item.kind === "related_list",
+        });
         const blockNode = {
             id: entry.itemId,
             kind: entry.item.kind === "related_list" ? ("related_list" as const) : ("field_group" as const),
@@ -541,6 +561,13 @@ function InlineItemSettings({
                     if (!loc) return;
                     applyDoc(patchLayoutBlockRowTemplateConfig(doc, loc, patch));
                 }}
+                blockItem={entry.item}
+                doc={doc}
+                sectionKey={sectionKey}
+                fieldPickerGroups={blockFieldPickerGroups}
+                validationOk={validationOk}
+                applyDoc={applyDoc}
+                onFieldAddError={onFieldAddError}
                 onClose={onClose}
             />
         );

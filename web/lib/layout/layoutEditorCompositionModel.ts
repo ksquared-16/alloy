@@ -3,13 +3,11 @@
  */
 
 import {
-    groupAddItem,
+    groupMoveItemHorizontal,
     groupMoveItemVertical,
     groupPatchItem,
     groupRemoveItem,
-    makeFieldItem,
     patchItem,
-    relatedAddColumn,
     relatedMoveColumn,
     relatedPatchColumn,
     relatedRemoveColumn,
@@ -45,7 +43,7 @@ import {
     removeLayoutBlock,
     resolveLayoutEditorBlockTitle,
 } from "@/lib/layout/layoutEditorBlockRegistry";
-import { isAllowedOpportunityDrawerFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
+import { addFieldToCustomBlockRow } from "@/lib/layout/layoutEditorFreeformBlocks";
 
 export type LayoutEditorBlockKind = "card" | "field_group" | "related_list" | "widget" | "field";
 
@@ -328,35 +326,13 @@ export function tryAddFieldAtLayoutBlock(
     sectionKey: string,
     blockItemId: string,
     field: LayoutCatalogField,
+    target?: { rowIndex: number; columnIndex: number },
 ): { ok: true; doc: LayoutDoc } | { ok: false; error: string } {
-    if (!isAllowedOpportunityDrawerFieldRefKey(field.refKey)) {
-        return { ok: false, error: `"${field.refKey}" is not allowed on the opportunity drawer.` };
-    }
-    const loc = groupLoc(doc, sectionKey, blockItemId);
-    if (!loc) return { ok: false, error: "Layout block not found." };
-    const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
-    if (!item) return { ok: false, error: "Layout block not found." };
-
-    if (item.kind === "related_list") {
-        const col: LayoutCollectionColumn = {
-            label: field.fieldLabel,
-            refKey: field.refKey,
-            width: "medium",
-            renderHint: "text",
-        };
-        return { ok: true, doc: relatedAddColumn(doc, loc, col) };
-    }
-
-    if (item.kind === "field_group") {
-        const gr = 0;
-        const gc = 0;
-        const rows = item.rows ?? [];
-        if (rows.length === 0) return { ok: false, error: "Field group has no rows." };
-        const fieldItem = makeFieldItem(field.refKey, field.fieldLabel, field.fieldType);
-        return { ok: true, doc: groupAddItem(doc, loc, gr, gc, fieldItem) };
-    }
-
-    return { ok: false, error: "Add field is supported on field groups and row templates only." };
+    const rowIndex = target?.rowIndex ?? 0;
+    const columnIndex = target?.columnIndex ?? 0;
+    const result = addFieldToCustomBlockRow(doc, blockItemId, rowIndex, columnIndex, field);
+    if (!result.ok) return result;
+    return { ok: true, doc: result.doc };
 }
 
 export function removeLayoutEditorField(doc: LayoutDoc, path: LayoutEditorNodePath): LayoutDoc {
@@ -390,6 +366,9 @@ export function moveLayoutEditorField(
     if (path.kind === "group_field") {
         const loc = groupLoc(doc, path.sectionKey, path.blockItemId);
         if (!loc) return doc;
+        if (axis === "horizontal") {
+            return groupMoveItemHorizontal(doc, loc, path.gr, path.gc, path.fieldId, direction);
+        }
         return groupMoveItemVertical(doc, loc, path.gr, path.gc, path.fieldId, direction);
     }
     if (path.kind === "column") {

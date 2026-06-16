@@ -46,6 +46,11 @@ export type LayoutEditorRowConfig = {
     columnCount?: 1 | 2 | 3;
 };
 
+export type LayoutEditorChildRowGroup = {
+    columnIndices: number[];
+    columnCount?: 1 | 2 | 3;
+};
+
 export type LayoutEditorBlockConfig = {
     blockType?: LayoutEditorBlockType;
     dataContext?: LayoutEditorDataContext;
@@ -53,6 +58,8 @@ export type LayoutEditorBlockConfig = {
     editMode?: LayoutEditorBlockEditMode;
     visibilityRule?: LayoutEditorBlockVisibilityRule;
     rowConfigs?: Record<string, LayoutEditorRowConfig>;
+    /** Related-list child row template: maps logical rows to column indices. */
+    childRowGroups?: LayoutEditorChildRowGroup[];
 };
 
 export const LAYOUT_EDITOR_BLOCK_TYPE_LABELS: Record<LayoutEditorBlockType, string> = {
@@ -115,6 +122,18 @@ export function readLayoutEditorBlockConfig(metadata: Record<string, unknown> | 
     if (bag.rowConfigs && typeof bag.rowConfigs === "object") {
         out.rowConfigs = bag.rowConfigs as Record<string, LayoutEditorRowConfig>;
     }
+    if (Array.isArray(bag.childRowGroups)) {
+        out.childRowGroups = bag.childRowGroups
+            .filter((g): g is LayoutEditorChildRowGroup => g && typeof g === "object" && Array.isArray((g as LayoutEditorChildRowGroup).columnIndices))
+            .map((g) => {
+                const group = g as LayoutEditorChildRowGroup;
+                const cc = group.columnCount;
+                return {
+                    columnIndices: [...group.columnIndices],
+                    ...(cc === 1 || cc === 2 || cc === 3 ? { columnCount: cc } : {}),
+                };
+            });
+    }
     return out;
 }
 
@@ -127,6 +146,9 @@ export function writeLayoutEditorBlockConfig(
     const merged: LayoutEditorBlockConfig = { ...prev, ...patch };
     if (patch.rowConfigs) {
         merged.rowConfigs = { ...(prev.rowConfigs ?? {}), ...patch.rowConfigs };
+    }
+    if (patch.childRowGroups) {
+        merged.childRowGroups = patch.childRowGroups;
     }
     next[LAYOUT_EDITOR_BLOCK_CONFIG_METADATA_KEY] = merged;
     return next;
