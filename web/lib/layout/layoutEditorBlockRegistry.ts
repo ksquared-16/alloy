@@ -18,6 +18,7 @@ import {
     writeLayoutEditorRowTemplateConfig,
 } from "@/lib/layout/layoutEditorRowTemplateConfig";
 import { LAYOUT_GRID_COLUMNS } from "@/lib/layout/layoutV2";
+import { isValidCustomSectionKeyPattern } from "@/lib/layout/layoutEditorGeneratedKeys";
 
 export const LAYOUT_EDITOR_BLOCK_TEMPLATE_METADATA_KEY = "layoutEditorBlockTemplate" as const;
 
@@ -264,6 +265,9 @@ export function layoutEditorBlockTemplateForKey(key: string): LayoutEditorBlockT
 }
 
 export function listLayoutEditorBlockTemplatesForSection(sectionKey: string): LayoutEditorBlockTemplate[] {
+    if (isValidCustomSectionKeyPattern(sectionKey)) {
+        return LAYOUT_EDITOR_BLOCK_TEMPLATE_CATALOG;
+    }
     return LAYOUT_EDITOR_BLOCK_TEMPLATE_CATALOG.filter((t) => t.allowedSections.includes(sectionKey));
 }
 
@@ -376,7 +380,7 @@ export function addLayoutBlockToSection(
 ): { ok: true; doc: LayoutDoc; blockItemId: string } | { ok: false; error: string } {
     const template = layoutEditorBlockTemplateForKey(templateKey);
     if (!template) return { ok: false, error: "Unknown block template." };
-    if (!template.allowedSections.includes(sectionKey)) {
+    if (!isValidCustomSectionKeyPattern(sectionKey) && !template.allowedSections.includes(sectionKey)) {
         return { ok: false, error: `"${template.label}" is not allowed in this section.` };
     }
     if (templateKey === "child_row_template" && sectionHasBlockTemplate(doc, sectionKey, templateKey)) {

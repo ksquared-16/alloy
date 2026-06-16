@@ -33,6 +33,16 @@ import {
     resolveSurfaceLayoutKeyFromDoc,
     type SurfaceLayoutKey,
 } from "@/lib/layout/surfaceLayoutRegistry";
+import {
+    isLegacyInvalidBlockRefKey,
+    isLegacyInvalidSectionKey,
+    isOpportunityDrawerSectionKeyAllowed,
+    isRegisteredOpportunityDrawerSectionKey,
+    isValidCustomLayoutBlockItem,
+    isValidCustomSectionKeyPattern,
+    LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,
+    LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
+} from "@/lib/layout/layoutEditorGeneratedKeys";
 
 export type LayoutSurfaceValidationResult = {
     ok: boolean;
@@ -56,6 +66,8 @@ const ALLOWED_SECTION_METADATA_KEYS = new Set([
     "compositionPrimaryColumnRefs",
     "enrollmentGridCellRoles",
     "layoutEditorHidden",
+    LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
+    LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,
 ]);
 
 const ALLOWED_ITEM_METADATA_KEYS = new Set([
@@ -76,6 +88,8 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "layoutEditorBlockConfig",
     "layoutEditorActionButton",
     "enrollmentRosterReadFirst",
+    LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
+    LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,
 ]);
 
 const QUEUE_ONLY_DOC_METADATA_KEYS = new Set(["queue_record_layout", "queue_context", "renderAs"]);
@@ -149,7 +163,17 @@ function walkItem(
     }
 
     if (item.kind === "field_group" && item.refKey) {
-        if (!ctx.allowedStructuralRefKeys.has(item.refKey)) {
+        if (isLegacyInvalidBlockRefKey(item.refKey)) {
+            ctx.errors.push(`${path}: legacy_invalid_block_refKey "${item.refKey}"`);
+        } else if ((OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS as readonly string[]).includes(item.refKey)) {
+            if (item.refKey === "layout_block" && !readLayoutEditorBlockConfig(item.metadata).blockType) {
+                ctx.errors.push(`${path}: layout_block requires layoutEditorBlockConfig.blockType`);
+            }
+        } else if (isValidCustomLayoutBlockItem(item)) {
+            // custom freeform block — contents validated below via block config
+        } else if (isValidCustomSectionKeyPattern(item.refKey)) {
+            ctx.errors.push(`${path}: custom_block_missing_metadata for refKey "${item.refKey}"`);
+        } else {
             ctx.errors.push(`${path}: unknown field_group refKey "${item.refKey}"`);
         }
     }
@@ -217,16 +241,33 @@ function walkItem(
 
 function validateOpportunityDrawerSection(section: LayoutSection, index: number, errors: string[]): void {
     const path = `sections[${index}]`;
-    if (!(OPPORTUNITY_DRAWER_SECTION_KEYS as readonly string[]).includes(section.key)) {
-        errors.push(`${path}: unknown section key "${section.key}"`);
+    if (!section.key?.trim()) {
+        errors.push(`${path}: empty section key`);
+        return;
     }
     if (PLATFORM_RESERVED_SECTION_KEYS.has(section.key)) {
         errors.push(`${path}: section key "${section.key}" is platform shell-owned`);
+        return;
+    }
+    if (isLegacyInvalidSectionKey(section.key)) {
+        errors.push(`${path}: legacy_invalid_section_key "${section.key}"`);
+        return;
+    }
+    if (!isOpportunityDrawerSectionKeyAllowed(section)) {
+        if (isValidCustomSectionKeyPattern(section.key)) {
+            errors.push(`${path}: custom_section_missing_metadata for key "${section.key}"`);
+        } else if (!isRegisteredOpportunityDrawerSectionKey(section.key)) {
+            errors.push(`${path}: unknown section key "${section.key}"`);
+        }
+        return;
     }
     if (isObject(section.metadata)) {
         collectUnknownKeys(section.metadata, ALLOWED_SECTION_METADATA_KEYS, `${path}.metadata`, errors);
         if (section.metadata.layoutZone !== undefined && !isOpportunityDrawerLayoutZone(section.metadata.layoutZone)) {
             errors.push(`${path}.metadata.layoutZone: unknown layout zone "${String(section.metadata.layoutZone)}"`);
+        }
+        if (isValidCustomSectionKeyPattern(section.key) && section.metadata[LAYOUT_EDITOR_CUSTOM_METADATA_KEY] !== true) {
+            errors.push(`${path}: custom_section_missing_metadata for key "${section.key}"`);
         }
         walkActionPlacements(
             section.metadata.actionPlacements,
@@ -234,6 +275,8 @@ function validateOpportunityDrawerSection(section: LayoutSection, index: number,
             OPPORTUNITY_DRAWER_ACTION_PLACEMENTS,
             errors,
         );
+    } else if (isValidCustomSectionKeyPattern(section.key)) {
+        errors.push(`${path}: custom_section_missing_metadata for key "${section.key}"`);
     }
 }
 
@@ -263,7 +306,14 @@ function validateOpportunityDrawerDoc(doc: LayoutDoc): string[] {
     const allowedWidgetKeys = new Set(OPPORTUNITY_DRAWER_SURFACE.allowedWidgetKeys);
     const allowedStructuralRefKeys = new Set(OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS as readonly string[]);
 
-    doc.sections.forEach((section, si) => validateOpportunityDrawerSection(section, si, errors));
+    const seenSectionKeys = new Set<string>();
+    doc.sections.forEach((section, si) => {
+        if (seenSectionKeys.has(section.key)) {
+            errors.push(`sections[${si}]: duplicate section key "${section.key}"`);
+        }
+        seenSectionKeys.add(section.key);
+        validateOpportunityDrawerSection(section, si, errors);
+    });
 
     const itemCtx = {
         allowedWidgetKeys,

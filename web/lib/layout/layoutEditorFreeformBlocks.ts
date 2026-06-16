@@ -39,6 +39,10 @@ import {
     type LayoutEditorDataContext,
 } from "@/lib/layout/layoutEditorBlockConfig";
 import {
+    makeCustomBlockRefKey,
+    writeCustomLayoutEditorMetadata,
+} from "@/lib/layout/layoutEditorGeneratedKeys";
+import {
     contactRoleFieldRefs,
     LAYOUT_EDITOR_CONTACT_ROLE_METADATA_KEY,
     readLayoutEditorContactRole,
@@ -98,9 +102,9 @@ function buildContactRoleRows(role: LayoutEditorContactRole): LayoutRow[] {
 export function buildCustomLayoutBlock(input: CreateCustomBlockInput): LayoutItem {
     const role = input.contactRole ?? "primary";
     const blockType = input.blockType;
-    const refKey = blockRefKeyForType(blockType);
+    const refKey = blockType === "contact_card" ? blockRefKeyForType(blockType) : makeCustomBlockRefKey();
     const visibilityRule = defaultBlockVisibilityRule(blockType === "contact_card" ? "contact_card" : blockType, role);
-    const metadata = writeLayoutEditorBlockConfig(
+    const metadata = writeCustomLayoutEditorMetadata(
         {
             [LAYOUT_EDITOR_BLOCK_TEMPLATE_METADATA_KEY]: "custom_layout_block",
             ...(blockType === "contact_card" ? { [LAYOUT_EDITOR_CONTACT_ROLE_METADATA_KEY]: role } : {}),

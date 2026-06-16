@@ -4,7 +4,6 @@
  */
 
 import {
-    addGroup,
     addItem,
     addRow,
     makeFieldItem,
@@ -39,6 +38,7 @@ import {
     OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS,
 } from "@/lib/layout/surfaceLayoutRegistry";
 import { GLOBAL_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
+import { makeEmptyCustomLayoutBlockItem } from "@/lib/layout/layoutEditorGeneratedKeys";
 
 export type SectionColumnCount = 1 | 2 | 3;
 
@@ -105,7 +105,7 @@ function sectionItemRuntimeEffective(item: LayoutItem, kind: SectionItemKind): {
     if (kind === "list" && item.refKey !== "children") {
         return { effective: false, reason: "Only children enrollment lists are runtime-effective today." };
     }
-    if (item.kind === "field_group" && item.refKey === "block") {
+    if (item.kind === "field_group" && (item.refKey === "block" || item.refKey?.startsWith("custom_block_") || item.refKey?.startsWith("layout_block_"))) {
         return { effective: true };
     }
     return { effective: true };
@@ -330,11 +330,8 @@ export function addSectionEmptyGroupBlock(
 ): AddSectionItemResult {
     const sIdx = sectionIndex(doc, sectionKey);
     if (sIdx < 0) return { ok: false, error: "Section not found." };
-    const before = doc.sections[sIdx]!.rows[rowIndex]?.columns[colIndex]?.items.length ?? 0;
-    const next = addGroup(doc, sIdx, rowIndex, colIndex);
-    const item = next.sections[sIdx]!.rows[rowIndex]!.columns[colIndex]!.items[before];
-    if (!item) return { ok: false, error: "Unable to add block." };
-    return { ok: true, doc: next, itemId: item.id };
+    const item = makeEmptyCustomLayoutBlockItem();
+    return { ok: true, doc: addItem(doc, sIdx, rowIndex, colIndex, item), itemId: item.id };
 }
 
 export function removeSectionItem(doc: LayoutDoc, sectionKey: string, itemId: string): LayoutDoc {

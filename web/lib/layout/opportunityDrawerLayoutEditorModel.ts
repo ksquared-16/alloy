@@ -19,6 +19,11 @@ import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { readLayoutSectionPresentationMetadata } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
 import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
+import {
+    addCustomOpportunityDrawerSection,
+    layoutDocHasRepairableGeneratedKeys,
+    repairOpportunityDrawerLayoutGeneratedKeys,
+} from "@/lib/layout/layoutEditorGeneratedKeys";
 import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawerLayoutDocShellZones";
 import {
     isAllowedOpportunityDrawerFieldRefKey,
@@ -280,6 +285,22 @@ export function formatLayoutValidationErrors(errors: string[]): string[] {
             .replace(/^doc\.metadata:/, "Layout settings:")
             .replace(/^doc\.sections\[(\d+)\]\./, "Section $1 · ");
 
+        msg = msg.replace(
+            /legacy_invalid_section_key "([^"]+)"/,
+            'This custom section was created with an invalid key ("$1"). Please recreate it or use "Repair generated layout keys".',
+        );
+        msg = msg.replace(
+            /custom_section_missing_metadata for key "([^"]+)"/,
+            'Custom section "$1" is missing required layout metadata. Use "Repair generated layout keys" or recreate the section.',
+        );
+        msg = msg.replace(
+            /legacy_invalid_block_refKey "([^"]+)"/,
+            'This custom block is missing a valid layout block ID. Use "Repair generated layout keys" or add the block again.',
+        );
+        msg = msg.replace(
+            /custom_block_missing_metadata for refKey "([^"]+)"/,
+            'Custom block "$1" is missing required layout metadata. Use "Repair generated layout keys" or recreate the block.',
+        );
         msg = msg.replace(/unknown field refKey "([^"]+)"/, 'Field "$1" is not allowed on the opportunity drawer');
         msg = msg.replace(/unknown field_group refKey "([^"]+)"/, 'Block "$1" is not allowed on this surface');
         msg = msg.replace(/unknown related_list refKey "([^"]+)"/, 'List "$1" is not allowed on this surface');
@@ -290,6 +311,8 @@ export function formatLayoutValidationErrors(errors: string[]): string[] {
         return msg;
     });
 }
+
+export { addCustomOpportunityDrawerSection, layoutDocHasRepairableGeneratedKeys, repairOpportunityDrawerLayoutGeneratedKeys };
 
 export type VisualEditorActionState = {
     canSave: boolean;

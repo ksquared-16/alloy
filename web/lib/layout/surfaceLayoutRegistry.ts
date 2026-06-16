@@ -131,6 +131,22 @@ export const OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS = [
     "_action_button",
 ] as const;
 
+/**
+ * Custom container policy (Phase 5.13):
+ * - Registered section keys: OPPORTUNITY_DRAWER_SECTION_KEYS
+ * - Custom sections: custom_section_* / layout_section_* + layoutEditorCustom metadata + layoutZone
+ * - System blocks: contact_block, children (related_list), layout_block (with block config)
+ * - Custom blocks: custom_block_* / layout_block_* + layoutEditorBlockConfig + layoutEditorCustom
+ * - Rejected: section_N, bare "block", platform shell keys, unknown field/widget/action refs
+ */
+export const OPPORTUNITY_DRAWER_CUSTOM_SECTION_POLICY = {
+    allowedZones: OPPORTUNITY_DRAWER_LAYOUT_ZONES,
+    sectionKeyPrefixes: ["custom_section_", "layout_section_"] as const,
+    blockRefKeyPrefixes: ["custom_block_", "layout_block_"] as const,
+    requiredSectionMetadata: ["layoutEditorCustom", "layoutZone"] as const,
+    requiredBlockMetadata: ["layoutEditorCustom", "layoutEditorBlockConfig"] as const,
+} as const;
+
 /** Action placement surfaces configurable via Settings → Actions for this drawer. */
 export const OPPORTUNITY_DRAWER_ACTION_PLACEMENTS: readonly ActionSurface[] = [
     "record_header",

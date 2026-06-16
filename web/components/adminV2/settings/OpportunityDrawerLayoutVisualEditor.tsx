@@ -24,11 +24,14 @@ import {
 import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import {
     addRegisteredSection,
+    addCustomOpportunityDrawerSection,
     formatLayoutValidationErrors,
     isOpportunityDrawerLayoutDoc,
     isSectionEditorHidden,
+    layoutDocHasRepairableGeneratedKeys,
     listMissingRegisteredSections,
     OPPORTUNITY_DRAWER_LOCKED_SHELL_SLOTS,
+    repairOpportunityDrawerLayoutGeneratedKeys,
     resolveOpportunityDrawerSectionZone,
     resolveVisualEditorActionState,
     validateOpportunityDrawerLayoutDoc,
@@ -95,6 +98,11 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
 
     const missingSections = useMemo(
         () => (workingDoc ? listMissingRegisteredSections(workingDoc) : []),
+        [workingDoc],
+    );
+
+    const repairableKeys = useMemo(
+        () => (workingDoc ? layoutDocHasRepairableGeneratedKeys(workingDoc) : false),
         [workingDoc],
     );
 
@@ -336,6 +344,20 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                             <li key={msg}>{msg}</li>
                         ))}
                     </ul>
+                    {repairableKeys ?
+                        <button
+                            type="button"
+                            className="mt-2 rounded-md border border-amber-400/60 bg-white px-2 py-1 text-xs font-semibold text-amber-950 hover:bg-amber-100/80"
+                            data-testid="visual-editor-repair-layout-keys"
+                            onClick={() => {
+                                if (!workingDoc) return;
+                                const repaired = repairOpportunityDrawerLayoutGeneratedKeys(workingDoc);
+                                if (repaired.changed) applyDoc(repaired.doc);
+                            }}
+                        >
+                            Repair generated layout keys
+                        </button>
+                    :   null}
                 </div>
             :   null}
 
@@ -470,24 +492,30 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         </div>
                     :   null}
 
-                    {missingSections.length > 0 ?
-                        <div className="mt-5 border-t border-alloy-forge/10 pt-4">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Add section</p>
-                            <div className="mt-2 flex flex-wrap gap-1">
-                                {missingSections.map((key) => (
-                                    <button
-                                        key={key}
-                                        type="button"
-                                        className="rounded border border-alloy-forge/15 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:border-alloy-pine/30"
-                                        onClick={() => applyDoc(addRegisteredSection(workingDoc, key as OpportunityDrawerSectionKey))}
-                                        data-testid={`visual-editor-add-section-${key}`}
-                                    >
-                                        + {key.replace(/_/g, " ")}
-                                    </button>
-                                ))}
-                            </div>
+                    <div className="mt-5 border-t border-alloy-forge/10 pt-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Add section</p>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                            <button
+                                type="button"
+                                className="rounded border border-alloy-pine/30 bg-alloy-pine/[0.06] px-2 py-0.5 text-[10px] font-medium text-alloy-pine hover:border-alloy-pine/50"
+                                onClick={() => applyDoc(addCustomOpportunityDrawerSection(workingDoc, { zone: "main" }))}
+                                data-testid="visual-editor-add-custom-section"
+                            >
+                                + Custom section
+                            </button>
+                            {missingSections.map((key) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    className="rounded border border-alloy-forge/15 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:border-alloy-pine/30"
+                                    onClick={() => applyDoc(addRegisteredSection(workingDoc, key as OpportunityDrawerSectionKey))}
+                                    data-testid={`visual-editor-add-section-${key}`}
+                                >
+                                    + {key.replace(/_/g, " ")}
+                                </button>
+                            ))}
                         </div>
-                    :   null}
+                    </div>
 
                     <p className="mt-6 text-[10px] text-alloy-midnight/40">
                         Locked: {OPPORTUNITY_DRAWER_LOCKED_SHELL_SLOTS.slice(0, 4).join(", ")}…
