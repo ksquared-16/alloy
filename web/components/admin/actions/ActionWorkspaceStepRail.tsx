@@ -73,9 +73,10 @@ export function ActionWorkspaceStepRail({ activeStep, onDark = false }: Props) {
                     <li key={step.key} className="flex items-center gap-2.5">
                         <span
                             style={pillStyle}
-                            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-semibold tracking-wide"
+                            className="inline-flex cursor-default select-none items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-semibold tracking-wide"
                             data-testid={`action-workspace-step-${step.key}`}
                             aria-current={isActive ? "step" : undefined}
+                            aria-disabled="true"
                         >
                             <span className="tabular-nums">{isComplete ? "✓" : index + 1}</span>
                             {step.label}

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { ActionWorkspaceBosSuggestion, ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import {
     buildCreateLeadLiveFindings,
@@ -16,12 +17,14 @@ type Props = {
     suggestions: ActionWorkspaceBosSuggestion[];
     values: Record<string, string>;
     sections: Array<{ key: string; label: string; fields: ActionWorkspaceGatherField[] }>;
-    platformRequiredKeys: readonly string[];
+    gatherFields: readonly ActionWorkspaceGatherField[];
+    intakeSpec: ActionIntakeSpec | null;
+    requiredPayloadKeys: readonly string[];
     onFieldChange: (payloadKey: string, value: string) => void;
     onToggleSuggestion: (id: string) => void;
     onApplySuggestions: () => void;
     onSuggestionValueChange: (id: string, value: string) => void;
-    onAnalyze: () => void;
+    onAnalyze: (textOverride?: string) => void;
     analyzing: boolean;
     analyzeError: string | null;
     disabled?: boolean;
@@ -38,7 +41,9 @@ export function CreateLeadOperationalIntake({
     suggestions,
     values,
     sections,
-    platformRequiredKeys,
+    gatherFields,
+    intakeSpec,
+    requiredPayloadKeys,
     onFieldChange,
     onToggleSuggestion,
     onApplySuggestions,
@@ -65,6 +70,7 @@ export function CreateLeadOperationalIntake({
         values,
         analyzing,
         manualMode,
+        gatherFields,
     });
     const selectedSuggestionCount = suggestions.filter((s) => s.selected).length;
 
@@ -82,7 +88,11 @@ export function CreateLeadOperationalIntake({
                 material={material}
                 pasteDraft={pasteText}
                 onPasteDraftChange={onPasteTextChange}
-                onCommitPaste={() => setComposerOpen(false)}
+                onCommitPaste={(text) => {
+                    onPasteTextChange(text);
+                    setComposerOpen(false);
+                    onAnalyze(text);
+                }}
                 onRemoveMaterial={handleClearMaterial}
                 onAnalyze={onAnalyze}
                 analyzing={analyzing}
@@ -103,7 +113,8 @@ export function CreateLeadOperationalIntake({
                 manualMode={manualMode}
                 sections={sections}
                 values={values}
-                platformRequiredKeys={platformRequiredKeys}
+                intakeSpec={intakeSpec}
+                requiredPayloadKeys={requiredPayloadKeys}
                 onFieldChange={onFieldChange}
                 onSuggestionValueChange={onSuggestionValueChange}
                 onToggleSuggestion={onToggleSuggestion}

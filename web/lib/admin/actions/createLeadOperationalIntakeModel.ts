@@ -28,24 +28,7 @@ export type CreateLeadLiveFinding = {
     source: "suggestion" | "value" | "placeholder";
 };
 
-const FIELD_ENTITY_LABEL: Record<string, string> = {
-    first_name: "Parent first name",
-    last_name: "Parent last name",
-    email: "Email",
-    phone: "Phone",
-    child_first_name: "Child first name",
-    child_last_name: "Child last name",
-    child_date_of_birth: "Date of birth",
-    child_program: "Program",
-    child_program_room_cohort_key: "Room / cohort",
-    child_desired_schedule_type: "Schedule",
-    child_desired_start_date: "Desired start",
-    location_id: "Location",
-    source: "Source",
-    intake_notes: "Notes",
-};
-
-const FINDING_PLACEHOLDER_ORDER = [
+const FALLBACK_PLACEHOLDER_ORDER = [
     "first_name",
     "email",
     "phone",
@@ -55,14 +38,36 @@ const FINDING_PLACEHOLDER_ORDER = [
     "source",
 ] as const;
 
+function fieldForPayloadKey(
+    gatherFields: readonly ActionWorkspaceGatherField[],
+    payloadKey: string,
+): ActionWorkspaceGatherField {
+    return (
+        gatherFields.find((f) => f.payload_key === payloadKey) ?? {
+            payload_key: payloadKey,
+            field_label: payloadKey,
+            section: "person",
+            section_label: "Parent / guardian",
+            tier: "optional",
+            value_kind: "text",
+        }
+    );
+}
+
 function entityLabelForField(field: ActionWorkspaceGatherField): string {
-    return FIELD_ENTITY_LABEL[field.payload_key] ?? field.field_label;
+    return field.field_label;
 }
 
 function confidenceToStatus(confidence: ActionWorkspaceBosSuggestion["confidence"]): CreateLeadLiveFindingStatus {
     if (confidence === "high") return "confirmed";
     if (confidence === "medium") return "review";
     return "review";
+}
+
+function placeholderOrderForFields(gatherFields: readonly ActionWorkspaceGatherField[]): string[] {
+    const required = gatherFields.filter((f) => f.tier === "required").map((f) => f.payload_key);
+    if (required.length) return required;
+    return [...FALLBACK_PLACEHOLDER_ORDER];
 }
 
 export function buildCreateLeadMaterialCard(args: {
@@ -92,20 +97,14 @@ export function buildCreateLeadLiveFindings(args: {
     values: Record<string, string>;
     analyzing: boolean;
     manualMode: boolean;
+    gatherFields?: readonly ActionWorkspaceGatherField[];
 }): CreateLeadLiveFinding[] {
+    const gatherFields = args.gatherFields ?? CREATE_LEAD_GATHER_FIELDS;
+
     if (args.analyzing) {
         return args.suggestions.map((s) => ({
             id: s.id,
-            entity: entityLabelForField(
-                CREATE_LEAD_GATHER_FIELDS.find((f) => f.payload_key === s.payload_key) ?? {
-                    payload_key: s.payload_key,
-                    field_label: s.field_label,
-                    section: "person",
-                    section_label: "Parent / guardian",
-                    tier: "optional",
-                    value_kind: "text",
-                },
-            ),
+            entity: entityLabelForField(fieldForPayloadKey(gatherFields, s.payload_key)),
             value: s.suggested_value,
             status: "streaming",
             detail: "Extracting from material…",
@@ -132,7 +131,7 @@ export function buildCreateLeadLiveFindings(args: {
         }));
     }
 
-    const valueFindings = CREATE_LEAD_GATHER_FIELDS.flatMap((field) => {
+    const valueFindings = gatherFields.flatMap((field) => {
         const value = (args.values[field.payload_key] ?? "").trim();
         if (!value) return [];
         return [
@@ -151,18 +150,20 @@ export function buildCreateLeadLiveFindings(args: {
 
     if (valueFindings.length > 0) return valueFindings;
 
-    return FINDING_PLACEHOLDER_ORDER.map((payloadKey) => {
-        const field = CREATE_LEAD_GATHER_FIELDS.find((f) => f.payload_key === payloadKey);
-        if (!field) return null;
-        const finding: CreateLeadLiveFinding = {
-            id: `placeholder:${payloadKey}`,
-            entity: entityLabelForField(field),
-            value: "",
-            status: "empty",
-            detail: "Waiting for material",
-            payloadKey,
-            source: "placeholder",
-        };
-        return finding;
-    }).filter((f): f is CreateLeadLiveFinding => f != null);
+    return placeholderOrderForFields(gatherFields)
+        .map((payloadKey) => {
+            const field = gatherFields.find((f) => f.payload_key === payloadKey);
+            if (!field) return null;
+            const finding: CreateLeadLiveFinding = {
+                id: `placeholder:${payloadKey}`,
+                entity: entityLabelForField(field),
+                value: "",
+                status: "empty",
+                detail: "Waiting for material",
+                payloadKey,
+                source: "placeholder",
+            };
+            return finding;
+        })
+        .filter((f): f is CreateLeadLiveFinding => f != null);
 }

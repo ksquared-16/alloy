@@ -4,10 +4,11 @@ import type {
     ActionIntakeValueKind,
 } from "@/lib/lifecycle/actionIntakeSpecTypes";
 
-/** Lifecycle Builder entities collected on create_lead (no opportunity/customer yet). */
+/** Lifecycle Builder entities + opportunity context fields collected on create_lead. */
 export const CREATE_LEAD_INTAKE_ENTITIES: readonly LifecycleRequirementEntityKey[] = [
     "person",
     "child",
+    "opportunity",
 ] as const;
 
 /** Platform minimum for create_lead regardless of dept field_rules. */
@@ -34,6 +35,7 @@ export const CREATE_LEAD_PAYLOAD_KEY_BY_RULE: Readonly<Record<string, string>> =
     "child:desired_start_date": "child_desired_start_date",
     "child:classroom": "child_program_room_cohort_key",
     "child:start_date": "child_desired_start_date",
+    "opportunity:location": "location_id",
 };
 
 export function createLeadPayloadKeyForRule(ruleId: string): string | null {

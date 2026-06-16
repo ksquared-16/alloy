@@ -11,7 +11,7 @@ type Props = {
     material: CreateLeadMaterialCard | null;
     pasteDraft: string;
     onPasteDraftChange: (value: string) => void;
-    onCommitPaste: () => void;
+    onCommitPaste: (text: string) => void;
     onRemoveMaterial: () => void;
     onAnalyze: () => void;
     analyzing: boolean;
@@ -67,8 +67,9 @@ export function CreateLeadMaterialStackColumn({
     };
 
     const commitComposer = () => {
-        onPasteDraftChange(localDraft);
-        onCommitPaste();
+        const trimmed = localDraft.trim();
+        if (!trimmed) return;
+        onCommitPaste(trimmed);
         onComposerOpenChange(false);
     };
 
@@ -95,7 +96,7 @@ export function CreateLeadMaterialStackColumn({
                         className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-1.5 text-[11px] font-semibold text-alloy-midnight/65 transition-colors hover:border-alloy-stone/25 hover:bg-[#FAFBFC] disabled:opacity-50"
                         data-testid="action-workspace-analyze-button"
                     >
-                        Analyze
+                        Analyze with BOS
                     </button>
                 :   null}
             </div>
@@ -192,7 +193,7 @@ export function CreateLeadMaterialStackColumn({
                                 className="rounded-lg border border-[#00A283]/25 bg-[#00A283]/10 px-3 py-1.5 text-[11px] font-semibold text-[#007A63] hover:bg-[#00A283]/15 disabled:opacity-50"
                                 data-testid="create-lead-commit-material-button"
                             >
-                                Add to stack
+                                Analyze with BOS
                             </button>
                         </div>
                     </div>

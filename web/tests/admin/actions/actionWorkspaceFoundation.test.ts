@@ -165,7 +165,8 @@ describe("action workspace foundation", () => {
         expect(modal).toContain('step === "review"');
         expect(modal).toContain('step === "execute"');
         expect(modal).toContain('step === "success"');
-        expect(modal).not.toContain("fetchActionIntakeSpec");
+        expect(modal).toContain("fetchActionIntakeSpec");
+        expect(modal).toContain("validateCreateLeadFromIntakeSpec");
         expect(modal).toContain("validateCreateLeadPlatformMinimum");
         expect(modal).toContain("gatherPhase");
         expect(modal).toContain("Create Lead");
@@ -342,8 +343,10 @@ describe("CreateLeadActionWorkspace render", () => {
         expect(html).not.toContain('data-create-lead-column="guidance"');
         expect(html).not.toContain('data-create-lead-column="findings"');
         expect(html).not.toContain('data-testid="action-workspace-paste-canvas"');
-        expect(html).not.toContain("Analyze with BOS");
         expect(html).not.toContain('data-testid="create-lead-review-step"');
+        const stack = read("components/admin/actions/CreateLeadMaterialStackColumn.tsx");
+        expect(stack).toContain("Analyze with BOS");
+        expect(stack).not.toContain("Add to stack");
     });
 });
 

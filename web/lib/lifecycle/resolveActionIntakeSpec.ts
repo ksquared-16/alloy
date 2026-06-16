@@ -1,8 +1,5 @@
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
-import {
-    effectiveFieldRulesForStage,
-    type LifecycleRequirementsSource,
-} from "@/lib/completion/lifecycleProgressionRequirementsConfig";
+import { effectiveFieldRulesForBuilderStage } from "@/lib/lifecycle/lifecycleBuilderStageFieldRules";
 import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
 import type {
     ActionIntakeConstraint,
@@ -103,12 +100,17 @@ function buildFieldSpec(
     const orgDef = orgFieldDefForKey(org_field_definitions, entity, fieldKey);
     const fallbackOptionSetKey =
         entity === "child" && fieldKey ? fallbackOptionSetKeyForInquiryChildField(fieldKey) : null;
+    const placementSelect =
+        entity === "child"
+            ? placementSelectForInquiryChildField(fieldKey)
+            : entity === "opportunity" && fieldKey === "location_id"
+              ? "site"
+              : null;
     const selectBinding = resolveSelectFieldBinding({
         field_type: orgDef?.field_type ?? (fallbackOptionSetKey ? "select" : "text"),
         config: orgDef?.config,
         fallbackOptionSetKey,
     });
-    const placementSelect = entity === "child" ? placementSelectForInquiryChildField(fieldKey) : null;
     const optionSetKey =
         placementSelect ? null : selectBinding.option_set_key;
     const valueKind = inferActionIntakeValueKind(ruleId, fieldKey, optionSetKey, placementSelect);
@@ -185,18 +187,43 @@ function buildGroups(fields: ActionIntakeFieldSpec[]): ActionIntakeEntityGroup[]
     return groups;
 }
 
+function buildCreateLeadContactConstraints(
+    requiredIds: string[],
+    requirementsSource: "platform" | "department",
+): ActionIntakeConstraint[] {
+    const emailRequired = requiredIds.includes("person:email");
+    const phoneRequired = requiredIds.includes("person:phone");
+    if (emailRequired || phoneRequired) return [];
+    if (requirementsSource === "platform") {
+        return [
+            {
+                kind: "at_least_one",
+                rule_ids: CREATE_LEAD_CONTACT_RULE_IDS,
+                message: "Phone or email is required.",
+            },
+        ];
+    }
+    return [];
+}
+
 export function resolveCreateLeadActionIntakeSpec(input: {
     department_id: string;
     process_id?: string | null;
     operator_stage: LifecycleOperatorStage;
+    /** Builder stage key — defaults to operator_stage when absent. */
+    builder_stage_key?: string | null;
     department_metadata?: Record<string, unknown> | null;
     org_field_definitions?: Partial<Record<string, OrgFieldDefinitionRow[]>> | null;
     primary_record_label?: string;
 }): ActionIntakeSpec {
-    const { rules, source } = effectiveFieldRulesForStage(
+    const builderStageKey = input.builder_stage_key?.trim() || input.operator_stage;
+    const { rules, source: rulesSource } = effectiveFieldRulesForBuilderStage(
+        builderStageKey,
+        input.department_metadata ?? null,
         input.operator_stage,
-        input.department_metadata ?? null
     );
+    const requirementsSource: "platform" | "department" =
+        rulesSource === "platform" || rulesSource === "none" ? "platform" : "department";
     const palette = mergeLifecycleFieldPaletteForStage(
         input.operator_stage,
         input.org_field_definitions ?? null
@@ -230,13 +257,7 @@ export function resolveCreateLeadActionIntakeSpec(input: {
         if (spec) optional.push(spec);
     }
 
-    const constraints: ActionIntakeConstraint[] = [
-        {
-            kind: "at_least_one",
-            rule_ids: CREATE_LEAD_CONTACT_RULE_IDS,
-            message: "Phone or email is required.",
-        },
-    ];
+    const constraints = buildCreateLeadContactConstraints(policy.requiredIds, requirementsSource);
 
     const leadLabel = input.primary_record_label?.trim() || "Lead";
     const allFields = dedupeFieldSpecs([...required, ...recommended, ...optional]);
@@ -247,7 +268,7 @@ export function resolveCreateLeadActionIntakeSpec(input: {
         process_id: input.process_id?.trim() || null,
         operator_stage: input.operator_stage,
         mode: "hybrid",
-        requirements_source: source as LifecycleRequirementsSource,
+        requirements_source: requirementsSource,
         groups: buildGroups(allFields),
         required: dedupeFieldSpecs(required),
         recommended: dedupeFieldSpecs(recommended),
@@ -255,7 +276,7 @@ export function resolveCreateLeadActionIntakeSpec(input: {
         constraints,
         copy: {
             title: `Create ${leadLabel}`,
-            help: "Paste inquiry details or enter manually. BOS drafts fields for your review — nothing is created until you confirm.",
+            help: "Paste inquiry details or enter manually. Required fields follow your Lead stage configuration.",
         },
     };
 }
@@ -268,6 +289,7 @@ export function resolveActionIntakeSpec(input: ResolveActionIntakeSpecInput): Ac
         department_id: input.department_id,
         process_id: input.process_id,
         operator_stage: asLeadStage(input.stage_key),
+        builder_stage_key: input.stage_key,
         department_metadata: input.department_metadata,
         org_field_definitions: input.org_field_definitions,
         primary_record_label: input.primary_record_label,

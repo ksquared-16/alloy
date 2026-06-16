@@ -2,6 +2,7 @@
 
 import { Check, Loader2 } from "lucide-react";
 
+import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type {
     ActionWorkspaceBosSuggestion,
     ActionWorkspaceGatherField,
@@ -9,7 +10,7 @@ import type {
 import type { CreateLeadLiveFinding } from "@/lib/admin/actions/createLeadOperationalIntakeModel";
 import {
     BOS_CONFIDENCE_STYLES,
-    missingPlatformKeysFromSuggestions,
+    missingRequiredLabelsForIntake,
 } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
 
@@ -20,7 +21,8 @@ type Props = {
     manualMode: boolean;
     sections: Array<{ key: string; label: string; fields: ActionWorkspaceGatherField[] }>;
     values: Record<string, string>;
-    platformRequiredKeys: readonly string[];
+    intakeSpec: ActionIntakeSpec | null;
+    requiredPayloadKeys: readonly string[];
     onFieldChange: (payloadKey: string, value: string) => void;
     onSuggestionValueChange: (id: string, value: string) => void;
     onToggleSuggestion: (id: string) => void;
@@ -150,7 +152,8 @@ export function CreateLeadDraftLeadColumn({
     manualMode,
     sections,
     values,
-    platformRequiredKeys,
+    intakeSpec,
+    requiredPayloadKeys,
     onFieldChange,
     onSuggestionValueChange,
     onToggleSuggestion,
@@ -160,7 +163,10 @@ export function CreateLeadDraftLeadColumn({
     validationIssues,
 }: Props) {
     const filledCount = findings.filter((f) => f.status === "confirmed" || f.status === "review").length;
-    const missing = missingPlatformKeysFromSuggestions(suggestions, true);
+    const missing =
+        intakeSpec ?
+            missingRequiredLabelsForIntake(intakeSpec, values, suggestions)
+        :   [];
     const showApply = suggestions.length > 0 && !analyzing && !manualMode;
 
     return (
@@ -231,7 +237,7 @@ export function CreateLeadDraftLeadColumn({
                             sections={sections}
                             values={values}
                             onChange={onFieldChange}
-                            platformRequiredKeys={platformRequiredKeys}
+                            platformRequiredKeys={requiredPayloadKeys}
                             dataTestIdPrefix="create-lead-gather"
                         />
                     </div>

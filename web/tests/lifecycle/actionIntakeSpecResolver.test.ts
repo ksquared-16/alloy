@@ -152,12 +152,12 @@ describe("action intake spec resolver P0", () => {
 });
 
 describe("create lead action workspace wiring", () => {
-    it("create lead uses action workspace with platform minimum only", () => {
+    it("create lead uses Lead stage intake spec with platform fallback", () => {
         const modal = read("components/admin/opportunity/actions/CreateLeadModal.tsx");
-        expect(modal).toContain("ActionWorkspaceShell");
+        expect(modal).toContain("ActionWorkspaceBosShell");
+        expect(modal).toContain("fetchActionIntakeSpec");
+        expect(modal).toContain("validateCreateLeadFromIntakeSpec");
         expect(modal).toContain("validateCreateLeadPlatformMinimum");
-        expect(modal).not.toContain("fetchActionIntakeSpec");
-        expect(modal).not.toContain("validateActionIntakePayload");
     });
 
     it("follows gather review execute success steps", () => {
@@ -179,8 +179,35 @@ describe("create lead action workspace wiring", () => {
 
     it("BOS suggestions require apply before field write", () => {
         const modal = read("components/admin/opportunity/actions/CreateLeadModal.tsx");
-        expect(modal).toContain("ActionWorkspaceBosSuggestions");
+        expect(modal).toContain("CreateLeadOperationalIntake");
         expect(modal).toContain("applySuggestions");
         expect(modal).not.toContain("applyActionIntakePasteExtraction");
+    });
+
+    it("department Lead stage with location and separate email and phone has no OR constraint", () => {
+        const spec = resolveCreateLeadActionIntakeSpec({
+            department_id: "dept-1",
+            operator_stage: "lead",
+            builder_stage_key: "lead",
+            department_metadata: {
+                lifecycle_builder_stage_field_rules_v1: {
+                    version: 1,
+                    by_stage_key: {
+                        lead: {
+                            required_rule_ids: [
+                                "opportunity:location",
+                                "person:email",
+                                "person:phone",
+                            ],
+                            recommended_rule_ids: [],
+                        },
+                    },
+                },
+            },
+        });
+        expect(spec.constraints).toEqual([]);
+        expect(spec.required.map((f) => f.rule_id)).toEqual(
+            expect.arrayContaining(["person:first_name", "person:last_name", "opportunity:location", "person:email", "person:phone"]),
+        );
     });
 });

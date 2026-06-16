@@ -1,4 +1,6 @@
 import type { ActionWorkspaceBosSuggestion } from "@/lib/admin/actions/actionWorkspaceTypes";
+import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
+import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 
 export type BosConfidenceLevel = ActionWorkspaceBosSuggestion["confidence"];
 
@@ -41,4 +43,12 @@ export function missingPlatformKeysFromSuggestions(
     if (!keys.has("last_name")) missing.push("Parent last name");
     if (!keys.has("email") && !keys.has("phone")) missing.push("Email or phone");
     return missing;
+}
+
+export function missingRequiredLabelsForIntake(
+    spec: ActionIntakeSpec,
+    values: Record<string, string>,
+    suggestions: ActionWorkspaceBosSuggestion[],
+): string[] {
+    return missingRequiredLabelsForCreateLead(spec, values, suggestions);
 }

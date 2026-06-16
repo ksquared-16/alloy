@@ -15,9 +15,7 @@ import {
     CREATE_LEAD_GATHER_FIELDS,
     CREATE_LEAD_PLATFORM_REQUIRED_KEYS,
     bosSuggestionsFromExtraction,
-    createLeadParserSpec,
     emptyCreateLeadGatherValues,
-    gatherSections,
     mapCreateLeadGatherToExecutePayload,
     validateCreateLeadPlatformMinimum,
 } from "@/lib/admin/actions/createLeadPlatformGather";
@@ -27,7 +25,16 @@ import {
 import { mapBosRecommendationsToSuccessActions } from "@/lib/admin/actions/mapBosRecommendationsToSuccessActions";
 import { resolveCreateLeadPostCreateRecommendations } from "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations";
 import { CREATE_LEAD_WORKSPACE_TITLE } from "@/lib/admin/actions/bosWorkspaceShell";
+import {
+    emptyCreateLeadValuesForFields,
+    gatherFieldsFromActionIntakeSpec,
+    gatherSectionsFromFields,
+    resolveCreateLeadRequiredFields,
+    validateCreateLeadFromIntakeSpec,
+    type CreateLeadRequiredFieldsBundle,
+} from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
+import { fetchActionIntakeSpec } from "@/lib/lifecycle/fetchActionIntakeSpec";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
 import { CreateLeadOperationalIntake } from "@/components/admin/actions/CreateLeadOperationalIntake";
 import { ActionWorkspaceReviewSummary } from "@/components/admin/actions/ActionWorkspaceReviewSummary";
@@ -60,6 +67,10 @@ function suggestionId(payloadKey: string, value: string): string {
     return `${payloadKey}:${value}`;
 }
 
+function platformFallbackBundle(departmentId: string): CreateLeadRequiredFieldsBundle {
+    return resolveCreateLeadRequiredFields({ departmentId, stageKey: "lead" });
+}
+
 export function CreateLeadModal(props: {
     open: boolean;
     departmentId: string | null;
@@ -73,6 +84,7 @@ export function CreateLeadModal(props: {
 
     const [step, setStep] = useState<ActionWorkspaceStep>("gather");
     const [gatherPhase, setGatherPhase] = useState<ActionWorkspaceGatherPhase>("paste");
+    const [intakeBundle, setIntakeBundle] = useState<CreateLeadRequiredFieldsBundle | null>(null);
     const [values, setValues] = useState<Record<string, string>>(emptyCreateLeadGatherValues());
     const [pasteText, setPasteText] = useState("");
     const [suggestions, setSuggestions] = useState<ActionWorkspaceBosSuggestion[]>([]);
@@ -84,6 +96,14 @@ export function CreateLeadModal(props: {
     const createdIdRef = useRef<string | null>(null);
     const handoffStartedRef = useRef(false);
 
+    const gatherFields = intakeBundle?.gatherFields ?? CREATE_LEAD_GATHER_FIELDS;
+    const sections = useMemo(
+        () => intakeBundle?.sections ?? gatherSectionsFromFields([...CREATE_LEAD_GATHER_FIELDS]),
+        [intakeBundle],
+    );
+    const requiredPayloadKeys = intakeBundle?.requiredPayloadKeys ?? CREATE_LEAD_PLATFORM_REQUIRED_KEYS;
+    const intakeSpec = intakeBundle?.spec ?? null;
+
     const handoffToCreatedLead = useCallback(
         (opportunityId: string) => {
             queueActionWorkspaceLeadHandoff(opportunityId, (id) => onCreated?.(id), onClose);
@@ -91,8 +111,10 @@ export function CreateLeadModal(props: {
         [onClose, onCreated],
     );
 
-    const sections = useMemo(() => gatherSections(), []);
-    const validation = useMemo(() => validateCreateLeadPlatformMinimum(values), [values]);
+    const validation = useMemo(() => {
+        if (intakeSpec) return validateCreateLeadFromIntakeSpec(intakeSpec, values);
+        return validateCreateLeadPlatformMinimum(values);
+    }, [intakeSpec, values]);
     const householdLabel = useMemo(() => formatCreateLeadHouseholdLabel(values), [values]);
     const bosRecommendations = useMemo(() => resolveCreateLeadPostCreateRecommendations(values), [values]);
     const successActions = useMemo(
@@ -109,10 +131,9 @@ export function CreateLeadModal(props: {
     const manualMode = gatherPhase === "details";
     const validationIssues = validation.ok ? [] : validation.issues;
 
-    const reset = useCallback(() => {
+    const resetWorkspaceState = useCallback(() => {
         setStep("gather");
         setGatherPhase("paste");
-        setValues(emptyCreateLeadGatherValues());
         setPasteText("");
         setSuggestions([]);
         setMaterialAnalyzed(false);
@@ -126,17 +147,60 @@ export function CreateLeadModal(props: {
 
     useEffect(() => {
         if (!open) return;
-        reset();
-        if (!departmentId) setError("Department context is required to create a lead.");
+        resetWorkspaceState();
+        if (!departmentId) {
+            setError("Department context is required to create a lead.");
+            setIntakeBundle(null);
+            setValues(emptyCreateLeadGatherValues());
+            return;
+        }
+
+        const fallback = platformFallbackBundle(departmentId);
+        setIntakeBundle(fallback);
+        const initialValues = emptyCreateLeadValuesForFields(fallback.gatherFields);
         const permittedSiteIds = (siteFilter?.bootstrap?.sites ?? []).map((s) => s.id);
         const resolved = resolveCreateLeadDefaultLocation({
             workspaceSiteId: siteFilter?.selectedSiteId ?? null,
             permittedSiteIds,
         });
-        if (resolved.location_id) {
-            setValues((prev) => applyCreateLeadDefaultLocationToValues(prev, resolved));
-        }
-    }, [open, departmentId, reset, siteFilter?.selectedSiteId, siteFilter?.bootstrap?.sites]);
+        setValues(
+            resolved.location_id ?
+                applyCreateLeadDefaultLocationToValues(initialValues, resolved)
+            :   initialValues,
+        );
+
+        let cancelled = false;
+        fetchActionIntakeSpec({
+            action_key: "create_lead",
+            department_id: departmentId,
+            stage_key: "lead",
+        })
+            .then((spec) => {
+                if (cancelled) return;
+                const fields = gatherFieldsFromActionIntakeSpec(spec);
+                setIntakeBundle({
+                    spec,
+                    gatherFields: fields,
+                    sections: gatherSectionsFromFields(fields),
+                    requiredPayloadKeys: spec.required.map((f) => f.payload_key),
+                });
+                setValues((prev) => {
+                    const next = emptyCreateLeadValuesForFields(fields);
+                    for (const field of fields) {
+                        const existing = (prev[field.payload_key] ?? "").trim();
+                        if (existing) next[field.payload_key] = existing;
+                    }
+                    return next;
+                });
+            })
+            .catch(() => {
+                /* keep client-side fallback bundle */
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, departmentId, resetWorkspaceState, siteFilter?.selectedSiteId, siteFilter?.bootstrap?.sites]);
 
     useEffect(() => {
         if (step !== "success" || !createdIdRef.current || handoffStartedRef.current) return;
@@ -164,39 +228,44 @@ export function CreateLeadModal(props: {
         setGatherPhase("paste");
     }, []);
 
-    const runAnalyze = useCallback(() => {
-        if (!departmentId || !pasteText.trim()) return;
-        setAnalyzing(true);
-        setAnalyzeError(null);
-        setError(null);
-        setGatherPhase("paste");
-        try {
-            const spec = createLeadParserSpec(departmentId);
-            const extraction = createLeadIntakePasteParser.parse({ text: pasteText, spec });
-            const mapped = bosSuggestionsFromExtraction(extraction);
-            if (mapped.length === 0) {
-                setAnalyzeError("BOS could not extract structured fields. Try adding labels like Parent: or Email:.");
+    const runAnalyze = useCallback(
+        (textOverride?: string) => {
+            const text = (textOverride ?? pasteText).trim();
+            if (!departmentId || !text) return;
+            if (textOverride) setPasteText(text);
+            setAnalyzing(true);
+            setAnalyzeError(null);
+            setError(null);
+            setGatherPhase("paste");
+            try {
+                const spec = intakeSpec ?? platformFallbackBundle(departmentId).spec;
+                const extraction = createLeadIntakePasteParser.parse({ text, spec });
+                const mapped = bosSuggestionsFromExtraction(extraction);
+                if (mapped.length === 0) {
+                    setAnalyzeError("BOS could not extract structured fields. Try adding labels like Parent: or Email:.");
+                    setSuggestions([]);
+                    return;
+                }
+                setSuggestions(
+                    mapped.map((s) => ({
+                        id: suggestionId(s.payload_key, s.suggested_value),
+                        payload_key: s.payload_key,
+                        field_label: s.field_label,
+                        suggested_value: s.suggested_value,
+                        confidence: s.confidence,
+                        selected: s.confidence === "high",
+                    })),
+                );
+                setMaterialAnalyzed(true);
+            } catch (e) {
                 setSuggestions([]);
-                return;
+                setAnalyzeError(e instanceof Error ? e.message : "Could not analyze pasted text.");
+            } finally {
+                setAnalyzing(false);
             }
-            setSuggestions(
-                mapped.map((s) => ({
-                    id: suggestionId(s.payload_key, s.suggested_value),
-                    payload_key: s.payload_key,
-                    field_label: s.field_label,
-                    suggested_value: s.suggested_value,
-                    confidence: s.confidence,
-                    selected: true,
-                })),
-            );
-            setMaterialAnalyzed(true);
-        } catch (e) {
-            setSuggestions([]);
-            setAnalyzeError(e instanceof Error ? e.message : "Could not analyze pasted text.");
-        } finally {
-            setAnalyzing(false);
-        }
-    }, [departmentId, pasteText]);
+        },
+        [departmentId, intakeSpec, pasteText],
+    );
 
     const applySuggestions = useCallback(() => {
         const selected = suggestions.filter((s) => s.selected);
@@ -212,7 +281,10 @@ export function CreateLeadModal(props: {
 
     const runExecute = useCallback(async () => {
         if (!departmentId) return;
-        const check = validateCreateLeadPlatformMinimum(values);
+        const check =
+            intakeSpec ?
+                validateCreateLeadFromIntakeSpec(intakeSpec, values)
+            :   validateCreateLeadPlatformMinimum(values);
         if (!check.ok) {
             setGatherPhase("details");
             setStep("gather");
@@ -234,7 +306,7 @@ export function CreateLeadModal(props: {
             setGatherPhase("details");
             setError(e instanceof Error ? e.message : "Create lead failed");
         }
-    }, [departmentId, onSubmit, values]);
+    }, [departmentId, intakeSpec, onSubmit, values]);
 
     const footer =
         step === "gather" ?
@@ -319,7 +391,9 @@ export function CreateLeadModal(props: {
                         suggestions={suggestions}
                         values={values}
                         sections={sections}
-                        platformRequiredKeys={CREATE_LEAD_PLATFORM_REQUIRED_KEYS}
+                        gatherFields={gatherFields}
+                        intakeSpec={intakeSpec}
+                        requiredPayloadKeys={requiredPayloadKeys}
                         onFieldChange={setFieldValue}
                         onToggleSuggestion={(id) => {
                             setSuggestions((prev) =>
@@ -351,7 +425,7 @@ export function CreateLeadModal(props: {
             <ActionWorkspaceStepContent step="review" activeStep={step}>
                 <div className="h-full px-8 py-4" data-testid="create-lead-review-step">
                     <ActionWorkspaceReviewSummary
-                        fields={CREATE_LEAD_GATHER_FIELDS}
+                        fields={gatherFields}
                         values={values}
                         dataTestIdPrefix="create-lead-review"
                     />
