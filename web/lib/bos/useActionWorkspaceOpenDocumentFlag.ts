@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 
+import { closeAllWorkspaceModals } from "@/lib/adminV2/workspaceModalCoordinator";
 import { setActionWorkspaceOpenDocumentFlag } from "@/lib/bos/bosRailPresentationFlags";
 
 /** Marks document while BOS Action Workspace overlay is open — suppresses persistent BOS rail. */
@@ -12,6 +13,7 @@ export function useActionWorkspaceOpenDocumentFlag(open: boolean, presentation: 
             return;
         }
 
+        closeAllWorkspaceModals();
         setActionWorkspaceOpenDocumentFlag(true);
 
         return () => {

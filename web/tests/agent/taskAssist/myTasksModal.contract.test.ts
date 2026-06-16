@@ -45,8 +45,8 @@ describe("My tasks modal UX", () => {
         expect(readFileSync(sidebarModalItems, "utf8")).toContain('type="button"');
         expect(readFileSync(sidebarModalItems, "utf8")).toContain("dispatchAdminV2OpenTasksPanel");
         expect(readFileSync(sidebar, "utf8")).toContain("SidebarTasksNavItem");
+        expect(readFileSync(topNav, "utf8")).toContain("subscribeAdminV2WorkspaceModal");
         expect(readFileSync(topNav, "utf8")).toContain("MyTasksModal");
-        expect(readFileSync(topNav, "utf8")).toContain("setTasksModalOpen");
         expect(readFileSync(navBadge, "utf8")).toContain("<button");
         expect(readFileSync(navBadge, "utf8")).not.toContain('href="/adminV2/tasks"');
     });

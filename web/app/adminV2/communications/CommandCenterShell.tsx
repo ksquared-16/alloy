@@ -15,20 +15,24 @@ import {
     conversationUnreadCount,
     conversationQueueStatusPill,
     queueStatusPillClass,
-    OTHER_QUEUE_KEY,
-    FALLBACK_QUEUE_EXPLANATION,
+    resolveCommandCenterHealthDisplay,
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
 import {
     getCommandCenterCacheSnapshot,
+    getCommandCenterFirstConversationWarm,
+    getCommandCenterWarmSelectedConversationId,
     prefetchCommandCenterConversations,
     subscribeCommandCenterCache,
 } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { buildCommandCenterRecordLinks, type CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
+import { fetchCommandCenterThreadMessages, type CommandCenterTimelineMessage } from "@/lib/communications/v2/commandCenterThreadMessages";
 import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import FamilyCommunicationWorkspaceView from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import type { FamilyCommunicationWorkspaceVM, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
@@ -48,27 +52,72 @@ import {
  *   - Composer = top-anchored, full-height, message body the dominant surface.
  * Presentation only; fixture mode kept; no data/route/outer-geometry/BOS/flag change.
  */
-type TimelineMessage = {
-    id?: string;
-    direction?: string | null;
-    channel?: string | null;
-    body?: string | null;
-    created_at?: string | null;
-    opened_at?: string | null;
-    replied_at?: string | null;
-    kind?: string | null;
-    thread_id?: string | null;
-    status?: string | null;
-};
+type TimelineMessage = CommandCenterTimelineMessage;
+
+function mapLiveEvents(events: FamilyCommunicationWorkspaceVM["timelineEvents"]): TimelineMessage[] {
+    return events.map((e) => ({
+        id: e.id,
+        direction: e.direction,
+        channel: e.channel,
+        body: e.body,
+        created_at: e.createdAt,
+        kind: e.kind,
+        opened_at: e.openedAt,
+        replied_at: e.repliedAt,
+        thread_id: e.threadId,
+        status: e.status,
+    }));
+}
+
+function initialWorkspaceFromWarm(): {
+    messages: TimelineMessage[];
+    liveChildren: string[] | null;
+    liveRecipientGroups: RecipientGroup[] | null;
+    selectedRecipientIds: string[];
+} | null {
+    const warm = getCommandCenterFirstConversationWarm();
+    if (!warm) return null;
+    if (warm.workspace) {
+        const threadMsgs = warm.threadMessages?.length
+            ? warm.threadMessages
+            : mapLiveEvents(warm.workspace.messages.length ? warm.workspace.messages : warm.workspace.timelineEvents);
+        return {
+            messages: threadMsgs,
+            liveChildren: warm.workspace.children.map((c) => c.name),
+            liveRecipientGroups: warm.workspace.recipientGroups,
+            selectedRecipientIds: warm.workspace.selectedRecipients,
+        };
+    }
+    if (warm.threadMessages) {
+        return {
+            messages: warm.threadMessages,
+            liveChildren: null,
+            liveRecipientGroups: null,
+            selectedRecipientIds: [],
+        };
+    }
+    return null;
+}
 
 function initialConversations(): ConversationSummary[] {
     if (COMMS_FIXTURES_ENABLED) return FIXTURE_CONVERSATIONS;
     return getCommandCenterCacheSnapshot()?.conversations ?? [];
 }
 
+function initialSelectedId(): string | null {
+    if (COMMS_FIXTURES_ENABLED) return FIXTURE_CONVERSATIONS[0]?.id ?? null;
+    return getCommandCenterWarmSelectedConversationId();
+}
+
 function initialLoading(): boolean {
     if (COMMS_FIXTURES_ENABLED) return false;
     return !getCommandCenterCacheSnapshot();
+}
+
+function initialHydratingWorkspace(): boolean {
+    if (COMMS_FIXTURES_ENABLED) return false;
+    if (getCommandCenterFirstConversationWarm()) return false;
+    return Boolean(getCommandCenterCacheSnapshot()?.conversations.length);
 }
 
 const attnAccent = (a: string | null | undefined): { rail: string; tint: string; dot: string } => {
@@ -87,60 +136,59 @@ const attnAccent = (a: string | null | undefined): { rail: string; tint: string;
 
 
 const LIVE_WORKSPACE = isCommsV2FlagEnabled("comms_v2_live_workspace");
+const ASSIGNMENT_ENABLED = isCommsV2FlagEnabled("comms_v2_assignment");
 
-
-function mapLiveEvents(events: FamilyCommunicationWorkspaceVM["timelineEvents"]): TimelineMessage[] {
-    return events.map((e) => ({
-        id: e.id,
-        direction: e.direction,
-        channel: e.channel,
-        body: e.body,
-        created_at: e.createdAt,
-        kind: e.kind,
-        opened_at: e.openedAt,
-        replied_at: e.repliedAt,
-        thread_id: e.threadId,
-        status: e.status,
-    }));
-}
+const warmWorkspaceSeed = initialWorkspaceFromWarm();
 
 export default function CommandCenterShell() {
+    const adminDrawer = useAdminDrawerOptional();
     const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
     const [loading, setLoading] = useState(initialLoading);
     const [error, setError] = useState<string | null>(null);
     const [filters, setFilters] = useState<CommandCenterFilters>({});
-    const [selectedId, setSelectedId] = useState<string | null>(
-        COMMS_FIXTURES_ENABLED ? (FIXTURE_CONVERSATIONS[0]?.id ?? null) : null
-    );
+    const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
     const [messages, setMessages] = useState<TimelineMessage[]>(
-        COMMS_FIXTURES_ENABLED ? (FIXTURE_MESSAGES[FIXTURE_CONVERSATIONS[0]?.id ?? ""] ?? []) : []
+        COMMS_FIXTURES_ENABLED
+            ? (FIXTURE_MESSAGES[FIXTURE_CONVERSATIONS[0]?.id ?? ""] ?? [])
+            : (warmWorkspaceSeed?.messages ?? [])
     );
+    const [liveWorkspaceVm, setLiveWorkspaceVm] = useState<FamilyCommunicationWorkspaceVM | null>(null);
     const [assignBusy, setAssignBusy] = useState(false);
-    const [liveChildren, setLiveChildren] = useState<string[] | null>(null);
+    const [liveChildren, setLiveChildren] = useState<string[] | null>(warmWorkspaceSeed?.liveChildren ?? null);
     const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-    const [liveRecipientGroups, setLiveRecipientGroups] = useState<RecipientGroup[] | null>(null);
-    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>([]);
+    const [liveRecipientGroups, setLiveRecipientGroups] = useState<RecipientGroup[] | null>(
+        warmWorkspaceSeed?.liveRecipientGroups ?? null
+    );
+    const [selectedRecipientIds, setSelectedRecipientIds] = useState<string[]>(
+        warmWorkspaceSeed?.selectedRecipientIds ?? []
+    );
     const [subjectDraft, setSubjectDraft] = useState("");
     const [bodyDraft, setBodyDraft] = useState("");
     const [sendResult, setSendResult] = useState<FamilySendResult | null>(null);
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState<string | null>(null);
-    const [hydratingWorkspace, setHydratingWorkspace] = useState(false);
+    const [hydratingWorkspace, setHydratingWorkspace] = useState(initialHydratingWorkspace);
 
-    const loadLive = useCallback(async (customerId: string, threadId: string | null, resetSelection = false) => {
+    const loadLive = useCallback(async (customerId: string, threadId: string, resetSelection = false) => {
         try {
-            const qs = `customer_id=${encodeURIComponent(customerId)}${threadId ? `&thread_id=${encodeURIComponent(threadId)}` : ""}`;
+            const qs = `customer_id=${encodeURIComponent(customerId)}&thread_id=${encodeURIComponent(threadId)}`;
             const res = await fetch(`/api/admin/communications/family-workspace?${qs}`);
-            if (!res.ok) return;
+            if (!res.ok) return null;
             const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM };
             const vm = data.workspace;
-            if (!vm) return;
-            setMessages(mapLiveEvents(threadId ? vm.messages : vm.timelineEvents));
+            if (!vm) return null;
+            let msgs = mapLiveEvents(vm.messages.length ? vm.messages : vm.timelineEvents);
+            if (msgs.length === 0) {
+                msgs = await fetchCommandCenterThreadMessages(threadId);
+            }
+            setLiveWorkspaceVm(vm);
+            setMessages(msgs);
             setLiveChildren(vm.children.map((c) => c.name));
             setLiveRecipientGroups(vm.recipientGroups);
             if (resetSelection) setSelectedRecipientIds(vm.selectedRecipients);
+            return vm;
         } catch {
-            /* live workspace best-effort; fixtures remain */
+            return null;
         }
     }, []);
 
@@ -167,6 +215,16 @@ export default function CommandCenterShell() {
         return subscribeCommandCenterCache(() => {
             const snap = getCommandCenterCacheSnapshot();
             if (snap) setConversations(snap.conversations);
+            const warm = getCommandCenterFirstConversationWarm();
+            if (!warm) return;
+            const seeded = initialWorkspaceFromWarm();
+            if (!seeded) return;
+            setSelectedId((prev) => prev ?? warm.conversationId);
+            setMessages(seeded.messages);
+            setLiveChildren(seeded.liveChildren);
+            setLiveRecipientGroups(seeded.liveRecipientGroups);
+            setSelectedRecipientIds(seeded.selectedRecipientIds);
+            setHydratingWorkspace(false);
         });
     }, []);
 
@@ -174,7 +232,8 @@ export default function CommandCenterShell() {
         void loadConversations({ background: !!getCommandCenterCacheSnapshot() });
         if (LIVE_WORKSPACE && COMMS_FIXTURES_ENABLED) {
             const c = FIXTURE_FAMILY_DETAILS[FIXTURE_CONVERSATIONS[0]?.id ?? ""]?.customerId;
-            if (c) void loadLive(c, null, true);
+            const tid = FIXTURE_CONVERSATIONS[0]?.id;
+            if (c && tid) void loadLive(c, tid, true);
         }
     }, [loadConversations, loadLive]);
 
@@ -183,12 +242,26 @@ export default function CommandCenterShell() {
         setSelectedThreadId(null);
         setSubjectDraft("");
         setBodyDraft("");
+        setLiveWorkspaceVm(null);
+        const conv = conversations.find((c) => c.id === id);
+        const warm = getCommandCenterFirstConversationWarm();
+        if (warm?.conversationId === id) {
+            const seeded = initialWorkspaceFromWarm();
+            if (seeded) {
+                setMessages(seeded.messages);
+                setLiveChildren(seeded.liveChildren);
+                setLiveRecipientGroups(seeded.liveRecipientGroups);
+                setSelectedRecipientIds(seeded.selectedRecipientIds);
+                if (warm.workspace) setLiveWorkspaceVm(warm.workspace);
+                return;
+            }
+        }
         setHydratingWorkspace(true);
         try {
             if (COMMS_FIXTURES_ENABLED) {
                 const liveCustomerId = LIVE_WORKSPACE ? FIXTURE_FAMILY_DETAILS[id]?.customerId : undefined;
                 if (liveCustomerId) {
-                    await loadLive(liveCustomerId, null, true);
+                    await loadLive(liveCustomerId, id, true);
                     return;
                 }
                 setMessages(FIXTURE_MESSAGES[id] ?? []);
@@ -196,19 +269,15 @@ export default function CommandCenterShell() {
                 return;
             }
             setMessages([]);
-            const liveCustomerId = LIVE_WORKSPACE ? conversations.find((c) => c.id === id)?.customer_id : undefined;
+            const liveCustomerId = LIVE_WORKSPACE ? conv?.customer_id : undefined;
             if (liveCustomerId) {
-                await loadLive(liveCustomerId, null, true);
+                const vm = await loadLive(liveCustomerId, id, true);
+                if (!vm && conv?.last_message_preview) {
+                    setMessages(await fetchCommandCenterThreadMessages(id));
+                }
                 return;
             }
-            try {
-                const res = await fetch(`/api/admin/communications/threads/${id}/messages`);
-                if (!res.ok) return;
-                const data = (await res.json()) as { messages?: TimelineMessage[] } | TimelineMessage[];
-                setMessages(Array.isArray(data) ? data : (data.messages ?? []));
-            } catch {
-                /* timeline best-effort */
-            }
+            setMessages(await fetchCommandCenterThreadMessages(id));
         } finally {
             setHydratingWorkspace(false);
         }
@@ -248,6 +317,31 @@ export default function CommandCenterShell() {
         [loadLive, selectedCustomerId]
     );
 
+    const recordLinks = useMemo((): CommandCenterRecordLink[] => {
+        if (!selected) return [];
+        const childLinks =
+            liveWorkspaceVm?.children.map((c) => ({ id: c.id, name: c.name })) ??
+            selected.child_links ??
+            null;
+        return buildCommandCenterRecordLinks(selected, childLinks);
+    }, [selected, liveWorkspaceVm]);
+
+    const openRecordLink = useCallback(
+        (link: CommandCenterRecordLink) => {
+            adminDrawer?.openDrawer({ type: link.type, id: link.id });
+        },
+        [adminDrawer]
+    );
+
+    const composerChannels = useMemo(
+        () => ({
+            email: liveWorkspaceVm?.composerDraft.availableChannels.email ?? true,
+            sms: liveWorkspaceVm?.composerDraft.availableChannels.sms ?? false,
+            note: false,
+        }),
+        [liveWorkspaceVm]
+    );
+
     const runFamilySend = useCallback(
         async (confirm: boolean) => {
             if (!LIVE_WORKSPACE) return;
@@ -276,7 +370,7 @@ export default function CommandCenterShell() {
                 }
                 setSendResult(data);
                 if (confirm) {
-                    await loadLive(cust, selectedThreadId, false); // refresh timeline after send
+                    await loadLive(cust, selectedThreadId ?? selectedId ?? "", false);
                 }
             } catch {
                 setSendError("Send failed");
@@ -317,6 +411,10 @@ export default function CommandCenterShell() {
         }
     }, [loading, visibleIds, selectedId, openConversation]);
 
+    const timelineMessageCount = useMemo(
+        () => messages.filter((m) => !m.kind || m.kind === "message").length,
+        [messages]
+    );
     const health = useMemo(
         () =>
             computeCommunicationHealth({
@@ -327,16 +425,16 @@ export default function CommandCenterShell() {
             }),
         [messages, selected]
     );
-    const healthLabel = health.engagementScore >= 66 ? "Healthy" : health.engagementScore >= 33 ? "At risk" : "Unresponsive";
-    const healthTone = health.engagementScore >= 66 ? "text-[#0f6b4a]" : health.engagementScore >= 33 ? "text-[#9a6b16]" : "text-red-600";
-    const healthDot = health.engagementScore >= 66 ? "bg-[#00A283]" : health.engagementScore >= 33 ? "bg-[#e0a32e]" : "bg-red-500";
+    const healthDisplay = useMemo(
+        () => resolveCommandCenterHealthDisplay(selected, timelineMessageCount, health.engagementScore),
+        [selected, timelineMessageCount, health.engagementScore]
+    );
 
-    const responseRate = metrics.total > 0 ? `${Math.round((100 * (metrics.total - metrics.requiresResponse)) / metrics.total)}%` : "—";
     const kpis = [
         { label: "Needs reply", value: metrics.requiresResponse, dot: "bg-[#e0a32e]", tone: "text-[#9a6b16]", status: metrics.requiresResponse > 0 ? "awaiting response" : "all caught up", statusTone: "text-[#9a6b16]" },
         { label: "Overdue", value: metrics.slaAtRisk, dot: "bg-alloy-ember", tone: "text-alloy-ember", status: metrics.slaAtRisk > 0 ? "act now" : "none overdue", statusTone: metrics.slaAtRisk > 0 ? "text-alloy-ember" : "text-[#0f6b4a]" },
-        { label: "Unread", value: metrics.unread, dot: "bg-[#00A283]", tone: "text-[#0f6b4a]", status: "new inbound", statusTone: "text-[#0f6b4a]" },
-        { label: "Response rate", value: responseRate, dot: "bg-[#5b9aa0]", tone: "text-alloy-midnight", status: "replied share", statusTone: "text-alloy-midnight/45" },
+        { label: "Unread", value: metrics.unread, dot: "bg-[#00A283]", tone: "text-[#0f6b4a]", status: metrics.unread > 0 ? "new inbound" : "caught up", statusTone: "text-[#0f6b4a]" },
+        { label: "Unclassified", value: metrics.unclassified, dot: "bg-alloy-stone/50", tone: "text-alloy-midnight", status: metrics.unclassified > 0 ? "needs triage" : "all classified", statusTone: "text-alloy-midnight/45" },
     ];
 
     const revealReady =
@@ -344,11 +442,11 @@ export default function CommandCenterShell() {
         (!loading && !hydratingWorkspace && (filtered.length === 0 || selected != null));
 
     return (
-        <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-2.5 bg-[#f2f3ef] p-2.5">
+        <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-2.5 bg-white p-2.5">
             {!revealReady ? (
                 <div
                     data-cc-loading-overlay
-                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-[#f2f3ef]/95 backdrop-blur-[1px]"
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 backdrop-blur-[1px]"
                     aria-busy="true"
                     aria-label="Loading Command Center"
                 >
@@ -412,7 +510,6 @@ export default function CommandCenterShell() {
                         {queueSections.map((q) => {
                             const items = q.items;
                             const acc = attnAccent(q.key);
-                            const isFallback = q.key === OTHER_QUEUE_KEY;
                             return (
                                 <div key={q.key} data-cc-queue={q.key} className="mb-3.5">
                                     <div className="mb-1.5 flex items-center gap-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.06em] text-alloy-midnight/40">
@@ -420,9 +517,6 @@ export default function CommandCenterShell() {
                                         <span>{q.label}</span>
                                         <span className="ml-auto tabular-nums">{items.length}</span>
                                     </div>
-                                    {isFallback ? (
-                                        <p className="mb-2 px-0.5 text-[10px] leading-relaxed text-alloy-midnight/45">{FALLBACK_QUEUE_EXPLANATION}</p>
-                                    ) : null}
                                     <ul className="space-y-1.5">
                                         {items.map((c) => {
                                             const d = FIXTURE_FAMILY_DETAILS[c.id];
@@ -489,9 +583,14 @@ export default function CommandCenterShell() {
                             selected={selected}
                             detail={detail}
                             childNames={childNames}
-                            healthTone={healthTone}
-                            healthDot={healthDot}
-                            healthLabel={healthLabel}
+                            stageLabel={selected.stage_label ?? detail?.stage ?? null}
+                            healthTone={healthDisplay.tone}
+                            healthDot={healthDisplay.dot}
+                            healthLabel={healthDisplay.label}
+                            recordLinks={recordLinks}
+                            onOpenRecordLink={openRecordLink}
+                            showClaim={ASSIGNMENT_ENABLED}
+                            composerChannels={composerChannels}
                             LIVE_WORKSPACE={LIVE_WORKSPACE}
                             selectedThreadId={selectedThreadId}
                             messages={messages}
@@ -505,7 +604,7 @@ export default function CommandCenterShell() {
                             sending={sending}
                             assignBusy={assignBusy}
                             onClaim={(id) => claim(id)}
-                            onAllMessages={() => { setSelectedThreadId(null); if (selectedCustomerId) void loadLive(selectedCustomerId, null, false); }}
+                            onAllMessages={() => { setSelectedThreadId(null); if (selectedCustomerId && selectedId) void loadLive(selectedCustomerId, selectedId, false); }}
                             onOpenThread={(t) => void openThread(t)}
                             onToggleRecipient={(id) => setSelectedRecipientIds((prev) => toggleRecipientSelection(prev, id, true))}
                             onSubjectChange={setSubjectDraft}

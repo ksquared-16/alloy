@@ -20,7 +20,8 @@ describe("Inbox foundation UI contracts", () => {
 
         const nav = read("app/adminV2/components/TopNavBar.tsx");
         expect(nav).toContain("InboxModal");
-        expect(nav).toContain("setInboxModalOpen(true)");
+        expect(nav).toContain("subscribeAdminV2WorkspaceModal");
+        expect(nav).toContain("openWorkspaceModal(\"inbox\")");
         expect(nav).toContain("adminv2:open-inbox-modal");
     });
 

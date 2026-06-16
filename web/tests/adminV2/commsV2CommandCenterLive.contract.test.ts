@@ -35,12 +35,46 @@ describe("command center live wiring", () => {
         expect(shellSrc).toMatch(/data-cc-loading-overlay/);
         expect(shellSrc).not.toMatch(/Select a family from the queue/);
     });
+    it("loads thread-scoped timeline and hides assignment UI by default", () => {
+        expect(shellSrc).toMatch(/thread_id=\$\{encodeURIComponent\(threadId\)\}/);
+        expect(shellSrc).toMatch(/fetchCommandCenterThreadMessages/);
+        expect(shellSrc).toMatch(/showClaim=\{ASSIGNMENT_ENABLED\}/);
+        expect(workspaceSrc).not.toMatch(/assignment_state \?\? "—"/);
+        expect(shellSrc).not.toMatch(/FALLBACK_QUEUE_EXPLANATION/);
+    });
+    it("uses readable consent labels and hides inactive composer tabs", () => {
+        expect(workspaceSrc).toMatch(/consentReadableLabel/);
+        expect(workspaceSrc).toMatch(/data-cc-composer-channels/);
+        expect(workspaceSrc).not.toMatch(/>Note</);
+        expect(workspaceSrc).not.toMatch(/>E\{consentMark/);
+    });
+    it("supports linked record drawer navigation", () => {
+        expect(shellSrc).toMatch(/buildCommandCenterRecordLinks/);
+        expect(workspaceSrc).toMatch(/data-cc-record-link/);
+        expect(shellSrc).toMatch(/openDrawer/);
+    });
+    it("uses conservative health labels and unclassified KPI", () => {
+        expect(shellSrc).toMatch(/resolveCommandCenterHealthDisplay/);
+        expect(shellSrc).toMatch(/label: "Unclassified"/);
+        expect(shellSrc).not.toMatch(/Unresponsive/);
+    });
+    it("resolves business process stage labels in enrichment", () => {
+        const enrichment = readFileSync(
+            join(process.cwd(), "lib", "communications", "v2", "commandCenterConversationEnrichment.ts"),
+            "utf8"
+        );
+        expect(enrichment).toMatch(/resolveOpportunityStatusDisplay/);
+        expect(enrichment).toMatch(/pipeline_stages/);
+    });
     it("prefetches conversations from shell mount and inbox open", () => {
         const shell = readFileSync(join(process.cwd(), "app", "adminV2", "components", "AdminV2Shell.tsx"), "utf8");
         const nav = readFileSync(join(process.cwd(), "app", "adminV2", "components", "TopNavBar.tsx"), "utf8");
+        const cache = readFileSync(join(process.cwd(), "lib", "communications", "v2", "commandCenterPrefetchCache.ts"), "utf8");
         expect(shell).toMatch(/scheduleCommandCenterPrefetch/);
-        expect(nav).toMatch(/prefetchCommandCenterConversations/);
+        expect(nav).toMatch(/warmCommandCenterModal/);
         expect(shellSrc).toMatch(/commandCenterPrefetchCache/);
+        expect(cache).toMatch(/warmFirstConversationWorkspace/);
+        expect(cache).toMatch(/runWhenAdminV2PrimarySurfaceReady/);
     });
     it("wraps timeline message bodies inside bubble borders", () => {
         expect(workspaceSrc).toMatch(/data-cc-msg-bubble/);

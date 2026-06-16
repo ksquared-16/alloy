@@ -111,6 +111,11 @@ export async function fetchOpportunityDrawerHeaderActions(
     bootstrap: OpportunityDrawerOperationalBootstrapResponse,
     init?: RequestInit
 ): Promise<ResolvedActionsBySlot> {
+    const bundled = bootstrap.record_header_actions;
+    if (bundled != null && typeof bundled === "object") {
+        return bundled;
+    }
+
     const url = buildOpportunityDrawerHeaderActionsUrl(opportunityId, workspaceContext, entity, bootstrap);
     if (!url) return emptyResolvedActionsBySlot();
 

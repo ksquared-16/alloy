@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
 import { isOperationalWorkV1Enabled } from "@/lib/admin/operationalWork/operationalWorkV1UiGate";
 import { runWhenAdminV2PrimarySurfaceReady } from "@/lib/workspace/adminV2DeferBackgroundWork";
@@ -18,13 +18,19 @@ import TopNavNotificationsLink from "@/app/adminV2/components/TopNavNotification
 import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import InboxModal from "@/app/adminV2/components/InboxModal";
-import { prefetchCommandCenterConversations } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { warmCommandCenterModal } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import {
     ADMINV2_OPEN_QUICK_MESSAGE_EVENT,
     type QuickMessageLaunchSeed,
 } from "@/lib/adminV2/quickMessageLaunch";
+import {
+    closeWorkspaceModal,
+    openWorkspaceModal,
+    subscribeAdminV2WorkspaceModal,
+    getAdminV2WorkspaceModalSnapshot,
+} from "@/lib/adminV2/workspaceModalCoordinator";
 
 function normalizeAdminPath(pathname: string): string {
   return normalizeToCanonicalAdminPath(pathname);
@@ -103,10 +109,15 @@ function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }
 
 export default function TopNavBar() {
   const pathname = usePathname();
-  const [quickMessageOpen, setQuickMessageOpen] = useState(false);
   const [quickMessageSeed, setQuickMessageSeed] = useState<QuickMessageModalSeed | null>(null);
-  const [tasksModalOpen, setTasksModalOpen] = useState(false);
-  const [inboxModalOpen, setInboxModalOpen] = useState(false);
+  const activeWorkspaceModal = useSyncExternalStore(
+    subscribeAdminV2WorkspaceModal,
+    () => getAdminV2WorkspaceModalSnapshot().active,
+    () => null
+  );
+  const tasksModalOpen = activeWorkspaceModal === "tasks";
+  const inboxModalOpen = activeWorkspaceModal === "inbox";
+  const quickMessageOpen = activeWorkspaceModal === "quick_message";
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -124,7 +135,7 @@ export default function TopNavBar() {
         recordScoped: detail.recordScoped ?? Boolean(opportunityId),
         defaultChannel: detail.defaultChannel,
       });
-      setQuickMessageOpen(true);
+      openWorkspaceModal("quick_message");
     };
     window.addEventListener(ADMINV2_OPEN_QUICK_MESSAGE_EVENT, onLaunch);
     return () => window.removeEventListener(ADMINV2_OPEN_QUICK_MESSAGE_EVENT, onLaunch);
@@ -134,13 +145,13 @@ export default function TopNavBar() {
     const onOpenTasks = () => {
       if (!isOperationalWorkV1Enabled()) return;
       prefetchWorkspaceOperationalTasks("open");
-      setTasksModalOpen(true);
+      openWorkspaceModal("tasks");
     };
     const onOpenInbox = () => {
       if (isCommsV2FlagEnabled("comms_v2_command_center")) {
-        void prefetchCommandCenterConversations();
+        void warmCommandCenterModal();
       }
-      setInboxModalOpen(true);
+      openWorkspaceModal("inbox");
     };
     window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
     window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
@@ -184,12 +195,12 @@ export default function TopNavBar() {
         open={quickMessageOpen}
         seed={quickMessageSeed}
         onClose={() => {
-          setQuickMessageOpen(false);
+          closeWorkspaceModal("quick_message");
           setQuickMessageSeed(null);
         }}
       />
-      <MyTasksModal open={tasksModalOpen} onClose={() => setTasksModalOpen(false)} />
-      <InboxModal open={inboxModalOpen} onClose={() => setInboxModalOpen(false)} />
+      <MyTasksModal open={tasksModalOpen} onClose={() => closeWorkspaceModal("tasks")} />
+      <InboxModal open={inboxModalOpen} onClose={() => closeWorkspaceModal("inbox")} />
     </header>
   );
 }

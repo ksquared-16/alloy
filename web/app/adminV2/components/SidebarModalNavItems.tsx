@@ -9,6 +9,8 @@ import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operat
 import { ADMIN_FORMS_HREF, isCanonicalFormsPath, normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
+import { warmCommandCenterModal } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
     dispatchAdminV2OpenInboxModal,
     dispatchAdminV2OpenTasksPanel,
@@ -30,6 +32,8 @@ function SidebarModalNavButton({
     icon,
     badge,
     onClick,
+    onMouseEnter,
+    onFocus,
     dataAttr,
 }: {
     collapsed: boolean;
@@ -38,6 +42,8 @@ function SidebarModalNavButton({
     icon: ReactNode;
     badge: ReactNode;
     onClick: () => void;
+    onMouseEnter?: () => void;
+    onFocus?: () => void;
     dataAttr: string;
 }) {
     return (
@@ -46,6 +52,8 @@ function SidebarModalNavButton({
             title={title}
             aria-label={title}
             onClick={onClick}
+            onMouseEnter={onMouseEnter}
+            onFocus={onFocus}
             className={collapsed ? "adminv2-sidebar-rail-link relative" : `${EXPANDED_PRIMARY_LINK} relative`}
             data-adminv2-sidebar-modal-nav={dataAttr}
         >
@@ -126,7 +134,22 @@ export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
                 :   null
             }
             dataAttr="inbox"
-            onClick={() => dispatchAdminV2OpenInboxModal()}
+            onMouseEnter={() => {
+                if (isCommsV2FlagEnabled("comms_v2_command_center")) {
+                    void warmCommandCenterModal();
+                }
+            }}
+            onFocus={() => {
+                if (isCommsV2FlagEnabled("comms_v2_command_center")) {
+                    void warmCommandCenterModal();
+                }
+            }}
+            onClick={() => {
+                if (isCommsV2FlagEnabled("comms_v2_command_center")) {
+                    void warmCommandCenterModal();
+                }
+                dispatchAdminV2OpenInboxModal();
+            }}
         />
     );
 }

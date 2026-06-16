@@ -10,6 +10,7 @@ import {
     prefetchOpportunityDrawerPrimary,
     seedOpportunityDrawerPrimaryFromBootstrap,
 } from "@/lib/admin/opportunityDrawerPrimaryPrefetch";
+import { prefetchOpportunityDrawerHeaderActions } from "@/lib/admin/opportunityDrawerHeaderActionsPrefetch";
 import { logPrefetchAdminV2 } from "@/lib/adminV2/adminV2PrefetchInstrumentation";
 import { warmVisibleQueueRowOpportunityVms } from "@/lib/adminV2/viewModel/drawer/vmRuntime/queueRowDrawerVmWarm";
 import { tracePlatformPrefetch } from "@/lib/perf/platformSurfacePerfTrace";
@@ -69,6 +70,15 @@ export function prefetchOpportunityDrawerPrimaryLaneOnRowIntent(
         .then((boot) => {
             const bootEntity = boot?.entity as Record<string, unknown> | null | undefined;
             if (seedOpportunityDrawerPrimaryFromBootstrap(id, bootEntity)) {
+                if (boot?.record_header_actions == null && bootEntity) {
+                    prefetchOpportunityDrawerHeaderActions(
+                        id,
+                        workspaceContext ?? null,
+                        bootEntity,
+                        boot,
+                        init
+                    );
+                }
                 return;
             }
             prefetchOpportunityDrawerPrimary(id, init, workspaceContext ?? null, _queuePreviewSeed ?? null);
@@ -93,7 +103,7 @@ export function prefetchOpportunityDrawerFullOnRowIntent(
     prefetchOpportunityDrawerFull(id, init ?? workspaceDataFetchInit());
 }
 
-const VISIBLE_DRAWER_PREFETCH_CAP = 3;
+const VISIBLE_DRAWER_PREFETCH_CAP = 5;
 
 /** After WU reveal — warm drawer_primary for first visible opportunity rows only. */
 export function prefetchVisibleWorkUnitDrawerPrimary(
