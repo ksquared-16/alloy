@@ -14,16 +14,16 @@ import {
     type StageOperatingPlanEditorDraft,
 } from "@/lib/lifecycle/stageOperatingPlanEditorModel";
 import {
-    outcomeAutomationSummaries,
     outcomesForWorkTemplate,
     resolveEffectivePrimaryWorkTemplate,
     setPrimaryWorkTemplate,
     unattachedStageOutcomes,
-    workTemplateLabelMap,
 } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { STAGE_JOURNEY_SEGMENT_LABELS } from "@/lib/lifecycle/stageOperatingPlanUiLabels";
 import LifecycleStageAttentionRulesEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageAttentionRulesEditor";
+import LifecycleStageWorkCompletionPolicyEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageWorkCompletionPolicyEditor";
+import LifecycleStageOutcomeAutomationEditor from "@/components/adminV2/settings/lifecycle/LifecycleStageOutcomeAutomationEditor";
 
 export type LifecycleStageOperatingPlanEditorHandle = {
     getDraftPlan: () => StageOperatingPlanV1 | null;
@@ -72,7 +72,6 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
     );
 
     const primaryWork = resolveEffectivePrimaryWorkTemplate({ work_templates: draft.work_templates });
-    const templateLabels = workTemplateLabelMap(draft.work_templates);
     const legacyOutcomes = unattachedStageOutcomes(draft.outcomes);
 
     return (
@@ -260,12 +259,32 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                                 outcomes: prev.outcomes.filter(
                                                     (o) => o.work_template_key !== work.template_key,
                                                 ),
+                                                outcome_rules: prev.outcome_rules.filter((r) => {
+                                                    const outcome = prev.outcomes.find(
+                                                        (o) => o.outcome_key === r.when_outcome_key,
+                                                    );
+                                                    return outcome?.work_template_key !== work.template_key;
+                                                }),
                                             }))
                                         }
                                     >
                                         Remove work item
                                     </button>
                                 </div>
+
+                                <LifecycleStageWorkCompletionPolicyEditor
+                                    policy={work.completion_policy}
+                                    testIdPrefix={`stage-operating-plan-work-${work.template_key}`}
+                                    onChange={(completion_policy) =>
+                                        setDraft((prev) => {
+                                            const work_templates = [...prev.work_templates];
+                                            const next = { ...work, completion_policy };
+                                            if (!completion_policy) delete next.completion_policy;
+                                            work_templates[index] = next;
+                                            return { ...prev, work_templates };
+                                        })
+                                    }
+                                />
 
                                 <div className="mt-3 border-t border-alloy-forge/10 pt-2">
                                     <div className="mb-1 flex items-center justify-between gap-2">
@@ -294,11 +313,6 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                         {workOutcomes.map((outcome) => {
                                             const outcomeIndex = draft.outcomes.findIndex(
                                                 (o) => o.outcome_key === outcome.outcome_key,
-                                            );
-                                            const automations = outcomeAutomationSummaries(
-                                                outcome.outcome_key,
-                                                draft.outcome_rules,
-                                                { workTemplateLabelByKey: templateLabels },
                                             );
                                             return (
                                                 <li
@@ -347,20 +361,25 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                                                     outcomes: prev.outcomes.filter(
                                                                         (o) => o.outcome_key !== outcome.outcome_key,
                                                                     ),
+                                                                    outcome_rules: prev.outcome_rules.filter(
+                                                                        (r) => r.when_outcome_key !== outcome.outcome_key,
+                                                                    ),
                                                                 }))
                                                             }
                                                         >
                                                             Remove
                                                         </button>
                                                     </div>
-                                                    <p
-                                                        className="mt-1 text-[10px] text-alloy-midnight/50"
-                                                        data-testid={`stage-outcome-automation-${outcome.outcome_key}`}
-                                                    >
-                                                        {automations.length ?
-                                                            automations.map((line) => `→ ${line}`).join(" · ")
-                                                        :   "No automation attached"}
-                                                    </p>
+                                                    <LifecycleStageOutcomeAutomationEditor
+                                                        outcomeKey={outcome.outcome_key}
+                                                        outcomeLabel={outcome.label}
+                                                        rules={draft.outcome_rules}
+                                                        workTemplates={draft.work_templates}
+                                                        defaultRepeatTemplateKey={work.template_key}
+                                                        onRulesChange={(outcome_rules) =>
+                                                            setDraft((prev) => ({ ...prev, outcome_rules }))
+                                                        }
+                                                    />
                                                 </li>
                                             );
                                         })}
@@ -392,15 +411,10 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                             const outcomeIndex = draft.outcomes.findIndex(
                                 (o) => o.outcome_key === outcome.outcome_key,
                             );
-                            const automations = outcomeAutomationSummaries(
-                                outcome.outcome_key,
-                                draft.outcome_rules,
-                                { workTemplateLabelByKey: templateLabels },
-                            );
                             return (
-                                <li key={outcome.outcome_key} className="flex flex-wrap items-center gap-2">
+                                <li key={outcome.outcome_key} className="rounded border border-alloy-forge/10 px-2 py-1.5">
                                     <input
-                                        className="min-w-0 flex-1 rounded border border-alloy-forge/15 px-2 py-1 text-xs"
+                                        className="mb-2 min-w-0 w-full rounded border border-alloy-forge/15 px-2 py-1 text-xs"
                                         value={outcome.label}
                                         onChange={(e) =>
                                             setDraft((prev) => {
@@ -410,11 +424,15 @@ const LifecycleStageOperatingPlanEditor = forwardRef<
                                             })
                                         }
                                     />
-                                    <span className="text-[10px] text-alloy-midnight/45">
-                                        {automations.length ?
-                                            automations.map((line) => `→ ${line}`).join(" · ")
-                                        :   "No automation attached"}
-                                    </span>
+                                    <LifecycleStageOutcomeAutomationEditor
+                                        outcomeKey={outcome.outcome_key}
+                                        outcomeLabel={outcome.label}
+                                        rules={draft.outcome_rules}
+                                        workTemplates={draft.work_templates}
+                                        onRulesChange={(outcome_rules) =>
+                                            setDraft((prev) => ({ ...prev, outcome_rules }))
+                                        }
+                                    />
                                 </li>
                             );
                         })}

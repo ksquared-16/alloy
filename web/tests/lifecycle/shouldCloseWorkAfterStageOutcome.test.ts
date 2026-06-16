@@ -5,36 +5,36 @@ import { shouldCloseWorkAfterStageOutcome } from "@/lib/lifecycle/shouldCloseWor
 describe("shouldCloseWorkAfterStageOutcome", () => {
     const leadPlan = defaultStageOperatingPlanForEnrollmentStage("lead")!;
 
-    it("closes on successful outcome (reached_family)", () => {
-        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "reached_family")).toEqual({
+    it("closes on successful outcome (qualified)", () => {
+        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "qualified")).toEqual({
             shouldClose: true,
             reason: "success",
         });
     });
 
-    it("keeps work open on retry outcome (left_voicemail)", () => {
-        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "left_voicemail")).toEqual({
+    it("keeps work open on retry outcome (left_message)", () => {
+        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "left_message")).toEqual({
             shouldClose: false,
             reason: "retry",
         });
     });
 
-    it("keeps work open on retry outcome (no_answer)", () => {
-        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "no_answer")).toEqual({
+    it("keeps work open on retry outcome (unable_to_reach below max)", () => {
+        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "unable_to_reach")).toEqual({
             shouldClose: false,
             reason: "retry",
         });
     });
 
-    it("keeps work open on retry outcome (sent_text)", () => {
-        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "sent_text")).toEqual({
+    it("keeps work open on retry outcome (awaiting_response)", () => {
+        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "awaiting_response")).toEqual({
             shouldClose: false,
             reason: "retry",
         });
     });
 
-    it("closes on terminal non-success (not_interested → closed case)", () => {
-        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "not_interested")).toEqual({
+    it("closes on terminal non-success (closed_lost → closed case)", () => {
+        expect(shouldCloseWorkAfterStageOutcome(leadPlan, "closed_lost")).toEqual({
             shouldClose: true,
             reason: "terminal",
         });

@@ -127,7 +127,30 @@ export function outcomeAutomationSummaries(
                 const label =
                     options?.workTemplateLabelByKey?.[target.template_key] ??
                     target.template_key.replace(/_/g, " ");
-                lines.push(`Create next work: ${label}`);
+                const due =
+                    typeof target.due_days === "number" ?
+                        ` in ${target.due_days} day${target.due_days === 1 ? "" : "s"}`
+                    :   "";
+                lines.push(`Create next work: ${label}${due}`);
+                continue;
+            }
+            if (target.kind === "reopen_work" && target.template_key) {
+                const label =
+                    options?.workTemplateLabelByKey?.[target.template_key] ??
+                    target.template_key.replace(/_/g, " ");
+                const due =
+                    typeof target.due_days === "number" ?
+                        ` in ${target.due_days} day${target.due_days === 1 ? "" : "s"}`
+                    :   "";
+                lines.push(`Repeat ${label}${due}`);
+                continue;
+            }
+            if (target.kind === "create_needs_attention") {
+                lines.push(
+                    target.attention_reason ?
+                        `Mark needs attention — ${target.attention_reason}`
+                    :   "Mark needs attention",
+                );
                 continue;
             }
             lines.push(stageOutcomeRuleSummary(target));

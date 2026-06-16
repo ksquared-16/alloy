@@ -15,12 +15,15 @@ import type {
     StageOutcomeRuleTargetV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { outcomeRulesForKey } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
 
 export type StageOutcomeExecutionSubject = {
     journey_segment: "family" | "child";
     opportunity_id: string;
     opportunity_customer_member_id?: string | null;
     placement_candidate_id?: string | null;
+    /** Open lifecycle work task for repeat/reopen automations. */
+    work_id?: string | null;
 };
 
 export type StageOutcomeExecutionResult = {
@@ -152,6 +155,23 @@ async function applyTarget(
             return {};
         }
 
+        case "reopen_work": {
+            const workId = subject.work_id?.trim();
+            if (!workId) return { error: "Open work required to repeat work item" };
+            const dueDays =
+                typeof target.due_days === "number" && Number.isFinite(target.due_days) ?
+                    Math.max(0, Math.floor(target.due_days))
+                :   1;
+            const reopened = await reopenStageWorkWithDueDate({
+                supabase,
+                orgId,
+                workId,
+                dueDays,
+            });
+            if (!reopened.ok) return { error: reopened.error };
+            return {};
+        }
+
         case "move_to_stage":
             // V1: movement is queue-membership driven via status/disposition updates in sibling rules.
             return {};
@@ -169,8 +189,11 @@ export async function executeStageOperatingOutcome(params: {
     plan: StageOperatingPlanV1;
     outcomeKey: string;
     subject: StageOutcomeExecutionSubject;
+    attemptCount?: number | null;
 }): Promise<StageOutcomeExecutionResult> {
-    const rules = outcomeRulesForKey(params.plan, params.outcomeKey);
+    const rules = outcomeRulesForKey(params.plan, params.outcomeKey, {
+        attemptCount: params.attemptCount ?? null,
+    });
     const applied_targets: StageOutcomeRuleTargetV1[] = [];
     const errors: string[] = [];
     let needs_attention_set = false;

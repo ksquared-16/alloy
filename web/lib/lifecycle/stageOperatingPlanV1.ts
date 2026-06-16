@@ -6,6 +6,7 @@
  */
 
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { normalizeCompletionPolicy } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 
 export const STAGE_OPERATING_PLAN_METADATA_KEY = "stage_operating_plan_v1" as const;
 
@@ -16,6 +17,14 @@ export type StageWorkDuePolicy =
     | { kind: "offset_days"; days: number };
 
 export type StageWorkOwnerStrategy = "record_owner" | "creator" | "unassigned";
+
+export type StageWorkCompletionPolicyV1 = {
+    min_attempts?: number;
+    max_attempts?: number;
+    window_days?: number;
+    repeat_until_outcome?: boolean;
+    repeat_due_days?: number;
+};
 
 export type StageWorkTemplateV1 = {
     template_key: string;
@@ -28,6 +37,7 @@ export type StageWorkTemplateV1 = {
     primary?: boolean;
     /** Optional link to platform work definition catalog key. */
     work_definition_key?: string | null;
+    completion_policy?: StageWorkCompletionPolicyV1;
 };
 
 export type StageCompletionOutcomeV1 = {
@@ -45,6 +55,7 @@ export type StageOutcomeRuleTargetKind =
     | "update_candidate_status"
     | "create_needs_attention"
     | "create_next_work"
+    | "reopen_work"
     | "mark_stage_work_complete"
     | "move_to_stage"
     | "no_movement";
@@ -58,12 +69,18 @@ export type StageOutcomeRuleTargetV1 = {
     wait_bucket?: string | null;
     template_key?: string | null;
     stage_key?: string | null;
+    /** Due offset for create_next_work / reopen_work targets. */
+    due_days?: number | null;
 };
 
 export type StageOutcomeRuleV1 = {
     rule_key: string;
     when_outcome_key: string;
     targets: StageOutcomeRuleTargetV1[];
+    /** Apply only when attempt count is strictly less than this value. */
+    when_attempt_count_lt?: number;
+    /** Apply only when attempt count is greater than or equal to this value. */
+    when_attempt_count_gte?: number;
 };
 
 export type StageAttentionRuleKind =
@@ -114,6 +131,7 @@ const TARGET_KINDS = new Set<StageOutcomeRuleTargetKind>([
     "update_candidate_status",
     "create_needs_attention",
     "create_next_work",
+    "reopen_work",
     "mark_stage_work_complete",
     "move_to_stage",
     "no_movement",
@@ -173,6 +191,10 @@ function parseWorkTemplate(raw: unknown): StageWorkTemplateV1 | null {
     const wdk = trimNonEmpty(o.work_definition_key);
     if (wdk) tpl.work_definition_key = wdk;
     if (o.primary === true) tpl.primary = true;
+    const completion_policy = normalizeCompletionPolicy(
+        o.completion_policy as StageWorkCompletionPolicyV1 | undefined,
+    );
+    if (completion_policy) tpl.completion_policy = completion_policy;
     return tpl;
 }
 
@@ -212,6 +234,9 @@ function parseTarget(raw: unknown): StageOutcomeRuleTargetV1 | null {
     if (template_key) target.template_key = template_key;
     const stage_key = trimNonEmpty(o.stage_key);
     if (stage_key) target.stage_key = stage_key;
+    if (typeof o.due_days === "number" && Number.isFinite(o.due_days)) {
+        target.due_days = Math.max(0, Math.floor(o.due_days));
+    }
     return target;
 }
 
@@ -227,7 +252,14 @@ function parseOutcomeRule(raw: unknown): StageOutcomeRuleV1 | null {
         if (parsed) targets.push(parsed);
     }
     if (!targets.length) return null;
-    return { rule_key, when_outcome_key, targets };
+    const rule: StageOutcomeRuleV1 = { rule_key, when_outcome_key, targets };
+    if (typeof o.when_attempt_count_lt === "number" && Number.isFinite(o.when_attempt_count_lt)) {
+        rule.when_attempt_count_lt = Math.max(0, Math.floor(o.when_attempt_count_lt));
+    }
+    if (typeof o.when_attempt_count_gte === "number" && Number.isFinite(o.when_attempt_count_gte)) {
+        rule.when_attempt_count_gte = Math.max(0, Math.floor(o.when_attempt_count_gte));
+    }
+    return rule;
 }
 
 function parseAttentionRule(raw: unknown): StageAttentionRuleV1 | null {
@@ -346,9 +378,17 @@ export function resolveStageOperatingPlanForStage(
 export function outcomeRulesForKey(
     plan: StageOperatingPlanV1,
     outcomeKey: string,
+    options?: { attemptCount?: number | null },
 ): StageOutcomeRuleV1[] {
     const key = outcomeKey.trim();
-    return plan.outcome_rules.filter((r) => r.when_outcome_key === key);
+    const attemptCount = options?.attemptCount;
+    return plan.outcome_rules.filter((r) => {
+        if (r.when_outcome_key !== key) return false;
+        if (attemptCount == null) return true;
+        if (r.when_attempt_count_lt != null && attemptCount >= r.when_attempt_count_lt) return false;
+        if (r.when_attempt_count_gte != null && attemptCount < r.when_attempt_count_gte) return false;
+        return true;
+    });
 }
 
 export function successfulOutcomeKeys(plan: StageOperatingPlanV1): Set<string> {

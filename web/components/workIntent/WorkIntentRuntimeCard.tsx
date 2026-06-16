@@ -66,11 +66,17 @@ export default function WorkIntentRuntimeCard({ opportunityId, projection, canMu
                 <p className="mt-2 text-[12px] text-alloy-midnight/55">No open work for this stage.</p>
             :   null}
 
-            {projection.state === "open" && (showAttempts || showLastOutcome) ?
+            {projection.state === "open" && (showAttempts || showLastOutcome || projection.completion_policy_summary) ?
                 <p className="mt-2 text-[12px] text-alloy-midnight/60">
                     {showAttempts ? `Attempt ${projection.attempt_count}` : null}
-                    {showAttempts && showLastOutcome ? " · " : null}
+                    {showAttempts && projection.completion_policy_max_attempts ?
+                        ` of ${projection.completion_policy_max_attempts}`
+                    :   null}
+                    {showAttempts && (showLastOutcome || projection.completion_policy_summary) ? " · " : null}
                     {showLastOutcome ? `Last: ${projection.last_outcome!.label}` : null}
+                    {!showLastOutcome && projection.completion_policy_summary ?
+                        projection.completion_policy_summary
+                    :   null}
                 </p>
             :   null}
 

@@ -15,6 +15,7 @@ export const STAGE_OUTCOME_RULE_TARGET_LABELS: Record<string, string> = {
     update_candidate_status: "Update waitlist candidate status",
     create_needs_attention: "Create Needs Attention",
     create_next_work: "Create next task",
+    reopen_work: "Repeat work item",
     mark_stage_work_complete: "Mark stage work complete",
     move_to_stage: "Move to next stage",
     no_movement: "No automatic movement",

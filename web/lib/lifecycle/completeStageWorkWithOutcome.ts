@@ -12,6 +12,8 @@ import { executeStageOperatingOutcome, type StageOutcomeExecutionSubject } from 
 import { patchLifecycleWorkIntentAttemptMetadata } from "@/lib/lifecycle/patchLifecycleWorkIntentAttemptMetadata";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { shouldCloseWorkAfterStageOutcome } from "@/lib/lifecycle/shouldCloseWorkAfterStageOutcome";
+import { shouldRepeatWorkAfterRetryOutcome } from "@/lib/lifecycle/stageWorkCompletionPolicy";
+import { reopenStageWorkWithDueDate } from "@/lib/lifecycle/reopenStageWorkWithDueDate";
 
 export type CompleteStageWorkWithOutcomeInput = {
     supabase: SupabaseClient;
@@ -97,7 +99,8 @@ export async function completeStageWorkWithOutcome(
         departmentId: input.departmentId,
         plan,
         outcomeKey,
-        subject: input.subject,
+        subject: { ...input.subject, work_id: input.workId },
+        attemptCount: attempt_count ?? null,
     });
 
     if (outcome_execution.errors.length) {
@@ -108,6 +111,26 @@ export async function completeStageWorkWithOutcome(
             attempt_count,
             outcome_execution,
         };
+    }
+
+    if (!closeDecision.shouldClose && attempt_count != null) {
+        const workTemplateKey = outcome.work_template_key?.trim() ?? null;
+        const workTemplate =
+            workTemplateKey ?
+                plan.work_templates.find((t) => t.template_key === workTemplateKey) ?? null
+            :   plan.work_templates[0] ?? null;
+        const repeat = shouldRepeatWorkAfterRetryOutcome(workTemplate, attempt_count);
+        if (repeat.repeat && repeat.dueDays != null) {
+            const reopened = await reopenStageWorkWithDueDate({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                workId: input.workId,
+                dueDays: repeat.dueDays,
+            });
+            if (!reopened.ok) {
+                return { ok: false, error: reopened.error, work_closed: false, attempt_count };
+            }
+        }
     }
 
     return {

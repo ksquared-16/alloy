@@ -9,6 +9,7 @@ import type {
 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { normalizeOperatingPlanDraftForPersist } from "@/lib/lifecycle/stageOperatingPlanConvergence";
+import { normalizeOutcomeRulesOnPersist } from "@/lib/lifecycle/stageOutcomeAutomation";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 
 export type StageOperatingPlanEditorDraft = {
@@ -64,7 +65,10 @@ export function stageOperatingPlanDraftToPersisted(
         journey_segment: normalized.journey_segment,
         work_templates: normalized.work_templates.map((t) => structuredClone(t)),
         outcomes: normalized.outcomes.map((o) => structuredClone(o)),
-        outcome_rules: normalized.outcome_rules.map((r) => structuredClone(r)),
+        outcome_rules: normalizeOutcomeRulesOnPersist(
+            normalized.outcome_rules.map((r) => structuredClone(r)),
+            normalized.outcomes,
+        ),
         attention_rules: normalized.attention_rules.map((r) => structuredClone(r)),
     };
     const purpose = normalized.purpose.trim();

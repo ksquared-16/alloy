@@ -14,6 +14,7 @@ import {
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
+import { completionPolicySummary } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type {
@@ -127,6 +128,11 @@ function buildProjectionShell(params: {
     opportunityId: string;
     outcomes: WorkIntentRuntimeProjection["outcomes"];
     workRow: TaskDbRow | null;
+    completionPolicy?: {
+        summary: string | null;
+        min_attempts?: number | null;
+        max_attempts?: number | null;
+    } | null;
 }): WorkIntentRuntimeProjection {
     const md = params.workRow?.metadata ?? {};
     const dueAt = params.workRow ? String(params.workRow.due_at ?? "") || null : null;
@@ -155,6 +161,9 @@ function buildProjectionShell(params: {
             requires_outcome_picker: requiresOutcomePicker,
             subject: buildExecutionSubject(params.opportunityId, params.journeySegment),
         },
+        completion_policy_summary: params.completionPolicy?.summary ?? null,
+        completion_policy_min_attempts: params.completionPolicy?.min_attempts ?? null,
+        completion_policy_max_attempts: params.completionPolicy?.max_attempts ?? null,
     };
 }
 
@@ -202,7 +211,32 @@ export async function projectWorkIntentRuntime(params: {
     if (!departmentId || !plan) return null;
 
     const journeySegment = plan.journey_segment ?? "family";
-    const outcomes = plan.outcomes.map((o) => ({
+    const workTemplate =
+        plan.work_templates.find((t) => t.template_key === primaryIntent.template_key) ??
+        plan.work_templates.find((t) => t.primary) ??
+        plan.work_templates[0] ??
+        null;
+    const completionPolicy = workTemplate?.completion_policy ?
+        {
+            summary: completionPolicySummary(workTemplate.completion_policy),
+            min_attempts: workTemplate.completion_policy.min_attempts ?? null,
+            max_attempts: workTemplate.completion_policy.max_attempts ?? null,
+        }
+    :   null;
+
+    const outcomesForTemplate = plan.outcomes
+        .filter((o) => {
+            const tplKey = o.work_template_key?.trim();
+            if (!tplKey) return true;
+            if (!workTemplate) return true;
+            return tplKey === workTemplate.template_key;
+        })
+        .map((o) => ({
+            outcome_key: o.outcome_key,
+            label: o.label,
+            ...(o.successful === true ? { successful: true } : {}),
+        }));
+    const outcomes = outcomesForTemplate.length ? outcomesForTemplate : plan.outcomes.map((o) => ({
         outcome_key: o.outcome_key,
         label: o.label,
         ...(o.successful === true ? { successful: true } : {}),
@@ -239,6 +273,7 @@ export async function projectWorkIntentRuntime(params: {
             opportunityId: params.opportunityId,
             outcomes,
             workRow: openRow,
+            completionPolicy,
         });
     }
 
@@ -263,6 +298,7 @@ export async function projectWorkIntentRuntime(params: {
             opportunityId: params.opportunityId,
             outcomes,
             workRow: null,
+            completionPolicy,
         });
     }
 
@@ -285,6 +321,7 @@ export async function projectWorkIntentRuntime(params: {
             opportunityId: params.opportunityId,
             outcomes: [],
             workRow: completedRow,
+            completionPolicy,
         });
     }
 
@@ -298,5 +335,6 @@ export async function projectWorkIntentRuntime(params: {
         opportunityId: params.opportunityId,
         outcomes,
         workRow: null,
+        completionPolicy,
     });
 }

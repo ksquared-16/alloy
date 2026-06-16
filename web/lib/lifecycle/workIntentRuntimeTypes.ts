@@ -36,4 +36,8 @@ export type WorkIntentRuntimeProjection = {
     completed_at: string | null;
     outcomes: WorkIntentRuntimeOutcome[];
     execution: WorkIntentRuntimeExecutionBundle;
+    /** Human-readable completion policy for active work template. */
+    completion_policy_summary?: string | null;
+    completion_policy_min_attempts?: number | null;
+    completion_policy_max_attempts?: number | null;
 };

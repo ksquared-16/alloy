@@ -164,9 +164,7 @@ describe("business process editor convergence wiring", () => {
         expect(editor).toContain("Work items");
         expect(editor).toContain("Primary");
         expect(editor).toContain("Outcomes for");
-        expect(editor).toContain("No automation attached");
         expect(editor).toContain("LifecycleStageAttentionRulesEditor");
-        expect(editor).not.toContain("Add off-track criteria in Expected work");
     });
 
     it("attention rules editor supports configured rule types", async () => {

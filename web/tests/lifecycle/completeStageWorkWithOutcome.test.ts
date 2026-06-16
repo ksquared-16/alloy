@@ -22,6 +22,10 @@ vi.mock("@/lib/lifecycle/patchLifecycleWorkIntentAttemptMetadata", () => ({
     patchLifecycleWorkIntentAttemptMetadata: (...args: unknown[]) => mockPatchAttemptMetadata(...args),
 }));
 
+vi.mock("@/lib/lifecycle/reopenStageWorkWithDueDate", () => ({
+    reopenStageWorkWithDueDate: vi.fn(async () => ({ ok: true, due_at: new Date().toISOString() })),
+}));
+
 vi.mock("@/lib/lifecycle/executeStageOperatingOutcome", () => ({
     executeStageOperatingOutcome: (...args: unknown[]) => mockExecuteStageOperatingOutcome(...args),
 }));
@@ -95,7 +99,7 @@ describe("completeStageWorkWithOutcome", () => {
         });
     });
 
-    it("successful outcome (reached_family) closes work and executes outcome", async () => {
+    it("successful outcome (qualified) closes work and executes outcome", async () => {
         mockExecuteStageOperatingOutcome.mockResolvedValue({
             applied_targets: [],
             errors: [],
@@ -106,7 +110,7 @@ describe("completeStageWorkWithOutcome", () => {
 
         const result = await completeStageWorkWithOutcome({
             ...baseInput,
-            outcomeKey: "reached_family",
+            outcomeKey: "qualified",
         });
 
         expect(result.ok).toBe(true);
@@ -118,16 +122,16 @@ describe("completeStageWorkWithOutcome", () => {
         });
         expect(mockPatchAttemptMetadata).not.toHaveBeenCalled();
         expect(mockExecuteStageOperatingOutcome).toHaveBeenCalledWith(
-            expect.objectContaining({ outcomeKey: "reached_family" }),
+            expect.objectContaining({ outcomeKey: "qualified", attemptCount: null }),
         );
     });
 
-    it("retry outcome (left_voicemail) keeps work open, increments attempts, executes outcome", async () => {
+    it("retry outcome (left_message) keeps work open, increments attempts, executes outcome", async () => {
         mockPatchAttemptMetadata.mockResolvedValue({ ok: true, attempt_count: 2 });
 
         const result = await completeStageWorkWithOutcome({
             ...baseInput,
-            outcomeKey: "left_voicemail",
+            outcomeKey: "left_message",
         });
 
         expect(result.ok).toBe(true);
@@ -138,15 +142,15 @@ describe("completeStageWorkWithOutcome", () => {
             supabase: baseInput.supabase,
             orgId,
             workId,
-            outcomeKey: "left_voicemail",
-            outcomeLabel: "Left voicemail",
+            outcomeKey: "left_message",
+            outcomeLabel: "Left Message",
         });
         expect(mockExecuteStageOperatingOutcome).toHaveBeenCalledWith(
-            expect.objectContaining({ outcomeKey: "left_voicemail" }),
+            expect.objectContaining({ outcomeKey: "left_message", attemptCount: 2 }),
         );
     });
 
-    it("terminal outcome (not_interested) closes work and executes outcome", async () => {
+    it("terminal outcome (closed_lost) closes work and executes outcome", async () => {
         mockExecuteStageOperatingOutcome.mockResolvedValue({
             applied_targets: [],
             errors: [],
@@ -157,7 +161,7 @@ describe("completeStageWorkWithOutcome", () => {
 
         const result = await completeStageWorkWithOutcome({
             ...baseInput,
-            outcomeKey: "not_interested",
+            outcomeKey: "closed_lost",
         });
 
         expect(result.ok).toBe(true);
@@ -165,7 +169,7 @@ describe("completeStageWorkWithOutcome", () => {
         expect(mockCompleteWorkInstance).toHaveBeenCalled();
         expect(mockPatchAttemptMetadata).not.toHaveBeenCalled();
         expect(mockExecuteStageOperatingOutcome).toHaveBeenCalledWith(
-            expect.objectContaining({ outcomeKey: "not_interested" }),
+            expect.objectContaining({ outcomeKey: "closed_lost" }),
         );
     });
 });
