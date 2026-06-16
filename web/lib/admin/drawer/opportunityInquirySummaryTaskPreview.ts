@@ -9,6 +9,7 @@ export type InquirySummaryTaskPreviewRow = {
     status: string;
     source: string;
     work_intent_key?: string;
+    operating_plan_template_key?: string;
     lifecycle_stage_key?: string;
     lifecycle_provenance?: string;
     attempt_count?: number;
@@ -107,10 +108,13 @@ function mapTaskPreviewRow(raw: Record<string, unknown>): InquirySummaryTaskPrev
     };
     const workIntentKey = trimOrNull(metadata.work_intent_key);
     if (workIntentKey) row.work_intent_key = workIntentKey;
+    const operatingPlanTemplateKey = trimOrNull(metadata.operating_plan_template_key);
+    if (operatingPlanTemplateKey) row.operating_plan_template_key = operatingPlanTemplateKey;
     const lifecycleStageKey =
         trimOrNull(metadata.lifecycle_stage_key) ?? trimOrNull(work.context_snapshot?.lifecycle_stage_key);
     if (lifecycleStageKey) row.lifecycle_stage_key = lifecycleStageKey;
-    if (work.provenance.source) row.lifecycle_provenance = work.provenance.source;
+    const lifecycleProvenance = trimOrNull(metadata.lifecycle_provenance) ?? work.provenance.source;
+    if (lifecycleProvenance) row.lifecycle_provenance = lifecycleProvenance;
     const attemptCount = readAttemptCount(metadata);
     if (attemptCount != null) row.attempt_count = attemptCount;
     const lastOutcomeLabel = trimOrNull(metadata.last_outcome_label);
@@ -130,6 +134,8 @@ function mapParsedTaskPreviewRow(row: Record<string, unknown>): InquirySummaryTa
     };
     const workIntentKey = trimOrNull(row.work_intent_key);
     if (workIntentKey) mapped.work_intent_key = workIntentKey;
+    const operatingPlanTemplateKey = trimOrNull(row.operating_plan_template_key);
+    if (operatingPlanTemplateKey) mapped.operating_plan_template_key = operatingPlanTemplateKey;
     const lifecycleStageKey = trimOrNull(row.lifecycle_stage_key);
     if (lifecycleStageKey) mapped.lifecycle_stage_key = lifecycleStageKey;
     const lifecycleProvenance = trimOrNull(row.lifecycle_provenance);
