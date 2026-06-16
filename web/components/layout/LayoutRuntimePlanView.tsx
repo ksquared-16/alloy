@@ -23,6 +23,14 @@ import {
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "@/lib/layout/runtime/layoutRuntimePlan";
 import { readLayoutEditorDisplayConfig, typographyIntentClass } from "@/lib/layout/layoutEditorDisplayConfig";
+import {
+    readLayoutEditorBlockConfig,
+} from "@/lib/layout/layoutEditorBlockConfig";
+import {
+    LayoutRuntimeBlockEditProvider,
+    layoutRuntimeBlockAllowsFieldEdit,
+    useLayoutRuntimeBlockEdit,
+} from "@/components/layout/LayoutRuntimeBlockEditContext";
 import { layoutEditorTraceProps, useLayoutEditorRuntimeTrace } from "@/lib/layout/layoutEditorRuntimeTraceContext";
 import { classifyLayoutItemBinding } from "@/lib/layout/runtime/classifyLayoutItemBinding";
 import {
@@ -271,6 +279,7 @@ function ValueCell({
     const variant = useContext(LayoutRuntimeVariantContext);
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const edit = useLayoutRuntimeDrawerEdit();
+    const blockEdit = useLayoutRuntimeBlockEdit();
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
     const displayConfig = readLayoutEditorDisplayConfig(item);
@@ -285,7 +294,8 @@ function ValueCell({
     const refKey = item.refKey ?? "";
     const canEdit =
         layoutRuntimeFieldIsEditable(item, variant) &&
-        Boolean(edit);
+        Boolean(edit) &&
+        layoutRuntimeBlockAllowsFieldEdit(blockEdit);
     const editValue = canEdit && edit ? edit.getFieldValue(refKey, display ?? "") : display ?? "";
 
     return (
@@ -338,18 +348,56 @@ function ValueCell({
 }
 
 function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
+    const blockConfig = readLayoutEditorBlockConfig(item.metadata);
+    const editMode = blockConfig.editMode ?? "display_only";
+    return (
+        <LayoutRuntimeBlockEditProvider editMode={editMode}>
+            <GroupCellContent record={record} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
+        </LayoutRuntimeBlockEditProvider>
+    );
+}
+
+function GroupCellContent({
+    record,
+    item,
+    anchorEntity,
+    blockConfig,
+}: {
+    record: ProofRuntimeRecord;
+    item: LayoutItem;
+    anchorEntity: string;
+    blockConfig: ReturnType<typeof readLayoutEditorBlockConfig>;
+}) {
     const variant = useContext(LayoutRuntimeVariantContext);
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
+    const blockEdit = useLayoutRuntimeBlockEdit();
+    const drawerEdit = useLayoutRuntimeDrawerEdit();
     const hasSubgrid = Array.isArray(item.rows) && item.rows.length > 0;
-    const title = operatorLabel(item, variant);
+    const showTitle = blockConfig.showTitle !== false;
+    const title = showTitle ? operatorLabel(item, variant) : "";
+    const showEditButton = blockConfig.editMode === "edit_button" && Boolean(drawerEdit);
     return (
         <div className={operatorSurfaces ? LAYOUT_RUNTIME_GROUP_READ_SURFACE : LAYOUT_RUNTIME_GROUP_SURFACE}>
-            {title ?
-                <div
-                    className={`${operatorSurfaces ? "text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/50" : "mb-1.5 text-[11px] font-semibold uppercase tracking-wide"}`}
-                    style={operatorSurfaces ? undefined : { color: MUTED }}
-                >
-                    {title}
+            {title || showEditButton ?
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                    {title ?
+                        <div
+                            className={`${operatorSurfaces ? "text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/50" : "text-[11px] font-semibold uppercase tracking-wide"}`}
+                            style={operatorSurfaces ? undefined : { color: MUTED }}
+                        >
+                            {title}
+                        </div>
+                    :   <span />}
+                    {showEditButton && blockEdit ?
+                        <button
+                            type="button"
+                            className="rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-pine hover:border-alloy-pine/30"
+                            onClick={() => blockEdit.setBlockEditing(!blockEdit.blockEditing)}
+                            data-testid={`layout-runtime-block-edit-${item.id}`}
+                        >
+                            {blockEdit.blockEditing ? "Done" : "Edit"}
+                        </button>
+                    :   null}
                 </div>
             :   null}
             {hasSubgrid ? (

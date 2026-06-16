@@ -126,6 +126,7 @@ export const OPPORTUNITY_DRAWER_SECTION_DEFAULT_ZONE: Readonly<
 export const OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS = [
     "children",
     "contact_block",
+    "layout_block",
     "_template",
 ] as const;
 

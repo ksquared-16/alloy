@@ -6,7 +6,15 @@
  */
 
 import type { ActionSurface } from "@/lib/admin/actions/types";
-import { validateLayoutEditorDisplayConfig, readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
+import {
+    LAYOUT_EDITOR_BLOCK_CONFIG_METADATA_KEY,
+    readLayoutEditorBlockConfig,
+    validateLayoutEditorBlockConfig,
+} from "@/lib/layout/layoutEditorBlockConfig";
+import {
+    readLayoutEditorDisplayConfig,
+    validateLayoutEditorDisplayConfig,
+} from "@/lib/layout/layoutEditorDisplayConfig";
 import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { isLayoutItemKind, isLayoutQueueZone } from "@/lib/layout/layoutV2";
 import {
@@ -61,6 +69,7 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "layoutEditorContactRole",
     "layoutEditorBlockTemplate",
     "layoutEditorRowTemplate",
+    "layoutEditorBlockConfig",
     "enrollmentRosterReadFirst",
 ]);
 
@@ -180,6 +189,8 @@ function walkItem(
         );
         const display = readLayoutEditorDisplayConfig({ metadata: item.metadata });
         ctx.errors.push(...validateLayoutEditorDisplayConfig(display, `${path}.metadata.layoutEditorDisplay`));
+        const blockConfig = readLayoutEditorBlockConfig(item.metadata);
+        ctx.errors.push(...validateLayoutEditorBlockConfig(blockConfig, `${path}.metadata.${LAYOUT_EDITOR_BLOCK_CONFIG_METADATA_KEY}`));
     }
 
     item.items?.forEach((child, i) => walkItem(child, `${path}.items[${i}]`, ctx));

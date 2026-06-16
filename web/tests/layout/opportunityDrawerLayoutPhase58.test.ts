@@ -104,7 +104,7 @@ describe("block runtime validity", () => {
 
     it("marks preview-only templates in registry", () => {
         expect(isLayoutEditorBlockRuntimeEffective("contact_secondary")).toBe(true);
-        expect(isLayoutEditorBlockRuntimeEffective("contact_custom")).toBe(false);
+        expect(isLayoutEditorBlockRuntimeEffective("contact_custom")).toBe(true);
         expect(isLayoutEditorBlockRuntimeEffective("address_card")).toBe(false);
     });
 

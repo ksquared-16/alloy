@@ -64,16 +64,16 @@ const MAIL_ICON: LayoutFieldAdornment = { position: "left", icon: "mail" };
 export const LAYOUT_EDITOR_BLOCK_TEMPLATE_CATALOG: LayoutEditorBlockTemplate[] = [
     {
         key: "contact_primary",
-        label: "Primary Contact Card",
-        description: "Primary relationship contact with name, email, and phone.",
+        label: "Primary Contact Card (starter)",
+        description: "Starter: primary relationship contact with name, email, and phone rows.",
         kind: "field_group",
         allowedSections: ["household_contact"],
         runtimeEffective: true,
     },
     {
         key: "contact_secondary",
-        label: "Secondary Contact Card",
-        description: "Secondary relationship contact card.",
+        label: "Secondary Contact Card (starter)",
+        description: "Starter: secondary relationship contact — or use Create block → Contact card → Secondary.",
         kind: "field_group",
         allowedSections: ["household_contact"],
         runtimeEffective: true,
@@ -96,11 +96,11 @@ export const LAYOUT_EDITOR_BLOCK_TEMPLATE_CATALOG: LayoutEditorBlockTemplate[] =
     },
     {
         key: "contact_custom",
-        label: "Custom Contact Card",
-        description: "Flexible contact card — preview only until runtime mapping exists.",
+        label: "Custom Contact Card (starter)",
+        description: "Starter: flexible contact card with role-aware fields.",
         kind: "field_group",
         allowedSections: ["household_contact"],
-        runtimeEffective: false,
+        runtimeEffective: true,
     },
     {
         key: "household_card",
@@ -128,8 +128,8 @@ export const LAYOUT_EDITOR_BLOCK_TEMPLATE_CATALOG: LayoutEditorBlockTemplate[] =
     },
     {
         key: "child_row_template",
-        label: "Child Row Template",
-        description: "Enrollment child row columns, actions, and display.",
+        label: "Child Row Template (starter)",
+        description: "Starter: enrollment child row columns, actions, and display.",
         kind: "related_list",
         allowedSections: ["children_enrollment"],
         runtimeEffective: true,

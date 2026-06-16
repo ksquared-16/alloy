@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import OpportunityDrawerLayoutBlockSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutBlockSettings";
+import OpportunityDrawerLayoutBlockSettings, {
+    OpportunityDrawerLayoutCreateBlockForm,
+} from "@/components/adminV2/settings/OpportunityDrawerLayoutBlockSettings";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
 import OpportunityDrawerLayoutFieldSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettings";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
@@ -11,10 +13,17 @@ import {
     findLayoutBlockLocation,
     isLayoutEditorBlockTemplateKey,
     listLayoutEditorBlockTemplatesForSection,
-    patchLayoutBlockContactRole,
     patchLayoutBlockRowTemplateConfig,
 } from "@/lib/layout/layoutEditorBlockRegistry";
 import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
+import {
+    addRowToCustomBlock,
+    createCustomBlockInSection,
+    listCustomBlockRows,
+    patchCustomBlockConfig,
+    removeRowFromCustomBlock,
+    setCustomBlockRowColumnCount,
+} from "@/lib/layout/layoutEditorFreeformBlocks";
 import {
     findBlockNodeByItemId,
     listSectionLayoutBlocks,
@@ -65,6 +74,7 @@ export default function OpportunityDrawerLayoutCompositionPanel({
 }: Props) {
     const [addFieldBlockId, setAddFieldBlockId] = useState<string | null>(null);
     const [showAddBlock, setShowAddBlock] = useState(false);
+    const [showCreateBlock, setShowCreateBlock] = useState(false);
     const blocks = useMemo(() => listSectionLayoutBlocks(doc, section.key), [doc, section.key]);
     const selectedBlock = selectedBlockId ? findBlockNodeByItemId(blocks, selectedBlockId) : null;
     const blockTemplates = useMemo(() => listLayoutEditorBlockTemplatesForSection(section.key), [section.key]);
@@ -131,16 +141,56 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                 <button
                     type="button"
                     className="rounded border border-alloy-pine/30 bg-alloy-pine/[0.06] px-2 py-1 text-[10px] font-semibold text-alloy-pine"
-                    onClick={() => setShowAddBlock((v) => !v)}
+                    onClick={() => {
+                        setShowAddBlock((v) => !v);
+                        setShowCreateBlock(false);
+                    }}
                     data-testid="visual-editor-add-block-toggle"
                 >
-                    Add block
+                    Starter templates
+                </button>
+                <button
+                    type="button"
+                    className="rounded border border-alloy-blue/30 bg-alloy-blue/[0.06] px-2 py-1 text-[10px] font-semibold text-alloy-blue"
+                    onClick={() => {
+                        setShowCreateBlock((v) => !v);
+                        setShowAddBlock(false);
+                    }}
+                    data-testid="visual-editor-create-block-toggle"
+                >
+                    Create block
                 </button>
             </div>
 
+            {showCreateBlock ?
+                <OpportunityDrawerLayoutCreateBlockForm
+                    sectionKey={section.key}
+                    onCancel={() => setShowCreateBlock(false)}
+                    onCreate={(input) => {
+                        const result = createCustomBlockInSection(doc, section.key, {
+                            title: input.title,
+                            blockType: input.blockType,
+                            dataContext: input.dataContext,
+                            contactRole: input.blockType === "contact_card" ? input.contactRole : undefined,
+                            editMode: input.editMode,
+                            showTitle: input.showTitle,
+                        });
+                        if (!result.ok) {
+                            onFieldAddError(result.error);
+                            return;
+                        }
+                        applyDoc(result.doc);
+                        onFieldAddError(null);
+                        onSelectBlockId(result.blockItemId);
+                        onSelectFieldPath(null);
+                        setShowCreateBlock(false);
+                    }}
+                />
+            :   null}
+
             {showAddBlock ?
                 <div className="mt-2 rounded-lg border border-alloy-forge/12 bg-white p-2" data-testid="visual-editor-add-block-menu">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Registry blocks</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Starter templates</p>
                     <div className="mt-2 flex flex-wrap gap-1">
                         {blockTemplates.map((template) => (
                             <button
@@ -247,6 +297,13 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                         {selectedBlockId === block.itemId && block.itemId && selectedBlockItem ?
                             <OpportunityDrawerLayoutBlockSettings
                                 block={block}
+                                blockItemMetadata={selectedBlockItem.metadata}
+                                showBlockBuilder={
+                                    selectedBlockItem.refKey === "layout_block"
+                                    || selectedBlockItem.refKey === "contact_block"
+                                    || Boolean(selectedBlockItem.metadata?.layoutEditorBlockConfig)
+                                }
+                                rows={listCustomBlockRows(selectedBlockItem)}
                                 showContactRole={selectedBlockItem.refKey === "contact_block"}
                                 contactRole={
                                     selectedBlockItem.refKey === "contact_block" ?
@@ -254,13 +311,25 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                                     :   undefined
                                 }
                                 rowTemplateConfig={readLayoutEditorRowTemplateConfig(selectedBlockItem.metadata)}
+                                onBlockConfigChange={(patch) => {
+                                    applyDoc(patchCustomBlockConfig(doc, block.itemId, patch));
+                                }}
                                 onContactRoleChange={
                                     selectedBlockItem.refKey === "contact_block" ?
                                         (role) => {
-                                            applyDoc(patchLayoutBlockContactRole(doc, section.key, block.itemId, role));
+                                            applyDoc(patchCustomBlockConfig(doc, block.itemId, { contactRole: role }));
                                         }
                                     :   undefined
                                 }
+                                onAddRow={(columnCount) => {
+                                    applyDoc(addRowToCustomBlock(doc, block.itemId, columnCount));
+                                }}
+                                onRemoveRow={(rowIndex) => {
+                                    applyDoc(removeRowFromCustomBlock(doc, block.itemId, rowIndex));
+                                }}
+                                onSetRowColumns={(rowIndex, columnCount) => {
+                                    applyDoc(setCustomBlockRowColumnCount(doc, block.itemId, rowIndex, columnCount));
+                                }}
                                 onRowTemplateChange={(patch) => {
                                     const loc = findLayoutBlockLocation(doc, block.itemId);
                                     if (!loc) return;

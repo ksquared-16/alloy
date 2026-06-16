@@ -34,6 +34,7 @@ export const LAYOUT_EDITOR_DISPLAY_TYPES = [
     "link",
     "avatar",
     "pill",
+    "action_button",
 ] as const;
 export type LayoutEditorDisplayType = (typeof LAYOUT_EDITOR_DISPLAY_TYPES)[number];
 
@@ -56,6 +57,7 @@ const DISPLAY_TYPE_TO_RENDER_HINT: Partial<Record<LayoutEditorDisplayType, Layou
     status: "status",
     link: "link",
     pill: "badge",
+    action_button: "link",
 };
 
 export function readLayoutEditorDisplayConfig(source: {

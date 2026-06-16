@@ -66,7 +66,7 @@ describe("block creation", () => {
         if (!added.ok) return;
         doc = added.doc;
         const blocks = listSectionLayoutBlocks(doc, "household_contact");
-        expect(blocks.some((b) => b.title === "Secondary Contact Card")).toBe(true);
+        expect(blocks.some((b) => b.title.includes("Secondary Contact Card"))).toBe(true);
 
         doc = removeLayoutBlock(doc, "household_contact", added.blockItemId);
         expect(listSectionLayoutBlocks(doc, "household_contact").some((b) => b.itemId === added.blockItemId)).toBe(false);
