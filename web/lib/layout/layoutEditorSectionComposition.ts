@@ -10,6 +10,7 @@ import {
     makeFieldItem,
     makeId,
     makeTemplateItem,
+    makeWidgetItem,
     moveItemHorizontal,
     moveItemVertical,
     moveRow,
@@ -34,8 +35,10 @@ import {
 } from "@/lib/layout/layoutEditorActionButton";
 import {
     isAllowedOpportunityDrawerFieldRefKey,
+    isAllowedOpportunityDrawerWidgetKey,
     OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS,
 } from "@/lib/layout/surfaceLayoutRegistry";
+import { GLOBAL_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
 
 export type SectionColumnCount = 1 | 2 | 3;
 
@@ -87,7 +90,10 @@ function resolveSectionItemKind(item: LayoutItem): SectionItemKind {
 
 function sectionItemRuntimeEffective(item: LayoutItem, kind: SectionItemKind): { effective: boolean; reason?: string } {
     if (kind === "widget") {
-        return { effective: false, reason: "Widget placement is shell-managed in this editor." };
+        if (!isAllowedOpportunityDrawerWidgetKey(item.refKey)) {
+            return { effective: false, reason: "Widget key is not registered for the opportunity drawer." };
+        }
+        return { effective: true };
     }
     if (kind === "action_button") {
         const cfg = readLayoutEditorActionButtonConfig(item.metadata);
@@ -280,6 +286,39 @@ export function addSectionActionButtonItem(
     if (config?.actionKey && !isAllowedLayoutEditorActionKey(config.actionKey)) {
         return { ok: false, error: `"${config.actionKey}" is not an allowed drawer action key.` };
     }
+    return { ok: true, doc: addItem(doc, sIdx, rowIndex, colIndex, item), itemId: item.id };
+}
+
+const SINGLETON_SECTION_WIDGET_KEYS = new Set(["attention", "tasks", "current_work"]);
+
+export function addSectionWidgetItem(
+    doc: LayoutDoc,
+    sectionKey: string,
+    rowIndex: number,
+    colIndex: number,
+    widgetKey: string,
+): AddSectionItemResult {
+    if (!isAllowedOpportunityDrawerWidgetKey(widgetKey)) {
+        return { ok: false, error: `"${widgetKey}" is not allowed on the opportunity drawer.` };
+    }
+    const catalog = GLOBAL_WIDGET_CATALOG.find((w) => w.widgetKey === widgetKey);
+    if (catalog?.relevantSurfaces?.length && !catalog.relevantSurfaces.includes("drawer")) {
+        return { ok: false, error: `"${catalog.label}" is not supported on the opportunity drawer.` };
+    }
+    const sIdx = sectionIndex(doc, sectionKey);
+    if (sIdx < 0) return { ok: false, error: "Section not found." };
+    const section = doc.sections[sIdx]!;
+    if (SINGLETON_SECTION_WIDGET_KEYS.has(widgetKey)) {
+        const exists = section.rows.some((row) =>
+            row.columns.some((col) =>
+                col.items.some((it) => it.kind === "widget_placeholder" && it.refKey === widgetKey),
+            ),
+        );
+        if (exists) {
+            return { ok: false, error: `Only one ${catalog?.label ?? widgetKey} widget is allowed per section.` };
+        }
+    }
+    const item = makeWidgetItem(widgetKey, catalog?.label ?? widgetKey, catalog?.defaultDisplayMode);
     return { ok: true, doc: addItem(doc, sIdx, rowIndex, colIndex, item), itemId: item.id };
 }
 

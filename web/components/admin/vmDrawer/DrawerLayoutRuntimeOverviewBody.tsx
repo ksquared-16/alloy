@@ -23,6 +23,7 @@ import {
     buildLayoutRuntimeDrawerEvidence,
     logLayoutRuntimeDrawerEvidence,
 } from "@/lib/layout/runtime/layoutRuntimeEvidence";
+import { summarizeLayoutDocCompositionDiagnostics } from "@/lib/layout/layoutEditorSectionCompositionDiagnostics";
 import { shouldLogLayoutRuntimeEvidence } from "@/lib/layout/runtime/layoutRuntimeEvidenceClient";
 import type { LayoutRuntimeDrawerSurface } from "@/lib/layout/runtime/logLayoutRuntimeBodyRenderFailure";
 import type { UseDrawerLayoutRuntimeBodyResult } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
@@ -80,6 +81,19 @@ export default function DrawerLayoutRuntimeOverviewBody({
                 lastError: layoutBody.lastError,
             }),
         [entityId, effectiveDoc, layoutBody],
+    );
+
+    const sectionDiagnostics = useMemo(
+        () =>
+            effectiveDoc ?
+                summarizeLayoutDocCompositionDiagnostics(effectiveDoc, {
+                    layoutRecordId: layoutBody.layoutRecordId,
+                    layoutVersion: layoutBody.layoutVersion,
+                    surface: "live_drawer_runtime",
+                    honorLayoutDocBlocks: true,
+                })
+            :   [],
+        [effectiveDoc, layoutBody.layoutRecordId, layoutBody.layoutVersion],
     );
 
     useEffect(() => {
@@ -143,6 +157,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                             surface={surface}
                             lastError={layoutBody.lastError ?? (noRenderedItems ? "zero_rendered_items" : null)}
                             evidence={evidence}
+                            sectionDiagnostics={sectionDiagnostics}
                         />
                     :   null}
                     {noRenderedItems && !showStagingDiagnostic ?
@@ -206,6 +221,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                         surface={surface}
                         lastError={layoutBody.lastError ?? renderStats.fallbackReason}
                         evidence={evidence}
+                        sectionDiagnostics={sectionDiagnostics}
                     />
                 :   null}
                 {fallbackNode}
@@ -222,6 +238,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                     surface={surface}
                     lastError={layoutBody.lastError ?? layoutBody.phase}
                     evidence={evidence}
+                    sectionDiagnostics={sectionDiagnostics}
                 />
             :   null}
             {fallbackNode}

@@ -39,6 +39,12 @@ vi.mock("@/lib/admin/opportunityDrawerPrimaryPrefetch", async (importOriginal) =
     };
 });
 
+const prefetchOpportunityDrawerHeaderActions = vi.fn();
+
+vi.mock("@/lib/admin/opportunityDrawerHeaderActionsPrefetch", () => ({
+    prefetchOpportunityDrawerHeaderActions,
+}));
+
 vi.mock("@/lib/admin/opportunityDrawerFullPrefetch", () => ({
     prefetchOpportunityDrawerFull,
 }));

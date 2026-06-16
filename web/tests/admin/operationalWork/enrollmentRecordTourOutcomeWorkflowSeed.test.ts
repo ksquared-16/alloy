@@ -21,6 +21,11 @@ const migrationPath = join(
     "../../../../supabase/migrations/20260605120000_enrollment_record_tour_outcome_instantiate_work.sql",
 );
 
+const disableMigrationPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../../supabase/migrations/20260620120000_disable_c4_enrollment_record_tour_outcome_workflow.sql",
+);
+
 const orgId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
 const ownerId = "55555555-5555-5555-8555-555555555555";
@@ -72,9 +77,54 @@ describe("enrollment record tour outcome workflow seed spec", () => {
     });
 });
 
+describe("Phase 0 disable C4 enrollment record tour outcome workflow seed", () => {
+    it("disable migration sets enabled = false for c4 seed_key only", () => {
+        const sql = readFileSync(disableMigrationPath, "utf8");
+        expect(sql).toContain("metadata->>'seed_key' = 'c4_enrollment_record_tour_outcome_v1'");
+        expect(sql).toContain("enabled = false");
+        expect(sql).not.toContain("DELETE FROM public.workflows");
+    });
+});
+
 describe("emitStatusChangedEvent fans out to C4 seed workflow", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+    });
+
+    it("does not execute workflows when C4 seed is disabled (no enabled matches)", async () => {
+        const executeSpy = vi.spyOn(await import("@/lib/workflowRun"), "executeWorkflowRun");
+        executeSpy.mockResolvedValue({ ok: true, status: "completed", workflow_run_id: runId });
+
+        const chain: { select: ReturnType<typeof vi.fn>; eq: ReturnType<typeof vi.fn>; or: ReturnType<typeof vi.fn> } = {
+            select: vi.fn(),
+            eq: vi.fn(),
+            or: vi.fn().mockResolvedValue({ data: [], error: null }),
+        };
+        chain.select.mockReturnValue(chain);
+        chain.eq.mockReturnValue(chain);
+
+        const supabase = {
+            from: vi.fn((table: string) => {
+                if (table === "workflows") return chain;
+                throw new Error(`unexpected table ${table}`);
+            }),
+        } as never;
+
+        await emitStatusChangedEvent({
+            supabase,
+            orgId,
+            entityType: "opportunities",
+            entityId: oppId,
+            oldStatusKey: "qualification",
+            newStatusKey: ENROLLMENT_RECORD_TOUR_OUTCOME_TRIGGER_STATUS_KEY,
+            actorUserId: userId,
+        });
+
+        expect(chain.eq).toHaveBeenCalledWith("enabled", true);
+        expect(executeSpy).not.toHaveBeenCalled();
+        expect(mockInstantiate).not.toHaveBeenCalled();
+
+        executeSpy.mockRestore();
     });
 
     it("queries workflows on opportunity_status_changed for opportunities entity", async () => {

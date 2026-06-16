@@ -102,6 +102,40 @@ export function readinessHeaderWhyLine(): string {
     return "Needed to continue this inquiry.";
 }
 
+export function collectStagePlanAttentionReasons(
+    overviewData: Record<string, unknown> | null | undefined,
+): ResolvedOpportunityAttentionReason[] {
+    const attention = parseOperationalAttentionFromOverview(overviewData);
+    if (!attention?.needs_attention) return [];
+    return attention.reasons.filter(isStagePlanSourcedAttentionReason);
+}
+
+export function resolveStagePlanAttentionSummaryLine(
+    overviewData: Record<string, unknown> | null | undefined,
+): string | null {
+    const reasons = collectStagePlanAttentionReasons(overviewData);
+    const primary = reasons[0];
+    if (!primary?.label?.trim()) return null;
+    return primary.label.trim();
+}
+
+export function buildStagePlanAttentionGuidanceLines(
+    overviewData: Record<string, unknown> | null | undefined,
+): DrawerHeaderMoreGuidanceLine[] {
+    const reasons = collectStagePlanAttentionReasons(overviewData);
+    return reasons.map((reason, index) => ({
+        key: reason.stage_attention_rule_key ?? reason.code ?? `stage-${index}`,
+        label: reason.stage_attention_rule_label?.trim() || "Stage attention",
+        body: [
+            reason.label.trim(),
+            reason.stage_attention_provenance?.trim(),
+            reason.severity ? `Severity: ${reason.severity}` : null,
+        ]
+            .filter(Boolean)
+            .join(" · "),
+    }));
+}
+
 /** Readiness-generated attention from `_operational_attention` for drawer header surfacing. */
 export function resolveDrawerHeaderReadinessAttention(
     overviewData: Record<string, unknown> | null | undefined

@@ -26,6 +26,9 @@ function paintRecordFromViewModel(vm: OpportunityDrawerViewModel): Record<string
         ...(vm.workspace.work_intent_runtime != null
             ? { _work_intent_runtime: vm.workspace.work_intent_runtime }
             : {}),
+        ...(vm.workspace.stage_work_runtime != null
+            ? { _stage_work_runtime: vm.workspace.stage_work_runtime }
+            : {}),
     };
     if (vm.summaries.reminders.next_follow_up_iso) {
         paint.next_follow_up_at = vm.summaries.reminders.next_follow_up_iso;

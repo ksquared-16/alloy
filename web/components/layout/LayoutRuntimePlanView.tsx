@@ -49,6 +49,9 @@ import { resolveLayoutRuntimeWidgetKey } from "@/lib/layout/runtime/resolveLayou
 import { DrawerHeaderAttentionBlock } from "@/components/admin/drawer/DrawerHeaderAttentionBlock";
 import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import LayoutRuntimeTasksWidget from "@/components/layout/LayoutRuntimeTasksWidget";
+import LayoutRuntimeCurrentWorkWidget from "@/components/layout/LayoutRuntimeCurrentWorkWidget";
+import LayoutRuntimeFollowUpsWidget from "@/components/layout/LayoutRuntimeFollowUpsWidget";
+import { mapLayoutRuntimeTasksFromVm } from "@/lib/layout/runtime/mapLayoutRuntimeTasksFromVm";
 import LayoutRuntimeChildrenListWidget from "@/components/layout/LayoutRuntimeChildrenListWidget";
 import LayoutRuntimeChildrenEmptyState from "@/components/layout/LayoutRuntimeChildrenEmptyState";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
@@ -121,7 +124,10 @@ import {
 } from "@/lib/layout/runtime/drawerOverviewSectionPresentation";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
 import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
-import { shouldUseDrawerHouseholdProfileSubstitution } from "@/lib/layout/runtime/resolveLayoutEditorHouseholdRendering";
+import {
+    sectionHasLayoutOwnedComposition,
+    shouldUseDrawerHouseholdProfileSubstitution,
+} from "@/lib/layout/runtime/resolveLayoutEditorHouseholdRendering";
 import {
     resolveLeadEnrollmentRowTemplatePresentation,
     shouldApplyLeadEnrollmentRowTemplatePresentation,
@@ -321,7 +327,7 @@ function ValueCell({
                     :   null}
                 </div>
             :   null}
-            <div className={`mt-0.5 flex items-center gap-1 ${operatorSurfaces ? PRESENTATION_DATA_VALUE : "text-sm"} ${typographyIntentClass(displayConfig.typographyIntent)}`}>
+            <div className={`mt-0.5 flex min-w-0 items-center gap-1 ${operatorSurfaces ? PRESENTATION_DATA_VALUE : "text-sm"} ${typographyIntentClass(displayConfig.typographyIntent)}`}>
                 {item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
                 {canEdit && edit ?
                     <LayoutRuntimeFieldInput
@@ -338,7 +344,7 @@ function ValueCell({
                     >
                         {actionButton.label ?? item.label ?? "Action"}
                     </button>
-                :   <span className={!display ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>
+                :   <span className={`min-w-0 ${!display ? PRESENTATION_VALUE_PLACEHOLDER : "truncate"}`}>
                         {!display ?
                             <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>{emptyDisplay}</span>
                         : r.renderHint === "status" ?
@@ -945,20 +951,86 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
         <DrawerOverviewEmptyState message={`No ${title.toLowerCase()} yet`} compact />
     );
 
-    if (widgetKey === "tasks") {
+    if (widgetKey === "current_work") {
+        const opportunityId = String(record.id ?? record.opportunity_id ?? "").trim();
         if (operatingCards && compact) {
             return (
                 <LeadOperatingSummaryCard
-                    title={title}
+                    title={title || "Current Work"}
+                    icon={<CheckSquare2 className="h-3.5 w-3.5" aria-hidden />}
+                    accent="work"
+                    widgetKey="current_work"
+                >
+                    <LayoutRuntimeCurrentWorkWidget
+                        record={record}
+                        opportunityId={opportunityId}
+                        title={title}
+                        compact
+                        chromeless
+                        canMutate={host.canMutate}
+                    />
+                </LeadOperatingSummaryCard>
+            );
+        }
+        return (
+            <LayoutRuntimeCurrentWorkWidget
+                record={record}
+                opportunityId={opportunityId}
+                title={title}
+                compact={compact}
+                canMutate={host.canMutate}
+            />
+        );
+    }
+
+    if (widgetKey === "follow_ups") {
+        const followUps = mapLayoutRuntimeTasksFromVm(record as Record<string, unknown>);
+        if (compact && followUps.length === 0) return null;
+        if (operatingCards && compact) {
+            return (
+                <LeadOperatingSummaryCard
+                    title={title || "Follow-ups"}
+                    icon={<CheckSquare2 className="h-3.5 w-3.5" aria-hidden />}
+                    accent="work"
+                    widgetKey="follow_ups"
+                >
+                    <LayoutRuntimeFollowUpsWidget record={record} title={title || "Follow-ups"} compact chromeless />
+                </LeadOperatingSummaryCard>
+            );
+        }
+        return (
+            <LayoutRuntimeFollowUpsWidget record={record} title={title || "Follow-ups"} compact={compact} />
+        );
+    }
+
+    if (widgetKey === "tasks") {
+        const followUps = mapLayoutRuntimeTasksFromVm(record as Record<string, unknown>);
+        const followUpTitle = title === "Tasks" ? "Follow-ups" : title;
+        if (operatingCards && compact && followUps.length === 0) return null;
+        if (operatingCards && compact) {
+            return (
+                <LeadOperatingSummaryCard
+                    title={followUpTitle}
                     icon={<CheckSquare2 className="h-3.5 w-3.5" aria-hidden />}
                     accent="work"
                     widgetKey="tasks"
                 >
-                    <LayoutRuntimeTasksWidget record={record} title={title} compact chromeless />
+                    <LayoutRuntimeFollowUpsWidget
+                        record={record}
+                        title={followUpTitle}
+                        compact
+                        chromeless
+                    />
                 </LeadOperatingSummaryCard>
             );
         }
-        return <LayoutRuntimeTasksWidget record={record} title={title} compact={compact} />;
+        return (
+            <LayoutRuntimeFollowUpsWidget
+                record={record}
+                title={followUpTitle}
+                compact={compact}
+            />
+        );
     }
 
     if (widgetKey === "household_summary" && personCards && compact) {
@@ -1237,7 +1309,10 @@ function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; ro
     }
 
     return (
-        <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${LAYOUT_GRID_COLUMNS}, minmax(0, 1fr))` }}>
+        <div
+            className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-[repeat(12,minmax(0,1fr))]"
+            data-layout-runtime-row-columns={row.columns.length}
+        >
             {row.columns.map((col) => (
                 <ColumnView key={col.id} record={record} column={col} anchorEntity={anchorEntity} />
             ))}
@@ -1275,13 +1350,14 @@ function SectionView({
         return null;
     }
 
-    const useHouseholdProfile = shouldUseDrawerHouseholdProfileSubstitution({
-        sectionKey: section.key,
-        compositionSectionSurface: composition.compositionSectionSurface,
-        operatorSurfaces,
-        opportunityEntityLayoutsVisualConfig: visibilityCtx.opportunityEntityLayoutsVisualConfig,
-        honorLayoutDocBlocks: composition.honorLayoutDocBlocks,
-    });
+    const useHouseholdProfile =
+        shouldUseDrawerHouseholdProfileSubstitution({
+            sectionKey: section.key,
+            compositionSectionSurface: composition.compositionSectionSurface,
+            operatorSurfaces,
+            opportunityEntityLayoutsVisualConfig: visibilityCtx.opportunityEntityLayoutsVisualConfig,
+            honorLayoutDocBlocks: composition.honorLayoutDocBlocks,
+        }) && !sectionHasLayoutOwnedComposition(section);
 
     const sectionContext = {
         sectionPresentation,

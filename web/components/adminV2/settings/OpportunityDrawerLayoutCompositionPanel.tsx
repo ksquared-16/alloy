@@ -30,6 +30,8 @@ type Props = {
     onFieldAddError: (message: string | null) => void;
     applyDoc: (next: LayoutDoc) => void;
     onClose: () => void;
+    layoutRecordId?: string | null;
+    layoutVersion?: number | null;
 };
 
 export default function OpportunityDrawerLayoutCompositionPanel({
@@ -44,6 +46,8 @@ export default function OpportunityDrawerLayoutCompositionPanel({
     onFieldAddError,
     applyDoc,
     onClose,
+    layoutRecordId,
+    layoutVersion,
 }: Props) {
     const [showAddBlock, setShowAddBlock] = useState(false);
     const [showCreateBlock, setShowCreateBlock] = useState(false);
@@ -203,6 +207,8 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                 }}
                 onFieldAddError={onFieldAddError}
                 applyDoc={applyDoc}
+                layoutRecordId={layoutRecordId}
+                layoutVersion={layoutVersion}
             />
         </div>
     );

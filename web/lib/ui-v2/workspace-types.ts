@@ -161,6 +161,8 @@ export type CrmCompactRowSemanticSlots = {
   stageLabel: string | null;
   statusLabel: string | null;
   nextStep: string | null;
+  /** Primary stage work line — label · state · due. */
+  currentWorkLine: string | null;
   lastActivity: string | null;
   /** Quote / offer total when present. */
   commercialValue: string | null;

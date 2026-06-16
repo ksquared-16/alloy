@@ -28,3 +28,14 @@ export async function publishEntityLayoutDraft(id: string): Promise<EntityLayout
     if (!res.ok) throw new Error(json.error ?? "Publish failed");
     return json;
 }
+
+export async function duplicateEntityLayoutDraft(sourceId: string, name?: string): Promise<EntityLayoutRecord> {
+    const res = await fetch(`/api/admin/entity-layouts/${encodeURIComponent(sourceId)}/duplicate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(name ? { name } : {}),
+    });
+    const json = (await res.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
+    if (!res.ok) throw new Error(json.error ?? "Could not create draft from published layout");
+    return json;
+}

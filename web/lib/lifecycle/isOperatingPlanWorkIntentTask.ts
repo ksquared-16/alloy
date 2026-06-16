@@ -6,24 +6,26 @@ function trimOrNull(v: unknown): string | null {
     return s || null;
 }
 
-/** True when a task row represents operating-plan lifecycle work (not residual generic tasks). */
+/** True when a task row represents operating-plan lifecycle work (not residual follow-ups). */
 export function isOperatingPlanWorkIntentTask(
     task: InquirySummaryTaskPreviewRow,
     currentStageKey: string | null,
-    primaryWorkIntentKey?: string | null,
+    stageTemplateKeys: readonly string[] = [],
 ): boolean {
     const workIntentKey = trimOrNull(task.work_intent_key);
     const stageKey = trimOrNull(task.lifecycle_stage_key);
-    const primaryKey = trimOrNull(primaryWorkIntentKey);
+    const templateKeys = stageTemplateKeys.map((k) => k.trim()).filter(Boolean);
 
-    if (workIntentKey && primaryKey && workIntentKey === primaryKey) return true;
-    if (workIntentKey) return true;
+    if (workIntentKey && templateKeys.includes(workIntentKey)) return true;
+    if (workIntentKey && templateKeys.length === 0) return true;
 
-    if (task.lifecycle_provenance === "lifecycle_template") return true;
+    if (task.lifecycle_provenance === "lifecycle_template") {
+        if (stageKey && currentStageKey && stageKey === currentStageKey) return true;
+        if (!stageKey && templateKeys.length === 0) return true;
+    }
 
-    if (stageKey && currentStageKey && stageKey === currentStageKey) {
-        if (task.lifecycle_provenance === "lifecycle_template") return true;
-        if (workIntentKey) return true;
+    if (stageKey && currentStageKey && stageKey === currentStageKey && workIntentKey) {
+        return true;
     }
 
     return false;

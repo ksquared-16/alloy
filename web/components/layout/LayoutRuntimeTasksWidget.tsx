@@ -39,10 +39,18 @@ type Props = {
     chromeless?: boolean;
     /** Premium operating card body typography. */
     operatingCard?: boolean;
+    /** Empty state copy — default follows title (Tasks vs Follow-ups). */
+    emptyMessage?: string;
 };
 
-/** Layout runtime tasks widget — click a task for anchored detail overlay. */
-export default function LayoutRuntimeTasksWidget({ record, title = "Tasks", compact = false, chromeless = false }: Props) {
+/** Layout runtime tasks / follow-ups widget — click a task for anchored detail overlay. */
+export default function LayoutRuntimeTasksWidget({
+    record,
+    title = "Tasks",
+    compact = false,
+    chromeless = false,
+    emptyMessage,
+}: Props) {
     const openTasks = toTaskRows(record);
     const visibleTasks = compact ? openTasks.slice(0, 2) : openTasks;
     const overflowCount = compact && openTasks.length > 2 ? openTasks.length - 2 : 0;
@@ -141,7 +149,15 @@ export default function LayoutRuntimeTasksWidget({ record, title = "Tasks", comp
                             </button>
                         );
                     })
-                :   <DrawerOverviewEmptyState message="No open tasks" hint="Tasks assigned to this record will appear here." compact />
+                :   <DrawerOverviewEmptyState
+                        message={emptyMessage ?? (title === "Follow-ups" ? "No follow-ups" : "No open tasks")}
+                        hint={
+                            title === "Follow-ups"
+                                ? "Manual and Task Assist items appear here."
+                                : "Tasks assigned to this record will appear here."
+                        }
+                        compact
+                    />
                 }
                 {overflowCount > 0 ?
                     <div className="text-[10px] font-medium text-alloy-midnight/45" data-layout-runtime-tasks-overflow="true">

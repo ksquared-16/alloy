@@ -118,6 +118,12 @@ export type QueueRowWorkSummary = {
     primary_open_label: string | null;
 };
 
+export type QueueRowCurrentWorkSummary = {
+    label: string;
+    state: "open" | "completed" | "none";
+    due_label: string | null;
+};
+
 export type QueueRowNextBestAction = {
     label: string;
     action_key?: string;
@@ -186,6 +192,9 @@ export type QueueRowContext = {
      * TODO(phase-5): subject-scoped work summary when per-child work ships.
      */
     work_summary: QueueRowWorkSummary | null;
+
+    /** Primary stage operating-plan work item for queue row preview. */
+    current_work_summary: QueueRowCurrentWorkSummary | null;
 
     /**
      * BOS / placement recommendation hint.

@@ -341,6 +341,13 @@ export function isAllowedOpportunityDrawerFieldRefKey(refKey: string): boolean {
     return false;
 }
 
+/** Widget key allow-list check for opportunity drawer surfaces. */
+export function isAllowedOpportunityDrawerWidgetKey(widgetKey: string): boolean {
+    const trimmed = widgetKey.trim();
+    if (!trimmed) return false;
+    return OPPORTUNITY_DRAWER_SURFACE.allowedWidgetKeys.includes(trimmed);
+}
+
 export function isOpportunityDrawerLayoutZone(v: unknown): v is OpportunityDrawerLayoutZone {
     return typeof v === "string" && (OPPORTUNITY_DRAWER_LAYOUT_ZONES as readonly string[]).includes(v);
 }

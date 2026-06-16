@@ -8,9 +8,11 @@
 import {
     buildDrawerHeaderMoreGuidance,
     buildReadinessDrawerHeaderMoreGuidance,
+    buildStagePlanAttentionGuidanceLines,
     drawerHeaderAttentionSummaryLine,
     hasDrawerHeaderMoreGuidanceContent,
     resolveDrawerHeaderReadinessAttention,
+    resolveStagePlanAttentionSummaryLine,
     type DrawerHeaderMoreGuidanceLine,
 } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { resolveDrawerReviewAssistViewModel } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
@@ -73,6 +75,9 @@ export function resolveLayoutRuntimeAttentionSummaryLine(
     if (readinessCtx.primarySummaryLine) return readinessCtx.primarySummaryLine;
     if (readinessCtx.nextStepLine) return readinessCtx.nextStepLine;
 
+    const stagePlanLine = resolveStagePlanAttentionSummaryLine(overview);
+    if (stagePlanLine) return stagePlanLine;
+
     const preview = getRecommendationQueuePreview(overview);
     if (preview?.nextLabel) return preview.nextLabel.trim();
 
@@ -101,6 +106,9 @@ export function resolveLayoutRuntimeAttentionGuidanceLines(
     if (readinessCtx.hasReadinessAttention) {
         return buildReadinessDrawerHeaderMoreGuidance(readinessCtx);
     }
+
+    const stagePlanLines = buildStagePlanAttentionGuidanceLines(overview);
+    if (stagePlanLines.length) return stagePlanLines;
 
     const preview = getRecommendationQueuePreview(overview);
     if (!preview) return [];

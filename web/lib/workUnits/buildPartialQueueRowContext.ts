@@ -37,6 +37,7 @@ import {
     resolveBoringCaseStatusLabel,
     type PartialQueueRowContextQueueMeta,
 } from "@/lib/workUnits/buildPartialQueueRowContextHelpers";
+import { buildQueueCurrentWorkSummary } from "@/lib/workUnits/buildQueueCurrentWorkSummary";
 
 export type { PartialQueueRowContextQueueMeta };
 export { resolveBoringCaseStatusLabel };
@@ -309,6 +310,7 @@ export function buildPartialQueueRowContext(input: BuildPartialQueueRowContextIn
         related_subjects_summary: buildRelatedSubjectsSummary(row, input.allowedLocationIds),
         attention_summary: buildAttentionSummary(row),
         work_summary: buildWorkSummary(row),
+        current_work_summary: buildQueueCurrentWorkSummary(row),
         next_best_action: buildNextBestAction(row),
         drawer_open: {
             entity_type: "opportunities",

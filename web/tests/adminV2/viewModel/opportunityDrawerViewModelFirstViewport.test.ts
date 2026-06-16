@@ -37,6 +37,7 @@ describe("opportunityDrawerViewModelFirstViewport", () => {
                 lifecycle_rail: null,
                 stage_context: null,
                 work_intent_runtime: null,
+                stage_work_runtime: null,
             },
             first_paint: {
                 settled: true,

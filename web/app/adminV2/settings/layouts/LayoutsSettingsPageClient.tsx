@@ -65,7 +65,12 @@ export default function LayoutsSettingsPageClient() {
 
         return (
             <div className="space-y-3" data-testid="layouts-editor-shell-visual">
-                <OpportunityDrawerLayoutVisualEditor layoutId={layoutId} basePath={base} onBack={backToGallery} />
+                <OpportunityDrawerLayoutVisualEditor
+                    layoutId={layoutId}
+                    basePath={base}
+                    onBack={backToGallery}
+                    onLayoutIdChange={(id) => openEditor(id)}
+                />
             </div>
         );
     }

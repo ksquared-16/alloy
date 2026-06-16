@@ -76,7 +76,7 @@ function buildFixtureVm(recordId: string): OpportunityDrawerViewModel {
         structureSettled: true,
         compose_version: "shadow-1",
         entity: { type: "opportunity", id: recordId },
-        workspace: { department_id: null, work_unit_id: null, queue_definition: null, lifecycle_rail: null, stage_context: null, work_intent_runtime: null },
+        workspace: { department_id: null, work_unit_id: null, queue_definition: null, lifecycle_rail: null, stage_context: null, work_intent_runtime: null, stage_work_runtime: null },
         first_paint: {
             settled: true,
             viewport_slots: [],

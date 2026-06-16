@@ -1368,6 +1368,7 @@ export function CrmCompactQueuePreview({
   const useDoctrine = slots.crmFactGroups != null;
   const hasMiddle = useDoctrine ? (slots.crmFactGroups?.length ?? 0) > 0 : legacyMiddleHasContent(slots);
 
+  const hasCurrentWorkStrip = Boolean(slots.currentWorkLine?.trim());
   const hasNextStrip = Boolean(slots.nextStep?.trim());
 
   const notePrev = slots.familyNotePreview;
@@ -1583,12 +1584,18 @@ export function CrmCompactQueuePreview({
               </span>
             ) : null}
           </div>
-          {hasNextStrip ? (
+          {hasCurrentWorkStrip ?
+            <div className="adminv2-ws-crm-queue-preview__next-strip" aria-label="Current work">
+              <span className="adminv2-ws-crm-queue-preview__next-value">{slots.currentWorkLine!.trim()}</span>
+              <span className="adminv2-ws-crm-queue-preview__next-caption">Current work</span>
+            </div>
+          :   null}
+          {hasNextStrip ?
             <div className="adminv2-ws-crm-queue-preview__next-strip" aria-label="Next step">
               <span className="adminv2-ws-crm-queue-preview__next-value">{slots.nextStep!.trim()}</span>
               <span className="adminv2-ws-crm-queue-preview__next-caption">Next step</span>
             </div>
-          ) : null}
+          :   null}
           {commercial ? (
             <div className="adminv2-ws-crm-queue-preview__commercial">{commercial}</div>
           ) : null}

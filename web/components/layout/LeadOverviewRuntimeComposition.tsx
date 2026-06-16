@@ -112,7 +112,7 @@ export default function LeadOverviewRuntimeComposition({
     const slots = partitionLeadOverviewBodySections(doc);
     const visualConfigEnabled = isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient();
     const hints = leadOverviewCompositionHints({
-        honorLayoutDocBlocks: visualConfigEnabled,
+        honorLayoutDocBlocks: true,
     });
     const visibilityCtx = useMemo(
         () =>

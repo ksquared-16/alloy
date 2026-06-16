@@ -6,7 +6,6 @@
 
 import { useMemo, useCallback } from "react";
 import DrawerLayoutRuntimeOverviewBody from "@/components/admin/vmDrawer/DrawerLayoutRuntimeOverviewBody";
-import WorkIntentRuntimeCard from "@/components/workIntent/WorkIntentRuntimeCard";
 import OpportunityDrawerInquiryWorkflowOverview from "@/components/admin/vmDrawer/OpportunityDrawerInquiryWorkflowOverview";
 import OpportunityDrawerLayoutRuntimeBodyStatus from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeBodyStatus";
 import OpportunityDrawerLayoutRuntimeShadowDiagnostics from "@/components/admin/vmDrawer/OpportunityDrawerLayoutRuntimeShadowDiagnostics";
@@ -85,8 +84,11 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         if (displayVm.workspace.work_intent_runtime != null) {
             merged._work_intent_runtime = displayVm.workspace.work_intent_runtime;
         }
+        if (displayVm.workspace.stage_work_runtime != null) {
+            merged._stage_work_runtime = displayVm.workspace.stage_work_runtime;
+        }
         return merged;
-    }, [vmRecord, displayVm.summaries?.tasks, displayVm.workspace.work_intent_runtime]);
+    }, [vmRecord, displayVm.summaries?.tasks, displayVm.workspace.work_intent_runtime, displayVm.workspace.stage_work_runtime]);
 
     const layoutQueryParams = useMemo(
         () => ({ departmentId, workUnitId }),
@@ -148,13 +150,6 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
 
     return (
         <div className="space-y-4" data-adminv2-opportunity-drawer-body="true">
-            {displayVm.workspace.work_intent_runtime ?
-                <WorkIntentRuntimeCard
-                    opportunityId={drawerId}
-                    projection={displayVm.workspace.work_intent_runtime}
-                    canMutate={canMutate}
-                />
-            :   null}
             <DrawerLayoutRuntimeOverviewBody
                 layoutBody={mergedLayoutBody}
                 layoutDocOverride={layoutDocBodyOverride}

@@ -307,10 +307,19 @@ export function resolveVisualEditorActionState(input: {
     busy: boolean;
 }): VisualEditorActionState {
     if (input.recordStatus === "published") {
+        if (input.dirty) {
+            return {
+                canSave: input.validationOk && !input.busy,
+                canPublish: false,
+                statusLabel: "Published — save creates a new draft with your changes",
+                statusTone: input.validationOk ? "warning" : "error",
+                publishBlockedReason: "Save as draft first, then publish the new draft.",
+            };
+        }
         return {
             canSave: false,
             canPublish: false,
-            statusLabel: "Published — create a new draft from the gallery to edit",
+            statusLabel: "Published — edit to start a new draft",
             statusTone: "success",
             publishBlockedReason: "This version is already published.",
         };

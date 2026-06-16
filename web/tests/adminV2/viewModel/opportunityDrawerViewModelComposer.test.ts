@@ -12,8 +12,9 @@ vi.mock("@/lib/admin/opportunityEntityRecord", () => ({
     attachOpportunityHouseholdCustomerPersonsForDrawer: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/lib/lifecycle/projectWorkIntentRuntime", () => ({
-    projectWorkIntentRuntime: vi.fn(async () => null),
+vi.mock("@/lib/lifecycle/projectStageWorkRuntime", () => ({
+    projectStageWorkRuntime: vi.fn(async () => null),
+    primaryWorkIntentProjectionFromStageWork: vi.fn(() => null),
 }));
 
 vi.mock("@/lib/admin/opportunityAttentionSuggestionAttachment", () => ({

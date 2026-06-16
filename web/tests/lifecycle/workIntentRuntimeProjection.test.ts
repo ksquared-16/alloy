@@ -49,7 +49,7 @@ describe("isOperatingPlanWorkIntentTask", () => {
                     work_intent_key: "make_contact",
                 },
                 "lead",
-                "make_contact",
+                ["make_contact"],
             ),
         ).toBe(true);
     });
@@ -67,7 +67,7 @@ describe("isOperatingPlanWorkIntentTask", () => {
                     lifecycle_stage_key: "lead",
                 },
                 "lead",
-                "make_contact",
+                ["make_contact"],
             ),
         ).toBe(true);
     });
@@ -83,7 +83,7 @@ describe("isOperatingPlanWorkIntentTask", () => {
                     source: "task_assist",
                 },
                 "lead",
-                "make_contact",
+                ["make_contact"],
             ),
         ).toBe(false);
     });
@@ -120,17 +120,16 @@ describe("filterResidualOperationalTasks", () => {
 });
 
 describe("Work Intent Runtime Phase A integration contracts", () => {
-    it("compose wires work_intent_runtime and filters tasks", () => {
+    it("compose wires stage work runtime and filters tasks", () => {
         const compose = read("lib/adminV2/viewModel/drawer/opportunity/composeOpportunityDrawerViewModel.ts");
-        expect(compose).toContain("projectWorkIntentRuntime");
+        expect(compose).toContain("projectStageWorkRuntime");
         expect(compose).toContain("filterResidualOperationalTasks");
-        expect(compose).toContain("work_intent_runtime");
+        expect(compose).toContain("stage_work_runtime");
     });
 
-    it("OpportunityDrawerOverviewBody hosts WorkIntentRuntimeCard above layout body", () => {
+    it("OpportunityDrawerOverviewBody uses layout runtime for current work", () => {
         const body = read("components/admin/vmDrawer/OpportunityDrawerOverviewBody.tsx");
-        expect(body).toContain("WorkIntentRuntimeCard");
-        expect(body).toContain("displayVm.workspace.work_intent_runtime");
+        expect(body).not.toContain("WorkIntentRuntimeCard");
         expect(body).toContain("DrawerLayoutRuntimeOverviewBody");
     });
 

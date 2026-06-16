@@ -45,6 +45,8 @@ type Props = {
     onSelectBlockId: (blockId: string | null) => void;
     onFieldAddError: (message: string | null) => void;
     applyDoc: (next: LayoutDoc) => void;
+    layoutRecordId?: string | null;
+    layoutVersion?: number | null;
 };
 
 function SectionPreviewBody({
@@ -116,6 +118,8 @@ function EditableSectionFrame({
     onSelectBlockId,
     onFieldAddError,
     applyDoc,
+    layoutRecordId,
+    layoutVersion,
 }: {
     doc: LayoutDoc;
     section: LayoutSection;
@@ -133,6 +137,8 @@ function EditableSectionFrame({
     onSelectBlockId: (blockId: string | null) => void;
     onFieldAddError: (message: string | null) => void;
     applyDoc: (next: LayoutDoc) => void;
+    layoutRecordId?: string | null;
+    layoutVersion?: number | null;
 }) {
     const hidden = isSectionEditorHidden(section);
     const isEditing = editingSectionKey === section.key;
@@ -226,6 +232,8 @@ function EditableSectionFrame({
                     onFieldAddError={onFieldAddError}
                     applyDoc={applyDoc}
                     onClose={() => onEditSection(null)}
+                    layoutRecordId={layoutRecordId}
+                    layoutVersion={layoutVersion}
                 />
             :   null}
         </div>
@@ -248,6 +256,8 @@ export default function OpportunityDrawerLayoutEditorCanvas({
     onSelectBlockId,
     onFieldAddError,
     applyDoc,
+    layoutRecordId,
+    layoutVersion,
 }: Props) {
     const slots = partitionLeadOverviewBodySections(doc);
     const zones = partitionOpportunityDrawerSectionsByZone(doc);
@@ -274,6 +284,8 @@ export default function OpportunityDrawerLayoutEditorCanvas({
                 onSelectBlockId={onSelectBlockId}
                 onFieldAddError={onFieldAddError}
                 applyDoc={applyDoc}
+                layoutRecordId={layoutRecordId}
+                layoutVersion={layoutVersion}
             />
         );
     };

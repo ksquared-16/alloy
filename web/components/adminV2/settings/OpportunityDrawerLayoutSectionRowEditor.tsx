@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import OpportunityDrawerLayoutBlockSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutBlockSettings";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
+import OpportunityDrawerLayoutWidgetPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutWidgetPicker";
+import OpportunityDrawerLayoutSectionCompositionDiagnostics from "@/components/adminV2/settings/OpportunityDrawerLayoutSectionCompositionDiagnostics";
 import OpportunityDrawerLayoutFieldSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettings";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
@@ -38,6 +40,7 @@ import {
     addSectionListItem,
     addSectionRow,
     addSectionTextItem,
+    addSectionWidgetItem,
     listSectionCompositionRows,
     moveSectionItemHorizontal,
     moveSectionItemVertical,
@@ -50,6 +53,7 @@ import {
     type SectionCompositionItem,
 } from "@/lib/layout/layoutEditorSectionComposition";
 import { resolveLayoutEditorItemDisplayLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
+import { summarizeSectionCompositionDiagnostic } from "@/lib/layout/layoutEditorSectionCompositionDiagnostics";
 import { resolveVisibilityRuleKey } from "@/lib/layout/layoutEditorVisibilityRules";
 
 type Props = {
@@ -61,6 +65,8 @@ type Props = {
     onSelectItemId: (itemId: string | null) => void;
     onFieldAddError: (message: string | null) => void;
     applyDoc: (next: LayoutDoc) => void;
+    layoutRecordId?: string | null;
+    layoutVersion?: number | null;
 };
 
 const ITEM_KIND_LABELS: Record<SectionCompositionItem["kind"], string> = {
@@ -81,9 +87,21 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
     onSelectItemId,
     onFieldAddError,
     applyDoc,
+    layoutRecordId,
+    layoutVersion,
 }: Props) {
     const rows = useMemo(() => listSectionCompositionRows(doc, sectionKey), [doc, sectionKey]);
-    const [pickerTarget, setPickerTarget] = useState<{ rowIndex: number; colIndex: number } | null>(null);
+    const [pickerTarget, setPickerTarget] = useState<{ rowIndex: number; colIndex: number; kind: "field" | "widget" } | null>(null);
+    const previewDiagnostic = useMemo(
+        () =>
+            summarizeSectionCompositionDiagnostic(doc, sectionKey, {
+                layoutRecordId,
+                layoutVersion,
+                surface: "editor_preview",
+                honorLayoutDocBlocks: true,
+            }),
+        [doc, sectionKey, layoutRecordId, layoutVersion],
+    );
 
     const selectedItem =
         selectedItemId ?
@@ -202,7 +220,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                     ))}
                                 </ul>
 
-                                {pickerTarget?.rowIndex === row.rowIndex && pickerTarget.colIndex === col.colIndex ?
+                                {pickerTarget?.rowIndex === row.rowIndex && pickerTarget.colIndex === col.colIndex && pickerTarget.kind === "field" ?
                                     <div className="mt-2">
                                         <OpportunityDrawerLayoutFieldPicker
                                             groups={fieldPickerGroups}
@@ -228,12 +246,37 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                     </div>
                                 :   null}
 
+                                {pickerTarget?.rowIndex === row.rowIndex && pickerTarget.colIndex === col.colIndex && pickerTarget.kind === "widget" ?
+                                    <div className="mt-2">
+                                        <OpportunityDrawerLayoutWidgetPicker
+                                            disabled={!validationOk}
+                                            onPickWidget={(widgetKey) => {
+                                                const result = addSectionWidgetItem(
+                                                    doc,
+                                                    sectionKey,
+                                                    row.rowIndex,
+                                                    col.colIndex,
+                                                    widgetKey,
+                                                );
+                                                if (!result.ok) {
+                                                    onFieldAddError(result.error);
+                                                    return;
+                                                }
+                                                applyDoc(result.doc);
+                                                onFieldAddError(null);
+                                                onSelectItemId(result.itemId);
+                                                setPickerTarget(null);
+                                            }}
+                                        />
+                                    </div>
+                                :   null}
+
                                 <div className="mt-2 flex flex-wrap gap-1">
                                     <AddItemButton
                                         label="Field"
                                         testId={`visual-editor-add-field-${row.rowIndex}-${col.colIndex}`}
                                         onClick={() => {
-                                            setPickerTarget({ rowIndex: row.rowIndex, colIndex: col.colIndex });
+                                            setPickerTarget({ rowIndex: row.rowIndex, colIndex: col.colIndex, kind: "field" });
                                             onSelectItemId(null);
                                         }}
                                     />
@@ -289,6 +332,14 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                             onSelectItemId(result.itemId);
                                         }}
                                     />
+                                    <AddItemButton
+                                        label="Widget"
+                                        testId={`visual-editor-add-widget-${row.rowIndex}-${col.colIndex}`}
+                                        onClick={() => {
+                                            setPickerTarget({ rowIndex: row.rowIndex, colIndex: col.colIndex, kind: "widget" });
+                                            onSelectItemId(null);
+                                        }}
+                                    />
                                 </div>
                             </div>
                         ))}
@@ -310,6 +361,10 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                     :   null}
                 </div>
             ))}
+            <OpportunityDrawerLayoutSectionCompositionDiagnostics
+                title="Editor preview composition"
+                diagnostic={previewDiagnostic}
+            />
         </div>
     );
 }

@@ -213,10 +213,15 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         vmRecord._work_intent_runtime && typeof vmRecord._work_intent_runtime === "object"
             ? vmRecord._work_intent_runtime
             : null;
+    const stageWorkRuntime =
+        vmRecord._stage_work_runtime && typeof vmRecord._stage_work_runtime === "object"
+            ? vmRecord._stage_work_runtime
+            : null;
     const overviewData: Record<string, unknown> = {
         ...vmRecord,
         ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),
         ...(workIntentRuntime ? { _work_intent_runtime: workIntentRuntime } : {}),
+        ...(stageWorkRuntime ? { _stage_work_runtime: stageWorkRuntime } : {}),
     };
 
     const record: ProofRuntimeRecord = {
@@ -248,6 +253,7 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         _attention: attention ?? "",
         ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),
         ...(workIntentRuntime ? { _work_intent_runtime: workIntentRuntime } : {}),
+        ...(stageWorkRuntime ? { _stage_work_runtime: stageWorkRuntime } : {}),
         enrollment_children: layoutChildren,
         children: layoutChildren,
         tasks: Array.isArray(vmRecord._tasks_preview) ? vmRecord._tasks_preview : [],

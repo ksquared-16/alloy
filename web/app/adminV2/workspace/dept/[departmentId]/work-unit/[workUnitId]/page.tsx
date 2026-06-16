@@ -160,6 +160,10 @@ import {
     buildWorkUnitQueueCrmCompactRowSliceForPlacementCandidate,
 } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { buildQueueRowLayoutRuntimeEnrichment } from "@/lib/layout/runtime/queueRowLayoutRuntimeEnrichment";
+import {
+    buildQueueCurrentWorkSummary,
+    formatQueueCurrentWorkLine,
+} from "@/lib/workUnits/buildQueueCurrentWorkSummary";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -4860,6 +4864,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                           typeof r?._next_step_preview === "string" && r._next_step_preview.trim()
                                               ? r._next_step_preview.trim()
                                               : null,
+                                      currentWorkLine: (() => {
+                                          const ctx = r._queue_row_context as
+                                              | { current_work_summary?: ReturnType<typeof buildQueueCurrentWorkSummary> }
+                                              | null
+                                              | undefined;
+                                          const summary =
+                                              ctx?.current_work_summary ??
+                                              buildQueueCurrentWorkSummary(r as Record<string, unknown>);
+                                          return formatQueueCurrentWorkLine(summary);
+                                      })(),
                                       lastActivity: activityLastLine,
                                       commercialValue: null,
                                       ...crmPresentation,

@@ -138,7 +138,7 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
         [
             row(id(sumBase, "r0"), [
                 col(id(sumBase, "r0"), 0, THIRD, [widgetItem(id(sumBase, "r0c0"), "attention", "Attention", "summary")]),
-                col(id(sumBase, "r0"), 1, THIRD, [widgetItem(id(sumBase, "r0c1"), "tasks", "Tasks", "list")]),
+                col(id(sumBase, "r0"), 1, THIRD, [widgetItem(id(sumBase, "r0c1"), "current_work", "Current Work", "summary")]),
                 col(id(sumBase, "r0"), 2, THIRD, [widgetItem(id(sumBase, "r0c2"), "tour_summary", "Tour / Event", "summary")]),
                 col(id(sumBase, "r0"), 3, THIRD, [widgetItem(id(sumBase, "r0c3"), "children_list", "Children", "list")]),
             ]),

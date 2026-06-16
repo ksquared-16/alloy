@@ -25,7 +25,7 @@ import {
 } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerViewModelHeader";
 import { buildOpportunityWorkspaceLifecycleRail } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityWorkspaceLifecycleRail";
 import { resolveStageOperatingPlanPurpose } from "@/lib/lifecycle/resolveStageOperatingPlanPurpose";
-import { projectWorkIntentRuntime } from "@/lib/lifecycle/projectWorkIntentRuntime";
+import { projectStageWorkRuntime, primaryWorkIntentProjectionFromStageWork } from "@/lib/lifecycle/projectStageWorkRuntime";
 import { filterResidualOperationalTasks } from "@/lib/lifecycle/filterResidualOperationalTasks";
 import { buildOpportunityDrawerHeaderMenuActions } from "@/lib/adminV2/viewModel/drawer/opportunity/buildOpportunityDrawerHeaderMenuActions";
 import { buildRecordManageMenuForEntity } from "@/lib/admin/recordManage/buildRecordManageMenu";
@@ -341,20 +341,26 @@ export async function composeOpportunityDrawerViewModel(
         departmentMetadata: deptMetadata,
         builderStageKey: lifecycle_rail?.current_stage_key ?? null,
     });
-    const work_intent_runtime = await projectWorkIntentRuntime({
+    const currentStageKey = lifecycle_rail?.current_stage_key ?? null;
+    const currentStageLabel =
+        lifecycle_rail?.stages.find((s) => s.key === currentStageKey)?.label ?? null;
+    const stage_work_runtime = await projectStageWorkRuntime({
         supabase,
         orgId,
         opportunityId,
         departmentId,
         departmentMetadata: deptMetadata,
-        builderStageKey: lifecycle_rail?.current_stage_key ?? null,
+        builderStageKey: currentStageKey,
+        stageLabel: currentStageLabel,
     });
+    const work_intent_runtime = primaryWorkIntentProjectionFromStageWork(stage_work_runtime);
     const rawTasksSummary = parseInquirySummaryTasksFromRecord(record);
-    const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, work_intent_runtime);
+    const filteredTasksSummary = filterResidualOperationalTasks(rawTasksSummary, stage_work_runtime);
     record._inquiry_summary_tasks = filteredTasksSummary;
     if (record._overview_data && typeof record._overview_data === "object" && !Array.isArray(record._overview_data)) {
         (record._overview_data as Record<string, unknown>)._inquiry_summary_tasks = filteredTasksSummary;
     }
+    record._stage_work_runtime = stage_work_runtime;
     record._work_intent_runtime = work_intent_runtime;
     const status_can_mutate = resolveOpportunityDrawerStatusCanMutateFromGate({
         role: gate.role,
@@ -383,6 +389,7 @@ export async function composeOpportunityDrawerViewModel(
             lifecycle_rail,
             stage_context,
             work_intent_runtime,
+            stage_work_runtime,
         },
         first_paint,
         header: {

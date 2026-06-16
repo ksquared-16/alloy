@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { LayoutRuntimeBodyRenderStats } from "@/lib/layout/runtime/layoutRuntimeBodyRenderStats";
 import type { LayoutRuntimeDrawerEvidence } from "@/lib/layout/runtime/layoutRuntimeEvidence";
+import type { SectionCompositionDiagnostic } from "@/lib/layout/layoutEditorSectionCompositionDiagnostics";
 
 type Props = {
     layoutSource: string | null;
@@ -11,6 +12,7 @@ type Props = {
     lastError?: string | null;
     evidence?: LayoutRuntimeDrawerEvidence | null;
     layoutFallbackReason?: string | null;
+    sectionDiagnostics?: SectionCompositionDiagnostic[];
 };
 
 /** Staging-only layout runtime body diagnostic strip. */
@@ -21,8 +23,10 @@ export default function DrawerLayoutRuntimeStagingDiagnostic({
     lastError,
     evidence,
     layoutFallbackReason,
+    sectionDiagnostics = [],
 }: Props) {
     const [open, setOpen] = useState(false);
+    const [sectionsOpen, setSectionsOpen] = useState(false);
 
     return (
         <div
@@ -91,6 +95,46 @@ export default function DrawerLayoutRuntimeStagingDiagnostic({
                     </div>
                 :   null}
             </dl>
+            {sectionDiagnostics.length > 0 ?
+                <div className="mt-2 border-t border-amber-200/70 pt-2">
+                    <button
+                        type="button"
+                        className="rounded border border-amber-300/80 px-1.5 py-0.5 text-[10px] font-medium"
+                        onClick={() => setSectionsOpen((v) => !v)}
+                    >
+                        {sectionsOpen ? "Hide section composition" : "Show section composition"}
+                    </button>
+                    {sectionsOpen ?
+                        <div className="mt-2 space-y-2">
+                            {sectionDiagnostics.map((diagnostic) => (
+                                <div
+                                    key={diagnostic.sectionKey}
+                                    className="rounded border border-amber-200/60 bg-white/70 px-2 py-1.5"
+                                    data-testid={`live-drawer-composition-diagnostic-${diagnostic.sectionKey}`}
+                                >
+                                    <p className="mb-1 font-semibold uppercase tracking-wide text-amber-900/60">
+                                        Live drawer · {diagnostic.sectionKey}
+                                    </p>
+                                    <dl className="grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5">
+                                        <dt>Published layout ID</dt>
+                                        <dd className="truncate font-mono">{diagnostic.publishedLayoutId ?? "—"}</dd>
+                                        <dt>Published version</dt>
+                                        <dd>{diagnostic.publishedLayoutVersion ?? "—"}</dd>
+                                        <dt>Section key</dt>
+                                        <dd>{diagnostic.sectionKey}</dd>
+                                        <dt>Row count</dt>
+                                        <dd>{diagnostic.rowCount}</dd>
+                                        <dt>Column counts</dt>
+                                        <dd>{diagnostic.columnCounts.join(", ") || "—"}</dd>
+                                        <dt>Runtime composition source</dt>
+                                        <dd data-testid="live-drawer-composition-source">{diagnostic.runtimeCompositionSource}</dd>
+                                    </dl>
+                                </div>
+                            ))}
+                        </div>
+                    :   null}
+                </div>
+            :   null}
             {open && evidence ?
                 <pre className="mt-2 max-h-64 overflow-auto rounded border border-amber-200/70 bg-white/80 p-2 text-[10px] leading-snug text-amber-950">
                     {JSON.stringify(evidence, null, 2)}

@@ -16,6 +16,11 @@ import {
     patchEntityLayoutDraft,
     publishEntityLayoutDraft,
 } from "@/lib/layout/opportunityDrawerLayoutEditorApi";
+import {
+    dispatchOpportunityDrawerLayoutPublished,
+    forkPublishedLayoutToDraft,
+    parseLayoutDocFromRecord,
+} from "@/lib/layout/layoutEditorPublishWorkflow";
 import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import {
     addRegisteredSection,
@@ -36,6 +41,7 @@ type Props = {
     layoutId: string;
     basePath: string;
     onBack: () => void;
+    onLayoutIdChange?: (layoutId: string) => void;
 };
 
 function LockedShellBand({
@@ -64,7 +70,7 @@ function LockedShellBand({
     );
 }
 
-export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath, onBack }: Props) {
+export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath, onBack, onLayoutIdChange }: Props) {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [record, setRecord] = useState<EntityLayoutRecord | null>(null);
@@ -154,35 +160,54 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     }, []);
 
     const saveDraft = useCallback(async () => {
-        if (!workingDoc || !record || record.status === "published") return;
-        if (!validation.ok) return;
+        if (!workingDoc || !record || !validation.ok) return;
         setBusy("save");
         setError(null);
         try {
-            await patchEntityLayoutDraft(record.id, workingName, workingDoc);
+            let target = record;
+            if (record.status === "published") {
+                target = await forkPublishedLayoutToDraft(record);
+                onLayoutIdChange?.(target.id);
+                setRecord(target);
+            }
+            const saved = await patchEntityLayoutDraft(target.id, workingName, workingDoc);
+            setRecord(saved);
+            setWorkingDoc(parseLayoutDocFromRecord(saved));
             setDirty(false);
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setBusy(null);
         }
-    }, [workingDoc, workingName, record, validation.ok]);
+    }, [workingDoc, workingName, record, validation.ok, onLayoutIdChange]);
 
     const publish = useCallback(async () => {
-        if (!record || record.status === "published" || !validation.ok) return;
+        if (!record || !workingDoc || !validation.ok) return;
         setBusy("publish");
         setError(null);
         try {
-            if (dirty) await patchEntityLayoutDraft(record.id, workingName, workingDoc!);
-            const updated = await publishEntityLayoutDraft(record.id);
-            setRecord(updated);
+            let target = record;
+            if (record.status === "published") {
+                target = await forkPublishedLayoutToDraft(record);
+                onLayoutIdChange?.(target.id);
+                setRecord(target);
+            }
+            if (dirty) {
+                target = await patchEntityLayoutDraft(target.id, workingName, workingDoc);
+            }
+            const published = await publishEntityLayoutDraft(target.id);
+            dispatchOpportunityDrawerLayoutPublished(published.doc);
+            const nextDraft = await forkPublishedLayoutToDraft(published);
+            onLayoutIdChange?.(nextDraft.id);
+            setRecord(nextDraft);
+            setWorkingDoc(parseLayoutDocFromRecord(nextDraft));
             setDirty(false);
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setBusy(null);
         }
-    }, [record, dirty, validation.ok, workingName, workingDoc]);
+    }, [record, dirty, validation.ok, workingName, workingDoc, onLayoutIdChange]);
 
     if (forceAdvanced) {
         return (
@@ -370,6 +395,8 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                             onSelectBlockId={setSelectedBlockId}
                             onFieldAddError={setFieldAddError}
                             applyDoc={applyDoc}
+                            layoutRecordId={record?.id ?? null}
+                            layoutVersion={record?.version ?? null}
                         />
 
                         <LockedShellBand slot="footer_actions" label="Footer actions">

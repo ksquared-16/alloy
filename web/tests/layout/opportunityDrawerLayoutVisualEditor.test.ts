@@ -94,7 +94,7 @@ describe("opportunityDrawerLayoutEditorModel", () => {
         expect(missing).not.toContain("lead_summary");
     });
 
-    it("blocks publish when validation fails or version is published", () => {
+    it("blocks publish when validation fails or version is clean published", () => {
         expect(
             resolveVisualEditorActionState({
                 dirty: true,
@@ -111,6 +111,16 @@ describe("opportunityDrawerLayoutEditorModel", () => {
                 busy: false,
             }).canPublish,
         ).toBe(false);
+    });
+
+    it("allows save for dirty published layouts", () => {
+        const state = resolveVisualEditorActionState({
+            dirty: true,
+            validationOk: true,
+            recordStatus: "published",
+            busy: false,
+        });
+        expect(state.canSave).toBe(true);
     });
 
     it("allows publish for saved valid drafts", () => {

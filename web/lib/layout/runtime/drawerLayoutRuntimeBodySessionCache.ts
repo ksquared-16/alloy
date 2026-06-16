@@ -78,6 +78,17 @@ export function invalidateDrawerLayoutRuntimeBodyCacheForEntity(
     }
 }
 
+/** Drop all cached layout body entries for an API path (after org layout publish). */
+export function invalidateDrawerLayoutRuntimeBodyCacheForApiPath(apiPathPrefix: string): void {
+    const needle = `${apiPathPrefix}:`;
+    for (const key of [...cache.keys()]) {
+        if (key.startsWith(needle)) cache.delete(key);
+    }
+    for (const key of [...inflight.keys()]) {
+        if (key.startsWith(needle)) inflight.delete(key);
+    }
+}
+
 function getPrimaryQueryKey(apiPath: string): string {
     if (apiPath.includes("child-drawer-body")) return "personId";
     if (apiPath.includes("child")) return "childId";

@@ -163,7 +163,9 @@ export const LAYOUT_ENTITY_GROUPS: { entityKey: LayoutEntityGroupKey; entityLabe
 export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
     // Work
     { widgetKey: "attention", label: "Attention", category: "Work", description: "Attention reason and review-assist guidance", defaultDisplayMode: "summary" },
-    { widgetKey: "tasks", label: "Tasks", category: "Work", description: "Open tasks for this record", defaultDisplayMode: "list" },
+    { widgetKey: "current_work", label: "Current Work", category: "Work", description: "Stage operating plan work items for this record", defaultDisplayMode: "summary" },
+    { widgetKey: "follow_ups", label: "Follow-ups", category: "Work", description: "Manual and Task Assist items not tied to stage work", defaultDisplayMode: "list" },
+    { widgetKey: "tasks", label: "Tasks (legacy)", category: "Work", description: "Legacy alias — renders Follow-ups", defaultDisplayMode: "list" },
     { widgetKey: "reminders", label: "Reminders", category: "Work", description: "Upcoming reminders", defaultDisplayMode: "list" },
     { widgetKey: "actions", label: "Actions", category: "Work", description: "Quick action buttons", defaultDisplayMode: "buttons" },
     // Communication

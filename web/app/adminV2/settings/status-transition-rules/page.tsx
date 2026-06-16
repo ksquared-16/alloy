@@ -71,20 +71,21 @@ export default function AdminV2SettingsStatusTransitionRulesPage() {
     return (
         <div className="w-full min-w-0 space-y-4 pb-2">
             <header>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Workflows · Diagnostics</p>
-                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Workflow automation rules</h1>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-alloy-midnight/40">Settings · Guardrails</p>
+                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Status transition guardrails</h1>
                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-alloy-midnight/60">
-                    These are <strong>workflow automation rules</strong> that may update status when business conditions are met — not
-                    a separate status-rules product. Example: when a tour date is set → update status to Tour Scheduled. Status{" "}
-                    <strong>display names</strong> are edited on{" "}
-                    <Link href="/admin/settings/statuses" className="font-medium text-alloy-pine hover:underline">
-                        Statuses
-                    </Link>
-                    ; triggers and side effects are owned by{" "}
+                    These rules <strong>validate or block status transitions before they happen</strong> — for example, requiring tour
+                    date and time in the action payload before an opportunity can move to Tour scheduled, or requiring a lost reason
+                    before marking lost. They are <strong>not</strong> outcome automation (Business Process outcomes run after work
+                    completion) and <strong>not</strong> workflow automation (event-driven side effects live in{" "}
                     <Link href="/admin/workflows" className="font-medium text-alloy-pine hover:underline">
                         Automations
                     </Link>
-                    . This table is read-only reference.
+                    ). Status <strong>display names</strong> are edited on{" "}
+                    <Link href="/admin/settings/statuses" className="font-medium text-alloy-pine hover:underline">
+                        Statuses
+                    </Link>
+                    . This table is read-only reference for this organization.
                 </p>
                 <p className="mt-2 text-xs text-alloy-midnight/45">
                     <Link href="/admin/settings" className="font-medium text-alloy-pine hover:underline">

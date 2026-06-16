@@ -61,6 +61,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 lifecycle_rail: null,
                 stage_context: null,
                 work_intent_runtime: null,
+                stage_work_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -94,6 +95,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 lifecycle_rail: null,
                 stage_context: null,
                 work_intent_runtime: null,
+                stage_work_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -125,6 +127,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 lifecycle_rail: null,
                 stage_context: null,
                 work_intent_runtime: null,
+                stage_work_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -147,6 +150,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 lifecycle_rail: null,
                 stage_context: null,
                 work_intent_runtime: null,
+                stage_work_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -170,6 +174,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 lifecycle_rail: null,
                 stage_context: null,
                 work_intent_runtime: null,
+                stage_work_runtime: null,
             },
         });
         expect(
@@ -205,6 +210,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 },
                 stage_context: null,
                 work_intent_runtime: null,
+                stage_work_runtime: null,
             },
             above_fold: {
                 render_model: minimalSettledOpportunityDrawerViewModel().above_fold.render_model,
@@ -229,6 +235,7 @@ describe("buildOpportunityVmLifecycleRailModel", () => {
                 lifecycle_rail: null,
                 stage_context: null,
                 work_intent_runtime: null,
+                stage_work_runtime: null,
             },
         });
         const model = buildOpportunityVmLifecycleRailModel({

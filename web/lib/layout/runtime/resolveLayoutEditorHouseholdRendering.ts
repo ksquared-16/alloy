@@ -27,3 +27,8 @@ export function shouldUseDrawerHouseholdProfileSubstitution(ctx: LayoutEditorHou
     }
     return !shouldHonorLayoutDocHouseholdBlocks(ctx);
 }
+
+/** True when section rows/columns contain layout-owned items (not empty scaffold). */
+export function sectionHasLayoutOwnedComposition(section: { rows?: Array<{ columns: Array<{ items: unknown[] }> }> }): boolean {
+    return (section.rows ?? []).some((row) => row.columns.some((col) => col.items.length > 0));
+}

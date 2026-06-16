@@ -204,8 +204,8 @@ export const CONFIGURATION_WORKSPACE_ADVANCED_ITEMS: readonly ConfigurationWorks
     },
     {
         href: "/admin/settings/status-transition-rules",
-        label: "Workflow automation rules",
-        description: "Read-only reference for status side effects.",
+        label: "Status transition guardrails",
+        description: "Read-only pre-transition validation rules — not outcome or workflow automation.",
     },
     {
         href: "/admin/settings/field-sections",
