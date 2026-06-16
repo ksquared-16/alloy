@@ -36,6 +36,11 @@ import {
     findLayoutItemLocation,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import {
+    moveSectionItemHorizontal,
+    moveSectionItemVertical,
+    removeSectionItem,
+} from "@/lib/layout/layoutEditorSectionComposition";
+import {
     moveLayoutBlock,
     removeLayoutBlock,
     resolveLayoutEditorBlockTitle,
@@ -356,12 +361,7 @@ export function tryAddFieldAtLayoutBlock(
 
 export function removeLayoutEditorField(doc: LayoutDoc, path: LayoutEditorNodePath): LayoutDoc {
     if (path.kind === "field") {
-        const loc = findLayoutItemLocation(doc, path.itemId);
-        if (!loc) return doc;
-        const next = JSON.parse(JSON.stringify(doc)) as LayoutDoc;
-        const col = next.sections[loc.sIdx]!.rows[loc.rIdx]!.columns[loc.cIdx]!;
-        col.items = col.items.filter((it) => it.id !== path.itemId);
-        return next;
+        return removeSectionItem(doc, path.sectionKey, path.itemId);
     }
     if (path.kind === "group_field") {
         const loc = groupLoc(doc, path.sectionKey, path.blockItemId);
@@ -376,7 +376,17 @@ export function removeLayoutEditorField(doc: LayoutDoc, path: LayoutEditorNodePa
     return doc;
 }
 
-export function moveLayoutEditorField(doc: LayoutDoc, path: LayoutEditorNodePath, direction: -1 | 1): LayoutDoc {
+export function moveLayoutEditorField(
+    doc: LayoutDoc,
+    path: LayoutEditorNodePath,
+    direction: -1 | 1,
+    axis: "vertical" | "horizontal" = "vertical",
+): LayoutDoc {
+    if (path.kind === "field") {
+        return axis === "horizontal" ?
+            moveSectionItemHorizontal(doc, path.sectionKey, path.itemId, direction)
+        :   moveSectionItemVertical(doc, path.sectionKey, path.itemId, direction);
+    }
     if (path.kind === "group_field") {
         const loc = groupLoc(doc, path.sectionKey, path.blockItemId);
         if (!loc) return doc;

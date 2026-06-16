@@ -12,6 +12,10 @@ import {
     validateLayoutEditorBlockConfig,
 } from "@/lib/layout/layoutEditorBlockConfig";
 import {
+    validateLayoutEditorActionButtonConfig,
+    readLayoutEditorActionButtonConfig,
+} from "@/lib/layout/layoutEditorActionButton";
+import {
     readLayoutEditorDisplayConfig,
     validateLayoutEditorDisplayConfig,
 } from "@/lib/layout/layoutEditorDisplayConfig";
@@ -70,6 +74,7 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "layoutEditorBlockTemplate",
     "layoutEditorRowTemplate",
     "layoutEditorBlockConfig",
+    "layoutEditorActionButton",
     "enrollmentRosterReadFirst",
 ]);
 
@@ -191,6 +196,15 @@ function walkItem(
         ctx.errors.push(...validateLayoutEditorDisplayConfig(display, `${path}.metadata.layoutEditorDisplay`));
         const blockConfig = readLayoutEditorBlockConfig(item.metadata);
         ctx.errors.push(...validateLayoutEditorBlockConfig(blockConfig, `${path}.metadata.${LAYOUT_EDITOR_BLOCK_CONFIG_METADATA_KEY}`));
+        const actionButton = readLayoutEditorActionButtonConfig(item.metadata);
+        if (actionButton) {
+            ctx.errors.push(
+                ...validateLayoutEditorActionButtonConfig(
+                    actionButton,
+                    `${path}.metadata.layoutEditorActionButton`,
+                ),
+            );
+        }
     }
 
     item.items?.forEach((child, i) => walkItem(child, `${path}.items[${i}]`, ctx));

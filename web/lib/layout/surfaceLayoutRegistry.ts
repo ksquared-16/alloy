@@ -128,6 +128,7 @@ export const OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS = [
     "contact_block",
     "layout_block",
     "_template",
+    "_action_button",
 ] as const;
 
 /** Action placement surfaces configurable via Settings → Actions for this drawer. */

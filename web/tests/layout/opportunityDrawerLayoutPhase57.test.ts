@@ -37,16 +37,16 @@ const root = resolve(__dirname, "../..");
 
 describe("inline field editing", () => {
     it("anchors field settings inline under the selected field row", () => {
-        const panel = readFileSync(
-            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutCompositionPanel.tsx"),
+        const rowEditor = readFileSync(
+            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutSectionRowEditor.tsx"),
             "utf8",
         );
         const settings = readFileSync(
             resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutFieldSettings.tsx"),
             "utf8",
         );
-        expect(panel).toContain("<OpportunityDrawerLayoutFieldSettings");
-        expect(panel).toContain("inline");
+        expect(rowEditor).toContain("<OpportunityDrawerLayoutFieldSettings");
+        expect(rowEditor).toContain("inline");
         expect(settings).toContain("data-visual-editor-field-settings-inline");
     });
 });

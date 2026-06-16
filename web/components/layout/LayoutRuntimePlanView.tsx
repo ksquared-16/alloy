@@ -23,9 +23,8 @@ import {
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "@/lib/layout/runtime/layoutRuntimePlan";
 import { readLayoutEditorDisplayConfig, typographyIntentClass } from "@/lib/layout/layoutEditorDisplayConfig";
-import {
-    readLayoutEditorBlockConfig,
-} from "@/lib/layout/layoutEditorBlockConfig";
+import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
+import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfig";
 import {
     LayoutRuntimeBlockEditProvider,
     layoutRuntimeBlockAllowsFieldEdit,
@@ -297,6 +296,7 @@ function ValueCell({
         Boolean(edit) &&
         layoutRuntimeBlockAllowsFieldEdit(blockEdit);
     const editValue = canEdit && edit ? edit.getFieldValue(refKey, display ?? "") : display ?? "";
+    const actionButton = item.refKey === "_action_button" ? readLayoutEditorActionButtonConfig(item.metadata) : null;
 
     return (
         <div
@@ -330,6 +330,14 @@ function ValueCell({
                         onChange={(v) => edit.setFieldValue(refKey, v)}
                         getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue)}
                     />
+                : actionButton ?
+                    <button
+                        type="button"
+                        className="inline-flex rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-xs font-medium text-alloy-pine"
+                        data-testid={`layout-runtime-action-button-${item.id}`}
+                    >
+                        {actionButton.label ?? item.label ?? "Action"}
+                    </button>
                 :   <span className={!display ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>
                         {!display ?
                             <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>{emptyDisplay}</span>
@@ -1255,13 +1263,6 @@ function SectionView({
     const composition = useLayoutRuntimeCompositionHints();
     const onAdornmentAction = useContext(AdornmentActionContext);
     const host = useContext(LayoutRuntimeHostContext);
-    const sectionContext = {
-        sectionPresentation,
-        sectionKey: section.key,
-        stackRows:
-            composition.compositionSectionSurface === true
-            && (section.key === "household_contact" || section.key === "household_relationships"),
-    };
     if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
 
     const useCompositionSurfaceEarly = composition.compositionSectionSurface === true && operatorSurfaces;
@@ -1281,6 +1282,15 @@ function SectionView({
         opportunityEntityLayoutsVisualConfig: visibilityCtx.opportunityEntityLayoutsVisualConfig,
         honorLayoutDocBlocks: composition.honorLayoutDocBlocks,
     });
+
+    const sectionContext = {
+        sectionPresentation,
+        sectionKey: section.key,
+        stackRows:
+            composition.compositionSectionSurface === true
+            && (section.key === "household_contact" || section.key === "household_relationships")
+            && useHouseholdProfile,
+    };
 
     const showHouseholdContactsList =
         useHouseholdProfile

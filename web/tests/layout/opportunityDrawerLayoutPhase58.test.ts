@@ -123,12 +123,11 @@ describe("block runtime validity", () => {
 
 describe("inline editing UX", () => {
     it("closes field settings with Done without toggling selection handler", () => {
-        const panel = readFileSync(
-            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutCompositionPanel.tsx"),
+        const rowEditor = readFileSync(
+            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutSectionRowEditor.tsx"),
             "utf8",
         );
-        expect(panel).toContain("onDeselect={() => onSelectFieldPath(null)}");
-        expect(panel).toContain("onClose={onDeselect}");
+        expect(rowEditor).toContain("onClose={() => onSelectItemId(null)}");
     });
 });
 
