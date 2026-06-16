@@ -120,7 +120,7 @@ export type QueueRowWorkSummary = {
 
 export type QueueRowCurrentWorkSummary = {
     label: string;
-    state: "open" | "completed" | "none";
+    state: "open" | "completed" | "planned" | "none";
     due_label: string | null;
 };
 

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { attachStageWorkRuntimeToOpportunityQueueRows } from "@/lib/lifecycle/attachStageWorkRuntimeToQueueRows";
 import { isLayoutRuntimeOpportunityQueueBodyEnabledServer } from "@/lib/layout/featureFlag";
 import type { QueueConfig, QueueDefinitionV1, QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
@@ -1181,6 +1182,8 @@ async function enrichOpportunityRows(params: {
         departmentId?: string | null;
         readinessMemoScope?: ReadinessMemoScope;
     } | null;
+    /** Builder stage key for stage-scoped queue lanes (used for stage work runtime projection). */
+    queueStageKey?: string | null;
 }): Promise<{ rows: Array<Record<string, unknown>>; queueListSubtimings?: QueueListEnrichmentSubtimingsMs }> {
     const {
         supabase,
@@ -1829,6 +1832,29 @@ async function enrichOpportunityRows(params: {
             queue_list_subtimings_ms: queueListSubtimings,
         });
     }
+
+    const attentionPack = params.opportunityAttentionResolution;
+    const deptId =
+        typeof attentionPack?.departmentId === "string" ? attentionPack.departmentId.trim() : "";
+    const deptMeta =
+        attentionPack?.departmentMetadata != null &&
+        typeof attentionPack.departmentMetadata === "object" &&
+        !Array.isArray(attentionPack.departmentMetadata)
+            ? (attentionPack.departmentMetadata as Record<string, unknown>)
+            : null;
+
+    if (deptId && deptMeta && mapped.length) {
+        const withStageRuntime = await attachStageWorkRuntimeToOpportunityQueueRows({
+            supabase,
+            orgId,
+            rows: mapped,
+            departmentId: deptId,
+            departmentMetadata: deptMeta,
+            queueStageKey: params.queueStageKey ?? null,
+        });
+        return { rows: withStageRuntime, queueListSubtimings };
+    }
+
     return { rows: mapped, queueListSubtimings };
 }
 
@@ -4290,6 +4316,7 @@ export async function getWorkUnitQueueItems(params: {
             viewerDisplayTimeZoneIana: viewerPreviewIana,
             skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
             opportunityAttentionResolution: queueAttentionEnrich(effectiveStatusDefs, refUtc.getTime()),
+            queueStageKey: laneRouting.builderMembership?.stage_key ?? null,
         });
         const enrichment_ms = Date.now() - tEn0;
         const placementPack = skipPlacementProjection
@@ -4399,6 +4426,7 @@ export async function getWorkUnitQueueItems(params: {
             viewerDisplayTimeZoneIana: viewerPreviewIana,
             skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
             opportunityAttentionResolution: queueAttentionEnrich(effectiveStatusDefs, refUtc.getTime()),
+            queueStageKey: laneRouting.builderMembership?.stage_key ?? null,
         });
         const enrichment_ms = Date.now() - tEn0;
         logQueueLaneParityDebug({
@@ -4526,13 +4554,8 @@ export async function getWorkUnitQueueItems(params: {
         enrichmentPlan: opportunityEnrichmentPlan ?? undefined,
         viewerDisplayTimeZoneIana: viewerPreviewIana,
         skipOptionalEnrichmentFetches: rowEnrichment === "queue_reveal",
-        opportunityAttentionResolution: opportunityAttentionConfigResolved
-            ? {
-                  defs: effectiveStatusDefs,
-                  config: opportunityAttentionConfigResolved,
-                  nowMs: refUtc.getTime(),
-              }
-            : undefined,
+        opportunityAttentionResolution: queueAttentionEnrich(effectiveStatusDefs, refUtc.getTime()),
+        queueStageKey: laneRouting.builderMembership?.stage_key ?? null,
     });
     const enrichment_ms = Date.now() - tEn0;
     logQueueLaneParityDebug({

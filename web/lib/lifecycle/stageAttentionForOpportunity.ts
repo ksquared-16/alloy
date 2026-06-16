@@ -4,24 +4,19 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReadinessResult } from "@/lib/completion/readinessTypes";
-import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import {
     evaluateStageOperatingPlanAttention,
     operationalTaskRowToStageAttentionSnapshot,
     type StageAttentionTaskSnapshot,
 } from "@/lib/lifecycle/evaluateStageOperatingPlanAttention";
 import { effectiveStageKeyAssignment } from "@/lib/lifecycle/enrollmentOperatorStage";
-import {
-    activeLifecycleProcess,
-    configuredStageKeysForMetadata,
-    findStage,
-    lifecycleBuilderFromDepartmentMetadata,
-} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { configuredStageKeysForMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import {
     projectStagePlanToAttentionReasons,
     type ProjectedStageAttentionReason,
 } from "@/lib/lifecycle/stageOperatingPlanAttentionProjection";
-import { resolveStageOperatingPlanForStage, type StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
+import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { OpportunityAttentionEntityInput } from "@/lib/opportunities/opportunityAttentionResolver";
 import type { ReadinessAttentionProjectionProfileV1 } from "@/lib/opportunities/readinessAttentionProjectionProfile";
 
@@ -31,19 +26,10 @@ export function resolveEffectiveStageOperatingPlanForAttention(
     departmentMetadata: Record<string, unknown> | null,
     builderStageKey: string,
 ): StageOperatingPlanV1 | null {
-    if (!departmentMetadata || !builderStageKey.trim()) return null;
-
-    const builder = lifecycleBuilderFromDepartmentMetadata(departmentMetadata);
-    const process = activeLifecycleProcess(builder);
-    const stageRecord = process ? findStage(process, builderStageKey) : null;
-    const explicit = resolveStageOperatingPlanForStage(stageRecord ?? {}, builderStageKey);
-    if (explicit) return explicit;
-
-    if (process?.key === "enrollment") {
-        return defaultStageOperatingPlanForEnrollmentStage(builderStageKey);
-    }
-
-    return null;
+    return resolveEffectiveStageOperatingPlan({
+        departmentMetadata,
+        builderStageKey,
+    }).plan;
 }
 
 function stageEnteredMsForOpportunity(

@@ -1,6 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { executeStageOperatingOutcome } from "@/lib/lifecycle/executeStageOperatingOutcome";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
+
+const mockInstantiate = vi.fn();
+
+vi.mock("@/lib/admin/operationalWork/instantiateWorkFromDefinition", () => ({
+    instantiateWorkFromDefinition: (...args: unknown[]) => mockInstantiate(...args),
+}));
+
+vi.mock("@/lib/lifecycle/instantiateStageWorkFromTemplate", () => ({
+    instantiateStageWorkFromTemplate: (...args: unknown[]) => mockInstantiate(...args),
+}));
 
 vi.mock("@/lib/opportunities/updateOpportunityStatusWithEvent", () => ({
     updateOpportunityStatusWithEvent: vi.fn(async () => ({ error: null })),
@@ -16,6 +26,10 @@ vi.mock("@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus", ()
 }));
 
 describe("executeStageOperatingOutcome", () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+    });
+
     it("updates child enrollment disposition for child journey stage", async () => {
         const plan = defaultStageOperatingPlanForEnrollmentStage("waitlist")!;
         const supabase = {
@@ -49,5 +63,72 @@ describe("executeStageOperatingOutcome", () => {
         expect(result.errors).toEqual([]);
         expect(updateOpportunityCustomerMemberLifecycleStatus).toHaveBeenCalled();
         expect(result.status_updated).toBe(true);
+    });
+
+    it("create_next_work uses shared stage work instantiation with idempotency", async () => {
+        mockInstantiate.mockResolvedValue({ status: "created", work_id: "work-1" });
+        const plan = defaultStageOperatingPlanForEnrollmentStage("tour")!;
+        plan.outcome_rules = [
+            {
+                rule_key: "spawn_outcome_work",
+                when_outcome_key: "tour_completed",
+                targets: [{ kind: "create_next_work", template_key: "record_tour_outcome_work" }],
+            },
+        ];
+
+        const result = await executeStageOperatingOutcome({
+            supabase: { from: vi.fn() } as never,
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            plan,
+            outcomeKey: "tour_completed",
+            subject: {
+                journey_segment: "family",
+                opportunity_id: "opp-1",
+            },
+        });
+
+        expect(result.errors).toEqual([]);
+        expect(mockInstantiate).toHaveBeenCalledWith(
+            expect.objectContaining({
+                orgId: "org-1",
+                opportunityId: "opp-1",
+                stageKey: "tour",
+                departmentId: "dept-1",
+                template: expect.objectContaining({
+                    template_key: "record_tour_outcome_work",
+                    work_definition_key: "record_tour_outcome",
+                }),
+            }),
+        );
+    });
+
+    it("create_next_work dedupes repeated outcome execution", async () => {
+        mockInstantiate.mockResolvedValue({ status: "deduped", work_id: "work-existing" });
+        const plan = defaultStageOperatingPlanForEnrollmentStage("tour")!;
+        plan.outcome_rules = [
+            {
+                rule_key: "spawn_outcome_work",
+                when_outcome_key: "tour_completed",
+                targets: [{ kind: "create_next_work", template_key: "record_tour_outcome_work" }],
+            },
+        ];
+
+        const result = await executeStageOperatingOutcome({
+            supabase: { from: vi.fn() } as never,
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            plan,
+            outcomeKey: "tour_completed",
+            subject: {
+                journey_segment: "family",
+                opportunity_id: "opp-1",
+            },
+        });
+
+        expect(result.errors).toEqual([]);
+        expect(mockInstantiate).toHaveBeenCalledTimes(1);
     });
 });

@@ -17,8 +17,8 @@ export function useWorkIntentOutcomeCompletion(opportunityId: string) {
     const completeOutcome = useCallback(
         async (projection: WorkIntentRuntimeProjection, outcomeKey: string) => {
             if (projection.state !== "open" || !projection.work_id) return;
+            if (!projection.outcomes.length) return;
             const { execution, stage_key: stageKey, work_id: workId } = projection;
-            if (!execution.requires_outcome_picker) return;
 
             setBusy(true);
             setError(null);

@@ -15,8 +15,8 @@ vi.mock("@/lib/lifecycle/resolveStageWorkOutcomeContext", () => ({
     resolveEnrollmentDepartmentForOpportunity: (...args: unknown[]) => mockResolveDept(...args),
 }));
 
-vi.mock("@/lib/admin/operationalWork/instantiateWorkFromDefinition", () => ({
-    instantiateWorkFromDefinition: (...args: unknown[]) => mockInstantiate(...args),
+vi.mock("@/lib/lifecycle/instantiateStageWorkFromTemplate", () => ({
+    instantiateStageWorkFromTemplate: (...args: unknown[]) => mockInstantiate(...args),
 }));
 
 function enrollmentDepartmentMetadata(): Record<string, unknown> {
@@ -76,12 +76,11 @@ describe("onStageEntrySpawnWorkIntent", () => {
         mockResolveDept.mockResolvedValue(departmentId);
         mockInstantiate.mockResolvedValue({
             status: "created",
-            work: { id: workId },
-            dedupeKey: "dedupe-1",
+            work_id: workId,
         });
     });
 
-    it("spawns one Make Contact work on new lead (null → new_inquiry)", async () => {
+    it("spawns Review Lead work on new lead using canonical enrollment default plan", async () => {
         const supabase = makeSupabase();
         const result = await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
@@ -98,16 +97,12 @@ describe("onStageEntrySpawnWorkIntent", () => {
         expect(mockInstantiate).toHaveBeenCalledTimes(1);
         expect(mockInstantiate).toHaveBeenCalledWith(
             expect.objectContaining({
-                workDefinitionKey: "contact_family",
-                titleOverride: "Make Contact",
-                idempotencyKey: `lifecycle_intent:${orgId}:${opportunityId}:lead:make_contact`,
-                metadata: expect.objectContaining({
-                    work_intent_key: "make_contact",
-                    lifecycle_stage_key: "lead",
-                    attempt_count: 0,
-                    department_id: departmentId,
+                stageKey: "lead",
+                template: expect.objectContaining({
+                    template_key: "review_lead",
+                    label: "Review Lead",
+                    work_definition_key: "collect_missing_information",
                 }),
-                contextSnapshot: { lifecycle_stage_key: "lead" },
             }),
         );
     });
@@ -130,8 +125,7 @@ describe("onStageEntrySpawnWorkIntent", () => {
     it("dedupes on re-entry to the same stage", async () => {
         mockInstantiate.mockResolvedValue({
             status: "deduped",
-            existingWork: { id: workId },
-            dedupeKey: "dedupe-1",
+            work_id: workId,
             reason: "idempotency_key_match",
         });
 
@@ -150,7 +144,7 @@ describe("onStageEntrySpawnWorkIntent", () => {
         expect(mockInstantiate).toHaveBeenCalledTimes(1);
     });
 
-    it("spawns Gather Enrollment Information on qualification transition", async () => {
+    it("spawns primary qualification work on qualification transition", async () => {
         const supabase = makeSupabase();
         const result = await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
@@ -164,14 +158,15 @@ describe("onStageEntrySpawnWorkIntent", () => {
         expect(result.action).toBe("spawned");
         expect(mockInstantiate).toHaveBeenCalledWith(
             expect.objectContaining({
-                workDefinitionKey: "collect_missing_information",
-                titleOverride: "Gather Enrollment Information",
-                idempotencyKey: `lifecycle_intent:${orgId}:${opportunityId}:qualification:gather_enrollment_information`,
+                stageKey: "qualification",
+                template: expect.objectContaining({
+                    work_definition_key: "collect_missing_information",
+                }),
             }),
         );
     });
 
-    it("never spawns legacy contact_attempt templates (single instantiate only)", async () => {
+    it("never spawns legacy make_contact when enrollment default plan exists", async () => {
         const supabase = makeSupabase();
         await onStageEntrySpawnWorkIntent({
             supabase: supabase as never,
@@ -183,8 +178,8 @@ describe("onStageEntrySpawnWorkIntent", () => {
         });
 
         expect(mockInstantiate).toHaveBeenCalledTimes(1);
-        const call = mockInstantiate.mock.calls[0]![0] as { titleOverride?: string };
-        expect(call.titleOverride).toBe("Make Contact");
-        expect(call.titleOverride).not.toMatch(/Contact attempt/i);
+        const call = mockInstantiate.mock.calls[0]![0] as { template?: { template_key?: string; label?: string } };
+        expect(call.template?.template_key).toBe("review_lead");
+        expect(call.template?.label).toBe("Review Lead");
     });
 });

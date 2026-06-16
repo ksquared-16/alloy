@@ -18,6 +18,13 @@ const DUE_LABEL: Record<WorkIntentRuntimeProjection["due_urgency"], string> = {
     none: "",
 };
 
+const STATE_LABEL: Record<string, string> = {
+    open: "Open",
+    planned: "Planned",
+    completed: "Completed",
+    none: "Planned",
+};
+
 type Props = {
     opportunityId: string;
     runtime: StageWorkRuntimeProjection;
@@ -59,9 +66,15 @@ function WorkItemBlock({
 }) {
     const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
     const projection = workIntentProjectionForStageWorkItem(runtime, item);
+    const stateLabel = STATE_LABEL[item.state] ?? item.state;
     const showDue = item.state === "open" && DUE_LABEL[item.due_urgency];
     const showAttempts = item.attempt_count > 0;
     const showLastOutcome = item.last_outcome?.label;
+    const showOutcomePicker =
+        item.state === "open" &&
+        item.requires_outcome_picker &&
+        item.outcomes.length > 0 &&
+        canMutate;
 
     return (
         <div
@@ -73,7 +86,7 @@ function WorkItemBlock({
                 <div className="min-w-0">
                     {!isPrimary ?
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                            Additional work
+                            {item.role === "secondary" ? "Additional work" : "Work"}
                         </p>
                     :   null}
                     <h4
@@ -81,9 +94,7 @@ function WorkItemBlock({
                     >
                         {item.label}
                     </h4>
-                    <p className="mt-0.5 text-[11px] capitalize text-alloy-midnight/50">
-                        {item.state === "open" ? "Open" : item.state === "completed" ? "Completed" : "Not started"}
-                    </p>
+                    <p className="mt-0.5 text-[11px] text-alloy-midnight/50">Status: {stateLabel}</p>
                 </div>
                 {showDue ? <DueBadge urgency={item.due_urgency} /> : null}
             </div>
@@ -128,11 +139,7 @@ function WorkItemBlock({
                 </p>
             :   null}
 
-            {isPrimary &&
-            item.state === "open" &&
-            projection.execution.requires_outcome_picker &&
-            item.outcomes.length > 0 &&
-            canMutate ?
+            {showOutcomePicker ?
                 <div className="mt-3 border-t border-alloy-stone/10 pt-3">
                     <StageWorkOutcomePicker
                         workTitle={item.label}
@@ -158,34 +165,22 @@ export default function CurrentWorkRuntimeCard({
     chromeless = false,
 }: Props) {
     const primary = runtime.primary;
-    const hasOpenWork =
-        primary?.state === "open" ||
-        runtime.additional.some((item) => item.state === "open") ||
-        primary?.state === "completed";
-
-    const emptyMessage = "No current work configured/open for this stage.";
+    const allItems = [primary, ...runtime.additional].filter(
+        (item): item is StageWorkItemProjection => item != null,
+    );
 
     const body =
-        !primary || (!hasOpenWork && primary.state === "none" && runtime.additional.length === 0) ?
-            <p className="text-[12px] text-alloy-midnight/55">{emptyMessage}</p>
+        allItems.length === 0 ?
+            <p className="text-[12px] text-alloy-midnight/55">No current work configured for this stage.</p>
         :   <div className="space-y-3">
-                {primary ?
-                    <WorkItemBlock
-                        item={primary}
-                        runtime={runtime}
-                        opportunityId={opportunityId}
-                        canMutate={canMutate}
-                        isPrimary
-                    />
-                :   null}
-                {runtime.additional.map((item) => (
+                {allItems.map((item, index) => (
                     <WorkItemBlock
                         key={item.template_key}
                         item={item}
                         runtime={runtime}
                         opportunityId={opportunityId}
                         canMutate={canMutate}
-                        isPrimary={false}
+                        isPrimary={index === 0}
                     />
                 ))}
             </div>;

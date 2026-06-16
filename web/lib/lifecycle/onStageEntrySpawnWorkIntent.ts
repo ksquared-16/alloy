@@ -3,20 +3,17 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { instantiateWorkFromDefinition } from "@/lib/admin/operationalWork/instantiateWorkFromDefinition";
 import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { detectBuilderStageTransition } from "@/lib/lifecycle/detectBuilderStageTransition";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
-import {
-    buildLifecycleIntentIdempotencyKey,
-    buildLifecycleIntentSubjectFingerprint,
-    resolvePrimaryWorkIntentForStage,
-} from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
+import { instantiateStageWorkFromTemplate } from "@/lib/lifecycle/instantiateStageWorkFromTemplate";
+import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
+import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
-import { resolveStageOperatingPlanForStage, type StageWorkDuePolicy } from "@/lib/lifecycle/stageOperatingPlanV1";
+import { resolveEffectivePrimaryWorkTemplate } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 
 export type OnStageEntrySpawnWorkIntentResult = {
     action: "spawned" | "deduped" | "skipped";
@@ -28,17 +25,6 @@ function trimOrNull(v: unknown): string | null {
     if (typeof v !== "string") return null;
     const s = v.trim();
     return s || null;
-}
-
-function dueAtIsoFromPolicy(duePolicy: StageWorkDuePolicy, now: Date): string {
-    if (duePolicy.kind === "same_day") {
-        const end = new Date(now);
-        end.setUTCHours(23, 59, 59, 999);
-        return end.toISOString();
-    }
-    const due = new Date(now);
-    due.setUTCDate(due.getUTCDate() + Math.max(0, duePolicy.days));
-    return due.toISOString();
 }
 
 async function loadStatusMetadata(
@@ -133,62 +119,40 @@ export async function onStageEntrySpawnWorkIntent(
     }
 
     const stageKey = transition.nextBuilderStageKey;
-    const stageRecord = process.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
-    const explicitOperatingPlan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
+    const { plan } = resolveEffectiveStageOperatingPlan({
+        departmentMetadata,
+        builderStageKey: stageKey,
+    });
 
-    const intent = resolvePrimaryWorkIntentForStage(stageKey, explicitOperatingPlan);
-    if (!intent) {
+    const primaryTemplate = resolveEffectivePrimaryWorkTemplate(plan);
+    const intent = resolvePrimaryWorkIntentForStage(stageKey, plan);
+    if (!intent || !primaryTemplate) {
         return { action: "skipped", reason: "no_primary_intent" };
     }
 
     const now = input.now ?? new Date();
-    const idempotencyKey = buildLifecycleIntentIdempotencyKey({
-        orgId,
-        opportunityId,
-        stageKey,
-        workIntentKey: intent.work_intent_key,
-    });
-    const subjectFingerprint = buildLifecycleIntentSubjectFingerprint({
-        orgId,
-        opportunityId,
-        stageKey,
-    });
-
-    const result = await instantiateWorkFromDefinition({
+    const result = await instantiateStageWorkFromTemplate({
         supabase: input.supabase,
         orgId,
         userId,
-        workDefinitionKey: intent.work_definition_key,
-        subject: { entityType: "opportunities", entityId: opportunityId },
-        subjectFingerprint,
-        provenance: { source: "lifecycle_template", idempotency_key: idempotencyKey },
-        contextSnapshot: { lifecycle_stage_key: stageKey },
-        titleOverride: intent.label,
-        dueAtOverride: dueAtIsoFromPolicy(intent.due_policy, now),
-        idempotencyKey,
-        metadata: {
-            work_intent_key: intent.work_intent_key,
-            lifecycle_stage_key: stageKey,
-            attempt_count: 0,
-            department_id: departmentId,
-            ...(intent.provenance === "operating_plan" ?
-                { operating_plan_template: true, operating_plan_template_key: intent.template_key ?? null }
-            :   {}),
-        },
-        resolveParams: { departmentMetadata, stageKey },
+        opportunityId,
+        stageKey,
+        departmentId,
+        template: primaryTemplate,
+        departmentMetadata,
         now,
     });
 
     if (result.status === "created") {
-        return { action: "spawned", work_id: result.work.id };
+        return { action: "spawned", work_id: result.work_id };
     }
     if (result.status === "deduped") {
-        return { action: "deduped", work_id: result.existingWork.id, reason: result.reason };
+        return { action: "deduped", work_id: result.work_id, reason: result.reason };
     }
 
     return {
         action: "skipped",
-        reason: result.status === "rejected" ? result.reason : "instantiate_failed",
+        reason: result.error,
     };
 }
 

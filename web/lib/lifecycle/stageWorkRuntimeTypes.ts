@@ -18,6 +18,8 @@ export type StageWorkItemProjection = {
     label: string;
     role: "primary" | "secondary";
     state: WorkIntentRuntimeState;
+    /** True when open work has selectable outcomes in Current Work. */
+    requires_outcome_picker: boolean;
     work_id: string | null;
     due_at: string | null;
     due_urgency: WorkIntentDueUrgency;
@@ -86,7 +88,10 @@ export function workIntentProjectionForStageWorkItem(
         last_outcome: item.last_outcome,
         completed_at: item.completed_at,
         outcomes: item.outcomes,
-        execution: runtime.execution,
+        execution: {
+            ...runtime.execution,
+            requires_outcome_picker: item.requires_outcome_picker,
+        },
         completion_policy_summary: item.completion_policy_summary,
         completion_policy_min_attempts: item.completion_policy_min_attempts,
         completion_policy_max_attempts: item.completion_policy_max_attempts,

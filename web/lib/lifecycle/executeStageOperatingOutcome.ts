@@ -3,7 +3,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { instantiateWorkFromDefinition } from "@/lib/admin/operationalWork/instantiateWorkFromDefinition";
+import { instantiateStageWorkFromTemplate } from "@/lib/lifecycle/instantiateStageWorkFromTemplate";
 import {
     mergeEnrollmentOperationalIntoMetadata,
     sanitizeEnrollmentOperationalPatch,
@@ -137,20 +137,19 @@ async function applyTarget(
             const templateKey = target.template_key?.trim();
             if (!templateKey) return { error: "Missing work template key" };
             const workTpl = plan.work_templates.find((t) => t.template_key === templateKey);
-            const definitionKey = workTpl?.work_definition_key?.trim() || "manual_ad_hoc";
-            const result = await instantiateWorkFromDefinition({
+            if (!workTpl) return { error: `Unknown work template: ${templateKey}` };
+            const result = await instantiateStageWorkFromTemplate({
                 supabase,
                 orgId,
                 userId,
-                workDefinitionKey: definitionKey,
-                subject: { entityType: "opportunities", entityId: subject.opportunity_id },
-                provenance: { source: "lifecycle_template" },
-                contextSnapshot: { lifecycle_stage_key: stageKey },
-                titleOverride: workTpl?.label,
-                resolveParams: { departmentMetadata: null, stageKey },
+                opportunityId: subject.opportunity_id,
+                stageKey,
+                departmentId,
+                template: workTpl,
+                dueDaysOverride: target.due_days,
             });
             if (result.status === "rejected") {
-                return { error: result.message ?? result.reason };
+                return { error: result.error };
             }
             return {};
         }

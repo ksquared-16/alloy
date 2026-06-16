@@ -10,7 +10,8 @@ function stageTemplateKeys(
     if ("template_keys" in stageWorkRuntime && Array.isArray(stageWorkRuntime.template_keys)) {
         return stageWorkRuntime.template_keys;
     }
-    const key = stageWorkRuntime.work_intent_key?.trim();
+    const key =
+        "work_intent_key" in stageWorkRuntime ? stageWorkRuntime.work_intent_key?.trim() : null;
     return key ? [key] : [];
 }
 

@@ -31,6 +31,7 @@ function stageRuntime(overrides: Partial<StageWorkRuntimeProjection> = {}): Stag
             label: "Review Lead",
             role: "primary",
             state: "open",
+            requires_outcome_picker: true,
             work_id: "work-primary",
             due_at: new Date().toISOString(),
             due_urgency: "due_today",
@@ -49,6 +50,7 @@ function stageRuntime(overrides: Partial<StageWorkRuntimeProjection> = {}): Stag
                 label: "Contact Family",
                 role: "secondary",
                 state: "open",
+                requires_outcome_picker: true,
                 work_id: "work-secondary",
                 due_at: new Date().toISOString(),
                 due_urgency: "upcoming",
@@ -103,6 +105,26 @@ describe("isOperatingPlanWorkIntentTask", () => {
                 ["review_lead", "contact_family"],
             ),
         ).toBe(false);
+    });
+
+    it("classifies BP work by operating_plan_template_key", () => {
+        expect(
+            isOperatingPlanWorkIntentTask(
+                {
+                    id: "4",
+                    title: "Record tour outcome",
+                    due_at: "",
+                    status: "open",
+                    source: "manual",
+                    work_intent_key: "complete_tour_process",
+                    operating_plan_template_key: "record_tour_outcome_work",
+                    lifecycle_stage_key: "tour",
+                    lifecycle_provenance: "lifecycle_template",
+                },
+                "tour",
+                ["confirm_tour_date", "record_tour_outcome_work"],
+            ),
+        ).toBe(true);
     });
 });
 
@@ -175,6 +197,56 @@ describe("buildQueueCurrentWorkSummary", () => {
         expect(line).toContain("Review Lead");
         expect(line).toContain("Open");
         expect(line).toContain("Due today");
+    });
+
+    it("formats queue current work line with planned state", () => {
+        const line = formatQueueCurrentWorkLine({
+            label: "Contact Family",
+            state: "planned",
+            due_label: null,
+        });
+        expect(line).toContain("Contact Family");
+        expect(line).toContain("Planned");
+    });
+
+    it("fallback preview requires lifecycle_template provenance", () => {
+        const withBpTask = buildQueueCurrentWorkSummary({
+            _inquiry_summary_tasks: {
+                state: "loaded",
+                open_count: 1,
+                open_tasks: [
+                    {
+                        id: "bp-1",
+                        title: "Record tour outcome",
+                        due_at: new Date().toISOString(),
+                        status: "open",
+                        source: "manual",
+                        work_intent_key: "complete_tour_process",
+                        operating_plan_template_key: "record_tour_outcome_work",
+                        lifecycle_stage_key: "tour",
+                        lifecycle_provenance: "lifecycle_template",
+                    },
+                ],
+            },
+        });
+        expect(withBpTask?.label).toBe("Record tour outcome");
+
+        const manualOnly = buildQueueCurrentWorkSummary({
+            _inquiry_summary_tasks: {
+                state: "loaded",
+                open_count: 1,
+                open_tasks: [
+                    {
+                        id: "manual-1",
+                        title: "Call family",
+                        due_at: new Date().toISOString(),
+                        status: "open",
+                        source: "manual",
+                    },
+                ],
+            },
+        });
+        expect(manualOnly).toBeNull();
     });
 });
 

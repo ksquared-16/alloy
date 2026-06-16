@@ -9,8 +9,8 @@ import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import type { StageCompletionOutcomeV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
-import { resolveStageOperatingPlanForStage } from "@/lib/lifecycle/stageOperatingPlanV1";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
 
 export type StageWorkOutcomeContext = {
@@ -125,7 +125,10 @@ export async function resolveStageWorkOutcomeContext(params: {
     const builder = lifecycleBuilderFromDepartmentMetadata(metadata);
     const process = builder ? activeLifecycleProcess(builder) : null;
     const stageRecord = process?.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
-    const plan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
+    const plan = resolveEffectiveStageOperatingPlan({
+        departmentMetadata: metadata,
+        builderStageKey: stageKey,
+    }).plan;
     if (!plan?.outcomes.length) return null;
 
     const journeySegment = plan.journey_segment ?? "family";

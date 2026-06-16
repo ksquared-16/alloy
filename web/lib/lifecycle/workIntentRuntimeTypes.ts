@@ -1,6 +1,7 @@
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
 
-export type WorkIntentRuntimeState = "open" | "completed" | "none";
+/** @deprecated Use `"planned"` — `"none"` retained for backward compat during migration. */
+export type WorkIntentRuntimeState = "planned" | "open" | "completed" | "none";
 
 export type WorkIntentDueUrgency = "overdue" | "due_today" | "upcoming" | "none";
 

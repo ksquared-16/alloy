@@ -7,18 +7,16 @@ import { operationalTaskDueUrgency } from "@/lib/agent/taskAssist/taskAssistOper
 import type { OperationalTaskRow } from "@/lib/admin/operationalTasksService";
 import { parseOperationalWorkViewFromTaskRow } from "@/lib/admin/operationalWork/operationalWorkMetadata";
 import { buildStageWorkOutcomeAutomationPreview } from "@/lib/lifecycle/buildStageWorkOutcomeAutomationPreview";
-import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 import {
     activeLifecycleProcess,
     lifecycleBuilderFromDepartmentMetadata,
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import type { StageOutcomeExecutionSubject } from "@/lib/lifecycle/executeStageOperatingOutcome";
-import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
 import { completionPolicySummary } from "@/lib/lifecycle/stageWorkCompletionPolicy";
 import { resolveEnrollmentDepartmentForOpportunity } from "@/lib/lifecycle/resolveStageWorkOutcomeContext";
 import {
-    resolveStageOperatingPlanForStage,
     type StageOperatingPlanV1,
     type StageWorkTemplateV1,
 } from "@/lib/lifecycle/stageOperatingPlanV1";
@@ -28,6 +26,7 @@ import type {
     WorkIntentDueUrgency,
     WorkIntentRuntimeOutcome,
     WorkIntentRuntimeProjection,
+    WorkIntentRuntimeState,
 } from "@/lib/lifecycle/workIntentRuntimeTypes";
 
 export { primaryWorkIntentProjectionFromStageWork };
@@ -46,6 +45,10 @@ function trimOrNull(v: unknown): string | null {
     if (typeof v !== "string") return null;
     const s = v.trim();
     return s || null;
+}
+
+function normalizeProjectionState(state: WorkIntentRuntimeState): WorkIntentRuntimeState {
+    return state === "none" ? "planned" : state;
 }
 
 function readAttemptCount(metadata: Record<string, unknown>): number {
@@ -99,14 +102,18 @@ function taskRowFromDb(row: TaskDbRow, orgId: string, opportunityId: string): Op
     };
 }
 
-function taskMatchesTemplate(
+export function taskMatchesStageWorkTemplate(
     row: TaskDbRow,
     stageKey: string,
-    templateKey: string,
+    template: Pick<StageWorkTemplateV1, "template_key" | "work_definition_key">,
 ): boolean {
+    const templateKey = template.template_key;
     const md = row.metadata ?? {};
-    const mdIntent = trimOrNull(md.work_intent_key) ?? trimOrNull(md.operating_plan_template_key);
-    if (mdIntent && mdIntent === templateKey) return true;
+    const mdWorkIntent = trimOrNull(md.work_intent_key);
+    const mdTemplateKey = trimOrNull(md.operating_plan_template_key) ?? mdWorkIntent;
+
+    if (mdTemplateKey === templateKey) return true;
+    if (mdWorkIntent === templateKey) return true;
 
     const mdStage = trimOrNull(md.lifecycle_stage_key);
     const work = parseOperationalWorkViewFromTaskRow(taskRowFromDb(row, "", ""));
@@ -114,7 +121,17 @@ function taskMatchesTemplate(
     const stage = mdStage ?? snapshotStage;
     if (stage !== stageKey) return false;
 
-    return mdIntent === templateKey;
+    const templateDefinitionKey = trimOrNull(template.work_definition_key);
+    const rowDefinitionKey = trimOrNull(work.work_definition_key) ?? trimOrNull(md.work_definition_key);
+    if (
+        templateDefinitionKey &&
+        rowDefinitionKey === templateDefinitionKey &&
+        trimOrNull(md.lifecycle_provenance) === "lifecycle_template"
+    ) {
+        return true;
+    }
+
+    return false;
 }
 
 function buildExecutionSubject(
@@ -187,6 +204,7 @@ function buildWorkItemProjection(args: {
             label: trimOrNull(openRow.title) ?? template.label,
             role,
             state: "open",
+            requires_outcome_picker: outcomes.length > 0,
             work_id: String(openRow.id),
             due_at: dueAt,
             due_urgency: mapDueUrgency(dueAt, status),
@@ -208,6 +226,7 @@ function buildWorkItemProjection(args: {
             label: trimOrNull(completedRow.title) ?? template.label,
             role,
             state: "completed",
+            requires_outcome_picker: false,
             work_id: String(completedRow.id),
             due_at: null,
             due_urgency: "none",
@@ -226,7 +245,8 @@ function buildWorkItemProjection(args: {
         template_key: template.template_key,
         label: template.label,
         role,
-        state: "none",
+        state: "planned",
+        requires_outcome_picker: false,
         work_id: null,
         due_at: null,
         due_urgency: "none",
@@ -254,15 +274,21 @@ function sortTemplatesForProjection(
     return [primary!, ...copy];
 }
 
-export async function projectStageWorkRuntime(params: {
-    supabase: SupabaseClient;
+export type ProjectStageWorkRuntimeSyncInput = {
     orgId: string;
     opportunityId: string;
-    departmentId: string | null;
+    departmentId: string;
     departmentMetadata: unknown;
     builderStageKey: string | null;
     stageLabel?: string | null;
-}): Promise<StageWorkRuntimeProjection | null> {
+    openRows?: TaskDbRow[];
+    completedRows?: TaskDbRow[];
+};
+
+/** Synchronous projection from preloaded tasks — used by drawer and batch queue enrichment. */
+export function projectStageWorkRuntimeSync(
+    params: ProjectStageWorkRuntimeSyncInput,
+): StageWorkRuntimeProjection | null {
     const stageKey = trimOrNull(params.builderStageKey);
     if (!stageKey) return null;
 
@@ -277,16 +303,75 @@ export async function projectStageWorkRuntime(params: {
     const process = activeLifecycleProcess(builder);
     if (!process?.is_active) return null;
 
-    const stageRecord = process.stages.find((s) => s.key === stageKey && s.is_active) ?? null;
-    const explicitOperatingPlan = resolveStageOperatingPlanForStage(stageRecord ?? {}, stageKey);
-    const plan =
-        explicitOperatingPlan ??
-        (process.key === ENROLLMENT_PROCESS_KEY ?
-            defaultStageOperatingPlanForEnrollmentStage(stageKey)
-        :   null);
-
-    const primaryIntent = resolvePrimaryWorkIntentForStage(stageKey, explicitOperatingPlan);
+    const { plan, stageRecord } = resolveEffectiveStageOperatingPlan({
+        departmentMetadata,
+        builderStageKey: stageKey,
+    });
+    const primaryIntent = resolvePrimaryWorkIntentForStage(stageKey, plan);
     if (!plan?.work_templates.length) return null;
+
+    const departmentId = trimOrNull(params.departmentId);
+    if (!departmentId) return null;
+
+    const journeySegment = plan.journey_segment ?? "family";
+    const sortedTemplates = sortTemplatesForProjection(
+        plan.work_templates,
+        primaryIntent?.template_key ?? null,
+    );
+
+    const openList = params.openRows ?? [];
+    const completedList = params.completedRows ?? [];
+
+    const items: StageWorkItemProjection[] = sortedTemplates.map((template, index) => {
+        const openRow =
+            openList.find((row) => taskMatchesStageWorkTemplate(row, stageKey, template)) ?? null;
+        const completedRow =
+            !openRow
+                ? completedList.find((row) => taskMatchesStageWorkTemplate(row, stageKey, template)) ?? null
+                : null;
+        return buildWorkItemProjection({
+            template,
+            role: index === 0 ? "primary" : "secondary",
+            stageKey,
+            plan,
+            openRow,
+            completedRow,
+        });
+    });
+
+    const primary = items[0] ?? null;
+    const additional = items.slice(1);
+
+    const requiresOutcomePicker =
+        items.some((item) => item.state === "open" && item.requires_outcome_picker);
+
+    return {
+        stage_key: stageKey,
+        stage_label: trimOrNull(params.stageLabel) ?? trimOrNull(stageRecord?.label) ?? stageKey,
+        purpose: trimOrNull(plan.purpose),
+        journey_segment: journeySegment,
+        template_keys: sortedTemplates.map((t) => t.template_key),
+        primary,
+        additional,
+        execution: {
+            department_id: departmentId,
+            requires_outcome_picker: requiresOutcomePicker,
+            subject: buildExecutionSubject(params.opportunityId, journeySegment),
+        },
+    };
+}
+
+export async function projectStageWorkRuntime(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    opportunityId: string;
+    departmentId: string | null;
+    departmentMetadata: unknown;
+    builderStageKey: string | null;
+    stageLabel?: string | null;
+}): Promise<StageWorkRuntimeProjection | null> {
+    const stageKey = trimOrNull(params.builderStageKey);
+    if (!stageKey) return null;
 
     let departmentId = trimOrNull(params.departmentId);
     if (!departmentId) {
@@ -297,12 +382,6 @@ export async function projectStageWorkRuntime(params: {
         });
     }
     if (!departmentId) return null;
-
-    const journeySegment = plan.journey_segment ?? "family";
-    const sortedTemplates = sortTemplatesForProjection(
-        plan.work_templates,
-        primaryIntent?.template_key ?? null,
-    );
 
     const { data: openRows, error: openErr } = await params.supabase
         .from("operational_tasks")
@@ -328,46 +407,16 @@ export async function projectStageWorkRuntime(params: {
 
     if (completedErr) return null;
 
-    const openList = (openRows ?? []) as TaskDbRow[];
-    const completedList = (completedRows ?? []) as TaskDbRow[];
-
-    const items: StageWorkItemProjection[] = sortedTemplates.map((template, index) => {
-        const openRow =
-            openList.find((row) => taskMatchesTemplate(row, stageKey, template.template_key)) ?? null;
-        const completedRow =
-            !openRow
-                ? completedList.find((row) => taskMatchesTemplate(row, stageKey, template.template_key)) ?? null
-                : null;
-        return buildWorkItemProjection({
-            template,
-            role: index === 0 ? "primary" : "secondary",
-            stageKey,
-            plan,
-            openRow,
-            completedRow,
-        });
+    return projectStageWorkRuntimeSync({
+        orgId: params.orgId,
+        opportunityId: params.opportunityId,
+        departmentId,
+        departmentMetadata: params.departmentMetadata,
+        builderStageKey: stageKey,
+        stageLabel: params.stageLabel,
+        openRows: (openRows ?? []) as TaskDbRow[],
+        completedRows: (completedRows ?? []) as TaskDbRow[],
     });
-
-    const primary = items[0] ?? null;
-    const additional = items.slice(1).filter((item) => item.state === "open");
-
-    const requiresOutcomePicker =
-        primary?.state === "open" && (primary.outcomes.length ?? 0) > 0;
-
-    return {
-        stage_key: stageKey,
-        stage_label: trimOrNull(params.stageLabel) ?? trimOrNull(stageRecord?.label) ?? stageKey,
-        purpose: trimOrNull(plan.purpose),
-        journey_segment: journeySegment,
-        template_keys: sortedTemplates.map((t) => t.template_key),
-        primary,
-        additional,
-        execution: {
-            department_id: departmentId,
-            requires_outcome_picker: requiresOutcomePicker,
-            subject: buildExecutionSubject(params.opportunityId, journeySegment),
-        },
-    };
 }
 
 /** @deprecated Prefer projectStageWorkRuntime — returns primary work item only. */
@@ -380,5 +429,7 @@ export async function projectWorkIntentRuntime(params: {
     builderStageKey: string | null;
 }): Promise<WorkIntentRuntimeProjection | null> {
     const runtime = await projectStageWorkRuntime(params);
-    return primaryWorkIntentProjectionFromStageWork(runtime);
+    const projection = primaryWorkIntentProjectionFromStageWork(runtime);
+    if (!projection) return null;
+    return { ...projection, state: normalizeProjectionState(projection.state) };
 }
