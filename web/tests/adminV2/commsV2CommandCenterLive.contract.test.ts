@@ -42,20 +42,21 @@ describe("command center live wiring", () => {
         expect(workspaceSrc).not.toMatch(/assignment_state \?\? "—"/);
         expect(shellSrc).not.toMatch(/FALLBACK_QUEUE_EXPLANATION/);
     });
-    it("uses readable consent labels and hides inactive composer tabs", () => {
-        expect(workspaceSrc).toMatch(/consentReadableLabel/);
-        expect(workspaceSrc).toMatch(/data-cc-composer-channels/);
-        expect(workspaceSrc).not.toMatch(/>Note</);
-        expect(workspaceSrc).not.toMatch(/>E\{consentMark/);
+    it("always shows communication preferences and workspace mode tabs", () => {
+        expect(workspaceSrc).toMatch(/data-cc-ws-section="preferences"/);
+        expect(workspaceSrc).toMatch(/consentOperatorStatus/);
+        expect(workspaceSrc).toMatch(/data-cc-workspace-mode/);
+        expect(workspaceSrc).toMatch(/renderModeTab\("note", "Notes"\)/);
+        expect(workspaceSrc).toMatch(/renderModeTab\("tasks", "Tasks"\)/);
     });
     it("supports linked record drawer navigation", () => {
         expect(shellSrc).toMatch(/buildCommandCenterRecordLinks/);
         expect(workspaceSrc).toMatch(/data-cc-record-link/);
         expect(shellSrc).toMatch(/openDrawer/);
     });
-    it("uses conservative health labels and unclassified KPI", () => {
+    it("uses conservative health labels and needs-review KPI", () => {
         expect(shellSrc).toMatch(/resolveCommandCenterHealthDisplay/);
-        expect(shellSrc).toMatch(/label: "Unclassified"/);
+        expect(shellSrc).toMatch(/NEEDS_REVIEW_STATUS_LABEL/);
         expect(shellSrc).not.toMatch(/Unresponsive/);
     });
     it("resolves business process stage labels via shared drawer batch helper", () => {

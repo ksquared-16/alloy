@@ -106,7 +106,16 @@ export type HealthSummary = {
 
 export type ConsentSummary = {
     byContact: Record<string, { email: ConsentState; sms: ConsentState; marketing: ConsentState }>;
+    /** Primary-contact household display for operator preferences panel. */
+    household: { email: ConsentState; sms: ConsentState; marketing: ConsentState };
     displayFlags: { email: boolean; sms: boolean; marketing: boolean };
+};
+
+export type RelatedTaskBrief = {
+    id: string;
+    title: string;
+    dueAt: string;
+    status: string;
 };
 
 export type ComposerDraftVM = {
@@ -134,4 +143,6 @@ export type FamilyCommunicationWorkspaceVM = {
     messages: TimelineEventVM[];     // selected thread's events
     timelineEvents: TimelineEventVM[]; // aggregated across all family threads (chronological asc)
     healthSummary: HealthSummary;     // 5C
+    /** Open operational tasks for the focused opportunity (when resolvable). */
+    relatedTasks: RelatedTaskBrief[];
 };

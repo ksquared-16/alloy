@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
-import type { FamilyCommunicationWorkspaceVM, TimelineEventVM, ConsentState } from "@/lib/communications/v2/familyWorkspace/types";
+import type { FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 
@@ -12,7 +12,6 @@ import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from 
  * customerId or drawer entity and renders the CANONICAL FamilyCommunicationWorkspaceView (the same
  * markup the full Communications modal uses). All timeline/composer UI lives in the View, once.
  */
-const consentFromFlag = (b: boolean): ConsentState => (b ? "opted_in" : "opted_out");
 const toWorkspaceMessage = (e: TimelineEventVM): WorkspaceTimelineMessage => ({
     id: e.id, direction: e.direction, channel: e.channel, body: e.body, created_at: e.createdAt, kind: e.kind, thread_id: e.threadId, status: e.status,
 });
@@ -118,11 +117,7 @@ export default function FamilyCommunicationWorkspace(props: {
         contactName: allRecipients[0]?.displayName ?? vm.family.label,
         program: vm.family.program,
         stage: vm.family.stage,
-        consent: {
-            email: consentFromFlag(vm.consentSummary.displayFlags.email),
-            sms: consentFromFlag(vm.consentSummary.displayFlags.sms),
-            marketing: consentFromFlag(vm.consentSummary.displayFlags.marketing),
-        },
+        consent: vm.consentSummary.household,
     };
     const selected = { id: vm.scope.customerId, family_label: vm.family.label, sla_state: null, assignment_state: "unassigned" };
 

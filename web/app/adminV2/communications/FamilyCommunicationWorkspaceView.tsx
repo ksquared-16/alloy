@@ -1,7 +1,10 @@
 "use client";
 
 import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send, Clock, Check, UserPlus, ChevronDown } from "lucide-react";
-import { relTime, statusDisplay, consentReadableLabel } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
+import { relTime, statusDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
+import { consentOperatorStatus } from "@/lib/communications/v2/householdCommunicationPreferences";
+import type { WorkspaceMode, WorkspaceModeAvailability } from "@/lib/communications/v2/workspaceModeAvailability";
+import type { RelatedTaskBrief } from "@/lib/communications/v2/familyWorkspace/types";
 import { isRecipientEligible, isRecipientSelected, selectionSummary } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type { ConsentState, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
@@ -54,7 +57,10 @@ export type FamilyCommunicationWorkspaceViewProps = {
     recordLinks?: CommandCenterRecordLink[];
     onOpenRecordLink?: (link: CommandCenterRecordLink) => void;
     showClaim?: boolean;
-    composerChannels?: { email: boolean; sms: boolean; note: boolean };
+    workspaceMode?: WorkspaceMode;
+    onWorkspaceModeChange?: (mode: WorkspaceMode) => void;
+    workspaceModeAvailability?: WorkspaceModeAvailability;
+    relatedTasks?: RelatedTaskBrief[];
     LIVE_WORKSPACE: boolean;
     selectedThreadId: string | null;
     messages: WorkspaceTimelineMessage[];
@@ -81,21 +87,48 @@ export type FamilyCommunicationWorkspaceViewProps = {
 export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicationWorkspaceViewProps) {
     const {
         selected, detail, childNames, stageLabel, healthTone, healthDot, healthLabel, recordLinks, onOpenRecordLink,
-        showClaim = false, composerChannels = { email: true, sms: false, note: false },
-        LIVE_WORKSPACE, selectedThreadId, messages,
+        showClaim = false, workspaceMode = "email", onWorkspaceModeChange, workspaceModeAvailability,
+        relatedTasks = [], LIVE_WORKSPACE, selectedThreadId, messages,
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
     } = props;
     const allLiveRecipients = liveRecipientGroups ? liveRecipientGroups.flatMap((g) => g.recipients) : [];
-    const consentEmail = consentReadableLabel("email", detail?.consent.email);
-    const consentSms = consentReadableLabel("sms", detail?.consent.sms);
-    const consentMarketing = consentReadableLabel("marketing", detail?.consent.marketing);
-    const consentLabels = [consentEmail, consentSms, consentMarketing].filter(Boolean) as string[];
+    const consentEmail = consentOperatorStatus(detail?.consent.email);
+    const consentSms = consentOperatorStatus(detail?.consent.sms);
+    const consentMarketing = consentOperatorStatus(detail?.consent.marketing);
     const familyLink = recordLinks?.find((l) => l.type === "customers");
     const contactLink = recordLinks?.find((l) => l.type === "persons");
     const opportunityLink = recordLinks?.find((l) => l.type === "opportunities");
     const childRecordLinks = recordLinks?.filter((l) => l.type === "customer_members") ?? [];
     const displayStage = stageLabel ?? detail?.stage ?? null;
+    const stageLink =
+        opportunityLink && displayStage ? { ...opportunityLink, label: displayStage } : opportunityLink ?? null;
+    const modeAvailability = workspaceModeAvailability ?? {
+        email: { available: true, reason: null },
+        sms: { available: false, reason: "SMS unavailable because no SMS-capable recipient exists." },
+        note: { available: true, reason: "Notes appear in the timeline. Composing new internal notes from this workspace is not yet available." },
+        tasks: { available: false, reason: "No enrollment opportunity is linked to this family." },
+    };
+    const noteMessages = messages.filter((m) => m.kind === "note");
+    const composeMode = workspaceMode === "email" || workspaceMode === "sms";
+    const activeModeReason = modeAvailability[workspaceMode]?.reason ?? null;
+
+    const renderModeTab = (mode: WorkspaceMode, label: string) => {
+        const status = modeAvailability[mode];
+        const active = workspaceMode === mode;
+        return (
+            <button
+                key={mode}
+                type="button"
+                data-cc-workspace-mode={mode}
+                aria-pressed={active}
+                onClick={() => onWorkspaceModeChange?.(mode)}
+                className={`border-l border-alloy-stone/15 px-2.5 py-1 first:border-l-0 ${active ? "bg-[#00A283] font-semibold text-white" : status.available ? "text-alloy-midnight/70 hover:bg-alloy-stone/[0.04]" : "text-alloy-midnight/45 hover:bg-alloy-stone/[0.04]"}`}
+            >
+                {label}
+            </button>
+        );
+    };
 
     const renderLinkChip = (link: CommandCenterRecordLink, className: string) => (
         <button
@@ -110,9 +143,9 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     );
 
     return (
-        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(380px,1.35fr)]">
+        <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(380px,1.35fr)] gap-0">
             {/* CONVERSATION — compact snapshot band + chat history */}
-            <div className="flex min-h-0 flex-col bg-white">
+            <div data-cc-ws-column="timeline" className="flex min-h-0 flex-col border-r border-alloy-stone/20 bg-white">
                 <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/15 bg-white px-3.5 py-2.5">
                     <div className="flex items-center gap-2.5">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#dff2ea] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/60">
@@ -147,29 +180,40 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 {contactLink && onOpenRecordLink ? (
                                     <>
                                         {healthLabel ? <span className="text-alloy-midnight/25">•</span> : null}
+                                        <span className="text-alloy-midnight/50">Parent</span>
                                         {renderLinkChip(contactLink, "font-medium text-[#0f6b4a] underline decoration-[#7fc9b6]/60 underline-offset-2 hover:text-[#009276]")}
                                     </>
-                                ) : null}
-                                {consentLabels.length > 0 ? (
+                                ) : detail?.contactName ? (
                                     <>
-                                        <span className="text-alloy-midnight/25">•</span>
-                                        <span data-cc-ws-section="consent" className="inline-flex flex-wrap items-center gap-1.5 text-[10px] text-alloy-midnight/55">
-                                            {consentLabels.map((label) => (
-                                                <span key={label} className="rounded-full border border-alloy-stone/15 bg-alloy-stone/[0.04] px-1.5 py-px">{label}</span>
-                                            ))}
-                                        </span>
+                                        {healthLabel ? <span className="text-alloy-midnight/25">•</span> : null}
+                                        <span className="text-alloy-midnight/50">Parent · {detail.contactName}</span>
                                     </>
                                 ) : null}
                                 {displayStage ? (
                                     <>
                                         <span className="text-alloy-midnight/25">•</span>
-                                        {opportunityLink && onOpenRecordLink ? (
-                                            renderLinkChip(opportunityLink, "truncate font-medium text-alloy-midnight/60 underline decoration-alloy-stone/30 underline-offset-2 hover:text-[#0f6b4a]")
+                                        {stageLink && onOpenRecordLink ? (
+                                            renderLinkChip(stageLink, "truncate font-medium text-alloy-midnight/60 underline decoration-alloy-stone/30 underline-offset-2 hover:text-[#0f6b4a]")
                                         ) : (
                                             <span className="truncate text-alloy-midnight/60">{displayStage}</span>
                                         )}
                                     </>
                                 ) : null}
+                            </div>
+                            <div data-cc-ws-section="preferences" className="mt-2 rounded-lg border border-alloy-stone/15 bg-[#fbfcfb] px-2.5 py-2">
+                                <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Communication preferences</div>
+                                <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px]">
+                                    {([
+                                        ["Email", consentEmail],
+                                        ["SMS", consentSms],
+                                        ["Marketing", consentMarketing],
+                                    ] as const).map(([label, status]) => (
+                                        <div key={label} className="rounded-md border border-alloy-stone/12 bg-white px-2 py-1">
+                                            <div className="text-[10px] text-alloy-midnight/45">{label}</div>
+                                            <div className={`font-semibold ${status === "Allowed" ? "text-[#0f6b4a]" : status === "Blocked" ? "text-red-600" : "text-alloy-midnight/55"}`}>{status}</div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                         {showClaim ? (
@@ -191,7 +235,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 </div>
 
                 {/* conversation history — reads like a chat */}
-                <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto px-3.5 py-3">
+                <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto bg-[#fbfcfb] px-3.5 py-3">
                     {LIVE_WORKSPACE && selectedThreadId ? (
                         <div className="mb-2 flex items-center justify-between rounded-md border border-[#7fc9b6]/50 bg-[#f0faf6] px-2 py-1 text-[10px] text-[#0f6b4a]">
                             <span>Viewing one thread</span>
@@ -251,16 +295,53 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
             </div>
 
             {/* COMPOSER — top-anchored, full height, body dominant */}
-            <div data-cc-ws-section="composer" className="flex min-h-0 flex-col border-l border-alloy-stone/15 bg-white px-4 py-3">
+            <div data-cc-ws-column="composer" data-cc-ws-section="composer" className="flex min-h-0 flex-col bg-white px-4 py-3">
                 <div data-cc-composer-channels className="inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
-                    {composerChannels.email ? (
-                        <span className="bg-[#00A283] px-2.5 py-1 font-semibold text-white">Email</span>
-                    ) : null}
-                    {composerChannels.sms ? (
-                        <span className={`border-l border-alloy-stone/15 px-2.5 py-1 ${liveChannel === "sms" ? "bg-[#00A283] font-semibold text-white" : "text-alloy-midnight/55"}`}>SMS</span>
-                    ) : null}
+                    {renderModeTab("email", "Email")}
+                    {renderModeTab("sms", "SMS")}
+                    {renderModeTab("note", "Notes")}
+                    {renderModeTab("tasks", "Tasks")}
                 </div>
+                {activeModeReason ? (
+                    <div data-cc-mode-unavailable className="mt-2 rounded-lg border border-alloy-stone/15 bg-[#fbfcfb] px-2.5 py-2 text-[11px] text-alloy-midnight/60">
+                        {activeModeReason}
+                    </div>
+                ) : null}
 
+                {workspaceMode === "tasks" ? (
+                    <div data-cc-tasks-panel className="mt-2 min-h-0 flex-1 overflow-auto rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 shadow-sm">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Related tasks</div>
+                        {relatedTasks.length === 0 ? (
+                            <p className="mt-2 text-[11px] text-alloy-midnight/50">No open tasks for the linked opportunity.</p>
+                        ) : (
+                            <ul className="mt-2 space-y-1.5">
+                                {relatedTasks.map((t) => (
+                                    <li key={t.id} className="rounded-md border border-alloy-stone/12 bg-[#fbfcfb] px-2.5 py-2 text-[11px]">
+                                        <div className="font-medium text-alloy-midnight">{t.title}</div>
+                                        <div className="mt-0.5 text-alloy-midnight/50">Due {relTime(t.dueAt) || t.dueAt} · {t.status}</div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ) : workspaceMode === "note" ? (
+                    <div data-cc-notes-panel className="mt-2 min-h-0 flex-1 overflow-auto rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 shadow-sm">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Internal notes</div>
+                        {noteMessages.length === 0 ? (
+                            <p className="mt-2 text-[11px] text-alloy-midnight/50">No internal notes recorded for this family yet.</p>
+                        ) : (
+                            <ul className="mt-2 space-y-2">
+                                {noteMessages.map((m) => (
+                                    <li key={m.id ?? m.created_at} className="rounded-md border border-alloy-stone/12 bg-[#fbfcfb] px-2.5 py-2 text-[11px] text-alloy-midnight/75">
+                                        <div className="mb-1 text-[10px] text-alloy-midnight/45">{relTime(m.created_at)}</div>
+                                        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.body}</div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                ) : composeMode ? (
+                <>
                 {LIVE_WORKSPACE && liveRecipientGroups ? (
                     <div data-cc-recipient-selector className="mt-2 rounded-lg border border-alloy-stone/20 bg-white px-2 py-2 shadow-sm">
                         <div className="mb-1 text-[10px] font-medium text-alloy-midnight/45">To · <span className="text-alloy-midnight/70">{selectionSummary(selectedRecipientIds, allLiveRecipients)}</span></div>
@@ -308,7 +389,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     placeholder="Subject"
                     value={subjectDraft}
                     onChange={(e) => onSubjectChange(e.target.value)}
-                    className="mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35"
+                    className={`mt-2 w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm placeholder:text-alloy-midnight/35 ${workspaceMode === "sms" ? "hidden" : ""}`}
                 />
 
                 <div className="mt-2 flex min-h-[240px] flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm">
@@ -366,11 +447,13 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     </div>
                 ) : null}
                 <div className="mt-2.5 flex items-center gap-1.5">
-                    <button type="button" disabled={sending || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)] disabled:opacity-40"><Send className="h-3.5 w-3.5" />{sending ? "Working…" : "Send now"}</button>
+                    <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)] disabled:opacity-40"><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : "Send now"}</button>
                     <button type="button" aria-label="Send later" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Later</button>
                     <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-2.5 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</button>
                     <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />manual send only</span>
                 </div>
+                </>
+                ) : null}
             </div>
         </div>
     );

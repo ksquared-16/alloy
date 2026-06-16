@@ -149,6 +149,9 @@ export function conversationUnreadCount(c: ConversationSummary): number {
     return typeof n === "number" && n > 0 ? n : 0;
 }
 
+/** Operator-facing label for threads without an operational attention_state queue assignment. */
+export const NEEDS_REVIEW_STATUS_LABEL = "Needs review";
+
 export function isUnclassifiedConversation(c: ConversationSummary): boolean {
     const attn = (c.attention_state ?? "").trim();
     if (!attn) return true;
@@ -166,7 +169,7 @@ export function conversationQueueStatusPill(c: ConversationSummary): QueueStatus
     if (attn === "awaiting_parent_reply") return { label: "Needs reply", tone: "warn" };
     if (attn === "needs_follow_up") return { label: "Follow up", tone: "warn" };
     if (attn === "documents_missing") return { label: "Docs missing", tone: "warn" };
-    if (isUnclassifiedConversation(c)) return { label: "Unclassified", tone: "neutral" };
+    if (isUnclassifiedConversation(c)) return { label: NEEDS_REVIEW_STATUS_LABEL, tone: "neutral" };
     if (sla === "on_track") return { label: "On track", tone: "brand" };
     return { label: "Active", tone: "neutral" };
 }
@@ -227,7 +230,7 @@ export function resolveCommandCenterHealthDisplay(
     const neutral = { label: null, tone: "text-alloy-midnight/45", dot: "bg-alloy-stone/40" };
     if (!conversation) return neutral;
     if (isUnclassifiedConversation(conversation)) {
-        return { label: "Unclassified", tone: "text-alloy-midnight/50", dot: "bg-alloy-stone/40" };
+        return { label: NEEDS_REVIEW_STATUS_LABEL, tone: "text-alloy-midnight/50", dot: "bg-alloy-stone/40" };
     }
     if (messageCount < 2) return neutral;
     if (engagementScore >= 66) {

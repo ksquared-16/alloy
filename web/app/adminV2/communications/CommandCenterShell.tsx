@@ -16,6 +16,7 @@ import {
     conversationQueueStatusPill,
     queueStatusPillClass,
     resolveCommandCenterHealthDisplay,
+    NEEDS_REVIEW_STATUS_LABEL,
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
@@ -30,12 +31,13 @@ import { buildCommandCenterRecordLinks, type CommandCenterRecordLink } from "@/l
 import { fetchCommandCenterThreadMessages, type CommandCenterTimelineMessage } from "@/lib/communications/v2/commandCenterThreadMessages";
 import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
-import FamilyCommunicationWorkspaceView from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
+import FamilyCommunicationWorkspaceView, { type WorkspaceDetail } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import type { FamilyCommunicationWorkspaceVM, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
+import { resolveWorkspaceModeAvailability, type WorkspaceMode } from "@/lib/communications/v2/workspaceModeAvailability";
 import {
     COMMS_FIXTURES_ENABLED,
     FIXTURE_CONVERSATIONS,
@@ -168,10 +170,11 @@ export default function CommandCenterShell() {
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState<string | null>(null);
     const [hydratingWorkspace, setHydratingWorkspace] = useState(initialHydratingWorkspace);
+    const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("email");
 
-    const loadLive = useCallback(async (customerId: string, threadId: string, resetSelection = false) => {
+    const loadLive = useCallback(async (customerId: string, threadId: string, resetSelection = false, composerChannel: ComposerChannel = "email") => {
         try {
-            const qs = `customer_id=${encodeURIComponent(customerId)}&thread_id=${encodeURIComponent(threadId)}`;
+            const qs = `customer_id=${encodeURIComponent(customerId)}&thread_id=${encodeURIComponent(threadId)}&composer_channel=${encodeURIComponent(composerChannel)}`;
             const res = await fetch(`/api/admin/communications/family-workspace?${qs}`);
             if (!res.ok) return null;
             const data = (await res.json()) as { workspace?: FamilyCommunicationWorkspaceVM };
@@ -240,6 +243,7 @@ export default function CommandCenterShell() {
     const openConversation = useCallback(async (id: string) => {
         setSelectedId(id);
         setSelectedThreadId(null);
+        setWorkspaceMode("email");
         setSubjectDraft("");
         setBodyDraft("");
         setLiveWorkspaceVm(null);
@@ -323,24 +327,40 @@ export default function CommandCenterShell() {
             liveWorkspaceVm?.children.map((c) => ({ id: c.id, name: c.name })) ??
             selected.child_links ??
             null;
-        return buildCommandCenterRecordLinks(selected, childLinks);
+        const stageDisplay = selected.stage_label ?? liveWorkspaceVm?.family.stage ?? null;
+        return buildCommandCenterRecordLinks(selected, childLinks).map((link) =>
+            link.type === "opportunities" && stageDisplay ? { ...link, label: stageDisplay } : link
+        );
     }, [selected, liveWorkspaceVm]);
 
     const openRecordLink = useCallback(
         (link: CommandCenterRecordLink) => {
-            adminDrawer?.openDrawer({ type: link.type, id: link.id });
+            if (!adminDrawer) return;
+            adminDrawer.openDrawer({ type: link.type, id: link.id });
         },
         [adminDrawer]
     );
 
-    const composerChannels = useMemo(
-        () => ({
-            email: liveWorkspaceVm?.composerDraft.availableChannels.email ?? true,
-            sms: liveWorkspaceVm?.composerDraft.availableChannels.sms ?? false,
-            note: false,
-        }),
+    const workspaceModeAvailability = useMemo(
+        () => resolveWorkspaceModeAvailability(liveWorkspaceVm, liveWorkspaceVm?.relatedTasks.length ?? 0),
         [liveWorkspaceVm]
     );
+
+    const liveChannel: ComposerChannel = workspaceMode === "sms" ? "sms" : "email";
+
+    const liveWorkspaceDetail = useMemo(() => {
+        if (!liveWorkspaceVm) return undefined;
+        const primaryRecipient =
+            liveWorkspaceVm.recipientGroups.flatMap((g) => g.recipients).find((r) => r.isPrimary) ??
+            liveWorkspaceVm.recipientGroups.flatMap((g) => g.recipients)[0];
+        return {
+            owner: liveWorkspaceVm.family.ownerLabel ?? "Unassigned",
+            contactName: primaryRecipient?.displayName ?? liveWorkspaceVm.family.label,
+            program: liveWorkspaceVm.family.program,
+            stage: liveWorkspaceVm.family.stage,
+            consent: liveWorkspaceVm.consentSummary.household,
+        };
+    }, [liveWorkspaceVm]);
 
     const runFamilySend = useCallback(
         async (confirm: boolean) => {
@@ -356,7 +376,7 @@ export default function CommandCenterShell() {
                     body: JSON.stringify({
                         customer_id: cust,
                         recipient_person_ids: selectedRecipientIds,
-                        channel: "email",
+                        channel: liveChannel,
                         subject: subjectDraft,
                         body: bodyDraft,
                         reply_to_thread_id: selectedThreadId,
@@ -378,25 +398,32 @@ export default function CommandCenterShell() {
                 setSending(false);
             }
         },
-        [loadLive, selectedCustomerId, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId]
+        [loadLive, selectedCustomerId, selectedRecipientIds, subjectDraft, bodyDraft, selectedThreadId, liveChannel]
     );
+
+    useEffect(() => {
+        if (!LIVE_WORKSPACE || !selectedCustomerId || !selectedId) return;
+        if (workspaceMode !== "email" && workspaceMode !== "sms") return;
+        void loadLive(selectedCustomerId, selectedThreadId ?? selectedId, false, liveChannel);
+    }, [workspaceMode, liveChannel, selectedCustomerId, selectedId, selectedThreadId, loadLive]);
 
     const filtered = useMemo(() => applyQueueFilters(conversations, filters), [conversations, filters]);
     const grouped = useMemo(() => groupConversationsByQueue(filtered), [filtered]);
     const queueSections = useMemo(() => visibleCommandCenterQueues(grouped), [grouped]);
     const visibleIds = useMemo(() => flattenVisibleConversationIds(queueSections), [queueSections]);
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
-    const detail: FixtureFamilyDetail | undefined = selected ? FIXTURE_FAMILY_DETAILS[selected.id] : undefined;
+    const detail: WorkspaceDetail | FixtureFamilyDetail | undefined =
+        COMMS_FIXTURES_ENABLED && selected ? FIXTURE_FAMILY_DETAILS[selected.id] : liveWorkspaceDetail;
     const childNames = useMemo(
-        () =>
-            LIVE_WORKSPACE && liveChildren
-                ? liveChildren
-                : detail
-                  ? detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean)
-                  : [],
+        () => {
+            if (LIVE_WORKSPACE && liveChildren) return liveChildren;
+            if (detail && "children" in detail && typeof detail.children === "string") {
+                return detail.children.split(/\s*[&,]\s*/).map((s) => s.trim()).filter(Boolean);
+            }
+            return [];
+        },
         [detail, liveChildren]
     );
-    const liveChannel: ComposerChannel = "email";
 
     useEffect(() => {
         if (loading) return;
@@ -434,7 +461,7 @@ export default function CommandCenterShell() {
         { label: "Needs reply", value: metrics.requiresResponse, dot: "bg-[#e0a32e]", tone: "text-[#9a6b16]", status: metrics.requiresResponse > 0 ? "awaiting response" : "all caught up", statusTone: "text-[#9a6b16]" },
         { label: "Overdue", value: metrics.slaAtRisk, dot: "bg-alloy-ember", tone: "text-alloy-ember", status: metrics.slaAtRisk > 0 ? "act now" : "none overdue", statusTone: metrics.slaAtRisk > 0 ? "text-alloy-ember" : "text-[#0f6b4a]" },
         { label: "Unread", value: metrics.unread, dot: "bg-[#00A283]", tone: "text-[#0f6b4a]", status: metrics.unread > 0 ? "new inbound" : "caught up", statusTone: "text-[#0f6b4a]" },
-        { label: "Unclassified", value: metrics.unclassified, dot: "bg-alloy-stone/50", tone: "text-alloy-midnight", status: metrics.unclassified > 0 ? "needs triage" : "all classified", statusTone: "text-alloy-midnight/45" },
+        { label: NEEDS_REVIEW_STATUS_LABEL, value: metrics.unclassified, dot: "bg-alloy-stone/50", tone: "text-alloy-midnight", status: metrics.unclassified > 0 ? "not yet triaged" : "all triaged", statusTone: "text-alloy-midnight/45" },
     ];
 
     const revealReady =
@@ -588,9 +615,12 @@ export default function CommandCenterShell() {
                             healthDot={healthDisplay.dot}
                             healthLabel={healthDisplay.label}
                             recordLinks={recordLinks}
-                            onOpenRecordLink={openRecordLink}
+                            onOpenRecordLink={adminDrawer ? openRecordLink : undefined}
                             showClaim={ASSIGNMENT_ENABLED}
-                            composerChannels={composerChannels}
+                            workspaceMode={workspaceMode}
+                            onWorkspaceModeChange={setWorkspaceMode}
+                            workspaceModeAvailability={workspaceModeAvailability}
+                            relatedTasks={liveWorkspaceVm?.relatedTasks ?? []}
                             LIVE_WORKSPACE={LIVE_WORKSPACE}
                             selectedThreadId={selectedThreadId}
                             messages={messages}

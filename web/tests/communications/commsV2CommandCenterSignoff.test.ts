@@ -51,3 +51,11 @@ describe("command center record links", () => {
         expect(links.map((l) => l.type)).toEqual(expect.arrayContaining(["customers", "persons", "opportunities", "customer_members"]));
     });
 });
+
+describe("command center operator terminology", () => {
+    it("labels unassigned queue threads as Needs review", async () => {
+        const { NEEDS_REVIEW_STATUS_LABEL, conversationQueueStatusPill } = await import("@/lib/communications/v2/commandCenterViewModel");
+        expect(NEEDS_REVIEW_STATUS_LABEL).toBe("Needs review");
+        expect(conversationQueueStatusPill({ id: "1", attention_state: null }).label).toBe("Needs review");
+    });
+});

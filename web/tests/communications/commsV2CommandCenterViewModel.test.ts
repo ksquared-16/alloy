@@ -94,7 +94,7 @@ describe("metrics", () => {
 describe("health display", () => {
     it("does not show Unresponsive for unclassified threads", async () => {
         const { resolveCommandCenterHealthDisplay } = await import("@/lib/communications/v2/commandCenterViewModel");
-        expect(resolveCommandCenterHealthDisplay({ id: "1", attention_state: null }, 0, 0).label).toBe("Unclassified");
+        expect(resolveCommandCenterHealthDisplay({ id: "1", attention_state: null }, 0, 0).label).toBe("Needs review");
         expect(resolveCommandCenterHealthDisplay({ id: "2", attention_state: "awaiting_parent_reply" }, 0, 0).label).toBeNull();
     });
 });
@@ -125,7 +125,7 @@ describe("queue card presentation", () => {
 
     it("labels unclassified threads without faking on track", async () => {
         const { conversationQueueStatusPill } = await import("@/lib/communications/v2/commandCenterViewModel");
-        expect(conversationQueueStatusPill({ id: "1", attention_state: null, sla_state: null }).label).toBe("Unclassified");
+        expect(conversationQueueStatusPill({ id: "1", attention_state: null, sla_state: null }).label).toBe("Needs review");
         expect(conversationQueueStatusPill({ id: "2", attention_state: "awaiting_parent_reply" }).label).toBe("Needs reply");
         expect(conversationQueueStatusPill({ id: "3", attention_state: "needs_follow_up", sla_state: "on_track" }).label).toBe("Follow up");
     });
