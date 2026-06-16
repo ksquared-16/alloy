@@ -186,3 +186,61 @@ export async function deleteLayout(supabase: SupabaseClient, id: string): Promis
     const { error } = await supabase.from(TABLE).delete().eq("id", id);
     if (error) throw new Error(error.message);
 }
+
+export interface DuplicateLayoutInput {
+    source: EntityLayoutRecord;
+    orgId: string;
+    createdBy: string;
+    name?: string;
+    lineage?: Record<string, unknown>;
+}
+
+/** Clone a layout row into a new org-scoped draft at the next version. */
+export async function duplicateLayoutAsDraft(
+    supabase: SupabaseClient,
+    input: DuplicateLayoutInput,
+): Promise<EntityLayoutRecord> {
+    const { source, orgId, createdBy, name, lineage } = input;
+    return createDraft(supabase, {
+        orgId,
+        entityType: source.entityType,
+        surface: source.surface,
+        layoutKey: source.layoutKey,
+        name: name?.trim() || `${source.name} (copy)`,
+        doc: source.doc,
+        createdBy,
+        metadata: {
+            ...(source.metadata ?? {}),
+            ...(lineage ?? {}),
+        },
+    });
+}
+
+export interface RollbackLayoutInput {
+    source: EntityLayoutRecord;
+    orgId: string;
+    createdBy: string;
+}
+
+/**
+ * Roll forward from a prior published LayoutDoc — creates a new draft and publishes it.
+ * Historical rows are never mutated.
+ */
+export async function rollbackLayoutFromVersion(
+    supabase: SupabaseClient,
+    input: RollbackLayoutInput,
+): Promise<{ draft: EntityLayoutRecord; published: EntityLayoutRecord }> {
+    const draft = await duplicateLayoutAsDraft(supabase, {
+        source: input.source,
+        orgId: input.orgId,
+        createdBy: input.createdBy,
+        name: `${input.source.name} (rollback v${input.source.version})`,
+        lineage: {
+            rollback_from_layout_id: input.source.id,
+            rollback_from_version: input.source.version,
+            based_on_layout_id: input.source.id,
+        },
+    });
+    const published = await publishLayout(supabase, draft.id);
+    return { draft, published };
+}

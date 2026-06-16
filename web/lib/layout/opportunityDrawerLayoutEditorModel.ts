@@ -269,7 +269,76 @@ export function validateOpportunityDrawerLayoutDoc(doc: LayoutDoc): {
 }
 
 export function formatLayoutValidationErrors(errors: string[]): string[] {
-    return errors.map((err) => err.replace(/^sections\[\d+\]\./, "").replace(/^doc\./, ""));
+    return errors.map((err) => {
+        let msg = err
+            .replace(/^sections\[(\d+)\]\.key:/, "Section $1:")
+            .replace(/^sections\[(\d+)\]\./, "Section $1 · ")
+            .replace(/^doc\.metadata:/, "Layout settings:")
+            .replace(/^doc\.sections\[(\d+)\]\./, "Section $1 · ");
+
+        msg = msg.replace(/unknown field refKey "([^"]+)"/, 'Field "$1" is not allowed on the opportunity drawer');
+        msg = msg.replace(/unknown field_group refKey "([^"]+)"/, 'Block "$1" is not allowed on this surface');
+        msg = msg.replace(/unknown related_list refKey "([^"]+)"/, 'List "$1" is not allowed on this surface');
+        msg = msg.replace(/unknown section key "([^"]+)"/, 'Section "$1" is not registered for this surface');
+        msg = msg.replace(/unknown metadata key "([^"]+)"/, 'Setting "$1" is not supported');
+        msg = msg.replace(/unknown widget refKey "([^"]+)"/, 'Widget "$1" is not allowed on this surface');
+
+        return msg;
+    });
+}
+
+export type VisualEditorActionState = {
+    canSave: boolean;
+    canPublish: boolean;
+    statusLabel: string;
+    statusTone: "neutral" | "warning" | "success" | "error";
+    publishBlockedReason: string | null;
+};
+
+/** Derive save/publish affordances for the visual editor toolbar. */
+export function resolveVisualEditorActionState(input: {
+    dirty: boolean;
+    validationOk: boolean;
+    recordStatus: "draft" | "published" | string;
+    busy: boolean;
+}): VisualEditorActionState {
+    if (input.recordStatus === "published") {
+        return {
+            canSave: false,
+            canPublish: false,
+            statusLabel: "Published — create a new draft from the gallery to edit",
+            statusTone: "success",
+            publishBlockedReason: "This version is already published.",
+        };
+    }
+
+    if (!input.validationOk) {
+        return {
+            canSave: false,
+            canPublish: false,
+            statusLabel: input.dirty ? "Unsaved changes · fix validation issues" : "Fix validation issues before saving",
+            statusTone: "error",
+            publishBlockedReason: "Resolve validation errors before publishing.",
+        };
+    }
+
+    if (input.dirty) {
+        return {
+            canSave: !input.busy,
+            canPublish: !input.busy,
+            statusLabel: "Unsaved changes",
+            statusTone: "warning",
+            publishBlockedReason: null,
+        };
+    }
+
+    return {
+        canSave: false,
+        canPublish: !input.busy,
+        statusLabel: "Draft saved",
+        statusTone: "neutral",
+        publishBlockedReason: null,
+    };
 }
 
 export function opportunityDrawerEditorFieldPickerOptions(): { refKey: string; label: string }[] {

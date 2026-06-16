@@ -117,11 +117,14 @@ describe("Configuration Workspace V3 — enrollment workflow readiness", () => {
         expect(read("components/adminV2/settings/SettingsWorkspaceNav.tsx")).toContain("configuration-workspace-nav");
     });
 
-    it("layouts audit — legacy builder retained with modern shell", () => {
+    it("layouts audit — gallery primary with legacy builder fallback", () => {
         const layouts = read("app/adminV2/settings/layouts/page.tsx");
-        expect(layouts).toContain("LayoutConfigClient");
-        expect(layouts).toContain("Record Experience");
-        expect(layouts).not.toContain("LayoutsSettingsHubClient");
+        expect(layouts).toContain("LayoutsSettingsPageClient");
+        expect(layouts).toContain("LAYOUTS_HUB_REGISTRY_TRUST_NOTE");
+        expect(layouts).not.toContain("<LayoutConfigClient");
+        const shell = read("app/adminV2/settings/layouts/LayoutsSettingsPageClient.tsx");
+        expect(shell).toContain("LayoutGalleryClient");
+        expect(shell).toContain("legacy builder");
     });
 
     it("enrollment QA doc includes configuration verification section", () => {

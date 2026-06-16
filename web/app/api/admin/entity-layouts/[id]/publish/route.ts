@@ -39,7 +39,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
         }
 
         // Validate before publishing — a published doc must be renderable.
-        const parsed = parseLayoutDoc(record.doc);
+        const parsed = parseLayoutDoc(record.doc, { inferSurfaceKey: true });
         if (!parsed.ok) {
             return NextResponse.json({ error: "Cannot publish invalid doc", details: parsed.errors }, { status: 400 });
         }

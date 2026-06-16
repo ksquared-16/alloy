@@ -35,6 +35,8 @@ import {
     type LayoutRow,
     type LayoutSection,
 } from "./layoutV2";
+import { resolveSurfaceLayoutKeyFromDoc, type SurfaceLayoutKey } from "./surfaceLayoutRegistry";
+import { validateLayoutDocForSurface } from "./validateLayoutDocForSurface";
 
 export interface LayoutValidationResult {
     ok: boolean;
@@ -42,7 +44,16 @@ export interface LayoutValidationResult {
     errors: string[];
     /** Non-fatal issues (e.g. row width > 12). The doc still parses. */
     warnings: string[];
+    /** Set when surface-scoped validation runs. */
+    surfaceKey?: SurfaceLayoutKey | null;
 }
+
+export type ParseLayoutDocOptions = {
+    /** When set, run surface registry validation for this surface. */
+    surfaceKey?: SurfaceLayoutKey | null;
+    /** When true (default false), infer surface from entityType + surface after structural parse. */
+    inferSurfaceKey?: boolean;
+};
 
 function isObject(v: unknown): v is Record<string, unknown> {
     return typeof v === "object" && v !== null && !Array.isArray(v);
@@ -57,7 +68,7 @@ function asBool(v: unknown): boolean | undefined {
 }
 
 /** Validate and normalize an untrusted value into a LayoutDoc. */
-export function parseLayoutDoc(input: unknown): LayoutValidationResult {
+export function parseLayoutDoc(input: unknown, options?: ParseLayoutDocOptions): LayoutValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
     const seenIds = new Set<string>();
@@ -341,7 +352,25 @@ export function parseLayoutDoc(input: unknown): LayoutValidationResult {
 
     warnings.push(...collectDeprecatedRefKeyWarnings(collectRefKeysFromLayoutDoc(doc)));
 
-    return { ok: true, doc, errors, warnings };
+    const shouldValidateSurface = options?.surfaceKey !== undefined || options?.inferSurfaceKey === true;
+    if (!shouldValidateSurface) {
+        return { ok: true, doc, errors, warnings };
+    }
+
+    const surfaceKey =
+        options?.surfaceKey !== undefined ? options.surfaceKey : resolveSurfaceLayoutKeyFromDoc(doc);
+    const surfaceResult = validateLayoutDocForSurface(doc, surfaceKey);
+    if (!surfaceResult.ok) {
+        return {
+            ok: false,
+            doc: null,
+            errors: [...errors, ...surfaceResult.errors],
+            warnings,
+            surfaceKey: surfaceResult.surfaceKey,
+        };
+    }
+
+    return { ok: true, doc, errors, warnings, surfaceKey: surfaceResult.surfaceKey };
 }
 
 /** Throwing variant for code paths that have already guaranteed validity. */

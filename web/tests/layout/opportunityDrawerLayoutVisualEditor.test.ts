@@ -18,6 +18,7 @@ import {
     listMissingRegisteredSections,
     OPPORTUNITY_DRAWER_LOCKED_SHELL_SLOTS,
     reorderSectionInZone,
+    resolveVisualEditorActionState,
     setSectionEditorHidden,
     tryAddFieldRefToSection,
     validateOpportunityDrawerLayoutDoc,
@@ -92,6 +93,37 @@ describe("opportunityDrawerLayoutEditorModel", () => {
         expect(missing).toContain("children_enrollment");
         expect(missing).not.toContain("lead_summary");
     });
+
+    it("blocks publish when validation fails or version is published", () => {
+        expect(
+            resolveVisualEditorActionState({
+                dirty: true,
+                validationOk: false,
+                recordStatus: "draft",
+                busy: false,
+            }).canPublish,
+        ).toBe(false);
+        expect(
+            resolveVisualEditorActionState({
+                dirty: false,
+                validationOk: true,
+                recordStatus: "published",
+                busy: false,
+            }).canPublish,
+        ).toBe(false);
+    });
+
+    it("allows publish for saved valid drafts", () => {
+        const state = resolveVisualEditorActionState({
+            dirty: false,
+            validationOk: true,
+            recordStatus: "draft",
+            busy: false,
+        });
+        expect(state.canPublish).toBe(true);
+        expect(state.canSave).toBe(false);
+        expect(state.statusLabel).toBe("Draft saved");
+    });
 });
 
 describe("opportunityDrawerLayoutEditorApi", () => {
@@ -157,6 +189,16 @@ describe("opportunityDrawerLayoutEditorApi", () => {
             "/api/admin/entity-layouts/draft-1/publish",
             expect.objectContaining({ method: "POST" }),
         );
+    });
+});
+
+describe("layoutEditorHidden runtime isolation", () => {
+    it("is not referenced by runtime section visibility resolver", () => {
+        const src = readFileSync(
+            resolve(root, "lib/layout/runtime/resolveLayoutRuntimeSectionVisibility.ts"),
+            "utf8",
+        );
+        expect(src).not.toContain("layoutEditorHidden");
     });
 });
 

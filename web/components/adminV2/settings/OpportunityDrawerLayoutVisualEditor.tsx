@@ -34,6 +34,7 @@ import {
     renameSectionTitle,
     reorderLayoutItemInColumn,
     reorderSectionInZone,
+    resolveVisualEditorActionState,
     setSectionEditorHidden,
     tryAddFieldRefToSection,
     validateOpportunityDrawerLayoutDoc,
@@ -111,7 +112,14 @@ function SectionPreviewCard({
         >
             <div className="flex items-center justify-between gap-2 border-b border-alloy-forge/10 px-3 py-2">
                 <span className="text-xs font-semibold text-alloy-midnight">{section.title}</span>
-                <span className="text-[10px] text-alloy-midnight/45">{section.key}</span>
+                <span className="flex items-center gap-2">
+                    {hidden ?
+                        <span className="rounded bg-alloy-stone/70 px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/50">
+                            Hidden
+                        </span>
+                    :   null}
+                    <span className="rounded bg-alloy-pine/10 px-1.5 py-0.5 text-[10px] font-medium text-alloy-pine">Editable</span>
+                </span>
             </div>
             <div className="max-h-64 overflow-hidden p-2">
                 {hidden ?
@@ -208,6 +216,25 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         [workingDoc],
     );
 
+    const actionState = useMemo(
+        () =>
+            record ?
+                resolveVisualEditorActionState({
+                    dirty,
+                    validationOk: validation.ok,
+                    recordStatus: record.status,
+                    busy: busy != null,
+                })
+            :   {
+                    canSave: false,
+                    canPublish: false,
+                    statusLabel: "",
+                    statusTone: "neutral" as const,
+                    publishBlockedReason: null,
+                },
+        [record, dirty, validation.ok, busy],
+    );
+
     const fieldPickerOptions = useMemo(() => opportunityDrawerEditorFieldPickerOptions(), []);
 
     const load = useCallback(async () => {
@@ -215,9 +242,9 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         setError(null);
         try {
             const rec = await fetchEntityLayoutRecord(layoutId);
-            const parsed = parseLayoutDoc(rec.doc);
+            const parsed = parseLayoutDoc(rec.doc, { inferSurfaceKey: true });
             if (!parsed.ok || !parsed.doc) {
-                throw new Error(parsed.errors.join("; ") || "Invalid layout document");
+                throw new Error(formatLayoutValidationErrors(parsed.errors).join("; ") || "Invalid layout document");
             }
             if (!isOpportunityDrawerLayoutDoc(parsed.doc)) {
                 setForceAdvanced(true);
@@ -260,11 +287,11 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     }, [workingDoc, workingName, record, validation.ok]);
 
     const publish = useCallback(async () => {
-        if (!record || record.status === "published") return;
+        if (!record || record.status === "published" || !validation.ok) return;
         setBusy("publish");
         setError(null);
         try {
-            if (dirty && validation.ok) await patchEntityLayoutDraft(record.id, workingName, workingDoc!);
+            if (dirty) await patchEntityLayoutDraft(record.id, workingName, workingDoc!);
             const updated = await publishEntityLayoutDraft(record.id);
             setRecord(updated);
             setDirty(false);
@@ -323,24 +350,34 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         className="mt-2 w-full max-w-md rounded-md border border-alloy-forge/20 px-2 py-1 text-sm"
                         aria-label="Layout name"
                     />
-                    <p className="mt-1 text-[10px] uppercase tracking-wide text-alloy-midnight/40">
+                    <p
+                        className={`mt-1 text-[10px] font-medium uppercase tracking-wide ${
+                            actionState.statusTone === "warning" ? "text-amber-700"
+                            : actionState.statusTone === "error" ? "text-red-700"
+                            : actionState.statusTone === "success" ? "text-alloy-pine"
+                            :   "text-alloy-midnight/40"
+                        }`}
+                        data-testid="visual-editor-action-state"
+                    >
                         {record.status} · v{record.version}
+                        {actionState.statusLabel ? ` · ${actionState.statusLabel}` : ""}
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <button
                         type="button"
                         onClick={() => void saveDraft()}
-                        disabled={!dirty || !validation.ok || busy != null || record.status === "published"}
+                        disabled={!actionState.canSave}
                         className="rounded-md bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
                         data-testid="visual-editor-save-draft"
                     >
-                        {busy === "save" ? "Saving…" : "Save draft"}
+                        {busy === "save" ? "Saving…" : dirty ? "Save draft" : "Saved"}
                     </button>
                     <button
                         type="button"
                         onClick={() => void publish()}
-                        disabled={busy != null || record.status === "published"}
+                        disabled={!actionState.canPublish}
+                        title={actionState.publishBlockedReason ?? undefined}
                         className="rounded-md border border-alloy-pine/30 px-3 py-1.5 text-xs font-semibold text-alloy-pine disabled:opacity-40"
                         data-testid="visual-editor-publish"
                     >
@@ -375,7 +412,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             :   null}
 
             <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-                <div className="overflow-hidden rounded-xl border border-alloy-forge/15 bg-[#F6F8FC] shadow-sm">
+                <div className="overflow-hidden rounded-xl border border-alloy-forge/15 bg-[#F6F8FC] shadow-sm max-w-[720px]" data-testid="visual-editor-drawer-frame">
                     <LockedShellBand slot="header" label="Drawer header">
                         <div className="flex items-center justify-between gap-3">
                             <div>
@@ -460,7 +497,10 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                                     }
                                     data-testid="visual-editor-section-hidden"
                                 />
-                                Hide section in preview
+                                Hide section
+                                <span className="block text-[10px] font-normal text-alloy-midnight/45">
+                                    Saved to layout draft. Live drawer unchanged until runtime adoption (Phase 4).
+                                </span>
                             </label>
 
                             <div className="flex gap-2">

@@ -199,7 +199,17 @@ function statusPill(status: string) {
     );
 }
 
-export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
+export default function LayoutConfigClient({
+    adminV2Chrome = false,
+    initialSelectedId = null,
+    hideLayoutCatalog = false,
+}: {
+    adminV2Chrome?: boolean;
+    /** Auto-open this layout row once the list has loaded. */
+    initialSelectedId?: string | null;
+    /** Hide left catalog when opened from the layout gallery editor. */
+    hideLayoutCatalog?: boolean;
+} = {}) {
     const [forbidden, setForbidden] = useState(false);
     const canMutate = !forbidden;
 
@@ -316,6 +326,12 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
             setBusy(null);
         }
     }, []);
+
+    useEffect(() => {
+        if (!initialSelectedId || loading) return;
+        if (selectedId === initialSelectedId) return;
+        void selectRecord(initialSelectedId);
+    }, [initialSelectedId, loading, selectedId, selectRecord]);
 
     const createDefault = useCallback(
         async (surface: "drawer" | "queue") => {
@@ -579,10 +595,16 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-                {/* Left: layout catalog (settings-style cards grouped by type) */}
-                <div className="flex flex-col gap-4">
-                    <SectionCard title="Layout catalog">
+            <div
+                className={
+                    hideLayoutCatalog ?
+                        "grid grid-cols-1 gap-4"
+                    :   "grid grid-cols-1 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]"
+                }
+            >
+                {!hideLayoutCatalog ?
+                    <div className="flex flex-col gap-4">
+                        <SectionCard title="Layout catalog">
                         {loading ? (
                             <p className="text-sm text-[#59678b]">Loading…</p>
                         ) : groups.length === 0 ? (
@@ -648,7 +670,8 @@ export default function LayoutConfigClient({ adminV2Chrome = false }: { adminV2C
                             </div>
                         )}
                     </SectionCard>
-                </div>
+                    </div>
+                :   null}
 
                 {/* Right: builder */}
                 <div className="flex flex-col gap-4">

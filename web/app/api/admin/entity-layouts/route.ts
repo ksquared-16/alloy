@@ -163,13 +163,19 @@ export async function POST(request: NextRequest) {
             }
         }
     } else {
-        const parsed = parseLayoutDoc(body.doc);
+        const parsed = parseLayoutDoc(body.doc, { inferSurfaceKey: true });
         if (!parsed.ok || !parsed.doc) {
             return NextResponse.json({ error: "Invalid layout doc", details: parsed.errors }, { status: 400 });
         }
         doc = parsed.doc;
         seededFrom = "request";
     }
+
+    const validated = parseLayoutDoc(doc, { inferSurfaceKey: true });
+    if (!validated.ok || !validated.doc) {
+        return NextResponse.json({ error: "Invalid layout doc", details: validated.errors }, { status: 400 });
+    }
+    doc = validated.doc;
 
     const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : `${entityType} ${surface} layout`;
 

@@ -81,7 +81,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         const patch: { name?: string; doc?: LayoutDoc } = {};
         if (typeof body.name === "string") patch.name = body.name.trim();
         if (body.doc !== undefined) {
-            const parsed = parseLayoutDoc(body.doc);
+            const parsed = parseLayoutDoc(body.doc, { inferSurfaceKey: true });
             if (!parsed.ok || !parsed.doc) {
                 return NextResponse.json({ error: "Invalid layout doc", details: parsed.errors }, { status: 400 });
             }
