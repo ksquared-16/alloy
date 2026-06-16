@@ -10,7 +10,6 @@ import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
 import type { EntityLayoutRecord, LayoutDoc } from "@/lib/layout/layoutV2";
-import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import {
     fetchEntityLayoutRecord,
     patchEntityLayoutDraft,
@@ -25,12 +24,14 @@ import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/oppo
 import {
     addRegisteredSection,
     addCustomOpportunityDrawerSection,
+    ensureOpportunityDrawerLayoutDocSaveReady,
     formatLayoutValidationErrors,
     isOpportunityDrawerLayoutDoc,
     isSectionEditorHidden,
     layoutDocHasRepairableGeneratedKeys,
     listMissingRegisteredSections,
     OPPORTUNITY_DRAWER_LOCKED_SHELL_SLOTS,
+    prepareOpportunityDrawerLayoutDocForEditor,
     repairOpportunityDrawerLayoutGeneratedKeys,
     resolveOpportunityDrawerSectionZone,
     resolveVisualEditorActionState,
@@ -88,6 +89,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const [inspectMode, setInspectMode] = useState(false);
     const [fieldAddError, setFieldAddError] = useState<string | null>(null);
     const [forceAdvanced, setForceAdvanced] = useState(false);
+    const [autoRepairNotice, setAutoRepairNotice] = useState<string | null>(null);
 
     const advancedHref = `${basePath}?editor=1&layout=${encodeURIComponent(layoutId)}&advanced=1`;
 
@@ -132,19 +134,27 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
+        setAutoRepairNotice(null);
         try {
             const rec = await fetchEntityLayoutRecord(layoutId);
-            const parsed = parseLayoutDoc(rec.doc, { inferSurfaceKey: true });
-            if (!parsed.ok || !parsed.doc) {
-                throw new Error(formatLayoutValidationErrors(parsed.errors).join("; ") || "Invalid layout document");
+            const prepared = prepareOpportunityDrawerLayoutDocForEditor(rec.doc);
+            if (!prepared.ok) {
+                throw new Error(formatLayoutValidationErrors(prepared.errors).join("; ") || "Invalid layout document");
             }
-            if (!isOpportunityDrawerLayoutDoc(parsed.doc)) {
+            if (!isOpportunityDrawerLayoutDoc(prepared.doc)) {
                 setForceAdvanced(true);
             }
             setRecord(rec);
-            setWorkingDoc(parsed.doc);
+            setWorkingDoc(prepared.doc);
             setWorkingName(rec.name);
-            setDirty(false);
+            setDirty(prepared.autoRepaired);
+            if (prepared.autoRepaired) {
+                setAutoRepairNotice(
+                    `Repaired ${prepared.repairs.length} legacy layout key${prepared.repairs.length === 1 ? "" : "s"}. Save draft to persist the fix.`,
+                );
+            } else {
+                setDirty(false);
+            }
             setEditingSectionKey(null);
             setSettingsSectionKey(null);
             setSelectedFieldPath(null);
@@ -168,7 +178,17 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     }, []);
 
     const saveDraft = useCallback(async () => {
-        if (!workingDoc || !record || !validation.ok) return;
+        if (!workingDoc || !record) return;
+        const ready = ensureOpportunityDrawerLayoutDocSaveReady(workingDoc);
+        const docToSave = ready.doc;
+        const validationForSave = validateOpportunityDrawerLayoutDoc(docToSave);
+        if (!validationForSave.ok) return;
+        if (ready.repaired) {
+            setWorkingDoc(docToSave);
+            setAutoRepairNotice(
+                `Repaired ${ready.repairs.length} legacy layout key${ready.repairs.length === 1 ? "" : "s"} before save.`,
+            );
+        }
         setBusy("save");
         setError(null);
         try {
@@ -178,19 +198,27 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                 onLayoutIdChange?.(target.id);
                 setRecord(target);
             }
-            const saved = await patchEntityLayoutDraft(target.id, workingName, workingDoc);
+            const saved = await patchEntityLayoutDraft(target.id, workingName, docToSave);
             setRecord(saved);
             setWorkingDoc(parseLayoutDocFromRecord(saved));
             setDirty(false);
+            setAutoRepairNotice(null);
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setBusy(null);
         }
-    }, [workingDoc, workingName, record, validation.ok, onLayoutIdChange]);
+    }, [workingDoc, workingName, record, onLayoutIdChange]);
 
     const publish = useCallback(async () => {
-        if (!record || !workingDoc || !validation.ok) return;
+        if (!record || !workingDoc) return;
+        const ready = ensureOpportunityDrawerLayoutDocSaveReady(workingDoc);
+        const docToPublish = ready.doc;
+        const validationForPublish = validateOpportunityDrawerLayoutDoc(docToPublish);
+        if (!validationForPublish.ok) return;
+        if (ready.repaired) {
+            setWorkingDoc(docToPublish);
+        }
         setBusy("publish");
         setError(null);
         try {
@@ -200,8 +228,8 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                 onLayoutIdChange?.(target.id);
                 setRecord(target);
             }
-            if (dirty) {
-                target = await patchEntityLayoutDraft(target.id, workingName, workingDoc);
+            if (dirty || ready.repaired) {
+                target = await patchEntityLayoutDraft(target.id, workingName, docToPublish);
             }
             const published = await publishEntityLayoutDraft(target.id);
             dispatchOpportunityDrawerLayoutPublished(published.doc);
@@ -210,12 +238,13 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             setRecord(nextDraft);
             setWorkingDoc(parseLayoutDocFromRecord(nextDraft));
             setDirty(false);
+            setAutoRepairNotice(null);
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setBusy(null);
         }
-    }, [record, dirty, validation.ok, workingName, workingDoc, onLayoutIdChange]);
+    }, [record, dirty, workingName, workingDoc, onLayoutIdChange]);
 
     if (forceAdvanced) {
         return (
@@ -328,6 +357,15 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     </Link>
                 </div>
             </div>
+
+            {autoRepairNotice ?
+                <div
+                    className="rounded-lg border border-alloy-pine/25 bg-alloy-pine/[0.08] px-3 py-2 text-sm text-alloy-midnight"
+                    data-testid="visual-editor-auto-repair-notice"
+                >
+                    {autoRepairNotice}
+                </div>
+            :   null}
 
             {error ?
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>

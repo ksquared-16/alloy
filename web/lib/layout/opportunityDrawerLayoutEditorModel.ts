@@ -277,6 +277,60 @@ export function validateOpportunityDrawerLayoutDoc(doc: LayoutDoc): {
     };
 }
 
+export type PrepareOpportunityDrawerLayoutDocResult =
+    | { ok: true; doc: LayoutDoc; autoRepaired: boolean; repairs: string[]; warnings: string[] }
+    | { ok: false; errors: string[] };
+
+/**
+ * Load path for the visual editor: structural parse → repair legacy keys → surface validate.
+ * Legacy drafts with section_N / block fail surface validation until repaired.
+ */
+export function prepareOpportunityDrawerLayoutDocForEditor(raw: unknown): PrepareOpportunityDrawerLayoutDocResult {
+    const structural = parseLayoutDoc(raw);
+    if (!structural.ok || !structural.doc) {
+        return { ok: false, errors: structural.errors };
+    }
+    if (!isOpportunityDrawerLayoutDoc(structural.doc)) {
+        return { ok: false, errors: ["Layout is not an opportunity drawer document."] };
+    }
+
+    let doc = structural.doc;
+    let autoRepaired = false;
+    let repairs: string[] = [];
+    if (layoutDocHasRepairableGeneratedKeys(doc)) {
+        const repaired = repairOpportunityDrawerLayoutGeneratedKeys(doc);
+        doc = repaired.doc;
+        autoRepaired = repaired.changed;
+        repairs = repaired.repairs;
+    }
+
+    const validated = parseLayoutDoc(doc, { inferSurfaceKey: true });
+    if (!validated.ok || !validated.doc) {
+        return { ok: false, errors: validated.errors };
+    }
+
+    return {
+        ok: true,
+        doc: validated.doc,
+        autoRepaired,
+        repairs,
+        warnings: validated.warnings,
+    };
+}
+
+/** Repair legacy keys before save/publish if still present. */
+export function ensureOpportunityDrawerLayoutDocSaveReady(doc: LayoutDoc): {
+    doc: LayoutDoc;
+    repaired: boolean;
+    repairs: string[];
+} {
+    if (!layoutDocHasRepairableGeneratedKeys(doc)) {
+        return { doc, repaired: false, repairs: [] };
+    }
+    const repaired = repairOpportunityDrawerLayoutGeneratedKeys(doc);
+    return { doc: repaired.doc, repaired: repaired.changed, repairs: repaired.repairs };
+}
+
 export function formatLayoutValidationErrors(errors: string[]): string[] {
     return errors.map((err) => {
         let msg = err

@@ -18,7 +18,7 @@ import {
 } from "@/lib/layout/layoutEditorGeneratedKeys";
 import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
-import { formatLayoutValidationErrors } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import { formatLayoutValidationErrors, prepareOpportunityDrawerLayoutDocForEditor, validateOpportunityDrawerLayoutDoc } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { validateLayoutDocForSurface } from "@/lib/layout/validateLayoutDocForSurface";
 
 const EMAIL_FIELD = { refKey: "person.primary_email", fieldLabel: "Email", fieldType: "text" as const };
@@ -150,6 +150,21 @@ describe("repair generated layout keys", () => {
 
         const parsed = parseLayoutDoc(withField.ok ? withField.doc : repaired.doc, { inferSurfaceKey: true });
         expect(parsed.ok, parsed.errors.join("; ")).toBe(true);
+    });
+});
+
+describe("prepareOpportunityDrawerLayoutDocForEditor", () => {
+    it("auto-repairs legacy keys on load so surface validation passes", () => {
+        const raw = legacySectionDoc("section_3", "block");
+        const structuralOnly = parseLayoutDoc(raw, { inferSurfaceKey: true });
+        expect(structuralOnly.ok).toBe(false);
+
+        const prepared = prepareOpportunityDrawerLayoutDocForEditor(raw);
+        expect(prepared.ok, prepared.ok ? "" : (prepared as { errors: string[] }).errors.join("; ")).toBe(true);
+        if (!prepared.ok) return;
+        expect(prepared.autoRepaired).toBe(true);
+        expect(prepared.repairs.length).toBeGreaterThan(0);
+        expect(validateOpportunityDrawerLayoutDoc(prepared.doc).ok).toBe(true);
     });
 });
 
