@@ -123,6 +123,10 @@ export function parseLayoutDoc(input: unknown, options?: ParseLayoutDocOptions):
             errors.push(`${path}.visibleWhen: "equals" requires a string "value"`);
             return undefined;
         }
+        if (raw.type === "count_gt" && cond.value === undefined) {
+            errors.push(`${path}.visibleWhen: "count_gt" requires a string "value"`);
+            return undefined;
+        }
         return cond;
     };
 

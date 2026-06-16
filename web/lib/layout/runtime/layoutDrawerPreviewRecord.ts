@@ -33,7 +33,7 @@ export const LAYOUT_DRAWER_PREVIEW_RECORD: ProofRuntimeRecord = {
             "child.program": "Preschool",
             "child.room": "Room A",
             "child.schedule": "Full time",
-            "child.status": "Inquiry",
+            "child.status": "Qualified",
         },
         {
             id: "c2",
@@ -44,7 +44,7 @@ export const LAYOUT_DRAWER_PREVIEW_RECORD: ProofRuntimeRecord = {
             "child.program": "Infant",
             "child.room": "Room B",
             "child.schedule": "Part time",
-            "child.status": "Waitlist",
+            "child.status": "On waitlist",
         },
     ],
     enrollment_children: [],

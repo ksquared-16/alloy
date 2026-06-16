@@ -44,17 +44,14 @@ describe("opportunity drawer layout editor field catalog", () => {
 });
 
 describe("visual editor UX convergence wiring", () => {
-    it("canvas uses production composition classes and inline editor", () => {
+    it("canvas uses composition panel for inline section configuration", () => {
         const canvas = readFileSync(
             resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas.tsx"),
             "utf8",
         );
-        expect(canvas).toContain("DRAWER_OVERVIEW_SHELL_GRID_CLASS");
-        expect(canvas).toContain("DRAWER_OVERVIEW_OVERFLOW_STACK_CLASS");
-        expect(canvas).toContain("partitionLeadOverviewBodySections");
-        expect(canvas).toContain('variant="production"');
-        expect(canvas).toContain("visual-editor-inline-section-editor");
-        expect(canvas).toContain("leadOverviewCompositionHints");
+        expect(canvas).toContain("OpportunityDrawerLayoutCompositionPanel");
+        const panel = readFileSync(resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutCompositionPanel.tsx"), "utf8");
+        expect(panel).toContain("visual-editor-composition-panel");
     });
 
     it("field picker is entity-first without refKey in operator UI", () => {

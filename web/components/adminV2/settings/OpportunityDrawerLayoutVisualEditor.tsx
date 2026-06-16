@@ -74,6 +74,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const [busy, setBusy] = useState<"save" | "publish" | null>(null);
     const [editingSectionKey, setEditingSectionKey] = useState<string | null>(null);
     const [settingsSectionKey, setSettingsSectionKey] = useState<string | null>(null);
+    const [selectedFieldPath, setSelectedFieldPath] = useState<string | null>(null);
     const [fieldAddError, setFieldAddError] = useState<string | null>(null);
     const [forceAdvanced, setForceAdvanced] = useState(false);
 
@@ -130,6 +131,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             setDirty(false);
             setEditingSectionKey(null);
             setSettingsSectionKey(null);
+            setSelectedFieldPath(null);
         } catch (e) {
             setError((e as Error).message);
         } finally {
@@ -334,11 +336,16 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                             doc={workingDoc}
                             editingSectionKey={editingSectionKey}
                             settingsSectionKey={settingsSectionKey}
+                            selectedFieldPath={selectedFieldPath}
                             fieldPickerGroups={fieldPickerGroups}
                             validationOk={validation.ok}
                             fieldAddError={fieldAddError}
-                            onEditSection={setEditingSectionKey}
+                            onEditSection={(key) => {
+                                setEditingSectionKey(key);
+                                if (key) setSelectedFieldPath(null);
+                            }}
                             onSectionSettings={setSettingsSectionKey}
+                            onSelectFieldPath={setSelectedFieldPath}
                             onFieldAddError={setFieldAddError}
                             applyDoc={applyDoc}
                         />
@@ -361,8 +368,8 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">Layout guidance</h3>
                     <div className="mt-3 space-y-3 text-xs leading-relaxed text-alloy-midnight/60">
                         <p>
-                            This canvas uses the same overview grid and runtime renderer as the live opportunity drawer.
-                            Hover a section for quick actions, or choose <strong>Edit</strong> to change fields inline.
+                            Hover a section and choose <strong>Configure</strong> to edit layout blocks, fields, and display
+                            behavior inline. Every visible element in the preview maps to a configurable block or field.
                         </p>
                         <p>
                             Choose an entity, then a field when adding data. Technical keys stay in advanced builder

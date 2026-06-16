@@ -22,6 +22,7 @@ import {
 } from "@/lib/layout/layoutV2";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "@/lib/layout/runtime/layoutRuntimePlan";
+import { readLayoutEditorDisplayConfig, typographyIntentClass } from "@/lib/layout/layoutEditorDisplayConfig";
 import { classifyLayoutItemBinding } from "@/lib/layout/runtime/classifyLayoutItemBinding";
 import {
     resolveProofBindingValue,
@@ -266,11 +267,13 @@ function ValueCell({
     const edit = useLayoutRuntimeDrawerEdit();
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
-    const label = operatorLabel(item, variant);
+    const displayConfig = readLayoutEditorDisplayConfig(item);
+    const label = displayConfig.showLabel === false ? "" : operatorLabel(item, variant);
     const display =
         variant === "production" || variant === "preview" ?
             sanitizeOperatorDisplay(r.isPlaceholder ? null : r.display)
         :   r.display;
+    const emptyDisplay = displayConfig.emptyState?.trim() || "—";
     const refKey = item.refKey ?? "";
     const canEdit =
         layoutRuntimeFieldIsEditable(item, variant) &&
@@ -293,7 +296,7 @@ function ValueCell({
                     :   null}
                 </div>
             :   null}
-            <div className={`mt-0.5 flex items-center gap-1 ${operatorSurfaces ? PRESENTATION_DATA_VALUE : "text-sm"}`}>
+            <div className={`mt-0.5 flex items-center gap-1 ${operatorSurfaces ? PRESENTATION_DATA_VALUE : "text-sm"} ${typographyIntentClass(displayConfig.typographyIntent)}`}>
                 {item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
                 {canEdit && edit ?
                     <LayoutRuntimeFieldInput
@@ -304,7 +307,7 @@ function ValueCell({
                     />
                 :   <span className={!display ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>
                         {!display ?
-                            <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>—</span>
+                            <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>{emptyDisplay}</span>
                         : r.renderHint === "status" ?
                             <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-xs font-medium text-alloy-midnight/90">{display}</span>
                         :   display}
@@ -312,6 +315,9 @@ function ValueCell({
                 }
                 {item.adornment && item.adornment.position === "right" ? <Adorn item={item} /> : null}
             </div>
+            {displayConfig.helperText ?
+                <p className="mt-1 text-[10px] text-alloy-midnight/45">{displayConfig.helperText}</p>
+            :   null}
         </div>
     );
 }

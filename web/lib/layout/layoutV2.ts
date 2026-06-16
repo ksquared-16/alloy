@@ -86,7 +86,7 @@ export interface LayoutLinkTarget {
  *  - "equals": show when `path` equals `value`.
  * `path` is a namespaced source path, e.g. "person.secondary_contact".
  */
-export const LAYOUT_CONDITION_TYPES = ["exists", "equals"] as const;
+export const LAYOUT_CONDITION_TYPES = ["exists", "equals", "count_gt"] as const;
 export type LayoutConditionType = (typeof LAYOUT_CONDITION_TYPES)[number];
 export interface LayoutCondition {
     type: LayoutConditionType;
@@ -105,6 +105,7 @@ export function isLayoutConditionType(v: unknown): v is LayoutConditionType {
 export const LAYOUT_ADORNMENT_ICONS = [
     "person",
     "child",
+    "user",
     "opportunity",
     "calendar",
     "birthday",
@@ -115,6 +116,7 @@ export const LAYOUT_ADORNMENT_ICONS = [
     "phone",
     "mail",
     "location",
+    "school",
 ] as const;
 export type LayoutAdornmentIcon = (typeof LAYOUT_ADORNMENT_ICONS)[number];
 

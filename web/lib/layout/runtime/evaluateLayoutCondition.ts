@@ -33,5 +33,10 @@ export function evaluateLayoutCondition(
     const raw = readPath(record, condition.path);
     if (condition.type === "exists") return !isEmptyValue(raw);
     if (condition.type === "equals") return String(raw ?? "") === String(condition.value ?? "");
+    if (condition.type === "count_gt") {
+        const threshold = Number(condition.value ?? "0");
+        const count = Array.isArray(raw) ? raw.length : typeof raw === "number" ? raw : 0;
+        return count > threshold;
+    }
     return true;
 }

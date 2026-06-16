@@ -6,6 +6,7 @@
  */
 
 import type { ActionSurface } from "@/lib/admin/actions/types";
+import { validateLayoutEditorDisplayConfig, readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
 import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { isLayoutItemKind, isLayoutQueueZone } from "@/lib/layout/layoutV2";
 import {
@@ -56,6 +57,8 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "actionPlacements",
     "binding",
     "futureModule",
+    "layoutEditorDisplay",
+    "enrollmentRosterReadFirst",
 ]);
 
 const QUEUE_ONLY_DOC_METADATA_KEYS = new Set(["queue_record_layout", "queue_context", "renderAs"]);
@@ -172,6 +175,8 @@ function walkItem(
             ctx.allowedActionPlacements,
             ctx.errors,
         );
+        const display = readLayoutEditorDisplayConfig({ metadata: item.metadata });
+        ctx.errors.push(...validateLayoutEditorDisplayConfig(display, `${path}.metadata.layoutEditorDisplay`));
     }
 
     item.items?.forEach((child, i) => walkItem(child, `${path}.items[${i}]`, ctx));

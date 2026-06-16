@@ -31,4 +31,19 @@ describe("evaluateLayoutCondition", () => {
             ),
         ).toBe(true);
     });
+
+    it("evaluates count_gt against array paths", () => {
+        expect(
+            evaluateLayoutCondition(
+                { children: [{ id: "1" }, { id: "2" }] },
+                { type: "count_gt", path: "children", value: "1" },
+            ),
+        ).toBe(true);
+        expect(
+            evaluateLayoutCondition(
+                { children: [{ id: "1" }] },
+                { type: "count_gt", path: "children", value: "1" },
+            ),
+        ).toBe(false);
+    });
 });
