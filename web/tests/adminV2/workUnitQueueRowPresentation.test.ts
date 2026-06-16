@@ -29,6 +29,7 @@ function baseSlots(partial: Partial<CrmCompactRowSemanticSlots> = {}): CrmCompac
         stageLabel: null,
         statusLabel: null,
         nextStep: null,
+        currentWorkLine: null,
         lastActivity: null,
         commercialValue: null,
         contactSnippet: null,

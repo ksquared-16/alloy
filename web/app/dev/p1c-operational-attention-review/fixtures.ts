@@ -121,6 +121,7 @@ function baseQueueSlots(partial: Partial<CrmCompactRowSemanticSlots>): CrmCompac
         stageLabel: null,
         statusLabel: "Contacted",
         nextStep: "Call to confirm tour window",
+        currentWorkLine: null,
         lastActivity: "3d ago · outbound call",
         commercialValue: null,
         contactSnippet: null,

@@ -232,6 +232,7 @@ const PREVIEW_SLOTS: CrmCompactRowSemanticSlots = {
     statusLabel: "Contact Attempted",
     stageLabel: null,
     nextStep: "Call family within one business day",
+    currentWorkLine: "Schedule tour · Open · Due today",
     lastActivity: null,
     commercialValue: null,
     contactSnippet: null,

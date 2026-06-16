@@ -23,6 +23,7 @@ import {
     applyRelatedSubjectLocationVisibility,
     relatedSubjectVisibilityForLocation,
 } from "@/lib/queues/queueMembershipLocationScope";
+import { buildQueueCurrentWorkSummary } from "@/lib/workUnits/buildQueueCurrentWorkSummary";
 import {
     buildAttentionSummary,
     buildNextBestAction,
@@ -436,6 +437,7 @@ export function buildChildGrainQueueRowContext(input: BuildChildGrainQueueRowCon
         ),
         attention_summary: buildAttentionSummary(row),
         work_summary: buildWorkSummary(row),
+        current_work_summary: buildQueueCurrentWorkSummary(row),
         next_best_action: buildNextBestAction(row),
         drawer_open: {
             entity_type: "opportunities",

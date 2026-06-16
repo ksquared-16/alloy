@@ -83,6 +83,7 @@ const baseSlots = (partial: Partial<CrmCompactRowSemanticSlots>): CrmCompactRowS
     stageLabel: null,
     statusLabel: "New",
     nextStep: null,
+    currentWorkLine: null,
     lastActivity: null,
     commercialValue: null,
     contactSnippet: null,

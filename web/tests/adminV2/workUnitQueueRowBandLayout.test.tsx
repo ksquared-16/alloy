@@ -27,6 +27,7 @@ function crmTestSlots(
         stageLabel: null,
         statusLabel: null,
         nextStep: null,
+        currentWorkLine: null,
         lastActivity: null,
         commercialValue: null,
         contactSnippet: null,

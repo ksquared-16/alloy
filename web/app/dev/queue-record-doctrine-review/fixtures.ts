@@ -13,6 +13,7 @@ export const doctrineEnrollmentRow: CrmCompactRowSemanticSlots = {
     stageLabel: "Tour",
     statusLabel: "Tour Scheduled",
     nextStep: "Confirm tour attendance and capture program preference.",
+    currentWorkLine: null,
     lastActivity: null,
     commercialValue: null,
     contactSnippet: null,

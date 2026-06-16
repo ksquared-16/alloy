@@ -22,6 +22,7 @@ import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
 import { resolveQueueOperationalReadSlot } from "@/lib/adminV2/bos/recommendations/selectors/recommendationSurfaceViewModels";
 import { buildQueueRowPriorityExplanationLine } from "@/lib/opportunities/queueRowPriorityExplanation";
+import { buildQueueCurrentWorkSummary, formatQueueCurrentWorkLine } from "@/lib/workUnits/buildQueueCurrentWorkSummary";
 import { CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 } from "@/lib/config/enrollmentPipelineQueueDefinitionV1";
 import type { QueueUiRowPreviewAction } from "@/lib/ui-v2/queueUiConfig";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -209,6 +210,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         stageLabel,
         statusLabel,
         nextStep,
+        currentWorkLine: formatQueueCurrentWorkLine(buildQueueCurrentWorkSummary(rowRec)),
         lastActivity,
         commercialValue,
         ...previewPresentation,
