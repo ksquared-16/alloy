@@ -83,21 +83,25 @@ CREATE INDEX IF NOT EXISTS idx_comm_threads_org_assigned_user
 ALTER TABLE public.conversation_assignment_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sla_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS conversation_assignment_events_select_org ON public.conversation_assignment_events;
 CREATE POLICY conversation_assignment_events_select_org
     ON public.conversation_assignment_events FOR SELECT TO authenticated
     USING (EXISTS (
         SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = conversation_assignment_events.org_id));
+DROP POLICY IF EXISTS conversation_assignment_events_service_all ON public.conversation_assignment_events;
 CREATE POLICY conversation_assignment_events_service_all
     ON public.conversation_assignment_events FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text))
     WITH CHECK ((auth.role() = 'service_role'::text));
 
+DROP POLICY IF EXISTS sla_events_select_org ON public.sla_events;
 CREATE POLICY sla_events_select_org
     ON public.sla_events FOR SELECT TO authenticated
     USING (EXISTS (
         SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = sla_events.org_id));
+DROP POLICY IF EXISTS sla_events_service_all ON public.sla_events;
 CREATE POLICY sla_events_service_all
     ON public.sla_events FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text))

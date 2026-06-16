@@ -98,9 +98,11 @@ CREATE INDEX IF NOT EXISTS idx_announcement_deliveries_org_person
 
 -- ===== RLS (org members SELECT; service_role ALL) — explicit per table =====
 ALTER TABLE public.communication_templates ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS communication_templates_select_org ON public.communication_templates;
 CREATE POLICY communication_templates_select_org
     ON public.communication_templates FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.org_id = communication_templates.org_id));
+DROP POLICY IF EXISTS communication_templates_service_all ON public.communication_templates;
 CREATE POLICY communication_templates_service_all
     ON public.communication_templates FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
@@ -109,9 +111,11 @@ GRANT ALL ON TABLE public.communication_templates TO authenticated;
 GRANT ALL ON TABLE public.communication_templates TO service_role;
 
 ALTER TABLE public.communication_template_versions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS communication_template_versions_select_org ON public.communication_template_versions;
 CREATE POLICY communication_template_versions_select_org
     ON public.communication_template_versions FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.org_id = communication_template_versions.org_id));
+DROP POLICY IF EXISTS communication_template_versions_service_all ON public.communication_template_versions;
 CREATE POLICY communication_template_versions_service_all
     ON public.communication_template_versions FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
@@ -120,9 +124,11 @@ GRANT ALL ON TABLE public.communication_template_versions TO authenticated;
 GRANT ALL ON TABLE public.communication_template_versions TO service_role;
 
 ALTER TABLE public.communication_snippets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS communication_snippets_select_org ON public.communication_snippets;
 CREATE POLICY communication_snippets_select_org
     ON public.communication_snippets FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.org_id = communication_snippets.org_id));
+DROP POLICY IF EXISTS communication_snippets_service_all ON public.communication_snippets;
 CREATE POLICY communication_snippets_service_all
     ON public.communication_snippets FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
@@ -131,9 +137,11 @@ GRANT ALL ON TABLE public.communication_snippets TO authenticated;
 GRANT ALL ON TABLE public.communication_snippets TO service_role;
 
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS announcements_select_org ON public.announcements;
 CREATE POLICY announcements_select_org
     ON public.announcements FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.org_id = announcements.org_id));
+DROP POLICY IF EXISTS announcements_service_all ON public.announcements;
 CREATE POLICY announcements_service_all
     ON public.announcements FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
@@ -142,9 +150,11 @@ GRANT ALL ON TABLE public.announcements TO authenticated;
 GRANT ALL ON TABLE public.announcements TO service_role;
 
 ALTER TABLE public.announcement_targets ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS announcement_targets_select_org ON public.announcement_targets;
 CREATE POLICY announcement_targets_select_org
     ON public.announcement_targets FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.org_id = announcement_targets.org_id));
+DROP POLICY IF EXISTS announcement_targets_service_all ON public.announcement_targets;
 CREATE POLICY announcement_targets_service_all
     ON public.announcement_targets FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
@@ -153,9 +163,11 @@ GRANT ALL ON TABLE public.announcement_targets TO authenticated;
 GRANT ALL ON TABLE public.announcement_targets TO service_role;
 
 ALTER TABLE public.announcement_deliveries ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS announcement_deliveries_select_org ON public.announcement_deliveries;
 CREATE POLICY announcement_deliveries_select_org
     ON public.announcement_deliveries FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.org_id = announcement_deliveries.org_id));
+DROP POLICY IF EXISTS announcement_deliveries_service_all ON public.announcement_deliveries;
 CREATE POLICY announcement_deliveries_service_all
     ON public.announcement_deliveries FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));

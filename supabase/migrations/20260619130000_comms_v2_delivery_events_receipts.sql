@@ -34,11 +34,13 @@ CREATE INDEX IF NOT EXISTS idx_comm_delivery_events_org_type
 -- 3) RLS — org members read; mutations via service_role (Next admin API + worker / webhooks).
 ALTER TABLE public.communication_delivery_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS communication_delivery_events_select_org ON public.communication_delivery_events;
 CREATE POLICY communication_delivery_events_select_org
     ON public.communication_delivery_events FOR SELECT TO authenticated
     USING (EXISTS (
         SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = communication_delivery_events.org_id));
+DROP POLICY IF EXISTS communication_delivery_events_service_all ON public.communication_delivery_events;
 CREATE POLICY communication_delivery_events_service_all
     ON public.communication_delivery_events FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text))

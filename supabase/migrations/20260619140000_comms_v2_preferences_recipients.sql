@@ -68,26 +68,32 @@ ALTER TABLE public.communication_message_recipients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.communication_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.communication_preference_events ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS communication_message_recipients_select_org ON public.communication_message_recipients;
 CREATE POLICY communication_message_recipients_select_org
     ON public.communication_message_recipients FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = communication_message_recipients.org_id));
+DROP POLICY IF EXISTS communication_message_recipients_service_all ON public.communication_message_recipients;
 CREATE POLICY communication_message_recipients_service_all
     ON public.communication_message_recipients FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
 
+DROP POLICY IF EXISTS communication_preferences_select_org ON public.communication_preferences;
 CREATE POLICY communication_preferences_select_org
     ON public.communication_preferences FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = communication_preferences.org_id));
+DROP POLICY IF EXISTS communication_preferences_service_all ON public.communication_preferences;
 CREATE POLICY communication_preferences_service_all
     ON public.communication_preferences FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
 
+DROP POLICY IF EXISTS communication_preference_events_select_org ON public.communication_preference_events;
 CREATE POLICY communication_preference_events_select_org
     ON public.communication_preference_events FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = communication_preference_events.org_id));
+DROP POLICY IF EXISTS communication_preference_events_service_all ON public.communication_preference_events;
 CREATE POLICY communication_preference_events_service_all
     ON public.communication_preference_events FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
