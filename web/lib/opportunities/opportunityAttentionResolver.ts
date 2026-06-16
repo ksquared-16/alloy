@@ -39,6 +39,10 @@ import {
     type ProjectedReadinessAttentionReason,
 } from "@/lib/opportunities/readinessAttentionProjection";
 import type { ReadinessAttentionProjectionProfileV1 } from "@/lib/opportunities/readinessAttentionProjectionProfile";
+import {
+    sortAttentionReasonsByPriority,
+    type ProjectedStageAttentionReason,
+} from "@/lib/lifecycle/stageOperatingPlanAttentionProjection";
 
 export type { OpportunityAttentionReasonCode } from "@/lib/opportunities/attentionPlatformCatalog";
 
@@ -131,6 +135,8 @@ export type OpportunityAttentionResolverInput = {
     readiness?: ReadinessResult | null;
     /** Override profile; defaults to `config.readiness_projection`. */
     readinessProjectionProfile?: ReadinessAttentionProjectionProfileV1 | null;
+    /** Pre-evaluated stage_operating_plan_v1 attention (evaluator runs outside resolver). */
+    stageAttention?: ProjectedStageAttentionReason[] | null;
 };
 
 export type ResolvedOpportunityAttentionReason = {
@@ -141,7 +147,12 @@ export type ResolvedOpportunityAttentionReason = {
     sla_clock_confidence: AttentionSlaClockConfidence;
     /** Present when reason was projected from readiness gaps. */
     readiness_gap_ids?: string[];
-    attention_source?: "platform" | "readiness";
+    attention_source?: "platform" | "readiness" | "stage_plan";
+    /** Present when reason was projected from stage_operating_plan_v1.attention_rules. */
+    stage_attention_rule_key?: string;
+    stage_attention_rule_label?: string;
+    stage_attention_provenance?: string;
+    stage_attention_kind?: string;
 };
 
 export type AttentionWaitingFacet = {
@@ -362,6 +373,38 @@ function applyPolicies(
     return codes.filter((code) => config.policies[code]?.enabled !== false);
 }
 
+function toResolvedStageReason(
+    projected: ProjectedStageAttentionReason,
+): ResolvedOpportunityAttentionReason {
+    return {
+        code: projected.code,
+        label: projected.label,
+        severity: projected.severity,
+        sla_tier: projected.severity === "high" || projected.severity === "critical" ? "breached" : "approaching",
+        sla_clock_confidence: "high",
+        attention_source: "stage_plan",
+        stage_attention_rule_key: projected.stage_attention_rule_key,
+        stage_attention_rule_label: projected.stage_attention_rule_label,
+        stage_attention_provenance: projected.provenance,
+        stage_attention_kind: projected.stage_attention_rule_kind,
+    };
+}
+
+function mergeStageAttentionReasons(
+    platformReasons: ResolvedOpportunityAttentionReason[],
+    stageProjected: ProjectedStageAttentionReason[] | null | undefined,
+    config: OpportunityAttentionResolvedConfig,
+): ResolvedOpportunityAttentionReason[] {
+    const stageReasons = (stageProjected ?? []).filter(
+        (p) => config.policies[p.code]?.enabled !== false,
+    );
+    if (!stageReasons.length) return platformReasons;
+
+    const combined = [...platformReasons, ...stageReasons.map(toResolvedStageReason)];
+    sortAttentionReasonsByPriority(combined, effectivePrimaryReasonPriorityOrder(config));
+    return combined;
+}
+
 function toResolvedList(
     orderedCodes: OpportunityAttentionReasonCode[],
     config: OpportunityAttentionResolvedConfig,
@@ -468,7 +511,11 @@ export function resolveOpportunityAttention(input: OpportunityAttentionResolverI
         rowContext: input.rowContext,
     };
 
-    const reasons = toResolvedList(orderedCodes, cfg, slaCtxBase, projectedByCode);
+    const reasons = mergeStageAttentionReasons(
+        toResolvedList(orderedCodes, cfg, slaCtxBase, projectedByCode),
+        input.stageAttention,
+        cfg,
+    );
 
     const activityStale = input.optionalSignals?.activityStale ?? null;
 

@@ -93,6 +93,26 @@ const MAP: Readonly<Record<OpportunityAttentionReasonCode, SuggestionActionRow>>
         label: "Track external dependency",
         action_family: "review",
     },
+    stage_work_overdue: {
+        key: "complete_stage_work",
+        label: "Complete overdue stage work",
+        action_family: "review",
+    },
+    stage_age_exceeded: {
+        key: "advance_stale_stage_record",
+        label: "Advance stale stage record",
+        action_family: "review",
+    },
+    stage_missing_required_fields: {
+        key: "complete_stage_required_fields",
+        label: "Complete stage required fields",
+        action_family: "update_record",
+    },
+    stage_attempts_incomplete: {
+        key: "complete_stage_contact_attempts",
+        label: "Complete stage contact attempts",
+        action_family: "follow_up",
+    },
 };
 
 export function suggestionActionForReasonCode(code: string): SuggestionActionRow {

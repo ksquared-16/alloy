@@ -140,6 +140,10 @@ import {
 } from "@/lib/lifecycle/lifecycleOpportunityQueueScope";
 import { buildLifecycleQueueEmptyDebug } from "@/lib/lifecycle/lifecycleQueueEmptyDebug";
 import type { LifecycleQueueEmptyDebugPayload } from "@/lib/lifecycle/lifecycleQueueEmptyDebug";
+import {
+    loadStageAttentionTasksByOpportunityId,
+    tryEvaluateStageAttentionForOpportunity,
+} from "@/lib/lifecycle/stageAttentionForOpportunity";
 
 type JobRowPreview = {
     id: string;
@@ -1953,20 +1957,21 @@ export async function loadOpportunityNeedsAttentionRows(params: {
 }> {
     const cap = params.fetchCap ?? NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP;
     const attentionConfig = params.attentionConfig;
-    const readinessBridge =
-        attentionConfig.readiness_projection.readiness_attention_bridge_v1 &&
-        isReadinessAttentionProjectionActive(attentionConfig.readiness_projection) &&
-        params.departmentMetadata != null;
-    const minLifecycleH = minLifecycleStaleHoursFromResolvedConfig(attentionConfig.thresholdsHours);
-    const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now, minLifecycleH);
-    const nowMs = params.now.getTime();
-    const readinessMemo = readinessBridge ? createReadinessMemoScope() : undefined;
     const deptMetaRecord =
         params.departmentMetadata &&
         typeof params.departmentMetadata === "object" &&
         !Array.isArray(params.departmentMetadata)
             ? (params.departmentMetadata as Record<string, unknown>)
             : null;
+    const readinessBridge =
+        attentionConfig.readiness_projection.readiness_attention_bridge_v1 &&
+        isReadinessAttentionProjectionActive(attentionConfig.readiness_projection) &&
+        deptMetaRecord != null;
+    const stageAttentionBridge = deptMetaRecord != null;
+    const minLifecycleH = minLifecycleStaleHoursFromResolvedConfig(attentionConfig.thresholdsHours);
+    const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now, minLifecycleH);
+    const nowMs = params.now.getTime();
+    const readinessMemo = readinessBridge ? createReadinessMemoScope() : undefined;
     const selectCols: string =
         params.columnSelect === "resolver_minimal"
             ? NEEDS_ATTENTION_OPPORTUNITY_SELECT_RESOLVER_MINIMAL
@@ -1998,6 +2003,14 @@ export async function loadOpportunityNeedsAttentionRows(params: {
         attentionConfig,
         nowMs
     );
+    const stageAttentionTasksByOpportunityId =
+        stageAttentionBridge && rawRows.length
+            ? await loadStageAttentionTasksByOpportunityId({
+                  supabase: params.supabase,
+                  orgId: params.orgId,
+                  opportunityIds: rawRows.map((r) => String(r.id)),
+              })
+            : new Map();
     const attentionByRowId = new Map<string, OpportunityAttentionResult>();
     const resolved_by_id: Record<string, OpportunityAttentionResult> = {};
     const filtered: OpportunityRowPreview[] = [];
@@ -2031,6 +2044,17 @@ export async function loadOpportunityNeedsAttentionRows(params: {
                       memoScope: readinessMemo,
                   })
                 : undefined;
+        const stageAttention =
+            stageAttentionBridge && deptMetaRecord
+                ? tryEvaluateStageAttentionForOpportunity({
+                      opportunity: entityInput,
+                      departmentMetadata: deptMetaRecord,
+                      tasks: stageAttentionTasksByOpportunityId.get(rowId) ?? [],
+                      readiness,
+                      readinessProfile: attentionConfig.readiness_projection,
+                      nowMs,
+                  })
+                : undefined;
         const attention = resolveOpportunityAttention({
             opportunity: entityInput,
             defs: params.opportunityStatusDefs,
@@ -2040,6 +2064,7 @@ export async function loadOpportunityNeedsAttentionRows(params: {
             batch,
             readiness,
             readinessProjectionProfile: attentionConfig.readiness_projection,
+            stageAttention,
         });
         resolverAccum += Date.now() - tResolve0;
         resolved_by_id[rowId] = attention;

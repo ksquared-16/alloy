@@ -15,6 +15,8 @@ import {
     type OpportunityAttentionEntityInput,
     type OpportunityAttentionResult,
 } from "@/lib/opportunities/opportunityAttentionResolver";
+import { tryEvaluateStageAttentionForOpportunity } from "@/lib/lifecycle/stageAttentionForOpportunity";
+import type { StageAttentionTaskSnapshot } from "@/lib/lifecycle/stageAttentionForOpportunity";
 
 export type OperationalAttentionAttachmentError = {
     code: string;
@@ -76,6 +78,8 @@ export function computeOperationalAttentionAttachment(input: {
     /** Pre-evaluated readiness (e.g. shared memo with drawer bootstrap). */
     readiness?: ReadinessResult | null;
     readinessMemoScope?: ReadinessMemoScope;
+    /** Open operational tasks for stage work_overdue / attempts rules. */
+    stageAttentionTasks?: StageAttentionTaskSnapshot[] | null;
 }): {
     _operational_attention: OpportunityAttentionResult | null;
     _operational_attention_error: OperationalAttentionAttachmentError | null;
@@ -88,6 +92,12 @@ export function computeOperationalAttentionAttachment(input: {
         const config = resolveOpportunityAttentionConfigFromMetadata(mergedMeta);
         const entity = opportunityRowToAttentionEntity(input.opportunityRow);
         const stale = input.activitySignal?.stale_signal ?? null;
+        const deptMeta =
+            input.departmentMetadata &&
+            typeof input.departmentMetadata === "object" &&
+            !Array.isArray(input.departmentMetadata)
+                ? (input.departmentMetadata as Record<string, unknown>)
+                : null;
 
         let readiness = input.readiness ?? null;
         const orgId = input.orgId != null ? String(input.orgId).trim() : "";
@@ -96,12 +106,6 @@ export function computeOperationalAttentionAttachment(input: {
             orgId &&
             isReadinessAttentionProjectionActive(config.readiness_projection)
         ) {
-            const deptMeta =
-                input.departmentMetadata &&
-                typeof input.departmentMetadata === "object" &&
-                !Array.isArray(input.departmentMetadata)
-                    ? (input.departmentMetadata as Record<string, unknown>)
-                    : null;
             readiness =
                 tryEvaluateOpportunityReadinessForAttention({
                     orgId,
@@ -113,6 +117,18 @@ export function computeOperationalAttentionAttachment(input: {
                 }) ?? null;
         }
 
+        const stageAttention =
+            deptMeta ?
+                tryEvaluateStageAttentionForOpportunity({
+                    opportunity: entity,
+                    departmentMetadata: deptMeta,
+                    tasks: input.stageAttentionTasks ?? [],
+                    readiness,
+                    readinessProfile: config.readiness_projection,
+                    nowMs: input.nowMs ?? Date.now(),
+                })
+            :   undefined;
+
         const result = resolveOpportunityAttention({
             opportunity: entity,
             defs: input.defs,
@@ -121,6 +137,7 @@ export function computeOperationalAttentionAttachment(input: {
             optionalSignals: stale ? { activityStale: stale } : null,
             readiness,
             readinessProjectionProfile: config.readiness_projection,
+            stageAttention,
         });
         return { _operational_attention: result, _operational_attention_error: null };
     } catch (e) {

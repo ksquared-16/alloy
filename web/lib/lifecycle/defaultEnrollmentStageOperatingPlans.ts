@@ -149,6 +149,15 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
         ],
         attention_rules: [
             {
+                rule_key: "review_lead_overdue",
+                kind: "work_overdue",
+                label: "Review Lead overdue",
+                severity: "medium",
+                threshold: 1,
+                template_key: "review_lead",
+                targets: attention("Review Lead overdue after 1 day"),
+            },
+            {
                 rule_key: "first_contact_overdue",
                 kind: "work_overdue",
                 label: "First contact overdue",

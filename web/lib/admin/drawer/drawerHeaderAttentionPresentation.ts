@@ -33,6 +33,12 @@ function parseOperationalAttentionFromOverview(
     return raw as OpportunityAttentionResult;
 }
 
+/** True when a reason was projected from stage_operating_plan_v1.attention_rules. */
+export function isStagePlanSourcedAttentionReason(reason: ResolvedOpportunityAttentionReason): boolean {
+    if (reason.attention_source === "stage_plan") return true;
+    return Boolean(reason.stage_attention_rule_key?.trim());
+}
+
 /** True when a reason was projected from readiness (consumes attach payload only). */
 export function isReadinessSourcedAttentionReason(reason: ResolvedOpportunityAttentionReason): boolean {
     if (reason.code === READINESS_ATTENTION_REASON_CODE) return true;

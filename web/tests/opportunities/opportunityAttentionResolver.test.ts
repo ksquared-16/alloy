@@ -38,9 +38,9 @@ function defFor(sk: string, lifecycle: string): StatusDefinitionRow {
 
 describe("resolveOpportunityAttention", () => {
     it("exposes stable priority ordering that includes every canonical code", () => {
-        expect(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER.length).toBe(17);
+        expect(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER.length).toBe(21);
         const set = new Set(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER);
-        expect(set.size).toBe(17);
+        expect(set.size).toBe(21);
     });
 
     it("reports resolver v2 with waiting facet and priority score fields", () => {

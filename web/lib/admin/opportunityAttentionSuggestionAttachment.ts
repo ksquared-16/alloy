@@ -11,6 +11,7 @@ import {
     computeOperationalAttentionAttachment,
     type OperationalAttentionAttachmentError,
 } from "@/lib/admin/operationalAttentionEntityAttachment";
+import { loadStageAttentionTasksByOpportunityId } from "@/lib/lifecycle/stageAttentionForOpportunity";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import {
     applyStubOperationalSummaryOverlay,
@@ -101,6 +102,16 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
         }
     }
 
+    let stageAttentionTasks = null;
+    if (oid && params.departmentMetadata) {
+        const tasksById = await loadStageAttentionTasksByOpportunityId({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            opportunityIds: [oid],
+        });
+        stageAttentionTasks = tasksById.get(oid) ?? [];
+    }
+
     const attn = computeOperationalAttentionAttachment({
         opportunityRow: params.opportunityRow,
         defs: params.defs,
@@ -113,6 +124,7 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
         nowMs,
         readiness: params.readiness ?? null,
         readinessMemoScope: params.readinessMemoScope,
+        stageAttentionTasks,
     });
 
     const legacySuggestionInput =

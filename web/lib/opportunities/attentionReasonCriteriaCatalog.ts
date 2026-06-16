@@ -175,6 +175,42 @@ export const ATTENTION_REASON_CRITERIA_CATALOG: Readonly<Record<OpportunityAtten
             configurableSurfaces: ["wait_bucket_sla_hours", "reason_policy_enabled"],
             metadataKeys: ["opportunity_attention_rules.sla_wait_hours.blocked_external"],
         },
+        stage_work_overdue: {
+            title: "Stage work overdue",
+            meaning:
+                "Triggers when a stage_operating_plan_v1 attention rule of kind `work_overdue` matches an open operational task past its due date plus threshold days.",
+            configSource: "Business Process stage plan (`stage_operating_plan_v1.attention_rules`) on the active builder stage.",
+            configurableSurfaces: ["none"],
+            metadataKeys: ["lifecycle_builder_v1.processes[].stages[].stage_operating_plan_v1.attention_rules"],
+            platformNote: "Configured per stage in /business-processes — not org-wide attention metadata.",
+        },
+        stage_age_exceeded: {
+            title: "Stage age exceeded",
+            meaning:
+                "Triggers when the record has remained in the current builder stage longer than the configured threshold days.",
+            configSource: "Stage plan attention rule + status transition / updated_at clock.",
+            configurableSurfaces: ["none"],
+            metadataKeys: ["lifecycle_builder_v1.processes[].stages[].stage_operating_plan_v1.attention_rules"],
+            platformNote: "Configured per stage in /business-processes.",
+        },
+        stage_missing_required_fields: {
+            title: "Stage required fields missing",
+            meaning:
+                "Triggers when stage plan `missing_required_fields` rule is configured and readiness evaluation reports eligible gaps for the record.",
+            configSource: "Stage plan attention rule + readiness evaluation at attach/queue time.",
+            configurableSurfaces: ["none"],
+            metadataKeys: ["lifecycle_builder_v1.processes[].stages[].stage_operating_plan_v1.attention_rules"],
+            platformNote: "Additive with org-wide `missing_required_info` when both fire.",
+        },
+        stage_attempts_incomplete: {
+            title: "Stage attempts incomplete",
+            meaning:
+                "Triggers when contact/work attempt count is below the rule threshold after the completion-policy window elapses.",
+            configSource: "Stage plan attention rule + open operational task attempt metadata.",
+            configurableSurfaces: ["none"],
+            metadataKeys: ["lifecycle_builder_v1.processes[].stages[].stage_operating_plan_v1.attention_rules"],
+            platformNote: "Evaluates `no_contact_attempt` and legacy `tasks_without_success` kinds.",
+        },
     };
 
 function rulesRootRaw(metadata: unknown): Record<string, unknown> | null {

@@ -22,7 +22,11 @@ export type AttentionOperationalReasonCode =
     | "waiting_on_family"
     | "waiting_on_documents"
     | "waiting_on_payment"
-    | "blocked_external";
+    | "blocked_external"
+    | "stage_work_overdue"
+    | "stage_age_exceeded"
+    | "stage_missing_required_fields"
+    | "stage_attempts_incomplete";
 
 /** All canonical attention reason codes (platform-owned). */
 export type OpportunityAttentionReasonCode = AttentionLifecycleReason | AttentionOperationalReasonCode;
@@ -34,8 +38,12 @@ export type OpportunityAttentionReasonCode = AttentionLifecycleReason | Attentio
 export const PLATFORM_PRIMARY_REASON_PRIORITY_ORDER: readonly OpportunityAttentionReasonCode[] = [
     "blocked_internal",
     "waiting_on_staff",
+    "stage_missing_required_fields",
+    "stage_work_overdue",
+    "stage_attempts_incomplete",
     "missing_identity",
     "missing_required_info",
+    "stage_age_exceeded",
     "overdue_commitment",
     "tour_date_passed",
     "follow_up_date_passed",
@@ -58,6 +66,10 @@ export const DEFAULT_SEVERITY_BY_REASON: Readonly<Record<OpportunityAttentionRea
         waiting_on_staff: "high",
         missing_identity: "high",
         missing_required_info: "high",
+        stage_work_overdue: "high",
+        stage_age_exceeded: "medium",
+        stage_missing_required_fields: "high",
+        stage_attempts_incomplete: "high",
         overdue_commitment: "high",
         tour_date_passed: "high",
         follow_up_date_passed: "high",
