@@ -67,9 +67,12 @@ function formatAge(iso: string | null): string {
 export default function ProcessingQueueList({
     selectedCaseId,
     onSelectCase,
+    onGoToSources,
 }: {
     selectedCaseId: string | null;
     onSelectCase: (caseId: string) => void;
+    /** When provided (POS workspace), the empty state switches to the Sources tab instead of linking out. */
+    onGoToSources?: () => void;
 }) {
     const [rows, setRows] = useState<ProcessingCaseQueueRow[]>([]);
     const [counts, setCounts] = useState<Record<string, number>>({});
@@ -131,14 +134,24 @@ export default function ProcessingQueueList({
             <div className="m-3 rounded-lg border border-dashed border-stone-200 bg-stone-50/60 p-5 text-center">
                 <div className="text-sm font-medium text-stone-700">No active processing</div>
                 <p className="mx-auto mt-1 max-w-[18rem] text-xs leading-relaxed text-stone-500">
-                    Enable Processing on a form, submit it through the public link, and new cases will appear here for review.
+                    Cases appear here when a connected source receives a submission. Enable Processing on a form under Sources, then submit it.
                 </p>
-                <a
-                    href="/admin/forms"
-                    className="mt-3 inline-flex items-center gap-1 rounded-md border border-emerald-700 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
-                >
-                    Go to Forms
-                </a>
+                {onGoToSources ? (
+                    <button
+                        type="button"
+                        onClick={onGoToSources}
+                        className="mt-3 inline-flex items-center gap-1 rounded-md border border-emerald-700 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
+                    >
+                        Go to Sources → Forms
+                    </button>
+                ) : (
+                    <a
+                        href="/admin/forms"
+                        className="mt-3 inline-flex items-center gap-1 rounded-md border border-emerald-700 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-50"
+                    >
+                        Go to Forms
+                    </a>
+                )}
             </div>
         );
     }
