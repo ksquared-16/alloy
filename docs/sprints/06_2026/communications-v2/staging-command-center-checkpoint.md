@@ -1,7 +1,17 @@
 # Communications V2 — Staging Command Center Checkpoint
 
-**Updated:** 2026-06-15  
-**Branch context:** `staging` — Command Center live on real Alloy staging (`staging.workwithalloy.com`).
+**Updated:** 2026-06-15 (signoff pass)
+
+## Signoff pass (after 3b9e121)
+
+- **Timeline/preview consistency:** queue selection loads thread-scoped workspace (`thread_id` param) with thread-messages API fallback; family thread loader accepts `persons`/`customers`/`opportunities` entity types.
+- **Assignment UI hidden** unless `comms_v2_assignment` flag is on (Claim hidden by default on staging).
+- **Drawer links:** family, contact, child (`customer_members`), opportunity chips open AdminV2 drawers when ids resolve.
+- **Composer tabs:** Email only when SMS/note not available; Note tab removed from UI.
+- **Consent:** E/S/M replaced with readable labels when known; unset consent hidden.
+- **KPI:** “Response rate” replaced with **Unclassified** count; health chip never shows fake “Unresponsive” on unclassified/sparse threads.
+- **Stage labels:** enrichment and family workspace use shared `resolveOpportunityStatusLabelsBatch` → `resolveOpportunityStatusDisplay` (same path as Opportunity Drawer); no comms-specific stage formatting.
+- **Visual:** white workspace backgrounds; reduced grey paneling in modal shell.
 
 ## What works on staging today
 

@@ -20,6 +20,21 @@ export const consentMark = (s: ConsentState | boolean): string =>
 export const consentTone = (s: ConsentState | boolean): string =>
     s === true || s === "opted_in" ? "text-[#0f6b4a]" : s === false || s === "opted_out" ? "text-red-600" : "text-alloy-midnight/40";
 
+export function consentReadableLabel(channel: "email" | "sms" | "marketing", state: ConsentState | boolean | undefined): string | null {
+    const s = state ?? "unset";
+    if (s === true || s === "opted_in") {
+        if (channel === "email") return "Email allowed";
+        if (channel === "sms") return "SMS allowed";
+        return "Marketing allowed";
+    }
+    if (s === false || s === "opted_out") {
+        if (channel === "email") return "Email blocked";
+        if (channel === "sms") return "SMS blocked";
+        return "Marketing blocked";
+    }
+    return null;
+}
+
 export function statusDisplay(status: string | null | undefined): { label: string; cls: string } | null {
     switch (status) {
         case "failed": return { label: "Failed", cls: "text-red-600" };

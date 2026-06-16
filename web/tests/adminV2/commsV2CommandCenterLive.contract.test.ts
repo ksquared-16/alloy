@@ -58,13 +58,18 @@ describe("command center live wiring", () => {
         expect(shellSrc).toMatch(/label: "Unclassified"/);
         expect(shellSrc).not.toMatch(/Unresponsive/);
     });
-    it("resolves business process stage labels in enrichment", () => {
+    it("resolves business process stage labels via shared drawer batch helper", () => {
         const enrichment = readFileSync(
             join(process.cwd(), "lib", "communications", "v2", "commandCenterConversationEnrichment.ts"),
             "utf8"
         );
-        expect(enrichment).toMatch(/resolveOpportunityStatusDisplay/);
-        expect(enrichment).toMatch(/pipeline_stages/);
+        expect(enrichment).toMatch(/resolveOpportunityStatusLabelsBatch/);
+        expect(enrichment).not.toMatch(/formatStageLabel|status_key\)\.replace\(/);
+        const batch = readFileSync(
+            join(process.cwd(), "lib", "admin", "drawer", "resolveOpportunityStatusLabelsBatch.ts"),
+            "utf8"
+        );
+        expect(batch).toMatch(/resolveOpportunityStatusDisplay/);
     });
     it("prefetches conversations from shell mount and inbox open", () => {
         const shell = readFileSync(join(process.cwd(), "app", "adminV2", "components", "AdminV2Shell.tsx"), "utf8");

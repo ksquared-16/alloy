@@ -17,12 +17,30 @@ export async function loadFamilyThreadsData(
     const opportunityIds = Array.from(new Set(args.opportunityIds.filter(Boolean)));
 
     const [customerThreadsRes, personThreadsRes, opportunityThreadsRes] = await Promise.all([
-        supabase.from("communication_threads").select(THREAD_COLS).eq("org_id", orgId).eq("primary_entity_type", "customer").eq("primary_entity_id", args.customerId).limit(THREAD_CAP),
+        supabase
+            .from("communication_threads")
+            .select(THREAD_COLS)
+            .eq("org_id", orgId)
+            .in("primary_entity_type", ["customer", "customers"])
+            .eq("primary_entity_id", args.customerId)
+            .limit(THREAD_CAP),
         personIds.length
-            ? supabase.from("communication_threads").select(THREAD_COLS).eq("org_id", orgId).in("primary_entity_type", ["person", "child"]).in("primary_entity_id", personIds).limit(THREAD_CAP)
+            ? supabase
+                  .from("communication_threads")
+                  .select(THREAD_COLS)
+                  .eq("org_id", orgId)
+                  .in("primary_entity_type", ["person", "persons", "child"])
+                  .in("primary_entity_id", personIds)
+                  .limit(THREAD_CAP)
             : Promise.resolve({ data: [] as RawThreadRow[] }),
         opportunityIds.length
-            ? supabase.from("communication_threads").select(THREAD_COLS).eq("org_id", orgId).eq("primary_entity_type", "opportunity").in("primary_entity_id", opportunityIds).limit(THREAD_CAP)
+            ? supabase
+                  .from("communication_threads")
+                  .select(THREAD_COLS)
+                  .eq("org_id", orgId)
+                  .in("primary_entity_type", ["opportunity", "opportunities"])
+                  .in("primary_entity_id", opportunityIds)
+                  .limit(THREAD_CAP)
             : Promise.resolve({ data: [] as RawThreadRow[] }),
     ]);
 

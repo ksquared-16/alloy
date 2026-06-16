@@ -583,7 +583,7 @@ export default function CommandCenterShell() {
                             selected={selected}
                             detail={detail}
                             childNames={childNames}
-                            stageLabel={selected.stage_label ?? detail?.stage ?? null}
+                            stageLabel={selected.stage_label ?? liveWorkspaceVm?.family.stage ?? detail?.stage ?? null}
                             healthTone={healthDisplay.tone}
                             healthDot={healthDisplay.dot}
                             healthLabel={healthDisplay.label}

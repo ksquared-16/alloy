@@ -17,6 +17,8 @@ export type ResolveFamilyWorkspaceOptions = {
     selectedThreadId?: string | null;
     focusPersonId?: string | null;
     viewerUserId?: string | null;
+    /** Resolved business-process stage label (from opportunity drawer status path). */
+    familyStageLabel?: string | null;
 };
 
 export type FamilyCommsRaw = { threads: RawThreadRow[]; messages: RawMessageRow[] };
@@ -128,7 +130,7 @@ export function assembleFamilyWorkspace(
             label: (raw.customer?.name ?? "Family").trim() || "Family",
             program: null,
             location: { id: newestOpp?.location_id ?? null, label: null },
-            stage: null,
+            stage: opts.familyStageLabel ?? null,
             ownerUserId: null,
             ownerLabel: null,
             lifecycleStage,

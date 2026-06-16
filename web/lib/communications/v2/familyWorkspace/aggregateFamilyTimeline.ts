@@ -174,7 +174,11 @@ export function aggregateFamilyThreads(
 
     const selectedThread =
         (ctx.selectedThreadId ? threadVms.find((t) => t.id === ctx.selectedThreadId) : null) ?? threadVms[0] ?? null;
-    const selectedMessages = selectedThread ? events.filter((e) => e.threadId === selectedThread.id) : [];
+    const selectedMessages = ctx.selectedThreadId
+        ? events.filter((e) => e.threadId === ctx.selectedThreadId)
+        : selectedThread
+          ? events.filter((e) => e.threadId === selectedThread.id)
+          : [];
 
     // P6 — family-level rollups across all transport threads.
     const familyUnread = threadVms.reduce((sum, t) => sum + (t.unread ?? 0), 0);

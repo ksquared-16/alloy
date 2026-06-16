@@ -1,10 +1,11 @@
 "use client";
 
 import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send, Clock, Check, UserPlus, ChevronDown } from "lucide-react";
-import { relTime, statusDisplay, consentTone, consentMark } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
+import { relTime, statusDisplay, consentReadableLabel } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import { isRecipientEligible, isRecipientSelected, selectionSummary } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type { ConsentState, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
+import type { CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
 
 /**
  * UI-6.1 — canonical Family Communication Workspace MARKUP (conversation | composer two-column body).
@@ -46,9 +47,14 @@ export type FamilyCommunicationWorkspaceViewProps = {
     selected: WorkspaceSelected;
     detail?: WorkspaceDetail;
     childNames: string[];
+    stageLabel?: string | null;
     healthTone: string;
     healthDot: string;
-    healthLabel: string;
+    healthLabel: string | null;
+    recordLinks?: CommandCenterRecordLink[];
+    onOpenRecordLink?: (link: CommandCenterRecordLink) => void;
+    showClaim?: boolean;
+    composerChannels?: { email: boolean; sms: boolean; note: boolean };
     LIVE_WORKSPACE: boolean;
     selectedThreadId: string | null;
     messages: WorkspaceTimelineMessage[];
@@ -74,56 +80,113 @@ export type FamilyCommunicationWorkspaceViewProps = {
 
 export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicationWorkspaceViewProps) {
     const {
-        selected, detail, childNames, healthTone, healthDot, healthLabel, LIVE_WORKSPACE, selectedThreadId, messages,
+        selected, detail, childNames, stageLabel, healthTone, healthDot, healthLabel, recordLinks, onOpenRecordLink,
+        showClaim = false, composerChannels = { email: true, sms: false, note: false },
+        LIVE_WORKSPACE, selectedThreadId, messages,
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
     } = props;
     const allLiveRecipients = liveRecipientGroups ? liveRecipientGroups.flatMap((g) => g.recipients) : [];
+    const consentEmail = consentReadableLabel("email", detail?.consent.email);
+    const consentSms = consentReadableLabel("sms", detail?.consent.sms);
+    const consentMarketing = consentReadableLabel("marketing", detail?.consent.marketing);
+    const consentLabels = [consentEmail, consentSms, consentMarketing].filter(Boolean) as string[];
+    const familyLink = recordLinks?.find((l) => l.type === "customers");
+    const contactLink = recordLinks?.find((l) => l.type === "persons");
+    const opportunityLink = recordLinks?.find((l) => l.type === "opportunities");
+    const childRecordLinks = recordLinks?.filter((l) => l.type === "customer_members") ?? [];
+    const displayStage = stageLabel ?? detail?.stage ?? null;
+
+    const renderLinkChip = (link: CommandCenterRecordLink, className: string) => (
+        <button
+            key={`${link.type}:${link.id}`}
+            type="button"
+            data-cc-record-link={link.type}
+            onClick={() => onOpenRecordLink?.(link)}
+            className={className}
+        >
+            {link.label}
+        </button>
+    );
 
     return (
         <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(380px,1.35fr)]">
             {/* CONVERSATION — compact snapshot band + chat history */}
-            <div className="flex min-h-0 flex-col bg-[#f6f7f5]">
-                <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/20 bg-gradient-to-br from-[#eef7f3] via-white to-[#eef6f4] px-3.5 py-2.5">
+            <div className="flex min-h-0 flex-col bg-white">
+                <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/15 bg-white px-3.5 py-2.5">
                     <div className="flex items-center gap-2.5">
                         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#dff2ea] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/60">
                             <Users className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                                <h3 className="truncate text-[15px] font-semibold leading-tight text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
-                                {childNames.map((n) => (
-                                    <span key={n} className="inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-1.5 py-px text-[10px] font-medium text-[#0f6b4a]">{n}</span>
-                                ))}
+                                {familyLink && onOpenRecordLink ? (
+                                    renderLinkChip(familyLink, "truncate text-[15px] font-semibold leading-tight text-[#0f6b4a] underline decoration-[#7fc9b6]/70 underline-offset-2 hover:text-[#009276]")
+                                ) : (
+                                    <h3 className="truncate text-[15px] font-semibold leading-tight text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
+                                )}
+                                {childRecordLinks.length && onOpenRecordLink
+                                    ? childRecordLinks.map((link) =>
+                                          renderLinkChip(
+                                              link,
+                                              "inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-1.5 py-px text-[10px] font-medium text-[#0f6b4a] hover:bg-[#e7f5ef]"
+                                          )
+                                      )
+                                    : childNames.map((n) => (
+                                          <span key={n} className="inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-1.5 py-px text-[10px] font-medium text-[#0f6b4a]">
+                                              {n}
+                                          </span>
+                                      ))}
                             </div>
                             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-alloy-midnight/60">
-                                <span data-cc-ws-section="health" className={`inline-flex items-center gap-1 font-semibold ${healthTone}`}>
-                                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${healthDot}`} />{healthLabel}
-                                </span>
-                                <span className="text-alloy-midnight/25">•</span>
-                                <span><span className="text-alloy-midnight/40">Assigned</span> {detail ? detail.owner : (selected.assignment_state ?? "—")}</span>
-                                <span className="text-alloy-midnight/25">•</span>
-                                <span data-cc-ws-section="consent" className="inline-flex items-center gap-1.5">
-                                    <span className={`font-bold ${consentTone(detail ? detail.consent.email : "unset")}`}>E{consentMark(detail ? detail.consent.email : "unset")}</span>
-                                    <span className={`font-bold ${consentTone(detail ? detail.consent.sms : "unset")}`}>S{consentMark(detail ? detail.consent.sms : "unset")}</span>
-                                    <span className={`font-bold ${consentTone(detail ? detail.consent.marketing : "unset")}`}>M{consentMark(detail ? detail.consent.marketing : "unset")}</span>
-                                </span>
-                                {detail ? <><span className="text-alloy-midnight/25">•</span><span className="truncate text-alloy-midnight/50">{detail.program} · {detail.stage}</span></> : null}
+                                {healthLabel ? (
+                                    <span data-cc-ws-section="health" className={`inline-flex items-center gap-1 font-semibold ${healthTone}`}>
+                                        <span className={`inline-block h-1.5 w-1.5 rounded-full ${healthDot}`} />{healthLabel}
+                                    </span>
+                                ) : null}
+                                {contactLink && onOpenRecordLink ? (
+                                    <>
+                                        {healthLabel ? <span className="text-alloy-midnight/25">•</span> : null}
+                                        {renderLinkChip(contactLink, "font-medium text-[#0f6b4a] underline decoration-[#7fc9b6]/60 underline-offset-2 hover:text-[#009276]")}
+                                    </>
+                                ) : null}
+                                {consentLabels.length > 0 ? (
+                                    <>
+                                        <span className="text-alloy-midnight/25">•</span>
+                                        <span data-cc-ws-section="consent" className="inline-flex flex-wrap items-center gap-1.5 text-[10px] text-alloy-midnight/55">
+                                            {consentLabels.map((label) => (
+                                                <span key={label} className="rounded-full border border-alloy-stone/15 bg-alloy-stone/[0.04] px-1.5 py-px">{label}</span>
+                                            ))}
+                                        </span>
+                                    </>
+                                ) : null}
+                                {displayStage ? (
+                                    <>
+                                        <span className="text-alloy-midnight/25">•</span>
+                                        {opportunityLink && onOpenRecordLink ? (
+                                            renderLinkChip(opportunityLink, "truncate font-medium text-alloy-midnight/60 underline decoration-alloy-stone/30 underline-offset-2 hover:text-[#0f6b4a]")
+                                        ) : (
+                                            <span className="truncate text-alloy-midnight/60">{displayStage}</span>
+                                        )}
+                                    </>
+                                ) : null}
                             </div>
                         </div>
-                        <button
-                            type="button"
-                            data-cc-claim
-                            disabled={assignBusy || selected.assignment_state === "assigned"}
-                            onClick={() => onClaim(selected.id)}
-                            className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm transition ${
-                                selected.assignment_state === "assigned"
-                                    ? "border border-[#7fc9b6] bg-[#eafaf3] text-[#0f6b4a]"
-                                    : "bg-[#00A283] text-white hover:bg-[#009276]"
-                            }`}
-                        >
-                            {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
-                        </button>
+                        {showClaim ? (
+                            <button
+                                type="button"
+                                data-cc-claim
+                                disabled={assignBusy || selected.assignment_state === "assigned"}
+                                onClick={() => onClaim(selected.id)}
+                                className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm transition ${
+                                    selected.assignment_state === "assigned"
+                                        ? "border border-[#7fc9b6] bg-[#eafaf3] text-[#0f6b4a]"
+                                        : "bg-[#00A283] text-white hover:bg-[#009276]"
+                                }`}
+                            >
+                                {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
+                            </button>
+                        ) : null}
                     </div>
                 </div>
 
@@ -188,11 +251,14 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
             </div>
 
             {/* COMPOSER — top-anchored, full height, body dominant */}
-            <div data-cc-ws-section="composer" className="flex min-h-0 flex-col border-l border-alloy-stone/15 bg-gradient-to-b from-[#fbfcfb] to-[#f3f5f2] px-4 py-3">
-                <div className="inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
-                    <span className="bg-[#00A283] px-2.5 py-1 font-semibold text-white">Email</span>
-                    <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">SMS</span>
-                    <span className="border-l border-alloy-stone/15 px-2.5 py-1 text-alloy-midnight/55">Note</span>
+            <div data-cc-ws-section="composer" className="flex min-h-0 flex-col border-l border-alloy-stone/15 bg-white px-4 py-3">
+                <div data-cc-composer-channels className="inline-flex w-fit overflow-hidden rounded-lg border border-alloy-stone/20 bg-white text-[11px] shadow-sm">
+                    {composerChannels.email ? (
+                        <span className="bg-[#00A283] px-2.5 py-1 font-semibold text-white">Email</span>
+                    ) : null}
+                    {composerChannels.sms ? (
+                        <span className={`border-l border-alloy-stone/15 px-2.5 py-1 ${liveChannel === "sms" ? "bg-[#00A283] font-semibold text-white" : "text-alloy-midnight/55"}`}>SMS</span>
+                    ) : null}
                 </div>
 
                 {LIVE_WORKSPACE && liveRecipientGroups ? (
@@ -229,7 +295,6 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                         <span className="text-[10px] font-medium text-alloy-midnight/40">To</span>
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#eafaf3] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50">
                             {detail ? detail.contactName : (selected.family_label ?? "")}
-                            {detail ? <span className={`font-bold ${consentTone(detail.consent.email)}`}>{consentMark(detail.consent.email)}</span> : null}
                         </span>
                         <button type="button" className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/50 hover:border-[#7fc9b6] hover:text-[#0f6b4a]">
                             <UserPlus className="h-3 w-3" />Add recipient

@@ -4,6 +4,11 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { personDisplayNameFromRow } from "@/lib/communications/inboxThreadPersonContext";
+import {
+    resolveCustomerStageLabelFromOpportunities,
+    resolveOpportunityStatusLabelsBatch,
+    type OpportunityStatusSourceRow,
+} from "@/lib/admin/drawer/resolveOpportunityStatusLabelsBatch";
 import type { ConversationSummary } from "@/lib/communications/v2/commandCenterViewModel";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
@@ -30,12 +35,20 @@ type LastMessagePreview = {
     created_at: string | null;
 };
 
-function formatStageLabel(statusKey: string | null | undefined): string | null {
-    const raw = (statusKey ?? "").trim();
-    if (!raw) return null;
-    return raw
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (c) => c.toUpperCase());
+function normalizeEntityType(type: string | null | undefined): string {
+    return (type ?? "").trim().toLowerCase();
+}
+
+function isOpportunityEntity(type: string): boolean {
+    return type === "opportunities" || type === "opportunity";
+}
+
+function isCustomerEntity(type: string): boolean {
+    return type === "customers" || type === "customer";
+}
+
+function isPersonEntity(type: string): boolean {
+    return type === "persons" || type === "person";
 }
 
 function truncatePreview(body: string | null | undefined): string | null {
@@ -85,22 +98,24 @@ export async function enrichCommandCenterConversations(
     const personIds = new Set<string>();
 
     for (const row of rows) {
-        const type = (row.primary_entity_type ?? "").trim().toLowerCase();
+        const type = normalizeEntityType(row.primary_entity_type);
         const id = (row.primary_entity_id ?? "").trim();
         if (!UUID_RE.test(id)) continue;
-        if (type === "opportunities") oppIds.add(id);
-        else if (type === "customers") customerIds.add(id);
-        else if (type === "persons") personIds.add(id);
+        if (isOpportunityEntity(type)) oppIds.add(id);
+        else if (isCustomerEntity(type)) customerIds.add(id);
+        else if (isPersonEntity(type)) personIds.add(id);
     }
 
     const oppCustomerByOppId = new Map<string, string>();
     const customerNameById = new Map<string, string>();
     const oppNameById = new Map<string, string>();
-    const oppStageByOppId = new Map<string, string>();
+    const oppIdByCustomerId = new Map<string, string>();
+    const opportunityRows: OpportunityStatusSourceRow[] = [];
     const personNameById = new Map<string, string>();
     const personCustomerByPersonId = new Map<string, string>();
     const primaryContactByCustomerId = new Map<string, string>();
-    const childNamesByCustomerId = new Map<string, string[]>();
+    const primaryContactPersonByCustomerId = new Map<string, string>();
+    const childLinksByCustomerId = new Map<string, Array<{ id: string; name: string }>>();
 
     const queries: Array<PromiseLike<void>> = [];
 
@@ -110,7 +125,7 @@ export async function enrichCommandCenterConversations(
         queries.push(
             supabase
                 .from("opportunities")
-                .select("id, name, customer_id, status_key")
+                .select("id, name, customer_id, status_key, status, pipeline_stage_id")
                 .eq("org_id", orgId)
                 .in("id", [...oppIds])
                 .then(({ data }) => {
@@ -118,13 +133,13 @@ export async function enrichCommandCenterConversations(
                         const id = String((row as { id: string }).id);
                         const name = ((row as { name?: string | null }).name ?? "").trim();
                         if (name) oppNameById.set(id, name);
-                        const stage = formatStageLabel((row as { status_key?: string | null }).status_key);
-                        if (stage) oppStageByOppId.set(id, stage);
+                        opportunityRows.push(row as OpportunityStatusSourceRow);
                         const cid = (row as { customer_id?: string | null }).customer_id;
                         if (cid && UUID_RE.test(String(cid))) {
                             const cidStr = String(cid);
                             oppCustomerByOppId.set(id, cidStr);
                             customerIds.add(cidStr);
+                            oppIdByCustomerId.set(cidStr, id);
                         }
                     }
                 })
@@ -167,6 +182,30 @@ export async function enrichCommandCenterConversations(
 
     const [previews] = await Promise.all([previewsPromise, ...queries]);
 
+    if (customerIds.size > 0) {
+        const missingCustomerOppIds = [...customerIds].filter((cid) => !oppIdByCustomerId.has(cid));
+        if (missingCustomerOppIds.length > 0) {
+            const { data: customerOpps } = await supabase
+                .from("opportunities")
+                .select("id, customer_id, status_key, status, pipeline_stage_id")
+                .eq("org_id", orgId)
+                .in("customer_id", missingCustomerOppIds)
+                .order("updated_at", { ascending: false })
+                .limit(Math.min(missingCustomerOppIds.length * 2, 100));
+            for (const row of customerOpps ?? []) {
+                const id = String((row as { id: string }).id);
+                const cid = String((row as { customer_id: string }).customer_id);
+                oppCustomerByOppId.set(id, cid);
+                if (!oppIdByCustomerId.has(cid)) oppIdByCustomerId.set(cid, id);
+                if (!opportunityRows.some((r) => r.id === id)) {
+                    opportunityRows.push(row as OpportunityStatusSourceRow);
+                }
+            }
+        }
+    }
+
+    const statusByOpportunity = await resolveOpportunityStatusLabelsBatch(supabase, orgId, opportunityRows);
+
     let customerRows: Array<{ id: string; name?: string | null; primary_contact_id?: string | null }> = [];
 
     if (customerIds.size > 0) {
@@ -175,7 +214,7 @@ export async function enrichCommandCenterConversations(
             supabase.from("customers").select("id, name, primary_contact_id").eq("org_id", orgId).in("id", ids),
             supabase
                 .from("customer_members")
-                .select("customer_id, display_name, first_name, last_name, relationship")
+                .select("id, customer_id, display_name, first_name, last_name, relationship")
                 .eq("org_id", orgId)
                 .in("customer_id", ids)
                 .eq("relationship", "child")
@@ -189,20 +228,26 @@ export async function enrichCommandCenterConversations(
             const name = ((row as { name?: string | null }).name ?? "").trim();
             customerNameById.set(id, name || "Family");
             const pc = (row as { primary_contact_id?: string | null }).primary_contact_id;
-            if (pc && UUID_RE.test(String(pc))) personIds.add(String(pc));
+            if (pc && UUID_RE.test(String(pc))) {
+                personIds.add(String(pc));
+                primaryContactPersonByCustomerId.set(id, String(pc));
+            }
         }
 
         for (const row of members ?? []) {
             const cid = String((row as { customer_id: string }).customer_id);
+            const memberId = String((row as { id?: string }).id ?? "").trim();
             const display =
                 ((row as { display_name?: string | null }).display_name ?? "").trim() ||
                 [((row as { first_name?: string | null }).first_name ?? "").trim(), ((row as { last_name?: string | null }).last_name ?? "").trim()]
                     .filter(Boolean)
                     .join(" ");
             if (!display) continue;
-            const list = childNamesByCustomerId.get(cid) ?? [];
-            if (!list.includes(display)) list.push(display);
-            childNamesByCustomerId.set(cid, list);
+            const list = childLinksByCustomerId.get(cid) ?? [];
+            if (memberId && UUID_RE.test(memberId)) {
+                if (!list.some((c) => c.id === memberId)) list.push({ id: memberId, name: display });
+            }
+            childLinksByCustomerId.set(cid, list);
         }
     }
 
@@ -236,7 +281,7 @@ export async function enrichCommandCenterConversations(
     return rows.map((r) => {
         const meta = r.metadata ?? {};
         const metaLabel = typeof meta.family_label === "string" ? meta.family_label.trim() : "";
-        const type = (r.primary_entity_type ?? "").trim().toLowerCase();
+        const type = normalizeEntityType(r.primary_entity_type);
         const entityId = (r.primary_entity_id ?? "").trim();
         const recipientKey = (r.recipient_key ?? "").trim() || null;
 
@@ -244,35 +289,67 @@ export async function enrichCommandCenterConversations(
         let familyLabel: string | null = metaLabel || null;
         let stageLabel: string | null = null;
         let primaryContactName: string | null = null;
+        let opportunityId: string | null = null;
+        let primaryContactPersonId: string | null = null;
 
-        if (type === "customers" && UUID_RE.test(entityId)) {
+        if (isCustomerEntity(type) && UUID_RE.test(entityId)) {
             customerId = entityId;
             familyLabel = familyLabel ?? customerNameById.get(entityId) ?? null;
             primaryContactName = primaryContactByCustomerId.get(entityId) ?? null;
-        } else if (type === "opportunities" && UUID_RE.test(entityId)) {
+            primaryContactPersonId = primaryContactPersonByCustomerId.get(entityId) ?? null;
+            opportunityId = oppIdByCustomerId.get(entityId) ?? null;
+            stageLabel = resolveCustomerStageLabelFromOpportunities(
+                entityId,
+                opportunityRows,
+                statusByOpportunity,
+                opportunityId
+            );
+        } else if (isOpportunityEntity(type) && UUID_RE.test(entityId)) {
             customerId = oppCustomerByOppId.get(entityId) ?? null;
+            opportunityId = entityId;
             familyLabel =
                 familyLabel ??
                 (customerId ? customerNameById.get(customerId) : null) ??
                 oppNameById.get(entityId) ??
                 null;
-            stageLabel = oppStageByOppId.get(entityId) ?? null;
-            if (customerId) primaryContactName = primaryContactByCustomerId.get(customerId) ?? null;
-        } else if (type === "persons" && UUID_RE.test(entityId)) {
+            stageLabel = statusByOpportunity.get(entityId) ?? null;
+            if (customerId) {
+                primaryContactName = primaryContactByCustomerId.get(customerId) ?? null;
+                primaryContactPersonId = primaryContactPersonByCustomerId.get(customerId) ?? null;
+            }
+        } else if (isPersonEntity(type) && UUID_RE.test(entityId)) {
             customerId = personCustomerByPersonId.get(entityId) ?? null;
             primaryContactName = personNameById.get(entityId) ?? null;
+            primaryContactPersonId = entityId;
             familyLabel =
                 familyLabel ??
                 (customerId ? customerNameById.get(customerId) : null) ??
                 primaryContactName ??
                 null;
-            if (customerId && !primaryContactName) {
-                primaryContactName = primaryContactByCustomerId.get(customerId) ?? null;
+            if (customerId) {
+                if (!primaryContactName) primaryContactName = primaryContactByCustomerId.get(customerId) ?? null;
+                if (!primaryContactPersonId) primaryContactPersonId = primaryContactPersonByCustomerId.get(customerId) ?? null;
+                opportunityId = oppIdByCustomerId.get(customerId) ?? null;
+                stageLabel = resolveCustomerStageLabelFromOpportunities(
+                    customerId,
+                    opportunityRows,
+                    statusByOpportunity,
+                    opportunityId
+                );
             }
+        } else if (customerId) {
+            opportunityId = oppIdByCustomerId.get(customerId) ?? null;
+            stageLabel = resolveCustomerStageLabelFromOpportunities(
+                customerId,
+                opportunityRows,
+                statusByOpportunity,
+                opportunityId
+            );
         }
 
         const preview = previews.get(r.id);
-        const childNames = customerId ? childNamesByCustomerId.get(customerId) ?? null : null;
+        const childLinks = customerId ? childLinksByCustomerId.get(customerId) ?? null : null;
+        const childNames = childLinks?.map((c) => c.name) ?? null;
         const lastActivityAt = preview?.created_at ?? r.last_message_at;
 
         return {
@@ -291,8 +368,13 @@ export async function enrichCommandCenterConversations(
             last_message_preview: truncatePreview(preview?.body),
             last_message_direction: preview?.direction ?? null,
             primary_contact_name: primaryContactName,
+            primary_contact_person_id: primaryContactPersonId,
             child_names: childNames?.length ? childNames : null,
+            child_links: childLinks?.length ? childLinks : null,
             stage_label: stageLabel,
+            opportunity_id: opportunityId,
+            primary_entity_type: r.primary_entity_type,
+            primary_entity_id: r.primary_entity_id,
             customer_id: customerId,
         };
     });

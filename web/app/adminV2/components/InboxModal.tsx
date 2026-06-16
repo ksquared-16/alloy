@@ -29,7 +29,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
             panelClassName="max-h-[min(88vh,42rem)]"
         >
             <div
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-[#f7f6f3]"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-white"
                 data-adminv2-inbox-modal="true"
             >
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/15 bg-white px-3 py-2.5">
