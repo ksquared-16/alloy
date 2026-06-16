@@ -6,8 +6,8 @@ import {
 } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 
-vi.mock("@/lib/opportunities/updateOpportunityStatusWithEvent", () => ({
-    updateOpportunityStatusWithEvent: vi.fn().mockResolvedValue({ error: null }),
+vi.mock("@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent", () => ({
+    emitDomainLifecycleStatusChangedEvent: vi.fn().mockResolvedValue({ error: null }),
 }));
 
 vi.mock("@/lib/admin/statusTransitionRules", () => ({
@@ -18,7 +18,7 @@ vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
     assertAllowedStatusKey: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
-import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
+import { emitDomainLifecycleStatusChangedEvent } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 
 function baseBooking(over: Partial<TourBookingRow>): TourBookingRow {
@@ -96,7 +96,7 @@ describe("deriveTourMetadataMirrorFromBooking", () => {
 
 describe("applyTourBookingOpportunityIntegration", () => {
     beforeEach(() => {
-        vi.mocked(updateOpportunityStatusWithEvent).mockClear();
+        vi.mocked(emitDomainLifecycleStatusChangedEvent).mockClear();
         vi.mocked(validateStatusTransition).mockClear();
     });
 
@@ -177,9 +177,9 @@ describe("applyTourBookingOpportunityIntegration", () => {
             work_unit_id: null,
         });
         await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "confirmed_mirror" });
-        expect(updateOpportunityStatusWithEvent).toHaveBeenCalledTimes(1);
-        const arg = vi.mocked(updateOpportunityStatusWithEvent).mock.calls[0]![0];
-        expect(arg.newStatusKey).toBe(TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled);
+        expect(emitDomainLifecycleStatusChangedEvent).toHaveBeenCalledTimes(1);
+        const arg = vi.mocked(emitDomainLifecycleStatusChangedEvent).mock.calls[0]![0];
+        expect(arg.nextStatusKey).toBe(TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled);
         const md = (arg.additionalPatch?.metadata ?? {}) as Record<string, unknown>;
         expect(md.notes).toBe("x");
         expect(md.tour_date).toBe("2026-05-11");
@@ -189,6 +189,7 @@ describe("applyTourBookingOpportunityIntegration", () => {
             booking_id: "b-1",
             status_key: "confirmed",
         });
+        expect(arg.domain).toBe("tour_booking");
     });
 
     it("reschedule_mirror uses same path as confirmed for firm booking", async () => {
@@ -201,7 +202,7 @@ describe("applyTourBookingOpportunityIntegration", () => {
             work_unit_id: null,
         });
         await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "reschedule_mirror" });
-        const md = (vi.mocked(updateOpportunityStatusWithEvent).mock.calls[0]![0].additionalPatch?.metadata ?? {}) as Record<string, unknown>;
+        const md = (vi.mocked(emitDomainLifecycleStatusChangedEvent).mock.calls[0]![0].additionalPatch?.metadata ?? {}) as Record<string, unknown>;
         expect(md.tour_date).toBe("2026-05-12");
         expect(md.tour_time).toBe("10:00");
     });
@@ -216,8 +217,8 @@ describe("applyTourBookingOpportunityIntegration", () => {
             work_unit_id: null,
         });
         await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "completed" });
-        expect(updateOpportunityStatusWithEvent).toHaveBeenCalledWith(
-            expect.objectContaining({ newStatusKey: TOUR_BOOKING_OPPORTUNITY_STATUS.completed })
+        expect(emitDomainLifecycleStatusChangedEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ nextStatusKey: TOUR_BOOKING_OPPORTUNITY_STATUS.completed })
         );
     });
 
@@ -231,22 +232,48 @@ describe("applyTourBookingOpportunityIntegration", () => {
             work_unit_id: null,
         });
         await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "no_show" });
-        expect(updateOpportunityStatusWithEvent).toHaveBeenCalledWith(
-            expect.objectContaining({ newStatusKey: TOUR_BOOKING_OPPORTUNITY_STATUS.noShow })
+        expect(emitDomainLifecycleStatusChangedEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ nextStatusKey: TOUR_BOOKING_OPPORTUNITY_STATUS.noShow })
         );
     });
 
-    it("canceled is a no-op for opportunity writes", async () => {
+    it("canceled sets needs-attention metadata without status change", async () => {
         const booking = baseBooking({ status_key: "canceled" });
-        const supabase = makeSupabase({
-            id: "opp-1",
-            org_id: "org-1",
-            status_key: "tour_scheduled",
-            metadata: {},
-            work_unit_id: null,
+        const selectChain = {
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn(async () => ({
+                data: {
+                    id: "opp-1",
+                    org_id: "org-1",
+                    status_key: "tour_scheduled",
+                    metadata: {},
+                    work_unit_id: null,
+                },
+                error: null,
+            })),
+        };
+        const updateChain = {
+            eq: vi.fn().mockReturnThis(),
+        };
+        updateChain.eq.mockImplementation(function (this: typeof updateChain, col: string) {
+            if (col === "org_id") {
+                return Promise.resolve({ error: null });
+            }
+            return updateChain;
         });
+        const supabase = {
+            from: vi.fn((table: string) => {
+                if (table === "opportunities") {
+                    return {
+                        select: vi.fn(() => selectChain),
+                        update: vi.fn(() => updateChain),
+                    };
+                }
+                throw new Error(`unexpected table ${table}`);
+            }),
+        } as never;
         await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "canceled" });
-        expect(updateOpportunityStatusWithEvent).not.toHaveBeenCalled();
+        expect(emitDomainLifecycleStatusChangedEvent).not.toHaveBeenCalled();
     });
 
     it("confirmed_mirror skips when booking is not firm", async () => {
@@ -259,7 +286,7 @@ describe("applyTourBookingOpportunityIntegration", () => {
             work_unit_id: null,
         });
         await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "confirmed_mirror" });
-        expect(updateOpportunityStatusWithEvent).not.toHaveBeenCalled();
+        expect(emitDomainLifecycleStatusChangedEvent).not.toHaveBeenCalled();
     });
 
     it("throws when validateStatusTransition blocks", async () => {
@@ -275,6 +302,6 @@ describe("applyTourBookingOpportunityIntegration", () => {
         await expect(applyTourBookingOpportunityIntegration(supabase, { booking, kind: "confirmed_mirror" })).rejects.toThrow(
             "opportunity transition blocked"
         );
-        expect(updateOpportunityStatusWithEvent).not.toHaveBeenCalled();
+        expect(emitDomainLifecycleStatusChangedEvent).not.toHaveBeenCalled();
     });
 });

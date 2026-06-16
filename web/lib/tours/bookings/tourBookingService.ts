@@ -341,6 +341,12 @@ export async function cancelTourBooking(
             actorUserId: input.canceledBy,
         })
     );
+    await applyTourBookingOpportunityIntegration(supabase, {
+        booking: row,
+        kind: "canceled",
+        actorUserId: input.canceledBy,
+        correlationId: input.correlationId ?? null,
+    });
     return row;
 }
 
@@ -348,7 +354,7 @@ export async function markTourBookingCompleted(
     supabase: SupabaseClient,
     orgId: string,
     bookingId: string,
-    opts?: { correlationId?: string | null }
+    opts?: { correlationId?: string | null; actorUserId?: string | null }
 ): Promise<TourBookingRow> {
     const existing = await fetchBooking(supabase, orgId, bookingId);
     if (!existing) throw new Error("tour_bookings: not found");
@@ -369,6 +375,7 @@ export async function markTourBookingCompleted(
         booking: row,
         kind: "completed",
         correlationId: opts?.correlationId ?? null,
+        actorUserId: opts?.actorUserId ?? null,
     });
     await emitTourBookingLifecycleEvent(
         supabase,
@@ -390,7 +397,7 @@ export async function markTourBookingNoShow(
     supabase: SupabaseClient,
     orgId: string,
     bookingId: string,
-    opts?: { correlationId?: string | null }
+    opts?: { correlationId?: string | null; actorUserId?: string | null }
 ): Promise<TourBookingRow> {
     const existing = await fetchBooking(supabase, orgId, bookingId);
     if (!existing) throw new Error("tour_bookings: not found");
@@ -411,6 +418,7 @@ export async function markTourBookingNoShow(
         booking: row,
         kind: "no_show",
         correlationId: opts?.correlationId ?? null,
+        actorUserId: opts?.actorUserId ?? null,
     });
     await emitTourBookingLifecycleEvent(
         supabase,

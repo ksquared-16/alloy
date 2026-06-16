@@ -250,31 +250,8 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
     tour: {
         version: 1,
         journey_segment: "family",
-        purpose: "Schedule, confirm, and follow up on tours.",
-        work_templates: [
-            {
-                template_key: "confirm_tour_date",
-                label: "Confirm tour date",
-                required: true,
-                due_policy: { kind: "same_day" },
-                owner_strategy: "record_owner",
-            },
-            {
-                template_key: "send_tour_reminder",
-                label: "Send tour reminder",
-                required: false,
-                due_policy: { kind: "offset_days", days: 1 },
-                owner_strategy: "record_owner",
-            },
-            {
-                template_key: "record_tour_outcome_work",
-                label: "Record tour outcome",
-                required: true,
-                due_policy: { kind: "offset_days", days: 1 },
-                owner_strategy: "record_owner",
-                work_definition_key: "record_tour_outcome",
-            },
-        ],
+        purpose: "Legacy coarse tour stage — prefer tour_scheduled / tour_completed / decision_pending.",
+        work_templates: [],
         outcomes: [
             { outcome_key: "tour_completed", label: "Tour completed", successful: true },
             { outcome_key: "no_show", label: "No show" },
@@ -627,23 +604,8 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
     tour_scheduled: {
         version: 1,
         journey_segment: "family",
-        purpose: "Confirm the tour is on the calendar.",
-        work_templates: [
-            {
-                template_key: "confirm_tour_date",
-                label: "Confirm tour date",
-                required: true,
-                due_policy: { kind: "same_day" },
-                owner_strategy: "record_owner",
-            },
-            {
-                template_key: "send_tour_reminder",
-                label: "Send tour reminder",
-                required: false,
-                due_policy: { kind: "offset_days", days: 1 },
-                owner_strategy: "record_owner",
-            },
-        ],
+        purpose: "Tour is on the calendar. Confirmation and reminders are handled by tour comms.",
+        work_templates: [],
         outcomes: [
             { outcome_key: "tour_confirmed", label: "Tour confirmed", successful: true },
             { outcome_key: "reschedule", label: "Reschedule tour" },
@@ -651,26 +613,33 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
         ],
         outcome_rules: [
             {
-                rule_key: "confirmed_to_completed_stage",
+                rule_key: "confirmed_noop",
                 when_outcome_key: "tour_confirmed",
-                targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "tour_scheduled" },
-                    { kind: "move_to_stage", stage_key: "tour_completed" },
-                    { kind: "mark_stage_work_complete" },
-                ],
+                targets: [{ kind: "mark_stage_work_complete" }],
+            },
+            {
+                rule_key: "reschedule_noop",
+                when_outcome_key: "reschedule",
+                targets: [{ kind: "no_movement" }],
+            },
+            {
+                rule_key: "cancelled_attention",
+                when_outcome_key: "cancelled",
+                targets: attention("Tour canceled — follow up required"),
             },
         ],
         attention_rules: [],
     },
     tour_completed: {
         version: 1,
-        journey_segment: "child",
+        journey_segment: "family",
         purpose: "Record tour outcome and decide next steps.",
         work_templates: [
             {
                 template_key: "record_tour_outcome_work",
                 label: "Record tour outcome",
                 required: true,
+                primary: true,
                 due_policy: { kind: "offset_days", days: 1 },
                 owner_strategy: "record_owner",
                 work_definition_key: "record_tour_outcome",
@@ -686,7 +655,7 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 rule_key: "completed_to_decision",
                 when_outcome_key: "tour_completed",
                 targets: [
-                    { kind: "update_child_enrollment_status", disposition_key: "tour_completed" },
+                    { kind: "update_family_case_status", status_key: "decision_pending" },
                     { kind: "move_to_stage", stage_key: "decision_pending" },
                     { kind: "mark_stage_work_complete" },
                 ],
@@ -696,18 +665,27 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 when_outcome_key: "no_show",
                 targets: attention("Tour no-show — follow up required"),
             },
+            {
+                rule_key: "not_interested_closed",
+                when_outcome_key: "not_interested",
+                targets: [
+                    { kind: "update_family_case_status", status_key: "not_a_fit" },
+                    { kind: "mark_stage_work_complete" },
+                ],
+            },
         ],
         attention_rules: [],
     },
     decision_pending: {
         version: 1,
-        journey_segment: "child",
+        journey_segment: "family",
         purpose: "Family is deciding enrollment path for each child.",
         work_templates: [
             {
                 template_key: "follow_up_decision",
                 label: "Follow up on enrollment decision",
                 required: true,
+                primary: true,
                 due_policy: { kind: "offset_days", days: 2 },
                 owner_strategy: "record_owner",
             },

@@ -5,6 +5,7 @@
 
 import type { StageOperatingPlanV1, StageWorkDuePolicy, StageWorkTemplateV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { resolveEffectivePrimaryWorkTemplate } from "@/lib/lifecycle/stageOperatingPlanConvergence";
+import { resolveWorkDefinitionKeyFromTemplate } from "@/lib/lifecycle/resolveWorkDefinitionKeyFromTemplate";
 
 export type PrimaryWorkIntentV1 = {
     work_intent_key: string;
@@ -29,6 +30,18 @@ const PRIMARY_WORK_INTENT_BY_STAGE: Record<string, Omit<PrimaryWorkIntentV1, "pr
         work_definition_key: "collect_missing_information",
         due_policy: { kind: "offset_days", days: 1 },
     },
+    tour_completed: {
+        work_intent_key: "record_tour_outcome_work",
+        label: "Record tour outcome",
+        work_definition_key: "record_tour_outcome",
+        due_policy: { kind: "offset_days", days: 1 },
+    },
+    decision_pending: {
+        work_intent_key: "follow_up_decision",
+        label: "Follow up on enrollment decision",
+        work_definition_key: "contact_family",
+        due_policy: { kind: "offset_days", days: 2 },
+    },
     tour: {
         work_intent_key: "complete_tour_process",
         label: "Complete Tour Process",
@@ -43,13 +56,16 @@ const PRIMARY_WORK_INTENT_BY_STAGE: Record<string, Omit<PrimaryWorkIntentV1, "pr
     },
 };
 
-const NO_SPAWN_STAGES = new Set(["enrolled", "waitlist", "decision", "closed", "closed_withdrawn"]);
+const NO_SPAWN_STAGES = new Set(["enrolled", "waitlist", "decision", "closed", "closed_withdrawn", "tour_scheduled"]);
 
 function primaryIntentFromWorkTemplate(template: StageWorkTemplateV1): PrimaryWorkIntentV1 {
+    const resolved = resolveWorkDefinitionKeyFromTemplate(template);
+    const workDefinitionKey =
+        resolved.ok ? resolved.work_definition_key : template.work_definition_key?.trim() || template.template_key;
     return {
         work_intent_key: template.template_key,
         label: template.label,
-        work_definition_key: template.work_definition_key?.trim() || template.template_key,
+        work_definition_key: workDefinitionKey,
         due_policy: template.due_policy,
         template_key: template.template_key,
         provenance: "operating_plan",

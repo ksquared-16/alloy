@@ -17,7 +17,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
 
     const supabase = createAdminClient();
     try {
-        const row = await markTourBookingCompleted(supabase, ctx.orgId, id);
+        const row = await markTourBookingCompleted(supabase, ctx.orgId, id, { actorUserId: ctx.userId });
         return NextResponse.json({ booking: row });
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

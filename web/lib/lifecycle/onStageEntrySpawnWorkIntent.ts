@@ -9,6 +9,7 @@ import {
 } from "@/lib/lifecycle/lifecycleBuilderConfig";
 import { detectBuilderStageTransition } from "@/lib/lifecycle/detectBuilderStageTransition";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
 import { instantiateStageWorkFromTemplate } from "@/lib/lifecycle/instantiateStageWorkFromTemplate";
 import { resolveEffectiveStageOperatingPlan } from "@/lib/lifecycle/resolveEffectiveStageOperatingPlan";
 import { resolvePrimaryWorkIntentForStage } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
@@ -62,13 +63,10 @@ export async function onStageEntrySpawnWorkIntent(
 ): Promise<OnStageEntrySpawnWorkIntentResult> {
     const opportunityId = input.opportunityId.trim();
     const orgId = input.orgId.trim();
-    const userId = trimOrNull(input.userId ?? null);
+    const userId = trimOrNull(input.userId ?? null) ?? DOMAIN_LIFECYCLE_SYSTEM_ACTOR_USER_ID;
 
     if (!orgId || !opportunityId) {
         return { action: "skipped", reason: "missing_scope" };
-    }
-    if (!userId) {
-        return { action: "skipped", reason: "no_actor" };
     }
 
     const departmentId = await resolveEnrollmentDepartmentForOpportunity({

@@ -25,9 +25,24 @@ const LEGACY_CANONICAL_KEY_TO_STAGE: Map<string, string> = (() => {
     return m;
 })();
 
+/** Granular tour / decision builder stages (V2 stage model). */
+const LEGACY_GRANULAR_STATUS_TO_STAGE: Record<string, string> = {
+    tour_requested: "tour_scheduled",
+    tour_scheduled: "tour_scheduled",
+    tour_completed: "tour_completed",
+    tour_no_show: "tour_completed",
+    follow_up_attempted: "tour_completed",
+    decision_pending: "decision_pending",
+};
+
 /** Legacy status_key → builder stage when metadata has no process_stage_key. */
 export function legacyCanonicalProcessStageForStatusKey(statusKey: string): string | null {
     return LEGACY_CANONICAL_KEY_TO_STAGE.get(statusKey.trim()) ?? null;
+}
+
+/** Granular status_key → builder stage when coarse legacy bucket is not configured. */
+export function legacyGranularProcessStageForStatusKey(statusKey: string): string | null {
+    return LEGACY_GRANULAR_STATUS_TO_STAGE[statusKey.trim()] ?? null;
 }
 
 /** Legacy OCM disposition keys when builder membership has no explicit rollups. */

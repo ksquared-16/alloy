@@ -4,8 +4,12 @@ import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY } from "@/lib/admin/actions/lifecycleActionMetadataKeys";
-import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import { isValidIanaTimeZone, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
+import { emitDomainLifecycleStatusChangedEvent } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
+import {
+    mergeEnrollmentOperationalIntoMetadata,
+    sanitizeEnrollmentOperationalPatch,
+} from "@/lib/opportunities/enrollmentOperationalMetadata";
 
 /** V1: opportunity CRM status aligned to authoritative `tour_bookings` (scheduling SoT). */
 export const TOUR_BOOKING_OPPORTUNITY_STATUS = {
@@ -21,8 +25,20 @@ export type TourBookingOpportunityIntegrationKind =
     | "reschedule_mirror"
     | "completed"
     | "no_show"
-    /** V1: no automatic opportunity rewind on booking cancel. */
+    /** Sets needs-attention follow-up without changing opportunity status (V1). */
     | "canceled";
+
+const TOUR_BOOKING_DOMAIN = "tour_booking" as const;
+
+function resolveTourIntegrationActorUserId(
+    booking: Pick<TourBookingRow, "requested_by_user_id">,
+    actorUserId?: string | null,
+): string | null {
+    const explicit = actorUserId != null ? String(actorUserId).trim() : "";
+    if (explicit) return explicit;
+    const requested = booking.requested_by_user_id != null ? String(booking.requested_by_user_id).trim() : "";
+    return requested || null;
+}
 
 function resolveIanaForMirror(timezoneIana: string): string {
     const t = String(timezoneIana ?? "").trim();
@@ -111,11 +127,29 @@ async function assertTransition(
         fromStatusKey,
         toStatusKey,
         currentMetadata: mergedMetadata,
-        payload: { source: "tour_booking", booking_id: bookingId, ...(payloadExtras ?? {}) },
+        payload: { source: TOUR_BOOKING_DOMAIN, booking_id: bookingId, ...(payloadExtras ?? {}) },
     });
     if (!t.ok) {
         throw new Error(`tour_booking: opportunity transition blocked — ${t.message}`);
     }
+}
+
+function tourBookingEventMetadata(
+    booking: TourBookingRow,
+    opportunityId: string,
+    correlationId?: string | null,
+): Record<string, unknown> {
+    return {
+        source: TOUR_BOOKING_DOMAIN,
+        booking_id: booking.id,
+        opportunity_id: opportunityId,
+        location_id: booking.location_id,
+        start_at: booking.start_at,
+        end_at: booking.end_at,
+        timezone: booking.timezone,
+        status_key: booking.status_key,
+        ...(correlationId ? { correlation_id: correlationId } : {}),
+    };
 }
 
 async function patchOpportunityTourMirrorAndScheduledStatus(input: {
@@ -145,24 +179,17 @@ async function patchOpportunityTourMirrorAndScheduledStatus(input: {
         tour_time: mirror.tour_time,
     });
 
-    const { error } = await updateOpportunityStatusWithEvent({
+    const { error } = await emitDomainLifecycleStatusChangedEvent({
         supabase,
         orgId,
-        opportunityId,
-        newStatusKey: target,
+        entityType: "opportunities",
+        entityId: opportunityId,
+        nextStatusKey: target,
         additionalPatch: { metadata: nextMd },
-        actorUserId: actorUserId ?? null,
-        eventMetadata: {
-            source: "tour_booking",
-            booking_id: booking.id,
-            opportunity_id: opportunityId,
-            location_id: booking.location_id,
-            start_at: booking.start_at,
-            end_at: booking.end_at,
-            timezone: booking.timezone,
-            status_key: booking.status_key,
-            ...(correlationId ? { correlation_id: correlationId } : {}),
-        },
+        actorUserId: resolveTourIntegrationActorUserId(booking, actorUserId),
+        domain: TOUR_BOOKING_DOMAIN,
+        domainEntityId: booking.id,
+        eventMetadata: tourBookingEventMetadata(booking, opportunityId, correlationId),
         normalizeContext: "tour_booking:confirmed_mirror",
     });
     if (error) {
@@ -176,9 +203,10 @@ async function patchOpportunityTerminalFromTour(input: {
     opportunityId: string;
     booking: TourBookingRow;
     newOppStatus: string;
+    actorUserId?: string | null;
     correlationId?: string | null;
 }): Promise<void> {
-    const { supabase, orgId, opportunityId, booking, newOppStatus, correlationId } = input;
+    const { supabase, orgId, opportunityId, booking, newOppStatus, actorUserId, correlationId } = input;
     const allowed = await assertAllowedStatusKey(supabase, orgId, "opportunities", newOppStatus);
     if (!allowed.ok) {
         throw new Error(`tour_booking: ${allowed.message}`);
@@ -196,24 +224,17 @@ async function patchOpportunityTerminalFromTour(input: {
     }
     await assertTransition(supabase, orgId, opportunityId, opp.status_key ?? null, newOppStatus, md, opp.work_unit_id, booking.id);
 
-    const { error } = await updateOpportunityStatusWithEvent({
+    const { error } = await emitDomainLifecycleStatusChangedEvent({
         supabase,
         orgId,
-        opportunityId,
-        newStatusKey: newOppStatus,
+        entityType: "opportunities",
+        entityId: opportunityId,
+        nextStatusKey: newOppStatus,
         additionalPatch: { metadata: md },
-        actorUserId: null,
-        eventMetadata: {
-            source: "tour_booking",
-            booking_id: booking.id,
-            opportunity_id: opportunityId,
-            location_id: booking.location_id,
-            start_at: booking.start_at,
-            end_at: booking.end_at,
-            timezone: booking.timezone,
-            status_key: booking.status_key,
-            ...(correlationId ? { correlation_id: correlationId } : {}),
-        },
+        actorUserId: resolveTourIntegrationActorUserId(booking, actorUserId),
+        domain: TOUR_BOOKING_DOMAIN,
+        domainEntityId: booking.id,
+        eventMetadata: tourBookingEventMetadata(booking, opportunityId, correlationId),
         normalizeContext: `tour_booking:${newOppStatus}`,
     });
     if (error) {
@@ -221,8 +242,38 @@ async function patchOpportunityTerminalFromTour(input: {
     }
 }
 
+async function applyTourBookingCanceledAttention(input: {
+    supabase: SupabaseClient;
+    orgId: string;
+    opportunityId: string;
+    booking: TourBookingRow;
+}): Promise<void> {
+    const { supabase, orgId, opportunityId, booking } = input;
+    const opp = await loadOpportunityForTourSync(supabase, orgId, opportunityId);
+    if (!opp) return;
+
+    const patch = sanitizeEnrollmentOperationalPatch({
+        wait_bucket: "waiting_on_staff",
+        wait_reason: "Tour canceled — follow up required",
+        wait_since: new Date().toISOString(),
+    });
+    if (!patch) return;
+
+    const metadata = asMetadataRecord(opp.metadata);
+    const merged = mergeEnrollmentOperationalIntoMetadata(metadata, patch);
+
+    const { error } = await supabase
+        .from("opportunities")
+        .update({ metadata: merged, updated_at: new Date().toISOString() })
+        .eq("id", opportunityId)
+        .eq("org_id", orgId);
+    if (error) {
+        throw new Error(`tour_booking: cancel attention failed — ${error.message}`);
+    }
+}
+
 /**
- * Card 4: keep `opportunities` metadata + `status_key` aligned for enrollment CRM / queue consumers.
+ * Keep `opportunities` metadata + `status_key` aligned for enrollment CRM / queue consumers.
  * Call after the `tour_bookings` row is committed, before tour lifecycle workflow events.
  */
 export async function applyTourBookingOpportunityIntegration(
@@ -240,6 +291,7 @@ export async function applyTourBookingOpportunityIntegration(
     if (!orgId || !opportunityId) return;
 
     if (kind === "canceled") {
+        await applyTourBookingCanceledAttention({ supabase, orgId, opportunityId, booking });
         return;
     }
 
@@ -265,6 +317,7 @@ export async function applyTourBookingOpportunityIntegration(
             opportunityId,
             booking,
             newOppStatus: TOUR_BOOKING_OPPORTUNITY_STATUS.completed,
+            actorUserId,
             correlationId,
         });
         return;
@@ -277,6 +330,7 @@ export async function applyTourBookingOpportunityIntegration(
             opportunityId,
             booking,
             newOppStatus: TOUR_BOOKING_OPPORTUNITY_STATUS.noShow,
+            actorUserId,
             correlationId,
         });
     }

@@ -6,7 +6,10 @@ import {
     parseProcessStageKeyFromStatusMetadata,
     PROCESS_STAGE_UNASSIGNED,
 } from "@/lib/businessProcesses/processStageMetadata";
-import { legacyCanonicalProcessStageForStatusKey } from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
+import {
+    legacyCanonicalProcessStageForStatusKey,
+    legacyGranularProcessStageForStatusKey,
+} from "@/lib/businessProcessTemplates/enrollmentLegacyCompat";
 
 export type ProcessStageAssignmentSource = "metadata" | "legacy_canonical" | "unassigned";
 
@@ -27,6 +30,11 @@ export function resolveStatusProcessStageAssignment(
     const legacy = legacyCanonicalProcessStageForStatusKey(statusKey);
     if (legacy && configuredStageKeys.includes(legacy)) {
         return { stage: legacy, source: "legacy_canonical" };
+    }
+
+    const granular = legacyGranularProcessStageForStatusKey(statusKey);
+    if (granular && configuredStageKeys.includes(granular)) {
+        return { stage: granular, source: "legacy_canonical" };
     }
 
     return { stage: null, source: "unassigned" };
