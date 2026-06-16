@@ -121,7 +121,9 @@ export function partitionLeadOverviewBodySections(doc: LayoutDoc): LeadOverviewS
     };
 }
 
-export function leadOverviewCompositionHints(): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
+export function leadOverviewCompositionHints(
+    overrides: Partial<import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints> = {},
+): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
     return {
         leadOverviewComposition: true,
         childrenListSummaryOnly: true,
@@ -133,7 +135,13 @@ export function leadOverviewCompositionHints(): import("@/lib/layout/runtime/lay
         enrollmentRosterReadFirst: true,
         leadOperatingSummaryCards: true,
         leadEnrollmentCardList: true,
+        ...overrides,
     };
+}
+
+/** Visual editor preview — match published LayoutDoc block rendering. */
+export function leadOverviewVisualEditorCompositionHints(): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
+    return leadOverviewCompositionHints({ honorLayoutDocBlocks: true });
 }
 
 export function summarizeLeadDrawerChildrenStrip(record: ProofRuntimeRecord): {

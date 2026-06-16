@@ -35,6 +35,11 @@ import {
 import {
     findLayoutItemLocation,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import {
+    moveLayoutBlock,
+    removeLayoutBlock,
+    resolveLayoutEditorBlockTitle,
+} from "@/lib/layout/layoutEditorBlockRegistry";
 import { isAllowedOpportunityDrawerFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
 
 export type LayoutEditorBlockKind = "card" | "field_group" | "related_list" | "widget" | "field";
@@ -62,9 +67,7 @@ export type LayoutEditorFieldNode = {
     visibilityRule: LayoutEditorVisibilityRule;
 };
 
-const BLOCK_TITLES: Record<string, string> = {
-    contact_block: "Primary Contact Card",
-    children: "Child Row Template",
+const WIDGET_BLOCK_TITLES: Record<string, string> = {
     notes: "Notes Block",
     recent_communication: "Communication Timeline Block",
     activity: "Activity Block",
@@ -75,10 +78,10 @@ function sectionIndex(doc: LayoutDoc, sectionKey: string): number {
 }
 
 function blockTitle(item: LayoutItem, fallback: string): string {
-    if (item.kind === "field_group") return BLOCK_TITLES[item.refKey] ?? item.label ?? "Field group";
-    if (item.kind === "related_list") return BLOCK_TITLES[item.refKey] ?? item.label ?? "Row template";
-    if (item.kind === "widget_placeholder") return BLOCK_TITLES[item.refKey] ?? item.label ?? "Widget block";
-    return fallback;
+    if (item.kind === "widget_placeholder") {
+        return WIDGET_BLOCK_TITLES[item.refKey] ?? item.label ?? "Widget block";
+    }
+    return resolveLayoutEditorBlockTitle(item, item.label?.trim() || fallback);
 }
 
 function fieldNodeFromItem(
@@ -412,4 +415,25 @@ export function patchSectionPresentation(
     const next = JSON.parse(JSON.stringify(doc)) as LayoutDoc;
     next.sections[sIdx] = { ...next.sections[sIdx]!, ...patch, title: patch.title ?? next.sections[sIdx]!.title };
     return next;
+}
+
+export function serializeLayoutEditorBlockPath(sectionKey: string, blockItemId: string): string {
+    return `block:${sectionKey}:${blockItemId}`;
+}
+
+export function removeLayoutEditorBlock(doc: LayoutDoc, sectionKey: string, blockItemId: string): LayoutDoc {
+    return removeLayoutBlock(doc, sectionKey, blockItemId);
+}
+
+export function moveLayoutEditorBlock(
+    doc: LayoutDoc,
+    sectionKey: string,
+    blockItemId: string,
+    direction: -1 | 1,
+): LayoutDoc {
+    return moveLayoutBlock(doc, sectionKey, blockItemId, direction);
+}
+
+export function findBlockNodeByItemId(blocks: LayoutEditorBlockNode[], blockItemId: string): LayoutEditorBlockNode | null {
+    return blocks.find((b) => b.itemId === blockItemId) ?? null;
 }

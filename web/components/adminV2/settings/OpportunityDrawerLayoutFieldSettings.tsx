@@ -4,6 +4,7 @@ import { LAYOUT_ADORNMENT_ICONS } from "@/lib/layout/layoutV2";
 import {
     LAYOUT_EDITOR_DISPLAY_TYPES,
     LAYOUT_LINK_BEHAVIORS,
+    LAYOUT_LINK_BEHAVIOR_LABELS,
     LAYOUT_TYPOGRAPHY_INTENTS,
     type LayoutEditorDisplayConfig,
 } from "@/lib/layout/layoutEditorDisplayConfig";
@@ -15,6 +16,7 @@ import type { LayoutEditorFieldNode } from "@/lib/layout/layoutEditorComposition
 
 type Props = {
     node: LayoutEditorFieldNode;
+    inline?: boolean;
     onChange: (patch: {
         label?: string;
         display?: LayoutEditorDisplayConfig;
@@ -23,13 +25,21 @@ type Props = {
     onClose: () => void;
 };
 
-export default function OpportunityDrawerLayoutFieldSettings({ node, onChange, onClose }: Props) {
+export default function OpportunityDrawerLayoutFieldSettings({ node, inline = false, onChange, onClose }: Props) {
     const display = node.displayConfig;
 
     return (
-        <div className="rounded-lg border border-alloy-forge/12 bg-white p-3 shadow-sm" data-testid="visual-editor-field-settings">
+        <div
+            className={
+                inline ?
+                    "mt-2 rounded-lg border border-alloy-pine/25 bg-alloy-pine/[0.04] p-3 shadow-sm"
+                :   "rounded-lg border border-alloy-forge/12 bg-white p-3 shadow-sm"
+            }
+            data-testid="visual-editor-field-settings"
+            data-visual-editor-field-settings-inline={inline ? "true" : undefined}
+        >
             <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="text-xs font-semibold text-alloy-midnight">{node.title}</p>
+                <p className="text-xs font-semibold text-alloy-midnight">Edit {node.title}</p>
                 <button type="button" className="text-[11px] text-alloy-midnight/50 hover:text-alloy-pine" onClick={onClose}>
                     Close
                 </button>
@@ -40,7 +50,7 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, onChange, o
                 <input
                     type="text"
                     defaultValue={node.title}
-                    onBlur={(e) => onChange({ label: e.target.value })}
+                    onChange={(e) => onChange({ label: e.target.value })}
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                     data-testid="visual-editor-field-label"
                 />
@@ -142,10 +152,19 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, onChange, o
                 >
                     {LAYOUT_LINK_BEHAVIORS.map((b) => (
                         <option key={b} value={b}>
-                            {b}
+                            {LAYOUT_LINK_BEHAVIOR_LABELS[b]}
                         </option>
                     ))}
                 </select>
+                {display.linkBehavior === "open_record" ?
+                    <span className="mt-1 block text-[10px] text-alloy-midnight/45">
+                        Opens the full record workspace page.
+                    </span>
+                : display.linkBehavior === "open_drawer" ?
+                    <span className="mt-1 block text-[10px] text-alloy-midnight/45">
+                        Opens the related record in the side drawer without leaving this context.
+                    </span>
+                :   null}
             </label>
 
             <label className="mt-2 block text-[11px] text-alloy-midnight/60">

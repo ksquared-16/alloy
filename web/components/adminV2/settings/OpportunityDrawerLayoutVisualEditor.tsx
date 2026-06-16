@@ -75,6 +75,8 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const [editingSectionKey, setEditingSectionKey] = useState<string | null>(null);
     const [settingsSectionKey, setSettingsSectionKey] = useState<string | null>(null);
     const [selectedFieldPath, setSelectedFieldPath] = useState<string | null>(null);
+    const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+    const [inspectMode, setInspectMode] = useState(false);
     const [fieldAddError, setFieldAddError] = useState<string | null>(null);
     const [forceAdvanced, setForceAdvanced] = useState(false);
 
@@ -132,6 +134,8 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             setEditingSectionKey(null);
             setSettingsSectionKey(null);
             setSelectedFieldPath(null);
+            setSelectedBlockId(null);
+            setInspectMode(false);
         } catch (e) {
             setError((e as Error).message);
         } finally {
@@ -253,6 +257,18 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                 <div className="flex flex-wrap items-center gap-2">
                     <button
                         type="button"
+                        onClick={() => setInspectMode((v) => !v)}
+                        className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
+                            inspectMode ?
+                                "border-alloy-pine/40 bg-alloy-pine/[0.08] text-alloy-pine"
+                            :   "border-alloy-forge/20 text-alloy-midnight/65"
+                        }`}
+                        data-testid="visual-editor-inspect-mode"
+                    >
+                        {inspectMode ? "Inspect on" : "Inspect"}
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => void saveDraft()}
                         disabled={!actionState.canSave}
                         className="rounded-md bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
@@ -337,15 +353,21 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                             editingSectionKey={editingSectionKey}
                             settingsSectionKey={settingsSectionKey}
                             selectedFieldPath={selectedFieldPath}
+                            selectedBlockId={selectedBlockId}
+                            inspectMode={inspectMode}
                             fieldPickerGroups={fieldPickerGroups}
                             validationOk={validation.ok}
                             fieldAddError={fieldAddError}
                             onEditSection={(key) => {
                                 setEditingSectionKey(key);
-                                if (key) setSelectedFieldPath(null);
+                                if (key) {
+                                    setSelectedFieldPath(null);
+                                    setSelectedBlockId(null);
+                                }
                             }}
                             onSectionSettings={setSettingsSectionKey}
                             onSelectFieldPath={setSelectedFieldPath}
+                            onSelectBlockId={setSelectedBlockId}
                             onFieldAddError={setFieldAddError}
                             applyDoc={applyDoc}
                         />
@@ -369,7 +391,11 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     <div className="mt-3 space-y-3 text-xs leading-relaxed text-alloy-midnight/60">
                         <p>
                             Hover a section and choose <strong>Configure</strong> to edit layout blocks, fields, and display
-                            behavior inline. Every visible element in the preview maps to a configurable block or field.
+                            behavior inline. Field settings expand directly under the selected field — no separate panel below.
+                        </p>
+                        <p>
+                            Use <strong>Inspect</strong> to hover or click preview elements and jump to their configuration.
+                            Preview updates instantly; save only persists changes.
                         </p>
                         <p>
                             Choose an entity, then a field when adding data. Technical keys stay in advanced builder

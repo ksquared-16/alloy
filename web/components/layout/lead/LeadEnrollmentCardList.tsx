@@ -22,6 +22,7 @@ import {
 import { layoutRuntimeEnrollmentPlacementDependentValueReader } from "@/lib/layout/runtime/resolveLayoutRuntimeEnrollmentPlacementContext";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import type { LeadEnrollmentRowTemplatePresentation } from "@/lib/layout/runtime/resolveLeadEnrollmentRowTemplatePresentation";
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
     PRESENTATION_LABEL,
@@ -35,6 +36,7 @@ type Props = {
     overflowFooter?: React.ReactNode;
     canMutate?: boolean;
     onAdornmentAction?: AdornmentActionHandler;
+    rowTemplate?: LeadEnrollmentRowTemplatePresentation;
 };
 
 /**
@@ -48,9 +50,15 @@ export default function LeadEnrollmentCardList({
     overflowFooter,
     canMutate,
     onAdornmentAction,
+    rowTemplate,
 }: Props) {
     const edit = useLayoutRuntimeDrawerEdit();
     const readFirst = true;
+    const showAvatar = rowTemplate?.showAvatar !== false;
+    const showStatusPill = rowTemplate?.showStatusPill !== false;
+    const showSecondaryMetadata = rowTemplate?.showSecondaryMetadata !== false;
+    const allowEditEnrollment = rowTemplate ? rowTemplate.enabledActions.has("edit_enrollment") : true;
+    const allowChildDrawer = rowTemplate ? rowTemplate.enabledActions.has("open_child_drawer") : true;
     const [editingRowKeys, setEditingRowKeys] = useState<Set<string>>(() => new Set());
 
     const toggleRowEdit = useCallback((rowKey: string) => {
@@ -83,7 +91,12 @@ export default function LeadEnrollmentCardList({
     };
 
     return (
-        <div className="min-w-0" data-lead-enrollment-card-list="true" data-layout-runtime-enrollment-read-mode="card-list">
+        <div
+            className="min-w-0"
+            data-lead-enrollment-card-list="true"
+            data-layout-runtime-enrollment-read-mode="card-list"
+            data-enrollment-row-layout={rowTemplate?.layoutMode ?? "standard"}
+        >
             {rows.length === 0 ?
                 <div className="p-2">
                     <DrawerOverviewEmptyState
@@ -120,7 +133,7 @@ export default function LeadEnrollmentCardList({
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                                        {!isEditing ?
+                                        {!isEditing && showAvatar ?
                                             <DrawerHouseholdChildLinkAvatar
                                                 childId={childId}
                                                 displayName={childDisplayName}
@@ -133,7 +146,7 @@ export default function LeadEnrollmentCardList({
                                         :   null}
                                         <div className="min-w-0 flex-1">
                                             <div className="flex min-w-0 items-start justify-between gap-2">
-                                                {childId ?
+                                                {childId && allowChildDrawer ?
                                                     <LayoutRuntimeChildLinkSurface
                                                         componentName="LeadEnrollmentCardList"
                                                         surface="drawer"
@@ -149,19 +162,19 @@ export default function LeadEnrollmentCardList({
                                                         {childDisplayName}
                                                     </p>
                                                 }
-                                            {!isEditing && statusDisplay && statusDisplay !== "—" ?
+                                            {!isEditing && showStatusPill && statusDisplay && statusDisplay !== "—" ?
                                                 <span className="shrink-0 rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">
                                                     {statusDisplay}
                                                 </span>
                                             :   null}
                                         </div>
-                                        {!isEditing && metaColumns.length > 0 ?
+                                        {!isEditing && showSecondaryMetadata && metaColumns.length > 0 ?
                                             <LeadEnrollmentCardMetaLines row={row} metaColumns={metaColumns} />
                                         :   null}
                                         </div>
                                     </div>
                                     <div className="flex shrink-0 items-center gap-1.5">
-                                        {showEdit ?
+                                        {showEdit && allowEditEnrollment ?
                                             <button
                                                 type="button"
                                                 className="rounded-md px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/40 opacity-0 transition-opacity hover:bg-alloy-stone/10 hover:text-alloy-juniper group-hover:opacity-100 focus:opacity-100"

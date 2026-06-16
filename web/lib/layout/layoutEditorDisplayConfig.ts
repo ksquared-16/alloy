@@ -14,6 +14,15 @@ export type LayoutTypographyIntent = (typeof LAYOUT_TYPOGRAPHY_INTENTS)[number];
 export const LAYOUT_LINK_BEHAVIORS = ["none", "open_record", "open_drawer", "mailto", "tel"] as const;
 export type LayoutLinkBehavior = (typeof LAYOUT_LINK_BEHAVIORS)[number];
 
+/** Operator-facing labels; internal values remain stable for storage. */
+export const LAYOUT_LINK_BEHAVIOR_LABELS: Record<LayoutLinkBehavior, string> = {
+    none: "No action",
+    open_record: "Open related record page",
+    open_drawer: "Open related record drawer",
+    mailto: "Open email composer",
+    tel: "Call phone number",
+};
+
 /** Editor-facing display types mapped to renderHint where supported. */
 export const LAYOUT_EDITOR_DISPLAY_TYPES = [
     "text",

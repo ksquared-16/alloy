@@ -58,6 +58,9 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "binding",
     "futureModule",
     "layoutEditorDisplay",
+    "layoutEditorContactRole",
+    "layoutEditorBlockTemplate",
+    "layoutEditorRowTemplate",
     "enrollmentRosterReadFirst",
 ]);
 

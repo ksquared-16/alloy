@@ -28,6 +28,8 @@ export type LayoutRuntimeCompositionHints = {
     personConnectedChildrenReadFirst?: boolean;
     /** Patch 12 — enrollment card list instead of table/grid roster. */
     leadEnrollmentCardList?: boolean;
+    /** Phase 5.8 — visual editor + published layout honor LayoutDoc household/contact blocks. */
+    honorLayoutDocBlocks?: boolean;
     /** Patch 19 — person overview composition active. */
     personOverviewComposition?: boolean;
     /** Summary-strip connected children widget shows count only. */

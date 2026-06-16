@@ -12,6 +12,9 @@ import {
     reorderSectionInZone,
     resolveOpportunityDrawerSectionZone,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import { listSectionLayoutBlocks } from "@/lib/layout/layoutEditorCompositionModel";
+import { buildLayoutEditorItemIdPathIndex } from "@/lib/layout/layoutEditorInspectModel";
+import { LayoutEditorRuntimeTraceProvider } from "@/lib/layout/layoutEditorRuntimeTraceContext";
 import {
     DRAWER_OVERVIEW_CANVAS_CLASS,
     DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS,
@@ -22,7 +25,7 @@ import {
     DRAWER_OVERVIEW_SHELL_GRID_CLASS,
     DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
-import { leadOverviewCompositionHints, partitionLeadOverviewBodySections } from "@/lib/layout/runtime/leadOverviewComposition";
+import { leadOverviewVisualEditorCompositionHints, partitionLeadOverviewBodySections } from "@/lib/layout/runtime/leadOverviewComposition";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
 
@@ -31,18 +34,52 @@ type Props = {
     editingSectionKey: string | null;
     settingsSectionKey: string | null;
     selectedFieldPath: string | null;
+    selectedBlockId: string | null;
+    inspectMode: boolean;
     fieldPickerGroups: LayoutCatalogGroup[];
     validationOk: boolean;
     fieldAddError: string | null;
     onEditSection: (sectionKey: string | null) => void;
     onSectionSettings: (sectionKey: string | null) => void;
     onSelectFieldPath: (path: string | null) => void;
+    onSelectBlockId: (blockId: string | null) => void;
     onFieldAddError: (message: string | null) => void;
     applyDoc: (next: LayoutDoc) => void;
 };
 
-function SectionPreviewBody({ doc, sectionKey, hidden }: { doc: LayoutDoc; sectionKey: string; hidden: boolean }) {
+function SectionPreviewBody({
+    doc,
+    sectionKey,
+    hidden,
+    traceEnabled,
+    inspectMode,
+    selectedFieldPath,
+    onSelectFieldPath,
+}: {
+    doc: LayoutDoc;
+    sectionKey: string;
+    hidden: boolean;
+    traceEnabled: boolean;
+    inspectMode: boolean;
+    selectedFieldPath: string | null;
+    onSelectFieldPath: (path: string | null) => void;
+}) {
     const sectionDoc = useMemo(() => buildSingleSectionPreviewDoc(doc, sectionKey), [doc, sectionKey]);
+    const traceValue = useMemo(() => {
+        const blocks = listSectionLayoutBlocks(doc, sectionKey);
+        const { byItemId, byRefKey } = buildLayoutEditorItemIdPathIndex(blocks);
+        return {
+            enabled: traceEnabled,
+            inspectMode,
+            byItemId,
+            byRefKey,
+            selectedPath: selectedFieldPath,
+            onSelectPath: (path: string | null) => {
+                onSelectFieldPath(path);
+            },
+        };
+    }, [doc, sectionKey, traceEnabled, inspectMode, selectedFieldPath, onSelectFieldPath]);
+
     if (!sectionDoc || hidden) {
         return (
             <p className="px-3 py-6 text-xs text-alloy-midnight/45" data-testid={`visual-editor-section-hidden-${sectionKey}`}>
@@ -52,11 +89,13 @@ function SectionPreviewBody({ doc, sectionKey, hidden }: { doc: LayoutDoc; secti
     }
 
     return (
-        <LayoutRuntimeCompositionProvider value={leadOverviewCompositionHints()}>
-            <div className={sectionKey === "lead_summary" ? DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS : undefined}>
-                <LayoutRuntimePlanView doc={sectionDoc} record={LAYOUT_DRAWER_PREVIEW_RECORD} variant="production" />
-            </div>
-        </LayoutRuntimeCompositionProvider>
+        <LayoutEditorRuntimeTraceProvider value={traceValue}>
+            <LayoutRuntimeCompositionProvider value={leadOverviewVisualEditorCompositionHints()}>
+                <div className={sectionKey === "lead_summary" ? DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS : undefined}>
+                    <LayoutRuntimePlanView doc={sectionDoc} record={LAYOUT_DRAWER_PREVIEW_RECORD} variant="production" />
+                </div>
+            </LayoutRuntimeCompositionProvider>
+        </LayoutEditorRuntimeTraceProvider>
     );
 }
 
@@ -66,12 +105,15 @@ function EditableSectionFrame({
     editingSectionKey,
     settingsSectionKey,
     selectedFieldPath,
+    selectedBlockId,
+    inspectMode,
     fieldPickerGroups,
     validationOk,
     fieldAddError,
     onEditSection,
     onSectionSettings,
     onSelectFieldPath,
+    onSelectBlockId,
     onFieldAddError,
     applyDoc,
 }: {
@@ -80,12 +122,15 @@ function EditableSectionFrame({
     editingSectionKey: string | null;
     settingsSectionKey: string | null;
     selectedFieldPath: string | null;
+    selectedBlockId: string | null;
+    inspectMode: boolean;
     fieldPickerGroups: LayoutCatalogGroup[];
     validationOk: boolean;
     fieldAddError: string | null;
     onEditSection: (sectionKey: string | null) => void;
     onSectionSettings: (sectionKey: string | null) => void;
     onSelectFieldPath: (path: string | null) => void;
+    onSelectBlockId: (blockId: string | null) => void;
     onFieldAddError: (message: string | null) => void;
     applyDoc: (next: LayoutDoc) => void;
 }) {
@@ -114,6 +159,7 @@ function EditableSectionFrame({
                         className="rounded px-2 py-0.5 text-[10px] font-semibold text-alloy-pine hover:bg-alloy-pine/10"
                         onClick={() => {
                             onSelectFieldPath(null);
+                            onSelectBlockId(null);
                             onEditSection(isEditing ? null : section.key);
                         }}
                         data-testid={`visual-editor-section-edit-${section.key}`}
@@ -151,7 +197,21 @@ function EditableSectionFrame({
                 </div>
             :   null}
 
-            <SectionPreviewBody doc={doc} sectionKey={section.key} hidden={hidden} />
+            <SectionPreviewBody
+                doc={doc}
+                sectionKey={section.key}
+                hidden={hidden}
+                traceEnabled={isEditing || inspectMode}
+                inspectMode={inspectMode}
+                selectedFieldPath={selectedFieldPath}
+                onSelectFieldPath={(path) => {
+                    onSelectFieldPath(path);
+                    if (path) {
+                        onEditSection(section.key);
+                        onSelectBlockId(null);
+                    }
+                }}
+            />
 
             {isEditing ?
                 <OpportunityDrawerLayoutCompositionPanel
@@ -160,7 +220,9 @@ function EditableSectionFrame({
                     fieldPickerGroups={fieldPickerGroups}
                     validationOk={validationOk}
                     selectedFieldPath={selectedFieldPath}
+                    selectedBlockId={selectedBlockId}
                     onSelectFieldPath={onSelectFieldPath}
+                    onSelectBlockId={onSelectBlockId}
                     onFieldAddError={onFieldAddError}
                     applyDoc={applyDoc}
                     onClose={() => onEditSection(null)}
@@ -175,12 +237,15 @@ export default function OpportunityDrawerLayoutEditorCanvas({
     editingSectionKey,
     settingsSectionKey,
     selectedFieldPath,
+    selectedBlockId,
+    inspectMode,
     fieldPickerGroups,
     validationOk,
     fieldAddError,
     onEditSection,
     onSectionSettings,
     onSelectFieldPath,
+    onSelectBlockId,
     onFieldAddError,
     applyDoc,
 }: Props) {
@@ -198,12 +263,15 @@ export default function OpportunityDrawerLayoutEditorCanvas({
                 editingSectionKey={editingSectionKey}
                 settingsSectionKey={settingsSectionKey}
                 selectedFieldPath={selectedFieldPath}
+                selectedBlockId={selectedBlockId}
+                inspectMode={inspectMode}
                 fieldPickerGroups={fieldPickerGroups}
                 validationOk={validationOk}
                 fieldAddError={fieldAddError}
                 onEditSection={onEditSection}
                 onSectionSettings={onSectionSettings}
                 onSelectFieldPath={onSelectFieldPath}
+                onSelectBlockId={onSelectBlockId}
                 onFieldAddError={onFieldAddError}
                 applyDoc={applyDoc}
             />

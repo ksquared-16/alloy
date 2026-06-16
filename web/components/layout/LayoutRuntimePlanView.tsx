@@ -23,6 +23,7 @@ import {
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "@/lib/layout/runtime/layoutRuntimePlan";
 import { readLayoutEditorDisplayConfig, typographyIntentClass } from "@/lib/layout/layoutEditorDisplayConfig";
+import { layoutEditorTraceProps, useLayoutEditorRuntimeTrace } from "@/lib/layout/layoutEditorRuntimeTraceContext";
 import { classifyLayoutItemBinding } from "@/lib/layout/runtime/classifyLayoutItemBinding";
 import {
     resolveProofBindingValue,
@@ -113,6 +114,11 @@ import {
 } from "@/lib/layout/runtime/drawerOverviewSectionPresentation";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
 import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
+import { shouldUseDrawerHouseholdProfileSubstitution } from "@/lib/layout/runtime/resolveLayoutEditorHouseholdRendering";
+import {
+    resolveLeadEnrollmentRowTemplatePresentation,
+    shouldApplyLeadEnrollmentRowTemplatePresentation,
+} from "@/lib/layout/runtime/resolveLeadEnrollmentRowTemplatePresentation";
 import { layoutSectionIncludesWidget } from "@/lib/layout/runtime/layoutSectionIncludesWidget";
 import {
     scrollToLeadEnrollmentSection,
@@ -269,6 +275,8 @@ function ValueCell({
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
     const displayConfig = readLayoutEditorDisplayConfig(item);
     const label = displayConfig.showLabel === false ? "" : operatorLabel(item, variant);
+    const trace = useLayoutEditorRuntimeTrace();
+    const traceProps = layoutEditorTraceProps(trace, { itemId: item.id, refKey: item.refKey });
     const display =
         variant === "production" || variant === "preview" ?
             sanitizeOperatorDisplay(r.isPlaceholder ? null : r.display)
@@ -281,7 +289,14 @@ function ValueCell({
     const editValue = canEdit && edit ? edit.getFieldValue(refKey, display ?? "") : display ?? "";
 
     return (
-        <div className={operatorSurfaces ? LAYOUT_RUNTIME_FIELD_READ_SURFACE : LAYOUT_RUNTIME_FIELD_SURFACE}>
+        <div
+            className={`${operatorSurfaces ? LAYOUT_RUNTIME_FIELD_READ_SURFACE : LAYOUT_RUNTIME_FIELD_SURFACE} ${traceProps.className ?? ""}`}
+            {...traceProps.attrs}
+            onClick={(e) => {
+                traceProps.onClick?.();
+                if (trace?.inspectMode) e.stopPropagation();
+            }}
+        >
             {label ?
                 <div
                     className={`flex flex-wrap items-center gap-1 ${operatorSurfaces ? PRESENTATION_LABEL : "text-[11px] font-medium"}`}
@@ -380,6 +395,8 @@ function RepeaterCellContent({
         renderHint: col.renderHint,
         template: col.template,
     });
+    const trace = useLayoutEditorRuntimeTrace();
+    const traceProps = layoutEditorTraceProps(trace, { refKey: col.refKey });
     const canEdit = layoutRuntimeFieldIsEditable(synthetic, variant) && Boolean(edit);
     const editValue =
         canEdit && edit ? edit.getFieldValue(col.refKey, r.display ?? "", rowKey) : r.display ?? "";
@@ -405,7 +422,14 @@ function RepeaterCellContent({
     }
 
     return (
-        <span className={`inline-flex items-center gap-1.5 ${PRESENTATION_DATA_VALUE_GRID}`}>
+        <span
+            className={`inline-flex items-center gap-1.5 ${PRESENTATION_DATA_VALUE_GRID} ${traceProps.className ?? ""}`}
+            {...traceProps.attrs}
+            onClick={(e) => {
+                traceProps.onClick?.();
+                if (trace?.inspectMode) e.stopPropagation();
+            }}
+        >
             {col.adornment && col.adornment.position !== "right" ?
                 <Adorn item={synthetic} rowRecord={row} />
             :   null}
@@ -499,6 +523,21 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         isChildrenRepeater &&
         sectionKey === "children_enrollment" &&
         (item.displayMode ?? "table") === "table";
+    const rowTemplatePresentation =
+        useEnrollmentReadTable
+        && shouldApplyLeadEnrollmentRowTemplatePresentation(item, {
+            honorLayoutDocBlocks: composition.honorLayoutDocBlocks,
+            opportunityEntityLayoutsVisualConfig:
+                isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient(),
+        }) ?
+            resolveLeadEnrollmentRowTemplatePresentation(item)
+        :   null;
+    const enrollmentUsesCardList =
+        rowTemplatePresentation ?
+            rowTemplatePresentation.useCardList && !rowTemplatePresentation.useDetailedGrid
+        :   Boolean(composition.leadEnrollmentCardList);
+    const enrollmentUsesDetailedGrid =
+        rowTemplatePresentation?.useDetailedGrid ?? false;
     const usePersonConnectedChildrenTable =
         operatorSurfaces &&
         isChildrenRepeater &&
@@ -585,7 +624,7 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
 
     const binding = classifyLayoutItemBinding(item, anchorEntity);
 
-    const enrollmentGridMarkup = composition.leadEnrollmentCardList ?
+    const enrollmentGridMarkup = enrollmentUsesCardList && !enrollmentUsesDetailedGrid ?
         <LeadEnrollmentCardList
             item={item}
             columns={visibleColumns}
@@ -594,6 +633,7 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
             overflowFooter={enrollmentOverflowFooter}
             canMutate={host.canMutate}
             onAdornmentAction={onAdornmentAction}
+            rowTemplate={rowTemplatePresentation ?? undefined}
         />
     :   <LayoutRuntimeEnrollmentGrid
             item={item}
@@ -1186,10 +1226,13 @@ function SectionView({
         return null;
     }
 
-    const useHouseholdProfile =
-        composition.compositionSectionSurface === true
-        && operatorSurfaces
-        && (section.key === "household_contact" || section.key === "household_relationships");
+    const useHouseholdProfile = shouldUseDrawerHouseholdProfileSubstitution({
+        sectionKey: section.key,
+        compositionSectionSurface: composition.compositionSectionSurface,
+        operatorSurfaces,
+        opportunityEntityLayoutsVisualConfig: visibilityCtx.opportunityEntityLayoutsVisualConfig,
+        honorLayoutDocBlocks: composition.honorLayoutDocBlocks,
+    });
 
     const showHouseholdContactsList =
         useHouseholdProfile

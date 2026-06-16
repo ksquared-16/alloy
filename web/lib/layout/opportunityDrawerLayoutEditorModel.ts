@@ -14,6 +14,7 @@ import {
     removeItem,
 } from "@/lib/layout/builderOps";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import { validateOpportunityDrawerLayoutBlocks } from "@/lib/layout/layoutEditorBlockRegistry";
 import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { readLayoutSectionPresentationMetadata } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
@@ -262,9 +263,11 @@ export function validateOpportunityDrawerLayoutDoc(doc: LayoutDoc): {
     warnings: string[];
 } {
     const parsed = parseLayoutDoc(doc, { inferSurfaceKey: true });
+    const blockErrors = isOpportunityDrawerLayoutDoc(doc) ? validateOpportunityDrawerLayoutBlocks(doc) : [];
+    const errors = [...parsed.errors, ...blockErrors];
     return {
-        ok: parsed.ok,
-        errors: parsed.errors,
+        ok: parsed.ok && blockErrors.length === 0,
+        errors,
         warnings: parsed.warnings,
     };
 }
