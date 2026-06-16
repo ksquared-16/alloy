@@ -17,6 +17,7 @@ import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { readLayoutSectionPresentationMetadata } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
+import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawerLayoutDocShellZones";
 import {
     isAllowedOpportunityDrawerFieldRefKey,
@@ -342,13 +343,9 @@ export function resolveVisualEditorActionState(input: {
 }
 
 export function opportunityDrawerEditorFieldPickerOptions(): { refKey: string; label: string }[] {
-    return OPPORTUNITY_DRAWER_SURFACE.allowedFieldRefKeys
-        .filter((refKey) => refKey !== "_template" && !refKey.startsWith("_"))
-        .slice(0, 120)
-        .map((refKey) => ({
-            refKey,
-            label: refKey.includes(".") ? refKey.split(".").slice(1).join(".") : refKey,
-        }));
+    return buildOpportunityDrawerEditorFieldPickerGroups().flatMap((group) =>
+        group.fields.map((field) => ({ refKey: field.refKey, label: field.fieldLabel })),
+    );
 }
 
 export function isPlatformShellSlotEditable(slot: string): boolean {

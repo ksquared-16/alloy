@@ -234,14 +234,18 @@ describe("visual editor registry validation", () => {
         expect(result.ok).toBe(true);
     });
 
-    it("visual editor includes searchable field picker and live publish notice", () => {
+    it("visual editor includes entity-first field picker and live publish notice", () => {
         const editor = readFileSync(
             resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutVisualEditor.tsx"),
             "utf8",
         );
-        expect(editor).toContain("OpportunityDrawerLayoutFieldPicker");
+        const canvas = readFileSync(
+            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas.tsx"),
+            "utf8",
+        );
+        expect(canvas).toContain("OpportunityDrawerLayoutFieldPicker");
         expect(editor).toContain("visual-editor-live-publish-notice");
-        expect(editor).toContain("visual-editor-main-composition-grid");
+        expect(canvas).toContain("visual-editor-main-composition-grid");
     });
 
     it("gallery duplicates published layout before edit when no draft", () => {

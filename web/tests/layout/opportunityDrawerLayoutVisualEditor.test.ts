@@ -215,19 +215,24 @@ describe("layouts settings visual editor wiring", () => {
         expect(pageClient).toContain("visual-editor-return-to-visual");
     });
 
-    it("visual editor component exposes locked shell and editable zone test ids", () => {
+    it("visual editor component exposes locked shell and editable canvas test ids", () => {
         const editor = readFileSync(
             resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutVisualEditor.tsx"),
+            "utf8",
+        );
+        const canvas = readFileSync(
+            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas.tsx"),
             "utf8",
         );
         expect(editor).toContain('data-testid="opportunity-drawer-visual-editor"');
         expect(editor).toContain('slot="header"');
         expect(editor).toContain("visual-editor-locked-shell-");
-        expect(editor).toContain("visual-editor-zone-${zone}");
+        expect(canvas).toContain("visual-editor-zone-summary_strip");
+        expect(canvas).toContain("visual-editor-zone-right_rail");
         expect(editor).toContain("visual-editor-advanced-builder-link");
         expect(editor).toContain("visual-editor-save-draft");
         expect(editor).toContain("visual-editor-publish");
         expect(editor).toContain('data-visual-editor-locked="true"');
-        expect(editor).toContain('data-visual-editor-editable="true"');
+        expect(canvas).toContain('data-visual-editor-editable="true"');
     });
 });
