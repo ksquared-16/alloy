@@ -111,6 +111,7 @@ import {
     resolveDrawerOverviewSectionEyebrow,
 } from "@/lib/layout/runtime/drawerOverviewSectionPresentation";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
+import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
 import { layoutSectionIncludesWidget } from "@/lib/layout/runtime/layoutSectionIncludesWidget";
 import {
     scrollToLeadEnrollmentSection,
@@ -1170,14 +1171,12 @@ function SectionView({
     if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
 
     const useCompositionSurfaceEarly = composition.compositionSectionSurface === true && operatorSurfaces;
-    if (
-        useCompositionSurfaceEarly &&
-        sectionPresentation !== "summary_strip" &&
-        !shouldRenderLayoutRuntimeSection(section, record, {
-            compositionShell: true,
-            sectionPresentation,
-        })
-    ) {
+    const visibilityCtx = {
+        compositionShell: useCompositionSurfaceEarly,
+        sectionPresentation,
+        opportunityEntityLayoutsVisualConfig: isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient(),
+    };
+    if (!shouldRenderLayoutRuntimeSection(section, record, visibilityCtx)) {
         return null;
     }
 

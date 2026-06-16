@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import LegacyWorkflowV1LayoutEditorBanner, {
+    useLegacyOpportunityDrawerLayoutReadOnly,
+} from "@/components/adminV2/settings/LegacyWorkflowV1LayoutEditorBanner";
 
 type PreviewSection = {
     position: number;
@@ -30,6 +33,8 @@ function move<T>(arr: T[], index: number, delta: number): T[] {
 
 export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { onSaved?: () => void }) {
     const { canMutate, role, roleKeys, userEmail, userId, orgId, roleKeysSource } = useAdminAuth();
+    const legacyLayoutReadOnly = useLegacyOpportunityDrawerLayoutReadOnly();
+    const canEditLayout = canMutate && !legacyLayoutReadOnly;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [preview, setPreview] = useState<PreviewPayload | null>(null);
@@ -74,7 +79,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
     }, [keys, preview]);
 
     const save = async () => {
-        if (!canMutate || !eligible) return;
+        if (!canEditLayout || !eligible) return;
         setSaving(true);
         setSaveError(null);
         setSaveOk(null);
@@ -119,6 +124,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
 
     return (
         <div className="rounded-xl border border-alloy-pine/25 bg-white/85 p-4 shadow-sm">
+            <LegacyWorkflowV1LayoutEditorBanner />
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                     <h2 className="text-sm font-semibold text-alloy-midnight">Drawer section order</h2>
@@ -144,7 +150,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
                     >
                         <span className="w-6 text-[10px] text-alloy-midnight/45">{i + 1}</span>
                         <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{titles[key] ?? key}</span>
-                        {canMutate ? (
+                        {canEditLayout ? (
                             <span className="flex gap-1">
                                 <button
                                     type="button"
@@ -168,7 +174,7 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
                 ))}
             </ol>
 
-            {canMutate ? (
+            {canEditLayout ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                     <button
                         type="button"

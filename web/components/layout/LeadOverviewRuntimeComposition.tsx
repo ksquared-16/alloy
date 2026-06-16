@@ -1,14 +1,18 @@
 "use client";
 
+import { useMemo } from "react";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
+import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import {
     leadOverviewCompositionHints,
     partitionLeadOverviewBodySections,
     sliceLayoutDocSections,
 } from "@/lib/layout/runtime/leadOverviewComposition";
+import { buildOpportunityDrawerRuntimeSectionVisibilityContext } from "@/lib/layout/runtime/opportunityDrawerEntityLayoutVisibility";
+import { sortLayoutSectionsByDocPosition } from "@/lib/layout/runtime/orderLayoutSectionsByDocPosition";
 import { resolveLeadOverviewRightRailSections } from "@/lib/layout/runtime/resolveLeadOverviewRightRailSections";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
 import {
@@ -107,17 +111,28 @@ export default function LeadOverviewRuntimeComposition({
 }: Props) {
     const slots = partitionLeadOverviewBodySections(doc);
     const hints = leadOverviewCompositionHints();
-    const rightRailSections = resolveLeadOverviewRightRailSections(slots, record);
+    const visibilityCtx = useMemo(
+        () =>
+            buildOpportunityDrawerRuntimeSectionVisibilityContext(
+                { compositionShell: true },
+                { adoptionEnabled: isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient() },
+            ),
+        [],
+    );
+    const rightRailSections = resolveLeadOverviewRightRailSections(slots, record, visibilityCtx, doc);
+    const showHousehold =
+        slots.household && shouldRenderLayoutRuntimeSection(slots.household, record, visibilityCtx);
+    const showEnrollment =
+        slots.enrollment && shouldRenderLayoutRuntimeSection(slots.enrollment, record, visibilityCtx);
     const showLeadSource =
-        slots.leadSource
-        && shouldRenderLayoutRuntimeSection(slots.leadSource, record, { compositionShell: true });
+        slots.leadSource && shouldRenderLayoutRuntimeSection(slots.leadSource, record, visibilityCtx);
 
     return (
         <LayoutRuntimeCompositionProvider value={hints}>
             <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-lead-overview-composition="true">
                 {/* Shell grid: household 4 / enrollment 5 / right rail 3 — see LEAD_OVERVIEW_SHELL_GRID */}
                 <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
-                    {slots.household ?
+                    {showHousehold && slots.household ?
                         <CompositionSlot
                             slotKey="household_contact"
                             sectionKeys={[slots.household.key]}
@@ -130,7 +145,7 @@ export default function LeadOverviewRuntimeComposition({
                         />
                     :   null}
 
-                    {slots.enrollment ?
+                    {showEnrollment && slots.enrollment ?
                         <CompositionSlot
                             slotKey="children_enrollment"
                             sectionKeys={[slots.enrollment.key]}
@@ -181,7 +196,13 @@ export default function LeadOverviewRuntimeComposition({
                 {slots.overflow.length > 0 ?
                     <div data-lead-overview-slot="overflow" className="space-y-4">
                         <LayoutRuntimeDrawerBodyView
-                            doc={{ ...doc, sections: slots.overflow }}
+                            doc={{
+                                ...doc,
+                                sections:
+                                    visibilityCtx.opportunityEntityLayoutsVisualConfig ?
+                                        sortLayoutSectionsByDocPosition(doc, slots.overflow)
+                                    :   slots.overflow,
+                            }}
                             record={record}
                             entityId={entityId}
                             canMutate={canMutate}

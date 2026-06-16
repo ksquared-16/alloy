@@ -17,6 +17,7 @@ import {
     personNotesCommunicationSectionHasVisibleContent,
 } from "@/lib/layout/runtime/personOverviewSectionContent";
 import { readLayoutSectionPresentationMetadata } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
+import { shouldSuppressOpportunityDrawerSectionForEditorHidden } from "@/lib/layout/runtime/opportunityDrawerEntityLayoutVisibility";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 export type LayoutRuntimeSectionVisibilityContext = {
@@ -24,6 +25,11 @@ export type LayoutRuntimeSectionVisibilityContext = {
     compositionShell?: boolean;
     /** Summary strip sections never collapse via this path. */
     sectionPresentation?: "default" | "summary_strip";
+    /**
+     * Phase 4 — honor entity_layouts `layoutEditorHidden` for registered opportunity drawer sections.
+     * Set from `isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabled*()` at call sites.
+     */
+    opportunityEntityLayoutsVisualConfig?: boolean;
 };
 
 const DRAWER_OVERVIEW_PREMIUM_EMPTY_SECTIONS = new Set<string>([
@@ -62,6 +68,15 @@ export function shouldRenderLayoutRuntimeSection(
     record: ProofRuntimeRecord,
     ctx: LayoutRuntimeSectionVisibilityContext = {},
 ): boolean {
+    if (
+        shouldSuppressOpportunityDrawerSectionForEditorHidden(
+            section,
+            ctx.opportunityEntityLayoutsVisualConfig === true,
+        )
+    ) {
+        return false;
+    }
+
     if (ctx.sectionPresentation === "summary_strip") return true;
 
     const meta = readLayoutSectionPresentationMetadata(section);

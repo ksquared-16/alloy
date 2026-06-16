@@ -135,6 +135,24 @@ export function isLayoutRuntimeOpportunityDrawerBodyEnabledClient(): boolean {
     );
 }
 
+/**
+ * Phase 4 — adopt entity_layouts visual surface config (layoutEditorHidden) on opportunity drawer runtime.
+ * Requires opportunity drawer body runtime. Default on when body is on; kill switch: `…_ENTITY_LAYOUTS_VISUAL_CONFIG=0`.
+ */
+export function isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledServer(): boolean {
+    return (
+        isLayoutRuntimeOpportunityDrawerBodyEnabledServer() &&
+        readFlag(process.env.LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG, true)
+    );
+}
+
+export function isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient(): boolean {
+    return (
+        isLayoutRuntimeOpportunityDrawerBodyEnabledClient() &&
+        readFlag(process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_OPPORTUNITY_DRAWER_ENTITY_LAYOUTS_VISUAL_CONFIG, true)
+    );
+}
+
 /** Per-entity cutover gate — person drawer body. Default: on (when master on). */
 export function isLayoutRuntimePersonDrawerEnabledServer(): boolean {
     return readLayoutRuntimeEntityFlag(process.env.LAYOUT_RUNTIME_PERSON_DRAWER, isLayoutRuntimeEnabledServer());

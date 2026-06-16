@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 import {
     rollbackCandidateVersions,
+    resolveGalleryEditLayoutAction,
     summarizeSurfaceLayoutRecords,
     type SurfaceRegistryApiEntry,
     type SurfaceRegistryApiResponse,
@@ -304,19 +305,54 @@ export default function LayoutGalleryClient({
         if (!canMutate || !opportunityEntry?.identity) return;
         setBusy("open");
         try {
-            let targetId = opportunitySummary?.editTargetId ?? null;
-            if (!targetId) {
+            let summary = opportunitySummary;
+            if (!summary) {
                 const created = await createFromDefault(opportunityEntry.identity);
-                targetId = created.id;
                 await load();
+                summary = summarizeSurfaceLayoutRecords(
+                    [...records, created],
+                    orgId || created.orgId || "",
+                    opportunityEntry.identity,
+                );
             }
-            onOpenEditor(targetId);
+
+            const action = summary ? resolveGalleryEditLayoutAction(summary) : null;
+            if (!action) {
+                const created = await createFromDefault(opportunityEntry.identity);
+                await load();
+                onOpenEditor(created.id);
+                return;
+            }
+
+            if (action.mode === "open") {
+                onOpenEditor(action.layoutId);
+                return;
+            }
+
+            const dupRes = await fetch(`/api/admin/entity-layouts/${encodeURIComponent(action.sourceLayoutId)}/duplicate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            });
+            const dupJson = (await dupRes.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
+            if (!dupRes.ok) throw new Error(dupJson.error ?? "Could not create draft from published layout");
+            await load();
+            onOpenEditor(dupJson.id);
         } catch (e) {
             setError((e as Error).message);
         } finally {
             setBusy(null);
         }
-    }, [canMutate, opportunityEntry, opportunitySummary, createFromDefault, load, onOpenEditor]);
+    }, [
+        canMutate,
+        opportunityEntry,
+        opportunitySummary,
+        createFromDefault,
+        load,
+        onOpenEditor,
+        orgId,
+        records,
+    ]);
 
     const handleDuplicateOpportunity = useCallback(async () => {
         if (!canMutate || !opportunityEntry?.identity) return;

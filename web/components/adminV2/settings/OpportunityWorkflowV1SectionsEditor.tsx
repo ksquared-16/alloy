@@ -9,6 +9,9 @@ import {
     resolveLayoutSectionOperatorProfile,
     withDrawerHeaderEditorSection,
 } from "@/lib/adminV2/layouts/layoutSectionOperatorUi";
+import LegacyWorkflowV1LayoutEditorBanner, {
+    useLegacyOpportunityDrawerLayoutReadOnly,
+} from "@/components/adminV2/settings/LegacyWorkflowV1LayoutEditorBanner";
 import type { FieldPlacementV1 } from "@/lib/fields/fieldPlacementV1";
 
 type EditorSection = {
@@ -82,6 +85,8 @@ export default function OpportunityWorkflowV1SectionsEditor({
     bundleLoading?: boolean;
 }) {
     const { canMutate } = useAdminAuth();
+    const legacyLayoutReadOnly = useLegacyOpportunityDrawerLayoutReadOnly();
+    const canEditLayout = canMutate && !legacyLayoutReadOnly;
     const useParentBundle = previewBundle !== undefined;
     const initialSelectDone = useRef(false);
     const [loading, setLoading] = useState(!useParentBundle);
@@ -173,7 +178,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
     };
 
     const save = async () => {
-        if (!canMutate || !eligible) return;
+        if (!canEditLayout || !eligible) return;
         setSaving(true);
         setSaveError(null);
         setSaveOk(null);
@@ -213,7 +218,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
     };
 
     const addSection = async () => {
-        if (!canMutate || !eligible) return;
+        if (!canEditLayout || !eligible) return;
         const label = newSectionLabel.trim();
         if (!label) return;
         setAddingSection(true);
@@ -279,6 +284,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
 
     return (
         <div className={shellClass} data-testid="opportunity-workflow-v1-sections-editor">
+            <LegacyWorkflowV1LayoutEditorBanner />
             {!embedded ? (
                 <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
                     <div>
@@ -295,7 +301,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                 </div>
             ) : null}
 
-            {canMutate ? (
+            {canEditLayout ? (
                 <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-alloy-pine/25 bg-alloy-pine/[0.03] px-3 py-2">
                     <div className="min-w-[10rem] flex-1">
                         <label className="mb-0.5 block text-[10px] font-medium text-alloy-midnight/55">Add section</label>
@@ -321,7 +327,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
             ) : null}
             {addSectionError ? <p className="mb-2 text-xs text-red-600">{addSectionError}</p> : null}
 
-            {restorableHiddenKeys.length > 0 && canMutate ? (
+            {restorableHiddenKeys.length > 0 && canEditLayout ? (
                 <div className="mb-3 flex flex-wrap items-end gap-2 rounded-lg border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.03] px-3 py-2">
                     <div>
                         <label className="mb-0.5 block text-[10px] font-medium text-alloy-midnight/55">
@@ -385,7 +391,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                     >
                         <div className="flex flex-wrap items-center gap-2">
                             <span className="w-6 text-[10px] text-alloy-midnight/45">{i + 1}</span>
-                            {row.titleEditable && canMutate ? (
+                            {row.titleEditable && canEditLayout ? (
                                 <input
                                     type="text"
                                     value={row.title}
@@ -410,7 +416,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                                     <input
                                         type="checkbox"
                                         checked={row.visible}
-                                        disabled={!canMutate || saving}
+                                        disabled={!canEditLayout || saving}
                                         onChange={(e) =>
                                             setRows((prev) =>
                                                 prev.map((r) =>
@@ -424,7 +430,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                                     Show in drawer
                                 </label>
                             ) : null}
-                            {canMutate && profile.canReorder ? (
+                            {canEditLayout && profile.canReorder ? (
                                 <span className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                                     <button
                                         type="button"
@@ -471,7 +477,7 @@ export default function OpportunityWorkflowV1SectionsEditor({
                 })}
             </ol>
 
-            {canMutate ? (
+            {canEditLayout ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                     <button
                         type="button"

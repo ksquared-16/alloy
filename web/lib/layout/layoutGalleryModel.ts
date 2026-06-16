@@ -61,6 +61,26 @@ export function summarizeSurfaceLayoutRecords(
     };
 }
 
+export type GalleryEditLayoutAction =
+    | { mode: "open"; layoutId: string }
+    | { mode: "duplicate_then_open"; sourceLayoutId: string };
+
+/**
+ * Gallery edit routing — never open a published row directly for mutation.
+ * Prefer existing draft; otherwise duplicate published (or edit target) into a new draft.
+ */
+export function resolveGalleryEditLayoutAction(
+    summary: SurfaceLayoutRecordsSummary,
+): GalleryEditLayoutAction | null {
+    if (summary.latestDraft) {
+        return { mode: "open", layoutId: summary.latestDraft.id };
+    }
+    if (summary.published) {
+        return { mode: "duplicate_then_open", sourceLayoutId: summary.published.id };
+    }
+    return null;
+}
+
 /** Published versions eligible for rollback (older than current published). */
 export function rollbackCandidateVersions(
     orgVersions: EntityLayoutRecord[],

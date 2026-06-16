@@ -9,6 +9,7 @@ import { validateOpportunityWorkflowV1SectionOrder } from "@/lib/admin/opportuni
 import { applyOpportunityWorkflowV1SectionPatches } from "@/lib/admin/opportunityWorkflowV1SectionConfig";
 import { persistOpportunityDrawerLayoutConfig } from "@/lib/admin/recordDrawerLayoutPersist";
 import { fetchEffectiveRecordDrawerLayout } from "@/lib/admin/effectiveRecordDrawerLayout";
+import { assertLegacyOpportunityLayoutWriteAllowed } from "@/lib/admin/legacyOpportunityLayoutWriteGuard";
 
 /**
  * PATCH: safe workflow v1 opportunity drawer section config (visibility, titles, order).
@@ -26,6 +27,9 @@ export async function PATCH(request: NextRequest) {
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden — admin role required" }, { status: 403 });
     }
+
+    const writeGuard = assertLegacyOpportunityLayoutWriteAllowed();
+    if (!writeGuard.ok) return writeGuard.response;
 
     let body: unknown = {};
     try {

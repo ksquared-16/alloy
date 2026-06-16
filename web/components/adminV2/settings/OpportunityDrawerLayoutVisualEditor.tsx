@@ -7,7 +7,8 @@
  * does not alter production drawer runtime.
  */
 
-import Link from "next/link";
+import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
+import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LayoutRuntimePlanView from "@/components/layout/LayoutRuntimePlanView";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
@@ -39,8 +40,134 @@ import {
     tryAddFieldRefToSection,
     validateOpportunityDrawerLayoutDoc,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
-import type { OpportunityDrawerLayoutZone, OpportunityDrawerSectionKey } from "@/lib/layout/surfaceLayoutRegistry";
+import Link from "next/link";
+import {
+    DRAWER_OVERVIEW_CANVAS_CLASS,
+    DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS,
+    DRAWER_OVERVIEW_LEFT_COLUMN_CLASS,
+    DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
+    DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
+    DRAWER_OVERVIEW_SHELL_GRID_CLASS,
+} from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
+import { LEAD_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/leadOverviewComposition";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
+import type { OpportunityDrawerLayoutZone, OpportunityDrawerSectionKey } from "@/lib/layout/surfaceLayoutRegistry";
+
+const MAIN_GRID_SLOT_KEYS = {
+    household: LEAD_OVERVIEW_SECTION_KEYS.household,
+    enrollment: LEAD_OVERVIEW_SECTION_KEYS.enrollment,
+    leadSource: LEAD_OVERVIEW_SECTION_KEYS.leadSource,
+} as const;
+
+function SectionCardsInZone({
+    sections,
+    doc,
+    selectedSectionKey,
+    onSelectSection,
+}: {
+    sections: import("@/lib/layout/layoutV2").LayoutSection[];
+    doc: LayoutDoc;
+    selectedSectionKey: string | null;
+    onSelectSection: (key: string) => void;
+}) {
+    if (!sections.length) {
+        return (
+            <p className="rounded-lg border border-dashed border-alloy-forge/15 px-2 py-3 text-[10px] text-alloy-midnight/45">
+                No sections
+            </p>
+        );
+    }
+    return (
+        <div className="space-y-2">
+            {sections.map((section) => (
+                <SectionPreviewCard
+                    key={section.key}
+                    doc={doc}
+                    sectionKey={section.key}
+                    selected={selectedSectionKey === section.key}
+                    hidden={isSectionEditorHidden(section)}
+                    onSelect={() => onSelectSection(section.key)}
+                />
+            ))}
+        </div>
+    );
+}
+
+function MainBodyCompositionPreview({
+    doc,
+    selectedSectionKey,
+    onSelectSection,
+}: {
+    doc: LayoutDoc;
+    selectedSectionKey: string | null;
+    onSelectSection: (key: string) => void;
+}) {
+    const zones = partitionOpportunityDrawerSectionsByZone(doc);
+    const household = zones.main.find((s) => s.key === MAIN_GRID_SLOT_KEYS.household) ?? null;
+    const enrollment = zones.main.find((s) => s.key === MAIN_GRID_SLOT_KEYS.enrollment) ?? null;
+    const leadSource = zones.main.find((s) => s.key === MAIN_GRID_SLOT_KEYS.leadSource) ?? null;
+    const otherMain = zones.main.filter(
+        (s) =>
+            s.key !== MAIN_GRID_SLOT_KEYS.household &&
+            s.key !== MAIN_GRID_SLOT_KEYS.enrollment &&
+            s.key !== MAIN_GRID_SLOT_KEYS.leadSource,
+    );
+
+    return (
+        <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-testid="visual-editor-main-composition-grid">
+            <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
+                <div className={DRAWER_OVERVIEW_LEFT_COLUMN_CLASS} data-visual-editor-zone-main-household="">
+                    <SectionCardsInZone
+                        sections={household ? [household] : []}
+                        doc={doc}
+                        selectedSectionKey={selectedSectionKey}
+                        onSelectSection={onSelectSection}
+                    />
+                </div>
+                <div className={DRAWER_OVERVIEW_MAIN_COLUMN_CLASS} data-visual-editor-zone-main-enrollment="">
+                    <SectionCardsInZone
+                        sections={enrollment ? [enrollment] : []}
+                        doc={doc}
+                        selectedSectionKey={selectedSectionKey}
+                        onSelectSection={onSelectSection}
+                    />
+                </div>
+                <div className={DRAWER_OVERVIEW_RIGHT_RAIL_CLASS} data-testid="visual-editor-zone-right_rail">
+                    <SectionCardsInZone
+                        sections={zones.right_rail}
+                        doc={doc}
+                        selectedSectionKey={selectedSectionKey}
+                        onSelectSection={onSelectSection}
+                    />
+                </div>
+            </div>
+            {leadSource ?
+                <div className={DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS}>
+                    <SectionPreviewCard
+                        doc={doc}
+                        sectionKey={leadSource.key}
+                        selected={selectedSectionKey === leadSource.key}
+                        hidden={isSectionEditorHidden(leadSource)}
+                        onSelect={() => onSelectSection(leadSource.key)}
+                    />
+                </div>
+            :   null}
+            {otherMain.length > 0 ?
+                <div className="space-y-2" data-visual-editor-zone-main-overflow="">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                        Additional main sections
+                    </p>
+                    <SectionCardsInZone
+                        sections={otherMain}
+                        doc={doc}
+                        selectedSectionKey={selectedSectionKey}
+                        onSelectSection={onSelectSection}
+                    />
+                </div>
+            :   null}
+        </div>
+    );
+}
 
 type Props = {
     layoutId: string;
@@ -340,6 +467,15 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     <p className="mt-0.5 text-xs text-alloy-midnight/50">
                         Edit sections and fields inside the drawer shell · sample preview data
                     </p>
+                    {isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient() ?
+                        <p
+                            className="mt-1 rounded-md border border-alloy-pine/20 bg-alloy-pine/[0.06] px-2 py-1 text-[11px] text-alloy-midnight/70"
+                            data-testid="visual-editor-live-publish-notice"
+                        >
+                            <strong>Live drawer:</strong> publishing this layout updates the opportunity drawer for your org
+                            (section visibility, order, and fields in supported sections).
+                        </p>
+                    :   null}
                     <input
                         type="text"
                         value={workingName}
@@ -447,20 +583,11 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                             onSelectSection={setSelectedSectionKey}
                         />
 
-                        <div className="grid gap-4 md:grid-cols-[1fr_16rem]">
-                            <ZoneEditorColumn
-                                zone="main"
-                                doc={workingDoc}
-                                selectedSectionKey={selectedSectionKey}
-                                onSelectSection={setSelectedSectionKey}
-                            />
-                            <ZoneEditorColumn
-                                zone="right_rail"
-                                doc={workingDoc}
-                                selectedSectionKey={selectedSectionKey}
-                                onSelectSection={setSelectedSectionKey}
-                            />
-                        </div>
+                        <MainBodyCompositionPreview
+                            doc={workingDoc}
+                            selectedSectionKey={selectedSectionKey}
+                            onSelectSection={setSelectedSectionKey}
+                        />
 
                         <ZoneEditorColumn
                             zone="footer_actions"
@@ -499,7 +626,9 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                                 />
                                 Hide section
                                 <span className="block text-[10px] font-normal text-alloy-midnight/45">
-                                    Saved to layout draft. Live drawer unchanged until runtime adoption (Phase 4).
+                                    {isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient() ?
+                                        "Hidden sections are omitted from the live drawer after you publish."
+                                    :   "Saved to draft; enable layout runtime adoption to apply live."}
                                 </span>
                             </label>
 
@@ -561,24 +690,13 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                                     ))}
                                 </ul>
 
-                                <div className="mt-3 space-y-1">
-                                    <select
+                                <div className="mt-3">
+                                    <OpportunityDrawerLayoutFieldPicker
+                                        options={fieldPickerOptions}
                                         value={addFieldRef}
-                                        onChange={(e) => setAddFieldRef(e.target.value)}
-                                        className="w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
-                                        data-testid="visual-editor-add-field"
-                                    >
-                                        <option value="">Add field…</option>
-                                        {fieldPickerOptions.map(({ refKey, label }) => (
-                                            <option key={refKey} value={refKey}>
-                                                {label} ({refKey})
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        type="button"
-                                        className="w-full rounded-md border border-alloy-pine/25 px-2 py-1 text-xs font-medium text-alloy-pine"
-                                        onClick={() => {
+                                        onChange={setAddFieldRef}
+                                        disabled={!validation.ok}
+                                        onAdd={() => {
                                             const result = tryAddFieldRefToSection(
                                                 workingDoc,
                                                 selectedSection.key,
@@ -592,9 +710,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                                             applyDoc(result.doc);
                                             setAddFieldRef("");
                                         }}
-                                    >
-                                        Add selected field
-                                    </button>
+                                    />
                                     {fieldAddError ?
                                         <p className="text-[10px] text-red-600" data-testid="visual-editor-field-add-error">
                                             {fieldAddError}

@@ -192,13 +192,14 @@ describe("opportunityDrawerLayoutEditorApi", () => {
     });
 });
 
-describe("layoutEditorHidden runtime isolation", () => {
-    it("is not referenced by runtime section visibility resolver", () => {
+describe("layoutEditorHidden runtime adoption", () => {
+    it("resolveLayoutRuntimeSectionVisibility honors layoutEditorHidden when adoption ctx is on", () => {
         const src = readFileSync(
             resolve(root, "lib/layout/runtime/resolveLayoutRuntimeSectionVisibility.ts"),
             "utf8",
         );
-        expect(src).not.toContain("layoutEditorHidden");
+        expect(src).toContain("layoutEditorHidden");
+        expect(src).toContain("shouldSuppressOpportunityDrawerSectionForEditorHidden");
     });
 });
 
