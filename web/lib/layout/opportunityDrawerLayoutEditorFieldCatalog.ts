@@ -75,7 +75,7 @@ export function resolveLayoutEditorItemDisplayLabel(item: LayoutItem): string {
         return resolveLayoutEditorFieldRefLabel(item.refKey);
     }
 
-    if (item.kind === "widget" || item.kind === "widget_placeholder") {
+    if (item.kind === "widget_placeholder") {
         const widget = GLOBAL_WIDGET_CATALOG.find((w) => w.widgetKey === item.refKey);
         return widget?.label ?? humanizeToken(item.refKey);
     }
