@@ -12,6 +12,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ProcessingCaseQueueRow, ProcessingCaseStatus } from "@/lib/pos/processingCase/readModel/types";
+import type { QueueRecommendationSummary } from "@/lib/pos/processingCase/recommendation/recommendationSummary";
+import RecommendationBadge from "@/app/adminV2/pos/RecommendationBadge";
 
 /** Display order: operator-actionable lanes first; completed/archived are secondary. */
 const PRIMARY_LANES: { key: ProcessingCaseStatus; label: string }[] = [
@@ -47,7 +49,12 @@ const LANE_TONE: Record<string, string> = {
 };
 
 interface QueueResponse {
-    data: { rows: ProcessingCaseQueueRow[]; next_cursor: unknown; counts: Record<string, number> };
+    data: {
+        rows: ProcessingCaseQueueRow[];
+        next_cursor: unknown;
+        counts: Record<string, number>;
+        recommendations?: Record<string, QueueRecommendationSummary>;
+    };
 }
 
 function formatAge(iso: string | null): string {
@@ -76,6 +83,7 @@ export default function ProcessingQueueList({
 }) {
     const [rows, setRows] = useState<ProcessingCaseQueueRow[]>([]);
     const [counts, setCounts] = useState<Record<string, number>>({});
+    const [recommendations, setRecommendations] = useState<Record<string, QueueRecommendationSummary>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -89,6 +97,7 @@ export default function ProcessingQueueList({
             const body = (await res.json()) as QueueResponse;
             setRows(body.data.rows);
             setCounts(body.data.counts);
+            setRecommendations(body.data.recommendations ?? {});
         } catch (e) {
             setError(e instanceof Error ? e.message : "Failed to load processing queue");
             setRows([]);
@@ -173,6 +182,7 @@ export default function ProcessingQueueList({
                         const kindLabel = SOURCE_TYPE_LABELS[row.primarySource?.kind ?? ""] ?? "Source";
                         const title = row.sourceDisplay?.label ?? row.primarySource?.kind ?? "Untitled source";
                         const channel = row.sourceDisplay?.channel ?? null;
+                        const rec = recommendations[row.id] ?? null;
                         return (
                             <li key={row.id}>
                                 <button
@@ -197,6 +207,12 @@ export default function ProcessingQueueList({
                                             {channel ? <span className="truncate">via {channel}</span> : null}
                                             {row.relatedSourceCount > 0 ? <span>· +{row.relatedSourceCount} source{row.relatedSourceCount > 1 ? "s" : ""}</span> : null}
                                         </span>
+                                        {rec ? (
+                                            <span className="mt-1 flex items-center gap-1.5">
+                                                <span className="text-[9px] font-medium uppercase tracking-wide text-stone-300">Alloy</span>
+                                                <RecommendationBadge rec={rec} />
+                                            </span>
+                                        ) : null}
                                     </span>
                                 </button>
                             </li>

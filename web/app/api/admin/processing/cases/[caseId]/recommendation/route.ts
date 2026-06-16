@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
-import { extractBoundPerson } from "@/lib/pos/processingCase/approveHandoff";
-import { resolveIntakeIdentity, type IntakeIdentityResolverDeps } from "@/lib/forms/intake/resolveIntakeIdentity";
-import {
-    getPersonLabels,
-    listPersonIdsByEmail,
-    listPersonIdsByPhone,
-} from "@/lib/forms/intake/intakeIdentityLookups";
+import { recommendationFromFormSubmission } from "@/lib/pos/processingCase/recommendation/recommendationFromSubmission";
 
 export const dynamic = "force-dynamic";
 
@@ -61,53 +55,9 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
             });
         }
 
-        const { data: sub, error: subErr } = await supabase
-            .from("form_submissions")
-            .select("payload, form_definition_version_id")
-            .eq("org_id", ctx.orgId)
-            .eq("id", source.source_id)
-            .maybeSingle();
-        if (subErr) throw new Error(subErr.message);
-        const subRow = sub as { payload?: Record<string, unknown>; form_definition_version_id?: string | null } | null;
-        if (!subRow) return jsonData({ supported: false, reason: "Submission not found." });
-
-        const valuesRaw = subRow.payload?.values;
-        const values =
-            valuesRaw && typeof valuesRaw === "object" && !Array.isArray(valuesRaw)
-                ? (valuesRaw as Record<string, unknown>)
-                : {};
-
-        let schemaJson: unknown = null;
-        if (subRow.form_definition_version_id) {
-            const { data: ver, error: verErr } = await supabase
-                .from("form_definition_versions")
-                .select("schema_json")
-                .eq("org_id", ctx.orgId)
-                .eq("id", subRow.form_definition_version_id)
-                .maybeSingle();
-            if (verErr) throw new Error(verErr.message);
-            schemaJson = (ver as { schema_json?: unknown } | null)?.schema_json ?? null;
-        }
-
-        const bound = extractBoundPerson(schemaJson, values);
-
-        const deps: IntakeIdentityResolverDeps = {
-            listPersonIdsByEmail: (orgId, e) => listPersonIdsByEmail(supabase, orgId, e),
-            listPersonIdsByPhone: (orgId, p) => listPersonIdsByPhone(supabase, orgId, p),
-            getPersonLabels: (orgId, ids) => getPersonLabels(supabase, orgId, ids),
-        };
-
-        const recommendation = await resolveIntakeIdentity(deps, {
-            orgId: ctx.orgId,
-            person: { email: bound.email, phone: bound.phone, firstName: bound.firstName, lastName: bound.lastName },
-        });
-
-        const mappedPersonValues = [bound.email, bound.phone, bound.firstName, bound.lastName].filter(Boolean).length;
-        return jsonData({
-            supported: true,
-            recommendation,
-            source: { kind: source.source_kind, hasEmailBinding: bound.hasEmailBinding, mappedPersonValues },
-        });
+        // Shared FP8a computation (same logic the queue enrichment uses).
+        const result = await recommendationFromFormSubmission(supabase, ctx.orgId, source.source_id);
+        return jsonData(result);
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to build recommendation" },

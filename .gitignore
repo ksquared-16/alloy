@@ -32,3 +32,6 @@ node_modules/
 **/.vercel/
 
 web/.next/
+
+# Local scoped typecheck helper (not product code)
+web/tsconfig.poscheck.json

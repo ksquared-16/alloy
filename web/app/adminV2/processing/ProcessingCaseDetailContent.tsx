@@ -15,6 +15,16 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/types";
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
+import ReviewDecideCard, { DECISION_TO_ACTION, type RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
+
+/** Operator decision vocabulary shown on every case (recommended one is highlighted; others are prototype). */
+const OPERATOR_ACTIONS: Array<{ key: string; label: string }> = [
+    { key: "link_existing", label: "Link existing" },
+    { key: "create_new", label: "Create new" },
+    { key: "update_existing", label: "Update existing" },
+    { key: "route_for_review", label: "Route for review" },
+    { key: "reject", label: "Reject / ignore" },
+];
 
 interface DetailResponse {
     data: {
@@ -63,6 +73,8 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
     const [approving, setApproving] = useState(false);
     const [approveErr, setApproveErr] = useState<string | null>(null);
     const [approveResult, setApproveResult] = useState<HandoffResult | null>(null);
+    const [rec, setRec] = useState<RecommendationView | null>(null);
+    const [recLoading, setRecLoading] = useState(true);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -85,6 +97,30 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
     useEffect(() => {
         void load();
     }, [load]);
+
+    // Recommendation is read-only and reuses the existing FP8a endpoint (no new matching).
+    useEffect(() => {
+        let cancelled = false;
+        setRecLoading(true);
+        setRec(null);
+        (async () => {
+            try {
+                const res = await fetch(`/api/admin/processing/cases/${caseId}/recommendation`, {
+                    credentials: "same-origin",
+                });
+                if (!res.ok) throw new Error(`Request failed (${res.status})`);
+                const body = (await res.json()) as { data?: RecommendationView };
+                if (!cancelled) setRec(body.data ?? null);
+            } catch {
+                if (!cancelled) setRec(null);
+            } finally {
+                if (!cancelled) setRecLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [caseId]);
 
     const approve = useCallback(async () => {
         setApproving(true);
@@ -139,6 +175,12 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
     const destinations = data?.affectedRecordTypes ?? [];
     const isClosed = detail.status === "completed" || detail.status === "archived";
 
+    // The operator action Alloy recommends (drives the primary button + highlight).
+    const recommendedActionKey =
+        rec?.supported && rec.recommendation ? DECISION_TO_ACTION[rec.recommendation.decision].key : null;
+    const recommendedActionLabel =
+        rec?.supported && rec.recommendation ? DECISION_TO_ACTION[rec.recommendation.decision].label : null;
+
     return (
         <div className="flex h-full min-h-0 flex-col">
             {/* Context header */}
@@ -163,6 +205,9 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
 
             {/* Work surface (scrolls) */}
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                {/* Core POS moment: what Alloy understood + what it recommends */}
+                {!isClosed ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}
+
                 <section className="mb-5">
                     <Eyebrow>Evidence</Eyebrow>
                     <ul className="space-y-2">
@@ -264,8 +309,12 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     <>
                         <div className="mb-2 flex items-center justify-between gap-2">
                             <div className="text-[12.5px] text-stone-800">
-                                <span className="text-[10.5px] font-medium uppercase tracking-wide text-emerald-700">Proposed action</span>
-                                <div>Promote this submission to a CRM record</div>
+                                <span className="text-[10.5px] font-medium uppercase tracking-wide text-emerald-700">Operator decision</span>
+                                <div>
+                                    {recommendedActionLabel
+                                        ? `Alloy recommends “${recommendedActionLabel}” — approve to execute, or choose another.`
+                                        : "Review the proposal, then approve to execute."}
+                                </div>
                             </div>
                             <span className="shrink-0 text-right text-[10px] leading-tight text-stone-400">
                                 Review-first
@@ -280,26 +329,34 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                         ) : null}
                         {approveErr ? <div className="mb-2 text-[11.5px] text-amber-700">{approveErr}</div> : null}
                         <div className="flex flex-wrap items-center gap-2">
+                            {/* Real, preserved approve path — executes Alloy's link-or-create handoff. */}
                             <button
                                 type="button"
                                 disabled={approving}
                                 onClick={() => void approve()}
                                 className="rounded-md bg-emerald-600 px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
                             >
-                                {approving ? "Approving…" : "Approve action"}
+                                {approving
+                                    ? "Approving…"
+                                    : recommendedActionLabel
+                                      ? `Approve — ${recommendedActionLabel}`
+                                      : "Approve action"}
                             </button>
-                            {["Adjust match", "Request info", "Reject"].map((label) => (
+                            {/* Operator decision alternatives — visible decision model; not yet wired. */}
+                            {OPERATOR_ACTIONS.filter((a) => a.key !== recommendedActionKey).map((a) => (
                                 <button
-                                    key={label}
+                                    key={a.key}
                                     type="button"
                                     disabled
-                                    title="Coming later"
-                                    className="cursor-not-allowed rounded-md border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-400"
+                                    title="Prototype — choose this decision once alternative outcomes are wired"
+                                    className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-stone-200 px-3 py-1.5 text-[12.5px] text-stone-400"
                                 >
-                                    {label}
+                                    {a.label}
+                                    <span className="rounded bg-stone-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-stone-400">
+                                        Proto
+                                    </span>
                                 </button>
                             ))}
-                            <span className="text-[10.5px] text-stone-400">Coming later</span>
                         </div>
                     </>
                 )}

@@ -10,14 +10,50 @@ import {
     listProcessingCaseQueue,
 } from "@/lib/pos/processingCase/readModel/processingCaseReadModelService";
 import { buildProcessingQueueRequest } from "@/lib/pos/processingCase/readModel/buildProcessingQueueRequest";
+import { recommendationFromFormSubmission } from "@/lib/pos/processingCase/recommendation/recommendationFromSubmission";
+import {
+    MANUAL_REVIEW_SUMMARY,
+    summarizeIntakeRecommendation,
+    type QueueRecommendationSummary,
+} from "@/lib/pos/processingCase/recommendation/recommendationSummary";
 
 export const dynamic = "force-dynamic";
 
 /**
+ * Best-effort recommendation enrichment for the page of rows already loaded.
+ * Reuses the SAME FP8a computation as the per-case endpoint (no duplicated match
+ * logic), runs once per page inside this single request (no N UI calls), and never
+ * breaks the queue — any failure degrades that row to "Manual review".
+ */
+async function enrichRecommendations(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    rows: Array<{ id: string; primarySource: { kind: string; id: string } | null }>
+): Promise<Record<string, QueueRecommendationSummary>> {
+    const out: Record<string, QueueRecommendationSummary> = {};
+    await Promise.all(
+        rows.map(async (row) => {
+            try {
+                const ps = row.primarySource;
+                if (ps && ps.kind === "form_submission") {
+                    const r = await recommendationFromFormSubmission(supabase, orgId, ps.id);
+                    out[row.id] = r.supported ? summarizeIntakeRecommendation(r.recommendation) : MANUAL_REVIEW_SUMMARY;
+                } else {
+                    out[row.id] = MANUAL_REVIEW_SUMMARY;
+                }
+            } catch {
+                out[row.id] = MANUAL_REVIEW_SUMMARY;
+            }
+        })
+    );
+    return out;
+}
+
+/**
  * GET /api/admin/processing/queue — read-only Processing Case queue (POS-FP3).
  *
- * Delegates directly to the FP2 read model: this route only parses params and
- * serializes FP2 output. No duplicated enrichment / filtering / shaping. GET only.
+ * Delegates to the FP2 read model for rows/counts, then attaches a thin, best-effort
+ * recommendation summary per row (sibling map; the read model is untouched). GET only.
  */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
@@ -34,8 +70,22 @@ export async function GET(request: NextRequest) {
             listProcessingCaseQueue(deps, registry, query),
             countProcessingCasesByStatus(deps, countQuery),
         ]);
+        // Enrichment is isolated: if it throws, the queue still returns rows/counts.
+        let recommendations: Record<string, QueueRecommendationSummary> = {};
+        try {
+            recommendations = await enrichRecommendations(
+                supabase,
+                ctx.orgId,
+                queue.rows.map((r) => ({
+                    id: r.id,
+                    primarySource: r.primarySource ? { kind: r.primarySource.kind, id: r.primarySource.id } : null,
+                }))
+            );
+        } catch (enrichErr) {
+            console.error("[api/admin/processing/queue] recommendation enrichment failed (non-fatal):", enrichErr);
+        }
         return NextResponse.json({
-            data: { rows: queue.rows, next_cursor: queue.nextCursor, counts },
+            data: { rows: queue.rows, next_cursor: queue.nextCursor, counts, recommendations },
         });
     } catch (e) {
         // TEMP DIAGNOSTIC (POS-FP3): surface the true underlying error/stack in the
