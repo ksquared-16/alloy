@@ -54,6 +54,8 @@ type Props = {
     onClose: () => void;
     title?: string;
     description?: string;
+    /** Optional progress rail override (Create Lead uses its own three-step rail). */
+    stepRail?: ReactNode;
     step: ActionWorkspaceStep;
     children: ReactNode;
     footer?: ReactNode;
@@ -77,6 +79,7 @@ export function ActionWorkspaceBosShell({
     title,
     description,
     step,
+    stepRail,
     children,
     footer,
     busy = false,
@@ -232,7 +235,7 @@ export function ActionWorkspaceBosShell({
                         </button>
                     </div>
                     <div className="mt-3">
-                        <ActionWorkspaceStepRail activeStep={step} onDark={!integratedHeader} />
+                        {stepRail ?? <ActionWorkspaceStepRail activeStep={step} onDark={!integratedHeader} />}
                     </div>
                 </div>
             </header>

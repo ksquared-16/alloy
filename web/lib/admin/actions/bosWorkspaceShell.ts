@@ -35,7 +35,7 @@ export const BOS_SHELL_HEADER_PADDING = "18px 28px 16px";
 export const BOS_SHELL_MIDNIGHT_FORGE = "#273F52";
 export const BOS_SHELL_TERRITORY_TITLE = "BOS";
 export const BOS_SHELL_TERRITORY_TAGLINE =
-    "BOS drafts a lead from inquiry material — you approve every detail.";
+    "BOS drafts a lead from pasted information — you approve every detail.";
 export const CREATE_LEAD_WORKSPACE_TITLE = "Create Lead";
 
 export const BOS_WORKSPACE_PANEL_SHADOW: CSSProperties = {

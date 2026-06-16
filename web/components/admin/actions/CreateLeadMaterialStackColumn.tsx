@@ -27,7 +27,7 @@ type Props = {
 };
 
 const INTAKE_ACTIONS: Array<{ icon: LucideIcon; label: string; hint: string; enabled: boolean }> = [
-    { icon: ClipboardPaste, label: "Paste inquiry text", hint: "Email, web form, or notes", enabled: true },
+    { icon: ClipboardPaste, label: "Paste information", hint: "Email, web form, or notes", enabled: true },
     { icon: Mail, label: "Drop email", hint: "Coming soon", enabled: false },
     { icon: Phone, label: "Add call note", hint: "Coming soon", enabled: false },
     { icon: Upload, label: "Upload source", hint: "Coming soon", enabled: false },
@@ -106,7 +106,7 @@ export function CreateLeadMaterialStackColumn({
                     <div className="absolute inset-0 z-[1] flex items-center justify-center bg-[#FAFBFC]/90 backdrop-blur-[1px]">
                         <BosRevealSequence
                             mode="working"
-                            message="Analyzing inquiry with BOS…"
+                            message="Analyzing with BOS…"
                             active={analyzing}
                             markSize="md"
                             data-testid="action-workspace-paste-analyzing"
@@ -116,7 +116,7 @@ export function CreateLeadMaterialStackColumn({
 
                 {!material && !composerOpen ?
                     <div className="flex h-full min-h-[16rem] flex-col gap-3">
-                        <p className="text-[13px] font-medium text-alloy-midnight/70">Add inquiry material</p>
+                        <p className="text-[13px] font-medium text-alloy-midnight/70">Paste family/lead information</p>
                         <div className="grid gap-2">
                             {INTAKE_ACTIONS.map((action) => {
                                 const Icon = action.icon;
@@ -157,7 +157,7 @@ export function CreateLeadMaterialStackColumn({
                         data-testid="create-lead-material-composer"
                     >
                         <div className="mb-2 flex items-center justify-between gap-2">
-                            <p className="text-[12px] font-semibold text-alloy-midnight">Paste inquiry material</p>
+                            <p className="text-[12px] font-semibold text-alloy-midnight">Paste family/lead information</p>
                             <button
                                 type="button"
                                 onClick={() => onComposerOpenChange(false)}

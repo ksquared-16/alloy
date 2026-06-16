@@ -263,6 +263,40 @@ function extractContactSignals(text: string, spec: ActionIntakeSpec): ActionInta
     return out;
 }
 
+function extractNameFromContactBlob(text: string, spec: ActionIntakeSpec): ActionIntakePasteExtractedField[] {
+    const lines = text.split(/\r?\n/).map((l) => trim(l)).filter(Boolean);
+    if (lines.length !== 1) return [];
+    const line = lines[0]!;
+    if (!EMAIL_RE.test(line) && !PHONE_RE.test(line)) return [];
+    if (PARENT_LABEL_RE.test(line) || CHILD_LABEL_RE.test(line)) return [];
+
+    let remainder = line;
+    const email = line.match(EMAIL_RE);
+    if (email?.[0]) remainder = remainder.replace(email[0], " ");
+    const phone = line.match(PHONE_RE);
+    if (phone?.[0]) remainder = remainder.replace(phone[0], " ");
+    remainder = remainder.replace(/\s+/g, " ").trim();
+    if (!remainder || remainder.includes(":")) return [];
+    const split = splitPersonName(remainder);
+    if (!split) return [];
+
+    const out: ActionIntakePasteExtractedField[] = [];
+    const seen = new Set<string>();
+    pushField(out, seen, {
+        payload_key: "first_name",
+        rule_id: fieldByPayloadKey(spec, "first_name")?.rule_id ?? "person:first_name",
+        value: split.first,
+        confidence: "high",
+    });
+    pushField(out, seen, {
+        payload_key: "last_name",
+        rule_id: fieldByPayloadKey(spec, "last_name")?.rule_id ?? "person:last_name",
+        value: split.last,
+        confidence: "high",
+    });
+    return out;
+}
+
 function extractHeuristicNames(lines: string[], spec: ActionIntakeSpec): ActionIntakePasteExtractedField[] {
     const out: ActionIntakePasteExtractedField[] = [];
     const seen = new Set<string>();
@@ -308,6 +342,7 @@ export function parseCreateLeadIntakeText(input: {
 
     for (const f of [
         ...extractContactSignals(raw_text, input.spec),
+        ...extractNameFromContactBlob(raw_text, input.spec),
         ...extractLabeledLines(lines, input.spec),
         ...extractHeuristicNames(lines, input.spec),
     ]) {

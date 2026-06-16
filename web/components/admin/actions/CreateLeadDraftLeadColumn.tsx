@@ -10,8 +10,8 @@ import type {
 import type { CreateLeadLiveFinding } from "@/lib/admin/actions/createLeadOperationalIntakeModel";
 import {
     BOS_CONFIDENCE_STYLES,
-    missingRequiredLabelsForIntake,
 } from "@/lib/admin/actions/actionWorkspaceBosTheme";
+import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
 
 type Props = {
@@ -19,6 +19,7 @@ type Props = {
     suggestions: ActionWorkspaceBosSuggestion[];
     analyzing: boolean;
     manualMode: boolean;
+    draftEditMode: boolean;
     sections: Array<{ key: string; label: string; fields: ActionWorkspaceGatherField[] }>;
     values: Record<string, string>;
     intakeSpec: ActionIntakeSpec | null;
@@ -150,6 +151,7 @@ export function CreateLeadDraftLeadColumn({
     suggestions,
     analyzing,
     manualMode,
+    draftEditMode,
     sections,
     values,
     intakeSpec,
@@ -162,12 +164,13 @@ export function CreateLeadDraftLeadColumn({
     analyzeError,
     validationIssues,
 }: Props) {
-    const filledCount = findings.filter((f) => f.status === "confirmed" || f.status === "review").length;
+    const showDraftForm = manualMode || draftEditMode;
+    const reviewSuggestions = suggestions.filter((s) => s.confidence !== "high");
     const missing =
-        intakeSpec ?
-            missingRequiredLabelsForIntake(intakeSpec, values, suggestions)
+        intakeSpec && showDraftForm ?
+            missingRequiredLabelsForCreateLead(intakeSpec, values)
         :   [];
-    const showApply = suggestions.length > 0 && !analyzing && !manualMode;
+    const showApplyReview = reviewSuggestions.length > 0 && draftEditMode;
 
     return (
         <section
@@ -185,13 +188,13 @@ export function CreateLeadDraftLeadColumn({
                             "Manual entry"
                         : analyzing ?
                             "Extracting lead details…"
-                        : suggestions.length > 0 ?
-                            `${suggestions.length} suggestions · review and apply`
-                        :   `${filledCount} fields · extracted in place`}
+                        : draftEditMode ?
+                            "Edit missing or incorrect fields"
+                        :   "Required fields appear after analyze"}
                     </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
-                    {showApply ?
+                    {showApplyReview ?
                         <button
                             type="button"
                             disabled={selectedSuggestionCount === 0}
@@ -199,7 +202,7 @@ export function CreateLeadDraftLeadColumn({
                             className="rounded-lg border border-[#00A283]/25 bg-[#00A283]/10 px-3 py-1.5 text-[11px] font-semibold text-[#007A63] hover:bg-[#00A283]/15 disabled:opacity-50"
                             data-testid="action-workspace-bos-apply-button"
                         >
-                            Apply selected
+                            Review suggestions
                         </button>
                     :   null}
                     {analyzing ?
@@ -221,17 +224,17 @@ export function CreateLeadDraftLeadColumn({
                     </p>
                 :   null}
 
-                {missing.length > 0 && !manualMode ?
+                {missing.length > 0 ?
                     <div
                         className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-950"
                         data-testid="action-workspace-bos-missing-hints"
                     >
-                        <span className="font-semibold">Still needed after apply: </span>
+                        <span className="font-semibold">Still needed: </span>
                         {missing.join(" · ")}
                     </div>
                 :   null}
 
-                {manualMode ?
+                {showDraftForm ?
                     <div data-testid="create-lead-gather-fields">
                         <ActionWorkspaceGatherFields
                             sections={sections}
@@ -266,8 +269,8 @@ export function CreateLeadDraftLeadColumn({
                 </div>
             :   <div className="shrink-0 border-t border-alloy-stone/8 px-4 py-2.5">
                     <p className="text-[11px] text-alloy-midnight/40">
-                        {suggestions.length > 0 && !manualMode ?
-                            "Select suggestions to apply, then confirm in the draft."
+                        {draftEditMode ?
+                            "High-confidence values are applied automatically after analyze."
                         :   "Answers appear here as material is analyzed."}
                     </p>
                 </div>

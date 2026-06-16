@@ -2,12 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
     gatherFieldsFromActionIntakeSpec,
     missingRequiredLabelsForCreateLead,
-    projectedCreateLeadValues,
     resolveCreateLeadRequiredFields,
     validateCreateLeadFromIntakeSpec,
 } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { resolveCreateLeadActionIntakeSpec } from "@/lib/lifecycle/resolveActionIntakeSpec";
-import type { ActionWorkspaceBosSuggestion } from "@/lib/admin/actions/actionWorkspaceTypes";
 
 const enrollmentLeadMetadata = {
     lifecycle_builder_stage_field_rules_v1: {
@@ -119,39 +117,22 @@ describe("resolveCreateLeadRequiredFields", () => {
         expect(gatherFields.find((f) => f.payload_key === "first_name")?.field_label).toBe("Guardian first name");
     });
 
-    it("updates required banner after apply using projected suggestion values", () => {
+    it("updates required banner from applied draft values (not unapplied suggestions)", () => {
         const spec = resolveCreateLeadActionIntakeSpec({
             department_id: "dept-1",
             operator_stage: "lead",
             builder_stage_key: "lead",
             department_metadata: enrollmentLeadMetadata,
         });
-        const suggestions: ActionWorkspaceBosSuggestion[] = [
-            {
-                id: "1",
-                payload_key: "first_name",
-                field_label: "First name",
-                suggested_value: "Jordan",
-                confidence: "high",
-                selected: true,
-            },
-            {
-                id: "2",
-                payload_key: "last_name",
-                field_label: "Last name",
-                suggested_value: "Lee",
-                confidence: "high",
-                selected: true,
-            },
-        ];
 
-        const beforeApply = missingRequiredLabelsForCreateLead(spec, {}, suggestions);
-        expect(beforeApply).toEqual(
-            expect.arrayContaining(["Location", "Email", "Phone"]),
-        );
-
-        const projected = projectedCreateLeadValues({}, suggestions, true);
-        const afterApply = missingRequiredLabelsForCreateLead(spec, projected, []);
+        const applied = {
+            first_name: "Jordan",
+            last_name: "Lee",
+            email: "",
+            phone: "",
+            location_id: "",
+        };
+        const afterApply = missingRequiredLabelsForCreateLead(spec, applied);
         expect(afterApply).toEqual(expect.arrayContaining(["Location", "Email", "Phone"]));
         expect(afterApply).not.toContain("First name");
         expect(afterApply).not.toContain("Last name");
@@ -191,11 +172,11 @@ describe("resolveCreateLeadRequiredFields", () => {
 });
 
 describe("create lead step rail affordance", () => {
-    it("step pills are non-interactive progress indicators", async () => {
+    it("Create Lead progress pills are non-interactive progress indicators", async () => {
         const { readFileSync } = await import("node:fs");
         const { resolve } = await import("node:path");
         const rail = readFileSync(
-            resolve(__dirname, "../../../components/admin/actions/ActionWorkspaceStepRail.tsx"),
+            resolve(__dirname, "../../../components/admin/actions/CreateLeadProgressRail.tsx"),
             "utf8",
         );
         expect(rail).toContain("cursor-default");
@@ -213,12 +194,12 @@ describe("create lead modal intake wiring", () => {
             "utf8",
         );
         expect(modal).toContain("fetchActionIntakeSpec");
-        expect(modal).toContain("resolveCreateLeadRequiredFields");
-        expect(modal).toContain("validateCreateLeadFromIntakeSpec");
+        expect(modal).toContain("CreateLeadProgressRail");
+        expect(modal).toContain("applyHighConfidenceCreateLeadExtraction");
         const draft = readFileSync(
             resolve(__dirname, "../../../components/admin/actions/CreateLeadDraftLeadColumn.tsx"),
             "utf8",
         );
-        expect(draft).toContain("missingRequiredLabelsForIntake");
+        expect(draft).toContain("missingRequiredLabelsForCreateLead");
     });
 });

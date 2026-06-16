@@ -29,6 +29,7 @@ type Props = {
     analyzeError: string | null;
     disabled?: boolean;
     manualMode: boolean;
+    draftEditMode: boolean;
     onEnterManually: () => void;
     onClearMaterial: () => void;
     materialAnalyzed: boolean;
@@ -53,6 +54,7 @@ export function CreateLeadOperationalIntake({
     analyzeError,
     disabled = false,
     manualMode,
+    draftEditMode,
     onEnterManually,
     onClearMaterial,
     materialAnalyzed,
@@ -70,9 +72,11 @@ export function CreateLeadOperationalIntake({
         values,
         analyzing,
         manualMode,
+        draftEditMode,
         gatherFields,
     });
     const selectedSuggestionCount = suggestions.filter((s) => s.selected).length;
+    const showDraftForm = manualMode || draftEditMode;
 
     const handleClearMaterial = () => {
         setComposerOpen(false);
@@ -111,6 +115,7 @@ export function CreateLeadOperationalIntake({
                 suggestions={suggestions}
                 analyzing={analyzing}
                 manualMode={manualMode}
+                draftEditMode={draftEditMode}
                 sections={sections}
                 values={values}
                 intakeSpec={intakeSpec}
@@ -121,7 +126,7 @@ export function CreateLeadOperationalIntake({
                 onApplySuggestions={onApplySuggestions}
                 selectedSuggestionCount={selectedSuggestionCount}
                 analyzeError={analyzeError}
-                validationIssues={manualMode ? validationIssues : []}
+                validationIssues={showDraftForm ? validationIssues : []}
             />
         </div>
     );

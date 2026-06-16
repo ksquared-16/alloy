@@ -86,7 +86,7 @@ export function buildCreateLeadMaterialCard(args: {
     return {
         id: "material-paste",
         sourceType: "paste",
-        label: "Pasted inquiry",
+        label: "Pasted information",
         snippet,
         status,
     };
@@ -97,73 +97,83 @@ export function buildCreateLeadLiveFindings(args: {
     values: Record<string, string>;
     analyzing: boolean;
     manualMode: boolean;
+    draftEditMode?: boolean;
     gatherFields?: readonly ActionWorkspaceGatherField[];
 }): CreateLeadLiveFinding[] {
     const gatherFields = args.gatherFields ?? CREATE_LEAD_GATHER_FIELDS;
 
+    if (args.manualMode || args.draftEditMode) {
+        return [];
+    }
+
     if (args.analyzing) {
-        return args.suggestions.map((s) => ({
-            id: s.id,
-            entity: entityLabelForField(fieldForPayloadKey(gatherFields, s.payload_key)),
-            value: s.suggested_value,
-            status: "streaming",
-            detail: "Extracting from material…",
-            payloadKey: s.payload_key,
-            confidence: s.confidence,
-            selected: s.selected,
-            editable: true,
-            source: "suggestion",
-        }));
+        const keys = placeholderOrderForFields(gatherFields);
+        return keys.map((payloadKey) => {
+            const field = fieldForPayloadKey(gatherFields, payloadKey);
+            const pending = args.suggestions.find((s) => s.payload_key === payloadKey);
+            const value =
+                (args.values[payloadKey] ?? "").trim() ||
+                pending?.suggested_value ||
+                "";
+            return {
+                id: pending?.id ?? `streaming:${payloadKey}`,
+                entity: entityLabelForField(field),
+                value,
+                status: "streaming" as const,
+                detail: "Extracting from material…",
+                payloadKey,
+                confidence: pending?.confidence,
+                selected: pending?.selected,
+                editable: false,
+                source: pending ? ("suggestion" as const) : ("placeholder" as const),
+            };
+        });
     }
 
-    if (args.suggestions.length > 0) {
-        return args.suggestions.map((s) => ({
-            id: s.id,
-            entity: s.field_label,
-            value: s.suggested_value,
-            status: confidenceToStatus(s.confidence),
-            detail: s.confidence === "high" ? "High confidence" : "Needs review",
-            payloadKey: s.payload_key,
-            confidence: s.confidence,
-            selected: s.selected,
-            editable: true,
-            source: "suggestion",
-        }));
-    }
+    const order = placeholderOrderForFields(gatherFields);
+    const suggestionByKey = new Map(args.suggestions.map((s) => [s.payload_key, s]));
 
-    const valueFindings = gatherFields.flatMap((field) => {
-        const value = (args.values[field.payload_key] ?? "").trim();
-        if (!value) return [];
-        return [
-            {
-                id: `value:${field.payload_key}`,
+    return order.map((payloadKey) => {
+        const field = fieldForPayloadKey(gatherFields, payloadKey);
+        const value = (args.values[payloadKey] ?? "").trim();
+        const pending = suggestionByKey.get(payloadKey);
+
+        if (value) {
+            return {
+                id: `value:${payloadKey}`,
                 entity: entityLabelForField(field),
                 value,
                 status: "confirmed" as const,
-                detail: args.manualMode ? "Entered manually" : "Confirmed",
-                payloadKey: field.payload_key,
-                editable: args.manualMode,
-                source: "value" as const,
-            },
-        ];
-    });
-
-    if (valueFindings.length > 0) return valueFindings;
-
-    return placeholderOrderForFields(gatherFields)
-        .map((payloadKey) => {
-            const field = gatherFields.find((f) => f.payload_key === payloadKey);
-            if (!field) return null;
-            const finding: CreateLeadLiveFinding = {
-                id: `placeholder:${payloadKey}`,
-                entity: entityLabelForField(field),
-                value: "",
-                status: "empty",
-                detail: "Waiting for material",
+                detail: "Confirmed",
                 payloadKey,
-                source: "placeholder",
+                editable: false,
+                source: "value" as const,
             };
-            return finding;
-        })
-        .filter((f): f is CreateLeadLiveFinding => f != null);
+        }
+
+        if (pending) {
+            return {
+                id: pending.id,
+                entity: pending.field_label,
+                value: pending.suggested_value,
+                status: confidenceToStatus(pending.confidence),
+                detail: pending.confidence === "medium" ? "Needs review" : "Low confidence",
+                payloadKey,
+                confidence: pending.confidence,
+                selected: pending.selected,
+                editable: true,
+                source: "suggestion" as const,
+            };
+        }
+
+        return {
+            id: `placeholder:${payloadKey}`,
+            entity: entityLabelForField(field),
+            value: "",
+            status: "empty" as const,
+            detail: "Waiting for material",
+            payloadKey,
+            source: "placeholder" as const,
+        };
+    });
 }

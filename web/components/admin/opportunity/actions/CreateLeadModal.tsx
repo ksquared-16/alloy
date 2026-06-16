@@ -14,7 +14,6 @@ import type {
 import {
     CREATE_LEAD_GATHER_FIELDS,
     CREATE_LEAD_PLATFORM_REQUIRED_KEYS,
-    bosSuggestionsFromExtraction,
     emptyCreateLeadGatherValues,
     mapCreateLeadGatherToExecutePayload,
     validateCreateLeadPlatformMinimum,
@@ -26,13 +25,17 @@ import { mapBosRecommendationsToSuccessActions } from "@/lib/admin/actions/mapBo
 import { resolveCreateLeadPostCreateRecommendations } from "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations";
 import { CREATE_LEAD_WORKSPACE_TITLE } from "@/lib/admin/actions/bosWorkspaceShell";
 import {
+    applyHighConfidenceCreateLeadExtraction,
     emptyCreateLeadValuesForFields,
     gatherFieldsFromActionIntakeSpec,
     gatherSectionsFromFields,
     resolveCreateLeadRequiredFields,
+    reviewSuggestionsFromExtraction,
     validateCreateLeadFromIntakeSpec,
     type CreateLeadRequiredFieldsBundle,
 } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
+import { resolveCreateLeadProgressStep } from "@/lib/admin/actions/createLeadProgressStep";
+import { CreateLeadProgressRail } from "@/components/admin/actions/CreateLeadProgressRail";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
 import { fetchActionIntakeSpec } from "@/lib/lifecycle/fetchActionIntakeSpec";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
@@ -61,10 +64,6 @@ function legacyPayloadFromValues(values: Record<string, string>): CreateLeadForm
         phone: values.phone?.trim() ?? "",
         ...values,
     };
-}
-
-function suggestionId(payloadKey: string, value: string): string {
-    return `${payloadKey}:${value}`;
 }
 
 function platformFallbackBundle(departmentId: string): CreateLeadRequiredFieldsBundle {
@@ -129,7 +128,13 @@ export function CreateLeadModal(props: {
         [bosRecommendations, handoffToCreatedLead],
     );
     const manualMode = gatherPhase === "details";
+    const draftEditMode = materialAnalyzed && !manualMode;
     const validationIssues = validation.ok ? [] : validation.issues;
+    const progressStep = resolveCreateLeadProgressStep({
+        step,
+        materialAnalyzed: draftEditMode || manualMode,
+        validationOk: validation.ok,
+    });
 
     const resetWorkspaceState = useCallback(() => {
         setStep("gather");
@@ -240,22 +245,15 @@ export function CreateLeadModal(props: {
             try {
                 const spec = intakeSpec ?? platformFallbackBundle(departmentId).spec;
                 const extraction = createLeadIntakePasteParser.parse({ text, spec });
-                const mapped = bosSuggestionsFromExtraction(extraction);
-                if (mapped.length === 0) {
+                if (extraction.fields.length === 0) {
                     setAnalyzeError("BOS could not extract structured fields. Try adding labels like Parent: or Email:.");
                     setSuggestions([]);
                     return;
                 }
-                setSuggestions(
-                    mapped.map((s) => ({
-                        id: suggestionId(s.payload_key, s.suggested_value),
-                        payload_key: s.payload_key,
-                        field_label: s.field_label,
-                        suggested_value: s.suggested_value,
-                        confidence: s.confidence,
-                        selected: s.confidence === "high",
-                    })),
-                );
+
+                const labelByKey = Object.fromEntries(gatherFields.map((f) => [f.payload_key, f.field_label]));
+                setValues((prev) => applyHighConfidenceCreateLeadExtraction(prev, extraction));
+                setSuggestions(reviewSuggestionsFromExtraction(extraction, labelByKey));
                 setMaterialAnalyzed(true);
             } catch (e) {
                 setSuggestions([]);
@@ -318,31 +316,26 @@ export function CreateLeadModal(props: {
                 >
                     Cancel
                 </button>
-                {suggestions.length > 0 ?
-                    null
-                :   <>
-                        {validation.ok ?
-                            <button
-                                type="button"
-                                disabled={!departmentId}
-                                onClick={() => void runExecute()}
-                                className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-                                data-testid="create-lead-create-button"
-                            >
-                                Create Lead
-                            </button>
-                        :   null}
-                        {manualMode && !validation.ok ?
-                            <button
-                                type="button"
-                                onClick={() => setGatherPhase("paste")}
-                                className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/75 hover:bg-alloy-stone/5"
-                            >
-                                Back to material
-                            </button>
-                        :   null}
-                    </>
-                }
+                {validation.ok && (draftEditMode || manualMode) ?
+                    <button
+                        type="button"
+                        disabled={!departmentId}
+                        onClick={() => void runExecute()}
+                        className="rounded-lg border border-alloy-pine/30 bg-alloy-pine px-4 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
+                        data-testid="create-lead-create-button"
+                    >
+                        Create Lead
+                    </button>
+                :   null}
+                {manualMode && !validation.ok ?
+                    <button
+                        type="button"
+                        onClick={() => setGatherPhase("paste")}
+                        className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm font-semibold text-alloy-midnight/75 hover:bg-alloy-stone/5"
+                    >
+                        Back to material
+                    </button>
+                :   null}
             </>
         : step === "review" ?
             <>
@@ -380,6 +373,7 @@ export function CreateLeadModal(props: {
             contentBleed={step === "gather"}
             headerTone="integrated"
             step={step}
+            stepRail={<CreateLeadProgressRail activeStep={progressStep} onDark={false} />}
             footer={footer}
             data-testid="create-lead-action-workspace"
         >
@@ -411,6 +405,7 @@ export function CreateLeadModal(props: {
                         analyzeError={analyzeError}
                         disabled={!departmentId}
                         manualMode={manualMode}
+                        draftEditMode={draftEditMode}
                         onEnterManually={() => {
                             setGatherPhase("details");
                             setError(null);

@@ -37,6 +37,18 @@ describe("parseCreateLeadIntakeText", () => {
         expect(byKey.intake_notes).toContain("toddler program");
     });
 
+    it("extracts first and last name from single-line contact blob", () => {
+        const result = parseCreateLeadIntakeText({
+            text: "Kelly Kurzman kelly.kurzman@gmail.com 6022904816",
+            spec,
+        });
+        const byKey = Object.fromEntries(result.fields.map((f) => [f.payload_key, f.value]));
+        expect(byKey.first_name).toBe("Kelly");
+        expect(byKey.last_name).toBe("Kurzman");
+        expect(byKey.email).toBe("kelly.kurzman@gmail.com");
+        expect(byKey.phone).toMatch(/602.*290.*4816|\(602\) 290-4816/);
+    });
+
     it("does not treat call-note phrasing as a high-confidence parent name", () => {
         const result = parseCreateLeadIntakeText({
             text: "Johnson called today about toddler care",
@@ -109,8 +121,8 @@ describe("CreateLead Action Workspace", () => {
 
         expect(html).toContain('data-testid="create-lead-action-workspace"');
         expect(html).toContain('data-testid="create-lead-gather-step"');
-        expect(html).toContain('data-testid="action-workspace-analyze-button"');
-        expect(html).toContain("BOS Intake");
+        expect(html).toContain('data-testid="create-lead-add-material-button"');
+        expect(html).toContain("Paste information");
         expect(html).not.toContain('data-testid="create-lead-gather-fields"');
     });
 });

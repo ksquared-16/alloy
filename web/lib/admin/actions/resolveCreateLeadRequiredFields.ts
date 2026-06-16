@@ -2,7 +2,7 @@
  * Create Lead intake — resolved from Business Process Lead stage field requirements.
  */
 
-import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
+import type { ActionWorkspaceGatherField, ActionWorkspaceBosSuggestion } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { OrgFieldDefinitionRow } from "@/lib/lifecycle/loadOrgFieldDefinitionsForLifecycle";
@@ -12,7 +12,8 @@ import {
     resolveCreateLeadActionIntakeSpec,
     validateActionIntakePayload,
 } from "@/lib/lifecycle/resolveActionIntakeSpec";
-import type { ActionWorkspaceBosSuggestion } from "@/lib/admin/actions/actionWorkspaceTypes";
+import type { ActionIntakePasteExtractionResult } from "@/lib/lifecycle/actionIntakePasteParserTypes";
+import { applyActionIntakePasteExtraction } from "@/lib/lifecycle/applyActionIntakePasteExtraction";
 import { CREATE_LEAD_GATHER_FIELDS } from "@/lib/admin/actions/createLeadPlatformGather";
 
 const CONTEXT_OPTIONAL_KEYS = new Set(["source", "intake_notes"]);
@@ -103,6 +104,37 @@ export function emptyCreateLeadValuesForFields(
     const out: Record<string, string> = {};
     for (const field of fields) out[field.payload_key] = "";
     return out;
+}
+
+export function applyHighConfidenceCreateLeadExtraction(
+    values: Record<string, string>,
+    extraction: ActionIntakePasteExtractionResult,
+): Record<string, string> {
+    const highConfidence: ActionIntakePasteExtractionResult = {
+        ...extraction,
+        fields: extraction.fields.filter((f) => f.confidence === "high"),
+    };
+    return applyActionIntakePasteExtraction({
+        current_values: values,
+        current_meta: {},
+        extraction: highConfidence,
+    }).values;
+}
+
+export function reviewSuggestionsFromExtraction(
+    extraction: ActionIntakePasteExtractionResult,
+    fieldLabels: Record<string, string>,
+): ActionWorkspaceBosSuggestion[] {
+    return extraction.fields
+        .filter((f) => f.confidence !== "high")
+        .map((f) => ({
+            id: `${f.payload_key}:${f.value}`,
+            payload_key: f.payload_key,
+            field_label: fieldLabels[f.payload_key] ?? f.payload_key,
+            suggested_value: f.value,
+            confidence: f.confidence,
+            selected: f.confidence === "medium",
+        }));
 }
 
 export function projectedCreateLeadValues(

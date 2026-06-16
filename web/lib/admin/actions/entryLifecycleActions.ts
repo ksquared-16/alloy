@@ -62,6 +62,9 @@ export async function executeCreateLeadAction(
     if (!lastName) {
         return { ok: false, error: "Last name is required.", status: 400 };
     }
+    // Server minimum: first/last name + email OR phone. Stage-configured requirements
+    // (e.g. Location, individual Email+Phone) are enforced client-side via
+    // validateCreateLeadFromIntakeSpec before submit — see resolveCreateLeadRequiredFields.
     if (!email && !phone) {
         return { ok: false, error: "Phone or email is required.", status: 400 };
     }
