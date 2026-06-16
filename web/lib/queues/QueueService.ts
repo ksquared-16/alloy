@@ -144,6 +144,10 @@ import {
     loadStageAttentionTasksByOpportunityId,
     tryEvaluateStageAttentionForOpportunity,
 } from "@/lib/lifecycle/stageAttentionForOpportunity";
+import {
+    buildStageAttentionStatusKeyOrBranches,
+    resolveStageAttentionCandidateStatusKeys,
+} from "@/lib/lifecycle/resolveStageAttentionCandidateStatusKeys";
 
 type JobRowPreview = {
     id: string;
@@ -1862,7 +1866,11 @@ function buildOpportunityNeedsAttentionOrExpr(now: Date, minLifecycleStaleHours:
  * resolver membership (lifecycle stale uses the configured hour thresholds). Extra rows are removed in-memory —
  * reduces rows scanned/sorted before the capped fetch.
  */
-function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date, minLifecycleStaleHours: number = defaultMinLifecycleStaleHours()): string {
+function buildOpportunityNeedsAttentionCandidateOrExpr(
+    now: Date,
+    minLifecycleStaleHours: number = defaultMinLifecycleStaleHours(),
+    stageAttentionStatusKeys: readonly string[] = [],
+): string {
     const stale7d = toIso(subtractDays(now, 7));
     const stale2d = toIso(subtractDays(now, 2));
     const nowIso = toIso(now);
@@ -1876,6 +1884,7 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date, minLifecycleSt
         "blocked_internal",
         "blocked_external",
     ].map((b) => `metadata->enrollment_operational->>wait_bucket.eq.${b}`);
+    const stageAttentionBranches = buildStageAttentionStatusKeyOrBranches(stageAttentionStatusKeys);
     return [
         `updated_at.lt.${stale7d}`,
         `updated_at.lt.${lifecycleStaleCut}`,
@@ -1888,6 +1897,7 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date, minLifecycleSt
         `metadata->>commitment_due_at.lt.${nowIso}`,
         `and(status_key.eq.tour_scheduled,metadata->>tour_date.lt.${todayYmd})`,
         ...waitBucketBranches,
+        ...stageAttentionBranches,
     ].join(",");
 }
 
@@ -1969,7 +1979,15 @@ export async function loadOpportunityNeedsAttentionRows(params: {
         deptMetaRecord != null;
     const stageAttentionBridge = deptMetaRecord != null;
     const minLifecycleH = minLifecycleStaleHoursFromResolvedConfig(attentionConfig.thresholdsHours);
-    const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now, minLifecycleH);
+    const stageAttentionStatusKeys =
+        stageAttentionBridge && deptMetaRecord
+            ? resolveStageAttentionCandidateStatusKeys(deptMetaRecord)
+            : [];
+    const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(
+        params.now,
+        minLifecycleH,
+        stageAttentionStatusKeys,
+    );
     const nowMs = params.now.getTime();
     const readinessMemo = readinessBridge ? createReadinessMemoScope() : undefined;
     const selectCols: string =
@@ -4613,6 +4631,8 @@ export const __testing = {
     buildOpportunityQueueEnrichmentPlan,
     buildOpportunityNeedsAttentionOrExpr,
     buildOpportunityNeedsAttentionCandidateOrExpr,
+    resolveStageAttentionCandidateStatusKeys,
+    buildStageAttentionStatusKeyOrBranches,
     opportunityNeedsAttention,
     findQueueByKey,
     assertSupportedEntityType,
