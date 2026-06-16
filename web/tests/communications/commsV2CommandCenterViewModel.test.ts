@@ -126,7 +126,7 @@ describe("queue card presentation", () => {
     it("labels unclassified threads without faking on track", async () => {
         const { conversationQueueStatusPill } = await import("@/lib/communications/v2/commandCenterViewModel");
         expect(conversationQueueStatusPill({ id: "1", attention_state: null, sla_state: null }).label).toBe("Needs review");
-        expect(conversationQueueStatusPill({ id: "2", attention_state: "awaiting_parent_reply" }).label).toBe("Needs reply");
+        expect(conversationQueueStatusPill({ id: "2", attention_state: "awaiting_parent_reply" }).label).toBe("Needs response");
         expect(conversationQueueStatusPill({ id: "3", attention_state: "needs_follow_up", sla_state: "on_track" }).label).toBe("Follow up");
     });
 });

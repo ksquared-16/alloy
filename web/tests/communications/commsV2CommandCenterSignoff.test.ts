@@ -28,7 +28,7 @@ describe("command center thread messages helper", () => {
                     { id: "1", body: "first", created_at: "2026-06-15T10:00:00Z" },
                 ],
             }),
-        })) as typeof fetch;
+        })) as unknown as typeof fetch;
         const msgs = await fetchCommandCenterThreadMessages("thread-1");
         expect(msgs.map((m) => m.body)).toEqual(["first", "second"]);
         global.fetch = originalFetch;

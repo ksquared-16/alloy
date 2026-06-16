@@ -4,6 +4,12 @@
  * Operational-work queues (NOT email folders), metrics, and filtering for the global Command
  * Center. Queues key off communication_threads.attention_state. Consumed by the dark shell.
  */
+import {
+    INBOUND_NEEDS_RESPONSE_STATE,
+    RESOLVED_ATTENTION_STATE,
+    isNeedsReviewConversation,
+    isResolvedConversation,
+} from "@/lib/communications/v2/conversationTriage";
 
 export const OPERATIONAL_QUEUES = [
     { key: "awaiting_parent_reply", label: "Awaiting Parent Reply" },
@@ -153,9 +159,7 @@ export function conversationUnreadCount(c: ConversationSummary): number {
 export const NEEDS_REVIEW_STATUS_LABEL = "Needs review";
 
 export function isUnclassifiedConversation(c: ConversationSummary): boolean {
-    const attn = (c.attention_state ?? "").trim();
-    if (!attn) return true;
-    return !OPERATIONAL_QUEUES.some((q) => q.key === attn);
+    return isNeedsReviewConversation(c);
 }
 
 export type QueueStatusPill = { label: string; tone: "neutral" | "warn" | "danger" | "brand" };
@@ -166,7 +170,9 @@ export function conversationQueueStatusPill(c: ConversationSummary): QueueStatus
     if (sla === "overdue") return { label: "Overdue", tone: "danger" };
     if (sla === "due" || sla === "first_response_due") return { label: "Due soon", tone: "warn" };
     const attn = (c.attention_state ?? "").trim();
-    if (attn === "awaiting_parent_reply") return { label: "Needs reply", tone: "warn" };
+    if (attn === RESOLVED_ATTENTION_STATE) return { label: "Resolved", tone: "brand" };
+    if (attn === INBOUND_NEEDS_RESPONSE_STATE) return { label: "Needs response", tone: "warn" };
+    if (attn === "awaiting_parent_reply") return { label: "Needs response", tone: "warn" };
     if (attn === "needs_follow_up") return { label: "Follow up", tone: "warn" };
     if (attn === "documents_missing") return { label: "Docs missing", tone: "warn" };
     if (isUnclassifiedConversation(c)) return { label: NEEDS_REVIEW_STATUS_LABEL, tone: "neutral" };
@@ -229,6 +235,9 @@ export function resolveCommandCenterHealthDisplay(
 ): CommandCenterHealthDisplay {
     const neutral = { label: null, tone: "text-alloy-midnight/45", dot: "bg-alloy-stone/40" };
     if (!conversation) return neutral;
+    if (isResolvedConversation(conversation)) {
+        return { label: "Resolved", tone: "text-[#0f6b4a]", dot: "bg-[#00A283]" };
+    }
     if (isUnclassifiedConversation(conversation)) {
         return { label: NEEDS_REVIEW_STATUS_LABEL, tone: "text-alloy-midnight/50", dot: "bg-alloy-stone/40" };
     }

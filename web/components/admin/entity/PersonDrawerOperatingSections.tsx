@@ -21,6 +21,7 @@ import {
 import { readPersonEmployeePlacementValues } from "@/lib/admin/personEmployeePlacementFields";
 import { stampPersonDrawerParentHeaderContext } from "@/lib/admin/person/resolvePersonDrawerParentHouseholdModel";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import PersonCommunicationPreferencesSection from "@/components/admin/communications/PersonCommunicationPreferencesSection";
 
 export type PersonDrawerOperatingSectionsProps = {
     variant: ResolvedPersonDrawerLayoutVariant;
@@ -105,6 +106,11 @@ export default function PersonDrawerOperatingSections({
                     canMutate={canMutate}
                     onPersonUpdated={onPersonUpdated}
                 />
+            ) : null}
+            {isParentVariant && personId && personId !== "new" ? (
+                <div className="mt-3">
+                    <PersonCommunicationPreferencesSection personId={personId} canMutate={canMutate} />
+                </div>
             ) : null}
             {showHousehold && isParentVariant ? (
                 <PersonDrawerParentHouseholdSection

@@ -38,6 +38,13 @@ import type { FamilyCommunicationWorkspaceVM, RecipientGroup, ComposerChannel } 
 import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspace/composerSelection";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import { resolveWorkspaceModeAvailability, type WorkspaceMode } from "@/lib/communications/v2/workspaceModeAvailability";
+import { conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
+import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
+import {
+    buildOperationalTaskBody,
+    createOperationalTask,
+    patchOperationalTaskStatus,
+} from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     COMMS_FIXTURES_ENABLED,
     FIXTURE_CONVERSATIONS,
@@ -171,6 +178,15 @@ export default function CommandCenterShell() {
     const [sendError, setSendError] = useState<string | null>(null);
     const [hydratingWorkspace, setHydratingWorkspace] = useState(initialHydratingWorkspace);
     const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>("email");
+    const [noteDraft, setNoteDraft] = useState("");
+    const [noteSaving, setNoteSaving] = useState(false);
+    const [noteError, setNoteError] = useState<string | null>(null);
+    const [taskTitleDraft, setTaskTitleDraft] = useState("");
+    const [taskDueDraft, setTaskDueDraft] = useState("");
+    const [taskSaving, setTaskSaving] = useState(false);
+    const [taskError, setTaskError] = useState<string | null>(null);
+    const [preferenceSaving, setPreferenceSaving] = useState(false);
+    const [triageBusy, setTriageBusy] = useState(false);
 
     const loadLive = useCallback(async (customerId: string, threadId: string, resetSelection = false, composerChannel: ComposerChannel = "email") => {
         try {
@@ -359,8 +375,148 @@ export default function CommandCenterShell() {
             program: liveWorkspaceVm.family.program,
             stage: liveWorkspaceVm.family.stage,
             consent: liveWorkspaceVm.consentSummary.household,
+            preferenceProfile: liveWorkspaceVm.consentSummary.preferenceProfile,
         };
     }, [liveWorkspaceVm]);
+
+    const refreshWorkspace = useCallback(async () => {
+        if (!selectedCustomerId || !selectedId) return;
+        await loadLive(selectedCustomerId, selectedThreadId ?? selectedId, false, liveChannel);
+    }, [loadLive, selectedCustomerId, selectedId, selectedThreadId, liveChannel]);
+
+    const primaryPersonId = useMemo(() => {
+        const primary = liveWorkspaceVm?.recipientGroups.flatMap((g) => g.recipients).find((r) => r.isPrimary);
+        return primary?.id ?? liveWorkspaceVm?.selectedRecipients[0] ?? selected?.primary_contact_person_id ?? null;
+    }, [liveWorkspaceVm, selected]);
+
+    const runAddNote = useCallback(async () => {
+        if (!LIVE_WORKSPACE || !selectedCustomerId || !noteDraft.trim()) return;
+        setNoteSaving(true);
+        setNoteError(null);
+        try {
+            const res = await fetch("/api/admin/communications/family-note", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    customer_id: selectedCustomerId,
+                    body: noteDraft,
+                    opportunity_id: liveWorkspaceVm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null,
+                    person_id: primaryPersonId,
+                }),
+            });
+            const data = (await res.json()) as { error?: string };
+            if (!res.ok) {
+                setNoteError(data.error ?? "Failed to save note");
+                return;
+            }
+            setNoteDraft("");
+            await refreshWorkspace();
+        } catch {
+            setNoteError("Failed to save note");
+        } finally {
+            setNoteSaving(false);
+        }
+    }, [LIVE_WORKSPACE, selectedCustomerId, noteDraft, liveWorkspaceVm, selected, primaryPersonId, refreshWorkspace]);
+
+    const runCreateTask = useCallback(async () => {
+        const oppId = liveWorkspaceVm?.scope.focusOpportunityId ?? selected?.opportunity_id ?? null;
+        if (!oppId || !taskTitleDraft.trim()) {
+            setTaskError("Link an opportunity before creating tasks.");
+            return;
+        }
+        setTaskSaving(true);
+        setTaskError(null);
+        try {
+            const dueIso = taskDueDraft ? new Date(taskDueDraft).toISOString() : new Date(Date.now() + 86400000).toISOString();
+            const res = await createOperationalTask(
+                buildOperationalTaskBody({ entityId: oppId, title: taskTitleDraft, dueAtIso: dueIso, source: "manual" })
+            );
+            const data = (await res.json()) as { error?: string };
+            if (!res.ok) {
+                setTaskError(data.error ?? "Failed to create task");
+                return;
+            }
+            setTaskTitleDraft("");
+            setTaskDueDraft("");
+            await refreshWorkspace();
+        } catch {
+            setTaskError("Failed to create task");
+        } finally {
+            setTaskSaving(false);
+        }
+    }, [liveWorkspaceVm, selected, taskTitleDraft, taskDueDraft, refreshWorkspace]);
+
+    const runCompleteTask = useCallback(
+        async (taskId: string) => {
+            setTaskSaving(true);
+            setTaskError(null);
+            try {
+                const res = await patchOperationalTaskStatus(taskId, "completed");
+                const data = (await res.json()) as { error?: string };
+                if (!res.ok) {
+                    setTaskError(data.error ?? "Failed to complete task");
+                    return;
+                }
+                await refreshWorkspace();
+            } catch {
+                setTaskError("Failed to complete task");
+            } finally {
+                setTaskSaving(false);
+            }
+        },
+        [refreshWorkspace]
+    );
+
+    const runTriage = useCallback(
+        async (action: TriageActionKey) => {
+            if (!selectedId) return;
+            setTriageBusy(true);
+            try {
+                const res = await fetch(`/api/admin/communications/conversations/${encodeURIComponent(selectedId)}/triage`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ action }),
+                });
+                if (!res.ok) return;
+                await loadConversations({ background: true });
+                setConversations((prev) =>
+                    prev.map((c) =>
+                        c.id === selectedId ?
+                            {
+                                ...c,
+                                attention_state:
+                                    action === "needs_review" ? null
+                                    : action === "needs_response" ? "awaiting_parent_reply"
+                                    : "resolved",
+                            }
+                        :   c
+                    )
+                );
+            } finally {
+                setTriageBusy(false);
+            }
+        },
+        [selectedId, loadConversations]
+    );
+
+    const runPreferenceChange = useCallback(
+        async (field: PreferenceFieldKey, status: "Allowed" | "Blocked") => {
+            if (!primaryPersonId) return;
+            setPreferenceSaving(true);
+            try {
+                const res = await fetch("/api/admin/communications/preferences", {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ person_id: primaryPersonId, field, status }),
+                });
+                if (!res.ok) return;
+                await refreshWorkspace();
+            } finally {
+                setPreferenceSaving(false);
+            }
+        },
+        [primaryPersonId, refreshWorkspace]
+    );
 
     const runFamilySend = useCallback(
         async (confirm: boolean) => {
@@ -621,6 +777,26 @@ export default function CommandCenterShell() {
                             onWorkspaceModeChange={setWorkspaceMode}
                             workspaceModeAvailability={workspaceModeAvailability}
                             relatedTasks={liveWorkspaceVm?.relatedTasks ?? []}
+                            preferenceProfile={liveWorkspaceVm?.consentSummary.preferenceProfile}
+                            canEditPreferences={LIVE_WORKSPACE && !!primaryPersonId}
+                            preferenceSaving={preferenceSaving}
+                            onPreferenceChange={(field, status) => void runPreferenceChange(field, status)}
+                            attentionLabel={conversationAttentionLabel(selected.attention_state)}
+                            onTriage={(action) => void runTriage(action)}
+                            triageBusy={triageBusy}
+                            noteDraft={noteDraft}
+                            onNoteDraftChange={setNoteDraft}
+                            onAddNote={() => void runAddNote()}
+                            noteSaving={noteSaving}
+                            noteError={noteError}
+                            taskTitleDraft={taskTitleDraft}
+                            taskDueDraft={taskDueDraft}
+                            onTaskTitleChange={setTaskTitleDraft}
+                            onTaskDueChange={setTaskDueDraft}
+                            onCreateTask={() => void runCreateTask()}
+                            onCompleteTask={(id) => void runCompleteTask(id)}
+                            taskSaving={taskSaving}
+                            taskError={taskError}
                             LIVE_WORKSPACE={LIVE_WORKSPACE}
                             selectedThreadId={selectedThreadId}
                             messages={messages}

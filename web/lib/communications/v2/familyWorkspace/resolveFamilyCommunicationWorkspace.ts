@@ -4,7 +4,7 @@ import {
     resolveCustomerStageLabelFromOpportunities,
     resolveOpportunityStatusLabelsBatch,
 } from "@/lib/admin/drawer/resolveOpportunityStatusLabelsBatch";
-import { loadCommunicationPreferencesForPersons } from "@/lib/communications/v2/loadCommunicationPreferences";
+import { loadPersonCommunicationPreferencesBundle } from "@/lib/communications/v2/loadCommunicationPreferences";
 import { listOperationalTasksForEntity } from "@/lib/admin/operationalTasksService";
 import { loadFamilyWorkspaceData } from "./loadFamilyWorkspaceData";
 import { loadFamilyThreadsData } from "./loadFamilyThreadsData";
@@ -35,9 +35,9 @@ export async function resolveFamilyCommunicationWorkspace(
     const opportunityIds = raw.opportunities.map((o) => o.id).filter(Boolean);
     const focusOpportunityId = opts.focusOpportunityId ?? raw.opportunities[0]?.id ?? null;
 
-    const [statusByOpportunity, preferencesByContact, comms, relatedTasksResult] = await Promise.all([
+    const [statusByOpportunity, preferencesBundle, comms, relatedTasksResult] = await Promise.all([
         resolveOpportunityStatusLabelsBatch(supabase, orgId, raw.opportunities),
-        loadCommunicationPreferencesForPersons(supabase, orgId, recipientPersonIds),
+        loadPersonCommunicationPreferencesBundle(supabase, orgId, recipientPersonIds),
         loadFamilyThreadsData(supabase, orgId, {
             customerId: opts.customerId,
             personIds,
@@ -74,7 +74,8 @@ export async function resolveFamilyCommunicationWorkspace(
             ...opts,
             focusOpportunityId,
             familyStageLabel,
-            preferencesByContact,
+            preferencesByContact: preferencesBundle.byContact,
+            preferenceProfilesByContact: preferencesBundle.profilesByContact,
             relatedTasks,
         },
         comms

@@ -6,9 +6,9 @@ import { tierForRoleType, compareRecipientsForTier, TIER_UI_LABEL } from "./reci
 import { buildChannelEligibility } from "./buildChannelEligibility";
 import { stubFamilyWorkspaceTail } from "./stubFamilyWorkspaceTail";
 import { aggregateFamilyThreads, type RawThreadRow, type RawMessageRow } from "./aggregateFamilyTimeline";
-import { resolveHouseholdConsentDisplay, type PersonConsentTriplet } from "@/lib/communications/v2/householdCommunicationPreferences";
+import { resolveHouseholdConsentDisplay, resolveHouseholdPreferenceProfile, type PersonConsentTriplet } from "@/lib/communications/v2/householdCommunicationPreferences";
 import type { RawFamilyWorkspaceData } from "./loadFamilyWorkspaceData";
-import type { FamilyCommunicationWorkspaceVM, RecipientVM, RecipientGroup, ChildRef, ComposerChannel, RelatedTaskBrief } from "./types";
+import type { FamilyCommunicationWorkspaceVM, RecipientVM, RecipientGroup, ChildRef, ComposerChannel, RelatedTaskBrief, PersonPreferenceProfile } from "./types";
 
 export type ResolveFamilyWorkspaceOptions = {
     customerId: string;
@@ -22,6 +22,7 @@ export type ResolveFamilyWorkspaceOptions = {
     familyStageLabel?: string | null;
     /** Loaded from communication_preferences (person-scoped). */
     preferencesByContact?: Record<string, PersonConsentTriplet>;
+    preferenceProfilesByContact?: Record<string, PersonPreferenceProfile>;
     relatedTasks?: RelatedTaskBrief[];
 };
 
@@ -127,6 +128,13 @@ export function assembleFamilyWorkspace(
     }
     const primaryPersonId = raw.customer?.primary_contact_id ?? recipients.find((r) => r.isPrimary)?.id ?? null;
     const household = resolveHouseholdConsentDisplay(byContact, primaryPersonId, recipients.map((r) => r.id));
+    const preferenceProfile = resolveHouseholdPreferenceProfile(
+        opts.preferenceProfilesByContact ?? {},
+        primaryPersonId,
+        recipients.map((r) => r.id)
+    );
+
+    const focusOpportunityId = opts.focusOpportunityId ?? raw.opportunities[0]?.id ?? null;
 
     const channelReasons: Record<string, string> = {};
     if (!providerChannels.includes("email")) {
@@ -139,9 +147,6 @@ export function assembleFamilyWorkspace(
     } else if (!recipients.some((r) => r.channels.sms.available)) {
         channelReasons.sms = "SMS unavailable because no SMS-capable recipient exists.";
     }
-    channelReasons.note =
-        "Notes appear in the timeline. Composing new internal notes from this workspace is not yet available.";
-    const focusOpportunityId = opts.focusOpportunityId ?? raw.opportunities[0]?.id ?? null;
     if (!focusOpportunityId) {
         channelReasons.tasks = "No enrollment opportunity is linked to this family, so related tasks cannot be loaded.";
     }
@@ -169,6 +174,7 @@ export function assembleFamilyWorkspace(
         consentSummary: {
             byContact,
             household,
+            preferenceProfile,
             displayFlags: {
                 email: true,
                 sms: true,

@@ -44,7 +44,9 @@ describe("command center live wiring", () => {
     });
     it("always shows communication preferences and workspace mode tabs", () => {
         expect(workspaceSrc).toMatch(/data-cc-ws-section="preferences"/);
-        expect(workspaceSrc).toMatch(/consentOperatorStatus/);
+        expect(workspaceSrc).toMatch(/CommunicationPreferencesEditor/);
+        expect(workspaceSrc).toMatch(/data-cc-triage/);
+        expect(workspaceSrc).toMatch(/data-cc-add-note/);
         expect(workspaceSrc).toMatch(/data-cc-workspace-mode/);
         expect(workspaceSrc).toMatch(/renderModeTab\("note", "Notes"\)/);
         expect(workspaceSrc).toMatch(/renderModeTab\("tasks", "Tasks"\)/);

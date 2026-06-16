@@ -2,7 +2,10 @@
 
 import { Users, Mail, MessageSquare, Phone, StickyNote, Settings2, Bold, Italic, List, Link2, Smile, Paperclip, FileText, Sparkles, Send, Clock, Check, UserPlus, ChevronDown } from "lucide-react";
 import { relTime, statusDisplay } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
-import { consentOperatorStatus } from "@/lib/communications/v2/householdCommunicationPreferences";
+import CommunicationPreferencesEditor from "@/components/admin/communications/CommunicationPreferencesEditor";
+import type { PersonPreferenceProfile } from "@/lib/communications/v2/familyWorkspace/types";
+import type { PreferenceFieldKey } from "@/lib/communications/v2/communicationPreferenceLabels";
+import { TRIAGE_OPERATOR_ACTIONS, conversationAttentionLabel, type TriageActionKey } from "@/lib/communications/v2/conversationTriage";
 import type { WorkspaceMode, WorkspaceModeAvailability } from "@/lib/communications/v2/workspaceModeAvailability";
 import type { RelatedTaskBrief } from "@/lib/communications/v2/familyWorkspace/types";
 import { isRecipientEligible, isRecipientSelected, selectionSummary } from "@/lib/communications/v2/familyWorkspace/composerSelection";
@@ -32,8 +35,9 @@ export type WorkspaceDetail = {
     program?: string | null;
     stage?: string | null;
     consent: { email: ConsentState; sms: ConsentState; marketing: ConsentState };
+    preferenceProfile?: PersonPreferenceProfile;
 };
-export type WorkspaceSelected = { id: string; family_label?: string | null; sla_state?: string | null; assignment_state?: string | null };
+export type WorkspaceSelected = { id: string; family_label?: string | null; sla_state?: string | null; assignment_state?: string | null; attention_state?: string | null };
 
 const toolbarBtn = "rounded-md p-1.5 text-alloy-midnight/55 transition hover:bg-alloy-stone/12 hover:text-alloy-midnight";
 type IconType = typeof Mail;
@@ -61,6 +65,26 @@ export type FamilyCommunicationWorkspaceViewProps = {
     onWorkspaceModeChange?: (mode: WorkspaceMode) => void;
     workspaceModeAvailability?: WorkspaceModeAvailability;
     relatedTasks?: RelatedTaskBrief[];
+    preferenceProfile?: PersonPreferenceProfile;
+    canEditPreferences?: boolean;
+    preferenceSaving?: boolean;
+    onPreferenceChange?: (field: PreferenceFieldKey, status: "Allowed" | "Blocked") => void;
+    attentionLabel?: string | null;
+    onTriage?: (action: TriageActionKey) => void;
+    triageBusy?: boolean;
+    noteDraft?: string;
+    onNoteDraftChange?: (v: string) => void;
+    onAddNote?: () => void;
+    noteSaving?: boolean;
+    noteError?: string | null;
+    taskTitleDraft?: string;
+    taskDueDraft?: string;
+    onTaskTitleChange?: (v: string) => void;
+    onTaskDueChange?: (v: string) => void;
+    onCreateTask?: () => void;
+    onCompleteTask?: (taskId: string) => void;
+    taskSaving?: boolean;
+    taskError?: string | null;
     LIVE_WORKSPACE: boolean;
     selectedThreadId: string | null;
     messages: WorkspaceTimelineMessage[];
@@ -88,14 +112,16 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const {
         selected, detail, childNames, stageLabel, healthTone, healthDot, healthLabel, recordLinks, onOpenRecordLink,
         showClaim = false, workspaceMode = "email", onWorkspaceModeChange, workspaceModeAvailability,
-        relatedTasks = [], LIVE_WORKSPACE, selectedThreadId, messages,
+        relatedTasks = [], preferenceProfile, canEditPreferences = false, preferenceSaving = false, onPreferenceChange,
+        attentionLabel, onTriage, triageBusy = false,
+        noteDraft = "", onNoteDraftChange, onAddNote, noteSaving = false, noteError,
+        taskTitleDraft = "", taskDueDraft = "", onTaskTitleChange, onTaskDueChange, onCreateTask, onCompleteTask, taskSaving = false, taskError,
+        LIVE_WORKSPACE, selectedThreadId, messages,
         liveRecipientGroups, selectedRecipientIds, liveChannel, subjectDraft, bodyDraft, sendResult, sendError, sending, assignBusy,
         onClaim, onAllMessages, onOpenThread, onToggleRecipient, onSubjectChange, onBodyChange, onSendNow, onConfirmSend, onDismissSend,
     } = props;
     const allLiveRecipients = liveRecipientGroups ? liveRecipientGroups.flatMap((g) => g.recipients) : [];
-    const consentEmail = consentOperatorStatus(detail?.consent.email);
-    const consentSms = consentOperatorStatus(detail?.consent.sms);
-    const consentMarketing = consentOperatorStatus(detail?.consent.marketing);
+    const resolvedPreferenceProfile = preferenceProfile ?? detail?.preferenceProfile;
     const familyLink = recordLinks?.find((l) => l.type === "customers");
     const contactLink = recordLinks?.find((l) => l.type === "persons");
     const opportunityLink = recordLinks?.find((l) => l.type === "opportunities");
@@ -106,12 +132,13 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
     const modeAvailability = workspaceModeAvailability ?? {
         email: { available: true, reason: null },
         sms: { available: false, reason: "SMS unavailable because no SMS-capable recipient exists." },
-        note: { available: true, reason: "Notes appear in the timeline. Composing new internal notes from this workspace is not yet available." },
+        note: { available: true, reason: null },
         tasks: { available: false, reason: "No enrollment opportunity is linked to this family." },
     };
     const noteMessages = messages.filter((m) => m.kind === "note");
     const composeMode = workspaceMode === "email" || workspaceMode === "sms";
-    const activeModeReason = modeAvailability[workspaceMode]?.reason ?? null;
+    const activeModeReason =
+        workspaceMode === "note" || workspaceMode === "tasks" ? null : modeAvailability[workspaceMode]?.reason ?? null;
 
     const renderModeTab = (mode: WorkspaceMode, label: string) => {
         const status = modeAvailability[mode];
@@ -200,21 +227,40 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     </>
                                 ) : null}
                             </div>
-                            <div data-cc-ws-section="preferences" className="mt-2 rounded-lg border border-alloy-stone/15 bg-[#fbfcfb] px-2.5 py-2">
-                                <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Communication preferences</div>
-                                <div className="mt-1.5 grid grid-cols-3 gap-2 text-[11px]">
-                                    {([
-                                        ["Email", consentEmail],
-                                        ["SMS", consentSms],
-                                        ["Marketing", consentMarketing],
-                                    ] as const).map(([label, status]) => (
-                                        <div key={label} className="rounded-md border border-alloy-stone/12 bg-white px-2 py-1">
-                                            <div className="text-[10px] text-alloy-midnight/45">{label}</div>
-                                            <div className={`font-semibold ${status === "Allowed" ? "text-[#0f6b4a]" : status === "Blocked" ? "text-red-600" : "text-alloy-midnight/55"}`}>{status}</div>
-                                        </div>
-                                    ))}
-                                </div>
+                            <div data-cc-ws-section="triage" className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-medium text-alloy-midnight/50">Queue</span>
+                                <span className="rounded-full border border-alloy-stone/15 bg-white px-2 py-0.5 text-[10px] font-semibold text-alloy-midnight/70">
+                                    {attentionLabel ?? conversationAttentionLabel(selected.attention_state as string | null)}
+                                </span>
+                                {onTriage ?
+                                    TRIAGE_OPERATOR_ACTIONS.map((action) => (
+                                        <button
+                                            key={action.key}
+                                            type="button"
+                                            data-cc-triage={action.key}
+                                            disabled={triageBusy}
+                                            onClick={() => onTriage(action.key)}
+                                            className="rounded-full border border-alloy-stone/20 bg-white px-2 py-0.5 text-[10px] text-alloy-midnight/60 hover:border-[#7fc9b6] hover:text-[#0f6b4a]"
+                                        >
+                                            {action.label}
+                                        </button>
+                                    ))
+                                : null}
                             </div>
+                            {resolvedPreferenceProfile ? (
+                                <div data-cc-ws-section="preferences" className="mt-2 rounded-lg border border-alloy-stone/15 bg-[#fbfcfb] px-2.5 py-2">
+                                    <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Communication preferences</div>
+                                    <div className="mt-1.5">
+                                        <CommunicationPreferencesEditor
+                                            profile={resolvedPreferenceProfile}
+                                            canEdit={canEditPreferences}
+                                            saving={preferenceSaving}
+                                            onChange={onPreferenceChange}
+                                            compact
+                                        />
+                                    </div>
+                                </div>
+                            ) : null}
                         </div>
                         {showClaim ? (
                             <button
@@ -309,36 +355,58 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 ) : null}
 
                 {workspaceMode === "tasks" ? (
-                    <div data-cc-tasks-panel className="mt-2 min-h-0 flex-1 overflow-auto rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 shadow-sm">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Related tasks</div>
-                        {relatedTasks.length === 0 ? (
-                            <p className="mt-2 text-[11px] text-alloy-midnight/50">No open tasks for the linked opportunity.</p>
-                        ) : (
-                            <ul className="mt-2 space-y-1.5">
-                                {relatedTasks.map((t) => (
-                                    <li key={t.id} className="rounded-md border border-alloy-stone/12 bg-[#fbfcfb] px-2.5 py-2 text-[11px]">
-                                        <div className="font-medium text-alloy-midnight">{t.title}</div>
-                                        <div className="mt-0.5 text-alloy-midnight/50">Due {relTime(t.dueAt) || t.dueAt} · {t.status}</div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                    <div data-cc-tasks-panel className="mt-2 flex min-h-0 flex-1 flex-col gap-2 overflow-auto">
+                        <div className="rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 shadow-sm">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">New task</div>
+                            <input aria-label="Task title" value={taskTitleDraft} onChange={(e) => onTaskTitleChange?.(e.target.value)} placeholder="Task title" className="mt-1 w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm" />
+                            <input aria-label="Due date" type="datetime-local" value={taskDueDraft} onChange={(e) => onTaskDueChange?.(e.target.value)} className="mt-1 w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm" />
+                            {taskError ? <div className="mt-1 text-[11px] text-alloy-ember">{taskError}</div> : null}
+                            <button type="button" data-cc-new-task disabled={taskSaving || !taskTitleDraft.trim()} onClick={() => onCreateTask?.()} className="mt-2 rounded-md bg-[#00A283] px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40">{taskSaving ? "Working…" : "New task"}</button>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 shadow-sm">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Related tasks</div>
+                            {relatedTasks.length === 0 ? (
+                                <p className="mt-2 text-[11px] text-alloy-midnight/50">No open tasks for the linked opportunity.</p>
+                            ) : (
+                                <ul className="mt-2 space-y-1.5">
+                                    {relatedTasks.map((t) => (
+                                        <li key={t.id} className="flex items-start justify-between gap-2 rounded-md border border-alloy-stone/12 bg-[#fbfcfb] px-2.5 py-2 text-[11px]">
+                                            <div>
+                                                <div className="font-medium text-alloy-midnight">{t.title}</div>
+                                                <div className="mt-0.5 text-alloy-midnight/50">Due {relTime(t.dueAt) || t.dueAt} · {t.status}</div>
+                                            </div>
+                                            {t.status === "open" && onCompleteTask ? (
+                                                <button type="button" data-cc-complete-task={t.id} disabled={taskSaving} onClick={() => onCompleteTask(t.id)} className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50 hover:bg-[#eafaf3]">Complete</button>
+                                            ) : null}
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
                     </div>
                 ) : workspaceMode === "note" ? (
-                    <div data-cc-notes-panel className="mt-2 min-h-0 flex-1 overflow-auto rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 shadow-sm">
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Internal notes</div>
-                        {noteMessages.length === 0 ? (
-                            <p className="mt-2 text-[11px] text-alloy-midnight/50">No internal notes recorded for this family yet.</p>
-                        ) : (
-                            <ul className="mt-2 space-y-2">
-                                {noteMessages.map((m) => (
-                                    <li key={m.id ?? m.created_at} className="rounded-md border border-alloy-stone/12 bg-[#fbfcfb] px-2.5 py-2 text-[11px] text-alloy-midnight/75">
-                                        <div className="mb-1 text-[10px] text-alloy-midnight/45">{relTime(m.created_at)}</div>
-                                        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.body}</div>
-                                    </li>
-                                ))}
-                            </ul>
-                        )}
+                    <div data-cc-notes-panel className="mt-2 flex min-h-0 flex-1 flex-col gap-2">
+                        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 shadow-sm">
+                            <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Internal notes</div>
+                            {noteMessages.length === 0 ? (
+                                <p className="mt-2 text-[11px] text-alloy-midnight/50">No notes yet.</p>
+                            ) : (
+                                <ul className="mt-2 space-y-2">
+                                    {noteMessages.map((m) => (
+                                        <li key={m.id ?? m.created_at} className="rounded-md border border-alloy-stone/12 bg-[#fbfcfb] px-2.5 py-2 text-[11px] text-alloy-midnight/75">
+                                            <div className="mb-1 text-[10px] text-alloy-midnight/45">{relTime(m.created_at)}</div>
+                                            <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.body}</div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+                        </div>
+                        <div className="rounded-lg border border-alloy-stone/20 bg-white p-2 shadow-sm">
+                            <div className="text-[10px] font-semibold text-alloy-midnight/50">Internal note</div>
+                            <textarea aria-label="Internal note" value={noteDraft} onChange={(e) => onNoteDraftChange?.(e.target.value)} placeholder="Add an internal note for this family…" className="mt-1 min-h-[88px] w-full resize-y rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm text-alloy-midnight" />
+                            {noteError ? <div className="mt-1 text-[11px] text-alloy-ember">{noteError}</div> : null}
+                            <button type="button" data-cc-add-note disabled={noteSaving || !noteDraft.trim()} onClick={() => onAddNote?.()} className="mt-2 rounded-md bg-[#00A283] px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40">{noteSaving ? "Saving…" : "Add note"}</button>
+                        </div>
                     </div>
                 ) : composeMode ? (
                 <>

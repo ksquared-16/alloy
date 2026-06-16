@@ -4,6 +4,12 @@
 export const FAMILY_WORKSPACE_RESOLVER_VERSION = "5a" as const;
 
 export type ConsentState = "opted_in" | "opted_out" | "unset";
+export type PersonPreferenceProfile = {
+    email_transactional: ConsentState;
+    sms_transactional: ConsentState;
+    email_marketing: ConsentState;
+    sms_marketing: ConsentState;
+};
 export type ComposerChannel = "email" | "sms" | "note";
 export type RecipientTier = "primary" | "secondary" | "excluded";
 
@@ -106,8 +112,10 @@ export type HealthSummary = {
 
 export type ConsentSummary = {
     byContact: Record<string, { email: ConsentState; sms: ConsentState; marketing: ConsentState }>;
-    /** Primary-contact household display for operator preferences panel. */
+    /** Primary-contact household display (legacy 3-field summary). */
     household: { email: ConsentState; sms: ConsentState; marketing: ConsentState };
+    /** Primary-contact granular preference profile for edit UI. */
+    preferenceProfile: PersonPreferenceProfile;
     displayFlags: { email: boolean; sms: boolean; marketing: boolean };
 };
 
