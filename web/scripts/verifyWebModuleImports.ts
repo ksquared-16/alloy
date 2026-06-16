@@ -89,7 +89,7 @@ for (const rel of trackedUnderWeb) {
 }
 
 if (issues.length === 0) {
-    console.log(JSON.stringify({ ok: true, checked_files: trackedUnderWeb.length }, null, 2));
+    console.log(`verify:module-imports ok (${trackedUnderWeb.length} files)`);
     process.exit(0);
 }
 

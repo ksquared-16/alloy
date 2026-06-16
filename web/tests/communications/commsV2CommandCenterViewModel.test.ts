@@ -83,10 +83,19 @@ describe("metrics", () => {
     it("computes deterministic counts", () => {
         const m = computeCommandCenterMetrics(C);
         expect(m.total).toBe(4);
-        expect(m.requiresResponse).toBe(2); // ids 1,2
-        expect(m.slaAtRisk).toBe(1); // overdue id 1
-        expect(m.unassigned).toBe(2); // ids 1,4
+        expect(m.requiresResponse).toBe(2);
+        expect(m.slaAtRisk).toBe(1);
+        expect(m.unassigned).toBe(2);
         expect(m.unread).toBe(3);
+        expect(m.unclassified).toBe(1);
+    });
+});
+
+describe("health display", () => {
+    it("does not show Unresponsive for unclassified threads", async () => {
+        const { resolveCommandCenterHealthDisplay } = await import("@/lib/communications/v2/commandCenterViewModel");
+        expect(resolveCommandCenterHealthDisplay({ id: "1", attention_state: null }, 0, 0).label).toBe("Unclassified");
+        expect(resolveCommandCenterHealthDisplay({ id: "2", attention_state: "awaiting_parent_reply" }, 0, 0).label).toBeNull();
     });
 });
 

@@ -33,14 +33,16 @@ export type ConversationSummary = {
     last_message_direction?: string | null;
     primary_contact_name?: string | null;
     child_names?: string[] | null;
+    child_links?: Array<{ id: string; name: string }> | null;
     stage_label?: string | null;
     program_label?: string | null;
+    opportunity_id?: string | null;
+    primary_entity_type?: string | null;
+    primary_entity_id?: string | null;
+    primary_contact_person_id?: string | null;
     /** Resolved household id for live Family Communication Workspace (when thread anchors a family). */
     customer_id?: string | null;
 };
-
-export const FALLBACK_QUEUE_EXPLANATION =
-    "These are live communication threads that have not been classified into an operational queue yet.";
 
 export const OTHER_QUEUE_KEY = "other" as const;
 
@@ -189,12 +191,15 @@ export function computeCommandCenterMetrics(conversations: ConversationSummary[]
     slaAtRisk: number;
     unassigned: number;
     unread: number;
+    unclassified: number;
 } {
     let requiresResponse = 0;
     let slaAtRisk = 0;
     let unassigned = 0;
     let unread = 0;
+    let unclassified = 0;
     for (const c of conversations) {
+        if (isUnclassifiedConversation(c)) unclassified += 1;
         const attn = c.attention_state ?? "";
         const sla = c.sla_state ?? "";
         if (attn === "awaiting_parent_reply" || attn === "needs_follow_up" || sla === "first_response_due" || sla === "overdue") {
@@ -204,7 +209,34 @@ export function computeCommandCenterMetrics(conversations: ConversationSummary[]
         if (c.assignment_state !== "assigned") unassigned += 1;
         unread += typeof c.unread === "number" ? c.unread : 0;
     }
-    return { total: conversations.length, requiresResponse, slaAtRisk, unassigned, unread };
+    return { total: conversations.length, requiresResponse, slaAtRisk, unassigned, unread, unclassified };
+}
+
+export type CommandCenterHealthDisplay = {
+    label: string | null;
+    tone: string;
+    dot: string;
+};
+
+/** Conservative health chip — no fake "Unresponsive" on sparse/unclassified threads. */
+export function resolveCommandCenterHealthDisplay(
+    conversation: ConversationSummary | null,
+    messageCount: number,
+    engagementScore: number
+): CommandCenterHealthDisplay {
+    const neutral = { label: null, tone: "text-alloy-midnight/45", dot: "bg-alloy-stone/40" };
+    if (!conversation) return neutral;
+    if (isUnclassifiedConversation(conversation)) {
+        return { label: "Unclassified", tone: "text-alloy-midnight/50", dot: "bg-alloy-stone/40" };
+    }
+    if (messageCount < 2) return neutral;
+    if (engagementScore >= 66) {
+        return { label: "Healthy", tone: "text-[#0f6b4a]", dot: "bg-[#00A283]" };
+    }
+    if (engagementScore >= 33) {
+        return { label: "At risk", tone: "text-[#9a6b16]", dot: "bg-[#e0a32e]" };
+    }
+    return { label: "Low engagement", tone: "text-red-600", dot: "bg-red-500" };
 }
 
 /** Apply Command Center filters (channel/status/owner/location/search). Pure. */
