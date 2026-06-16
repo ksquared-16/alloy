@@ -50,14 +50,11 @@ export async function resolveEnrollmentDepartmentForOpportunity(params: {
 }): Promise<string | null> {
     const { data: opp, error } = await params.supabase
         .from("opportunities")
-        .select("department_id, metadata")
+        .select("metadata")
         .eq("id", params.opportunityId)
         .eq("org_id", params.orgId)
         .maybeSingle();
     if (error || !opp) return null;
-
-    const direct = trimOrNull((opp as { department_id?: string }).department_id);
-    if (direct) return direct;
 
     const md =
         (opp as { metadata?: Record<string, unknown> }).metadata != null &&
