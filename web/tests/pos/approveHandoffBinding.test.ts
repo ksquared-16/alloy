@@ -22,7 +22,13 @@ describe("extractBoundPerson — meaning layer, not guessing", () => {
             f_last: "Lovelace",
             f_note: "ignore-me@nope.com",
         });
-        expect(r).toEqual({ email: "ada@example.com", firstName: "Ada", lastName: "Lovelace", hasEmailBinding: true });
+        expect(r).toEqual({
+            email: "ada@example.com",
+            phone: null,
+            firstName: "Ada",
+            lastName: "Lovelace",
+            hasEmailBinding: true,
+        });
     });
 
     it("does NOT guess an email from an unmapped field when there is no person.email binding", () => {
