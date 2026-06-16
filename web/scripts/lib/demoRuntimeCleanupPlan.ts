@@ -6,10 +6,15 @@
 import type { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     chunk,
+    ENROLLMENT_RUNTIME_RESET_MODE,
     PROTECTED_LOCATIONS_TABLE_KEY,
     type DemoCleanupScope,
     type ResolvedDemoIds,
 } from "./demoRuntimeCleanupScope";
+import { buildEnrollmentResetSelection } from "./enrollmentRuntimeResetSelection";
+
+export { buildEnrollmentResetSelection } from "./enrollmentRuntimeResetSelection";
+export type { EnrollmentResetSelection, EnrollmentResetOpportunityRow } from "./enrollmentRuntimeResetSelection";
 
 type SupabaseAdmin = ReturnType<typeof createAdminClient>;
 
@@ -140,7 +145,8 @@ async function countDocumentsForEntities(
     supabase: SupabaseAdmin,
     orgId: string,
     entityIds: string[],
-    orDemo: string
+    orDemo: string,
+    includeMetadataTagged = true
 ): Promise<number> {
     const ids = new Set<string>();
     for (const part of chunk(entityIds, 150)) {
@@ -155,7 +161,7 @@ async function countDocumentsForEntities(
             if (id) ids.add(id);
         }
     }
-    const metaCount = await countRows(supabase, "documents", orgId, orDemo);
+    const metaCount = includeMetadataTagged ? await countRows(supabase, "documents", orgId, orDemo) : 0;
     return ids.size + metaCount;
 }
 
@@ -164,10 +170,19 @@ export async function resolveDemoIds(
     scope: DemoCleanupScope,
     orDemo: string
 ): Promise<ResolvedDemoIds> {
-    const opportunityIds = await selectIds(supabase, "opportunities", scope.orgId, orDemo);
-    const customerIds = new Set<string>(await selectIds(supabase, "customers", scope.orgId, orDemo));
-    const personIds = new Set<string>(await selectIds(supabase, "persons", scope.orgId, orDemo));
-    const customerMemberIds = new Set<string>(await selectIds(supabase, "customer_members", scope.orgId, orDemo));
+    const idsOnly = scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE;
+
+    const opportunityIds = idsOnly
+        ? (await buildEnrollmentResetSelection(supabase, scope.orgId)).opportunityIds
+        : await selectIds(supabase, "opportunities", scope.orgId, orDemo);
+
+    const customerIds = new Set<string>(
+        idsOnly ? [] : await selectIds(supabase, "customers", scope.orgId, orDemo)
+    );
+    const personIds = new Set<string>(idsOnly ? [] : await selectIds(supabase, "persons", scope.orgId, orDemo));
+    const customerMemberIds = new Set<string>(
+        idsOnly ? [] : await selectIds(supabase, "customer_members", scope.orgId, orDemo)
+    );
 
     for (const part of chunk(opportunityIds, 200)) {
         const { data, error } = await supabase
@@ -217,7 +232,9 @@ export async function resolveDemoIds(
             if (id) jobIds.add(id);
         }
     }
-    const { data: metaJobs } = await supabase.from("jobs").select("id").eq("org_id", scope.orgId).or(orDemo);
+    const { data: metaJobs } = idsOnly
+        ? { data: [] as Array<{ id?: string }> }
+        : await supabase.from("jobs").select("id").eq("org_id", scope.orgId).or(orDemo);
     for (const r of metaJobs ?? []) {
         const id = (r as { id?: string }).id;
         if (id) jobIds.add(id);
@@ -247,7 +264,7 @@ export async function resolveDemoIds(
             if (id) threadIds.add(id);
         }
     }
-    const threadMeta = await selectIds(supabase, "communication_threads", scope.orgId, orDemo);
+    const threadMeta = idsOnly ? [] : await selectIds(supabase, "communication_threads", scope.orgId, orDemo);
     for (const id of threadMeta) threadIds.add(id);
 
     const formSubmissionIds = new Set<string>();
@@ -263,7 +280,7 @@ export async function resolveDemoIds(
             if (id) formSubmissionIds.add(id);
         }
     }
-    const fsMeta = await selectIds(supabase, "form_submissions", scope.orgId, orDemo);
+    const fsMeta = idsOnly ? [] : await selectIds(supabase, "form_submissions", scope.orgId, orDemo);
     for (const id of fsMeta) formSubmissionIds.add(id);
 
     const documentIds = new Set<string>();
@@ -297,6 +314,7 @@ export async function buildDemoCleanupCounts(
     orDemo: string
 ): Promise<Record<string, number>> {
     const { orgId } = scope;
+    const idsOnly = scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE;
     const opp = ids.opportunityIds;
     const cust = ids.customerIds;
     const persons = ids.personIds;
@@ -407,7 +425,9 @@ export async function buildDemoCleanupCounts(
         : 0;
     counts.form_packet_sessions = uniqueSessions.length
         ? await countByIn(supabase, "form_packet_sessions", "id", uniqueSessions, orgId)
-        : await countRows(supabase, "form_packet_sessions", orgId, orDemo);
+        : idsOnly
+          ? 0
+          : await countRows(supabase, "form_packet_sessions", orgId, orDemo);
 
     counts.form_submission_signatures = await countByIn(supabase, "form_submission_signatures", "form_submission_id", formSubs, orgId);
     counts.form_submission_documents = await countByIn(supabase, "form_submission_documents", "form_submission_id", formSubs, orgId);
@@ -416,18 +436,24 @@ export async function buildDemoCleanupCounts(
     const docIds = [...ids.documentIds];
     counts.document_field_values = await countByIn(supabase, "document_field_values", "document_id", docIds, orgId);
     counts.document_versions = await countByIn(supabase, "document_versions", "document_id", docIds, orgId);
-    counts.documents = await countDocumentsForEntities(supabase, orgId, [...opp, ...persons, ...cust], orDemo);
+    counts.documents = await countDocumentsForEntities(
+        supabase,
+        orgId,
+        [...opp, ...persons, ...cust],
+        orDemo,
+        !idsOnly
+    );
 
+    const locationIdsForFv = idsOnly
+        ? []
+        : await selectIds(supabase, "locations", orgId, orDemo);
     counts.field_values =
         (await countFieldValuesForEntities(supabase, orgId, "opportunity", opp)) +
         (await countFieldValuesForEntities(supabase, orgId, "person", persons)) +
         (await countFieldValuesForEntities(supabase, orgId, "customer", cust)) +
-        (await countFieldValuesForEntities(
-            supabase,
-            orgId,
-            "location",
-            await selectIds(supabase, "locations", orgId, orDemo)
-        ));
+        (locationIdsForFv.length
+            ? await countFieldValuesForEntities(supabase, orgId, "location", locationIdsForFv)
+            : 0);
 
     counts.opportunities = opp.length;
     counts.customer_member_contacts =
@@ -436,19 +462,20 @@ export async function buildDemoCleanupCounts(
     counts.customer_tags = cust.length ? await countByInNoOrg(supabase, "customer_tags", "customer_id", cust) : 0;
     counts.customer_subscriptions = await countByIn(supabase, "customer_subscriptions", "customer_id", cust, orgId);
     counts.customer_payment_methods = cust.length ? await countByInNoOrg(supabase, "customer_payment_methods", "customer_id", cust) : 0;
-    counts.customer_members = members.length + (await countRows(supabase, "customer_members", orgId, orDemo));
+    counts.customer_members =
+        members.length + (idsOnly ? 0 : await countRows(supabase, "customer_members", orgId, orDemo));
     counts.customer_persons =
         (await countByIn(supabase, "customer_persons", "customer_id", cust, orgId)) +
-        (await countRows(supabase, "customer_persons", orgId, orDemo));
-    counts.contacts = await countRows(supabase, "contacts", orgId, orDemo);
+        (idsOnly ? 0 : await countRows(supabase, "customer_persons", orgId, orDemo));
+    counts.contacts = idsOnly ? 0 : await countRows(supabase, "contacts", orgId, orDemo);
     counts.person_locations =
-        (await countRows(supabase, "person_locations", orgId, orDemo)) +
+        (idsOnly ? 0 : await countRows(supabase, "person_locations", orgId, orDemo)) +
         (await countByIn(supabase, "person_locations", "person_id", persons, orgId));
     counts.person_relationships =
         (await countByIn(supabase, "person_relationships", "from_person_id", persons, orgId)) +
         (await countByIn(supabase, "person_relationships", "to_person_id", persons, orgId));
     counts.customers = cust.length;
-    counts.persons = persons.length + (await countRows(supabase, "persons", orgId, orDemo));
+    counts.persons = persons.length + (idsOnly ? 0 : await countRows(supabase, "persons", orgId, orDemo));
     counts[PROTECTED_LOCATIONS_TABLE_KEY] = await countRows(supabase, "locations", orgId, orDemo);
     counts.work_units = await countRows(supabase, "work_units", orgId, orDemo);
     counts.departments = await countRows(supabase, "departments", orgId, orDemo);

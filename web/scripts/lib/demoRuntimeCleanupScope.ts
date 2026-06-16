@@ -22,11 +22,23 @@ export const ALL_DEMO_SEED_PACKAGES = [
 
 export const DEMO_CLEANUP_CONFIRM_VALUE = "DELETE_DEMO_RUNTIME_DATA";
 
+/** Explicit one-time org enrollment/lead queue reset (not default demo-metadata cleanup). */
+export const ENROLLMENT_RUNTIME_RESET_MODE = "enrollment_runtime_reset";
+
+/** Explicit orphan communications cleanup — unlinked threads/messages only. */
+export const COMMUNICATIONS_ORPHAN_RESET_MODE = "communications_orphan_reset";
+
+/** Status keys for enrollment New Leads / lifecycle lead lane visibility. */
+export const ENROLLMENT_LEAD_STATUS_KEYS = ["new_inquiry", "needs_qualification", "open"] as const;
+
+export type DemoCleanupMode = "default" | typeof ENROLLMENT_RUNTIME_RESET_MODE | typeof COMMUNICATIONS_ORPHAN_RESET_MODE;
+
 /** Output key for demo-tagged locations — visibility only, never deleted. */
 export const PROTECTED_LOCATIONS_TABLE_KEY = "protected_locations_not_deleted";
 
 export type DemoCleanupScope = {
     orgId: string;
+    cleanupMode: DemoCleanupMode;
     /** When set, only rows with this metadata.demo_seed_package. */
     demoSeedPackage: string | null;
     /** When set, only rows with this metadata.demo_seed_run_id. */
@@ -132,13 +144,57 @@ export const DEMO_CLEANUP_TABLE_ORDER = [
 
 export type DemoCleanupTable = (typeof DEMO_CLEANUP_TABLE_ORDER)[number];
 
+/** FK-safe delete order for communications_orphan_reset (comms tables only). */
+export const COMMUNICATIONS_ORPHAN_CLEANUP_TABLE_ORDER = [
+    "communication_message_reads",
+    "communication_messages",
+    "communication_scheduled_sends",
+    "messages_outbox",
+    "communication_threads",
+] as const;
+
+export type CommunicationsOrphanCleanupTable = (typeof COMMUNICATIONS_ORPHAN_CLEANUP_TABLE_ORDER)[number];
+
+const EXPLICIT_CLEANUP_MODES = new Set<DemoCleanupMode>([
+    ENROLLMENT_RUNTIME_RESET_MODE,
+    COMMUNICATIONS_ORPHAN_RESET_MODE,
+]);
+
+export function isExplicitCleanupMode(mode: DemoCleanupMode): boolean {
+    return EXPLICIT_CLEANUP_MODES.has(mode);
+}
+
+export function isGoldenPathProtectedMetadata(metadata: unknown): boolean {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return false;
+    const m = metadata as Record<string, unknown>;
+    if (m.demo_seed_package === GOLDEN_PATH_SEED_PACKAGE) return true;
+    const seedKey = typeof m.seed_key === "string" ? m.seed_key.trim() : "";
+    return seedKey.startsWith("golden_path");
+}
+
+export function parseDemoCleanupModeFromEnv(): DemoCleanupMode {
+    const mode = process.env.DEMO_CLEANUP_MODE?.trim();
+    if (mode === ENROLLMENT_RUNTIME_RESET_MODE) return ENROLLMENT_RUNTIME_RESET_MODE;
+    if (mode === COMMUNICATIONS_ORPHAN_RESET_MODE) return COMMUNICATIONS_ORPHAN_RESET_MODE;
+    return "default";
+}
+
 export function parseDemoCleanupScopeFromEnv(): DemoCleanupScope {
     const orgId = process.env.DEMO_RESET_ORG_ID?.trim() || process.env.DEMO_SEED_ORG_ID?.trim();
     if (!orgId) {
         throw new Error("Missing DEMO_RESET_ORG_ID (or DEMO_SEED_ORG_ID)");
     }
+    const cleanupMode = parseDemoCleanupModeFromEnv();
+    if (isExplicitCleanupMode(cleanupMode)) {
+        if (process.env.DEMO_SEED_PACKAGE?.trim() || process.env.DEMO_SEED_RUN_ID?.trim() || process.env.DEMO_SEED_FAMILY_KEY?.trim()) {
+            throw new Error(
+                `DEMO_CLEANUP_MODE=${cleanupMode} cannot be combined with DEMO_SEED_PACKAGE / DEMO_SEED_RUN_ID / DEMO_SEED_FAMILY_KEY`
+            );
+        }
+    }
     return {
         orgId,
+        cleanupMode,
         demoSeedPackage: process.env.DEMO_SEED_PACKAGE?.trim() || null,
         demoSeedRunId: process.env.DEMO_SEED_RUN_ID?.trim() || null,
         demoSeedFamilyKey: process.env.DEMO_SEED_FAMILY_KEY?.trim() || null,

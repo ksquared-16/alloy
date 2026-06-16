@@ -22,8 +22,11 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
+    COMMUNICATIONS_ORPHAN_CLEANUP_TABLE_ORDER,
+    COMMUNICATIONS_ORPHAN_RESET_MODE,
     DEMO_CLEANUP_CONFIRM_VALUE,
     DEMO_CLEANUP_TABLE_ORDER,
+    ENROLLMENT_RUNTIME_RESET_MODE,
     PROTECTED_LOCATIONS_TABLE_KEY,
     demoMetadataOrFilter,
     chunk,
@@ -31,7 +34,17 @@ import {
     type DemoCleanupScope,
     type ResolvedDemoIds,
 } from "./lib/demoRuntimeCleanupScope";
-import { buildDemoCleanupCounts, resolveDemoIds } from "./lib/demoRuntimeCleanupPlan";
+import { buildCommunicationsOrphanSelection } from "./lib/communicationsOrphanResetSelection";
+import {
+    executeCommunicationsOrphanDeletes,
+    printCommunicationsOrphanReport,
+} from "./lib/communicationsOrphanResetExecute";
+import {
+    buildDemoCleanupCounts,
+    buildEnrollmentResetSelection,
+    resolveDemoIds,
+} from "./lib/demoRuntimeCleanupPlan";
+import type { EnrollmentResetOpportunityRow } from "./lib/demoRuntimeCleanupPlan";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -43,6 +56,37 @@ function errMessage(err: unknown): string {
         return (err as { message: string }).message;
     }
     return String(err);
+}
+
+function printEnrollmentResetReport(selection: {
+    selected: EnrollmentResetOpportunityRow[];
+    excludedGoldenPath: EnrollmentResetOpportunityRow[];
+    enrollmentWorkUnitIds: string[];
+}): void {
+    console.log("--- enrollment_runtime_reset opportunity selection ---\n");
+    console.log(`enrollment_work_unit_ids: ${selection.enrollmentWorkUnitIds.length ? selection.enrollmentWorkUnitIds.join(", ") : "(none)"}`);
+    console.log(`selected_opportunities: ${selection.selected.length}`);
+    console.log(`excluded_golden_path_opportunities: ${selection.excludedGoldenPath.length}\n`);
+
+    if (selection.selected.length) {
+        console.log("Selected (would delete):");
+        for (const row of selection.selected) {
+            console.log(
+                `  - ${row.name ?? "(unnamed)"} | status=${row.status_key ?? "—"} | work_unit_id=${row.work_unit_id ?? "—"} | id=${row.id}`
+            );
+        }
+        console.log("");
+    }
+
+    if (selection.excludedGoldenPath.length) {
+        console.log("Excluded golden-path (protected):");
+        for (const row of selection.excludedGoldenPath) {
+            console.log(
+                `  - ${row.name ?? "(unnamed)"} | status=${row.status_key ?? "—"} | work_unit_id=${row.work_unit_id ?? "—"} | id=${row.id}`
+            );
+        }
+        console.log("");
+    }
 }
 
 async function deleteByIn(
@@ -104,6 +148,7 @@ async function executeDeletes(
     orDemo: string
 ): Promise<Record<string, number>> {
     const { orgId } = scope;
+    const idsOnly = scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE;
     const opp = ids.opportunityIds;
     const cust = ids.customerIds;
     const persons = ids.personIds;
@@ -136,7 +181,9 @@ async function executeDeletes(
         (await deleteByIn(supabase, "communication_scheduled_sends", "entity_id", opp, orgId)) +
         (await deleteByIn(supabase, "communication_scheduled_sends", "recipient_person_id", persons, orgId));
     deleted.communication_threads = await deleteByIn(supabase, "communication_threads", "id", threads, orgId);
-    deleted.communication_threads += await deleteByOr(supabase, "communication_threads", orgId, orDemo);
+    if (!idsOnly) {
+        deleted.communication_threads += await deleteByOr(supabase, "communication_threads", orgId, orDemo);
+    }
 
     deleted.task_assist_proposals = await deleteByIn(supabase, "task_assist_proposals", "entity_id", opp, orgId);
     deleted.operational_tasks = await deleteByIn(supabase, "operational_tasks", "entity_id", opp, orgId);
@@ -215,32 +262,40 @@ async function executeDeletes(
     }
     deleted.form_packet_session_items = await deleteByIn(supabase, "form_packet_session_items", "form_submission_id", formSubs, orgId);
     deleted.form_packet_sessions = await deleteByIn(supabase, "form_packet_sessions", "id", [...sessionIds], orgId);
-    deleted.form_packet_sessions += await deleteByOr(supabase, "form_packet_sessions", orgId, orDemo);
+    if (!idsOnly) {
+        deleted.form_packet_sessions += await deleteByOr(supabase, "form_packet_sessions", orgId, orDemo);
+    }
 
     deleted.form_submission_signatures = await deleteByIn(supabase, "form_submission_signatures", "form_submission_id", formSubs, orgId);
     deleted.form_submission_documents = await deleteByIn(supabase, "form_submission_documents", "form_submission_id", formSubs, orgId);
     deleted.form_submissions = await deleteByIn(supabase, "form_submissions", "id", formSubs, orgId);
-    deleted.form_submissions += await deleteByOr(supabase, "form_submissions", orgId, orDemo);
+    if (!idsOnly) {
+        deleted.form_submissions += await deleteByOr(supabase, "form_submissions", orgId, orDemo);
+    }
 
     const docIds = [...ids.documentIds];
     deleted.document_field_values = await deleteByIn(supabase, "document_field_values", "document_id", docIds, orgId);
     deleted.document_versions = await deleteByIn(supabase, "document_versions", "document_id", docIds, orgId);
     deleted.documents = await deleteByIn(supabase, "documents", "id", docIds, orgId);
-    deleted.documents += await deleteByOr(supabase, "documents", orgId, orDemo);
+    if (!idsOnly) {
+        deleted.documents += await deleteByOr(supabase, "documents", orgId, orDemo);
+    }
 
     const fvEntitySets: Array<{ type: string; ids: string[] }> = [
         { type: "opportunity", ids: opp },
         { type: "person", ids: persons },
         { type: "customer", ids: cust },
     ];
-    const { data: locRows, error: locErr } = await supabase.from("locations").select("id").eq("org_id", orgId).or(orDemo);
-    if (locErr) throw new Error(`[locations select for field_values] ${locErr.message}`);
-    const locationIds: string[] = [];
-    for (const r of locRows ?? []) {
-        const id = (r as { id?: string }).id;
-        if (id) locationIds.push(id);
+    if (!idsOnly) {
+        const { data: locRows, error: locErr } = await supabase.from("locations").select("id").eq("org_id", orgId).or(orDemo);
+        if (locErr) throw new Error(`[locations select for field_values] ${locErr.message}`);
+        const locationIds: string[] = [];
+        for (const r of locRows ?? []) {
+            const id = (r as { id?: string }).id;
+            if (id) locationIds.push(id);
+        }
+        if (locationIds.length) fvEntitySets.push({ type: "location", ids: locationIds });
     }
-    if (locationIds.length) fvEntitySets.push({ type: "location", ids: locationIds });
     deleted.field_values = 0;
     for (const { type, ids: eids } of fvEntitySets) {
         for (const part of chunk(eids, 150)) {
@@ -266,19 +321,32 @@ async function executeDeletes(
     deleted.customer_payment_methods = await deleteByIn(supabase, "customer_payment_methods", "customer_id", cust, undefined, "*");
 
     deleted.customer_members = await deleteByIn(supabase, "customer_members", "customer_id", cust, orgId);
-    deleted.customer_members += await deleteByOr(supabase, "customer_members", orgId, orDemo);
+    if (!idsOnly) {
+        deleted.customer_members += await deleteByOr(supabase, "customer_members", orgId, orDemo);
+    }
     deleted.customer_persons = await deleteByIn(supabase, "customer_persons", "customer_id", cust, orgId);
-    deleted.customer_persons += await deleteByOr(supabase, "customer_persons", orgId, orDemo);
-    deleted.contacts = await deleteByOr(supabase, "contacts", orgId, orDemo);
+    if (!idsOnly) {
+        deleted.customer_persons += await deleteByOr(supabase, "customer_persons", orgId, orDemo);
+    }
+    deleted.contacts = idsOnly ? 0 : await deleteByOr(supabase, "contacts", orgId, orDemo);
 
-    deleted.person_locations = await deleteByOr(supabase, "person_locations", orgId, orDemo);
+    if (!idsOnly) {
+        deleted.person_locations = await deleteByOr(supabase, "person_locations", orgId, orDemo);
+    } else {
+        deleted.person_locations = 0;
+    }
     deleted.person_locations += await deleteByIn(supabase, "person_locations", "person_id", persons, orgId);
     deleted.person_relationships =
         (await deleteByIn(supabase, "person_relationships", "from_person_id", persons, orgId)) +
         (await deleteByIn(supabase, "person_relationships", "to_person_id", persons, orgId));
 
-    deleted.customers = await deleteByOr(supabase, "customers", orgId, orDemo);
-    deleted.persons = await deleteByOr(supabase, "persons", orgId, orDemo);
+    if (idsOnly) {
+        deleted.customers = await deleteByIn(supabase, "customers", "id", cust, orgId);
+        deleted.persons = await deleteByIn(supabase, "persons", "id", persons, orgId);
+    } else {
+        deleted.customers = await deleteByOr(supabase, "customers", orgId, orDemo);
+        deleted.persons = await deleteByOr(supabase, "persons", orgId, orDemo);
+    }
 
     deleted[PROTECTED_LOCATIONS_TABLE_KEY] = 0;
     deleted.work_units = await deleteByOr(supabase, "work_units", orgId, orDemo);
@@ -307,10 +375,41 @@ async function main(): Promise<void> {
 
     console.log("\n=== demoRuntimeCleanupExecute (DESTRUCTIVE) ===\n");
     console.log(`org_id: ${scope.orgId}`);
+    console.log(`cleanup_mode: ${scope.cleanupMode}`);
+    if (scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE) {
+        console.log("mode: enrollment_runtime_reset — deletes lead/enrollment queue runtime (not demo-metadata default)");
+    }
+    if (scope.cleanupMode === COMMUNICATIONS_ORPHAN_RESET_MODE) {
+        console.log("mode: communications_orphan_reset — deletes unlinked communication threads/messages only");
+    }
     if (scope.demoSeedPackage) console.log(`filter: demo_seed_package = ${scope.demoSeedPackage}`);
     if (scope.demoSeedRunId) console.log(`filter: demo_seed_run_id = ${scope.demoSeedRunId}`);
     if (scope.demoSeedFamilyKey) console.log(`filter: demo_seed_family_key = ${scope.demoSeedFamilyKey}`);
     console.log("");
+
+    if (scope.cleanupMode === COMMUNICATIONS_ORPHAN_RESET_MODE) {
+        const selection = await buildCommunicationsOrphanSelection(supabase, scope.orgId);
+        printCommunicationsOrphanReport(selection);
+
+        console.log("--- Pre-delete counts ---\n");
+        for (const table of COMMUNICATIONS_ORPHAN_CLEANUP_TABLE_ORDER) {
+            console.log(`${table}: ${selection.counts[table as keyof typeof selection.counts] ?? 0}`);
+        }
+
+        const deleted = await executeCommunicationsOrphanDeletes(supabase, scope.orgId, selection);
+
+        console.log("\n--- Deleted row counts ---\n");
+        for (const table of COMMUNICATIONS_ORPHAN_CLEANUP_TABLE_ORDER) {
+            console.log(`${table}: ${deleted[table] ?? 0}`);
+        }
+        console.log("\nExecute complete.\n");
+        return;
+    }
+
+    if (scope.cleanupMode === ENROLLMENT_RUNTIME_RESET_MODE) {
+        const selection = await buildEnrollmentResetSelection(supabase, scope.orgId);
+        printEnrollmentResetReport(selection);
+    }
 
     const ids = await resolveDemoIds(supabase, scope, orDemo);
     const before = await buildDemoCleanupCounts(supabase, scope, ids, orDemo);
