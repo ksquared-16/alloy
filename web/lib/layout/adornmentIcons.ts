@@ -8,6 +8,7 @@ import type { LayoutAdornmentIcon } from "./layoutV2";
 export const ADORNMENT_ICON_GLYPH: Record<LayoutAdornmentIcon, string> = {
     person: "👤",
     child: "👶",
+    user: "🧑",
     opportunity: "🎯",
     calendar: "📅",
     birthday: "🎂",
@@ -18,11 +19,13 @@ export const ADORNMENT_ICON_GLYPH: Record<LayoutAdornmentIcon, string> = {
     phone: "📞",
     mail: "✉️",
     location: "📍",
+    school: "🏫",
 };
 
 export const ADORNMENT_ICON_LABEL: Record<LayoutAdornmentIcon, string> = {
     person: "Person",
     child: "Child",
+    user: "User",
     opportunity: "Opportunity",
     calendar: "Calendar",
     birthday: "Birthday",
@@ -33,4 +36,5 @@ export const ADORNMENT_ICON_LABEL: Record<LayoutAdornmentIcon, string> = {
     phone: "Phone",
     mail: "Email",
     location: "Location",
+    school: "School",
 };
