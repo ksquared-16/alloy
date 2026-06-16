@@ -60,7 +60,8 @@ export function parseCreateLeadChildParticipationPayload(
     const dob = trimDateOnly(merged.child_date_of_birth);
 
     const ocm: CreateLeadChildOcmFields = {
-        location_id: trimUuid(merged.child_location_id) ?? trimUuid(merged.location_id),
+        // Lead-level location_id belongs on the opportunity — never infer child participation from it.
+        location_id: trimUuid(merged.child_location_id),
         desired_program_type:
             trimStableKey(merged.child_program) ?? trimStableKey(merged.desired_program_type),
         desired_program_category_id:
@@ -76,14 +77,11 @@ export function parseCreateLeadChildParticipationPayload(
         notes: trimStableKey(merged.child_notes) ?? trimStableKey(merged.notes),
     };
 
+    // Child person creation requires durable first + last name (see findOrCreateChildPersonInOrg).
+    if (!firstName || !lastName) return null;
+
     const hasOcmField = Object.values(ocm).some((v) => v != null);
-    const hasIdentity = Boolean(firstName || lastName);
-    if (!hasOcmField && !hasIdentity) return null;
-
-    const display_name =
-        [firstName, lastName].filter(Boolean).join(" ").trim() ||
-        (hasOcmField ? "Child" : "");
-
+    const display_name = [firstName, lastName].filter(Boolean).join(" ").trim();
     if (!display_name) return null;
 
     return {

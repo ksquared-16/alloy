@@ -1,7 +1,12 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
+import {
+    BOS_FIELD_CONFIDENCE_STYLES,
+    type BosFieldConfidenceDisplayLevel,
+} from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import {
     useInquiryChildPlacementCascade,
     useInquiryChildPlacementDefaultSite,
@@ -26,7 +31,23 @@ type Props = {
     disabled?: boolean;
     dataTestIdPrefix?: string;
     platformRequiredKeys?: readonly string[];
+    /** BOS extraction confidence — shown after Analyze in draft edit mode. */
+    fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
 };
+
+function FieldConfidenceBadge({ level }: { level: BosFieldConfidenceDisplayLevel }) {
+    const style = BOS_FIELD_CONFIDENCE_STYLES[level];
+    return (
+        <span className="ml-auto flex shrink-0 items-center gap-1">
+            {level === "high" ?
+                <Check className="h-3 w-3 text-alloy-pine" strokeWidth={2.5} aria-hidden />
+            :   null}
+            <span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-semibold ${style.badge}`}>
+                {style.label}
+            </span>
+        </span>
+    );
+}
 
 function inputType(field: ActionWorkspaceGatherField): string {
     if (field.value_kind === "email") return "email";
@@ -63,6 +84,7 @@ export function ActionWorkspaceGatherFields({
     disabled = false,
     dataTestIdPrefix = "action-workspace-gather",
     platformRequiredKeys = [],
+    fieldConfidence,
 }: Props) {
     const [activeTab, setActiveTab] = useState(sections[0]?.key ?? "person");
     const activeSection = sections.find((s) => s.key === activeTab) ?? sections[0];
@@ -172,18 +194,27 @@ export function ActionWorkspaceGatherFields({
                             return (
                                 <label
                                     key={field.payload_key}
-                                    className={field.multiline ? "col-span-2" : undefined}
+                                    className={`${field.multiline ? "col-span-2" : ""} ${
+                                        fieldConfidence?.[field.payload_key] ?
+                                            BOS_FIELD_CONFIDENCE_STYLES[fieldConfidence[field.payload_key]!].border
+                                        :   ""
+                                    } border-l-2 pl-2`}
                                     data-testid={`${dataTestIdPrefix}-field-${field.payload_key}`}
                                 >
-                                    <div className={LABEL}>
-                                        {field.field_label}
-                                        {platformRequiredKeys.includes(field.payload_key) ?
-                                            <span className="text-alloy-ember"> *</span>
-                                        :   null}
-                                        {(field.payload_key === "email" || field.payload_key === "phone") ?
-                                            <span className="ml-1 text-[11px] font-normal text-alloy-midnight/40">
-                                                (one required)
-                                            </span>
+                                    <div className={`${LABEL} flex items-start gap-2`}>
+                                        <span>
+                                            {field.field_label}
+                                            {platformRequiredKeys.includes(field.payload_key) ?
+                                                <span className="text-alloy-ember"> *</span>
+                                            :   null}
+                                            {(field.payload_key === "email" || field.payload_key === "phone") ?
+                                                <span className="ml-1 text-[11px] font-normal text-alloy-midnight/40">
+                                                    (one required)
+                                                </span>
+                                            :   null}
+                                        </span>
+                                        {fieldConfidence?.[field.payload_key] ?
+                                            <FieldConfidenceBadge level={fieldConfidence[field.payload_key]!} />
                                         :   null}
                                     </div>
                                     {field.multiline ?

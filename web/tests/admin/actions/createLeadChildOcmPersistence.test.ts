@@ -18,7 +18,7 @@ describe("parseCreateLeadChildParticipationPayload", () => {
             child_first_name: "Riley",
             child_last_name: "Nguyen",
             child_date_of_birth: "2022-03-15",
-            location_id: SITE_ID,
+            child_location_id: SITE_ID,
             child_program: "infant",
             child_desired_schedule_type: "full_day",
             child_desired_start_date: "2026-09-01",
@@ -42,6 +42,7 @@ describe("parseCreateLeadChildParticipationPayload", () => {
     it("stores program item_key not display label", () => {
         const parsed = parseCreateLeadChildParticipationPayload({
             child_first_name: "Sam",
+            child_last_name: "Lee",
             child_program: "preschool",
         });
         expect(parsed!.ocm.desired_program_type).toBe("preschool");
@@ -51,6 +52,7 @@ describe("parseCreateLeadChildParticipationPayload", () => {
     it("stores room unit location id not label", () => {
         const parsed = parseCreateLeadChildParticipationPayload({
             child_first_name: "Sam",
+            child_last_name: "Lee",
             child_program_room_cohort_key: ROOM_ID,
         });
         expect(parsed!.ocm.program_room_cohort_key).toBe(ROOM_ID);
@@ -59,6 +61,7 @@ describe("parseCreateLeadChildParticipationPayload", () => {
     it("ignores non-uuid room labels", () => {
         const parsed = parseCreateLeadChildParticipationPayload({
             child_first_name: "Sam",
+            child_last_name: "Lee",
             child_program_room_cohort_key: "Infant A",
         });
         expect(parsed!.ocm.program_room_cohort_key).toBeNull();
@@ -68,9 +71,31 @@ describe("parseCreateLeadChildParticipationPayload", () => {
         expect(parseCreateLeadChildParticipationPayload({ first_name: "Parent" })).toBeNull();
     });
 
-    it("accepts child_location_id before execute payload remap", () => {
+    it("returns null when only parent location_id is set (no child names)", () => {
+        expect(
+            parseCreateLeadChildParticipationPayload({
+                first_name: "Kelly",
+                last_name: "Kurzman",
+                email: "kelly.kurzman@gmail.com",
+                phone: "6022904816",
+                location_id: SITE_ID,
+            }),
+        ).toBeNull();
+    });
+
+    it("returns null when only child first name is present", () => {
+        expect(
+            parseCreateLeadChildParticipationPayload({
+                child_first_name: "Sam",
+                child_location_id: SITE_ID,
+            }),
+        ).toBeNull();
+    });
+
+    it("accepts child_location_id for child OCM site", () => {
         const parsed = parseCreateLeadChildParticipationPayload({
             child_first_name: "Sam",
+            child_last_name: "Lee",
             child_location_id: SITE_ID,
         });
         expect(parsed!.ocm.location_id).toBe(SITE_ID);
@@ -168,7 +193,7 @@ describe("applyCreateLeadChildParticipation", () => {
         const merged = {
             child_first_name: "Riley",
             child_last_name: "Nguyen",
-            location_id: SITE_ID,
+            child_location_id: SITE_ID,
             child_program: "infant",
             child_desired_schedule_type: "full_day",
             child_program_room_cohort_key: ROOM_ID,

@@ -8,6 +8,7 @@ import {
     buildCreateLeadLiveFindings,
     buildCreateLeadMaterialCard,
 } from "@/lib/admin/actions/createLeadOperationalIntakeModel";
+import type { BosFieldConfidenceDisplayLevel } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import { CreateLeadDraftLeadColumn } from "@/components/admin/actions/CreateLeadDraftLeadColumn";
 import { CreateLeadMaterialStackColumn } from "@/components/admin/actions/CreateLeadMaterialStackColumn";
 
@@ -34,6 +35,7 @@ type Props = {
     onClearMaterial: () => void;
     materialAnalyzed: boolean;
     validationIssues: string[];
+    fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
 };
 
 export function CreateLeadOperationalIntake({
@@ -59,6 +61,7 @@ export function CreateLeadOperationalIntake({
     onClearMaterial,
     materialAnalyzed,
     validationIssues,
+    fieldConfidence,
 }: Props) {
     const [composerOpen, setComposerOpen] = useState(false);
 
@@ -127,6 +130,7 @@ export function CreateLeadOperationalIntake({
                 selectedSuggestionCount={selectedSuggestionCount}
                 analyzeError={analyzeError}
                 validationIssues={showDraftForm ? validationIssues : []}
+                fieldConfidence={fieldConfidence}
             />
         </div>
     );

@@ -260,6 +260,28 @@ describe("executeCreateLeadAction validation", () => {
         );
     });
 
+    it("creates Kelly Kurzman lead with location only — child participation skipped", async () => {
+        const sb = supabaseForCreate("vert-1");
+        const siteId = "11111111-1111-4111-8111-111111111111";
+        const merged = {
+            first_name: "Kelly",
+            last_name: "Kurzman",
+            email: "kelly.kurzman@gmail.com",
+            phone: "6022904816",
+            location_id: siteId,
+        };
+        const res = await executeCreateLeadAction(sb as never, ctx as never, {
+            merged,
+            context: { department_id: "dept-1" },
+        });
+        expect(res.ok).toBe(true);
+        expect(sb.getCapturedOppInsert()?.location_id).toBe(siteId);
+        expect(applyCreateLeadChildParticipation).toHaveBeenCalledWith(
+            sb,
+            expect.objectContaining({ merged }),
+        );
+    });
+
     it("creates lead when org has no configured vertical", async () => {
         const sb = supabaseForCreate(null);
         const res = await executeCreateLeadAction(sb as never, ctx as never, {
@@ -336,6 +358,7 @@ describe("executeCreateLeadAction validation", () => {
                 last_name: "Lovelace",
                 email: "ada@example.com",
                 child_first_name: "Riley",
+                child_last_name: "Nguyen",
                 child_program: "infant",
             },
         });

@@ -4,8 +4,10 @@ import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveC
 
 export type BosConfidenceLevel = ActionWorkspaceBosSuggestion["confidence"];
 
-export const BOS_CONFIDENCE_STYLES: Record<
-    BosConfidenceLevel,
+export type BosFieldConfidenceDisplayLevel = BosConfidenceLevel | "undetected" | "manual";
+
+export const BOS_FIELD_CONFIDENCE_STYLES: Record<
+    BosFieldConfidenceDisplayLevel,
     { badge: string; border: string; label: string }
 > = {
     high: {
@@ -23,6 +25,25 @@ export const BOS_CONFIDENCE_STYLES: Record<
         border: "border-l-red-500",
         label: "Low confidence",
     },
+    undetected: {
+        badge: "bg-amber-50 text-amber-900 border-amber-200",
+        border: "border-l-amber-300",
+        label: "Not detected",
+    },
+    manual: {
+        badge: "bg-alloy-stone/10 text-alloy-midnight/55 border-alloy-stone/20",
+        border: "border-l-alloy-stone/30",
+        label: "Entered manually",
+    },
+};
+
+export const BOS_CONFIDENCE_STYLES: Record<
+    BosConfidenceLevel,
+    { badge: string; border: string; label: string }
+> = {
+    high: BOS_FIELD_CONFIDENCE_STYLES.high,
+    medium: BOS_FIELD_CONFIDENCE_STYLES.medium,
+    low: BOS_FIELD_CONFIDENCE_STYLES.low,
 };
 
 /** Height reserved for BOS Command Center + workspace padding (matches shell chrome). */

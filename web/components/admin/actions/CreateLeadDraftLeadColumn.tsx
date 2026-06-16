@@ -10,6 +10,7 @@ import type {
 import type { CreateLeadLiveFinding } from "@/lib/admin/actions/createLeadOperationalIntakeModel";
 import {
     BOS_CONFIDENCE_STYLES,
+    type BosFieldConfidenceDisplayLevel,
 } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
@@ -31,6 +32,7 @@ type Props = {
     selectedSuggestionCount: number;
     analyzeError: string | null;
     validationIssues: string[];
+    fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
 };
 
 function DraftFieldCard({
@@ -163,6 +165,7 @@ export function CreateLeadDraftLeadColumn({
     selectedSuggestionCount,
     analyzeError,
     validationIssues,
+    fieldConfidence,
 }: Props) {
     const showDraftForm = manualMode || draftEditMode;
     const reviewSuggestions = suggestions.filter((s) => s.confidence !== "high");
@@ -241,6 +244,7 @@ export function CreateLeadDraftLeadColumn({
                             values={values}
                             onChange={onFieldChange}
                             platformRequiredKeys={requiredPayloadKeys}
+                            fieldConfidence={fieldConfidence}
                             dataTestIdPrefix="create-lead-gather"
                         />
                     </div>

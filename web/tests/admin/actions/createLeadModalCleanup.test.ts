@@ -230,4 +230,15 @@ describe("Client vs server create lead validation boundary", () => {
         expect(server).toContain("validateCreateLeadFromIntakeSpec");
         expect(server).toMatch(/Server minimum|stage-configured requirements/i);
     });
+
+    it("CreateLeadModal maps submit payload through intake spec when configured", async () => {
+        const { readFileSync } = await import("node:fs");
+        const { resolve } = await import("node:path");
+        const modal = readFileSync(
+            resolve(__dirname, "../../../components/admin/opportunity/actions/CreateLeadModal.tsx"),
+            "utf8",
+        );
+        expect(modal).toContain("mapActionIntakeValuesToCreateLeadPayload");
+        expect(modal).toContain("validateCreateLeadFromIntakeSpec");
+    });
 });

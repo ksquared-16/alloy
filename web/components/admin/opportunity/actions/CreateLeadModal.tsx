@@ -18,6 +18,7 @@ import {
     mapCreateLeadGatherToExecutePayload,
     validateCreateLeadPlatformMinimum,
 } from "@/lib/admin/actions/createLeadPlatformGather";
+import { mapActionIntakeValuesToCreateLeadPayload } from "@/lib/lifecycle/resolveActionIntakeSpec";
 import {
     formatCreateLeadHouseholdLabel,
 } from "@/lib/admin/actions/createLeadBosGuidance";
@@ -45,6 +46,11 @@ import { ActionWorkspaceExecuteState } from "@/components/admin/actions/ActionWo
 import { ActionWorkspaceSuccessState } from "@/components/admin/actions/ActionWorkspaceSuccessState";
 import { ActionWorkspaceStepContent } from "@/components/admin/actions/ActionWorkspaceStepContent";
 import { queueActionWorkspaceLeadHandoff } from "@/lib/bos/actionWorkspaceDrawerHandoff";
+import {
+    buildCreateLeadFieldConfidenceMap,
+    type CreateLeadFieldConfidenceState,
+} from "@/lib/admin/actions/createLeadFieldConfidence";
+import type { ActionIntakePasteExtractionResult } from "@/lib/lifecycle/actionIntakePasteParserTypes";
 
 export type CreateLeadFormPayload = {
     first_name: string;
@@ -88,6 +94,8 @@ export function CreateLeadModal(props: {
     const [pasteText, setPasteText] = useState("");
     const [suggestions, setSuggestions] = useState<ActionWorkspaceBosSuggestion[]>([]);
     const [materialAnalyzed, setMaterialAnalyzed] = useState(false);
+    const [fieldConfidence, setFieldConfidence] = useState<Record<string, CreateLeadFieldConfidenceState>>({});
+    const [lastExtraction, setLastExtraction] = useState<ActionIntakePasteExtractionResult | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -142,6 +150,8 @@ export function CreateLeadModal(props: {
         setPasteText("");
         setSuggestions([]);
         setMaterialAnalyzed(false);
+        setFieldConfidence({});
+        setLastExtraction(null);
         setAnalyzing(false);
         setAnalyzeError(null);
         setError(null);
@@ -223,12 +233,15 @@ export function CreateLeadModal(props: {
 
     const setFieldValue = useCallback((payloadKey: string, next: string) => {
         setValues((prev) => ({ ...prev, [payloadKey]: next }));
+        setFieldConfidence((prev) => ({ ...prev, [payloadKey]: "manual" }));
     }, []);
 
     const clearMaterial = useCallback(() => {
         setPasteText("");
         setSuggestions([]);
         setMaterialAnalyzed(false);
+        setFieldConfidence({});
+        setLastExtraction(null);
         setAnalyzeError(null);
         setGatherPhase("paste");
     }, []);
@@ -252,7 +265,19 @@ export function CreateLeadModal(props: {
                 }
 
                 const labelByKey = Object.fromEntries(gatherFields.map((f) => [f.payload_key, f.field_label]));
-                setValues((prev) => applyHighConfidenceCreateLeadExtraction(prev, extraction));
+                setValues((prev) => {
+                    const nextValues = applyHighConfidenceCreateLeadExtraction(prev, extraction);
+                    setLastExtraction(extraction);
+                    setFieldConfidence(
+                        buildCreateLeadFieldConfidenceMap({
+                            extraction,
+                            values: nextValues,
+                            gatherFields,
+                            materialAnalyzed: true,
+                        }),
+                    );
+                    return nextValues;
+                });
                 setSuggestions(reviewSuggestionsFromExtraction(extraction, labelByKey));
                 setMaterialAnalyzed(true);
             } catch (e) {
@@ -262,7 +287,7 @@ export function CreateLeadModal(props: {
                 setAnalyzing(false);
             }
         },
-        [departmentId, intakeSpec, pasteText],
+        [departmentId, gatherFields, intakeSpec, pasteText],
     );
 
     const applySuggestions = useCallback(() => {
@@ -271,11 +296,21 @@ export function CreateLeadModal(props: {
         setValues((prev) => {
             const next = { ...prev };
             for (const s of selected) next[s.payload_key] = s.suggested_value;
+            if (lastExtraction) {
+                setFieldConfidence(
+                    buildCreateLeadFieldConfidenceMap({
+                        extraction: lastExtraction,
+                        values: next,
+                        gatherFields,
+                        materialAnalyzed: true,
+                    }),
+                );
+            }
             return next;
         });
         setSuggestions([]);
         setGatherPhase("paste");
-    }, [suggestions]);
+    }, [suggestions, lastExtraction, gatherFields]);
 
     const runExecute = useCallback(async () => {
         if (!departmentId) return;
@@ -292,7 +327,11 @@ export function CreateLeadModal(props: {
         setStep("execute");
         setError(null);
         try {
-            const payload = legacyPayloadFromValues(mapCreateLeadGatherToExecutePayload(values));
+            const mapped =
+                intakeSpec ?
+                    mapActionIntakeValuesToCreateLeadPayload(intakeSpec, values)
+                :   mapCreateLeadGatherToExecutePayload(values);
+            const payload = legacyPayloadFromValues(mapped);
             const result = await onSubmit(payload);
             const opportunityId = result.opportunity_id?.trim();
             if (!opportunityId) throw new Error("Lead was created but no opportunity id was returned.");
@@ -413,6 +452,7 @@ export function CreateLeadModal(props: {
                         onClearMaterial={clearMaterial}
                         materialAnalyzed={materialAnalyzed}
                         validationIssues={validationIssues}
+                        fieldConfidence={draftEditMode ? fieldConfidence : undefined}
                     />
                 </div>
             </ActionWorkspaceStepContent>
