@@ -33,6 +33,7 @@ export type OpportunityDrawerProofLayoutHeaderProps = {
     currentStatusKey: string;
     statusControl: StatusControlVm;
     statusCanMutate: boolean;
+    manageCanMutate: boolean;
     tabs: readonly DrawerTabKey[];
     activeTab: DrawerTabKey;
     onTabSelect: (tab: DrawerTabKey) => void;
@@ -62,6 +63,7 @@ export default function OpportunityDrawerProofLayoutHeader({
     currentStatusKey,
     statusControl,
     statusCanMutate,
+    manageCanMutate,
     tabs,
     activeTab,
     onTabSelect,
@@ -125,7 +127,7 @@ export default function OpportunityDrawerProofLayoutHeader({
                 queuePreviewSeed={queuePreviewSeed}
                 inquiryWorkflow
                 manageMenuItems={manageMenuItems}
-                canMutate={statusCanMutate}
+                canMutate={manageCanMutate}
                 manageBusyKey={manageBusyKey}
                 onManageSelect={onManageSelect}
                 layout="modal-actions"
@@ -136,7 +138,7 @@ export default function OpportunityDrawerProofLayoutHeader({
                 registryActionFeedback={registryActionFeedback}
                 manageDisabledReason={
                     manageBusyKey ? "A manage action is running — wait for it to finish."
-                    : !statusCanMutate ? "You don't have permission to manage this record."
+                    : !manageCanMutate ? "You don't have permission to manage this record."
                     :   null
                 }
             />

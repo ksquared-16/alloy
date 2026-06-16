@@ -27,6 +27,9 @@ describe("record drawer Manage menu presentation", () => {
         expect(runtime).toContain('key === "delete_lead"');
         expect(runtime).toContain('dispatchOpportunityQueueUpdated(opportunityId, "delete_lead")');
         expect(runtime).toContain("closeDrawer");
+        expect(runtime).toContain("resolvePortalRecordManageAccess");
+        expect(runtime).toContain("manageCanMutate");
+        expect(runtime).toContain("showSuccess");
     });
 
     it("keeps registry actions on command rail separate from manage menu", () => {

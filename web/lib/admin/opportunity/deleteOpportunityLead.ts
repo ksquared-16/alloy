@@ -1,26 +1,20 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logAdminAudit } from "@/lib/adminAuth";
+import {
+    chunkIds,
+    deleteByIn,
+    deleteByInHeadCount,
+    deleteFieldValuesForEntities,
+    selectIdsByIn,
+} from "@/lib/admin/opportunity/opportunityLeadDeletionDb";
+import {
+    previewOpportunityLeadDeletion,
+    resolveOpportunityLeadDeletionGraph,
+    type OpportunityLeadDeletionGraph,
+    type OpportunityLeadDeletionPreview,
+} from "@/lib/admin/opportunity/opportunityLeadDeletionGraph";
 
-export type OpportunityLeadDeletionPreview = {
-    opportunity_id: string;
-    opportunity_name: string | null;
-    counts: {
-        opportunities: number;
-        enrollment_records: number;
-        parents: number;
-        children: number;
-        customer_members: number;
-        customers: number;
-        placement_candidates: number;
-    };
-    deletable: {
-        persons: number;
-        customers: number;
-        customer_members: number;
-    };
-    blocked: boolean;
-    block_reason: string | null;
-};
+export type { OpportunityLeadDeletionPreview } from "@/lib/admin/opportunity/opportunityLeadDeletionGraph";
 
 export type OpportunityLeadDeletionResult = {
     deleted: Record<string, number>;
@@ -28,314 +22,371 @@ export type OpportunityLeadDeletionResult = {
     audit_logged: boolean;
 };
 
-type OpportunityLeadDeletionScope = {
-    orgId: string;
-    opportunityId: string;
-    customerId: string | null;
-    customerMemberIds: string[];
-    personIds: string[];
-};
+export { previewOpportunityLeadDeletion };
 
-async function loadOpportunityRow(
+async function selectMessageIdsForThreads(
     supabase: SupabaseClient,
     orgId: string,
-    opportunityId: string
-): Promise<{ id: string; name: string | null; customer_id: string | null } | null> {
-    const { data, error } = await supabase
-        .from("opportunities")
-        .select("id, name, customer_id")
-        .eq("org_id", orgId)
-        .eq("id", opportunityId)
-        .maybeSingle();
-    if (error) throw new Error(`load opportunity: ${error.message}`);
-    if (!data) return null;
-    return {
-        id: String(data.id),
-        name: typeof data.name === "string" ? data.name : null,
-        customer_id: typeof data.customer_id === "string" ? data.customer_id : null,
-    };
-}
-
-async function countByOpportunity(
-    supabase: SupabaseClient,
-    table: string,
-    orgId: string,
-    opportunityId: string
-): Promise<number> {
-    const { count, error } = await supabase
-        .from(table)
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", orgId)
-        .eq("opportunity_id", opportunityId);
-    if (error) throw new Error(`count ${table}: ${error.message}`);
-    return count ?? 0;
-}
-
-async function loadDeletionScope(
-    supabase: SupabaseClient,
-    orgId: string,
-    opportunityId: string,
-    customerId: string | null
-): Promise<OpportunityLeadDeletionScope> {
-    const [ocmRes, oppPersonsRes, oppRow] = await Promise.all([
-        supabase
-            .from("opportunity_customer_members")
-            .select("id, customer_member_id")
-            .eq("org_id", orgId)
-            .eq("opportunity_id", opportunityId),
-        supabase
-            .from("opportunity_persons")
-            .select("person_id")
-            .eq("org_id", orgId)
-            .eq("opportunity_id", opportunityId),
-        supabase
-            .from("opportunities")
-            .select("primary_person_id")
-            .eq("org_id", orgId)
-            .eq("id", opportunityId)
-            .maybeSingle(),
-    ]);
-
-    if (ocmRes.error) throw new Error(`load OCM: ${ocmRes.error.message}`);
-    if (oppPersonsRes.error) throw new Error(`load opportunity_persons: ${oppPersonsRes.error.message}`);
-    if (oppRow.error) throw new Error(`load opportunity primary person: ${oppRow.error.message}`);
-
-    const customerMemberIds = new Set<string>();
-    for (const row of ocmRes.data ?? []) {
-        const id = typeof row.customer_member_id === "string" ? row.customer_member_id.trim() : "";
-        if (id) customerMemberIds.add(id);
-    }
-
-    const personIds = new Set<string>();
-    const primaryPersonId =
-        typeof oppRow.data?.primary_person_id === "string" ? oppRow.data.primary_person_id.trim() : "";
-    if (primaryPersonId) personIds.add(primaryPersonId);
-    for (const row of oppPersonsRes.data ?? []) {
-        const id = typeof row.person_id === "string" ? row.person_id.trim() : "";
-        if (id) personIds.add(id);
-    }
-
-    if (customerMemberIds.size > 0) {
-        const { data: members, error } = await supabase
-            .from("customer_members")
-            .select("id, person_id, relationship")
-            .eq("org_id", orgId)
-            .in("id", [...customerMemberIds]);
-        if (error) throw new Error(`load customer_members: ${error.message}`);
-        for (const row of members ?? []) {
-            const personId = typeof row.person_id === "string" ? row.person_id.trim() : "";
-            if (personId) personIds.add(personId);
-        }
-    }
-
-    if (customerId) {
-        const { data: householdMembers, error } = await supabase
-            .from("customer_members")
+    threadIds: readonly string[]
+): Promise<string[]> {
+    if (!threadIds.length) return [];
+    const out: string[] = [];
+    for (const part of chunkIds(threadIds)) {
+        const { data, error } = await supabase
+            .from("communication_messages")
             .select("id")
             .eq("org_id", orgId)
-            .eq("customer_id", customerId);
-        if (error) throw new Error(`load household members: ${error.message}`);
-        for (const row of householdMembers ?? []) {
+            .in("thread_id", part);
+        if (error) throw new Error(`select communication_messages: ${error.message}`);
+        for (const row of data ?? []) {
             const id = typeof row.id === "string" ? row.id.trim() : "";
-            if (id) customerMemberIds.add(id);
+            if (id) out.push(id);
+        }
+    }
+    return out;
+}
+
+async function selectPlacementCandidateIds(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string
+): Promise<string[]> {
+    return selectIdsByIn(supabase, "placement_candidates", "opportunity_id", [opportunityId], orgId);
+}
+
+async function deleteWorkflowEventsForEntities(
+    supabase: SupabaseClient,
+    orgId: string,
+    entityIds: readonly string[]
+): Promise<Record<string, number>> {
+    const deleted: Record<string, number> = {
+        workflow_events: 0,
+        workflow_runs: 0,
+        workflow_action_runs: 0,
+        messages_outbox: 0,
+    };
+    if (!entityIds.length) return deleted;
+
+    const eventIds = new Set<string>();
+    for (const part of chunkIds(entityIds)) {
+        const { data, error } = await supabase
+            .from("workflow_events")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("entity_id", part);
+        if (error) throw new Error(`select workflow_events: ${error.message}`);
+        for (const row of data ?? []) {
+            const id = typeof row.id === "string" ? row.id.trim() : "";
+            if (id) eventIds.add(id);
         }
     }
 
-    return {
-        orgId,
-        opportunityId,
-        customerId,
-        customerMemberIds: [...customerMemberIds],
-        personIds: [...personIds],
+    const runIds = new Set<string>();
+    for (const part of chunkIds([...eventIds])) {
+        const { data, error } = await supabase
+            .from("workflow_runs")
+            .select("id")
+            .eq("org_id", orgId)
+            .in("event_id", part);
+        if (error) throw new Error(`select workflow_runs: ${error.message}`);
+        for (const row of data ?? []) {
+            const id = typeof row.id === "string" ? row.id.trim() : "";
+            if (id) runIds.add(id);
+        }
+    }
+
+    deleted.workflow_action_runs = await deleteByIn(
+        supabase,
+        "workflow_action_runs",
+        "workflow_run_id",
+        [...runIds],
+        orgId
+    );
+    deleted.messages_outbox = await deleteByIn(supabase, "messages_outbox", "workflow_run_id", [...runIds], orgId);
+    deleted.workflow_runs = await deleteByIn(supabase, "workflow_runs", "id", [...runIds], orgId);
+    deleted.workflow_events = await deleteByIn(supabase, "workflow_events", "id", [...eventIds], orgId);
+    return deleted;
+}
+
+async function deleteFormSubmissionsGraph(
+    supabase: SupabaseClient,
+    orgId: string,
+    formSubmissionIds: readonly string[]
+): Promise<Record<string, number>> {
+    const deleted: Record<string, number> = {
+        form_packet_session_items: 0,
+        form_packet_sessions: 0,
+        form_submission_signatures: 0,
+        form_submission_documents: 0,
+        form_submissions: 0,
     };
-}
+    if (!formSubmissionIds.length) return deleted;
 
-async function countChildMembers(
-    supabase: SupabaseClient,
-    orgId: string,
-    customerMemberIds: string[]
-): Promise<number> {
-    if (!customerMemberIds.length) return 0;
-    const { count, error } = await supabase
-        .from("customer_members")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", orgId)
-        .in("id", customerMemberIds)
-        .eq("relationship", "child");
-    if (error) throw new Error(`count child members: ${error.message}`);
-    return count ?? 0;
-}
-
-async function countLinkedJobs(
-    supabase: SupabaseClient,
-    orgId: string,
-    opportunityId: string
-): Promise<number> {
-    const { count, error } = await supabase
-        .from("jobs")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", orgId)
-        .eq("opportunity_id", opportunityId);
-    if (error) throw new Error(`count jobs: ${error.message}`);
-    return count ?? 0;
-}
-
-async function personHasRemainingReferences(
-    supabase: SupabaseClient,
-    orgId: string,
-    personId: string,
-    excludeOpportunityId: string
-): Promise<boolean> {
-    const checks = await Promise.all([
-        supabase
-            .from("opportunities")
-            .select("id", { count: "exact", head: true })
+    const sessionIds = new Set<string>();
+    for (const part of chunkIds(formSubmissionIds)) {
+        const { data, error } = await supabase
+            .from("form_packet_session_items")
+            .select("packet_session_id")
             .eq("org_id", orgId)
-            .eq("primary_person_id", personId)
-            .neq("id", excludeOpportunityId),
-        supabase
-            .from("opportunity_persons")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", orgId)
-            .eq("person_id", personId)
-            .neq("opportunity_id", excludeOpportunityId),
-        supabase
-            .from("customer_persons")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", orgId)
-            .eq("person_id", personId),
-        supabase
-            .from("customer_members")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", orgId)
-            .eq("person_id", personId),
-    ]);
-
-    for (const res of checks) {
-        if (res.error) throw new Error(`person reference check: ${res.error.message}`);
-        if ((res.count ?? 0) > 0) return true;
-    }
-    return false;
-}
-
-async function customerHasRemainingReferences(
-    supabase: SupabaseClient,
-    orgId: string,
-    customerId: string,
-    excludeOpportunityId: string
-): Promise<boolean> {
-    const [oppRes, jobRes] = await Promise.all([
-        supabase
-            .from("opportunities")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", orgId)
-            .eq("customer_id", customerId)
-            .neq("id", excludeOpportunityId),
-        supabase
-            .from("jobs")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", orgId)
-            .eq("customer_id", customerId),
-    ]);
-    if (oppRes.error) throw new Error(`customer opportunity refs: ${oppRes.error.message}`);
-    if (jobRes.error) throw new Error(`customer job refs: ${jobRes.error.message}`);
-    return (oppRes.count ?? 0) > 0 || (jobRes.count ?? 0) > 0;
-}
-
-async function customerMemberHasRemainingOcmReferences(
-    supabase: SupabaseClient,
-    orgId: string,
-    customerMemberId: string,
-    excludeOpportunityId: string
-): Promise<boolean> {
-    const { count, error } = await supabase
-        .from("opportunity_customer_members")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", orgId)
-        .eq("customer_member_id", customerMemberId)
-        .neq("opportunity_id", excludeOpportunityId);
-    if (error) throw new Error(`customer_member OCM refs: ${error.message}`);
-    return (count ?? 0) > 0;
-}
-
-export async function previewOpportunityLeadDeletion(
-    supabase: SupabaseClient,
-    orgId: string,
-    opportunityId: string
-): Promise<OpportunityLeadDeletionPreview | null> {
-    const opp = await loadOpportunityRow(supabase, orgId, opportunityId);
-    if (!opp) return null;
-
-    const scope = await loadDeletionScope(supabase, orgId, opportunityId, opp.customer_id);
-    const [enrollmentRecords, parents, children, placementCandidates, linkedJobs] = await Promise.all([
-        countByOpportunity(supabase, "opportunity_customer_members", orgId, opportunityId),
-        countByOpportunity(supabase, "opportunity_persons", orgId, opportunityId),
-        countChildMembers(supabase, orgId, scope.customerMemberIds),
-        countByOpportunity(supabase, "placement_candidates", orgId, opportunityId),
-        countLinkedJobs(supabase, orgId, opportunityId),
-    ]);
-
-    let deletablePersons = 0;
-    for (const personId of scope.personIds) {
-        const hasRefs = await personHasRemainingReferences(supabase, orgId, personId, opportunityId);
-        if (!hasRefs) deletablePersons += 1;
+            .in("form_submission_id", part);
+        if (error) throw new Error(`select form_packet_session_items: ${error.message}`);
+        for (const row of data ?? []) {
+            const id =
+                typeof (row as { packet_session_id?: string }).packet_session_id === "string"
+                    ? (row as { packet_session_id: string }).packet_session_id.trim()
+                    : "";
+            if (id) sessionIds.add(id);
+        }
     }
 
-    let deletableCustomerMembers = 0;
-    for (const memberId of scope.customerMemberIds) {
-        const hasRefs = await customerMemberHasRemainingOcmReferences(
+    deleted.form_packet_session_items = await deleteByIn(
+        supabase,
+        "form_packet_session_items",
+        "form_submission_id",
+        formSubmissionIds,
+        orgId
+    );
+    deleted.form_packet_sessions = await deleteByIn(
+        supabase,
+        "form_packet_sessions",
+        "id",
+        [...sessionIds],
+        orgId
+    );
+    deleted.form_submission_signatures = await deleteByIn(
+        supabase,
+        "form_submission_signatures",
+        "form_submission_id",
+        formSubmissionIds,
+        orgId
+    );
+    deleted.form_submission_documents = await deleteByIn(
+        supabase,
+        "form_submission_documents",
+        "form_submission_id",
+        formSubmissionIds,
+        orgId
+    );
+    deleted.form_submissions = await deleteByIn(supabase, "form_submissions", "id", formSubmissionIds, orgId);
+    return deleted;
+}
+
+async function deleteDocumentsGraph(
+    supabase: SupabaseClient,
+    orgId: string,
+    documentIds: readonly string[]
+): Promise<Record<string, number>> {
+    const deleted: Record<string, number> = {
+        document_field_values: 0,
+        document_versions: 0,
+        documents: 0,
+    };
+    if (!documentIds.length) return deleted;
+
+    deleted.document_field_values = await deleteByIn(
+        supabase,
+        "document_field_values",
+        "document_id",
+        documentIds,
+        orgId
+    );
+    deleted.document_versions = await deleteByIn(supabase, "document_versions", "document_id", documentIds, orgId);
+    deleted.documents = await deleteByIn(supabase, "documents", "id", documentIds, orgId);
+    return deleted;
+}
+
+/**
+ * FK-safe single-opportunity deletion order (aligned with enrollment runtime reset idsOnly path).
+ * Never touches locations, work_units, departments, or config/layout/form definitions.
+ */
+export async function executeOpportunityLeadDeletionGraph(
+    supabase: SupabaseClient,
+    graph: OpportunityLeadDeletionGraph
+): Promise<Record<string, number>> {
+    const { orgId, opportunityId } = graph;
+    const deleted: Record<string, number> = {};
+    const opp = [opportunityId];
+    const deletablePersons = graph.deletablePersonIds;
+    const deletableCustomer = graph.deletableCustomerId ? [graph.deletableCustomerId] : [];
+    const deletableMembers = graph.deletableCustomerMemberIds;
+    const entityIdsForWorkflow = [...new Set([...opp, ...deletableCustomer])];
+
+    // 1. Communications (deepest children first)
+    const messageIds = await selectMessageIdsForThreads(supabase, orgId, graph.threadIds);
+    deleted.communication_message_reads = await deleteByInHeadCount(
+        supabase,
+        "communication_message_reads",
+        "message_id",
+        messageIds
+    );
+    deleted.communication_messages = await deleteByIn(
+        supabase,
+        "communication_messages",
+        "thread_id",
+        graph.threadIds,
+        orgId
+    );
+    deleted.communication_scheduled_sends =
+        (await deleteByIn(supabase, "communication_scheduled_sends", "entity_id", opp, orgId)) +
+        (await deleteByIn(
             supabase,
-            orgId,
-            memberId,
-            opportunityId
+            "communication_scheduled_sends",
+            "recipient_person_id",
+            deletablePersons,
+            orgId
+        ));
+    deleted.communication_threads = await deleteByIn(supabase, "communication_threads", "id", graph.threadIds, orgId);
+
+    // 2. Tasks
+    deleted.task_assist_proposals = await deleteByIn(supabase, "task_assist_proposals", "entity_id", opp, orgId);
+    deleted.operational_tasks = await deleteByIn(supabase, "operational_tasks", "entity_id", opp, orgId);
+
+    // 3. Placement / tours
+    const pcIds = await selectPlacementCandidateIds(supabase, orgId, opportunityId);
+    deleted.placement_overrides = await deleteByIn(
+        supabase,
+        "placement_overrides",
+        "placement_candidate_id",
+        pcIds,
+        orgId
+    );
+    deleted.placement_link_group_members = await deleteByIn(
+        supabase,
+        "placement_link_group_members",
+        "placement_candidate_id",
+        pcIds,
+        orgId
+    );
+    deleted.placement_link_groups = await deleteByIn(
+        supabase,
+        "placement_link_groups",
+        "opportunity_id",
+        opp,
+        orgId
+    );
+    deleted.placement_candidates = await deleteByIn(
+        supabase,
+        "placement_candidates",
+        "opportunity_id",
+        opp,
+        orgId
+    );
+    deleted.tour_public_booking_links = await deleteByIn(
+        supabase,
+        "tour_public_booking_links",
+        "opportunity_id",
+        opp,
+        orgId
+    );
+    deleted.tour_bookings = await deleteByIn(supabase, "tour_bookings", "opportunity_id", opp, orgId);
+
+    // 4. Opportunity joins (explicit — cascades on delete but keeps counts accurate)
+    deleted.opportunity_tags = await deleteByInHeadCount(supabase, "opportunity_tags", "opportunity_id", opp);
+    deleted.opportunity_persons = await deleteByIn(supabase, "opportunity_persons", "opportunity_id", opp, orgId);
+    deleted.opportunity_customer_members = await deleteByIn(
+        supabase,
+        "opportunity_customer_members",
+        "opportunity_id",
+        opp,
+        orgId
+    );
+
+    // 5. Quotes / discount applications (redemptions blocked in preview)
+    deleted.quotes = await deleteByIn(supabase, "quotes", "opportunity_id", opp, orgId);
+    deleted.discount_applications = await deleteByIn(supabase, "discount_applications", "opportunity_id", opp, orgId);
+    deleted.messages = await deleteByIn(supabase, "messages", "opportunity_id", opp);
+
+    // 6. Workflow / action links
+    Object.assign(deleted, await deleteWorkflowEventsForEntities(supabase, orgId, entityIdsForWorkflow));
+    deleted.action_links = await deleteByIn(supabase, "action_links", "entity_id", entityIdsForWorkflow, orgId);
+
+    // 7. Forms
+    Object.assign(deleted, await deleteFormSubmissionsGraph(supabase, orgId, graph.formSubmissionIds));
+
+    // 8. Documents
+    Object.assign(deleted, await deleteDocumentsGraph(supabase, orgId, graph.documentIds));
+
+    // 9. Field values (opportunity + deletable household entities)
+    deleted.field_values = 0;
+    deleted.field_values += await deleteFieldValuesForEntities(supabase, orgId, "opportunity", opp);
+    deleted.field_values += await deleteFieldValuesForEntities(supabase, orgId, "opportunities", opp);
+    if (graph.deletableCustomerId) {
+        deleted.field_values += await deleteFieldValuesForEntities(supabase, orgId, "customer", deletableCustomer);
+        deleted.field_values += await deleteFieldValuesForEntities(supabase, orgId, "customers", deletableCustomer);
+    }
+    deleted.field_values += await deleteFieldValuesForEntities(supabase, orgId, "person", deletablePersons);
+    deleted.field_values += await deleteFieldValuesForEntities(supabase, orgId, "persons", deletablePersons);
+
+    // 10. Opportunity row
+    const { data: oppDeleted, error: oppErr } = await supabase
+        .from("opportunities")
+        .delete()
+        .eq("org_id", orgId)
+        .eq("id", opportunityId)
+        .select("id");
+    if (oppErr) throw new Error(`delete opportunity: ${oppErr.message}`);
+    if (!(oppDeleted ?? []).length) {
+        throw new Error("Opportunity could not be deleted. It may have linked records blocking removal.");
+    }
+    deleted.opportunities = oppDeleted.length;
+
+    // 11. Household — members / customer_persons before persons / customer
+    deleted.customer_member_contacts =
+        (await deleteByIn(supabase, "customer_member_contacts", "customer_member_id", deletableMembers, orgId)) +
+        (await deleteByIn(supabase, "customer_member_contacts", "customer_id", deletableCustomer, orgId));
+    deleted.customer_tags = await deleteByInHeadCount(
+        supabase,
+        "customer_tags",
+        "customer_id",
+        deletableCustomer
+    );
+    deleted.customer_subscriptions = await deleteByIn(
+        supabase,
+        "customer_subscriptions",
+        "customer_id",
+        deletableCustomer,
+        orgId
+    );
+    deleted.customer_payment_methods = await deleteByInHeadCount(
+        supabase,
+        "customer_payment_methods",
+        "customer_id",
+        deletableCustomer
+    );
+    deleted.customer_members = await deleteByIn(supabase, "customer_members", "id", deletableMembers, orgId);
+    deleted.customer_persons = await deleteByIn(
+        supabase,
+        "customer_persons",
+        "customer_id",
+        deletableCustomer,
+        orgId
+    );
+
+    if (deletablePersons.length) {
+        deleted.contacts_by_person = await deleteByIn(supabase, "contacts", "person_id", deletablePersons, orgId);
+    } else {
+        deleted.contacts_by_person = 0;
+    }
+    if (deletableCustomer.length) {
+        deleted.contacts_by_customer = await deleteByIn(
+            supabase,
+            "contacts",
+            "customer_id",
+            deletableCustomer,
+            orgId
         );
-        if (!hasRefs) deletableCustomerMembers += 1;
+    } else {
+        deleted.contacts_by_customer = 0;
     }
 
-    let deletableCustomers = 0;
-    if (opp.customer_id) {
-        const hasRefs = await customerHasRemainingReferences(supabase, orgId, opp.customer_id, opportunityId);
-        if (!hasRefs) deletableCustomers = 1;
-    }
+    deleted.person_locations = await deleteByIn(supabase, "person_locations", "person_id", deletablePersons, orgId);
+    deleted.person_relationships =
+        (await deleteByIn(supabase, "person_relationships", "from_person_id", deletablePersons, orgId)) +
+        (await deleteByIn(supabase, "person_relationships", "to_person_id", deletablePersons, orgId));
+    deleted.persons = await deleteByIn(supabase, "persons", "id", deletablePersons, orgId);
+    deleted.customers = await deleteByIn(supabase, "customers", "id", deletableCustomer, orgId);
 
-    const blocked = linkedJobs > 0;
-    const blockReason =
-        blocked ?
-            "This lead has linked jobs. Financial and job record deletion is not supported in this workflow."
-        :   null;
-
-    return {
-        opportunity_id: opportunityId,
-        opportunity_name: opp.name,
-        counts: {
-            opportunities: 1,
-            enrollment_records: enrollmentRecords,
-            parents,
-            children,
-            customer_members: scope.customerMemberIds.length,
-            customers: opp.customer_id ? 1 : 0,
-            placement_candidates: placementCandidates,
-        },
-        deletable: {
-            persons: deletablePersons,
-            customers: deletableCustomers,
-            customer_members: deletableCustomerMembers,
-        },
-        blocked,
-        block_reason: blockReason,
-    };
-}
-
-async function deleteRowsByIds(
-    supabase: SupabaseClient,
-    table: string,
-    orgId: string,
-    ids: string[]
-): Promise<number> {
-    if (!ids.length) return 0;
-    const { data, error } = await supabase.from(table).delete().eq("org_id", orgId).in("id", ids).select("id");
-    if (error) throw new Error(`delete ${table}: ${error.message}`);
-    return (data ?? []).length;
+    return deleted;
 }
 
 export async function executeDeleteOpportunityLead(params: {
@@ -347,72 +398,12 @@ export async function executeDeleteOpportunityLead(params: {
 }): Promise<OpportunityLeadDeletionResult> {
     const { supabase, orgId, opportunityId, actorUserId, actorRole } = params;
 
-    const preview = await previewOpportunityLeadDeletion(supabase, orgId, opportunityId);
-    if (!preview) throw new Error("Opportunity not found");
-    if (preview.blocked) throw new Error(preview.block_reason ?? "Deletion blocked");
+    const graph = await resolveOpportunityLeadDeletionGraph(supabase, orgId, opportunityId);
+    if (!graph) throw new Error("Opportunity not found");
+    if (graph.blocked) throw new Error(graph.blockReason ?? "Deletion blocked");
 
-    const opp = await loadOpportunityRow(supabase, orgId, opportunityId);
-    if (!opp) throw new Error("Opportunity not found");
-
-    const scopeWithCustomer = await loadDeletionScope(supabase, orgId, opportunityId, opp.customer_id);
-    const deleted: Record<string, number> = {};
-
-    deleted.placement_candidates = await countByOpportunity(
-        supabase,
-        "placement_candidates",
-        orgId,
-        opportunityId
-    );
-    const { error: pcErr } = await supabase
-        .from("placement_candidates")
-        .delete()
-        .eq("org_id", orgId)
-        .eq("opportunity_id", opportunityId);
-    if (pcErr) throw new Error(`delete placement_candidates: ${pcErr.message}`);
-
-    const { error: oppErr } = await supabase
-        .from("opportunities")
-        .delete()
-        .eq("org_id", orgId)
-        .eq("id", opportunityId);
-    if (oppErr) throw new Error(`delete opportunity: ${oppErr.message}`);
-    deleted.opportunities = 1;
-    deleted.opportunity_customer_members = preview.counts.enrollment_records;
-    deleted.opportunity_persons = preview.counts.parents;
-
-    const memberIdsToDelete: string[] = [];
-    for (const memberId of scopeWithCustomer.customerMemberIds) {
-        const hasRefs = await customerMemberHasRemainingOcmReferences(supabase, orgId, memberId, opportunityId);
-        if (!hasRefs) memberIdsToDelete.push(memberId);
-    }
-    deleted.customer_members = await deleteRowsByIds(supabase, "customer_members", orgId, memberIdsToDelete);
-
-    const personIdsToDelete: string[] = [];
-    for (const personId of scopeWithCustomer.personIds) {
-        const hasRefs = await personHasRemainingReferences(supabase, orgId, personId, opportunityId);
-        if (!hasRefs) personIdsToDelete.push(personId);
-    }
-    deleted.persons = await deleteRowsByIds(supabase, "persons", orgId, personIdsToDelete);
-
-    if (opp.customer_id) {
-        const hasRefs = await customerHasRemainingReferences(supabase, orgId, opp.customer_id, opportunityId);
-        if (!hasRefs) {
-            const { data, error } = await supabase
-                .from("customers")
-                .delete()
-                .eq("org_id", orgId)
-                .eq("id", opp.customer_id)
-                .select("id");
-            if (error) throw new Error(`delete customer: ${error.message}`);
-            deleted.customers = (data ?? []).length;
-        } else {
-            deleted.customers = 0;
-        }
-    } else {
-        deleted.customers = 0;
-    }
-
-    const orphans = await verifyOpportunityLeadDeletionOrphans(supabase, orgId, opportunityId);
+    const deleted = await executeOpportunityLeadDeletionGraph(supabase, graph);
+    const orphans = await verifyOpportunityLeadDeletionOrphans(supabase, orgId, opportunityId, graph);
 
     logAdminAudit({
         entity: "opportunities",
@@ -428,7 +419,8 @@ export async function executeDeleteOpportunityLead(params: {
 export async function verifyOpportunityLeadDeletionOrphans(
     supabase: SupabaseClient,
     orgId: string,
-    opportunityId: string
+    opportunityId: string,
+    graph?: OpportunityLeadDeletionGraph | null
 ): Promise<Record<string, number>> {
     const scopedTables = [
         "opportunity_customer_members",
@@ -454,5 +446,27 @@ export async function verifyOpportunityLeadDeletionOrphans(
         if (error) throw new Error(`orphan check ${table}: ${error.message}`);
         orphans[table] = count ?? 0;
     }
+
+    if (graph) {
+        for (const personId of graph.deletablePersonIds) {
+            const { count, error } = await supabase
+                .from("persons")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", orgId)
+                .eq("id", personId);
+            if (error) throw new Error(`orphan check persons: ${error.message}`);
+            if ((count ?? 0) > 0) orphans[`person:${personId}`] = count ?? 0;
+        }
+        if (graph.deletableCustomerId) {
+            const { count, error } = await supabase
+                .from("customers")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", orgId)
+                .eq("id", graph.deletableCustomerId);
+            if (error) throw new Error(`orphan check customers: ${error.message}`);
+            if ((count ?? 0) > 0) orphans[`customer:${graph.deletableCustomerId}`] = count ?? 0;
+        }
+    }
+
     return orphans;
 }

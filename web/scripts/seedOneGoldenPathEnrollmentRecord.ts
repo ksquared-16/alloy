@@ -4,7 +4,7 @@
  *
  * Creates a minimal, realistic household:
  * - 1 guardian person + 1 child person/member
- * - 1 opportunity on enrollment_pipeline work unit (new_inquiry)
+ * - 1 opportunity on enrollment_pipeline work unit (resolved lead status from org config)
  * - 2 operational tasks, 1 communication thread, 1 document
  * - Uses existing org site location (does not create schools/sites)
  *
@@ -14,6 +14,7 @@
  *   DEMO_SEED_ORG_ID or DEMO_RESET_ORG_ID (required)
  *   SUPABASE_SERVICE_ROLE_KEY (required)
  *   DEMO_SEED_RUN_ID (optional — defaults to new uuid)
+ *   DEMO_SEED_GOLDEN_PATH_ENABLED=true (required — script disabled by default)
  *
  * Usage (from `web/`):
  *   npm run demo:seed:golden-path
@@ -30,6 +31,11 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    DEFAULT_LEAD_CASE_STATUS_KEY,
+    NEW_LEAD_STATUS_KEY,
+} from "@/lib/admin/actions/createLeadActionConstants";
 import { demoSeedOneFamilyMetadata } from "./lib/stagingDemoMarkers";
 import { GOLDEN_PATH_SEED_PACKAGE } from "./lib/demoRuntimeCleanupScope";
 
@@ -127,7 +133,24 @@ async function upsertBySeedKey(
     return (created as { id: string }).id;
 }
 
+async function resolveSeedLeadStatusKey(supabase: SupabaseAdmin, orgId: string): Promise<string> {
+    const newInquiry = await assertAllowedStatusKey(supabase, orgId, "opportunities", NEW_LEAD_STATUS_KEY);
+    if (newInquiry.ok) return NEW_LEAD_STATUS_KEY;
+    const openStatus = await assertAllowedStatusKey(supabase, orgId, "opportunities", DEFAULT_LEAD_CASE_STATUS_KEY);
+    if (openStatus.ok) return DEFAULT_LEAD_CASE_STATUS_KEY;
+    throw new Error(
+        `No valid lead status_key for golden-path seed (tried ${NEW_LEAD_STATUS_KEY}, ${DEFAULT_LEAD_CASE_STATUS_KEY})`
+    );
+}
+
 async function main(): Promise<void> {
+    if (process.env.DEMO_SEED_GOLDEN_PATH_ENABLED?.trim() !== "true") {
+        console.error(
+            "golden-path seed is disabled. Manual lead creation is preferred until status mapping is verified.\n" +
+                "To run anyway: DEMO_SEED_GOLDEN_PATH_ENABLED=true npm run demo:seed:golden-path"
+        );
+        process.exit(1);
+    }
     if (process.env.VERCEL_ENV === "production") {
         console.error("Refusing to run: VERCEL_ENV=production");
         process.exit(1);
@@ -145,6 +168,7 @@ async function main(): Promise<void> {
     const siteLocationId = await resolveOrgSiteLocationId(supabase, orgId);
     const verticalId = await resolveChildcareVerticalId(supabase);
     const actorUserId = await resolveSeedActorUserId(supabase, orgId);
+    const leadStatusKey = await resolveSeedLeadStatusKey(supabase, orgId);
 
     const guardianSeedKey = `${SEED_KEY}:guardian`;
     const childSeedKey = `${SEED_KEY}:child`;
@@ -219,7 +243,7 @@ async function main(): Promise<void> {
         org_id: orgId,
         vertical_id: verticalId,
         name: "Enrollment — Martinez Family",
-        status_key: "new_inquiry",
+        status_key: leadStatusKey,
         work_unit_id: workUnitId,
         customer_id: customerId,
         primary_person_id: guardianPersonId,

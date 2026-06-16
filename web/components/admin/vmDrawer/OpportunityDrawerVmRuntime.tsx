@@ -20,6 +20,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { formatOpportunityInquiryDrawerTitle } from "@/lib/admin/drawer/opportunityInquiryDrawerTitle";
 import { isDrawerHeaderAttentionVisible } from "@/lib/admin/drawer/drawerHeaderAttentionPresentation";
 import { buildOpportunityVmLifecycleRailModel } from "@/lib/adminV2/viewModel/drawer/vmRuntime/buildOpportunityVmLifecycleRailModel";
+import { resolvePortalRecordManageAccess } from "@/lib/admin/adminPortalRolePick";
 import { resolveOpportunityVmStatusCanMutate } from "@/lib/adminV2/viewModel/drawer/vmRuntime/resolveOpportunityVmStatusCanMutate";
 import { useOpportunityDrawerVmHeaderActions } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmHeaderActions";
 import { useOpportunityDrawerVmRegistryModals } from "@/lib/adminV2/viewModel/drawer/vmRuntime/useOpportunityDrawerVmRegistryModals";
@@ -62,6 +63,7 @@ import {
     dispatchOpportunityQueueUpdated,
     dispatchOpportunityQueueUpdatedBroadcast,
 } from "@/lib/admin/opportunityQueueRefreshEvent";
+import { dispatchGlobalRecordSearchInvalidate } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 import type { RecordManageMenuActionKey } from "@/lib/admin/recordManage/types";
 
 const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
@@ -73,7 +75,7 @@ const OPPORTUNITY_TAB_LABELS: Partial<Record<DrawerTabKey, string>> = {
 };
 
 export default function OpportunityDrawerVmRuntime() {
-    const { canMutate: authCanMutate } = useAdminAuth();
+    const { canMutate: authCanMutate, role, roleKeys } = useAdminAuth();
     const { labels } = useEntityLabels();
     const opportunitySingular = labels.opportunities?.singular ?? "Opportunity";
     const {
@@ -93,6 +95,11 @@ export default function OpportunityDrawerVmRuntime() {
     const statusCanMutate = useMemo(
         () => resolveOpportunityVmStatusCanMutate(displayVm, authCanMutate),
         [displayVm, authCanMutate]
+    );
+
+    const manageCanMutate = useMemo(
+        () => resolvePortalRecordManageAccess({ roleKeys, legacyRole: role }),
+        [role, roleKeys]
     );
 
     const record = displayVm?.above_fold.record ?? null;
@@ -175,13 +182,15 @@ export default function OpportunityDrawerVmRuntime() {
         const opportunityId = drawer.id?.trim();
         setDeleteLeadModalOpen(false);
         setManageBusyKey(null);
+        showSuccess(`${opportunitySingular} deleted.`);
         closeDrawer();
+        dispatchGlobalRecordSearchInvalidate();
         if (opportunityId) {
             dispatchOpportunityQueueUpdated(opportunityId, "delete_lead");
         } else {
             dispatchOpportunityQueueUpdatedBroadcast("delete_lead");
         }
-    }, [closeDrawer, drawer.id]);
+    }, [closeDrawer, drawer.id, opportunitySingular, showSuccess]);
 
     useEffect(() => {
         setDrawerTab("overview");
@@ -452,7 +461,7 @@ export default function OpportunityDrawerVmRuntime() {
                 queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
                 inquiryWorkflow
                 manageMenuItems={manageMenuItems}
-                canMutate={statusCanMutate}
+                canMutate={manageCanMutate}
                 onManageSelect={onManageSelect}
                 actionPreflightBlocked={actionPreflightBlocked}
                 onDismissActionPreflightBlocked={clearActionPreflightBlocked}
@@ -467,7 +476,7 @@ export default function OpportunityDrawerVmRuntime() {
         onManageSelect,
         opportunitySingular,
         record,
-        statusCanMutate,
+        manageCanMutate,
         actionPreflightBlocked,
         clearActionPreflightBlocked,
         registryActionFeedback,
@@ -512,7 +521,7 @@ export default function OpportunityDrawerVmRuntime() {
                     queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
                     inquiryWorkflow
                     manageMenuItems={manageMenuItems}
-                    canMutate={statusCanMutate}
+                    canMutate={manageCanMutate}
                     manageBusyKey={manageBusyKey}
                     onManageSelect={onManageSelect}
                     layout="modal-actions"
@@ -521,7 +530,7 @@ export default function OpportunityDrawerVmRuntime() {
                     registryActionFeedback={registryActionFeedback}
                     manageDisabledReason={
                         manageBusyKey ? "A manage action is running — wait for it to finish."
-                            : !statusCanMutate ? "You don't have permission to manage this record."
+                            : !manageCanMutate ? "You don't have permission to manage this record."
                                 : null
                     }
                 />
@@ -536,7 +545,7 @@ export default function OpportunityDrawerVmRuntime() {
         manageMenuItems,
         onManageSelect,
         record,
-        statusCanMutate,
+        manageCanMutate,
         actionPreflightBlocked,
         clearActionPreflightBlocked,
         registryActionFeedback,
@@ -662,6 +671,7 @@ export default function OpportunityDrawerVmRuntime() {
                 currentStatusKey={currentStatusKey}
                 statusControl={displayVm.header.status}
                 statusCanMutate={statusCanMutate}
+                manageCanMutate={manageCanMutate}
                 tabs={tabs}
                 activeTab={drawerTab}
                 onTabSelect={onTabSelect}
@@ -691,6 +701,7 @@ export default function OpportunityDrawerVmRuntime() {
         statusLabel,
         currentStatusKey,
         statusCanMutate,
+        manageCanMutate,
         tabs,
         drawerTab,
         onTabSelect,

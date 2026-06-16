@@ -24,6 +24,7 @@ import {
 } from "@/lib/adminV2/globalRecordSearchOpen";
 import GlobalSearchStatusPill from "@/app/adminV2/components/GlobalSearchResultPills";
 import { warmGlobalSearchHitDrawerIntent } from "@/lib/adminV2/globalRecordSearchWarmPrefetch";
+import { ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT } from "@/lib/admin/globalSearch/dispatchGlobalRecordSearchInvalidate";
 
 function useGlobalSearchFocusShortcut(focusInput: () => void): void {
     useEffect(() => {
@@ -120,6 +121,18 @@ export default function GlobalSearchBox() {
         };
         document.addEventListener("mousedown", onDocMouseDown);
         return () => document.removeEventListener("mousedown", onDocMouseDown);
+    }, []);
+
+    useEffect(() => {
+        const onInvalidate = () => {
+            setGroups([]);
+            setClusters([]);
+            setErr(null);
+            setUnsupportedMsg(null);
+            setActiveIndex(0);
+        };
+        window.addEventListener(ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT, onInvalidate);
+        return () => window.removeEventListener(ADMINV2_GLOBAL_RECORD_SEARCH_INVALIDATE_EVENT, onInvalidate);
     }, []);
 
     useEffect(() => {

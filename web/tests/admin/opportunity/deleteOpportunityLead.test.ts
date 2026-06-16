@@ -15,12 +15,41 @@ describe("deleteOpportunityLead service", () => {
         expect(typeof mod.previewOpportunityLeadDeletion).toBe("function");
         expect(typeof mod.executeDeleteOpportunityLead).toBe("function");
         expect(typeof mod.verifyOpportunityLeadDeletionOrphans).toBe("function");
+        expect(typeof mod.executeOpportunityLeadDeletionGraph).toBe("function");
+    });
+
+    it("uses graph resolver for preview", async () => {
+        const src = read("lib/admin/opportunity/deleteOpportunityLead.ts");
+        expect(src).toContain("resolveOpportunityLeadDeletionGraph");
+        expect(src).toContain("executeOpportunityLeadDeletionGraph");
     });
 
     it("blocks deletion when linked jobs exist", () => {
-        const src = read("lib/admin/opportunity/deleteOpportunityLead.ts");
+        const src = read("lib/admin/opportunity/opportunityLeadDeletionGraph.ts");
         expect(src).toContain('from("jobs")');
-        expect(src).toContain("Financial and job record deletion is not supported");
+        expect(src).toContain("linked jobs");
+    });
+
+    it("blocks deletion when discount redemptions exist", () => {
+        const src = read("lib/admin/opportunity/opportunityLeadDeletionGraph.ts");
+        expect(src).toContain('"discount_redemptions"');
+        expect(src).toContain("discount redemptions");
+    });
+
+    it("deletes customer_persons before persons", () => {
+        const src = read("lib/admin/opportunity/deleteOpportunityLead.ts");
+        const personsIdx = src.indexOf('"customer_persons"');
+        const personsDeleteIdx = src.indexOf('"persons", "id", deletablePersons');
+        expect(personsIdx).toBeGreaterThan(0);
+        expect(personsDeleteIdx).toBeGreaterThan(personsIdx);
+    });
+
+    it("cleans communication_scheduled_sends before persons", () => {
+        const src = read("lib/admin/opportunity/deleteOpportunityLead.ts");
+        const schedIdx = src.indexOf('"communication_scheduled_sends"');
+        const personsDeleteIdx = src.indexOf('"persons", "id", deletablePersons');
+        expect(schedIdx).toBeGreaterThan(0);
+        expect(personsDeleteIdx).toBeGreaterThan(schedIdx);
     });
 
     it("writes admin audit on execute", () => {
@@ -29,10 +58,11 @@ describe("deleteOpportunityLead service", () => {
         expect(src).toContain('changed_fields: ["deleted"]');
     });
 
-    it("verifies opportunity-scoped orphan tables after delete", () => {
+    it("never deletes locations work_units or departments", () => {
         const src = read("lib/admin/opportunity/deleteOpportunityLead.ts");
-        expect(src).toContain("opportunity_customer_members");
-        expect(src).toContain("placement_candidates");
+        expect(src).not.toContain('"locations"');
+        expect(src).not.toContain('"work_units"');
+        expect(src).not.toContain('"departments"');
     });
 });
 
@@ -44,5 +74,14 @@ describe("delete lead API routes", () => {
         expect(execute).toContain("requireAdminOrOps");
         expect(preview).toContain("previewOpportunityLeadDeletion");
         expect(execute).toContain("executeDeleteOpportunityLead");
+    });
+});
+
+describe("DeleteLeadModal preview UI", () => {
+    it("shows expanded will_delete breakdown", () => {
+        const src = read("components/admin/opportunity/DeleteLeadModal.tsx");
+        expect(src).toContain("will_delete");
+        expect(src).toContain("Communication threads");
+        expect(src).toContain("will_retain");
     });
 });

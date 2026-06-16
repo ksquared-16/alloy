@@ -43,8 +43,15 @@ export async function POST(
 
         const orphanTotal = Object.values(result.orphans).reduce((sum, n) => sum + n, 0);
         if (orphanTotal > 0) {
+            const opportunityStillExists = (result.orphans.opportunities ?? 0) > 0;
             return NextResponse.json(
-                { error: "Delete completed with orphan verification failures.", result },
+                {
+                    error:
+                        opportunityStillExists ?
+                            "Delete failed — the opportunity still exists. Check linked records and try again."
+                        :   "Delete completed with orphan verification failures.",
+                    result,
+                },
                 { status: 500 }
             );
         }
