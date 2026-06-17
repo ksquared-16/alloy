@@ -3,53 +3,94 @@
 /**
  * POS Workspace — the home for information entering Alloy.
  *
- * Mounts inside `AdminV2WorkspaceBosModalShell` (the SAME shell as Inbox / My
- * Tasks), which owns the modal geometry, placement, sizing and the fixed BOS
- * right rail behind it. This component ONLY changes the workspace *content*; it
- * does not touch the shell, so modal shape and right-rail sticky behavior are
- * preserved exactly. Mount point (TopNavBar) and the `dispatchAdminV2OpenProcessingModal`
- * open path are unchanged.
+ * Mounts inside `AdminV2WorkspaceBosModalShell` (same shell as Inbox / My Tasks),
+ * which owns modal geometry, placement, sizing and the fixed BOS right rail. This
+ * component only sets the workspace *content*; it does not touch the shell.
  *
- * Internal subnav (POS sections): Home · Processing · Sources · Forms · Packets ·
- * Documents · Settings. Forms is one Source; Processing is one workspace.
+ * Restored POS workspace shell: a left-nav `PosWorkspaceLayout` (white sidebar, grouped
+ * Operate / Sources / Configure) → a per-section workspace, replacing the old horizontal
+ * tab/header layout. Processing is the 3-column command center (`PosProcessingWorkspace`).
  *
- * Reuse map:
- *   • Processing → ProcessingQueueList + ProcessingCaseDetailContent (real)
- *   • Sources    → SourcesPanel (real)
- *   • Forms      → PosFormsPanel (real list via /api/admin/forms)
- *   • Home       → PosHome (real counts via /api/admin/processing/queue)
- *   • Packets / Documents / Settings → prototype surfaces (clearly marked)
+ * Section map:
+ *   • Home       → PosHome
+ *   • Processing → PosProcessingWorkspace (queue · work · decision)
+ *   • Review     → PosProcessingWorkspace (case review)
+ *   • Linkage    → PosLinkagePanel
+ *   • Forms      → PosFormsWorkspace
+ *   • Packets    → PosPacketsPanel
+ *   • Documents  → PosDocumentsPanel
+ *   • Settings   → PosSettingsPanel
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
-import ProcessingQueueList from "@/app/adminV2/processing/ProcessingQueueList";
-import ProcessingCaseDetailContent from "@/app/adminV2/processing/ProcessingCaseDetailContent";
-import SourcesPanel from "@/app/adminV2/processing/SourcesPanel";
+import PosWorkspaceLayout from "@/app/adminV2/pos/PosWorkspaceLayout";
 import PosHome from "@/app/adminV2/pos/PosHome";
-import PosFormsPanel from "@/app/adminV2/pos/PosFormsPanel";
+import PosProcessingWorkspace from "@/app/adminV2/pos/PosProcessingWorkspace";
+import PosFormsWorkspace from "@/app/adminV2/pos/PosFormsWorkspace";
+import PosLinkagePanel from "@/app/adminV2/pos/PosLinkagePanel";
 import PosPacketsPanel from "@/app/adminV2/pos/PosPacketsPanel";
 import PosDocumentsPanel from "@/app/adminV2/pos/PosDocumentsPanel";
 import PosSettingsPanel from "@/app/adminV2/pos/PosSettingsPanel";
-import { POS_SECTIONS, type PosSection } from "@/app/adminV2/pos/posSections";
+import type { PosSection } from "@/app/adminV2/pos/posSections";
 
 export default function ProcessingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
     const [section, setSection] = useState<PosSection>("home");
 
-    // Reset to a clean Home on close (event handler, not an effect) so reopening starts fresh.
     const handleClose = useCallback(() => {
         setSelectedCaseId(null);
         setSection("home");
         onClose();
     }, [onClose]);
 
-    // Open a case from Home/anywhere: switch to Processing and select it.
     const openCase = useCallback((caseId: string) => {
         setSelectedCaseId(caseId);
         setSection("processing");
     }, []);
+
+    let body: ReactNode;
+    switch (section) {
+        case "home":
+            body = <PosHome onNavigate={setSection} onOpenCase={openCase} />;
+            break;
+        case "processing":
+            body = (
+                <PosProcessingWorkspace
+                    selectedCaseId={selectedCaseId}
+                    onSelectCase={setSelectedCaseId}
+                    onGoToSources={() => setSection("documents")}
+                />
+            );
+            break;
+        case "review":
+            body = (
+                <PosProcessingWorkspace
+                    selectedCaseId={selectedCaseId}
+                    onSelectCase={setSelectedCaseId}
+                    title="Review"
+                    subtitle="Cases Alloy has triaged and that are ready for your decision."
+                />
+            );
+            break;
+        case "linkage":
+            body = <PosLinkagePanel onNavigate={setSection} />;
+            break;
+        case "forms":
+            body = <PosFormsWorkspace />;
+            break;
+        case "packets":
+            body = <PosPacketsPanel />;
+            break;
+        case "documents":
+            body = <PosDocumentsPanel onNavigate={setSection} />;
+            break;
+        case "settings":
+        default:
+            body = <PosSettingsPanel />;
+            break;
+    }
 
     return (
         <AdminV2WorkspaceBosModalShell
@@ -60,7 +101,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
             panelClassName="max-h-[min(88vh,46rem)]"
         >
             <div
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-[#f7f6f3]"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-white"
                 data-adminv2-processing-modal="true"
             >
                 {/* Title bar (unchanged geometry) */}
@@ -79,74 +120,12 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                     </button>
                 </div>
 
-                {/* POS subnav */}
-                <div
-                    className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-stone-200 bg-white px-3"
-                    role="tablist"
-                    aria-label="POS sections"
-                >
-                    {POS_SECTIONS.map((s) => (
-                        <button
-                            key={s.key}
-                            type="button"
-                            role="tab"
-                            aria-selected={section === s.key}
-                            onClick={() => setSection(s.key)}
-                            className={
-                                section === s.key
-                                    ? "whitespace-nowrap border-b-2 border-emerald-600 px-3 py-2 text-[12px] font-medium text-emerald-800"
-                                    : "whitespace-nowrap border-b-2 border-transparent px-3 py-2 text-[12px] text-stone-500 hover:text-stone-700"
-                            }
-                        >
-                            {s.label}
-                        </button>
-                    ))}
+                {/* Left-nav workspace shell → active section workspace. */}
+                <div className="flex min-h-[min(26rem,68vh)] min-w-0 flex-1 overflow-hidden">
+                    <PosWorkspaceLayout active={section} onNavigate={setSection}>
+                        {body}
+                    </PosWorkspaceLayout>
                 </div>
-
-                {/* Section content (only this changes per section) */}
-                {section === "home" ? (
-                    <div className="min-h-[min(26rem,68vh)] flex-1 overflow-hidden">
-                        <PosHome onNavigate={setSection} onOpenCase={openCase} />
-                    </div>
-                ) : section === "processing" ? (
-                    <div className="grid min-h-[min(26rem,68vh)] flex-1 grid-cols-[20rem_1fr] overflow-hidden">
-                        <div className="min-h-0 overflow-y-auto border-r border-stone-200 bg-white">
-                            <ProcessingQueueList
-                                selectedCaseId={selectedCaseId}
-                                onSelectCase={setSelectedCaseId}
-                                onGoToSources={() => setSection("forms")}
-                            />
-                        </div>
-                        <div className="min-h-0 overflow-hidden bg-white">
-                            {selectedCaseId ? (
-                                <ProcessingCaseDetailContent caseId={selectedCaseId} />
-                            ) : (
-                                <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-                                    <div className="text-sm font-medium text-stone-600">Select a case to start</div>
-                                    <p className="mx-auto mt-1 max-w-[20rem] text-xs leading-relaxed text-stone-400">
-                                        Pick a case from the queue to review its source, proposed values, and destination — then approve the action to hand it off to the record.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                ) : section === "forms" ? (
-                    <div className="min-h-[min(26rem,68vh)] flex-1 overflow-hidden">
-                        <PosFormsPanel />
-                    </div>
-                ) : section === "packets" ? (
-                    <div className="min-h-[min(26rem,68vh)] flex-1 overflow-hidden">
-                        <PosPacketsPanel />
-                    </div>
-                ) : section === "documents" ? (
-                    <div className="min-h-[min(26rem,68vh)] flex-1 overflow-hidden">
-                        <PosDocumentsPanel onNavigate={setSection} />
-                    </div>
-                ) : (
-                    <div className="min-h-[min(26rem,68vh)] flex-1 overflow-hidden">
-                        <PosSettingsPanel />
-                    </div>
-                )}
             </div>
         </AdminV2WorkspaceBosModalShell>
     );

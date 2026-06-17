@@ -76,11 +76,19 @@ export function deriveDocumentTitle(input: DeriveTitleInput): DerivedTitle {
     return { title: "Untitled form", fromText: false };
 }
 
-/** Display name for a document in lists (title → cleaned filename → fallback). */
+/**
+ * Display name for a document everywhere (queue, header, list, evidence).
+ * Priority: operator override → detected/stored title → cleaned filename → fallback.
+ * `operatorName` is future-safe: no override field exists yet, so callers pass nothing
+ * and behavior is unchanged — but the seam is ready for an operator-set custom name.
+ */
 export function deriveDocumentDisplayName(
     title: string | null | undefined,
-    fileName: string | null | undefined
+    fileName: string | null | undefined,
+    operatorName?: string | null
 ): string {
+    const op = (operatorName ?? "").trim();
+    if (op) return op;
     const t = (title ?? "").trim();
     if (t && t.toLowerCase() !== "document") return t;
     const cleaned = cleanFilenameToTitle(fileName);

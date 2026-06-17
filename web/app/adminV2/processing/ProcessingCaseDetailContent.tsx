@@ -169,7 +169,7 @@ function FormDraftSection({
     return (
         <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
             <div className="mb-2 flex items-center justify-between">
-                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">Recreate as a form</span>
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">Set up this document</span>
                 {draft ? (
                     <span className="text-[10px] text-stone-400">
                         {draft.generator_version} · {formatWhen(draft.generated_at)}
@@ -186,7 +186,7 @@ function FormDraftSection({
                         >
                             Open in Forms builder
                         </a>
-                        <span className="text-[11px] text-emerald-700">Editable draft form created — not published.</span>
+                        <span className="text-[11px] text-emerald-700">Reusable template created (draft) — tweak &amp; publish in the builder.</span>
                     </>
                 ) : (
                     <>
@@ -196,7 +196,7 @@ function FormDraftSection({
                             onClick={() => void generate()}
                             className="rounded-md border border-stone-300 px-3 py-1.5 text-[12.5px] font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
                         >
-                            {busy ? "Drafting…" : draft ? "Regenerate draft" : "Create form from document"}
+                            {busy ? "Detecting…" : draft ? "Re-detect fields" : "Set up this document"}
                         </button>
                         {draft && draft.fields.length > 0 ? (
                             <button
@@ -205,7 +205,7 @@ function FormDraftSection({
                                 onClick={() => void createForm()}
                                 className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
                             >
-                                {creating ? "Creating…" : "Create editable form"}
+                                {creating ? "Creating…" : "Create reusable template"}
                             </button>
                         ) : null}
                     </>
@@ -215,7 +215,8 @@ function FormDraftSection({
 
             {!draft ? (
                 <p className="text-[12px] text-stone-500">
-                    Recreate this document’s structure as an editable Alloy form draft. Nothing is created or published — you review it first.
+                    Set this document up once: Alloy detects what it can, you review the detected fields and tweak them in the
+                    Forms builder, then save it as a reusable template for future uploads. Nothing is created or published until you review it.
                 </p>
             ) : (
                 <div>

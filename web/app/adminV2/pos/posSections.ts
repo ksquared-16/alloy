@@ -10,7 +10,8 @@
 export type PosSection =
     | "home"
     | "processing"
-    | "sources"
+    | "review"
+    | "linkage"
     | "forms"
     | "packets"
     | "documents"
@@ -19,16 +20,19 @@ export type PosSection =
 export interface PosSectionDef {
     key: PosSection;
     label: string;
+    /** Secondary nav items sit under a divider (configuration vs. operational work). */
+    group: "work" | "sources" | "config";
 }
 
 export const POS_SECTIONS: PosSectionDef[] = [
-    { key: "home", label: "Home" },
-    { key: "processing", label: "Processing" },
-    { key: "sources", label: "Sources" },
-    { key: "forms", label: "Forms" },
-    { key: "packets", label: "Packets" },
-    { key: "documents", label: "Documents" },
-    { key: "settings", label: "Settings" },
+    { key: "home", label: "Home", group: "work" },
+    { key: "processing", label: "Processing", group: "work" },
+    { key: "review", label: "Review", group: "work" },
+    { key: "linkage", label: "Linkage", group: "work" },
+    { key: "forms", label: "Forms", group: "sources" },
+    { key: "packets", label: "Packets", group: "sources" },
+    { key: "documents", label: "Documents", group: "sources" },
+    { key: "settings", label: "Settings", group: "config" },
 ];
 
 /** Human label for a processing-case lifecycle status. */
