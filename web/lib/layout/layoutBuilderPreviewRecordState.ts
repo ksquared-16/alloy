@@ -1,51 +1,73 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import type { LayoutBuilderPreviewRecordSelection } from "@/lib/layout/layoutBuilderPreviewRecordSearch";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 const STORAGE_KEY = "layout-builder-preview-opportunity-id";
+const STORAGE_LABEL_KEY = "layout-builder-preview-opportunity-label";
 
 export type LayoutBuilderPreviewRecordState = {
-    opportunityId: string;
-    setOpportunityId: (id: string) => void;
+    selection: LayoutBuilderPreviewRecordSelection | null;
+    selectOpportunity: (selection: LayoutBuilderPreviewRecordSelection) => void;
+    clearSelection: () => void;
     record: ProofRuntimeRecord;
     loading: boolean;
     error: string | null;
     usingSample: boolean;
 };
 
+function readStoredSelection(): LayoutBuilderPreviewRecordSelection | null {
+    try {
+        const id = sessionStorage.getItem(STORAGE_KEY)?.trim();
+        if (!id) return null;
+        const label = sessionStorage.getItem(STORAGE_LABEL_KEY)?.trim() || "Selected lead";
+        return { opportunityId: id, label };
+    } catch {
+        return null;
+    }
+}
+
+function persistSelection(selection: LayoutBuilderPreviewRecordSelection | null): void {
+    try {
+        if (!selection) {
+            sessionStorage.removeItem(STORAGE_KEY);
+            sessionStorage.removeItem(STORAGE_LABEL_KEY);
+            return;
+        }
+        sessionStorage.setItem(STORAGE_KEY, selection.opportunityId);
+        sessionStorage.setItem(STORAGE_LABEL_KEY, selection.label);
+    } catch {
+        // ignore storage errors
+    }
+}
+
 /** Fetch a real opportunity record for Experience Builder preview; falls back to sample data. */
 export function useLayoutBuilderPreviewRecord(): LayoutBuilderPreviewRecordState {
-    const [opportunityId, setOpportunityIdState] = useState("");
+    const [selection, setSelection] = useState<LayoutBuilderPreviewRecordSelection | null>(null);
     const [record, setRecord] = useState<ProofRuntimeRecord>(LAYOUT_DRAWER_PREVIEW_RECORD);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [usingSample, setUsingSample] = useState(true);
 
     useEffect(() => {
-        try {
-            const stored = sessionStorage.getItem(STORAGE_KEY);
-            if (stored) setOpportunityIdState(stored);
-        } catch {
-            // ignore storage errors
-        }
+        setSelection(readStoredSelection());
     }, []);
 
-    const setOpportunityId = useCallback((id: string) => {
-        setOpportunityIdState(id);
-        try {
-            const trimmed = id.replace(/^\s+|\s+$/g, "");
-            if (trimmed) sessionStorage.setItem(STORAGE_KEY, trimmed);
-            else sessionStorage.removeItem(STORAGE_KEY);
-        } catch {
-            // ignore storage errors
-        }
+    const selectOpportunity = useCallback((next: LayoutBuilderPreviewRecordSelection) => {
+        setSelection(next);
+        persistSelection(next);
+    }, []);
+
+    const clearSelection = useCallback(() => {
+        setSelection(null);
+        persistSelection(null);
     }, []);
 
     useEffect(() => {
-        const trimmed = opportunityId.replace(/^\s+|\s+$/g, "");
-        if (!trimmed) {
+        const opportunityId = selection?.opportunityId.trim() ?? "";
+        if (!opportunityId) {
             setRecord(LAYOUT_DRAWER_PREVIEW_RECORD);
             setUsingSample(true);
             setError(null);
@@ -57,7 +79,7 @@ export function useLayoutBuilderPreviewRecord(): LayoutBuilderPreviewRecordState
         setLoading(true);
         setError(null);
 
-        void fetch(`/api/admin/layout-runtime/opportunity-drawer-body?opportunityId=${encodeURIComponent(trimmed)}`)
+        void fetch(`/api/admin/layout-runtime/opportunity-drawer-body?opportunityId=${encodeURIComponent(opportunityId)}`)
             .then(async (res) => {
                 const body = (await res.json().catch(() => ({}))) as { error?: string; record?: ProofRuntimeRecord };
                 if (!res.ok) {
@@ -86,7 +108,7 @@ export function useLayoutBuilderPreviewRecord(): LayoutBuilderPreviewRecordState
         return () => {
             cancelled = true;
         };
-    }, [opportunityId]);
+    }, [selection?.opportunityId]);
 
-    return { opportunityId, setOpportunityId, record, loading, error, usingSample };
+    return { selection, selectOpportunity, clearSelection, record, loading, error, usingSample };
 }

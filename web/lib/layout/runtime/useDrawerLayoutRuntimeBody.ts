@@ -10,6 +10,7 @@ import { enrichLayoutDocDrawerFieldEditable } from "@/lib/layout/runtime/enrichL
 import {
     buildDrawerLayoutRuntimeBodyCacheKey,
     fetchDrawerLayoutRuntimeBodyDeduped,
+    invalidateDrawerLayoutRuntimeBodyCacheForApiPath,
     invalidateDrawerLayoutRuntimeBodyCacheForEntity,
     peekDrawerLayoutRuntimeBodyCacheEntry,
     putDrawerLayoutRuntimeBodyCacheEntry,
@@ -74,6 +75,22 @@ export function useDrawerLayoutRuntimeBody(args: UseDrawerLayoutRuntimeBodyArgs)
     const readyIdRef = useRef<string | null>(null);
     const fetchGenRef = useRef(0);
     const [invalidationGen, setInvalidationGen] = useState(0);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const onLayoutPublished = (ev: Event) => {
+            if (!(ev instanceof CustomEvent)) return;
+            const detail = ev.detail as { entityType?: string; surface?: string } | undefined;
+            if (detail?.entityType !== "opportunities" || detail?.surface !== "drawer") return;
+            if (!apiPath.includes("opportunity")) return;
+            invalidateDrawerLayoutRuntimeBodyCacheForApiPath(apiPath);
+            readyIdRef.current = null;
+            setInvalidationGen((g) => g + 1);
+        };
+        window.addEventListener("adminv2:entity-layout-published", onLayoutPublished as EventListener);
+        return () =>
+            window.removeEventListener("adminv2:entity-layout-published", onLayoutPublished as EventListener);
+    }, [apiPath]);
 
     useEffect(() => {
         if (typeof window === "undefined") return;

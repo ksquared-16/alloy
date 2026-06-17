@@ -22,17 +22,17 @@ function CompactRowLine({
     slots: Array<LayoutCollectionColumn | undefined>;
     rowIndex: number;
 }) {
-    const { segments, lineClassName } = formatLayoutRuntimeCompactRowLine(row, slots, rowIndex);
+    const { segments, lineClassName, labelClassName } = formatLayoutRuntimeCompactRowLine(row, slots, rowIndex);
     if (segments.length === 0) return null;
 
     return (
-        <div className={`min-w-0 truncate ${lineClassName}`} data-layout-runtime-compact-row-line={rowIndex}>
+        <div className={lineClassName} data-layout-runtime-compact-row-line={rowIndex}>
             {segments.map((segment, index) => (
-                <span key={index}>
-                    {index > 0 ?
-                        <span className="mx-1 text-alloy-midnight/30">·</span>
+                <span key={index} className="inline-flex min-w-0 items-baseline gap-1.5">
+                    {segment.label ?
+                        <span className={`shrink-0 ${labelClassName}`}>{segment.label}</span>
                     :   null}
-                    <span className={segment.className || undefined}>{segment.text}</span>
+                    <span className={`min-w-0 break-words ${segment.valueClassName}`}>{segment.value}</span>
                 </span>
             ))}
         </div>
@@ -85,11 +85,11 @@ export default function LayoutRuntimeRelatedListCompactRows({
                     const primary =
                         primaryColumn ?
                             formatLayoutRuntimeCompactRowLine(row, [primaryColumn], 0).segments
-                                .map((s) => s.text)
+                                .map((s) => s.value)
                                 .join(" · ")
                         :   "—";
                     const details = detailColumns
-                        .map((col) => formatLayoutRuntimeCompactRowLine(row, [col], 1).segments[0]?.text)
+                        .map((col) => formatLayoutRuntimeCompactRowLine(row, [col], 1).segments[0]?.value)
                         .filter((value) => value && value !== "—");
 
                     return (

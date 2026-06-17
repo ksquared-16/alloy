@@ -122,6 +122,7 @@ const OPPORTUNITY_MANIFEST: PlatformFieldManifestEntry[] = [
     entry("opportunity.channel", "Channel", "text", "metadata", "opportunities.metadata.channel", "now", ["case"], ["opportunities"]),
     entry("opportunity.campaign", "Campaign", "text", "metadata", "opportunities.metadata.campaign", "now", ["case"], ["opportunities"]),
     entry("opportunity.tour_status", "Tour status", "status", "metadata", "opportunities.metadata.tour_status", "now", ["case"], ["opportunities"]),
+    entry("opportunity.created_at", "Lead created date", "date", "native_entity", "opportunities.created_at", "now", ["case"], ["opportunities"]),
 ];
 
 const PERSON_MANIFEST: PlatformFieldManifestEntry[] = [

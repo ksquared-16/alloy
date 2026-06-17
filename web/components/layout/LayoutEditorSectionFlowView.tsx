@@ -46,13 +46,13 @@ export default function LayoutEditorSectionFlowView({
                 return (
                     <div
                         key={segment.groupId}
-                        className={rowClassName}
+                        className={`${rowClassName} items-stretch`}
                         style={sectionRowGroupGridStyle(segment.spans)}
                         data-layout-section-row-group={segment.groupId}
                         data-layout-section-segment="row"
                     >
                         {segment.sections.map((section) => (
-                            <div key={section.key} className={rowCellClassName}>
+                            <div key={section.key} className={`${rowCellClassName} flex h-full min-h-0 flex-col`}>
                                 {renderSection(section)}
                             </div>
                         ))}

@@ -37,7 +37,7 @@ export default function ExperienceBuilderEditableCardShell({
 
     return (
         <div
-            className={`${DRAWER_OVERVIEW_PANEL_SURFACE} transition-all duration-150 ${
+            className={`${DRAWER_OVERVIEW_PANEL_SURFACE} flex h-full min-h-0 flex-col transition-all duration-150 ${
                 isSelected ?
                     "ring-1 ring-alloy-pine/30 shadow-[0_2px_8px_rgba(45,106,79,0.08)]"
                 :   "hover:shadow-[0_2px_8px_rgba(24,39,58,0.05)]"
@@ -66,7 +66,7 @@ export default function ExperienceBuilderEditableCardShell({
                     </div>
                 </div>
             </header>
-            <div className={`flex min-w-0 flex-col ${DRAWER_OVERVIEW_PANEL_BODY_CLASS}`}>{children}</div>
+            <div className={`flex min-h-0 flex-1 flex-col ${DRAWER_OVERVIEW_PANEL_BODY_CLASS}`}>{children}</div>
         </div>
     );
 }

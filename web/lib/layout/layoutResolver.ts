@@ -29,6 +29,8 @@ export type ExtendedLayoutResolution = LayoutResolution & {
 export interface ResolveLayoutInput {
     entityType: string;
     surface: LayoutSurface;
+    /** When set, prefer published rows for this layout_key (Experience Builder uses "default"). */
+    layoutKey?: string;
     /** Candidate org-scoped records for this (entity_type, surface). */
     orgRecords?: EntityLayoutRecord[];
     /** Candidate default records (org_id NULL or is_system_default). */
@@ -40,12 +42,22 @@ export interface ResolveLayoutInput {
 function latestPublished(
     records: EntityLayoutRecord[] | undefined,
     surface: LayoutSurface,
+    layoutKey?: string,
 ): EntityLayoutRecord | null {
     if (!records?.length) return null;
-    const published = records
-        .filter((r) => r.status === "published" && r.surface === surface)
-        .sort((a, b) => b.version - a.version);
+    let published = records.filter((r) => r.status === "published" && r.surface === surface);
+    if (layoutKey) {
+        const keyed = published.filter((r) => r.layoutKey === layoutKey);
+        if (keyed.length > 0) published = keyed;
+    }
+    published.sort((a, b) => b.version - a.version);
     return published[0] ?? null;
+}
+
+function resolveDrawerLayoutKey(entityType: string, layoutKey?: string): string | undefined {
+    if (layoutKey) return layoutKey;
+    if (entityType === "opportunities") return "default";
+    return undefined;
 }
 
 /**
@@ -55,7 +67,7 @@ function latestPublished(
  * Queue: DB variant match → builtin variant (when context provided) → registry.
  */
 export function resolveLayout(input: ResolveLayoutInput): ExtendedLayoutResolution {
-    const { entityType, surface, orgRecords, defaultRecords, queueContext } = input;
+    const { entityType, surface, orgRecords, defaultRecords, queueContext, layoutKey } = input;
 
     if (surface === "queue") {
         const variantMatch = resolveQueueLayoutVariantFromRecords(orgRecords, defaultRecords, queueContext);
@@ -83,12 +95,13 @@ export function resolveLayout(input: ResolveLayoutInput): ExtendedLayoutResoluti
             }
         }
     } else {
-        const orgRecord = latestPublished(orgRecords, surface);
+        const drawerLayoutKey = surface === "drawer" ? resolveDrawerLayoutKey(entityType, layoutKey) : layoutKey;
+        const orgRecord = latestPublished(orgRecords, surface, drawerLayoutKey);
         if (orgRecord) {
             return { doc: orgRecord.doc, source: "org", record: orgRecord, layoutKey: orgRecord.layoutKey };
         }
 
-        const defaultRecord = latestPublished(defaultRecords, surface);
+        const defaultRecord = latestPublished(defaultRecords, surface, drawerLayoutKey);
         if (defaultRecord) {
             return {
                 doc: defaultRecord.doc,

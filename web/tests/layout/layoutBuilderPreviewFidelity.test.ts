@@ -141,9 +141,9 @@ describe("layoutBuilderPreviewFidelity", () => {
 
         const child = (LAYOUT_DRAWER_PREVIEW_RECORD.children as ProofRuntimeRecord[])[0]!;
         const line1 = formatLayoutRuntimeCompactRowLine(child, rowLayout![0]!.slots, 0);
-        expect(line1.segments.map((s) => s.text).join(" · ")).toContain("Avery");
-        expect(line1.segments.map((s) => s.text).join(" · ")).toContain("Johnson");
-        expect(line1.segments.map((s) => s.text).join(" · ")).toContain("4");
+        expect(line1.segments.some((s) => s.value.includes("Avery"))).toBe(true);
+        expect(line1.segments.some((s) => s.value.includes("Johnson"))).toBe(true);
+        expect(line1.segments.some((s) => s.value.includes("4"))).toBe(true);
     });
 
     it("persists typography display config on related-list columns", () => {

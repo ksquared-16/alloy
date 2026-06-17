@@ -229,7 +229,7 @@ function KpiTileSectionFrame({
         <div
             role="button"
             tabIndex={0}
-            className={`group relative min-h-[4.25rem] cursor-pointer rounded-xl border border-l-[3px] transition-all duration-150 ${railClass} ${
+            className={`group relative flex h-full min-h-[4.25rem] cursor-pointer rounded-xl border border-l-[3px] transition-all duration-150 ${railClass} ${
                 isSelected || widgetSelected ?
                     "border-alloy-pine/40 ring-1 ring-alloy-pine/25 shadow-[0_2px_8px_rgba(45,106,79,0.08)]"
                 :   "border-alloy-stone/12 bg-white hover:border-alloy-pine/30 hover:shadow-[0_2px_8px_rgba(24,39,58,0.05)]"
@@ -468,7 +468,7 @@ function EditableSectionFrame({
                     onSelectBlockId(null);
                 }
             }}
-            className={`group relative cursor-pointer ${hidden ? "opacity-60" : ""}`}
+            className={`group relative flex h-full min-h-0 flex-col cursor-pointer ${hidden ? "opacity-60" : ""}`}
             data-testid={`visual-editor-section-${section.key}`}
             data-visual-editor-editable="true"
             data-visual-editor-section-type={sectionType}
@@ -627,7 +627,7 @@ function CompositionGrid({
                         renderSection={renderSection}
                         stackClassName="min-w-0"
                         rowClassName="min-w-0 w-full"
-                        rowCellClassName="min-w-0"
+                        rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
                     />
                 </div>
             :   null}
@@ -641,7 +641,7 @@ function CompositionGrid({
                         renderSection={renderSection}
                         stackClassName="space-y-2"
                         rowClassName="min-w-0"
-                        rowCellClassName="min-w-0"
+                        rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
                     />
                 </div>
             </div>
@@ -657,7 +657,7 @@ function CompositionGrid({
                         renderSection={renderSection}
                         stackClassName=""
                         rowClassName="min-w-0"
-                        rowCellClassName="min-w-0"
+                        rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
                     />
                 </div>
             :   null}
@@ -682,7 +682,7 @@ export default function OpportunityDrawerLayoutEditorCanvas({
         <LayoutBuilderPreviewRecordContext.Provider value={previewRecord}>
             <div className="relative" data-testid="visual-editor-drawer-frame">
             {isPreview ?
-                <LayoutBuilderPreviewDrawerFrame>
+                <LayoutBuilderPreviewDrawerFrame record={previewRecord}>
                     <CompositionGrid
                         doc={doc}
                         editorMode={editorMode}

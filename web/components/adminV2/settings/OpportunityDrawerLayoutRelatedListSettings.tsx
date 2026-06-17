@@ -12,9 +12,10 @@ import {
     relatedListEntityTypeRuntimeSupported,
     type LayoutEditorRelatedListEntityType,
     type LayoutEditorRelatedListPresentationMode,
+    type LayoutEditorRelatedListRowTemplate,
 } from "@/lib/layout/layoutEditorRelatedListConfig";
 import { buildRelatedListFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Props = {
     doc: LayoutDoc;
@@ -23,6 +24,7 @@ type Props = {
 };
 
 const ROW_LABELS = ["Row 1", "Row 2", "Row 3"] as const;
+const COLUMN_COUNTS = [1, 2, 3] as const;
 
 function rowKey(index: number): "primaryRow" | "secondaryRow" | "tertiaryRow" {
     if (index === 0) return "primaryRow";
@@ -30,35 +32,147 @@ function rowKey(index: number): "primaryRow" | "secondaryRow" | "tertiaryRow" {
     return "tertiaryRow";
 }
 
-function RelatedListFieldSelect({
-    value,
-    groups,
-    testId,
-    onChange,
+function fieldLabel(groups: ReturnType<typeof buildRelatedListFieldPickerGroups>, refKey: string): string {
+    for (const group of groups) {
+        const match = group.fields.find((field) => field.refKey === refKey);
+        if (match) return match.fieldLabel;
+    }
+    return refKey.split(".").pop()?.replace(/_/g, " ") ?? refKey;
+}
+
+function RelatedListRowEditor({
+    label,
+    rowKeyName,
+    row,
+    fieldGroups,
+    onPatch,
 }: {
-    value: string;
-    groups: ReturnType<typeof buildRelatedListFieldPickerGroups>;
-    testId: string;
-    onChange: (refKey: string) => void;
+    label: string;
+    rowKeyName: "primaryRow" | "secondaryRow" | "tertiaryRow";
+    row?: LayoutEditorRelatedListRowTemplate;
+    fieldGroups: ReturnType<typeof buildRelatedListFieldPickerGroups>;
+    onPatch: (patch: Partial<{ primaryRow: LayoutEditorRelatedListRowTemplate; secondaryRow: LayoutEditorRelatedListRowTemplate; tertiaryRow: LayoutEditorRelatedListRowTemplate }>) => void;
 }) {
+    const fields = row?.fields ?? [];
+    const [columnCount, setColumnCount] = useState(Math.min(3, Math.max(1, fields.length || 1)));
+
+    useEffect(() => {
+        setColumnCount((prev) => Math.max(prev, Math.min(3, Math.max(1, fields.length || 1))));
+    }, [fields.length]);
+
+    const setColumnCountAndPad = (count: number) => {
+        setColumnCount(count);
+    };
+
+    const setFieldAt = (index: number, refKey: string) => {
+        const nextFields = [...fields];
+        while (nextFields.length <= index) nextFields.push("");
+        if (refKey) nextFields[index] = refKey;
+        else nextFields.splice(index, 1);
+        onPatch({ [rowKeyName]: { fields: nextFields.filter(Boolean) } });
+    };
+
+    const moveField = (index: number, direction: -1 | 1) => {
+        const target = index + direction;
+        if (target < 0 || target >= fields.length) return;
+        const nextFields = [...fields];
+        [nextFields[index], nextFields[target]] = [nextFields[target]!, nextFields[index]!];
+        onPatch({ [rowKeyName]: { fields: nextFields } });
+    };
+
+    const removeField = (index: number) => {
+        const nextFields = fields.filter((_, i) => i !== index);
+        onPatch({ [rowKeyName]: { fields: nextFields } });
+    };
+
     return (
-        <select
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="mt-0.5 w-full min-w-0 rounded-md border border-alloy-forge/15 px-2 py-1 text-xs"
-            data-testid={testId}
-        >
-            <option value="">—</option>
-            {groups.map((group) => (
-                <optgroup key={group.entityKey} label={group.entityLabel}>
-                    {group.fields.map((field) => (
-                        <option key={field.refKey} value={field.refKey}>
-                            {field.fieldLabel}
-                        </option>
+        <div className="space-y-2 rounded-lg border border-alloy-forge/10 bg-white p-2.5" data-testid={`visual-editor-related-list-row-${rowKeyName}`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold text-alloy-midnight/70">{label}</p>
+                <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-alloy-midnight/45">Columns</span>
+                    {COLUMN_COUNTS.map((count) => (
+                        <button
+                            key={count}
+                            type="button"
+                            className={`rounded px-2 py-0.5 text-[10px] font-medium ${
+                                columnCount === count ?
+                                    "bg-alloy-pine/10 text-alloy-pine"
+                                :   "text-alloy-midnight/55 hover:bg-alloy-stone/30"
+                            }`}
+                            onClick={() => setColumnCountAndPad(count)}
+                            data-testid={`visual-editor-related-list-${rowKeyName}-cols-${count}`}
+                        >
+                            {count}
+                        </button>
                     ))}
-                </optgroup>
-            ))}
-        </select>
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                {Array.from({ length: columnCount }, (_, slot) => {
+                    const refKey = fields[slot] ?? "";
+                    return (
+                        <div key={slot} className="flex min-w-0 items-start gap-2">
+                            <div className="min-w-0 flex-1">
+                                {refKey ?
+                                    <div className="flex min-w-0 items-center gap-2 rounded-md border border-alloy-pine/20 bg-alloy-pine/[0.04] px-2 py-1.5">
+                                        <span className="min-w-0 flex-1 truncate text-xs font-medium text-alloy-midnight">
+                                            {fieldLabel(fieldGroups, refKey)}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="text-[10px] text-alloy-midnight/45 hover:text-red-600"
+                                            onClick={() => removeField(slot)}
+                                            aria-label="Remove field"
+                                        >
+                                            Remove
+                                        </button>
+                                    </div>
+                                :   <select
+                                        value=""
+                                        onChange={(e) => setFieldAt(slot, e.target.value)}
+                                        className="w-full rounded-md border border-alloy-forge/15 px-2 py-1.5 text-xs"
+                                        data-testid={`visual-editor-related-list-${rowKeyName}-add-${slot}`}
+                                    >
+                                        <option value="">+ Add field</option>
+                                        {fieldGroups.map((group) => (
+                                            <optgroup key={group.entityKey} label={group.entityLabel}>
+                                                {group.fields.map((field) => (
+                                                    <option key={field.refKey} value={field.refKey}>
+                                                        {field.fieldLabel}
+                                                    </option>
+                                                ))}
+                                            </optgroup>
+                                        ))}
+                                    </select>
+                                }
+                            </div>
+                            {refKey ?
+                                <div className="flex shrink-0 flex-col gap-0.5">
+                                    <button
+                                        type="button"
+                                        className="text-[10px] text-alloy-midnight/45 hover:text-alloy-pine disabled:opacity-30"
+                                        disabled={slot === 0}
+                                        onClick={() => moveField(slot, -1)}
+                                    >
+                                        ↑
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="text-[10px] text-alloy-midnight/45 hover:text-alloy-pine disabled:opacity-30"
+                                        disabled={slot >= fields.length - 1}
+                                        onClick={() => moveField(slot, 1)}
+                                    >
+                                        ↓
+                                    </button>
+                                </div>
+                            :   null}
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
     );
 }
 
@@ -75,6 +189,10 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
     const rows = [config.primaryRow, config.secondaryRow, config.tertiaryRow];
     const presentationMode = config.presentationMode ?? "table";
 
+    const patchRow = (patch: Parameters<typeof patchLayoutEditorRelatedListConfig>[2]) => {
+        applyDoc(patchLayoutEditorRelatedListConfig(doc, sectionKey, patch));
+    };
+
     return (
         <div className="mt-3 space-y-3 rounded-lg border border-alloy-blue/20 bg-alloy-blue/[0.04] p-2" data-testid="visual-editor-related-list-settings">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-blue">Related list</p>
@@ -84,11 +202,7 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                 <select
                     value={presentationMode}
                     onChange={(e) =>
-                        applyDoc(
-                            patchLayoutEditorRelatedListConfig(doc, sectionKey, {
-                                presentationMode: e.target.value as LayoutEditorRelatedListPresentationMode,
-                            }),
-                        )
+                        patchRow({ presentationMode: e.target.value as LayoutEditorRelatedListPresentationMode })
                     }
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                     data-testid="visual-editor-related-list-presentation"
@@ -99,13 +213,6 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                         </option>
                     ))}
                 </select>
-                <span className="mt-1 block text-[10px] text-alloy-midnight/45">
-                    {presentationMode === "table" ?
-                        "Full table with columns — best for scanning many fields."
-                    : presentationMode === "cards" ?
-                        "Card per record with labeled rows — best for child or contact summaries."
-                    :   "Single-line summary per record — best for dense drawers."}
-                </span>
             </label>
 
             <label className="block text-[11px] text-alloy-midnight/60">
@@ -113,11 +220,7 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                 <select
                     value={config.entityType}
                     onChange={(e) =>
-                        applyDoc(
-                            patchLayoutEditorRelatedListConfig(doc, sectionKey, {
-                                entityType: e.target.value as LayoutEditorRelatedListEntityType,
-                            }),
-                        )
+                        patchRow({ entityType: e.target.value as LayoutEditorRelatedListEntityType })
                     }
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                     data-testid="visual-editor-related-list-entity"
@@ -132,7 +235,7 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
             </label>
 
             <div className="flex items-center justify-between gap-2">
-                <p className="text-[10px] text-alloy-midnight/50">Fields grouped by entity</p>
+                <p className="text-[10px] text-alloy-midnight/50">Row layout</p>
                 <button
                     type="button"
                     className="shrink-0 text-[10px] font-medium text-alloy-pine hover:underline"
@@ -143,36 +246,16 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                 </button>
             </div>
 
-            {ROW_LABELS.map((label, index) => {
-                const key = rowKey(index);
-                const row = rows[index];
-                const fields = row?.fields ?? [];
-                return (
-                    <fieldset key={key} className="space-y-1 rounded border border-alloy-forge/10 bg-white/80 p-2">
-                        <legend className="px-1 text-[10px] font-semibold text-alloy-midnight/55">{label}</legend>
-                        {[0, 1, 2].map((slot) => (
-                            <label key={slot} className="block text-[10px] text-alloy-midnight/50">
-                                Field {slot + 1}
-                                <RelatedListFieldSelect
-                                    value={fields[slot] ?? ""}
-                                    groups={fieldGroups}
-                                    testId={`visual-editor-related-list-${key}-${slot}`}
-                                    onChange={(value) => {
-                                        const nextFields = [...fields];
-                                        if (value) nextFields[slot] = value;
-                                        else nextFields.splice(slot, 1);
-                                        applyDoc(
-                                            patchLayoutEditorRelatedListConfig(doc, sectionKey, {
-                                                [key]: { fields: nextFields.filter(Boolean) },
-                                            }),
-                                        );
-                                    }}
-                                />
-                            </label>
-                        ))}
-                    </fieldset>
-                );
-            })}
+            {ROW_LABELS.map((label, index) => (
+                <RelatedListRowEditor
+                    key={label}
+                    label={label}
+                    rowKeyName={rowKey(index)}
+                    row={rows[index]}
+                    fieldGroups={fieldGroups}
+                    onPatch={patchRow}
+                />
+            ))}
         </div>
     );
 }

@@ -17,10 +17,28 @@ import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext
 
 export type CompactRowLineTier = "primary" | "secondary" | "tertiary";
 
-const TIER_DEFAULT_CLASS: Record<CompactRowLineTier, string> = {
-    primary: "text-xs font-medium text-alloy-midnight",
-    secondary: "text-xs text-alloy-midnight/70",
-    tertiary: "text-[10px] text-alloy-midnight/50",
+export type CompactRowFieldSegment = {
+    label: string | null;
+    value: string;
+    valueClassName: string;
+};
+
+const TIER_LINE_CLASS: Record<CompactRowLineTier, string> = {
+    primary: "flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-alloy-midnight",
+    secondary: "flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-alloy-midnight/70",
+    tertiary: "flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[11px] text-alloy-midnight/50",
+};
+
+const TIER_VALUE_CLASS: Record<CompactRowLineTier, string> = {
+    primary: "font-medium text-alloy-midnight",
+    secondary: "text-alloy-midnight/75",
+    tertiary: "text-alloy-midnight/60",
+};
+
+const TIER_LABEL_CLASS: Record<CompactRowLineTier, string> = {
+    primary: "text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45",
+    secondary: "text-[10px] font-medium text-alloy-midnight/40",
+    tertiary: "text-[10px] text-alloy-midnight/35",
 };
 
 function tierForRowIndex(rowIndex: number): CompactRowLineTier {
@@ -32,7 +50,8 @@ function tierForRowIndex(rowIndex: number): CompactRowLineTier {
 function formatCompactColumnSegment(
     row: ProofRuntimeRecord,
     col: LayoutCollectionColumn,
-): { text: string; className: string } | null {
+    tier: CompactRowLineTier,
+): CompactRowFieldSegment | null {
     const displayConfig = readLayoutEditorDisplayConfig(col);
     const raw = formatLayoutRuntimeRepeaterColumnDisplay(row, col);
     if (!raw || raw === "—") return null;
@@ -43,32 +62,28 @@ function formatCompactColumnSegment(
         :   raw;
 
     const showLabel = shouldShowLayoutEditorFieldLabel(displayConfig);
-    const label = showLabel ? col.label?.trim() : "";
-    const text = label ? `${label}: ${formatted}` : formatted;
+    const label = showLabel ? col.label?.trim() || null : null;
     const statusClass = layoutEditorStatusFormatClass(displayConfig, col.renderHint);
     const typography = typographyIntentClass(displayConfig.typographyIntent);
-    const className = [statusClass, typography].filter(Boolean).join(" ") || "";
+    const valueClassName =
+        [TIER_VALUE_CLASS[tier], statusClass, typography].filter(Boolean).join(" ") || TIER_VALUE_CLASS[tier];
 
-    return { text, className };
+    return { label, value: formatted, valueClassName };
 }
 
 export function formatLayoutRuntimeCompactRowLine(
     row: ProofRuntimeRecord,
     columns: Array<LayoutCollectionColumn | undefined>,
     rowIndex: number,
-): { segments: Array<{ text: string; className: string }>; lineClassName: string } {
+): { segments: CompactRowFieldSegment[]; lineClassName: string; labelClassName: string } {
     const tier = tierForRowIndex(rowIndex);
     const segments = columns
-        .map((col) => (col ? formatCompactColumnSegment(row, col) : null))
-        .filter((segment): segment is { text: string; className: string } => segment != null);
-
-    const hasTypographyOverride = columns.some((col) => {
-        if (!col) return false;
-        return Boolean(readLayoutEditorDisplayConfig(col).typographyIntent);
-    });
+        .map((col) => (col ? formatCompactColumnSegment(row, col, tier) : null))
+        .filter((segment): segment is CompactRowFieldSegment => segment != null);
 
     return {
         segments,
-        lineClassName: hasTypographyOverride ? "text-xs text-alloy-midnight" : TIER_DEFAULT_CLASS[tier],
+        lineClassName: TIER_LINE_CLASS[tier],
+        labelClassName: TIER_LABEL_CLASS[tier],
     };
 }

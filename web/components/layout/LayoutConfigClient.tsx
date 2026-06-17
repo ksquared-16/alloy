@@ -37,6 +37,7 @@ import {
     type LayoutCatalogWidget,
 } from "@/lib/layout/fieldCatalog";
 import { collectRefKeysFromLayoutDoc } from "@/lib/layout/layoutRefKeyAliases";
+import { dispatchOpportunityDrawerLayoutPublished } from "@/lib/layout/layoutEditorPublishWorkflow";
 import LayoutFieldPickerOverlay from "@/components/layout/LayoutFieldPickerOverlay";
 import * as ops from "@/lib/layout/builderOps";
 import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
@@ -450,11 +451,7 @@ export default function LayoutConfigClient({
             setSelectedStatus("published");
             await fetchList();
             if (typeof window !== "undefined" && workingDoc) {
-                window.dispatchEvent(
-                    new CustomEvent("adminv2:entity-layout-published", {
-                        detail: { entityType: workingDoc.entityType, surface: workingDoc.surface },
-                    }),
-                );
+                dispatchOpportunityDrawerLayoutPublished(workingDoc);
             }
         } catch (e) {
             setError((e as Error).message);
