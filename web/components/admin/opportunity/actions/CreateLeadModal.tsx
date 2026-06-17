@@ -47,6 +47,7 @@ import { ActionWorkspaceExecuteState } from "@/components/admin/actions/ActionWo
 import { ActionWorkspaceSuccessState } from "@/components/admin/actions/ActionWorkspaceSuccessState";
 import { ActionWorkspaceStepContent } from "@/components/admin/actions/ActionWorkspaceStepContent";
 import { queueActionWorkspaceLeadHandoff } from "@/lib/bos/actionWorkspaceDrawerHandoff";
+import { warmCreateLeadOpportunityDrawer } from "@/lib/admin/actions/warmCreateLeadOpportunityDrawer";
 import {
     buildCreateLeadFieldConfidenceMap,
     type CreateLeadFieldConfidenceState,
@@ -60,8 +61,6 @@ export type CreateLeadFormPayload = {
     phone: string;
     [key: string]: string;
 };
-
-const SUCCESS_OPEN_DELAY_MS = 1400;
 
 function legacyPayloadFromValues(values: Record<string, string>): CreateLeadFormPayload {
     return {
@@ -102,7 +101,7 @@ export function CreateLeadModal(props: {
     const [error, setError] = useState<string | null>(null);
     const [successDetail, setSuccessDetail] = useState<string | null>(null);
     const createdIdRef = useRef<string | null>(null);
-    const handoffStartedRef = useRef(false);
+    const drawerWarmRef = useRef<Promise<void> | null>(null);
 
     const gatherFields = intakeBundle?.gatherFields ?? CREATE_LEAD_GATHER_FIELDS;
     const sections = useMemo(
@@ -113,10 +112,14 @@ export function CreateLeadModal(props: {
     const intakeSpec = intakeBundle?.spec ?? null;
 
     const handoffToCreatedLead = useCallback(
-        (opportunityId: string) => {
+        async (opportunityId: string) => {
+            setSuccessDetail("Opening Lead…");
+            await (drawerWarmRef.current ??
+                warmCreateLeadOpportunityDrawer(opportunityId, { department_id: departmentId }));
+            setSuccessDetail(null);
             queueActionWorkspaceLeadHandoff(opportunityId, (id) => onCreated?.(id), onClose);
         },
-        [onClose, onCreated],
+        [departmentId, onClose, onCreated],
     );
 
     const validation = useMemo(() => {
@@ -131,7 +134,7 @@ export function CreateLeadModal(props: {
                 onOpenLead: () => {
                     const opportunityId = createdIdRef.current;
                     if (!opportunityId) return;
-                    handoffToCreatedLead(opportunityId);
+                    void handoffToCreatedLead(opportunityId);
                 },
             }),
         [bosRecommendations, handoffToCreatedLead],
@@ -158,7 +161,7 @@ export function CreateLeadModal(props: {
         setError(null);
         setSuccessDetail(null);
         createdIdRef.current = null;
-        handoffStartedRef.current = false;
+        drawerWarmRef.current = null;
     }, []);
 
     useEffect(() => {
@@ -219,18 +222,13 @@ export function CreateLeadModal(props: {
     }, [open, departmentId, resetWorkspaceState, siteFilter?.selectedSiteId, siteFilter?.bootstrap?.sites]);
 
     useEffect(() => {
-        if (step !== "success" || !createdIdRef.current || handoffStartedRef.current) return;
-        handoffStartedRef.current = true;
+        if (step !== "success" || !createdIdRef.current) return;
         const opportunityId = createdIdRef.current;
-        const openTimer = window.setTimeout(() => setSuccessDetail("Opening Lead…"), 600);
-        const handoffTimer = window.setTimeout(() => {
-            handoffToCreatedLead(opportunityId);
-        }, SUCCESS_OPEN_DELAY_MS);
-        return () => {
-            window.clearTimeout(openTimer);
-            window.clearTimeout(handoffTimer);
-        };
-    }, [step, handoffToCreatedLead]);
+        drawerWarmRef.current = warmCreateLeadOpportunityDrawer(opportunityId, { department_id: departmentId });
+        void drawerWarmRef.current.then(() => {
+            if (createdIdRef.current === opportunityId) setSuccessDetail(null);
+        });
+    }, [step, departmentId]);
 
     const setFieldValue = useCallback((payloadKey: string, next: string) => {
         setValues((prev) => ({ ...prev, [payloadKey]: next }));
@@ -355,6 +353,7 @@ export function CreateLeadModal(props: {
             const opportunityId = result.opportunity_id?.trim();
             if (!opportunityId) throw new Error("Lead was created but no opportunity id was returned.");
             createdIdRef.current = opportunityId;
+            drawerWarmRef.current = warmCreateLeadOpportunityDrawer(opportunityId, { department_id: departmentId });
             setSuccessDetail(null);
             setStep("success");
         } catch (e) {
@@ -497,10 +496,11 @@ export function CreateLeadModal(props: {
             <ActionWorkspaceStepContent step="success" activeStep={step}>
                 <ActionWorkspaceSuccessState
                     title="Lead Created"
-                    detail={successDetail ?? "Preparing your workspace…"}
+                    detail={successDetail ?? undefined}
                     householdLabel={householdLabel}
                     bosRecommendations={bosRecommendations}
                     suggestedActions={successActions}
+                    maxVisibleRecommendations={3}
                 />
             </ActionWorkspaceStepContent>
 

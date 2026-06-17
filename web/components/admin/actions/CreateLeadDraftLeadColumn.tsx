@@ -16,6 +16,8 @@ import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveC
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
 import { IntakeHouseholdReviewPanel } from "@/components/admin/intake/IntakeHouseholdReviewPanel";
 import { IntakeReviewWarningsBanner } from "@/components/admin/intake/IntakeReviewWarningsBanner";
+import { CreateLeadCommitPreviewPanel } from "@/components/admin/actions/CreateLeadCommitPreviewPanel";
+import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 type Props = {
@@ -179,6 +181,10 @@ export function CreateLeadDraftLeadColumn({
             missingRequiredLabelsForCreateLead(intakeSpec, values)
         :   [];
     const showApplyReview = reviewSuggestions.length > 0 && draftEditMode;
+    const commitPreview =
+        household && (draftEditMode || manualMode) ?
+            buildCreateLeadCommitPreview({ values, household })
+        :   null;
 
     return (
         <section
@@ -253,6 +259,9 @@ export function CreateLeadDraftLeadColumn({
                         {household ?
                             <IntakeHouseholdReviewPanel household={household} className="mb-4" />
                         :   null}
+                        {commitPreview ?
+                            <CreateLeadCommitPreviewPanel preview={commitPreview} className="mb-4" />
+                        :   null}
                         <ActionWorkspaceGatherFields
                             sections={sections}
                             values={values}
@@ -265,7 +274,12 @@ export function CreateLeadDraftLeadColumn({
                     </div>
                 :   <div className="space-y-2" data-testid="create-lead-draft-fields">
                         {household && !analyzing ?
-                            <IntakeHouseholdReviewPanel household={household} className="mb-2" />
+                            <>
+                                <IntakeHouseholdReviewPanel household={household} className="mb-2" />
+                                {commitPreview ?
+                                    <CreateLeadCommitPreviewPanel preview={commitPreview} className="mb-2" />
+                                :   null}
+                            </>
                         :   null}
                         {findings.map((finding) => (
                             <DraftFieldCard
