@@ -17,6 +17,8 @@ import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveS
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
 import ReviewDecideCard, { DECISION_TO_ACTION, type RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
 import ClassificationPanel from "@/app/adminV2/processing/ClassificationPanel";
+import type { StoredProcessingExtraction } from "@/lib/pos/processingCase/extraction/types";
+import { isExtractionStale } from "@/lib/pos/processingCase/extraction/processingCaseExtractionDb";
 
 /** Operator decision vocabulary shown on every case (recommended one is highlighted; others are prototype). */
 const OPERATOR_ACTIONS: Array<{ key: string; label: string }> = [
@@ -65,6 +67,155 @@ function formatWhen(iso: string | null): string {
 
 function Eyebrow({ children }: { children: ReactNode }) {
     return <div className="mb-1.5 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">{children}</div>;
+}
+
+/** B — fetch a time-limited signed URL and open the document; show a useful error on failure. */
+function OpenDocumentButton({ documentId }: { documentId: string }) {
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const open = useCallback(async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/documents/${documentId}/signed-url`, { credentials: "same-origin" });
+            const body = (await res.json().catch(() => ({}))) as { ok?: boolean; signedUrl?: string; error?: string };
+            if (!res.ok || !body.ok || !body.signedUrl) {
+                throw new Error(body.error || `Couldn’t open document (${res.status})`);
+            }
+            window.open(body.signedUrl, "_blank", "noopener,noreferrer");
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Couldn’t open document");
+        } finally {
+            setBusy(false);
+        }
+    }, [documentId]);
+    return (
+        <div className="mt-1">
+            <button
+                type="button"
+                disabled={busy}
+                onClick={() => void open()}
+                className="text-[11.5px] font-medium text-emerald-700 underline-offset-2 hover:underline disabled:opacity-50"
+            >
+                {busy ? "Opening…" : "Open document"}
+            </button>
+            {error ? <div className="mt-0.5 text-[11px] text-amber-700">{error}</div> : null}
+        </div>
+    );
+}
+
+/** C — present the intake-aligned extraction result: facts ("what Alloy found") + candidates ("what it maps to"). */
+function ExtractionSection({
+    extraction,
+    currentClassificationKey,
+    classificationStatus,
+}: {
+    extraction: StoredProcessingExtraction | null;
+    currentClassificationKey: string | null;
+    classificationStatus: string | null;
+}) {
+    // D — unknown next-step.
+    if (classificationStatus === "unknown") {
+        return (
+            <section className="mb-5 rounded-lg border border-stone-200 bg-stone-50/60 p-3">
+                <Eyebrow>Extraction</Eyebrow>
+                <div className="text-[13px] font-medium text-stone-700">This document is unknown</div>
+                <p className="mt-0.5 text-[12px] text-stone-500">
+                    Alloy couldn’t tell what this is, so it proposed no values. Change the classification above to help
+                    Alloy understand it — extraction re-runs automatically.
+                </p>
+            </section>
+        );
+    }
+
+    if (!extraction) {
+        return (
+            <section className="mb-5">
+                <Eyebrow>Extraction</Eyebrow>
+                <div className="text-sm text-stone-400">No extraction yet for this case.</div>
+            </section>
+        );
+    }
+
+    const stale = isExtractionStale(extraction, currentClassificationKey);
+
+    return (
+        <section className="mb-5 rounded-lg border border-stone-200 bg-white p-3.5 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-stone-500">Extraction</span>
+                <span className="text-[10px] text-stone-400">
+                    {extraction.extractor_version} · {formatWhen(extraction.extracted_at)}
+                </span>
+            </div>
+
+            {stale ? (
+                <div className="mb-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11.5px] text-amber-800">
+                    These candidates were produced for “{extraction.classification_key}”, but the classification is now
+                    “{currentClassificationKey}”. Re-run extraction to refresh them.
+                </div>
+            ) : null}
+
+            {/* What Alloy found = facts */}
+            <div className="mb-3">
+                <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">
+                    What Alloy found ({extraction.facts.length})
+                </div>
+                {extraction.facts.length === 0 ? (
+                    <div className="text-[12px] text-stone-400">No facts read from this document.</div>
+                ) : (
+                    <ul className="flex flex-wrap gap-1.5">
+                        {extraction.facts.map((f) => (
+                            <li
+                                key={f.fact_id}
+                                className="inline-flex items-center gap-1 rounded-md border border-stone-200 bg-stone-50/60 px-2 py-0.5 text-[11.5px] text-stone-700"
+                            >
+                                <span className="text-stone-400">{f.fact_type}:</span>
+                                <span className="font-medium">{String(f.normalized_value ?? f.raw_value)}</span>
+                                <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px] text-stone-500">{f.confidence}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+
+            {/* What Alloy thinks this maps to = candidates */}
+            <div>
+                <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">
+                    What Alloy thinks this maps to ({extraction.candidates.length})
+                </div>
+                {extraction.candidates.length === 0 ? (
+                    <div className="text-[12px] text-stone-400">No field candidates proposed.</div>
+                ) : (
+                    <dl className="space-y-1.5">
+                        {extraction.candidates.map((c, i) => (
+                            <div key={`${c.payload_key}:${i}`} className="flex items-baseline gap-2 text-[13px]">
+                                <dt className="w-48 shrink-0 truncate">
+                                    <span className="text-stone-600">{c.payload_key}</span>
+                                    <span className="ml-1.5 rounded bg-stone-100 px-1 py-0.5 text-[9.5px] text-stone-500">
+                                        {c.confidence}
+                                    </span>
+                                </dt>
+                                <dd className="min-w-0 flex-1 text-stone-800">{c.value || "—"}</dd>
+                            </div>
+                        ))}
+                    </dl>
+                )}
+            </div>
+
+            {extraction.review_warnings.length > 0 ? (
+                <div className="mt-2.5 border-t border-stone-100 pt-2">
+                    <div className="mb-1 text-[10.5px] font-medium uppercase tracking-wide text-stone-400">Review notes</div>
+                    <ul className="list-inside list-disc space-y-0.5 text-[11.5px] text-amber-700">
+                        {extraction.review_warnings.map((w, i) => (
+                            <li key={i}>{w}</li>
+                        ))}
+                    </ul>
+                </div>
+            ) : null}
+
+            <p className="mt-2 text-[10.5px] text-stone-400">Proposed values only — nothing is written until you approve.</p>
+        </section>
+    );
 }
 
 export default function ProcessingCaseDetailContent({ caseId }: { caseId: string }) {
@@ -215,6 +366,13 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     onCorrected={() => void load()}
                 />
 
+                {/* What Alloy found (facts) + what it maps to (candidates) — proposals only. */}
+                <ExtractionSection
+                    extraction={detail.extraction}
+                    currentClassificationKey={detail.caseType}
+                    classificationStatus={detail.classification?.status ?? null}
+                />
+
                 {/* Core POS moment: what Alloy understood + what it recommends */}
                 {!isClosed ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}
 
@@ -231,7 +389,7 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                                     <span className="text-[11px] text-stone-400">{s.role}</span>
                                 </div>
                                 {evidenceFor(s.kind, s.id)?.documentId ? (
-                                    <div className="mt-1 text-[11.5px] text-emerald-700">Open document</div>
+                                    <OpenDocumentButton documentId={evidenceFor(s.kind, s.id)!.documentId!} />
                                 ) : null}
                             </li>
                         ))}

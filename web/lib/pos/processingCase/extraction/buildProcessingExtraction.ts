@@ -27,6 +27,7 @@ export function buildProcessingExtraction(input: {
         classificationKey: input.classificationKey,
     });
     return {
+        classification_key: input.classificationKey,
         source: input.envelope,
         facts: extraction.facts,
         candidates: mapping.candidates,

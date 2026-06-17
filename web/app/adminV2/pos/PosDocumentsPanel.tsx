@@ -14,9 +14,58 @@
  * to the relevant POS section so the flow is demonstrable today.
  */
 
-import { ArrowRight, FileSearch, FileUp, Sparkles } from "lucide-react";
-import { useRef, useState, type ReactNode } from "react";
+import { ArrowRight, FileSearch, FileText, FileUp, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { PosSection } from "./posSections";
+
+interface PosDocListItem {
+    documentId: string;
+    label: string;
+    uploadedAt: string | null;
+    docType: string | null;
+    processingCaseId: string | null;
+    caseStatus: string | null;
+    classificationKey: string | null;
+}
+
+function formatWhen(iso: string | null): string {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+/** Open a document via a fresh signed URL; show a useful error on failure. */
+function OpenDocLink({ documentId }: { documentId: string }) {
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    return (
+        <>
+            <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                    setBusy(true);
+                    setError(null);
+                    try {
+                        const res = await fetch(`/api/admin/documents/${documentId}/signed-url`, { credentials: "same-origin" });
+                        const body = (await res.json().catch(() => ({}))) as { ok?: boolean; signedUrl?: string; error?: string };
+                        if (!res.ok || !body.ok || !body.signedUrl) throw new Error(body.error || `Couldn’t open (${res.status})`);
+                        window.open(body.signedUrl, "_blank", "noopener,noreferrer");
+                    } catch (e) {
+                        setError(e instanceof Error ? e.message : "Couldn’t open");
+                    } finally {
+                        setBusy(false);
+                    }
+                }}
+                className="text-[11.5px] font-medium text-emerald-700 hover:underline disabled:opacity-50"
+            >
+                {busy ? "Opening…" : "Open document"}
+            </button>
+            {error ? <span className="text-[11px] text-amber-700">· {error}</span> : null}
+        </>
+    );
+}
 
 function WorkflowCard({
     badge,
@@ -68,6 +117,28 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [uploading, setUploading] = useState(false);
     const [status, setStatus] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
+    const [docs, setDocs] = useState<PosDocListItem[]>([]);
+    const [docsLoading, setDocsLoading] = useState(true);
+    const [docsError, setDocsError] = useState<string | null>(null);
+
+    const loadDocs = useCallback(async () => {
+        setDocsLoading(true);
+        setDocsError(null);
+        try {
+            const res = await fetch("/api/admin/pos/documents", { credentials: "same-origin" });
+            const body = (await res.json().catch(() => ({}))) as { documents?: PosDocListItem[]; error?: string };
+            if (!res.ok) throw new Error(body.error || `Failed to load documents (${res.status})`);
+            setDocs(body.documents ?? []);
+        } catch (e) {
+            setDocsError(e instanceof Error ? e.message : "Failed to load documents");
+        } finally {
+            setDocsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadDocs();
+    }, [loadDocs]);
 
     async function handleFile(file: File) {
         setUploading(true);
@@ -94,6 +165,7 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                     ? `Uploaded — Processing case opened${body.classification_key ? ` · ${body.classification_key}` : ""}.`
                     : "Uploaded.",
             });
+            void loadDocs(); // refresh the list so the new upload appears immediately
         } catch (e) {
             setStatus({ kind: "error", message: e instanceof Error ? e.message : "Upload failed" });
         } finally {
@@ -138,29 +210,108 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                 </div>
             </div>
 
+            {/* A — uploaded documents, with classification + linked Processing Case status. */}
+            <section className="mb-4">
+                <div className="mb-2 flex items-center justify-between">
+                    <span className="text-[10.5px] font-semibold uppercase tracking-wide text-stone-500">Uploaded documents</span>
+                    <button type="button" onClick={() => void loadDocs()} className="text-[11px] text-stone-500 hover:underline">
+                        Refresh
+                    </button>
+                </div>
+                {docsLoading ? (
+                    <div className="text-[12px] text-stone-400">Loading…</div>
+                ) : docsError ? (
+                    <div className="text-[12px] text-amber-700">{docsError}</div>
+                ) : docs.length === 0 ? (
+                    <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50/60 p-4 text-[12px] text-stone-500">
+                        No documents yet. Use <span className="font-medium text-stone-600">Upload Document</span> above — it opens a
+                        Processing case automatically.
+                    </div>
+                ) : (
+                    <ul className="divide-y divide-stone-100 rounded-lg border border-stone-200">
+                        {docs.map((d) => (
+                            <li key={d.documentId} className="flex items-center gap-3 px-3 py-2">
+                                <FileText className="h-4 w-4 shrink-0 text-stone-400" aria-hidden />
+                                <div className="min-w-0 flex-1">
+                                    <div className="truncate text-[13px] font-medium text-stone-800">{d.label}</div>
+                                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-stone-500">
+                                        <span>{formatWhen(d.uploadedAt)}</span>
+                                        {d.classificationKey ? (
+                                            <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600">
+                                                {d.classificationKey}
+                                            </span>
+                                        ) : (
+                                            <span className="text-stone-400">unclassified</span>
+                                        )}
+                                        {d.caseStatus ? <span>· case {d.caseStatus.replace(/_/g, " ")}</span> : <span>· no case</span>}
+                                    </div>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-3">
+                                    <OpenDocLink documentId={d.documentId} />
+                                    {d.processingCaseId ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => onNavigate("processing")}
+                                            className="text-[11.5px] font-medium text-emerald-700 hover:underline"
+                                        >
+                                            Open in Processing
+                                        </button>
+                                    ) : null}
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
+
             <div className="mb-4 grid gap-3 lg:grid-cols-2">
                 <WorkflowCard
                     icon={<FileSearch className="h-4 w-4" />}
                     title="Document → Data"
-                    badge="Prototype"
-                    steps={["Upload", "Extract values", "Open Processing case", "Review", "Approve"]}
+                    badge="Live"
+                    steps={["Upload", "Classify", "Extract facts → candidates", "Review in Processing", "Approve (later)"]}
                     cta="See it in Processing"
                     onCta={() => onNavigate("processing")}
                 />
-                <WorkflowCard
-                    icon={<Sparkles className="h-4 w-4" />}
-                    title="Document → Form"
-                    badge="Prototype"
-                    steps={["Upload", "Read structure", "Draft form", "Review", "Publish"]}
-                    cta="See it in Forms"
-                    onCta={() => onNavigate("forms")}
-                />
-            </div>
-
-            <div className="rounded-lg border border-dashed border-stone-200 bg-stone-50/60 p-4 text-[12px] leading-relaxed text-stone-500">
-                <span className="font-medium text-stone-600">Foundations in place:</span> document storage, upload API, and signed-url
-                reads already exist. Extracted documents will open a Processing case (source kind <code className="rounded bg-stone-100 px-1 text-[11px]">document</code>)
-                so they appear in the queue alongside form and packet intake — no separate inbox.
+                {/* E — Document → Form: correct next-step shell. Generation is NOT built yet. */}
+                <div className="rounded-xl border border-stone-200 bg-white p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                        <span className="flex items-center gap-1.5 text-stone-700">
+                            <Sparkles className="h-4 w-4" />
+                            <span className="text-sm font-semibold text-stone-900">Document → Form</span>
+                        </span>
+                        <span className="rounded bg-stone-100 px-1.5 py-0.5 text-[10px] font-semibold text-stone-600">Planned</span>
+                    </div>
+                    <ol className="mb-3 space-y-1">
+                        {[
+                            "Classify document",
+                            "Extract structure / facts",
+                            "Identify sections & fields",
+                            "Propose a form draft",
+                            "Operator reviews",
+                            "Publish form",
+                        ].map((s, i) => (
+                            <li key={s} className="flex items-center gap-2 text-[12px] text-stone-600">
+                                <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-stone-100 text-[9px] font-semibold text-stone-500">
+                                    {i + 1}
+                                </span>
+                                {s}
+                            </li>
+                        ))}
+                    </ol>
+                    <button
+                        type="button"
+                        disabled
+                        title="Needs document structure detection (steps 2–4) before a draft can be proposed"
+                        className="inline-flex cursor-not-allowed items-center gap-1 rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-400"
+                    >
+                        Create form draft
+                        <span className="rounded bg-stone-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-stone-400">Planned</span>
+                    </button>
+                    <p className="mt-1.5 text-[10.5px] text-stone-400">
+                        Blocked on structure detection — classification + facts exist today; section/field detection is next.
+                    </p>
+                </div>
             </div>
         </div>
     );
