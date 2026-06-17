@@ -21,6 +21,7 @@ import { maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processi
 import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/classification/maybeClassifyProcessingCaseFromDocumentSafe";
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
 import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
+import { buildDocumentTextUpdate, extractPdfText, looksLikePdf } from "@/lib/pos/processingCase/structure/pdfTextExtract";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -156,6 +157,21 @@ export async function POST(request: NextRequest) {
 
     const document = normalizeDocumentRow(row as Record<string, unknown>);
     const docId = (row as { id: string }).id;
+
+    // POS-FP11b: best-effort text-only PDF extraction. We already have the bytes in
+    // memory. On success the text lands on `documents.extracted_text` so the structure
+    // preview (below) can use it. NEVER blocks the upload — any failure is swallowed and
+    // recorded as an extraction status. No OCR; scanned PDFs simply yield no text.
+    if (looksLikePdf(file.type, origName)) {
+        try {
+            const pdfResult = await extractPdfText(new Uint8Array(buffer));
+            const textUpdate = buildDocumentTextUpdate(pdfResult);
+            await supabase.from("documents").update(textUpdate).eq("org_id", ctx.orgId).eq("id", docId);
+        } catch (e) {
+            console.warn("[documents/upload] pdf text extraction", e instanceof Error ? e.message : e);
+        }
+    }
+
     try {
         await emitEvent({
             org_id: ctx.orgId,
