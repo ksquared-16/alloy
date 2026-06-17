@@ -1,8 +1,18 @@
 "use client";
 
+import OpportunityDrawerLayoutFieldSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettings";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
+    patchLayoutEditorFieldDisplay,
+    patchLayoutEditorFieldEditable,
+    patchLayoutEditorFieldVisibility,
+    type LayoutEditorFieldNode,
+} from "@/lib/layout/layoutEditorCompositionModel";
+import { readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
+import { resolveVisibilityRuleKey } from "@/lib/layout/layoutEditorVisibilityRules";
+import {
     DEFAULT_CHILDREN_RELATED_LIST_CONFIG,
+    findRelatedListItemInSection,
     LAYOUT_EDITOR_RELATED_LIST_ENTITY_LABELS,
     LAYOUT_EDITOR_RELATED_LIST_ENTITY_TYPES,
     LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_LABELS,
@@ -46,12 +56,16 @@ function RelatedListRowEditor({
     row,
     fieldGroups,
     onPatch,
+    selectedRefKey,
+    onSelectRefKey,
 }: {
     label: string;
     rowKeyName: "primaryRow" | "secondaryRow" | "tertiaryRow";
     row?: LayoutEditorRelatedListRowTemplate;
     fieldGroups: ReturnType<typeof buildRelatedListFieldPickerGroups>;
     onPatch: (patch: Partial<{ primaryRow: LayoutEditorRelatedListRowTemplate; secondaryRow: LayoutEditorRelatedListRowTemplate; tertiaryRow: LayoutEditorRelatedListRowTemplate }>) => void;
+    selectedRefKey: string | null;
+    onSelectRefKey: (refKey: string | null) => void;
 }) {
     const fields = row?.fields ?? [];
     const [columnCount, setColumnCount] = useState(Math.min(3, Math.max(1, fields.length || 1)));
@@ -116,19 +130,20 @@ function RelatedListRowEditor({
                         <div key={slot} className="flex min-w-0 items-start gap-2">
                             <div className="min-w-0 flex-1">
                                 {refKey ?
-                                    <div className="flex min-w-0 items-center gap-2 rounded-md border border-alloy-pine/20 bg-alloy-pine/[0.04] px-2 py-1.5">
+                                    <button
+                                        type="button"
+                                        className={`flex min-w-0 w-full items-center gap-2 rounded-md border px-2 py-1.5 text-left ${
+                                            selectedRefKey === refKey ?
+                                                "border-alloy-pine/40 bg-alloy-pine/[0.08]"
+                                            :   "border-alloy-pine/20 bg-alloy-pine/[0.04] hover:border-alloy-pine/35"
+                                        }`}
+                                        onClick={() => onSelectRefKey(selectedRefKey === refKey ? null : refKey)}
+                                        data-testid={`visual-editor-related-list-field-${refKey}`}
+                                    >
                                         <span className="min-w-0 flex-1 truncate text-xs font-medium text-alloy-midnight">
                                             {fieldLabel(fieldGroups, refKey)}
                                         </span>
-                                        <button
-                                            type="button"
-                                            className="text-[10px] text-alloy-midnight/45 hover:text-red-600"
-                                            onClick={() => removeField(slot)}
-                                            aria-label="Remove field"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
+                                    </button>
                                 :   <select
                                         value=""
                                         onChange={(e) => setFieldAt(slot, e.target.value)}
@@ -150,6 +165,17 @@ function RelatedListRowEditor({
                             </div>
                             {refKey ?
                                 <div className="flex shrink-0 flex-col gap-0.5">
+                                    <button
+                                        type="button"
+                                        className="text-[10px] text-alloy-midnight/45 hover:text-red-600"
+                                        onClick={() => {
+                                            removeField(slot);
+                                            if (selectedRefKey === refKey) onSelectRefKey(null);
+                                        }}
+                                        aria-label="Remove field"
+                                    >
+                                        Remove
+                                    </button>
                                     <button
                                         type="button"
                                         className="text-[10px] text-alloy-midnight/45 hover:text-alloy-pine disabled:opacity-30"
@@ -180,6 +206,25 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
     const section = doc.sections.find((s) => s.key === sectionKey);
     const config = section ? readLayoutEditorRelatedListConfig(section) : DEFAULT_CHILDREN_RELATED_LIST_CONFIG;
     const [showAllFields, setShowAllFields] = useState(false);
+    const [selectedRefKey, setSelectedRefKey] = useState<string | null>(null);
+
+    const relatedListItem = section ? findRelatedListItemInSection(section)?.item ?? null : null;
+
+    const selectedFieldNode: LayoutEditorFieldNode | null = useMemo(() => {
+        if (!selectedRefKey || !relatedListItem) return null;
+        const colIdx = relatedListItem.columns?.findIndex((col) => col.refKey === selectedRefKey) ?? -1;
+        if (colIdx < 0) return null;
+        const col = relatedListItem.columns![colIdx]!;
+        return {
+            id: `${relatedListItem.id}-col-${colIdx}`,
+            title: col.label?.trim() || selectedRefKey,
+            refKey: col.refKey,
+            path: { kind: "column", sectionKey, blockItemId: relatedListItem.id, colIdx },
+            displayConfig: readLayoutEditorDisplayConfig(col),
+            visibilityRule: resolveVisibilityRuleKey(col.visibleWhen, col.refKey),
+            editable: col.editable === true,
+        };
+    }, [relatedListItem, sectionKey, selectedRefKey]);
 
     const fieldGroups = useMemo(
         () => buildRelatedListFieldPickerGroups(config.entityType, { includeAllEntities: showAllFields }),
@@ -254,8 +299,41 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                     row={rows[index]}
                     fieldGroups={fieldGroups}
                     onPatch={patchRow}
+                    selectedRefKey={selectedRefKey}
+                    onSelectRefKey={setSelectedRefKey}
                 />
             ))}
+
+            {selectedFieldNode ?
+                <OpportunityDrawerLayoutFieldSettings
+                    inline
+                    node={selectedFieldNode}
+                    onClose={() => setSelectedRefKey(null)}
+                    onChange={(patch) => {
+                        let next = doc;
+                        if (patch.label !== undefined || patch.display) {
+                            next = patchLayoutEditorFieldDisplay(
+                                next,
+                                selectedFieldNode.path,
+                                patch.display ?? {},
+                                patch.label,
+                            );
+                        }
+                        if (patch.visibility) {
+                            next = patchLayoutEditorFieldVisibility(
+                                next,
+                                selectedFieldNode.path,
+                                patch.visibility,
+                                selectedFieldNode.refKey,
+                            );
+                        }
+                        if (patch.editable !== undefined) {
+                            next = patchLayoutEditorFieldEditable(next, selectedFieldNode.path, patch.editable);
+                        }
+                        applyDoc(next);
+                    }}
+                />
+            :   null}
         </div>
     );
 }

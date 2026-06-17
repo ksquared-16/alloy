@@ -17,6 +17,14 @@ import {
     buildPrimaryContactPersonRelation,
     resolveOpportunityPrimaryContactPerson,
 } from "./resolveOpportunityPrimaryContactPerson";
+import {
+    buildBillingContactPersonRelation,
+    buildEmergencyContactPersonRelation,
+    buildSecondaryContactPersonRelation,
+    resolveOpportunityBillingContactPerson,
+    resolveOpportunityEmergencyContactPerson,
+    resolveOpportunitySecondaryContactPerson,
+} from "./resolveOpportunityRoleContactPerson";
 
 /**
  * Top-level field refKeys a LayoutDoc binds against the drawer record. Excludes
@@ -64,9 +72,12 @@ function mapFieldRefKeyValue(refKey: string, vmRecord: Record<string, unknown>, 
         if (v != null) return v;
     }
     if (entity === "person") {
-        // contact = Person record; reuse the keys the contact resolver already set.
         const v = asDisplayValue(record[`person.${fieldKey}`] ?? vmRecord[`person.${fieldKey}`]);
         if (v != null) return v;
+        // Never fall back to generic person.phone / person.email for role-scoped fields.
+        if (fieldKey.startsWith("secondary_") || fieldKey.startsWith("emergency_") || fieldKey.startsWith("billing_")) {
+            return "";
+        }
     }
     return "";
 }
@@ -141,6 +152,14 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
     const primaryEmail = primaryContact.email;
     const primaryPersonId = primaryContact.personId;
 
+    const secondaryContact = resolveOpportunitySecondaryContactPerson(vmRecord);
+    const secondaryName = secondaryContact.displayName;
+    const secondaryPhone = secondaryContact.phone;
+    const secondaryEmail = secondaryContact.email;
+
+    const emergencyContact = resolveOpportunityEmergencyContactPerson(vmRecord);
+    const billingContact = resolveOpportunityBillingContactPerson(vmRecord);
+
     const firstName = pickDisplay(
         vmRecord["person.first_name"],
         vmRecord._primary_person_first_name,
@@ -150,11 +169,6 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         vmRecord["person.last_name"],
         vmRecord._primary_person_last_name,
         vmRecord.last_name,
-    );
-
-    const secondaryName = pickDisplay(
-        vmRecord["person.secondary_contact_name"],
-        vmRecord._secondary_contact_name,
     );
 
     const location = opportunityDisplayLocationFromRecord(vmRecord);
@@ -242,6 +256,14 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         "opportunity.attention_reason": attention ?? "",
         "person.primary_contact_name": primaryName ?? "",
         "person.secondary_contact_name": secondaryName ?? "",
+        "person.secondary_phone": secondaryPhone ?? "",
+        "person.secondary_email": secondaryEmail ?? "",
+        "person.emergency_contact_name": emergencyContact.displayName ?? "",
+        "person.emergency_contact_phone": emergencyContact.phone ?? "",
+        "person.emergency_contact_email": emergencyContact.email ?? "",
+        "person.billing_contact_name": billingContact.displayName ?? "",
+        "person.billing_contact_phone": billingContact.phone ?? "",
+        "person.billing_contact_email": billingContact.email ?? "",
         "person.primary_phone": primaryPhone ?? "",
         "person.primary_email": primaryEmail ?? "",
         "person.phone": primaryPhone ?? "",
@@ -262,14 +284,14 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
             ...(buildPrimaryContactPersonRelation(primaryContact) ?
                 { primary_contact: buildPrimaryContactPersonRelation(primaryContact)! }
             :   {}),
-            ...(secondaryName ?
-                {
-                    secondary_contact: {
-                        handle: secondaryName,
-                        entityType: "person",
-                        fields: { secondary_contact_name: secondaryName },
-                    },
-                }
+            ...(buildSecondaryContactPersonRelation(secondaryContact) ?
+                { secondary_contact: buildSecondaryContactPersonRelation(secondaryContact)! }
+            :   {}),
+            ...(buildEmergencyContactPersonRelation(emergencyContact) ?
+                { emergency_contact: buildEmergencyContactPersonRelation(emergencyContact)! }
+            :   {}),
+            ...(buildBillingContactPersonRelation(billingContact) ?
+                { billing_contact: buildBillingContactPersonRelation(billingContact)! }
             :   {}),
             ...(siteLabel ?
                 {

@@ -132,6 +132,13 @@ const PERSON_MANIFEST: PlatformFieldManifestEntry[] = [
     entry("person.last_name", "Last name", "text", "relationship", "primary_contact.last_name", "fc3", ["relationship"], ["person"]),
     entry("person.secondary_contact_name", "Secondary contact name", "text", "relationship", "secondary_contact.display_name", "fc3", ["case"], ["opportunities", "person"]),
     entry("person.secondary_phone", "Secondary phone", "phone", "relationship", "secondary_contact.phone", "fc3", ["case"], ["opportunities", "person"]),
+    entry("person.secondary_email", "Secondary email", "text", "relationship", "secondary_contact.email", "fc3", ["case"], ["opportunities", "person"]),
+    entry("person.emergency_contact_name", "Emergency contact name", "text", "relationship", "emergency_contact.display_name", "fc3", ["case"], ["opportunities", "person"]),
+    entry("person.emergency_contact_phone", "Emergency phone", "phone", "relationship", "emergency_contact.phone", "fc3", ["case"], ["opportunities", "person"]),
+    entry("person.emergency_contact_email", "Emergency email", "text", "relationship", "emergency_contact.email", "fc3", ["case"], ["opportunities", "person"]),
+    entry("person.billing_contact_name", "Billing contact name", "text", "relationship", "billing_contact.display_name", "fc3", ["case"], ["opportunities", "person"]),
+    entry("person.billing_contact_phone", "Billing phone", "phone", "relationship", "billing_contact.phone", "fc3", ["case"], ["opportunities", "person"]),
+    entry("person.billing_contact_email", "Billing email", "text", "relationship", "billing_contact.email", "fc3", ["case"], ["opportunities", "person"]),
 ];
 
 const CHILD_MANIFEST: PlatformFieldManifestEntry[] = [

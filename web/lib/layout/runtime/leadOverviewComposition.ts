@@ -135,6 +135,7 @@ export function leadOverviewCompositionHints(
         enrollmentRosterReadFirst: true,
         leadOperatingSummaryCards: true,
         leadEnrollmentCardList: true,
+        suppressRelatedListPanelHeader: true,
         ...overrides,
     };
 }

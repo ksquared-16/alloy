@@ -35,6 +35,8 @@ export const DRAWER_OVERVIEW_LEFT_COLUMN_CLASS = "adminv2-drawer-overview-col-le
 
 export const DRAWER_OVERVIEW_MAIN_COLUMN_CLASS = "adminv2-drawer-overview-col-main";
 
+export const DRAWER_OVERVIEW_MAIN_ZONE_FLOW_CLASS = "adminv2-drawer-overview-main-zone-flow";
+
 export const DRAWER_OVERVIEW_RIGHT_RAIL_CLASS = "adminv2-drawer-overview-col-rail";
 
 export const DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS = "adminv2-drawer-overview-lead-source-grid";

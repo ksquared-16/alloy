@@ -101,7 +101,7 @@ function SectionPreviewBody({
         :   "default" as const;
     const previewCompositionHints = useMemo(() => {
         const cardWidth = section ? readCardWidthFraction(section) : "full";
-        const narrowCard = cardWidth === "third" || cardWidth === "quarter" || cardWidth === "half";
+        const narrowCard = cardWidth === "quarter";
         return leadOverviewVisualEditorCompositionHints({
             ...(section && sectionIsKpiTile(section) ? { summaryStripCompactRow: false } : {}),
             ...(sectionPresentation === "default" ?

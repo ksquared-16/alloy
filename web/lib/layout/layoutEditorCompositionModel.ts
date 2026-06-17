@@ -68,6 +68,7 @@ export type LayoutEditorFieldNode = {
     path: LayoutEditorNodePath;
     displayConfig: ReturnType<typeof readLayoutEditorDisplayConfig>;
     visibilityRule: LayoutEditorVisibilityRule;
+    editable?: boolean;
 };
 
 const WIDGET_BLOCK_TITLES: Record<string, string> = {
@@ -100,6 +101,7 @@ function fieldNodeFromItem(
         path,
         displayConfig: readLayoutEditorDisplayConfig(item),
         visibilityRule: resolveVisibilityRuleKey(item.visibleWhen, boundPath),
+        editable: item.editable === true,
     };
 }
 
@@ -116,6 +118,7 @@ function columnNode(
         path: { kind: "column", sectionKey, blockItemId, colIdx },
         displayConfig: readLayoutEditorDisplayConfig({ metadata: undefined, renderHint: col.renderHint, adornment: col.adornment }),
         visibilityRule: resolveVisibilityRuleKey(col.visibleWhen, col.refKey),
+        editable: col.editable === true,
     };
 }
 
@@ -278,6 +281,29 @@ export function patchLayoutEditorFieldDisplay(
         return relatedPatchColumn(doc, loc, path.colIdx, patch);
     }
 
+    return doc;
+}
+
+export function patchLayoutEditorFieldEditable(
+    doc: LayoutDoc,
+    path: LayoutEditorNodePath,
+    editable: boolean,
+): LayoutDoc {
+    if (path.kind === "field") {
+        const loc = findLayoutItemLocation(doc, path.itemId);
+        if (!loc) return doc;
+        return patchItem(doc, loc.sIdx, loc.rIdx, loc.cIdx, path.itemId, { editable });
+    }
+    if (path.kind === "group_field") {
+        const loc = groupLoc(doc, path.sectionKey, path.blockItemId);
+        if (!loc) return doc;
+        return groupPatchItem(doc, loc, path.gr, path.gc, path.fieldId, { editable });
+    }
+    if (path.kind === "column") {
+        const loc = groupLoc(doc, path.sectionKey, path.blockItemId);
+        if (!loc) return doc;
+        return relatedPatchColumn(doc, loc, path.colIdx, { editable });
+    }
     return doc;
 }
 

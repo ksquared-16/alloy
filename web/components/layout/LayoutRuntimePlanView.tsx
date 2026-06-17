@@ -43,6 +43,7 @@ import {
     shouldShowLayoutEditorFieldIcon,
     shouldShowLayoutEditorFieldLabel,
 } from "@/lib/layout/runtime/applyLayoutEditorFieldDisplay";
+import { readCardWidthFraction } from "@/lib/layout/layoutBuilderCardWidth";
 import { sectionIsKpiTile } from "@/lib/layout/runtime/layoutRuntimeKpiTilePresentation";
 import { readLayoutEditorRelatedListConfigFromItem } from "@/lib/layout/runtime/resolveLayoutRuntimeRelatedListPresentation";
 import LayoutRuntimeRelatedListCompactRows from "@/components/layout/LayoutRuntimeRelatedListCompactRows";
@@ -93,6 +94,8 @@ import PersonRelatedPeopleGroupsWidget from "@/components/layout/person/PersonRe
 import LeadHouseholdContactsWidget from "@/components/layout/lead/LeadHouseholdContactsWidget";
 import LeadLastTouchSummaryCard from "@/components/layout/lead/LeadLastTouchSummaryCard";
 import LeadOperatingAttentionSummaryCard from "@/components/layout/lead/LeadOperatingAttentionSummaryCard";
+import LeadOperatingCurrentWorkSummaryCard from "@/components/layout/lead/LeadOperatingCurrentWorkSummaryCard";
+import LayoutRuntimeSectionFlowView from "@/components/layout/LayoutRuntimeSectionFlowView";
 import LeadActivityPreview from "@/components/layout/lead/LeadActivityPreview";
 import LeadOperatingSummaryCard from "@/components/layout/lead/LeadOperatingSummaryCard";
 import PersonActivityPreview from "@/components/layout/person/PersonActivityPreview";
@@ -230,6 +233,7 @@ type LayoutRuntimeSectionContextValue = {
     sectionPresentation: LayoutRuntimeSectionPresentation;
     sectionKey: string;
     stackRows?: boolean;
+    stackFieldColumns?: boolean;
     kpiTile?: boolean;
 };
 
@@ -1269,12 +1273,9 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                     accent={leadWidgetAccent("green")}
                     widgetKey="current_work"
                 >
-                    <LayoutRuntimeCurrentWorkWidget
+                    <LeadOperatingCurrentWorkSummaryCard
                         record={record}
                         opportunityId={opportunityId}
-                        title={title}
-                        compact
-                        chromeless
                         canMutate={host.canMutate}
                     />
                 </LeadOperatingSummaryCard>
@@ -1619,10 +1620,12 @@ function ColumnView({ record, column, anchorEntity }: { record: ProofRuntimeReco
 
 function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; row: LayoutRow; anchorEntity: string }) {
     if (!evaluateLayoutCondition(record, row.visibleWhen)) return null;
-    const { stackRows } = useContext(LayoutRuntimeSectionContext);
+    const { stackRows, stackFieldColumns: stackFieldColumnsInSection } = useContext(LayoutRuntimeSectionContext);
     const kpiTile = useLayoutRuntimeKpiTile();
     const summaryCompact = useLayoutRuntimeSummaryStrip() && useLayoutRuntimeCompositionHints().summaryStripCompactRow;
-    const stackFieldColumns = useLayoutRuntimeCompositionHints().stackFieldColumns;
+    const stackFieldColumns =
+        stackFieldColumnsInSection === true
+        || useLayoutRuntimeCompositionHints().stackFieldColumns === true;
 
     if (stackRows || stackFieldColumns) {
         return (
@@ -1716,10 +1719,14 @@ function SectionView({
             honorLayoutDocBlocks: composition.honorLayoutDocBlocks,
         }) && !sectionHasLayoutOwnedComposition(section);
 
+    const stackFieldColumns =
+        composition.stackFieldColumns === true || readCardWidthFraction(section) === "quarter";
+
     const sectionContext = {
         sectionPresentation: effectiveSectionPresentation,
         sectionKey: section.key,
         kpiTile: isKpiTile,
+        stackFieldColumns,
         stackRows:
             composition.compositionSectionSurface === true
             && (section.key === "household_contact" || section.key === "household_relationships")
@@ -1844,6 +1851,8 @@ export type LayoutRuntimePlanViewProps = {
     variant?: "proof" | "production" | "preview";
     /** Platform shell zone presentation — summary strip omits section chrome. */
     sectionPresentation?: LayoutRuntimeSectionPresentation;
+    /** When false, render sections directly (used by LayoutRuntimeSectionFlowView to avoid recursion). */
+    useSectionFlow?: boolean;
 };
 
 export default function LayoutRuntimePlanView({
@@ -1855,12 +1864,18 @@ export default function LayoutRuntimePlanView({
     canMutate = false,
     variant = "proof",
     sectionPresentation = "default",
+    useSectionFlow = true,
 }: LayoutRuntimePlanViewProps) {
     const plan = useMemo(() => planProp ?? buildLayoutRuntimePlan(doc), [planProp, doc]);
     const anchorEntity = plan.entityType;
     const hostContext = useMemo(
         () => ({ entityId, canMutate, anchorEntity }),
         [entityId, canMutate, anchorEntity],
+    );
+
+    const visibleSections = useMemo(
+        () => (doc?.sections ?? []).filter((section) => evaluateLayoutCondition(record, section.visibleWhen)),
+        [doc?.sections, record],
     );
 
     if (!doc?.sections?.length) {
@@ -1881,18 +1896,31 @@ export default function LayoutRuntimePlanView({
                                 .join(", ")}
                         </div>
                     :   null}
-                    {doc.sections.map((section) => {
-                if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
-                return (
-                    <SectionView
-                        key={section.id}
-                        record={record}
-                        section={section}
-                        anchorEntity={anchorEntity}
-                        sectionPresentation={sectionPresentation}
-                    />
-                );
-            })}
+                    {visibleSections.length > 0 && useSectionFlow ?
+                        <LayoutRuntimeSectionFlowView
+                            doc={doc}
+                            sections={visibleSections}
+                            record={record}
+                            entityId={entityId ?? ""}
+                            canMutate={canMutate}
+                            onAdornmentAction={onAdornmentAction}
+                            sectionPresentation={sectionPresentation}
+                            stackClassName="min-w-0"
+                            rowClassName="min-w-0 items-stretch"
+                            rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
+                        />
+                    :   null}
+                    {!useSectionFlow ?
+                        visibleSections.map((section) => (
+                            <SectionView
+                                key={section.id}
+                                record={record}
+                                section={section}
+                                anchorEntity={anchorEntity}
+                                sectionPresentation={sectionPresentation}
+                            />
+                        ))
+                    :   null}
                 </div>
                 </AdornmentActionContext.Provider>
             </LayoutRuntimeHostContext.Provider>

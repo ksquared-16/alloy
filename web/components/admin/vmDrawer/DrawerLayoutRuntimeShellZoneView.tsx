@@ -41,6 +41,9 @@ export default function DrawerLayoutRuntimeShellZoneView({
         isSummaryStrip && shouldUseLeadOverviewComposition(doc) ? leadOverviewCompositionHints()
         : isSummaryStrip && shouldUsePersonOverviewComposition(doc) ? personOverviewCompositionHints()
         : isSummaryStrip && shouldUseChildOverviewComposition(doc) ? childOverviewCompositionHints()
+        : !isSummaryStrip && shouldUseLeadOverviewComposition(doc) ? leadOverviewCompositionHints({ summaryStripCompactRow: false })
+        : !isSummaryStrip && shouldUsePersonOverviewComposition(doc) ? personOverviewCompositionHints()
+        : !isSummaryStrip && shouldUseChildOverviewComposition(doc) ? childOverviewCompositionHints()
         :   {};
 
     return (

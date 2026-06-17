@@ -48,6 +48,7 @@ export default function LayoutRuntimeSectionFlowView({
                     canMutate={canMutate}
                     onAdornmentAction={onAdornmentAction}
                     sectionPresentation={sectionPresentation}
+                    useSectionFlow={false}
                 />
             )}
         />

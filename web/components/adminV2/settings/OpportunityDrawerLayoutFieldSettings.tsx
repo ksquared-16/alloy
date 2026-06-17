@@ -26,6 +26,7 @@ type Props = {
         label?: string;
         display?: LayoutEditorDisplayConfig;
         visibility?: LayoutEditorVisibilityRule;
+        editable?: boolean;
     }) => void;
     onClose: () => void;
 };
@@ -271,6 +272,18 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                     Choose a supported action or clear it before publishing.
                 </p>
             :   null}
+
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Edit behavior</p>
+
+            <label className="mt-1 flex items-center gap-2 text-[11px] text-alloy-midnight/70">
+                <input
+                    type="checkbox"
+                    checked={node.editable === true}
+                    onChange={(e) => onChange({ editable: e.target.checked })}
+                    data-testid="visual-editor-field-inline-editable"
+                />
+                Inline editable in live drawer
+            </label>
 
             <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Visibility</p>
 

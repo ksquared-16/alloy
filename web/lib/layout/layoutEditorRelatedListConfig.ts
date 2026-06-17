@@ -177,7 +177,10 @@ function fieldLabel(refKey: string): string {
     return tail.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function buildColumnsFromConfig(config: LayoutEditorRelatedListConfig): LayoutCollectionColumn[] {
+function buildColumnsFromConfig(
+    config: LayoutEditorRelatedListConfig,
+    existingItem?: LayoutItem | null,
+): LayoutCollectionColumn[] {
     const ordered: string[] = [];
     for (const row of [config.primaryRow, config.secondaryRow, config.tertiaryRow]) {
         if (!row) continue;
@@ -185,12 +188,17 @@ function buildColumnsFromConfig(config: LayoutEditorRelatedListConfig): LayoutCo
             if (!ordered.includes(refKey)) ordered.push(refKey);
         }
     }
-    return ordered.map((refKey) => ({
-        label: fieldLabel(refKey),
-        refKey,
-        width: "medium" as const,
-        ...(refKey.includes("status") ? { renderHint: "status" as const } : {}),
-    }));
+    const existingByRef = new Map((existingItem?.columns ?? []).map((col) => [col.refKey, col]));
+    return ordered.map((refKey) => {
+        const preserved = existingByRef.get(refKey);
+        if (preserved) return { ...preserved };
+        return {
+            label: fieldLabel(refKey),
+            refKey,
+            width: "medium" as const,
+            ...(refKey.includes("status") ? { renderHint: "status" as const } : {}),
+        };
+    });
 }
 
 function buildChildRowGroups(config: LayoutEditorRelatedListConfig, columns: LayoutCollectionColumn[]): LayoutEditorChildRowGroup[] {
@@ -211,6 +219,10 @@ function buildChildRowGroups(config: LayoutEditorRelatedListConfig, columns: Lay
     pushGroup(config.secondaryRow);
     pushGroup(config.tertiaryRow);
     return groups;
+}
+
+export function findRelatedListItemInSection(section: LayoutSection): { rIdx: number; cIdx: number; item: LayoutItem } | null {
+    return findRelatedListItem(section);
 }
 
 function findRelatedListItem(section: LayoutSection): { rIdx: number; cIdx: number; item: LayoutItem } | null {
@@ -249,7 +261,7 @@ function writeRelatedListConfigOnItem(
 }
 
 function makeRelatedListItem(config: LayoutEditorRelatedListConfig): LayoutItem {
-    const columns = buildColumnsFromConfig(config);
+    const columns = buildColumnsFromConfig(config, null);
     const childRowGroups = buildChildRowGroups(config, columns);
     const refKey = ENTITY_REF_KEYS[config.entityType];
     const dataContext =
@@ -284,9 +296,9 @@ export function syncRelatedListSectionToItem(doc: LayoutDoc, sectionKey: string)
     if (!relatedListEntityTypeRuntimeSupported(config.entityType)) {
         return removeRelatedListItemFromSection(doc, sectionKey);
     }
-    const columns = buildColumnsFromConfig(config);
-    const childRowGroups = buildChildRowGroups(config, columns);
     const existing = findRelatedListItem(section);
+    const columns = buildColumnsFromConfig(config, existing?.item ?? null);
+    const childRowGroups = buildChildRowGroups(config, columns);
 
     let next = cloneDoc(doc);
     const nextSection = next.sections[sIdx]!;

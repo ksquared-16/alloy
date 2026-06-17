@@ -92,7 +92,9 @@ export function createExperienceBuilderCard(
     const afterSectionKey = input.afterSectionKey ?? null;
     const zone =
         input.zone
-        ?? resolveExperienceBuilderPlacementZone(doc, afterSectionKey, placementIntent);
+        ?? (input.cardType === "widget" && placementIntent === "after_selected" && !afterSectionKey ?
+            "summary_strip"
+        :   resolveExperienceBuilderPlacementZone(doc, afterSectionKey, placementIntent));
     const widthKey = input.widthKey ?? defaultWidthForBlockType(input.cardType);
 
     let next: LayoutDoc;

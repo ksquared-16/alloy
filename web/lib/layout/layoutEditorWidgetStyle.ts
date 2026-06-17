@@ -170,6 +170,25 @@ export function resolveLayoutEditorWidgetToneDotClass(tone: LayoutEditorWidgetRu
     }
 }
 
+export function resolveLayoutEditorWidgetToneIconClass(tone: LayoutEditorWidgetRuntimeTone | undefined): string {
+    switch (tone ?? "neutral") {
+        case "green":
+            return "border-alloy-stone/10 bg-alloy-juniper/[0.08] text-alloy-juniper/80";
+        case "blue":
+            return "border-alloy-stone/10 bg-alloy-blue/[0.08] text-alloy-blue/80";
+        case "amber":
+            return "border-alloy-stone/10 bg-alloy-ember/[0.08] text-alloy-ember/85";
+        case "red":
+            return "border-alloy-stone/10 bg-red-500/[0.08] text-red-600/85";
+        case "purple":
+            return "border-alloy-stone/10 bg-violet-500/[0.08] text-violet-600/85";
+        case "muted":
+            return "border-alloy-stone/10 bg-alloy-stone/[0.08] text-alloy-midnight/45";
+        default:
+            return "border-alloy-stone/10 bg-alloy-stone/[0.06] text-alloy-midnight/55";
+    }
+}
+
 export function resolveLayoutEditorWidgetToneRailClass(tone: LayoutEditorWidgetTone | undefined): string {
     const normalized = normalizeWidgetTone(tone) ?? "neutral";
     switch (normalized) {

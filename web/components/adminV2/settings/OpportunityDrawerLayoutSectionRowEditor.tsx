@@ -21,6 +21,7 @@ import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfi
 import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
     patchLayoutEditorFieldDisplay,
+    patchLayoutEditorFieldEditable,
     patchLayoutEditorFieldVisibility,
     type LayoutEditorFieldNode,
 } from "@/lib/layout/layoutEditorCompositionModel";
@@ -827,6 +828,7 @@ export function LayoutBuilderItemInspector({
         path: { kind: "field", sectionKey, itemId: entry.itemId },
         displayConfig: readLayoutEditorDisplayConfig(entry.item),
         visibilityRule: resolveVisibilityRuleKey(entry.item.visibleWhen, entry.item.refKey),
+        editable: entry.item.editable === true,
     };
 
     return (
@@ -841,6 +843,9 @@ export function LayoutBuilderItemInspector({
                 }
                 if (patch.visibility) {
                     next = patchLayoutEditorFieldVisibility(next, fieldNode.path, patch.visibility, fieldNode.refKey);
+                }
+                if (patch.editable !== undefined) {
+                    next = patchLayoutEditorFieldEditable(next, fieldNode.path, patch.editable);
                 }
                 applyDoc(next);
             }}

@@ -6,6 +6,7 @@ import LayoutRuntimeSectionFlowView from "@/components/layout/LayoutRuntimeSecti
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
+import { partitionOpportunityDrawerSectionsByZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import {
     leadOverviewCompositionHints,
@@ -21,6 +22,7 @@ import {
     DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS,
     DRAWER_OVERVIEW_LEFT_COLUMN_CLASS,
     DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
+    DRAWER_OVERVIEW_MAIN_ZONE_FLOW_CLASS,
     DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
     DRAWER_OVERVIEW_SHELL_GRID_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
@@ -96,6 +98,7 @@ export default function LeadOverviewRuntimeComposition({
         [],
     );
     const rightRailSections = resolveLeadOverviewRightRailSections(slots, record, visibilityCtx, doc);
+    const zones = useMemo(() => partitionOpportunityDrawerSectionsByZone(doc), [doc]);
     const showHousehold =
         slots.household && shouldRenderLayoutRuntimeSection(slots.household, record, visibilityCtx);
     const showEnrollment =
@@ -108,31 +111,47 @@ export default function LeadOverviewRuntimeComposition({
             <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-lead-overview-composition="true">
                 {/* Shell grid: household 4 / enrollment 5 / right rail 3 — see LEAD_OVERVIEW_SHELL_GRID */}
                 <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
-                    {showHousehold && slots.household ?
-                        <CompositionSlot
-                            slotKey="household_contact"
-                            sectionKeys={[slots.household.key]}
-                            doc={doc}
-                            record={record}
-                            entityId={entityId}
-                            canMutate={canMutate}
-                            onAdornmentAction={onAdornmentAction}
-                            className={DRAWER_OVERVIEW_LEFT_COLUMN_CLASS}
-                        />
-                    :   null}
+                    {visualConfigEnabled && zones.main.length > 0 ?
+                        <div className={DRAWER_OVERVIEW_MAIN_ZONE_FLOW_CLASS} data-lead-overview-slot="main_zone">
+                            <LayoutRuntimeSectionFlowView
+                                doc={doc}
+                                sections={zones.main}
+                                record={record}
+                                entityId={entityId}
+                                canMutate={canMutate}
+                                onAdornmentAction={onAdornmentAction}
+                                rowClassName="min-w-0 items-stretch"
+                                rowCellClassName="min-w-0 flex h-full min-h-0 flex-col"
+                            />
+                        </div>
+                    :   <>
+                            {showHousehold && slots.household ?
+                                <CompositionSlot
+                                    slotKey="household_contact"
+                                    sectionKeys={[slots.household.key]}
+                                    doc={doc}
+                                    record={record}
+                                    entityId={entityId}
+                                    canMutate={canMutate}
+                                    onAdornmentAction={onAdornmentAction}
+                                    className={DRAWER_OVERVIEW_LEFT_COLUMN_CLASS}
+                                />
+                            :   null}
 
-                    {showEnrollment && slots.enrollment ?
-                        <CompositionSlot
-                            slotKey="children_enrollment"
-                            sectionKeys={[slots.enrollment.key]}
-                            doc={doc}
-                            record={record}
-                            entityId={entityId}
-                            canMutate={canMutate}
-                            onAdornmentAction={onAdornmentAction}
-                            className={DRAWER_OVERVIEW_MAIN_COLUMN_CLASS}
-                        />
-                    :   null}
+                            {showEnrollment && slots.enrollment ?
+                                <CompositionSlot
+                                    slotKey="children_enrollment"
+                                    sectionKeys={[slots.enrollment.key]}
+                                    doc={doc}
+                                    record={record}
+                                    entityId={entityId}
+                                    canMutate={canMutate}
+                                    onAdornmentAction={onAdornmentAction}
+                                    className={DRAWER_OVERVIEW_MAIN_COLUMN_CLASS}
+                                />
+                            :   null}
+                        </>
+                    }
 
                     {rightRailSections.length > 0 ?
                         <div

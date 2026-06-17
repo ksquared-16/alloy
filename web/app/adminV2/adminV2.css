@@ -612,6 +612,13 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-dr
     flex-direction: column;
   }
 
+  .adminv2-drawer-overview-main-zone-flow {
+    grid-column: span 9;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
   .adminv2-drawer-overview-col-rail {
     grid-column: span 3;
     min-width: 12rem;
