@@ -123,7 +123,7 @@ export default function PosHome({
                 <CtaButton icon={<Plus className="h-3.5 w-3.5" />} label="Create Packet" primary onClick={() => onNavigate("packets")} />
                 <CtaButton icon={<FolderUp className="h-3.5 w-3.5" />} label="Upload Document" onClick={() => onNavigate("documents")} />
                 <CtaButton icon={<ListChecks className="h-3.5 w-3.5" />} label="Open Processing Queue" onClick={() => onNavigate("processing")} />
-                <CtaButton icon={<Layers className="h-3.5 w-3.5" />} label="Manage Sources" onClick={() => onNavigate("sources")} />
+                <CtaButton icon={<Layers className="h-3.5 w-3.5" />} label="Manage Sources" onClick={() => onNavigate("forms")} />
             </div>
 
             {error ? (
@@ -224,7 +224,7 @@ export default function PosHome({
             <section className="mt-5">
                 <SectionTitle>How it fits together</SectionTitle>
                 <div className="grid gap-2 sm:grid-cols-3">
-                    <FitCard icon={<Layers className="h-4 w-4" />} title="Sources" body="Forms, packets, documents and more feed Alloy." onClick={() => onNavigate("sources")} />
+                    <FitCard icon={<Layers className="h-4 w-4" />} title="Sources" body="Forms, packets, documents and more feed Alloy." onClick={() => onNavigate("forms")} />
                     <FitCard icon={<Inbox className="h-4 w-4" />} title="Processing" body="Alloy proposes meaning + action; you approve." onClick={() => onNavigate("processing")} />
                     <FitCard icon={<FileText className="h-4 w-4" />} title="Packets" body="One guided parent journey, many forms behind it." onClick={() => onNavigate("packets")} />
                 </div>
