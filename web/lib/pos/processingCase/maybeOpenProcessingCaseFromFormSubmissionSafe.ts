@@ -35,21 +35,42 @@ export async function maybeOpenProcessingCaseFromFormSubmissionSafe(
     }
 ): Promise<void> {
     try {
-        if (!args.formDefinitionId) return;
+        // [POS_FORM_SUBMIT_TRACE] TEMPORARY diagnostic — remove after root-causing the missing case.
+        if (!args.formDefinitionId) {
+            console.log("[POS_FORM_SUBMIT_TRACE] producer: no formDefinitionId — skip", {
+                submissionId: args.submissionId,
+                orgId: args.orgId,
+            });
+            return;
+        }
         const { data: def } = await dbGetFormDefinition(supabase, args.orgId, args.formDefinitionId);
         const posConnected = shouldOpenProcessingCaseForSurface({
             definitionMetadata: (def as { metadata?: unknown } | null)?.metadata,
             versionMetadata: args.versionMetadata,
         });
+        console.log("[POS_FORM_SUBMIT_TRACE] producer: gate evaluated", {
+            submissionId: args.submissionId,
+            orgId: args.orgId,
+            formDefinitionId: args.formDefinitionId,
+            definitionLoaded: Boolean(def),
+            posConnected,
+        });
         if (!posConnected) return;
 
         const deps = makeProcessingCaseDbDeps(supabase);
-        await openProcessingCaseFromSource(deps, {
+        const result = await openProcessingCaseFromSource(deps, {
             orgId: args.orgId,
             sourceKind: "form_submission",
             sourceId: args.submissionId,
         });
+        console.log("[POS_FORM_SUBMIT_TRACE] producer: case opened", {
+            submissionId: args.submissionId,
+            processingCaseId: result.processingCaseId,
+            created: result.created,
+        });
     } catch (e) {
+        // [POS_FORM_SUBMIT_TRACE] surface the exact failure (do NOT lose the detail).
+        console.error("[POS_FORM_SUBMIT_TRACE] producer: FAILED", e instanceof Error ? e.message : e);
         console.warn(
             "[maybeOpenProcessingCaseFromFormSubmissionSafe]",
             e instanceof Error ? e.message : e

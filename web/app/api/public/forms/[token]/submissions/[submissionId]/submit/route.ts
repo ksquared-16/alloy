@@ -386,17 +386,23 @@ export async function POST(
     }
 
     // POS-FP5: best-effort, marker-gated. A POS-connected SINGLE form submitted through
-    // the public UI opens one Processing Case (the submission as primary source) — the
-    // same on-ramp the admin submit route uses. Packet steps are excluded here: packets
-    // open one case on completion (packet producer below). Idempotent at the producer
-    // (findCaseIdByPrimarySource + the unique primary-source index), so finalizing the
-    // same submission later via the admin endpoint will not create a duplicate. Never
-    // throws — submission must not fail if case creation fails. Legacy/unmarked forms no-op.
+    // the public UI opens one Processing Case (the submission as primary source). Packet
+    // steps are excluded (packets open one case on completion below). Never throws.
+    // [POS_FORM_SUBMIT_TRACE] TEMPORARY diagnostic — remove after root-causing the missing case.
+    const posTraceFormDefinitionId = String((submittedRow as { form_definition_id?: string }).form_definition_id ?? "");
+    console.log("[POS_FORM_SUBMIT_TRACE] public submit reached producer gate", {
+        route: "public/forms/[token]/submissions/[submissionId]/submit",
+        submissionId,
+        orgId: ctx.orgId,
+        formDefinitionId: posTraceFormDefinitionId,
+        isPacket: Boolean(ctx.packet),
+        willCallProducer: !ctx.packet,
+    });
     if (!ctx.packet) {
         await maybeOpenProcessingCaseFromFormSubmissionSafe(supabase, {
             orgId: ctx.orgId,
             submissionId,
-            formDefinitionId: String((submittedRow as { form_definition_id?: string }).form_definition_id ?? ""),
+            formDefinitionId: posTraceFormDefinitionId,
         });
     }
 

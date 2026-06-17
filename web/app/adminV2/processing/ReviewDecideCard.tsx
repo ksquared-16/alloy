@@ -104,7 +104,7 @@ function ReviewBody({ rec }: { rec: IntakeRecommendation }) {
         <div>
             {/* Recommendation headline + confidence */}
             <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                <span className="rounded-md bg-[#00A283] px-2 py-0.5 text-[11px] font-semibold text-white">
                     Alloy recommends: {action.label}
                 </span>
                 <span className={`rounded-full px-2 py-0.5 text-[10.5px] font-medium ${confCls}`}>

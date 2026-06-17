@@ -8,9 +8,9 @@
  * generates forms/documents, (eventually) PDFs + emails, updates records, and
  * opens Processing cases only for review/exceptions.
  *
- * Real links: packet definitions + session review reuse the existing
- * `/admin/forms/packet-definitions` and `/admin/forms/packets` surfaces. The
- * journey stepper below is an illustrative prototype of the parent experience.
+ * Packet definitions + session review are presented natively (prototype — no jump
+ * to the legacy /admin/forms app). The journey stepper below is an illustrative
+ * prototype of the parent experience.
  */
 
 import { Check, FileSignature, FileText, FolderUp, Send, User, Users } from "lucide-react";
@@ -35,7 +35,7 @@ const BEHIND_THE_SCENES = [
 
 export default function PosPacketsPanel() {
     return (
-        <div className="h-full overflow-y-auto bg-[#f7f6f3] p-4">
+        <div className="h-full overflow-y-auto bg-white p-4">
             <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                     <h3 className="text-sm font-semibold text-stone-900">Packets</h3>
@@ -43,12 +43,14 @@ export default function PosPacketsPanel() {
                         One guided journey, many forms behind it. A parent never sees “form after form.”
                     </p>
                 </div>
-                <a
-                    href="/admin/forms/packet-definitions"
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
+                <button
+                    type="button"
+                    disabled
+                    title="Prototype — native packet builder lands next"
+                    className="inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-lg bg-[#00A283]/60 px-3 py-2 text-xs font-semibold text-white"
                 >
-                    Create Packet ↗
-                </a>
+                    Create Packet
+                </button>
             </div>
 
             {/* Parent-facing journey (prototype illustration) */}
@@ -93,20 +95,20 @@ export default function PosPacketsPanel() {
             <section>
                 <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-stone-500">Manage</h4>
                 <div className="grid gap-2 sm:grid-cols-2">
-                    <a
-                        href="/admin/forms/packet-definitions"
-                        className="rounded-lg border border-stone-200 bg-white p-3 text-sm text-stone-700 hover:bg-stone-50"
-                    >
+                    <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm text-stone-700">
                         <span className="block font-medium text-stone-900">Packet definitions</span>
-                        <span className="mt-0.5 block text-[11px] text-stone-500">Build the ordered steps a packet contains ↗</span>
-                    </a>
-                    <a
-                        href="/admin/forms/packets"
-                        className="rounded-lg border border-stone-200 bg-white p-3 text-sm text-stone-700 hover:bg-stone-50"
-                    >
+                        <span className="mt-0.5 block text-[11px] text-stone-500">Build the ordered steps a packet contains</span>
+                        <span className="mt-1 inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-stone-400">
+                            Native builder — prototype
+                        </span>
+                    </div>
+                    <div className="rounded-lg border border-stone-200 bg-white p-3 text-sm text-stone-700">
                         <span className="block font-medium text-stone-900">Packet sessions</span>
-                        <span className="mt-0.5 block text-[11px] text-stone-500">Review submitted packets + approve outcomes ↗</span>
-                    </a>
+                        <span className="mt-0.5 block text-[11px] text-stone-500">Review submitted packets + approve outcomes</span>
+                        <span className="mt-1 inline-block rounded bg-stone-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-stone-400">
+                            Native review — prototype
+                        </span>
+                    </div>
                 </div>
             </section>
         </div>
