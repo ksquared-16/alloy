@@ -44,14 +44,18 @@ describe("opportunity drawer layout editor field catalog", () => {
 });
 
 describe("visual editor UX convergence wiring", () => {
-    it("canvas uses composition panel for inline section configuration", () => {
-        const canvas = readFileSync(
-            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas.tsx"),
+    it("studio shell uses inspector for section configuration", () => {
+        const editor = readFileSync(
+            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutVisualEditor.tsx"),
             "utf8",
         );
-        expect(canvas).toContain("OpportunityDrawerLayoutCompositionPanel");
-        const panel = readFileSync(resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutCompositionPanel.tsx"), "utf8");
-        expect(panel).toContain("visual-editor-composition-panel");
+        const inspector = readFileSync(
+            resolve(root, "components/adminV2/settings/LayoutBuilderInspectorPanel.tsx"),
+            "utf8",
+        );
+        expect(editor).toContain("LayoutBuilderInspectorPanel");
+        expect(inspector).toContain("visual-editor-composition-panel");
+        expect(inspector).toContain("visual-editor-section-title");
     });
 
     it("field picker is entity-first without refKey in operator UI", () => {
@@ -64,13 +68,14 @@ describe("visual editor UX convergence wiring", () => {
         expect(picker).not.toContain("{label} ({refKey})");
     });
 
-    it("main editor uses canvas and guidance panel instead of section sidebar editor", () => {
+    it("main editor uses palette, canvas, and inspector studio grid", () => {
         const editor = readFileSync(
             resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutVisualEditor.tsx"),
             "utf8",
         );
         expect(editor).toContain("OpportunityDrawerLayoutEditorCanvas");
-        expect(editor).toContain("visual-editor-guidance-panel");
+        expect(editor).toContain("LayoutBuilderPalettePanel");
+        expect(editor).toContain("LayoutBuilderInspectorPanel");
         expect(editor).not.toContain("Section editor");
     });
 });

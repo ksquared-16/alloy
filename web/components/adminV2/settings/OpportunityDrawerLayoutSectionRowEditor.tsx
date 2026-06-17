@@ -75,6 +75,12 @@ type Props = {
     applyDoc: (next: LayoutDoc) => void;
     layoutRecordId?: string | null;
     layoutVersion?: number | null;
+    /** When true, item settings render in the right inspector — not inline under rows. */
+    hideInlineItemSettings?: boolean;
+    /** When true, hide composition diagnostics footer. */
+    hideDiagnostics?: boolean;
+    /** Business-friendly row/column labels for operator-facing inspector. */
+    friendlyLabels?: boolean;
 };
 
 const ITEM_KIND_LABELS: Record<SectionCompositionItem["kind"], string> = {
@@ -97,6 +103,9 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
     applyDoc,
     layoutRecordId,
     layoutVersion,
+    hideInlineItemSettings = false,
+    hideDiagnostics = false,
+    friendlyLabels = false,
 }: Props) {
     const rows = useMemo(() => listSectionCompositionRows(doc, sectionKey), [doc, sectionKey]);
     const [pickerTarget, setPickerTarget] = useState<{ rowIndex: number; colIndex: number; kind: "field" | "widget" } | null>(null);
@@ -119,7 +128,9 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
     return (
         <div className="mt-4 space-y-3" data-testid="visual-editor-section-rows">
             <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Section layout</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                    {friendlyLabels ? "Layout" : "Section layout"}
+                </p>
                 <span className="flex gap-1">
                     {([1, 2, 3] as const).map((count) => (
                         <button
@@ -129,7 +140,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                             onClick={() => applyDoc(addSectionRow(doc, sectionKey, count))}
                             data-testid={`visual-editor-add-section-row-${count}`}
                         >
-                            + {count}-col row
+                            {friendlyLabels ? `+ Row · ${count} col` : `+ ${count}-col row`}
                         </button>
                     ))}
                 </span>
@@ -143,7 +154,9 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                 >
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <span className="text-[10px] font-medium text-alloy-midnight/55">
-                            Row {row.rowIndex + 1} · {row.columnCount} column{row.columnCount === 1 ? "" : "s"}
+                            {friendlyLabels ?
+                                `Section row ${row.rowIndex + 1} · ${row.columnCount} column${row.columnCount === 1 ? "" : "s"}`
+                            :   `Row ${row.rowIndex + 1} · ${row.columnCount} column${row.columnCount === 1 ? "" : "s"}`}
                         </span>
                         <span className="flex gap-1">
                             {([1, 2, 3] as const).map((count) => (
@@ -203,7 +216,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                 data-testid={`visual-editor-section-col-${row.rowIndex}-${col.colIndex}`}
                             >
                                 <p className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/35">
-                                    Column {col.colIndex + 1}
+                                    {friendlyLabels ? `Column ${col.colIndex + 1}` : `Column ${col.colIndex + 1}`}
                                 </p>
                                 <ul className="space-y-1">
                                     {col.items.map((entry) => (
@@ -356,9 +369,9 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                         ))}
                     </div>
 
-                    {selectedItem && row.columns.some((c) => c.items.some((it) => it.itemId === selectedItem.itemId)) ?
+                    {!hideInlineItemSettings && selectedItem && row.columns.some((c) => c.items.some((it) => it.itemId === selectedItem.itemId)) ?
                         <div className="mt-2 rounded-lg border border-alloy-blue/20 bg-alloy-blue/[0.03] p-2" data-testid="visual-editor-item-settings">
-                            <InlineItemSettings
+                            <LayoutBuilderItemInspector
                                 doc={doc}
                                 sectionKey={sectionKey}
                                 entry={selectedItem}
@@ -372,10 +385,12 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                     :   null}
                 </div>
             ))}
-            <OpportunityDrawerLayoutSectionCompositionDiagnostics
-                title="Editor preview composition"
-                diagnostic={previewDiagnostic}
-            />
+            {!hideDiagnostics ?
+                <OpportunityDrawerLayoutSectionCompositionDiagnostics
+                    title="Editor preview composition"
+                    diagnostic={previewDiagnostic}
+                />
+            :   null}
         </div>
     );
 }
@@ -477,7 +492,7 @@ function SectionItemRow({
     );
 }
 
-function InlineItemSettings({
+export function LayoutBuilderItemInspector({
     doc,
     sectionKey,
     entry,

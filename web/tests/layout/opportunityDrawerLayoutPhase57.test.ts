@@ -170,7 +170,7 @@ describe("inspect mode", () => {
         expect(byItemId.size + byRefKey.size).toBeGreaterThan(0);
     });
 
-    it("wires inspect toggle and trace provider in editor shell", () => {
+    it("wires build/preview toggle and trace provider in editor shell", () => {
         const editor = readFileSync(
             resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutVisualEditor.tsx"),
             "utf8",
@@ -179,7 +179,7 @@ describe("inspect mode", () => {
             resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas.tsx"),
             "utf8",
         );
-        expect(editor).toContain("visual-editor-inspect-mode");
+        expect(editor).toContain("visual-editor-build-preview-toggle");
         expect(canvas).toContain("LayoutEditorRuntimeTraceProvider");
     });
 });

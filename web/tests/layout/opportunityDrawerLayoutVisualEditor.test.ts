@@ -234,15 +234,22 @@ describe("layouts settings visual editor wiring", () => {
             resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas.tsx"),
             "utf8",
         );
+        const previewFrame = readFileSync(
+            resolve(root, "components/adminV2/settings/LayoutBuilderPreviewDrawerFrame.tsx"),
+            "utf8",
+        );
         expect(editor).toContain('data-testid="opportunity-drawer-visual-editor"');
-        expect(editor).toContain('slot="header"');
-        expect(editor).toContain("visual-editor-locked-shell-");
+        expect(previewFrame).toContain('slot="header"');
+        expect(previewFrame).toContain("visual-editor-locked-shell-");
         expect(canvas).toContain("visual-editor-zone-summary_strip");
         expect(canvas).toContain("visual-editor-zone-right_rail");
         expect(editor).toContain("visual-editor-advanced-builder-link");
         expect(editor).toContain("visual-editor-save-draft");
         expect(editor).toContain("visual-editor-publish");
-        expect(editor).toContain('data-visual-editor-locked="true"');
+        expect(editor).toContain("LayoutBuilderPalettePanel");
+        expect(editor).toContain("LayoutBuilderInspectorPanel");
+        expect(canvas).toContain("LayoutBuilderCanvasStartGuide");
+        expect(canvas).toContain("LayoutBuilderPreviewDrawerFrame");
         expect(canvas).toContain('data-visual-editor-editable="true"');
     });
 });

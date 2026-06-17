@@ -2,10 +2,17 @@
 
 /**
  * Visual layout editor — Opportunity Drawer.
- * Phase 5.5 — production-faithful composition with inline section editing.
+ * Phase 5.16 — POS-builder-style studio shell (palette · canvas · inspector).
  */
 
-import OpportunityDrawerLayoutEditorCanvas from "@/components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas";
+import OpportunityDrawerLayoutEditorCanvas, {
+    type LayoutBuilderEditorMode,
+    type LayoutBuilderQuickStartAction,
+} from "@/components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas";
+import LayoutBuilderInspectorPanel from "@/components/adminV2/settings/LayoutBuilderInspectorPanel";
+import LayoutBuilderPalettePanel, {
+    type LayoutBuilderStudioNotice,
+} from "@/components/adminV2/settings/LayoutBuilderPalettePanel";
 import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
@@ -22,29 +29,21 @@ import {
 } from "@/lib/layout/layoutEditorPublishWorkflow";
 import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import {
-    addRegisteredSection,
-    addCustomOpportunityDrawerSection,
-    addRelatedListOpportunityDrawerSection,
-    addWidgetOpportunityDrawerSection,
+    applyOpportunityDrawerStarterTemplate,
+    type OpportunityDrawerStarterTemplateKey,
+} from "@/lib/layout/layoutEditorOpportunityDrawerStarterTemplates";
+import { diffNewSectionKeys } from "@/lib/layout/layoutBuilderStudioUx";
+import {
     ensureOpportunityDrawerLayoutDocSaveReady,
     formatLayoutValidationErrors,
     isOpportunityDrawerLayoutDoc,
-    isSectionEditorHidden,
     layoutDocHasRepairableGeneratedKeys,
-    listMissingRegisteredSections,
-    OPPORTUNITY_DRAWER_LOCKED_SHELL_SLOTS,
     prepareOpportunityDrawerLayoutDocForEditor,
     repairOpportunityDrawerLayoutGeneratedKeys,
-    resolveOpportunityDrawerSectionZone,
     resolveVisualEditorActionState,
     validateOpportunityDrawerLayoutDoc,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
-import {
-    applyOpportunityDrawerStarterTemplate,
-    OPPORTUNITY_DRAWER_STARTER_TEMPLATES,
-    type OpportunityDrawerStarterTemplateKey,
-} from "@/lib/layout/layoutEditorOpportunityDrawerStarterTemplates";
-import type { OpportunityDrawerSectionKey } from "@/lib/layout/surfaceLayoutRegistry";
+import { opCaseFileCanvas } from "@/lib/operational/ui/operationalVisualTokens";
 import Link from "next/link";
 
 type Props = {
@@ -62,12 +61,11 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const [workingName, setWorkingName] = useState("");
     const [dirty, setDirty] = useState(false);
     const [busy, setBusy] = useState<"save" | "publish" | null>(null);
-    const [editingSectionKey, setEditingSectionKey] = useState<string | null>(null);
-    const [settingsSectionKey, setSettingsSectionKey] = useState<string | null>(null);
+    const [editorMode, setEditorMode] = useState<LayoutBuilderEditorMode>("build");
+    const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
     const [selectedFieldPath, setSelectedFieldPath] = useState<string | null>(null);
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
-    const [inspectMode, setInspectMode] = useState(false);
-    const [fieldAddError, setFieldAddError] = useState<string | null>(null);
+    const [studioNotice, setStudioNotice] = useState<LayoutBuilderStudioNotice | null>(null);
     const [forceAdvanced, setForceAdvanced] = useState(false);
     const [autoRepairNotice, setAutoRepairNotice] = useState<string | null>(null);
 
@@ -75,11 +73,6 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
 
     const validation = useMemo(
         () => (workingDoc ? validateOpportunityDrawerLayoutDoc(workingDoc) : { ok: true, errors: [], warnings: [] }),
-        [workingDoc],
-    );
-
-    const missingSections = useMemo(
-        () => (workingDoc ? listMissingRegisteredSections(workingDoc) : []),
         [workingDoc],
     );
 
@@ -109,8 +102,6 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
 
     const fieldPickerGroups = useMemo(() => buildOpportunityDrawerEditorFieldPickerGroups(), []);
 
-    const settingsSection = workingDoc?.sections.find((s) => s.key === settingsSectionKey) ?? null;
-
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -135,11 +126,10 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             } else {
                 setDirty(false);
             }
-            setEditingSectionKey(null);
-            setSettingsSectionKey(null);
+            setSelectedSectionId(null);
             setSelectedFieldPath(null);
             setSelectedBlockId(null);
-            setInspectMode(false);
+            setEditorMode("build");
         } catch (e) {
             setError((e as Error).message);
         } finally {
@@ -154,8 +144,53 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const applyDoc = useCallback((next: LayoutDoc) => {
         setWorkingDoc(next);
         setDirty(true);
-        setFieldAddError(null);
     }, []);
+
+    const scrollToSection = useCallback((sectionKey: string) => {
+        requestAnimationFrame(() => {
+            document
+                .querySelector(`[data-testid="visual-editor-section-${sectionKey}"]`)
+                ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+    }, []);
+
+    const handleQuickStart = useCallback(
+        (action: LayoutBuilderQuickStartAction) => {
+            if (!workingDoc) return;
+            const templateKey: OpportunityDrawerStarterTemplateKey =
+                action === "template" ? "minimal_lead_overview"
+                : action === "kpi_strip" ? "kpi_strip"
+                : action === "contact_summary" ? "contact_summary"
+                : "children_enrollment_list";
+            const next = applyOpportunityDrawerStarterTemplate(workingDoc, templateKey);
+            if (next === workingDoc) {
+                setStudioNotice({
+                    tone: "info",
+                    message: "That pattern is already on this layout — select it on the canvas to edit.",
+                });
+                return;
+            }
+            const added = diffNewSectionKeys(workingDoc, next);
+            applyDoc(next);
+            const focusKey = added[added.length - 1] ?? next.sections[next.sections.length - 1]?.key;
+            if (focusKey) {
+                setSelectedSectionId(focusKey);
+                scrollToSection(focusKey);
+            }
+            setStudioNotice({ tone: "success", message: "Added starter content — customize it in Properties." });
+        },
+        [workingDoc, applyDoc, scrollToSection],
+    );
+
+    const clearItemSelection = useCallback(() => {
+        setSelectedFieldPath(null);
+        setSelectedBlockId(null);
+    }, []);
+
+    const clearAllSelection = useCallback(() => {
+        setSelectedSectionId(null);
+        clearItemSelection();
+    }, [clearItemSelection]);
 
     const saveDraft = useCallback(async () => {
         if (!workingDoc || !record) return;
@@ -256,13 +291,15 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         );
     }
 
+    const isBuild = editorMode === "build";
+
     return (
         <div className="space-y-4" data-testid="opportunity-drawer-visual-editor">
             <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-alloy-forge/12 bg-white/95 p-4 shadow-sm">
                 <div>
                     <h2 className="text-sm font-semibold text-alloy-midnight">Opportunity Drawer layout</h2>
                     <p className="mt-0.5 text-xs text-alloy-midnight/50">
-                        Edit the drawer directly — hover a section for controls, or open Edit for inline changes.
+                        Design the drawer like your operators see it — build on the canvas, preview the live experience.
                     </p>
                     {isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient() ?
                         <p
@@ -297,18 +334,34 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        type="button"
-                        onClick={() => setInspectMode((v) => !v)}
-                        className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
-                            inspectMode ?
-                                "border-alloy-pine/40 bg-alloy-pine/[0.08] text-alloy-pine"
-                            :   "border-alloy-forge/20 text-alloy-midnight/65"
-                        }`}
-                        data-testid="visual-editor-inspect-mode"
+                    <div
+                        className="inline-flex rounded-lg border border-alloy-forge/20 bg-alloy-stone/20 p-0.5"
+                        data-testid="visual-editor-build-preview-toggle"
                     >
-                        {inspectMode ? "Inspect on" : "Inspect"}
-                    </button>
+                        <button
+                            type="button"
+                            onClick={() => setEditorMode("build")}
+                            className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                                isBuild ? "bg-white text-alloy-midnight shadow-sm" : "text-alloy-midnight/55"
+                            }`}
+                            data-testid="visual-editor-mode-build"
+                        >
+                            Build
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setEditorMode("preview");
+                                clearItemSelection();
+                            }}
+                            className={`rounded-md px-3 py-1.5 text-xs font-semibold ${
+                                !isBuild ? "bg-white text-alloy-midnight shadow-sm" : "text-alloy-midnight/55"
+                            }`}
+                            data-testid="visual-editor-mode-preview"
+                        >
+                            Preview
+                        </button>
+                    </div>
                     <button
                         type="button"
                         onClick={() => void saveDraft()}
@@ -329,11 +382,18 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         {busy === "publish" ? "Publishing…" : "Publish"}
                     </button>
                     <Link
+                        href={basePath}
+                        className="text-xs font-medium text-alloy-midnight/55 underline hover:text-alloy-pine"
+                        data-testid="visual-editor-gallery-rollback-link"
+                    >
+                        Version history
+                    </Link>
+                    <Link
                         href={advancedHref}
                         className="text-xs font-medium text-alloy-midnight/55 underline hover:text-alloy-pine"
                         data-testid="visual-editor-advanced-builder-link"
                     >
-                        Switch to advanced builder
+                        Advanced
                     </Link>
                 </div>
             </div>
@@ -379,179 +439,81 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                 </div>
             :   null}
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_280px]">
-                <div
-                    className={`${DRAWER_OVERVIEW_CONTAINER} overflow-hidden rounded-xl border border-alloy-forge/15 bg-[#F6F8FC] shadow-sm`}
-                    data-testid="visual-editor-drawer-frame"
-                >
+            <div
+                className={`grid gap-4 ${isBuild ? "xl:grid-cols-[260px_minmax(0,1fr)_300px]" : "grid-cols-1"}`}
+                data-testid="layout-builder-studio-grid"
+            >
+                {isBuild && studioNotice ?
                     <div
-                        className="mb-2 flex items-center justify-between gap-2 rounded-md border border-dashed border-alloy-forge/20 bg-white/60 px-2 py-1.5"
-                        data-testid="visual-editor-shell-preview-indicator"
+                        className={`col-span-full rounded-lg border px-3 py-2 text-xs ${
+                            studioNotice.tone === "error" ? "border-red-200 bg-red-50 text-red-800"
+                            : studioNotice.tone === "success" ? "border-alloy-pine/25 bg-alloy-pine/[0.08] text-alloy-midnight"
+                            : "border-alloy-blue/20 bg-alloy-blue/[0.06] text-alloy-midnight/75"
+                        }`}
+                        data-testid="layout-builder-studio-notice"
                     >
-                        <span className="text-[10px] text-alloy-midnight/45">
-                            Drawer shell (header · lifecycle · tabs · footer) — preview only, not editable here
-                        </span>
+                        {studioNotice.message}
                     </div>
+                :   null}
+                {isBuild ?
+                    <LayoutBuilderPalettePanel
+                        doc={workingDoc}
+                        selectedSectionId={selectedSectionId}
+                        fieldPickerGroups={fieldPickerGroups}
+                        validationOk={validation.ok}
+                        studioNotice={studioNotice}
+                        applyDoc={applyDoc}
+                        onSelectSection={setSelectedSectionId}
+                        onSelectItem={(sectionKey, itemId) => {
+                            setSelectedSectionId(sectionKey);
+                            setSelectedFieldPath(`field:${sectionKey}:${itemId}`);
+                            setSelectedBlockId(null);
+                        }}
+                        onStudioNotice={setStudioNotice}
+                        onScrollToSection={scrollToSection}
+                    />
+                :   null}
 
-                    <div className="p-1">
-                        <OpportunityDrawerLayoutEditorCanvas
-                            doc={workingDoc}
-                            editingSectionKey={editingSectionKey}
-                            settingsSectionKey={settingsSectionKey}
-                            selectedFieldPath={selectedFieldPath}
-                            selectedBlockId={selectedBlockId}
-                            inspectMode={inspectMode}
-                            fieldPickerGroups={fieldPickerGroups}
-                            validationOk={validation.ok}
-                            fieldAddError={fieldAddError}
-                            onEditSection={(key) => {
-                                setEditingSectionKey(key);
-                                if (key) {
-                                    setSelectedFieldPath(null);
-                                    setSelectedBlockId(null);
-                                }
-                            }}
-                            onSectionSettings={setSettingsSectionKey}
-                            onSelectFieldPath={setSelectedFieldPath}
-                            onSelectBlockId={setSelectedBlockId}
-                            onFieldAddError={setFieldAddError}
-                            applyDoc={applyDoc}
-                            layoutRecordId={record?.id ?? null}
-                            layoutVersion={record?.version ?? null}
-                        />
-                    </div>
+                <div className={`relative min-w-0 rounded-xl ${isBuild ? "" : ""} ${opCaseFileCanvas}`} data-testid="layout-builder-canvas-host">
+                    <OpportunityDrawerLayoutEditorCanvas
+                        doc={workingDoc}
+                        editorMode={editorMode}
+                        selectedSectionId={selectedSectionId}
+                        selectedFieldPath={selectedFieldPath}
+                        onSelectSection={setSelectedSectionId}
+                        onSelectFieldPath={setSelectedFieldPath}
+                        onSelectBlockId={setSelectedBlockId}
+                        applyDoc={applyDoc}
+                        onQuickStart={handleQuickStart}
+                    />
                 </div>
 
-                <aside className="rounded-xl border border-alloy-forge/12 bg-white/95 p-4 shadow-sm" data-testid="visual-editor-guidance-panel">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/55">Layout guidance</h3>
-                    <div className="mt-3 space-y-3 text-xs leading-relaxed text-alloy-midnight/60">
-                        <p>
-                            Hover a section and choose <strong>Configure</strong> to edit layout blocks, fields, and display
-                            behavior inline. Field settings expand directly under the selected field — no separate panel below.
-                        </p>
-                        <p>
-                            Use <strong>Inspect</strong> to hover or click preview elements and jump to their configuration.
-                            Preview updates instantly; save only persists changes.
-                        </p>
-                        <p>
-                            Choose an entity, then a field when adding data. Technical keys stay in advanced builder
-                            only.
-                        </p>
-                    </div>
-
-                    {settingsSection ?
-                        <div className="mt-5 border-t border-alloy-forge/10 pt-4" data-testid="visual-editor-section-settings-panel">
-                            <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                Section settings
-                            </p>
-                            <dl className="mt-2 space-y-2 text-xs">
-                                <div>
-                                    <dt className="text-alloy-midnight/45">Title</dt>
-                                    <dd className="font-medium text-alloy-midnight">{settingsSection.title}</dd>
-                                </div>
-                                <div>
-                                    <dt className="text-alloy-midnight/45">Zone</dt>
-                                    <dd className="font-medium text-alloy-midnight">
-                                        {resolveOpportunityDrawerSectionZone(settingsSection)}
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt className="text-alloy-midnight/45">Visibility</dt>
-                                    <dd className="font-medium text-alloy-midnight">
-                                        {isSectionEditorHidden(settingsSection) ? "Hidden after publish" : "Visible"}
-                                    </dd>
-                                </div>
-                                <div>
-                                    <dt className="text-alloy-midnight/45">Registry key</dt>
-                                    <dd className="font-mono text-[10px] text-alloy-midnight/55">{settingsSection.key}</dd>
-                                </div>
-                            </dl>
-                            <button
-                                type="button"
-                                className="mt-3 text-[11px] font-medium text-alloy-pine hover:underline"
-                                onClick={() => {
-                                    setEditingSectionKey(settingsSection.key);
-                                    setSettingsSectionKey(null);
-                                }}
-                            >
-                                Edit this section
-                            </button>
-                        </div>
-                    :   null}
-
-                    <div className="mt-5 border-t border-alloy-forge/10 pt-4">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Starter templates</p>
-                        <p className="mt-1 text-[10px] leading-relaxed text-alloy-midnight/45">
-                            Add production-ready section patterns using current builder primitives.
-                        </p>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                            {OPPORTUNITY_DRAWER_STARTER_TEMPLATES.map((template) => (
-                                <button
-                                    key={template.key}
-                                    type="button"
-                                    className="rounded border border-alloy-blue/25 bg-alloy-blue/[0.05] px-2 py-0.5 text-[10px] font-medium text-alloy-blue hover:border-alloy-blue/40"
-                                    title={template.description}
-                                    onClick={() =>
-                                        applyDoc(
-                                            applyOpportunityDrawerStarterTemplate(
-                                                workingDoc,
-                                                template.key as OpportunityDrawerStarterTemplateKey,
-                                            ),
-                                        )
-                                    }
-                                    data-testid={`visual-editor-starter-${template.key}`}
-                                >
-                                    + {template.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="mt-5 border-t border-alloy-forge/10 pt-4">
-                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Add section</p>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                            <button
-                                type="button"
-                                className="rounded border border-alloy-pine/30 bg-alloy-pine/[0.06] px-2 py-0.5 text-[10px] font-medium text-alloy-pine hover:border-alloy-pine/50"
-                                onClick={() => applyDoc(addCustomOpportunityDrawerSection(workingDoc, { zone: "main" }))}
-                                data-testid="visual-editor-add-custom-section"
-                            >
-                                + Custom section
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded border border-alloy-pine/30 bg-alloy-pine/[0.06] px-2 py-0.5 text-[10px] font-medium text-alloy-pine hover:border-alloy-pine/50"
-                                onClick={() => applyDoc(addWidgetOpportunityDrawerSection(workingDoc, { zone: "summary_strip" }))}
-                                data-testid="visual-editor-add-widget-section"
-                            >
-                                + Widget section
-                            </button>
-                            <button
-                                type="button"
-                                className="rounded border border-alloy-blue/30 bg-alloy-blue/[0.06] px-2 py-0.5 text-[10px] font-medium text-alloy-blue hover:border-alloy-blue/50"
-                                onClick={() => applyDoc(addRelatedListOpportunityDrawerSection(workingDoc, { zone: "main" }))}
-                                data-testid="visual-editor-add-related-list-section"
-                            >
-                                + Related list section
-                            </button>
-                            {missingSections.map((key) => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    className="rounded border border-alloy-forge/15 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:border-alloy-pine/30"
-                                    onClick={() => applyDoc(addRegisteredSection(workingDoc, key as OpportunityDrawerSectionKey))}
-                                    data-testid={`visual-editor-add-section-${key}`}
-                                >
-                                    + {key.replace(/_/g, " ")}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    <p className="mt-6 text-[10px] text-alloy-midnight/40">
-                        Locked: {OPPORTUNITY_DRAWER_LOCKED_SHELL_SLOTS.slice(0, 4).join(", ")}…
-                    </p>
-                </aside>
+                {isBuild ?
+                    <LayoutBuilderInspectorPanel
+                        doc={workingDoc}
+                        selectedSectionId={selectedSectionId}
+                        selectedFieldPath={selectedFieldPath}
+                        selectedBlockId={selectedBlockId}
+                        fieldPickerGroups={fieldPickerGroups}
+                        validationOk={validation.ok}
+                        applyDoc={applyDoc}
+                        onFieldAddError={(message) =>
+                            setStudioNotice(message ? { tone: "error", message } : null)
+                        }
+                        onClearSelection={clearAllSelection}
+                        onClearItemSelection={clearItemSelection}
+                        onSelectItem={(itemId) => {
+                            if (selectedSectionId && itemId) {
+                                setSelectedFieldPath(`field:${selectedSectionId}:${itemId}`);
+                                setSelectedBlockId(null);
+                            } else {
+                                clearItemSelection();
+                            }
+                        }}
+                        layoutRecordId={record.id}
+                        layoutVersion={record.version}
+                    />
+                :   null}
             </div>
 
             <button type="button" onClick={onBack} className="text-xs font-medium text-alloy-pine hover:underline">
@@ -560,5 +522,3 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         </div>
     );
 }
-
-const DRAWER_OVERVIEW_CONTAINER = "adminv2-drawer-overview-canvas max-w-none";

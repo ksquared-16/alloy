@@ -121,12 +121,12 @@ describe("sample preview data", () => {
 });
 
 describe("editor wiring", () => {
-    it("uses composition panel instead of standalone editing section panel", () => {
+    it("uses inspector panel for section configuration instead of inline canvas panel", () => {
         const canvas = readFileSync(resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas.tsx"), "utf8");
-        expect(canvas).toContain("OpportunityDrawerLayoutCompositionPanel");
+        expect(canvas).not.toContain("OpportunityDrawerLayoutCompositionPanel");
         expect(canvas).not.toContain("visual-editor-inline-section-editor");
-        const panel = readFileSync(resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutCompositionPanel.tsx"), "utf8");
-        expect(panel).toContain("visual-editor-composition-panel");
+        const inspector = readFileSync(resolve(root, "components/adminV2/settings/LayoutBuilderInspectorPanel.tsx"), "utf8");
+        expect(inspector).toContain("visual-editor-composition-panel");
     });
 
     it("exposes field settings component with registry-constrained controls", () => {
