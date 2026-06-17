@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
 import VmReadonlyStatusPill from "@/components/admin/vmDrawer/VmReadonlyStatusPill";
+import { StageTransitionReconciliationDialog } from "@/components/workIntent/StageTransitionReconciliationDialog";
+import type { StageTransitionReconciliationPreflight } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
+import { STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
 import type { StatusControlVm, StatusMenuItemVm, StatusOptionVm } from "@/lib/adminV2/viewModel/drawer/types";
 import type { PersonStatusProfileKey } from "@/lib/admin/person/personStatusApplicability";
 import {
@@ -136,6 +139,9 @@ export default function VmDrawerHeaderStatusSelect({
     const [statusKey, setStatusKey] = useState(currentStatusKey);
     const [saving, setSaving] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
+    const [reconciliationPreflight, setReconciliationPreflight] =
+        useState<StageTransitionReconciliationPreflight | null>(null);
+    const [pendingStatusKey, setPendingStatusKey] = useState<string | null>(null);
     const shellRef = useRef<HTMLDivElement>(null);
     const menuId = useMemo(
         () => `drawer-status-menu-${entityKind}-${entityId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
@@ -215,6 +221,43 @@ export default function VmDrawerHeaderStatusSelect({
         onDebugModeChange?.(showMenu ? "vm-dropdown" : "vm-readonly-pill");
     }, [onDebugModeChange, showMenu]);
 
+    const patchStatus = useCallback(
+        async (
+            nextKey: string,
+            reconciliation?: {
+                work: Array<{ work_id: string; resolution: "completed" | "skipped" | "carry_forward" }>;
+                attention?: "cleared" | "carry_forward";
+            },
+        ) => {
+            const path =
+                entityKind === "opportunities" ?
+                    `/api/admin/opportunities/${encodeURIComponent(entityId)}`
+                :   `/api/admin/persons/${encodeURIComponent(entityId)}`;
+            const res = await fetch(path, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    status_key: nextKey,
+                    ...(reconciliation ? { stage_transition_reconciliation: reconciliation } : {}),
+                }),
+            });
+            const json = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                stage_transition_reconciliation_preflight?: StageTransitionReconciliationPreflight;
+            };
+            if (res.status === 409 && json.error === STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR) {
+                return {
+                    ok: false as const,
+                    reconciliationRequired: true,
+                    preflight: json.stage_transition_reconciliation_preflight ?? null,
+                };
+            }
+            if (!res.ok) throw new Error(json.error ?? "Save failed");
+            return { ok: true as const };
+        },
+        [entityId, entityKind],
+    );
+
     const onStatusChange = useCallback(
         async (nextKey: string) => {
             if (!canMutate || !nextKey.trim() || nextKey === statusKey) {
@@ -225,22 +268,40 @@ export default function VmDrawerHeaderStatusSelect({
             setFetchError(null);
             setMenuOpen(false);
             try {
-                const path =
-                    entityKind === "opportunities" ?
-                        `/api/admin/opportunities/${encodeURIComponent(entityId)}`
-                    :   `/api/admin/persons/${encodeURIComponent(entityId)}`;
-                const res = await fetch(path, {
-                    method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ status_key: nextKey }),
-                });
-                const json = (await res.json().catch(() => ({}))) as { error?: string };
-                if (!res.ok) throw new Error(json.error ?? "Save failed");
+                if (entityKind === "opportunities") {
+                    const preflightRes = await fetch(
+                        `/api/admin/opportunities/${encodeURIComponent(entityId)}/stage-transition-reconciliation/preflight`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ next_status_key: nextKey }),
+                        },
+                    );
+                    const preflightJson = (await preflightRes.json().catch(() => ({}))) as {
+                        preflight?: StageTransitionReconciliationPreflight;
+                        error?: string;
+                    };
+                    if (!preflightRes.ok) throw new Error(preflightJson.error ?? "Preflight failed");
+                    if (preflightJson.preflight?.required) {
+                        setPendingStatusKey(nextKey);
+                        setReconciliationPreflight(preflightJson.preflight);
+                        setSaving(false);
+                        return;
+                    }
+                }
+
+                const result = await patchStatus(nextKey);
+                if (!result.ok && result.reconciliationRequired && result.preflight) {
+                    setPendingStatusKey(nextKey);
+                    setReconciliationPreflight(result.preflight);
+                    setSaving(false);
+                    return;
+                }
                 setStatusKey(nextKey);
                 window.dispatchEvent(
                     new CustomEvent("admin-entity-saved", {
                         detail: { type: entityKind, id: entityId },
-                    })
+                    }),
                 );
             } catch (e) {
                 setFetchError(e instanceof Error ? e.message : "Save failed");
@@ -248,7 +309,36 @@ export default function VmDrawerHeaderStatusSelect({
                 setSaving(false);
             }
         },
-        [canMutate, entityId, entityKind, statusKey]
+        [canMutate, entityId, entityKind, patchStatus, statusKey],
+    );
+
+    const onReconciliationContinue = useCallback(
+        async (payload: {
+            work: Array<{ work_id: string; resolution: "completed" | "skipped" | "carry_forward" }>;
+            attention?: "cleared" | "carry_forward";
+        }) => {
+            const nextKey = pendingStatusKey;
+            if (!nextKey) return;
+            setSaving(true);
+            setFetchError(null);
+            try {
+                const result = await patchStatus(nextKey, payload);
+                if (!result.ok) throw new Error("Reconciliation failed");
+                setStatusKey(nextKey);
+                setReconciliationPreflight(null);
+                setPendingStatusKey(null);
+                window.dispatchEvent(
+                    new CustomEvent("admin-entity-saved", {
+                        detail: { type: entityKind, id: entityId },
+                    }),
+                );
+            } catch (e) {
+                setFetchError(e instanceof Error ? e.message : "Save failed");
+            } finally {
+                setSaving(false);
+            }
+        },
+        [entityId, entityKind, patchStatus, pendingStatusKey],
     );
 
     const shellClass = "relative flex min-w-0 max-w-[11rem] shrink-0 flex-col gap-0.5 sm:max-w-[15rem]";
@@ -280,7 +370,20 @@ export default function VmDrawerHeaderStatusSelect({
     if (showMenu) {
         const key = statusKey.trim();
         return (
-            <div
+            <>
+                {entityKind === "opportunities" && reconciliationPreflight ?
+                    <StageTransitionReconciliationDialog
+                        open
+                        preflight={reconciliationPreflight}
+                        saving={saving}
+                        onCancel={() => {
+                            setReconciliationPreflight(null);
+                            setPendingStatusKey(null);
+                        }}
+                        onContinue={(payload) => void onReconciliationContinue(payload)}
+                    />
+                :   null}
+                <div
                 ref={shellRef}
                 className={shellClass}
                 data-vm-drawer-header-status="menu"
@@ -361,6 +464,7 @@ export default function VmDrawerHeaderStatusSelect({
                     </span>
                 :   null}
             </div>
+            </>
         );
     }
 

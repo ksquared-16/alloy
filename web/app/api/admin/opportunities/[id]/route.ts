@@ -29,6 +29,10 @@ import {
     fieldPolicyValidationResponse,
 } from "@/lib/fields/enforceDrawerFieldPoliciesOnPatch";
 import { opportunityBodyHasCustomFieldUpdates } from "@/lib/admin/drawer/opportunityDrawerFieldSave";
+import { applyStageTransitionReconciliation } from "@/lib/lifecycle/applyStageTransitionReconciliation";
+import { preflightStageTransitionReconciliation } from "@/lib/lifecycle/preflightStageTransitionReconciliation";
+import { STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
+import { validateStageTransitionReconciliationPayload } from "@/lib/lifecycle/validateStageTransitionReconciliationPayload";
 
 /**
  * PATCH allowlist intentionally excludes identity FKs (`primary_contact_id`, `primary_person_id`).
@@ -274,6 +278,48 @@ export async function PATCH(
                         },
                         { status: 400 }
                     );
+                }
+
+                const stageReconciliationPreflight = await preflightStageTransitionReconciliation({
+                    supabase,
+                    orgId,
+                    opportunityId: id,
+                    previousStatusKey: oldStatusKey,
+                    nextStatusKey: sk.trim(),
+                });
+
+                if (stageReconciliationPreflight.required) {
+                    const reconciliationRaw = body.stage_transition_reconciliation;
+                    if (reconciliationRaw == null) {
+                        return NextResponse.json(
+                            {
+                                error: STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR,
+                                stage_transition_reconciliation_preflight: stageReconciliationPreflight,
+                            },
+                            { status: 409 },
+                        );
+                    }
+                    const validated = validateStageTransitionReconciliationPayload(
+                        stageReconciliationPreflight,
+                        reconciliationRaw,
+                    );
+                    if (!validated.ok) {
+                        return NextResponse.json({ error: validated.message }, { status: 400 });
+                    }
+                    const applyResult = await applyStageTransitionReconciliation({
+                        supabase,
+                        orgId,
+                        opportunityId: id,
+                        actorUserId: auth.user.id,
+                        preflight: stageReconciliationPreflight,
+                        reconciliation: validated.reconciliation,
+                    });
+                    if (applyResult.errors.length) {
+                        return NextResponse.json(
+                            { error: applyResult.errors.join("; ") },
+                            { status: 400 },
+                        );
+                    }
                 }
             }
         }
