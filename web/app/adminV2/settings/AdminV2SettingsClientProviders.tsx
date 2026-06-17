@@ -4,7 +4,9 @@ import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
-import type { ReactNode } from "react";
+import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, type ReactNode } from "react";
 import SettingsHierarchyBreadcrumb from "./SettingsHierarchyBreadcrumb";
 import SettingsWorkspaceNav from "@/components/adminV2/settings/SettingsWorkspaceNav";
 
@@ -23,7 +25,7 @@ interface AdminV2SettingsClientProvidersProps {
  * Minimal client providers for Settings (control plane).
  * Matches workspace auth/labels bootstrap so reused /admin/system/* clients work unchanged.
  */
-export default function AdminV2SettingsClientProviders({
+function AdminV2SettingsClientProvidersInner({
     children,
     userEmail,
     userId,
@@ -32,6 +34,9 @@ export default function AdminV2SettingsClientProviders({
     roleKeys,
     initialEntityLabels,
 }: AdminV2SettingsClientProvidersProps) {
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const studioMode = isExperienceBuilderStudioActive(pathname, searchParams);
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
     const safeUserId = typeof userId === "string" ? userId : "";
     const safeOrgId = typeof orgId === "string" ? orgId : "";
@@ -41,6 +46,23 @@ export default function AdminV2SettingsClientProviders({
     const labels: EntityLabelsMap | undefined = initialEntityLabels
         ? (initialEntityLabels as EntityLabelsMap)
         : undefined;
+
+    if (studioMode) {
+        return (
+            <AdminAuthProvider userEmail={safeEmail} userId={safeUserId} orgId={safeOrgId} role={safeRole} roleKeys={safeRoleKeys}>
+                <EntityLabelsProvider initialLabels={labels}>
+                    <div
+                        className="fixed inset-0 z-[120] flex min-h-0 min-w-0 flex-col overflow-hidden bg-[#EEF2F8]"
+                        data-testid="experience-builder-studio-shell"
+                        data-experience-builder-studio="true"
+                    >
+                        {children}
+                    </div>
+                    <AdminEntityDrawer />
+                </EntityLabelsProvider>
+            </AdminAuthProvider>
+        );
+    }
 
     return (
         <AdminAuthProvider userEmail={safeEmail} userId={safeUserId} orgId={safeOrgId} role={safeRole} roleKeys={safeRoleKeys}>
@@ -61,5 +83,13 @@ export default function AdminV2SettingsClientProviders({
                 <AdminEntityDrawer />
             </EntityLabelsProvider>
         </AdminAuthProvider>
+    );
+}
+
+export default function AdminV2SettingsClientProviders(props: AdminV2SettingsClientProvidersProps) {
+    return (
+        <Suspense fallback={<div className="flex min-h-0 flex-1 items-center justify-center text-sm text-alloy-midnight/55">Loading settings…</div>}>
+            <AdminV2SettingsClientProvidersInner {...props} />
+        </Suspense>
     );
 }

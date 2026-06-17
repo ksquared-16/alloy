@@ -6,6 +6,7 @@ import {
     segmentSectionsForRowLayout,
     sectionRowGroupGridStyle,
 } from "@/lib/layout/layoutEditorSectionLayout";
+import { cardWidthStackStyle } from "@/lib/layout/layoutBuilderCardWidth";
 
 type Props = {
     sections: LayoutSection[];
@@ -29,8 +30,15 @@ export default function LayoutEditorSectionFlowView({
         <>
             {segments.map((segment) => {
                 if (segment.kind === "stack") {
+                    const widthStyle = cardWidthStackStyle(segment.section);
                     return (
-                        <div key={segment.section.key} className={stackClassName} data-layout-section-segment="stack">
+                        <div
+                            key={segment.section.key}
+                            className={stackClassName}
+                            style={widthStyle}
+                            data-layout-section-segment="stack"
+                            data-layout-card-width-span={widthStyle ? String(segment.section.metadata?.layoutEditorSectionRowSpan) : undefined}
+                        >
                             {renderSection(segment.section)}
                         </div>
                     );

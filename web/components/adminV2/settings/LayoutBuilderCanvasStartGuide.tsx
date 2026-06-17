@@ -9,25 +9,25 @@ type Props = {
 const QUICK_STARTS: { action: QuickStartAction; label: string; description: string; testId: string }[] = [
     {
         action: "template",
-        label: "Start with a template",
-        description: "Add a production-ready drawer section pattern.",
+        label: "Starter layout",
+        description: "A balanced default drawer to customize.",
         testId: "layout-builder-start-template",
     },
     {
         action: "kpi_strip",
-        label: "Add a KPI strip",
-        description: "Tour summary, follow-ups, and enrollment highlights.",
+        label: "KPI tiles row",
+        description: "Tour, follow-ups, and enrollment highlights.",
         testId: "layout-builder-start-kpi",
     },
     {
         action: "contact_summary",
-        label: "Add a contact section",
+        label: "Contact card",
         description: "Household and primary contact fields.",
         testId: "layout-builder-start-contact",
     },
     {
         action: "children_list",
-        label: "Add a children list",
+        label: "Children list",
         description: "Enrollment rows with child details.",
         testId: "layout-builder-start-children",
     },
@@ -40,10 +40,9 @@ export default function LayoutBuilderCanvasStartGuide({ onQuickStart }: Props) {
             data-testid="layout-builder-canvas-start-guide"
         >
             <div className="pointer-events-auto w-full max-w-lg rounded-xl border border-alloy-forge/10 bg-white/95 p-4 shadow-lg backdrop-blur-sm">
-                <h4 className="text-sm font-semibold text-alloy-midnight">Design your opportunity drawer</h4>
+                <h4 className="text-sm font-semibold text-alloy-midnight">Start building your drawer</h4>
                 <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/55">
-                    Pick a starting point below, or use the palette on the left. Click any card on the canvas to edit it in
-                    Properties.
+                    Click <strong>+ Add card</strong> on the left, or pick a quick start below. Click anything on the canvas to edit it.
                 </p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     {QUICK_STARTS.map((item) => (

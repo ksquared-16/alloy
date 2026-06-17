@@ -9,7 +9,7 @@ import { prefetchWorkspaceNavTree } from "@/lib/adminV2/navigation/workspaceNavT
 import { scheduleInboxWarmLoad } from "@/lib/adminV2/inboxWarmLoadCache";
 import { scheduleCommandCenterPrefetch } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 const CHAMBER_FRAME = `inset 0 0 0 1px ${derived.adminV2BoundaryAmberInset}`;
@@ -44,6 +44,7 @@ import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
 import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
+import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
 
 /**
  * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
@@ -88,12 +89,14 @@ const workspaceContentAmbientStyle: CSSProperties = DEBUG_EXAGGERATE_WORKSPACE_A
   ? workspaceContentAmbientStyleDebug
   : workspaceContentAmbientStyleProduction;
 
-export default function AdminV2Shell({
+function AdminV2ShellInner({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const experienceBuilderStudio = isExperienceBuilderStudioActive(pathname, searchParams);
   const isWorkspaceV2Route = isCanonicalWorkspacePath(pathname);
   const isAiActivityRoute = isCanonicalAiActivityPath(pathname);
   const isSettingsRoute = isCanonicalSettingsPath(pathname);
@@ -143,6 +146,30 @@ export default function AdminV2Shell({
   const showRecordsExpandable = zoomLevel === "department" && selectedDepartmentKey != null;
   useAdminV2WorkspaceShellDocumentFlag();
   useWorkspaceCommandRailDrawerOffset(pathname);
+
+  if (experienceBuilderStudio) {
+    return (
+      <GlobalAssistantProvider>
+        <CommandRailBosMount>
+          <WorkspaceCommandRailRegistryProvider>
+            <DrawerCommandRailActionsProvider>
+              <BosDrawerGeometryDiagnostics />
+              <AskBosHandoffListener />
+              <WorkspaceSiteFilterProvider>
+                <div
+                  className="flex h-screen w-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#EEF2F8]"
+                  data-adminv2-app-shell="experience-builder-studio"
+                  data-experience-builder-studio="true"
+                >
+                  <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
+                </div>
+              </WorkspaceSiteFilterProvider>
+            </DrawerCommandRailActionsProvider>
+          </WorkspaceCommandRailRegistryProvider>
+        </CommandRailBosMount>
+      </GlobalAssistantProvider>
+    );
+  }
 
   if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
     return (
@@ -278,5 +305,13 @@ export default function AdminV2Shell({
       </div>
     </div>
     </GlobalAssistantProvider>
+  );
+}
+
+export default function AdminV2Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-alloy-midnight/55">Loading…</div>}>
+      <AdminV2ShellInner>{children}</AdminV2ShellInner>
+    </Suspense>
   );
 }

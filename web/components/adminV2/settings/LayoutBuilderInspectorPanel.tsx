@@ -17,7 +17,6 @@ import {
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import {
     applySectionRowLayout,
-    LAYOUT_EDITOR_SECTION_TYPE_LABELS,
     LAYOUT_EDITOR_SECTION_TYPES,
     readSectionType,
     SECTION_ROW_WIDTH_PRESET_KEYS,
@@ -26,7 +25,15 @@ import {
     type LayoutEditorSectionType,
     type SectionRowWidthPresetKey,
 } from "@/lib/layout/layoutEditorSectionLayout";
-import { listSectionCompositionRows } from "@/lib/layout/layoutEditorSectionComposition";
+import {
+    CARD_WIDTH_FRACTION_KEYS,
+    CARD_WIDTH_FRACTIONS,
+    readCardWidthFraction,
+    setCardWidthFraction,
+    type CardWidthFractionKey,
+} from "@/lib/layout/layoutBuilderCardWidth";
+import { EXPERIENCE_BUILDER_CARD_TYPE_LABELS } from "@/lib/layout/layoutBuilderCardAuthoring";
+import { listSectionCompositionRows, removeSectionItem } from "@/lib/layout/layoutEditorSectionComposition";
 import { sectionZoneLabel } from "@/lib/layout/layoutBuilderStudioUx";
 import { sectionIsWidgetStrip, WIDGET_STRIP_WIDTH_PRESETS } from "@/lib/layout/layoutBuilderWidgetStrip";
 import { setRowColumnCount } from "@/lib/layout/builderOps";
@@ -125,7 +132,7 @@ export default function LayoutBuilderInspectorPanel({
                     <p className="mt-1 truncate text-sm font-semibold text-alloy-midnight" data-testid="layout-builder-inspector-selection-title">
                         {selectionTitle}
                     </p>
-                :   <p className={opSectionSupport}>Select a card, field, or widget on the canvas.</p>}
+                :   <p className={opSectionSupport}>Click a card, field, or tile on the canvas.</p>}
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3">
@@ -142,9 +149,9 @@ export default function LayoutBuilderInspectorPanel({
                 : selectedItem ?
                     <div className="rounded-xl border border-alloy-forge/10 bg-alloy-stone/[0.02] p-3" data-testid="visual-editor-item-settings">
                         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                            {selectedItem.kind === "widget" ? "Widget settings"
+                            {selectedItem.kind === "widget" ? "Tile settings"
                             : selectedItem.kind === "field" ? "Field settings"
-                            : "Component settings"}
+                            : "Item settings"}
                         </p>
                         <p className="mb-3 text-[10px] text-alloy-midnight/45">Changes preview instantly. Publish to update the live drawer.</p>
                         <LayoutBuilderItemInspector
@@ -157,13 +164,24 @@ export default function LayoutBuilderInspectorPanel({
                             onFieldAddError={onFieldAddError}
                             onClose={onClearItemSelection}
                         />
+                        <button
+                            type="button"
+                            className="mt-3 w-full rounded-lg border border-red-200/80 bg-red-50/80 px-3 py-2 text-left text-[11px] font-semibold text-red-700 hover:bg-red-100/80"
+                            onClick={() => {
+                                applyDoc(removeSectionItem(doc, section.key, selectedItem.itemId));
+                                onClearItemSelection();
+                            }}
+                            data-testid="layout-builder-inspector-delete-item"
+                        >
+                            Delete
+                        </button>
                     </div>
                 :   <div className="space-y-4" data-testid="visual-editor-section-settings-panel">
                         <p className="text-[10px] text-alloy-midnight/45">
                             In <strong>{sectionZoneLabel(doc, section.key)}</strong> · live after publish
                         </p>
 
-                        <InspectorField label="Card title" helper="What operators see at the top of this drawer card.">
+                        <InspectorField label="Card title" helper="Shown at the top of this card in the drawer.">
                             <input
                                 type="text"
                                 value={section.title}
@@ -173,7 +191,24 @@ export default function LayoutBuilderInspectorPanel({
                             />
                         </InspectorField>
 
-                        <InspectorField label="Card type" helper="How this card behaves in the drawer.">
+                        <InspectorField label="Width" helper="How wide this card appears on the canvas.">
+                            <select
+                                value={readCardWidthFraction(section)}
+                                onChange={(e) =>
+                                    applyDoc(setCardWidthFraction(doc, section.key, e.target.value as CardWidthFractionKey))
+                                }
+                                className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                data-testid="visual-editor-section-row-layout"
+                            >
+                                {CARD_WIDTH_FRACTION_KEYS.map((key) => (
+                                    <option key={key} value={key}>
+                                        {CARD_WIDTH_FRACTIONS[key].label}
+                                    </option>
+                                ))}
+                            </select>
+                        </InspectorField>
+
+                        <InspectorField label="Card type" helper="What this card is for.">
                             <select
                                 value={sectionType ?? "content"}
                                 onChange={(e) =>
@@ -184,14 +219,16 @@ export default function LayoutBuilderInspectorPanel({
                             >
                                 {LAYOUT_EDITOR_SECTION_TYPES.map((type) => (
                                     <option key={type} value={type}>
-                                        {LAYOUT_EDITOR_SECTION_TYPE_LABELS[type]}
+                                        {type === "content" ? EXPERIENCE_BUILDER_CARD_TYPE_LABELS.fields
+                                        : type === "widget" ? EXPERIENCE_BUILDER_CARD_TYPE_LABELS.widget
+                                        : EXPERIENCE_BUILDER_CARD_TYPE_LABELS.related_list}
                                     </option>
                                 ))}
                             </select>
                         </InspectorField>
 
                         {widgetStrip ?
-                            <InspectorField label="Widget strip layout" helper="Equal-width KPI widgets across the strip.">
+                            <InspectorField label="Tile row layout" helper="When multiple KPI tiles share one card row.">
                                 <select
                                     defaultValue={String(WIDGET_STRIP_WIDTH_PRESETS.find((p) => p.count === (section?.rows[0]?.columns.length ?? 4))?.count ?? 4)}
                                     onChange={(e) => {
@@ -213,24 +250,26 @@ export default function LayoutBuilderInspectorPanel({
                             </InspectorField>
                         :   null}
 
-                        <InspectorField label="Width" helper="How much horizontal space this card shares with neighbors.">
-                            <select
-                                defaultValue="full_width"
-                                onChange={(e) =>
-                                    applyDoc(
-                                        applySectionRowLayout(doc, section.key, e.target.value as SectionRowWidthPresetKey),
-                                    )
-                                }
-                                className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
-                                data-testid="visual-editor-section-row-layout"
-                            >
-                                {SECTION_ROW_WIDTH_PRESET_KEYS.map((key) => (
-                                    <option key={key} value={key}>
-                                        {SECTION_ROW_WIDTH_PRESETS[key].label}
-                                    </option>
-                                ))}
-                            </select>
-                        </InspectorField>
+                        {widgetStrip ?
+                            <InspectorField label="Side-by-side cards" helper="Advanced: split this row with neighboring cards.">
+                                <select
+                                    defaultValue="full_width"
+                                    onChange={(e) =>
+                                        applyDoc(
+                                            applySectionRowLayout(doc, section.key, e.target.value as SectionRowWidthPresetKey),
+                                        )
+                                    }
+                                    className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                    data-testid="visual-editor-section-row-group-layout"
+                                >
+                                    {SECTION_ROW_WIDTH_PRESET_KEYS.map((key) => (
+                                        <option key={key} value={key}>
+                                            {SECTION_ROW_WIDTH_PRESETS[key].label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </InspectorField>
+                        :   null}
 
                         <label className="flex items-start gap-2.5 rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5 text-xs text-alloy-midnight/70">
                             <input
@@ -304,11 +343,11 @@ export default function LayoutBuilderInspectorPanel({
                                 onClick={() => setShowStructure((v) => !v)}
                                 data-testid="layout-builder-inspector-structure-toggle"
                             >
-                                Layout
+                                Layout inside this card
                                 <span className="text-alloy-midnight/35">{showStructure ? "−" : "+"}</span>
                             </button>
                             <p className="mt-0.5 px-1 text-[10px] text-alloy-midnight/40">
-                                Adjust rows and columns inside this card.
+                                Add, reorder, or remove fields inside this card.
                             </p>
                             {showStructure ?
                                 <div className="mt-2 rounded-lg border border-alloy-forge/10 bg-white p-2" data-testid="visual-editor-composition-panel">

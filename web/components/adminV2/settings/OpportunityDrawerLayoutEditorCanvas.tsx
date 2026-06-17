@@ -452,7 +452,7 @@ function CompositionGrid({
                 <div
                     data-visual-editor-zone="summary_strip"
                     data-testid="visual-editor-zone-summary_strip"
-                    className={DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS}
+                    className={`${DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS} flex flex-wrap items-stretch gap-2`}
                 >
                     <LayoutEditorSectionFlowView
                         sections={summarySections}

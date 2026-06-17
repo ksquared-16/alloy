@@ -29,9 +29,15 @@ describe("layoutBuilderStudioUx", () => {
         expect(result.reason).toBeUndefined();
     });
 
-    it("resolvePaletteTargetSectionId falls back to KPI strip for widgets", () => {
+    it("resolvePaletteTargetSectionId does not auto-target KPI strip for widgets", () => {
         const doc = buildLeadDrawerDefaultDoc();
-        const result = resolvePaletteTargetSectionId(doc, "lead_source", "widget");
+        const result = resolvePaletteTargetSectionId(doc, null, "widget");
+        expect(result.sectionId).toBeNull();
+    });
+
+    it("resolvePaletteTargetSectionId uses selected widget card when adding widgets", () => {
+        const doc = buildLeadDrawerDefaultDoc();
+        const result = resolvePaletteTargetSectionId(doc, "lead_summary", "widget");
         expect(result.sectionId).toBe("lead_summary");
     });
 

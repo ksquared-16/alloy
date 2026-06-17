@@ -41,12 +41,12 @@ export function isPlatformOwnedDrawerSection(sectionKey: string): boolean {
 export function friendlyZoneLabel(zone: OpportunityDrawerLayoutZone): string {
     switch (zone) {
         case "summary_strip":
-            return "KPI strip";
+            return "top of drawer";
         case "right_rail":
-            return "right rail";
+            return "right side";
         case "main":
         default:
-            return "main content";
+            return "main area";
     }
 }
 
@@ -77,15 +77,11 @@ export function resolvePaletteTargetSectionId(
     }
 
     if (itemKind === "widget") {
-        const widgetSection = doc.sections.find((s) => sectionAcceptsWidgets(s));
-        if (widgetSection) {
-            return {
-                sectionId: widgetSection.key,
-                reason:
-                    selectedSectionId ?
-                        `Placed in "${widgetSection.title}" — KPI widgets belong in the summary strip.`
-                    :   undefined,
-            };
+        if (selectedSectionId) {
+            const section = doc.sections.find((s) => s.key === selectedSectionId);
+            if (section && sectionAcceptsWidgets(section)) {
+                return { sectionId: selectedSectionId };
+            }
         }
         return { sectionId: null };
     }

@@ -64,7 +64,7 @@ export default function LayoutsSettingsPageClient() {
         }
 
         return (
-            <div className="space-y-3" data-testid="layouts-editor-shell-visual">
+            <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="layouts-editor-shell-visual">
                 <OpportunityDrawerLayoutVisualEditor
                     layoutId={layoutId}
                     basePath={base}

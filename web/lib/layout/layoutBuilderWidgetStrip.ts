@@ -8,7 +8,23 @@ import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDra
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import type { SectionCompositionItem } from "@/lib/layout/layoutEditorSectionComposition";
 
+function countSectionWidgets(section: LayoutSection): number {
+    return section.rows.reduce(
+        (total, row) =>
+            total
+            + row.columns.reduce(
+                (colTotal, col) =>
+                    colTotal + col.items.filter((item) => item.kind === "widget_placeholder").length,
+                0,
+            ),
+        0,
+    );
+}
+
+/** True when a card hosts multiple KPI widgets in one row (legacy strip layout). */
 export function sectionIsWidgetStrip(section: LayoutSection): boolean {
+    const widgetCount = countSectionWidgets(section);
+    if (widgetCount <= 1) return false;
     if (readSectionType(section) === "widget") return true;
     if (resolveOpportunityDrawerSectionZone(section) === "summary_strip" && sectionHasWidgetItems(section)) return true;
     return false;

@@ -680,7 +680,7 @@ export function LayoutBuilderItemInspector({
         const style = readLayoutEditorWidgetStyle(entry.item.metadata);
         return (
             <div className="space-y-3">
-                <SettingsHeader title="Widget properties" onClose={onClose} />
+                <SettingsHeader title="Tile properties" onClose={onClose} />
                 <label className="block text-[11px] text-alloy-midnight/60">
                     Title
                     <input
