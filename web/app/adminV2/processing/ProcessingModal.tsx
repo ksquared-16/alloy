@@ -130,10 +130,6 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                             )}
                         </div>
                     </div>
-                ) : section === "sources" ? (
-                    <div className="min-h-[min(26rem,68vh)] flex-1 overflow-hidden">
-                        <SourcesPanel />
-                    </div>
                 ) : section === "forms" ? (
                     <div className="min-h-[min(26rem,68vh)] flex-1 overflow-hidden">
                         <PosFormsPanel />
