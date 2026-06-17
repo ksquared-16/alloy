@@ -46,7 +46,10 @@ export default function OpportunityDrawerLayoutFieldPicker({
     const commonFields = useMemo(() => {
         const byRef = new Map(allFields.map((f) => [f.refKey, f]));
         return EXPERIENCE_BUILDER_COMMON_FIELD_REF_KEYS.map((refKey) => byRef.get(refKey)).filter(
-            (f): f is LayoutCatalogField => Boolean(f) && !used.has(f.refKey),
+            (f): f is LayoutCatalogField => {
+                if (!f) return false;
+                return !used.has(f.refKey);
+            },
         );
     }, [allFields, used]);
 
