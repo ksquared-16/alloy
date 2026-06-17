@@ -66,6 +66,10 @@ const ALLOWED_SECTION_METADATA_KEYS = new Set([
     "compositionPrimaryColumnRefs",
     "enrollmentGridCellRoles",
     "layoutEditorHidden",
+    "layoutEditorSectionRowGroup",
+    "layoutEditorSectionRowSpan",
+    "layoutEditorSectionType",
+    "layoutEditorRelatedListConfig",
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
     LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,
 ]);
@@ -87,6 +91,7 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "layoutEditorRowTemplate",
     "layoutEditorBlockConfig",
     "layoutEditorActionButton",
+    "layoutEditorWidgetStyle",
     "enrollmentRosterReadFirst",
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
     LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,

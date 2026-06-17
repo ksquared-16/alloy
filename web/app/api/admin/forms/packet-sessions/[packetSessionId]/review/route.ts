@@ -6,6 +6,7 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { resolveOpportunityIdFromSessionSnapshotFields } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import { ensureGeneratedPdfsForApprovedPacketSession } from "@/lib/forms/packets/ensureGeneratedPdfsForApprovedPacketSession";
+import { applyEnrollmentPacketBusinessProcessIntegration } from "@/lib/forms/packets/applyEnrollmentPacketBusinessProcessIntegration";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -119,6 +120,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const lc = (sess as { launch_context?: unknown }).launch_context;
     const opportunityId = resolveOpportunityIdFromSessionSnapshotFields(snap, lc);
     if (opportunityId) {
+        try {
+            const bpKind =
+                next === "approved" ? "review_approved"
+                : next === "needs_correction" ? "review_needs_correction"
+                : "review_rejected";
+            await applyEnrollmentPacketBusinessProcessIntegration({
+                supabase,
+                orgId,
+                packetSessionId,
+                kind: bpKind,
+                actorUserId: reviewerId,
+            });
+        } catch (e) {
+            console.error("[packet review] BP integration failed:", e instanceof Error ? e.message : e);
+        }
+
         try {
             await emitEvent({
                 org_id: orgId,

@@ -21,7 +21,24 @@ export const LAYOUT_DRAWER_PREVIEW_RECORD: ProofRuntimeRecord = {
     "person.primary_contact_name": "Jordan Nguyen",
     "person.primary_phone": "(555) 010-2244",
     "person.primary_email": "jordan@example.com",
-    "person.secondary_contact_name": "",
+    "person.secondary_contact_name": "Sam Nguyen",
+    "opportunity.primary_person_id": "preview-person-jordan",
+    _opportunity_persons: [
+        {
+            person_id: "preview-person-jordan",
+            name: "Jordan Nguyen",
+            role_type: "primary_contact",
+            phone: "(555) 010-2244",
+            email: "jordan@example.com",
+        },
+        {
+            person_id: "preview-person-sam",
+            name: "Sam Nguyen",
+            role_type: "guardian",
+            phone: "(555) 010-7788",
+            email: "sam@example.com",
+        },
+    ],
     _attention: "Tour Jun 12 — confirm details",
     children: [
         {

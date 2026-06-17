@@ -16,7 +16,21 @@ import {
     renameSectionTitle,
     reorderSectionInZone,
     setSectionEditorHidden,
+    deleteOpportunityDrawerSection,
+    canDeleteOpportunityDrawerSection,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import {
+    applySectionRowLayout,
+    LAYOUT_EDITOR_SECTION_TYPE_LABELS,
+    LAYOUT_EDITOR_SECTION_TYPES,
+    readSectionType,
+    SECTION_ROW_WIDTH_PRESET_KEYS,
+    SECTION_ROW_WIDTH_PRESETS,
+    setSectionType,
+    type LayoutEditorSectionType,
+    type SectionRowWidthPresetKey,
+} from "@/lib/layout/layoutEditorSectionLayout";
+import OpportunityDrawerLayoutRelatedListSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutRelatedListSettings";
 
 type Props = {
     doc: LayoutDoc;
@@ -52,6 +66,8 @@ export default function OpportunityDrawerLayoutCompositionPanel({
     const [showAddBlock, setShowAddBlock] = useState(false);
     const [showCreateBlock, setShowCreateBlock] = useState(false);
     const blockTemplates = useMemo(() => listLayoutEditorBlockTemplatesForSection(section.key), [section.key]);
+    const sectionType = readSectionType(section);
+    const deleteGate = canDeleteOpportunityDrawerSection(section);
 
     const selectedItemId =
         selectedBlockId
@@ -92,6 +108,67 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                 />
                 Hide section after publish
             </label>
+
+            <label className="mt-3 block text-xs text-alloy-midnight/60">
+                Section type
+                <select
+                    value={sectionType}
+                    onChange={(e) => applyDoc(setSectionType(doc, section.key, e.target.value as LayoutEditorSectionType))}
+                    className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-sm"
+                    data-testid="visual-editor-section-type"
+                >
+                    {LAYOUT_EDITOR_SECTION_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                            {LAYOUT_EDITOR_SECTION_TYPE_LABELS[type]}
+                        </option>
+                    ))}
+                </select>
+            </label>
+
+            <label className="mt-2 block text-xs text-alloy-midnight/60">
+                Section row layout
+                <select
+                    defaultValue="full_width"
+                    onChange={(e) =>
+                        applyDoc(applySectionRowLayout(doc, section.key, e.target.value as SectionRowWidthPresetKey))
+                    }
+                    className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-sm"
+                    data-testid="visual-editor-section-row-layout"
+                >
+                    {SECTION_ROW_WIDTH_PRESET_KEYS.map((key) => (
+                        <option key={key} value={key}>
+                            {SECTION_ROW_WIDTH_PRESETS[key].label}
+                        </option>
+                    ))}
+                </select>
+                <span className="mt-1 block text-[10px] text-alloy-midnight/45">
+                    Groups this section with the next sections in the same zone using the selected widths.
+                </span>
+            </label>
+
+            {sectionType === "related_list" ?
+                <OpportunityDrawerLayoutRelatedListSettings doc={doc} sectionKey={section.key} applyDoc={applyDoc} />
+            :   null}
+
+            <div className="mt-3">
+                <button
+                    type="button"
+                    className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    disabled={!deleteGate.ok}
+                    title={deleteGate.ok ? undefined : deleteGate.reason}
+                    onClick={() => {
+                        if (!deleteGate.ok) return;
+                        applyDoc(deleteOpportunityDrawerSection(doc, section.key));
+                        onClose();
+                    }}
+                    data-testid="visual-editor-delete-section"
+                >
+                    Delete section
+                </button>
+                {!deleteGate.ok ?
+                    <p className="mt-1 text-[10px] text-alloy-midnight/45">{deleteGate.reason}</p>
+                :   null}
+            </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
                 <button
@@ -134,7 +211,7 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                 </button>
             </div>
 
-            {showCreateBlock ?
+            {sectionType !== "widget" && showCreateBlock ?
                 <OpportunityDrawerLayoutCreateBlockForm
                     sectionKey={section.key}
                     onCancel={() => setShowCreateBlock(false)}
@@ -160,7 +237,7 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                 />
             :   null}
 
-            {showAddBlock ?
+            {sectionType !== "widget" && showAddBlock ?
                 <div className="mt-2 rounded-lg border border-alloy-forge/12 bg-white p-2" data-testid="visual-editor-add-block-menu">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Starter templates</p>
                     <div className="mt-2 flex flex-wrap gap-1">

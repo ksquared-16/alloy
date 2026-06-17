@@ -18,6 +18,10 @@ import {
 } from "@/lib/layout/layoutRefKeyAliases";
 import { allPickerEligibleRefKeys } from "@/lib/layout/platformFieldResolutionManifest";
 import {
+    LAYOUT_EDITOR_CONTACT_ROLES,
+    contactRoleFieldRefs,
+} from "@/lib/layout/layoutEditorContactRoles";
+import {
     LAYOUT_ITEM_KINDS,
     type LayoutDoc,
     type LayoutItemKind,
@@ -122,9 +126,29 @@ export const OPPORTUNITY_DRAWER_SECTION_DEFAULT_ZONE: Readonly<
     activity: "right_rail",
 };
 
+/** Layout-owned contact repeater columns (Phase 5.14B). */
+export const OPPORTUNITY_DRAWER_CONTACT_REPEATER_FIELD_REFS = [
+    "person.role",
+    "person.relationship",
+    "person.is_primary",
+    "person.display_name",
+    "person.name",
+    "person.contact_role",
+    "person.is_payer",
+    "person.secondary_email",
+] as const;
+
+/** Contact block role cards — all role-specific name/email/phone refs (Phase 5.15 certification). */
+export const OPPORTUNITY_DRAWER_CONTACT_BLOCK_FIELD_REFS = LAYOUT_EDITOR_CONTACT_ROLES.flatMap((role) => {
+    const refs = contactRoleFieldRefs(role);
+    return [refs.name, refs.email, refs.phone];
+});
+
 /** Related-list / structural item refKeys allowed outside field catalog. */
 export const OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS = [
     "children",
+    "contacts",
+    "household_members",
     "contact_block",
     "layout_block",
     "_template",
@@ -189,6 +213,8 @@ function buildOpportunityDrawerAllowedFieldRefKeys(): readonly string[] {
         ...baseline,
         ...picker,
         ...OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS,
+        ...OPPORTUNITY_DRAWER_CONTACT_REPEATER_FIELD_REFS,
+        ...OPPORTUNITY_DRAWER_CONTACT_BLOCK_FIELD_REFS,
     ]);
     return [...merged].sort();
 }

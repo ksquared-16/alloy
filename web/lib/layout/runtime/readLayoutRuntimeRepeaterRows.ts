@@ -14,6 +14,7 @@ import {
     mapVmInquiryChildrenToLayoutRuntimeRows,
     resolveOpportunityLayoutRuntimeChildrenRows,
 } from "./mapLayoutRuntimeChildrenRows";
+import { readLayoutRuntimeContactRepeaterRows, isLayoutRuntimeContactRepeater } from "./mapLayoutRuntimeContactRepeaterRows";
 import {
     enrichLayoutRuntimeChildRowIdentifiers,
     enrichLayoutRuntimeChildRowsFromAnchor,
@@ -57,6 +58,10 @@ export function readLayoutRuntimeRepeaterRows(
     record: ProofRuntimeRecord,
     item: LayoutItem,
 ): ProofRuntimeRecord[] {
+    if (isLayoutRuntimeContactRepeater(item)) {
+        return readLayoutRuntimeContactRepeaterRows(record, item);
+    }
+
     const keys = [
         item.source ?? "",
         item.refKey,

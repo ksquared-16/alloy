@@ -97,6 +97,10 @@ const LEAD_PRIMARY_CONTACT_PROJECTION_MANIFEST: PlatformFieldManifestEntry[] = [
         ["case", "relationship"],
         ["opportunities"],
     ),
+    entry("person.role", "Contact role", "text", "computed", "household_contact.role_label", "now", ["repeater", "relationship"], ["opportunities"]),
+    entry("person.relationship", "Relationship", "text", "computed", "household_contact.relationship", "now", ["repeater", "relationship"], ["opportunities"]),
+    entry("person.is_primary", "Primary flag", "text", "computed", "household_contact.is_primary", "now", ["repeater", "relationship"], ["opportunities"]),
+    entry("person.display_name", "Display name", "text", "computed", "person.display_name", "now", ["repeater", "relationship"], ["opportunities"]),
 ];
 
 const OPPORTUNITY_MANIFEST: PlatformFieldManifestEntry[] = [

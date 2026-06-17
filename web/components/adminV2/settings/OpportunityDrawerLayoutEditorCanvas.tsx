@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import LayoutRuntimePlanView from "@/components/layout/LayoutRuntimePlanView";
+import LayoutEditorSectionFlowView from "@/components/layout/LayoutEditorSectionFlowView";
 import OpportunityDrawerLayoutCompositionPanel from "@/components/adminV2/settings/OpportunityDrawerLayoutCompositionPanel";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
@@ -9,9 +10,12 @@ import {
     buildSingleSectionPreviewDoc,
     isSectionEditorHidden,
     partitionOpportunityDrawerSectionsByZone,
+    renameSectionTitle,
     reorderSectionInZone,
     resolveOpportunityDrawerSectionZone,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import { readSectionType } from "@/lib/layout/layoutEditorSectionLayout";
+import { LEAD_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/leadOverviewComposition";
 import { listSectionLayoutBlocks } from "@/lib/layout/layoutEditorCompositionModel";
 import { buildLayoutEditorItemIdPathIndex } from "@/lib/layout/layoutEditorInspectModel";
 import { LayoutEditorRuntimeTraceProvider } from "@/lib/layout/layoutEditorRuntimeTraceContext";
@@ -144,6 +148,15 @@ function EditableSectionFrame({
     const isEditing = editingSectionKey === section.key;
     const isSettings = settingsSectionKey === section.key;
     const zone = resolveOpportunityDrawerSectionZone(section);
+    const sectionType = readSectionType(section);
+    const isPlatformCompositionSlot =
+        section.key === LEAD_OVERVIEW_SECTION_KEYS.household
+        || section.key === LEAD_OVERVIEW_SECTION_KEYS.enrollment
+        || section.key === LEAD_OVERVIEW_SECTION_KEYS.summary;
+    const platformSlotLabel =
+        section.key === LEAD_OVERVIEW_SECTION_KEYS.summary ?
+            "Platform summary strip · contents editable, position fixed"
+        :   "Platform composition slot · contents editable, position fixed";
 
     return (
         <div
@@ -152,12 +165,31 @@ function EditableSectionFrame({
                     "border-alloy-pine/40 ring-2 ring-alloy-pine/20"
                 : isSettings ?
                     "border-alloy-blue/30 ring-1 ring-alloy-blue/15"
+                : isPlatformCompositionSlot ?
+                    "border-alloy-stone/20 ring-1 ring-alloy-stone/10"
                 :   "border-transparent hover:border-alloy-pine/20 hover:ring-1 hover:ring-alloy-pine/10"
             } ${hidden ? "opacity-60" : ""}`}
             data-testid={`visual-editor-section-${section.key}`}
             data-visual-editor-editable="true"
             data-visual-editor-zone={zone}
+            data-visual-editor-section-type={sectionType}
+            data-visual-editor-platform-slot={isPlatformCompositionSlot ? "true" : undefined}
         >
+            <div className="border-b border-alloy-stone/10 bg-gradient-to-r from-white via-alloy-stone/[0.03] to-white px-3 py-1.5">
+                {isPlatformCompositionSlot ?
+                    <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/40">
+                        {platformSlotLabel}
+                    </p>
+                :   null}
+                <input
+                    type="text"
+                    value={section.title}
+                    onChange={(e) => applyDoc(renameSectionTitle(doc, section.key, e.target.value))}
+                    className="w-full bg-transparent text-xs font-semibold text-alloy-midnight outline-none placeholder:text-alloy-midnight/35 focus:ring-0"
+                    aria-label="Section title"
+                    data-testid={`visual-editor-section-title-inline-${section.key}`}
+                />
+            </div>
             <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-end gap-1 p-2 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
                 <div className="pointer-events-auto flex flex-wrap justify-end gap-1 rounded-md border border-alloy-forge/10 bg-white/95 p-1 shadow-sm">
                     <button
@@ -300,7 +332,13 @@ export default function OpportunityDrawerLayoutEditorCanvas({
         <div className={DRAWER_OVERVIEW_CANVAS_CLASS} data-testid="visual-editor-main-composition-grid">
             {summarySections.length > 0 ?
                 <div data-visual-editor-zone="summary_strip" data-testid="visual-editor-zone-summary_strip" className="space-y-2">
-                    {summarySections.map((section) => renderSection(section))}
+                    <LayoutEditorSectionFlowView
+                        sections={summarySections}
+                        renderSection={renderSection}
+                        stackClassName=""
+                        rowClassName="min-w-0"
+                        rowCellClassName="min-w-0"
+                    />
                 </div>
             :   null}
 
@@ -312,7 +350,13 @@ export default function OpportunityDrawerLayoutEditorCanvas({
                     {renderSection(slots.enrollment)}
                 </div>
                 <div className={DRAWER_OVERVIEW_RIGHT_RAIL_CLASS} data-testid="visual-editor-zone-right_rail">
-                    {zones.right_rail.map((section) => renderSection(section))}
+                    <LayoutEditorSectionFlowView
+                        sections={zones.right_rail}
+                        renderSection={renderSection}
+                        stackClassName="space-y-2"
+                        rowClassName="min-w-0"
+                        rowCellClassName="min-w-0"
+                    />
                 </div>
             </div>
 
@@ -322,7 +366,13 @@ export default function OpportunityDrawerLayoutEditorCanvas({
 
             {overflowSections.length > 0 ?
                 <div className={DRAWER_OVERVIEW_OVERFLOW_STACK_CLASS} data-visual-editor-zone-main-overflow="">
-                    {overflowSections.map((section) => renderSection(section))}
+                    <LayoutEditorSectionFlowView
+                        sections={overflowSections}
+                        renderSection={renderSection}
+                        stackClassName=""
+                        rowClassName="min-w-0"
+                        rowCellClassName="min-w-0"
+                    />
                 </div>
             :   null}
 

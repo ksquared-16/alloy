@@ -5,7 +5,7 @@
  * Content is layout-owned; this component only hosts the zone container.
  */
 
-import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import LayoutRuntimeSectionFlowView from "@/components/layout/LayoutRuntimeSectionFlowView";
 import LayoutRuntimeDrawerEditProvider from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { leadOverviewCompositionHints, shouldUseLeadOverviewComposition } from "@/lib/layout/runtime/leadOverviewComposition";
@@ -55,13 +55,15 @@ export default function DrawerLayoutRuntimeShellZoneView({
             data-drawer-layout-runtime-shell-zone-sections={doc.sections.map((s) => s.key).join(",")}
         >
             <LayoutRuntimeDrawerEditProvider record={record}>
-                <LayoutRuntimeDrawerBodyView
+                <LayoutRuntimeSectionFlowView
                     doc={doc}
+                    sections={doc.sections}
                     record={record}
                     entityId={entityId}
                     canMutate={canMutate}
                     onAdornmentAction={onAdornmentAction}
                     sectionPresentation={isSummaryStrip ? "summary_strip" : "default"}
+                    stackClassName={isSummaryStrip ? "space-y-2" : undefined}
                 />
             </LayoutRuntimeDrawerEditProvider>
         </div>

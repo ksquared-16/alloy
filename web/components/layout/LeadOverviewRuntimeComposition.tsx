@@ -2,8 +2,9 @@
 
 import { useMemo } from "react";
 import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import LayoutRuntimeSectionFlowView from "@/components/layout/LayoutRuntimeSectionFlowView";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
-import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
+import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import {
@@ -65,34 +66,6 @@ function CompositionSlot({
                 onAdornmentAction={onAdornmentAction}
             />
         </div>
-    );
-}
-
-function RightRailSlot({
-    section,
-    doc,
-    record,
-    entityId,
-    canMutate,
-    onAdornmentAction,
-}: {
-    section: LayoutSection;
-    doc: LayoutDoc;
-    record: ProofRuntimeRecord;
-    entityId: string;
-    canMutate?: boolean;
-    onAdornmentAction?: AdornmentActionHandler;
-}) {
-    return (
-        <CompositionSlot
-            slotKey={section.key}
-            sectionKeys={[section.key]}
-            doc={doc}
-            record={record}
-            entityId={entityId}
-            canMutate={canMutate}
-            onAdornmentAction={onAdornmentAction}
-        />
     );
 }
 
@@ -167,17 +140,15 @@ export default function LeadOverviewRuntimeComposition({
                             data-lead-overview-slot="right_rail"
                             data-lead-overview-right-rail-section-count={String(rightRailSections.length)}
                         >
-                            {rightRailSections.map((section) => (
-                                <RightRailSlot
-                                    key={section.key}
-                                    section={section}
-                                    doc={doc}
-                                    record={record}
-                                    entityId={entityId}
-                                    canMutate={canMutate}
-                                    onAdornmentAction={onAdornmentAction}
-                                />
-                            ))}
+                            <LayoutRuntimeSectionFlowView
+                                doc={doc}
+                                sections={rightRailSections}
+                                record={record}
+                                entityId={entityId}
+                                canMutate={canMutate}
+                                onAdornmentAction={onAdornmentAction}
+                                stackClassName="space-y-2"
+                            />
                         </div>
                     :   null}
                 </div>
@@ -198,14 +169,13 @@ export default function LeadOverviewRuntimeComposition({
 
                 {slots.overflow.length > 0 ?
                     <div data-lead-overview-slot="overflow" className="space-y-4">
-                        <LayoutRuntimeDrawerBodyView
-                            doc={{
-                                ...doc,
-                                sections:
-                                    visibilityCtx.opportunityEntityLayoutsVisualConfig ?
-                                        sortLayoutSectionsByDocPosition(doc, slots.overflow)
-                                    :   slots.overflow,
-                            }}
+                        <LayoutRuntimeSectionFlowView
+                            doc={doc}
+                            sections={
+                                visibilityCtx.opportunityEntityLayoutsVisualConfig ?
+                                    sortLayoutSectionsByDocPosition(doc, slots.overflow)
+                                :   slots.overflow
+                            }
                             record={record}
                             entityId={entityId}
                             canMutate={canMutate}

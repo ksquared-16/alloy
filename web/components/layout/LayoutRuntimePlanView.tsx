@@ -26,6 +26,11 @@ import { readLayoutEditorDisplayConfig, typographyIntentClass } from "@/lib/layo
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
 import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfig";
 import {
+    readLayoutEditorWidgetStyle,
+    resolveLayoutEditorWidgetAccentRail,
+    resolveLayoutEditorWidgetLeadCardAccent,
+} from "@/lib/layout/layoutEditorWidgetStyle";
+import {
     LayoutRuntimeBlockEditProvider,
     layoutRuntimeBlockAllowsFieldEdit,
     useLayoutRuntimeBlockEdit,
@@ -64,6 +69,9 @@ import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChil
 import LayoutRuntimeEnrollmentGrid from "@/components/layout/LayoutRuntimeEnrollmentGrid";
 import LeadEnrollmentHealthSummaryCard from "@/components/layout/lead/LeadEnrollmentHealthSummaryCard";
 import LeadEnrollmentCardList from "@/components/layout/lead/LeadEnrollmentCardList";
+import LeadContactRepeaterCardList from "@/components/layout/lead/LeadContactRepeaterCardList";
+import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
+import { isLayoutRuntimeContactRepeater } from "@/lib/layout/runtime/mapLayoutRuntimeContactRepeaterRows";
 import PersonConnectedChildrenCardList from "@/components/layout/person/PersonConnectedChildrenCardList";
 import PersonRelatedPeopleGroupsWidget from "@/components/layout/person/PersonRelatedPeopleGroupsWidget";
 import LeadHouseholdContactsWidget from "@/components/layout/lead/LeadHouseholdContactsWidget";
@@ -86,7 +94,6 @@ import LayoutRuntimeNotesCommunicationWidget, {
 } from "@/components/layout/LayoutRuntimeNotesCommunicationWidget";
 import LayoutRuntimeDocumentsOverviewWidget from "@/components/layout/LayoutRuntimeDocumentsOverviewWidget";
 import DrawerOverviewPanelShell from "@/components/layout/DrawerOverviewPanelShell";
-import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import DrawerHouseholdProfileSection from "@/components/layout/DrawerHouseholdProfileSection";
 import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
 import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
@@ -543,6 +550,7 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
     const allRows = readLayoutRuntimeRepeaterRows(record, item);
     const title = operatorLabel(item, variant);
     const isChildrenRepeater = isLayoutRuntimeChildrenRepeater(item);
+    const isContactRepeater = isLayoutRuntimeContactRepeater(item);
     const maxEnrollmentRows =
         composition.enrollmentMaxVisibleRows != null && composition.enrollmentMaxVisibleRows > 0 ?
             composition.enrollmentMaxVisibleRows
@@ -579,6 +587,41 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         isChildrenRepeater &&
         isOpportunityAnchor &&
         Boolean(host.entityId);
+    const showContactsEmpty =
+        variant === "production" &&
+        allRows.length === 0 &&
+        isContactRepeater &&
+        isOpportunityAnchor;
+
+    if (isContactRepeater) {
+        const entityLabel = item.refKey === "household_members" ? "household members" : "contacts";
+        return (
+            <div className={LAYOUT_RUNTIME_PANEL_SURFACE}>
+                <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                        {title || "Contacts"}
+                    </span>
+                </div>
+                {showContactsEmpty ?
+                    <div className="p-2">
+                        <DrawerOverviewEmptyState
+                            message={`No ${entityLabel} on this record yet.`}
+                            hint="Add household adults or contact details to populate this list."
+                            compact
+                        />
+                    </div>
+                :   <LeadContactRepeaterCardList
+                        item={item}
+                        columns={columns}
+                        rows={allRows}
+                        anchorRecord={record}
+                        entityLabel={entityLabel}
+                        onAdornmentAction={onAdornmentAction}
+                    />
+                }
+            </div>
+        );
+    }
 
     const useEnrollmentReadTable =
         operatorSurfaces &&
@@ -935,6 +978,10 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     const childCards = composition.childOperatingSummaryCards === true;
     const operatingCards = leadCards || personCards || childCards;
     const compact = useLayoutRuntimeSummaryStrip();
+    const widgetStyle = readLayoutEditorWidgetStyle(item.metadata);
+    const configuredAccentRail = resolveLayoutEditorWidgetAccentRail(widgetStyle);
+    const configuredLeadAccent = resolveLayoutEditorWidgetLeadCardAccent(widgetStyle);
+    const widgetDescription = widgetStyle.description?.trim();
 
     if (isFutureModule) {
         if (variant === "production") return null;
@@ -1139,15 +1186,21 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 <LeadOperatingSummaryCard
                     title={cardTitle}
                     icon={<MessageSquare className="h-3.5 w-3.5" aria-hidden />}
-                    accent={hasContent ? "neutral" : "work"}
+                    accent={widgetStyle.tone ? configuredLeadAccent : hasContent ? "neutral" : "work"}
                     widgetKey="last_touch"
                 >
+                    {widgetDescription ?
+                        <p className="mb-1 text-[10px] text-alloy-midnight/50">{widgetDescription}</p>
+                    :   null}
                     <LeadLastTouchSummaryCard touch={lastTouch} />
                 </LeadOperatingSummaryCard>
             );
         }
         return (
-            <WidgetChrome title={cardTitle}>
+            <WidgetChrome title={cardTitle} accentRail={configuredAccentRail}>
+                {widgetDescription ?
+                    <p className="mb-1 text-[10px] text-alloy-midnight/50">{widgetDescription}</p>
+                :   null}
                 <LeadLastTouchSummaryCard touch={lastTouch} />
             </WidgetChrome>
         );
@@ -1241,7 +1294,14 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
         return composition.compositionSectionSurface ? markup : <WidgetChrome title={title}>{markup}</WidgetChrome>;
     }
 
-    return <WidgetChrome title={title}>{empty}</WidgetChrome>;
+    return (
+        <WidgetChrome title={title} accentRail={configuredAccentRail}>
+            {widgetDescription ?
+                <p className="mb-1 text-[10px] text-alloy-midnight/50">{widgetDescription}</p>
+            :   null}
+            {empty}
+        </WidgetChrome>
+    );
 }
 
 function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {

@@ -86,6 +86,28 @@ export function readLayoutRuntimeRepeaterFieldRaw(
         return undefined;
     }
 
+    if (entityKey === "person") {
+        if (hasValue(row[refKey])) return row[refKey];
+        if (fieldKey === "name" || fieldKey === "display_name" || fieldKey === "primary_contact_name") {
+            return row["person.primary_contact_name"] ?? row["person.display_name"] ?? row["person.name"];
+        }
+        if (fieldKey === "email" || fieldKey === "primary_email") {
+            return row["person.primary_email"] ?? row["person.email"];
+        }
+        if (fieldKey === "phone" || fieldKey === "primary_phone") {
+            return row["person.primary_phone"] ?? row["person.phone"];
+        }
+        if (fieldKey === "role" || fieldKey === "contact_role" || fieldKey === "relationship") {
+            return row["person.role"] ?? row["person.contact_role"] ?? row["person.relationship"];
+        }
+        if (fieldKey === "is_primary" || fieldKey === "is_primary_contact") {
+            return row["person.is_primary"] ?? row["person.is_primary_contact"];
+        }
+        if (fieldKey === "is_payer") return row["person.is_payer"];
+        if (hasValue(row[`person.${fieldKey}`])) return row[`person.${fieldKey}`];
+        return undefined;
+    }
+
     if (hasValue(row[fieldKey])) return row[fieldKey];
     return undefined;
 }

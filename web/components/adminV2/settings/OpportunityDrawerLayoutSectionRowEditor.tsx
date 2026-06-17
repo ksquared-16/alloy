@@ -46,6 +46,7 @@ import {
     moveSectionItemVertical,
     moveSectionRow,
     patchSectionActionButtonItem,
+    patchSectionItem,
     patchSectionTextItem,
     removeSectionItem,
     removeSectionRow,
@@ -53,6 +54,13 @@ import {
     type SectionCompositionItem,
 } from "@/lib/layout/layoutEditorSectionComposition";
 import { resolveLayoutEditorItemDisplayLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
+import {
+    LAYOUT_EDITOR_WIDGET_TONE_LABELS,
+    LAYOUT_EDITOR_WIDGET_TONES,
+    readLayoutEditorWidgetStyle,
+    writeLayoutEditorWidgetStyle,
+    type LayoutEditorWidgetTone,
+} from "@/lib/layout/layoutEditorWidgetStyle";
 import { summarizeSectionCompositionDiagnostic } from "@/lib/layout/layoutEditorSectionCompositionDiagnostics";
 import { resolveVisibilityRuleKey } from "@/lib/layout/layoutEditorVisibilityRules";
 
@@ -203,6 +211,9 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                             key={entry.itemId}
                                             entry={entry}
                                             selected={selectedItemId === entry.itemId}
+                                            doc={doc}
+                                            sectionKey={sectionKey}
+                                            applyDoc={applyDoc}
                                             onSelect={() => onSelectItemId(selectedItemId === entry.itemId ? null : entry.itemId)}
                                             onRemove={() => {
                                                 applyDoc(removeSectionItem(doc, sectionKey, entry.itemId));
@@ -385,6 +396,9 @@ function AddItemButton({ label, testId, onClick }: { label: string; testId: stri
 function SectionItemRow({
     entry,
     selected,
+    doc,
+    sectionKey,
+    applyDoc,
     onSelect,
     onRemove,
     onMoveVertical,
@@ -394,6 +408,9 @@ function SectionItemRow({
 }: {
     entry: SectionCompositionItem;
     selected: boolean;
+    doc: LayoutDoc;
+    sectionKey: string;
+    applyDoc: (next: LayoutDoc) => void;
     onSelect: () => void;
     onRemove: () => void;
     onMoveVertical: (dir: -1 | 1) => void;
@@ -401,6 +418,8 @@ function SectionItemRow({
     canMoveLeft: boolean;
     canMoveRight: boolean;
 }) {
+    const showInlineLabel = selected && (entry.kind === "field" || entry.kind === "widget");
+
     return (
         <li
             className={`rounded border px-2 py-1.5 text-xs ${
@@ -440,6 +459,20 @@ function SectionItemRow({
                     </button>
                 </span>
             </div>
+            {showInlineLabel ?
+                <label className="mt-2 block text-[10px] text-alloy-midnight/50">
+                    Display label
+                    <input
+                        type="text"
+                        value={entry.item.label ?? entry.title}
+                        onChange={(e) =>
+                            applyDoc(patchSectionItem(doc, sectionKey, entry.itemId, { label: e.target.value }))
+                        }
+                        className="mt-0.5 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-item-label-inline"
+                    />
+                </label>
+            :   null}
         </li>
     );
 }
@@ -625,6 +658,68 @@ function InlineItemSettings({
                 onFieldAddError={onFieldAddError}
                 onClose={onClose}
             />
+        );
+    }
+
+    if (entry.kind === "widget") {
+        const style = readLayoutEditorWidgetStyle(entry.item.metadata);
+        return (
+            <div className="space-y-2">
+                <SettingsHeader title="Widget settings" onClose={onClose} />
+                <label className="block text-[11px] text-alloy-midnight/60">
+                    Widget title
+                    <input
+                        type="text"
+                        value={entry.item.label ?? entry.title}
+                        onChange={(e) =>
+                            applyDoc(patchSectionItem(doc, sectionKey, entry.itemId, { label: e.target.value }))
+                        }
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-widget-title"
+                    />
+                </label>
+                <label className="block text-[11px] text-alloy-midnight/60">
+                    Visual tone
+                    <select
+                        value={style.tone ?? "neutral"}
+                        onChange={(e) =>
+                            applyDoc(
+                                patchSectionItem(doc, sectionKey, entry.itemId, {
+                                    metadata: writeLayoutEditorWidgetStyle(entry.item.metadata, {
+                                        tone: e.target.value as LayoutEditorWidgetTone,
+                                    }),
+                                }),
+                            )
+                        }
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-widget-tone"
+                    >
+                        {LAYOUT_EDITOR_WIDGET_TONES.map((tone) => (
+                            <option key={tone} value={tone}>
+                                {LAYOUT_EDITOR_WIDGET_TONE_LABELS[tone]}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+                <label className="block text-[11px] text-alloy-midnight/60">
+                    Description
+                    <input
+                        type="text"
+                        value={style.description ?? ""}
+                        onChange={(e) =>
+                            applyDoc(
+                                patchSectionItem(doc, sectionKey, entry.itemId, {
+                                    metadata: writeLayoutEditorWidgetStyle(entry.item.metadata, {
+                                        description: e.target.value,
+                                    }),
+                                }),
+                            )
+                        }
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-widget-description"
+                    />
+                </label>
+            </div>
         );
     }
 

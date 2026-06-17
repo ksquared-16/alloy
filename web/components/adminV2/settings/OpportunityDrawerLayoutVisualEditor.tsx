@@ -24,6 +24,8 @@ import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/oppo
 import {
     addRegisteredSection,
     addCustomOpportunityDrawerSection,
+    addRelatedListOpportunityDrawerSection,
+    addWidgetOpportunityDrawerSection,
     ensureOpportunityDrawerLayoutDocSaveReady,
     formatLayoutValidationErrors,
     isOpportunityDrawerLayoutDoc,
@@ -37,9 +39,13 @@ import {
     resolveVisualEditorActionState,
     validateOpportunityDrawerLayoutDoc,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import {
+    applyOpportunityDrawerStarterTemplate,
+    OPPORTUNITY_DRAWER_STARTER_TEMPLATES,
+    type OpportunityDrawerStarterTemplateKey,
+} from "@/lib/layout/layoutEditorOpportunityDrawerStarterTemplates";
 import type { OpportunityDrawerSectionKey } from "@/lib/layout/surfaceLayoutRegistry";
 import Link from "next/link";
-import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
 
 type Props = {
     layoutId: string;
@@ -47,32 +53,6 @@ type Props = {
     onBack: () => void;
     onLayoutIdChange?: (layoutId: string) => void;
 };
-
-function LockedShellBand({
-    slot,
-    label,
-    children,
-}: {
-    slot: string;
-    label: string;
-    children?: React.ReactNode;
-}) {
-    return (
-        <div
-            className="relative rounded-lg border border-dashed border-alloy-forge/25 bg-alloy-stone/[0.04]"
-            data-testid={`visual-editor-locked-shell-${slot}`}
-            data-visual-editor-locked="true"
-        >
-            <div className="flex items-center justify-between gap-2 border-b border-dashed border-alloy-forge/15 px-3 py-1.5">
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">{label}</span>
-                <span className="rounded bg-alloy-stone/80 px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/50">
-                    Platform · locked
-                </span>
-            </div>
-            <div className="pointer-events-none select-none px-3 py-2 opacity-90">{children}</div>
-        </div>
-    );
-}
 
 export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath, onBack, onLayoutIdChange }: Props) {
     const [loading, setLoading] = useState(true);
@@ -404,35 +384,16 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     className={`${DRAWER_OVERVIEW_CONTAINER} overflow-hidden rounded-xl border border-alloy-forge/15 bg-[#F6F8FC] shadow-sm`}
                     data-testid="visual-editor-drawer-frame"
                 >
-                    <LockedShellBand slot="header" label="Drawer header">
-                        <div className="flex items-center justify-between gap-3">
-                            <div>
-                                <p className="text-sm font-semibold text-alloy-midnight">
-                                    {String(LAYOUT_DRAWER_PREVIEW_RECORD.name ?? "Sample household")}
-                                </p>
-                                <p className="text-xs text-alloy-midnight/55">
-                                    {String(LAYOUT_DRAWER_PREVIEW_RECORD._status_display ?? "Qualified")}
-                                </p>
-                            </div>
-                            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-alloy-midnight/45">Close</span>
-                        </div>
-                    </LockedShellBand>
+                    <div
+                        className="mb-2 flex items-center justify-between gap-2 rounded-md border border-dashed border-alloy-forge/20 bg-white/60 px-2 py-1.5"
+                        data-testid="visual-editor-shell-preview-indicator"
+                    >
+                        <span className="text-[10px] text-alloy-midnight/45">
+                            Drawer shell (header · lifecycle · tabs · footer) — preview only, not editable here
+                        </span>
+                    </div>
 
-                    <div className="space-y-3 p-4">
-                        <LockedShellBand slot="lifecycle_rail_container" label="Lifecycle rail">
-                            <div className="flex gap-2 text-[10px] text-alloy-midnight/50">
-                                <span className="rounded bg-white px-2 py-1">Inquiry</span>
-                                <span className="rounded bg-white px-2 py-1">Qualified</span>
-                                <span className="rounded bg-white/60 px-2 py-1">Tour</span>
-                            </div>
-                        </LockedShellBand>
-
-                        <LockedShellBand slot="tabs_container" label="Overview tabs">
-                            <span className="inline-block border-b-2 border-alloy-pine/40 px-2 pb-1 text-xs font-medium text-alloy-midnight">
-                                Overview
-                            </span>
-                        </LockedShellBand>
-
+                    <div className="p-1">
                         <OpportunityDrawerLayoutEditorCanvas
                             doc={workingDoc}
                             editingSectionKey={editingSectionKey}
@@ -458,18 +419,6 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                             layoutRecordId={record?.id ?? null}
                             layoutVersion={record?.version ?? null}
                         />
-
-                        <LockedShellBand slot="footer_actions" label="Footer actions">
-                            <div className="flex flex-wrap gap-2">
-                                <span className="rounded-full border border-alloy-forge/20 bg-white px-3 py-1 text-xs text-alloy-midnight/60">
-                                    Message
-                                </span>
-                                <span className="rounded-full border border-alloy-forge/20 bg-white px-3 py-1 text-xs text-alloy-midnight/60">
-                                    Update status
-                                </span>
-                                <span className="text-[10px] text-alloy-midnight/40">Configured in Settings → Actions</span>
-                            </div>
-                        </LockedShellBand>
                     </div>
                 </div>
 
@@ -531,6 +480,34 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     :   null}
 
                     <div className="mt-5 border-t border-alloy-forge/10 pt-4">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Starter templates</p>
+                        <p className="mt-1 text-[10px] leading-relaxed text-alloy-midnight/45">
+                            Add production-ready section patterns using current builder primitives.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                            {OPPORTUNITY_DRAWER_STARTER_TEMPLATES.map((template) => (
+                                <button
+                                    key={template.key}
+                                    type="button"
+                                    className="rounded border border-alloy-blue/25 bg-alloy-blue/[0.05] px-2 py-0.5 text-[10px] font-medium text-alloy-blue hover:border-alloy-blue/40"
+                                    title={template.description}
+                                    onClick={() =>
+                                        applyDoc(
+                                            applyOpportunityDrawerStarterTemplate(
+                                                workingDoc,
+                                                template.key as OpportunityDrawerStarterTemplateKey,
+                                            ),
+                                        )
+                                    }
+                                    data-testid={`visual-editor-starter-${template.key}`}
+                                >
+                                    + {template.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="mt-5 border-t border-alloy-forge/10 pt-4">
                         <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Add section</p>
                         <div className="mt-2 flex flex-wrap gap-1">
                             <button
@@ -540,6 +517,22 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                                 data-testid="visual-editor-add-custom-section"
                             >
                                 + Custom section
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded border border-alloy-pine/30 bg-alloy-pine/[0.06] px-2 py-0.5 text-[10px] font-medium text-alloy-pine hover:border-alloy-pine/50"
+                                onClick={() => applyDoc(addWidgetOpportunityDrawerSection(workingDoc, { zone: "summary_strip" }))}
+                                data-testid="visual-editor-add-widget-section"
+                            >
+                                + Widget section
+                            </button>
+                            <button
+                                type="button"
+                                className="rounded border border-alloy-blue/30 bg-alloy-blue/[0.06] px-2 py-0.5 text-[10px] font-medium text-alloy-blue hover:border-alloy-blue/50"
+                                onClick={() => applyDoc(addRelatedListOpportunityDrawerSection(workingDoc, { zone: "main" }))}
+                                data-testid="visual-editor-add-related-list-section"
+                            >
+                                + Related list section
                             </button>
                             {missingSections.map((key) => (
                                 <button

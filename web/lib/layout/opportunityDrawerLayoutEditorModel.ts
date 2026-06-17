@@ -24,6 +24,9 @@ import {
     layoutDocHasRepairableGeneratedKeys,
     repairOpportunityDrawerLayoutGeneratedKeys,
 } from "@/lib/layout/layoutEditorGeneratedKeys";
+import { validateRelatedListSectionMetadata } from "@/lib/layout/layoutEditorRelatedListConfig";
+import { validateOpportunityDrawerLayoutPublishGuards } from "@/lib/layout/layoutEditorPublishGuards";
+import { validateSectionLayoutMetadata } from "@/lib/layout/layoutEditorSectionLayout";
 import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawerLayoutDocShellZones";
 import {
     isAllowedOpportunityDrawerFieldRefKey,
@@ -269,9 +272,12 @@ export function validateOpportunityDrawerLayoutDoc(doc: LayoutDoc): {
 } {
     const parsed = parseLayoutDoc(doc, { inferSurfaceKey: true });
     const blockErrors = isOpportunityDrawerLayoutDoc(doc) ? validateOpportunityDrawerLayoutBlocks(doc) : [];
-    const errors = [...parsed.errors, ...blockErrors];
+    const sectionLayoutErrors = isOpportunityDrawerLayoutDoc(doc) ? validateSectionLayoutMetadata(doc) : [];
+    const relatedListErrors = isOpportunityDrawerLayoutDoc(doc) ? validateRelatedListSectionMetadata(doc) : [];
+    const publishGuardErrors = isOpportunityDrawerLayoutDoc(doc) ? validateOpportunityDrawerLayoutPublishGuards(doc) : [];
+    const errors = [...parsed.errors, ...blockErrors, ...sectionLayoutErrors, ...relatedListErrors, ...publishGuardErrors];
     return {
-        ok: parsed.ok && blockErrors.length === 0,
+        ok: parsed.ok && errors.length === 0,
         errors,
         warnings: parsed.warnings,
     };
@@ -361,12 +367,35 @@ export function formatLayoutValidationErrors(errors: string[]): string[] {
         msg = msg.replace(/unknown section key "([^"]+)"/, 'Section "$1" is not registered for this surface');
         msg = msg.replace(/unknown metadata key "([^"]+)"/, 'Setting "$1" is not supported');
         msg = msg.replace(/unknown widget refKey "([^"]+)"/, 'Widget "$1" is not allowed on this surface');
+        msg = msg.replace(
+            /related list entity "([^"]+)" is preview-only and cannot be published/,
+            'Related list "$1" is preview-only — choose Children, Contacts, or Household members before publishing',
+        );
+        msg = msg.replace(
+            /action buttons are preview-only and cannot be published/,
+            "Action buttons are preview-only — remove them or wait for live drawer action wiring before publishing",
+        );
 
         return msg;
     });
 }
 
-export { addCustomOpportunityDrawerSection, layoutDocHasRepairableGeneratedKeys, repairOpportunityDrawerLayoutGeneratedKeys };
+export {
+    addCustomOpportunityDrawerSection,
+    layoutDocHasRepairableGeneratedKeys,
+    repairOpportunityDrawerLayoutGeneratedKeys,
+} from "@/lib/layout/layoutEditorGeneratedKeys";
+export {
+    addRelatedListOpportunityDrawerSection,
+    addWidgetOpportunityDrawerSection,
+    applySectionRowLayout,
+    deleteOpportunityDrawerSection,
+    canDeleteOpportunityDrawerSection,
+    readSectionType,
+    setSectionType,
+    SECTION_ROW_WIDTH_PRESETS,
+    type SectionRowWidthPresetKey,
+} from "@/lib/layout/layoutEditorSectionLayout";
 
 export type VisualEditorActionState = {
     canSave: boolean;
