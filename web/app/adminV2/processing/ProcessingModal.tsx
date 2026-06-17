@@ -114,7 +114,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                             <ProcessingQueueList
                                 selectedCaseId={selectedCaseId}
                                 onSelectCase={setSelectedCaseId}
-                                onGoToSources={() => setSection("sources")}
+                                onGoToSources={() => setSection("forms")}
                             />
                         </div>
                         <div className="min-h-0 overflow-hidden bg-white">
