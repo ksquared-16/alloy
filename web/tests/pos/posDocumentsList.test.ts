@@ -38,16 +38,18 @@ describe("buildPosDocumentsList", () => {
             classificationKey: "subsidy_contract",
         });
         expect(byId["doc-2"]).toMatchObject({
-            label: "scan_002.pdf",
+            // Label is now derived from the filename: "scan_002.pdf" → "Scan" (extension,
+            // separators and trailing index stripped, title-cased). See deriveDocumentDisplayName.
+            label: "Scan",
             processingCaseId: "case-2",
             caseStatus: "needs_review",
             classificationKey: null,
         });
     });
 
-    it("falls back to filename then 'Untitled document' for the label", () => {
+    it("derives a clean label from the filename, else 'Untitled document'", () => {
         const list = buildPosDocumentsList(docs, links, cases);
-        expect(list.find((d) => d.documentId === "doc-2")?.label).toBe("scan_002.pdf");
+        expect(list.find((d) => d.documentId === "doc-2")?.label).toBe("Scan");
         expect(list.find((d) => d.documentId === "doc-3")?.label).toBe("Untitled document");
     });
 
