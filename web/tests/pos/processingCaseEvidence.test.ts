@@ -18,6 +18,8 @@ function detailWith(sources: { kind: ProcessingCaseSourceKind; id: string; role:
             linkedAt: null,
             display: { kind: s.kind, id: s.id, label: `L:${s.id}`, receivedAt: null, channel: s.kind, resolved: true },
         })),
+        classification: null,
+        extraction: null,
     };
 }
 
