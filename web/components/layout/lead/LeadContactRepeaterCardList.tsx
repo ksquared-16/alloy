@@ -53,6 +53,7 @@ export default function LeadContactRepeaterCardList({
                         componentName="LeadContactRepeaterCardList"
                         surface="drawer"
                         item={synthetic}
+                        personId={personId}
                         rowRecord={row}
                         anchorRecord={anchorRecord}
                         display={display}
