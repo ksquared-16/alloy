@@ -15,7 +15,7 @@
  */
 
 import { ArrowRight, FileSearch, FileUp, Sparkles } from "lucide-react";
-import type { ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { PosSection } from "./posSections";
 
 function WorkflowCard({
@@ -65,8 +65,44 @@ function WorkflowCard({
 }
 
 export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section: PosSection) => void }) {
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+    const [uploading, setUploading] = useState(false);
+    const [status, setStatus] = useState<{ kind: "ok" | "error"; message: string } | null>(null);
+
+    async function handleFile(file: File) {
+        setUploading(true);
+        setStatus(null);
+        try {
+            const form = new FormData();
+            form.append("file", file);
+            // POS document intake: open a Processing Case; no CRM entity required.
+            form.append("open_processing_case", "true");
+            const res = await fetch("/api/admin/documents/upload", {
+                method: "POST",
+                credentials: "same-origin",
+                body: form,
+            });
+            const body = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                processing_case_id?: string | null;
+                classification_key?: string | null;
+            };
+            if (!res.ok) throw new Error(body.error || `Upload failed (${res.status})`);
+            setStatus({
+                kind: "ok",
+                message: body.processing_case_id
+                    ? `Uploaded — Processing case opened${body.classification_key ? ` · ${body.classification_key}` : ""}.`
+                    : "Uploaded.",
+            });
+        } catch (e) {
+            setStatus({ kind: "error", message: e instanceof Error ? e.message : "Upload failed" });
+        } finally {
+            setUploading(false);
+        }
+    }
+
     return (
-        <div className="h-full overflow-y-auto bg-[#f7f6f3] p-4">
+        <div className="h-full overflow-y-auto bg-white p-4">
             <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                     <h3 className="text-sm font-semibold text-stone-900">Documents</h3>
@@ -74,15 +110,32 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                         Upload a document and let Alloy turn it into data or a form. Storage is live; extraction is being wired.
                     </p>
                 </div>
-                <button
-                    type="button"
-                    disabled
-                    title="Upload UI is wired to /api/admin/documents/upload; the POS picker lands next sprint"
-                    className="inline-flex shrink-0 cursor-not-allowed items-center gap-1.5 rounded-lg bg-emerald-600/60 px-3 py-2 text-xs font-semibold text-white"
-                >
-                    <FileUp className="h-3.5 w-3.5" aria-hidden />
-                    Upload Document
-                </button>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) void handleFile(f);
+                            e.target.value = "";
+                        }}
+                    />
+                    <button
+                        type="button"
+                        disabled={uploading}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-xs font-semibold text-white hover:bg-[#009276] disabled:opacity-60"
+                    >
+                        <FileUp className="h-3.5 w-3.5" aria-hidden />
+                        {uploading ? "Uploading…" : "Upload Document"}
+                    </button>
+                    {status ? (
+                        <span className={`text-[11px] ${status.kind === "ok" ? "text-emerald-700" : "text-amber-700"}`}>
+                            {status.message}
+                        </span>
+                    ) : null}
+                </div>
             </div>
 
             <div className="mb-4 grid gap-3 lg:grid-cols-2">
