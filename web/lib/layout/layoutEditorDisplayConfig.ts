@@ -298,14 +298,39 @@ export function applyDisplayConfigToColumnPatch(
     col: LayoutCollectionColumn,
     config: LayoutEditorDisplayConfig,
 ): Partial<LayoutCollectionColumn> {
-    const patch: Partial<LayoutCollectionColumn> = {};
+    const patch: Partial<LayoutCollectionColumn> = {
+        metadata: writeLayoutEditorDisplayConfig(col.metadata, config),
+    };
     if (config.displayType) {
         const hint = renderHintForDisplayType(config.displayType);
         if (hint) patch.renderHint = hint;
     }
-    if (config.icon) {
+
+    const linkBehavior = config.linkBehavior;
+    const icon = config.icon ?? col.adornment?.icon;
+    const position = col.adornment?.position ?? (config.iconPosition === "right" ? "right" : "left");
+
+    if (linkBehavior === "open_drawer" || linkBehavior === "open_record") {
+        const action = resolveOpenDrawerActionForRefKey(col.refKey);
+        if (action) {
+            patch.adornment = {
+                position,
+                icon: icon ?? defaultAdornmentIconForRefKey(col.refKey, linkBehavior),
+                action,
+            };
+        }
+    } else if (linkBehavior === "mailto" || linkBehavior === "tel" || linkBehavior === "none") {
+        if (icon) {
+            patch.adornment = { position, icon };
+        } else if (linkBehavior === "none" && col.adornment?.action) {
+            patch.adornment = {
+                position: col.adornment.position,
+                icon: col.adornment.icon,
+            };
+        }
+    } else if (config.icon) {
         patch.adornment = {
-            position: col.adornment?.position ?? "left",
+            position,
             icon: config.icon,
             ...(col.adornment?.action ? { action: col.adornment.action } : {}),
         };

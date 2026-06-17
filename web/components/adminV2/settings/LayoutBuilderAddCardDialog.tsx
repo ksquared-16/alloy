@@ -11,6 +11,11 @@ import {
     EXPERIENCE_BUILDER_PEER_BLOCK_TYPES,
     type ExperienceBuilderPeerBlockType,
 } from "@/lib/layout/layoutBuilderCardAuthoring";
+import {
+    EXPERIENCE_BUILDER_PLACEMENT_INTENTS,
+    EXPERIENCE_BUILDER_PLACEMENT_LABELS,
+    type ExperienceBuilderPlacementIntent,
+} from "@/lib/layout/layoutBuilderPlacement";
 import { LAYOUT_BUILDER_WIDGET_OPTIONS } from "@/lib/layout/layoutBuilderPaletteModel";
 
 export type LayoutBuilderAddCardDialogSubmit = {
@@ -18,6 +23,7 @@ export type LayoutBuilderAddCardDialogSubmit = {
     widthKey: CardWidthFractionKey;
     cardType: ExperienceBuilderPeerBlockType;
     widgetKey?: string;
+    placementIntent: ExperienceBuilderPlacementIntent;
 };
 
 type Props = {
@@ -55,6 +61,7 @@ export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: 
     const [title, setTitle] = useState("");
     const [widthKey, setWidthKey] = useState<CardWidthFractionKey>("full");
     const [widgetKey, setWidgetKey] = useState(LAYOUT_BUILDER_WIDGET_OPTIONS[0]?.key ?? "tasks");
+    const [placementIntent, setPlacementIntent] = useState<ExperienceBuilderPlacementIntent>("after_selected");
 
     useEffect(() => {
         if (!open) return;
@@ -62,6 +69,7 @@ export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: 
         setTitle("");
         setWidthKey("full");
         setWidgetKey(LAYOUT_BUILDER_WIDGET_OPTIONS[0]?.key ?? "tasks");
+        setPlacementIntent("after_selected");
     }, [open]);
 
     useEffect(() => {
@@ -126,6 +134,7 @@ export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: 
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
+                            onKeyDown={(e) => e.stopPropagation()}
                             placeholder={
                                 blockType === "widget" ? "e.g. Open Tasks"
                                 : blockType === "fields" ? "e.g. Enrollment Details"
@@ -156,6 +165,30 @@ export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: 
                                 </button>
                             ))}
                         </div>
+                    </fieldset>
+
+                    <fieldset>
+                        <legend className="text-xs font-medium text-alloy-midnight/75">Location</legend>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                            {EXPERIENCE_BUILDER_PLACEMENT_INTENTS.map((intent) => (
+                                <button
+                                    key={intent}
+                                    type="button"
+                                    className={`rounded-lg border px-2 py-2 text-left text-xs font-medium transition ${
+                                        placementIntent === intent ?
+                                            "border-alloy-pine/40 bg-alloy-pine/[0.08] text-alloy-pine"
+                                        :   "border-alloy-forge/12 bg-white text-alloy-midnight/70 hover:border-alloy-pine/25"
+                                    }`}
+                                    onClick={() => setPlacementIntent(intent)}
+                                    data-testid={`layout-builder-add-placement-${intent}`}
+                                >
+                                    {EXPERIENCE_BUILDER_PLACEMENT_LABELS[intent]}
+                                </button>
+                            ))}
+                        </div>
+                        <span className="mt-1 block text-[10px] text-alloy-midnight/45">
+                            Defaults to after the selected card when one is selected on the canvas.
+                        </span>
                     </fieldset>
 
                     {blockType === "widget" ?
@@ -194,10 +227,11 @@ export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: 
                         className="rounded-lg bg-alloy-pine px-4 py-2 text-xs font-semibold text-white hover:bg-alloy-pine/90"
                         onClick={() =>
                             onSubmit({
-                                title: title.trim() || defaultTitleForType(blockType),
+                                title: title.replace(/^\s+|\s+$/g, "") || defaultTitleForType(blockType),
                                 widthKey,
                                 cardType: blockType,
                                 widgetKey: blockType === "widget" ? widgetKey : undefined,
+                                placementIntent,
                             })
                         }
                         data-testid="layout-builder-add-card-submit"

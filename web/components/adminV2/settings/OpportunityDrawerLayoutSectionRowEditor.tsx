@@ -503,6 +503,7 @@ function SectionItemRow({
                     <input
                         type="text"
                         value={entry.item.label ?? entry.title}
+                        onKeyDown={(e) => e.stopPropagation()}
                         onChange={(e) =>
                             applyDoc(patchSectionItem(doc, sectionKey, entry.itemId, { label: e.target.value }))
                         }
@@ -709,6 +710,7 @@ export function LayoutBuilderItemInspector({
                     <input
                         type="text"
                         value={entry.item.label ?? entry.title}
+                        onKeyDown={(e) => e.stopPropagation()}
                         onChange={(e) =>
                             applyDoc(patchSectionItem(doc, sectionKey, entry.itemId, { label: e.target.value }))
                         }
@@ -721,6 +723,7 @@ export function LayoutBuilderItemInspector({
                     <input
                         type="text"
                         value={style.subtitle ?? ""}
+                        onKeyDown={(e) => e.stopPropagation()}
                         onChange={(e) =>
                             applyDoc(
                                 patchSectionItem(doc, sectionKey, entry.itemId, {

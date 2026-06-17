@@ -273,7 +273,7 @@ export function patchLayoutEditorFieldDisplay(
         if (!col) return doc;
         const patch: Partial<LayoutCollectionColumn> = {
             ...applyDisplayConfigToColumnPatch(col, displayPatch),
-            ...(label !== undefined ? { label: label.trim() } : {}),
+            ...(label !== undefined ? { label: label.replace(/^\s+|\s+$/g, "") || col.label } : {}),
         };
         return relatedPatchColumn(doc, loc, path.colIdx, patch);
     }

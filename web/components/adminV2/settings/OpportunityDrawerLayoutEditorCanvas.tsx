@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { createContext, useContext } from "react";
 import LayoutRuntimePlanView from "@/components/layout/LayoutRuntimePlanView";
 import LayoutEditorSectionFlowView from "@/components/layout/LayoutEditorSectionFlowView";
 import LayoutBuilderPreviewDrawerFrame from "@/components/adminV2/settings/LayoutBuilderPreviewDrawerFrame";
@@ -31,6 +32,7 @@ import {
 import { leadOverviewVisualEditorCompositionHints, partitionLeadOverviewBodySections } from "@/lib/layout/runtime/leadOverviewComposition";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
+import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { repackPeerCardsAfterZoneReorder } from "@/lib/layout/layoutBuilderPeerCardRows";
 import { readCardWidthFraction } from "@/lib/layout/layoutBuilderCardWidth";
 import { sectionIsKpiTile, sectionIsWidgetStrip, listSectionWidgetItems, widgetStripColumnCount } from "@/lib/layout/layoutBuilderWidgetStrip";
@@ -39,6 +41,8 @@ import { readLayoutEditorWidgetStyle, resolveLayoutEditorWidgetToneRailClass } f
 export type LayoutBuilderEditorMode = "build" | "preview";
 
 export type LayoutBuilderQuickStartAction = "template" | "kpi_strip" | "contact_summary" | "children_list";
+
+const LayoutBuilderPreviewRecordContext = createContext<ProofRuntimeRecord>(LAYOUT_DRAWER_PREVIEW_RECORD);
 
 type Props = {
     doc: LayoutDoc;
@@ -50,6 +54,7 @@ type Props = {
     onSelectBlockId: (blockId: string | null) => void;
     applyDoc: (next: LayoutDoc) => void;
     onQuickStart?: (action: LayoutBuilderQuickStartAction) => void;
+    previewRecord?: ProofRuntimeRecord;
 };
 
 function SectionPreviewBody({
@@ -69,6 +74,7 @@ function SectionPreviewBody({
     onSelectFieldPath: (path: string | null) => void;
     onSelectSection: (sectionKey: string) => void;
 }) {
+    const previewRecord = useContext(LayoutBuilderPreviewRecordContext);
     const sectionDoc = useMemo(() => buildSingleSectionPreviewDoc(doc, sectionKey), [doc, sectionKey]);
     const traceValue = useMemo(() => {
         const blocks = listSectionLayoutBlocks(doc, sectionKey);
@@ -124,7 +130,7 @@ function SectionPreviewBody({
                 >
                     <LayoutRuntimePlanView
                         doc={sectionDoc}
-                        record={LAYOUT_DRAWER_PREVIEW_RECORD}
+                        record={previewRecord}
                         variant="production"
                         sectionPresentation={sectionPresentation}
                     />
@@ -668,11 +674,13 @@ export default function OpportunityDrawerLayoutEditorCanvas({
     onSelectFieldPath,
     onSelectBlockId,
     applyDoc,
+    previewRecord = LAYOUT_DRAWER_PREVIEW_RECORD,
 }: Props) {
     const isPreview = editorMode === "preview";
 
     return (
-        <div className="relative" data-testid="visual-editor-drawer-frame">
+        <LayoutBuilderPreviewRecordContext.Provider value={previewRecord}>
+            <div className="relative" data-testid="visual-editor-drawer-frame">
             {isPreview ?
                 <LayoutBuilderPreviewDrawerFrame>
                     <CompositionGrid
@@ -698,5 +706,6 @@ export default function OpportunityDrawerLayoutEditorCanvas({
                 />
             }
         </div>
+        </LayoutBuilderPreviewRecordContext.Provider>
     );
 }

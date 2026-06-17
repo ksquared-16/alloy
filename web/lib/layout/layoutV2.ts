@@ -210,6 +210,8 @@ export interface LayoutCollectionColumn {
     visibleWhen?: LayoutCondition;
     /** Static text + `{token}` replacement resolved against each row. */
     template?: string;
+    /** Experience Builder display metadata (`layoutEditorDisplay`). */
+    metadata?: Record<string, unknown>;
 }
 export function isLayoutColumnWidth(v: unknown): v is LayoutColumnWidth {
     return typeof v === "string" && (LAYOUT_COLUMN_WIDTHS as readonly string[]).includes(v);

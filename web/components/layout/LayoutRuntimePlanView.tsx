@@ -543,6 +543,7 @@ function RepeaterCellContent({
     const variant = useContext(LayoutRuntimeVariantContext);
     const edit = useLayoutRuntimeDrawerEdit();
     const onAction = useContext(AdornmentActionContext);
+    const displayConfig = readLayoutEditorDisplayConfig(col);
     const synthetic: LayoutItem = {
         id: col.refKey,
         kind: "field",
@@ -550,6 +551,7 @@ function RepeaterCellContent({
         renderHint: col.renderHint,
         adornment: col.adornment,
         editable: col.editable,
+        metadata: col.metadata,
     };
     const r = resolveLayoutRuntimeRepeaterFieldValue(row, col.refKey, {
         renderHint: col.renderHint,
@@ -560,6 +562,14 @@ function RepeaterCellContent({
     const canEdit = layoutRuntimeFieldIsEditable(synthetic, variant) && Boolean(edit);
     const editValue =
         canEdit && edit ? edit.getFieldValue(col.refKey, r.display ?? "", rowKey) : r.display ?? "";
+    const formattedDisplay =
+        !r.isPlaceholder && r.display ?
+            formatLayoutEditorFieldDateValue(col.refKey, r.display, col.renderHint, displayConfig.dateFormat)
+        :   r.display;
+    const statusClass = layoutEditorStatusFormatClass(displayConfig, col.renderHint);
+    const typographyClass = typographyIntentClass(displayConfig.typographyIntent);
+    const showLabel = shouldShowLayoutEditorFieldLabel(displayConfig);
+    const columnLabel = showLabel ? col.label?.trim() : "";
     if (isLayoutRuntimeChildLinkColumn(col.refKey) && !canEdit) {
         return (
             <LayoutRuntimeChildLinkSurface
@@ -583,13 +593,16 @@ function RepeaterCellContent({
 
     return (
         <span
-            className={`inline-flex items-center gap-1.5 ${PRESENTATION_DATA_VALUE_GRID} ${traceProps.className ?? ""}`}
+            className={`inline-flex min-w-0 items-center gap-1.5 ${PRESENTATION_DATA_VALUE_GRID} ${typographyClass} ${traceProps.className ?? ""}`}
             {...traceProps.attrs}
             onClick={(e) => {
                 traceProps.onClick?.();
                 if (trace?.inspectMode) e.stopPropagation();
             }}
         >
+            {columnLabel ?
+                <span className="shrink-0 text-[11px] font-medium text-alloy-midnight/55">{columnLabel}</span>
+            :   null}
             {col.adornment && col.adornment.position !== "right" ?
                 <Adorn item={synthetic} rowRecord={row} />
             :   null}
@@ -601,10 +614,13 @@ function RepeaterCellContent({
                     onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
                     getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
                 />
-            :   <span className={r.isPlaceholder ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>
-                    {r.isPlaceholder ? "—" : col.renderHint === "status" ?
-                        <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">{r.display}</span>
-                    :   r.display}
+            :   <span className={`${r.isPlaceholder ? PRESENTATION_VALUE_PLACEHOLDER : ""} ${statusClass}`.trim()}>
+                    {r.isPlaceholder ? "—"
+                    : col.renderHint === "status" || displayConfig.displayType === "badge" || displayConfig.displayType === "pill" ?
+                        <span className={statusClass || "inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90"}>
+                            {formattedDisplay}
+                        </span>
+                    :   formattedDisplay}
                 </span>
             }
             {col.adornment && col.adornment.position === "right" ?

@@ -9,6 +9,7 @@ import OpportunityDrawerLayoutEditorCanvas, {
     type LayoutBuilderEditorMode,
     type LayoutBuilderQuickStartAction,
 } from "@/components/adminV2/settings/OpportunityDrawerLayoutEditorCanvas";
+import LayoutBuilderPreviewRecordSelector from "@/components/adminV2/settings/LayoutBuilderPreviewRecordSelector";
 import LayoutBuilderInspectorPanel from "@/components/adminV2/settings/LayoutBuilderInspectorPanel";
 import LayoutBuilderPalettePanel, {
     type LayoutBuilderStudioNotice,
@@ -43,6 +44,7 @@ import {
     validateOpportunityDrawerLayoutDoc,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { opCaseFileCanvas } from "@/lib/operational/ui/operationalVisualTokens";
+import { useLayoutBuilderPreviewRecord } from "@/lib/layout/layoutBuilderPreviewRecordState";
 import Link from "next/link";
 
 type Props = {
@@ -67,6 +69,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const [studioNotice, setStudioNotice] = useState<LayoutBuilderStudioNotice | null>(null);
     const [forceAdvanced, setForceAdvanced] = useState(false);
     const [autoRepairNotice, setAutoRepairNotice] = useState<string | null>(null);
+    const previewRecordState = useLayoutBuilderPreviewRecord();
 
     const advancedHref = `${basePath}?editor=1&layout=${encodeURIComponent(layoutId)}&advanced=1`;
 
@@ -336,6 +339,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    <LayoutBuilderPreviewRecordSelector state={previewRecordState} />
                     <div
                         className="inline-flex rounded-lg border border-alloy-forge/20 bg-alloy-stone/20 p-0.5"
                         data-testid="visual-editor-build-preview-toggle"
@@ -487,6 +491,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         onSelectBlockId={setSelectedBlockId}
                         applyDoc={applyDoc}
                         onQuickStart={handleQuickStart}
+                        previewRecord={previewRecordState.record}
                     />
                 </div>
 

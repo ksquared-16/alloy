@@ -95,7 +95,10 @@ export default function LayoutBuilderPalettePanel({
 
     const handleAddCard = (input: LayoutBuilderAddCardDialogSubmit) => {
         setAddCardOpen(false);
-        const result = createExperienceBuilderCard(doc, input);
+        const result = createExperienceBuilderCard(doc, {
+            ...input,
+            afterSectionKey: selectedSectionId,
+        });
         const title =
             input.cardType === "widget" ? input.title
             : result.doc.sections.find((s) => s.key === result.sectionKey)?.title ?? input.title;
@@ -125,6 +128,8 @@ export default function LayoutBuilderPalettePanel({
                 widthKey: "third",
                 cardType: "widget",
                 widgetKey: options.widgetKey,
+                placementIntent: "after_selected",
+                afterSectionKey: selectedSectionId,
             });
             focusCreatedCard(
                 result.doc,
@@ -146,6 +151,8 @@ export default function LayoutBuilderPalettePanel({
                 title: "New card",
                 widthKey: "full",
                 cardType: itemKind === "text" ? "text" : "fields",
+                placementIntent: "after_selected",
+                afterSectionKey: selectedSectionId,
             });
             workingDoc = created.doc;
             sectionId = created.sectionKey;

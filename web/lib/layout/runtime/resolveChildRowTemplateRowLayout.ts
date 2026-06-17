@@ -17,7 +17,7 @@ function childRowGroupColumnCount(group: LayoutEditorChildRowGroup): number {
 }
 
 export function resolveChildRowTemplateRowLayout(item: LayoutItem): ChildRowTemplateRowLayout[] | null {
-    if (item.kind !== "related_list" || item.refKey !== "children") return null;
+    if (item.kind !== "related_list") return null;
     const groups = readLayoutEditorBlockConfig(item.metadata).childRowGroups;
     if (!groups?.length) return null;
     const allColumns = item.columns ?? [];

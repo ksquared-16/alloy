@@ -20,6 +20,11 @@ import {
     setKpiTileSectionTitleHidden,
 } from "@/lib/layout/layoutBuilderKpiTileRows";
 import { applyPeerCardWidth, packPeerCardsInZone } from "@/lib/layout/layoutBuilderPeerCardRows";
+import {
+    applyExperienceBuilderPlacement,
+    resolveExperienceBuilderPlacementZone,
+    type ExperienceBuilderPlacementIntent,
+} from "@/lib/layout/layoutBuilderPlacement";
 import type { CardWidthFractionKey } from "@/lib/layout/layoutBuilderCardWidth";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { OpportunityDrawerLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
@@ -53,6 +58,8 @@ export type CreateExperienceBuilderCardInput = {
     cardType: ExperienceBuilderPeerBlockType;
     widgetKey?: string;
     zone?: OpportunityDrawerLayoutZone;
+    placementIntent?: ExperienceBuilderPlacementIntent;
+    afterSectionKey?: string | null;
 };
 
 export type CreateExperienceBuilderCardResult = {
@@ -61,9 +68,8 @@ export type CreateExperienceBuilderCardResult = {
     itemId?: string;
 };
 
-function defaultZoneForBlockType(cardType: ExperienceBuilderPeerBlockType): OpportunityDrawerLayoutZone {
-    if (cardType === "widget") return "summary_strip";
-    return "main";
+function trimTitleEdges(title: string): string {
+    return title.replace(/^\s+|\s+$/g, "");
 }
 
 function defaultWidthForBlockType(cardType: ExperienceBuilderPeerBlockType): CardWidthFractionKey {
@@ -81,8 +87,12 @@ export function createExperienceBuilderCard(
     doc: LayoutDoc,
     input: CreateExperienceBuilderCardInput,
 ): CreateExperienceBuilderCardResult {
-    const title = input.title.trim();
-    const zone = input.zone ?? defaultZoneForBlockType(input.cardType);
+    const title = trimTitleEdges(input.title);
+    const placementIntent = input.placementIntent ?? "after_selected";
+    const afterSectionKey = input.afterSectionKey ?? null;
+    const zone =
+        input.zone
+        ?? resolveExperienceBuilderPlacementZone(doc, afterSectionKey, placementIntent);
     const widthKey = input.widthKey ?? defaultWidthForBlockType(input.cardType);
 
     let next: LayoutDoc;
@@ -100,6 +110,7 @@ export function createExperienceBuilderCard(
     }
 
     const sectionKey = next.sections[next.sections.length - 1]!.key;
+    next = applyExperienceBuilderPlacement(next, sectionKey, placementIntent, afterSectionKey, zone);
     next = ensureFirstRow(next, sectionKey);
 
     let itemId: string | undefined;
@@ -127,9 +138,7 @@ export function createExperienceBuilderCard(
         }
     }
 
-    if (input.cardType !== "widget") {
-        next = packPeerCardsInZone(next, zone);
-    }
+    next = packPeerCardsInZone(next, zone);
 
     return { doc: next, sectionKey, itemId };
 }

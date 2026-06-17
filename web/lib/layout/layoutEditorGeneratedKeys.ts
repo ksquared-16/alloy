@@ -137,7 +137,7 @@ export function addCustomOpportunityDrawerSection(
     next.sections.push({
         id: makeId("sec"),
         key,
-        title: input?.title?.trim() || `Custom section ${customCount}`,
+        title: input?.title?.replace(/^\s+|\s+$/g, "") || `Custom section ${customCount}`,
         collapsible: true,
         defaultExpanded: true,
         rows: [{ id: makeId("row"), columns: computeColumnWidths(1).map((width) => ({ id: makeId("col"), width, items: [] })) }],
