@@ -207,6 +207,21 @@ export function typographyIntentClass(intent: LayoutTypographyIntent | undefined
     }
 }
 
+function defaultAdornmentIconForRefKey(
+    refKey: string | undefined,
+    linkBehavior?: LayoutLinkBehavior,
+): LayoutAdornmentIcon {
+    if (linkBehavior === "mailto") return "mail";
+    if (linkBehavior === "tel") return "phone";
+    const key = refKey?.trim() ?? "";
+    if (key.startsWith("person.")) return "person";
+    if (key.startsWith("child.") || key.startsWith("inquiry_child.")) return "child";
+    if (key.startsWith("opportunity.")) return "opportunity";
+    if (key.includes("phone")) return "phone";
+    if (key.includes("email") || key.includes("mail")) return "mail";
+    return "person";
+}
+
 function resolveOpenDrawerActionForRefKey(
     refKey: string | undefined,
 ): { type: "open_drawer"; entity: "person" | "child" | "opportunity"; idPath?: string } | undefined {
@@ -244,7 +259,7 @@ export function applyDisplayConfigToItemPatch(
         if (action) {
             patch.adornment = {
                 position,
-                icon: icon ?? "link",
+                icon: icon ?? defaultAdornmentIconForRefKey(item.refKey, linkBehavior),
                 action,
             };
         }
@@ -253,7 +268,7 @@ export function applyDisplayConfigToItemPatch(
         if (action) {
             patch.adornment = {
                 position,
-                icon: icon ?? "link",
+                icon: icon ?? defaultAdornmentIconForRefKey(item.refKey, linkBehavior),
                 action,
             };
         }
