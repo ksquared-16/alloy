@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitEvent } from "@/lib/emitEvent";
+import { applyConfiguredStageRulesForStatusEntry } from "@/lib/lifecycle/applyConfiguredStageAutomationRules";
 import { onStageEntrySpawnWorkIntentFromOpportunityStatusChange } from "@/lib/lifecycle/onStageEntrySpawnWorkIntent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
@@ -75,6 +76,20 @@ export async function emitStatusChangedEvent(params: EmitStatusChangedEventParam
         } catch (e) {
             console.warn(
                 "[emitStatusChangedEvent] onStageEntrySpawnWorkIntent",
+                e instanceof Error ? e.message : e,
+            );
+        }
+        try {
+            await applyConfiguredStageRulesForStatusEntry({
+                supabase,
+                orgId,
+                opportunityId: entityId,
+                nextStatusKey: newNorm,
+                actorUserId,
+            });
+        } catch (e) {
+            console.warn(
+                "[emitStatusChangedEvent] applyConfiguredStageRulesForStatusEntry",
                 e instanceof Error ? e.message : e,
             );
         }

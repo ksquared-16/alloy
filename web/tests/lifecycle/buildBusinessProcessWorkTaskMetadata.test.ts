@@ -22,6 +22,18 @@ describe("buildBusinessProcessWorkTaskMetadata", () => {
         });
     });
 
+    it("stamps bp runtime fingerprint when provided", () => {
+        const metadata = buildBusinessProcessWorkTaskMetadata({
+            workIntentKey: "confirm_tour_date",
+            operatingPlanTemplateKey: "confirm_tour_date",
+            lifecycleStageKey: "tour",
+            bpRuntimeFingerprint: "bp:org-1:opportunities:opp-1:tour:confirm_tour_date",
+        });
+        expect(metadata.bp_runtime_fingerprint).toBe(
+            "bp:org-1:opportunities:opp-1:tour:confirm_tour_date",
+        );
+    });
+
     it("requires all identity keys", () => {
         expect(() =>
             buildBusinessProcessWorkTaskMetadata({

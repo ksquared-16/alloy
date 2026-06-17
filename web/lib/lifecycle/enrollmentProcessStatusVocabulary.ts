@@ -37,7 +37,7 @@ export const ENROLLMENT_FAMILY_TRACK_STATUS_VOCABULARY: EnrollmentStatusVocabula
     { status_key: "tour_requested", status_label: "Tour Requested", sort_order: 20, stage_key: "tour_scheduled", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
     { status_key: "tour_scheduled", status_label: "Tour Scheduled", sort_order: 25, stage_key: "tour_scheduled", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
     { status_key: "tour_completed", status_label: "Tour Completed", sort_order: 30, stage_key: "tour_completed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
-    { status_key: "tour_no_show", status_label: "Tour No-Show", sort_order: 32, stage_key: "tour_completed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
+    { status_key: "tour_no_show", status_label: "Tour No-Show", sort_order: 32, stage_key: "tour_scheduled", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
     { status_key: "decision_pending", status_label: "Decision Pending", sort_order: 35, stage_key: "decision_pending", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY },
     { status_key: "lost", status_label: "Lost", sort_order: 50, stage_key: "closed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY, terminal: true },
     { status_key: "withdrawn", status_label: "Withdrawn", sort_order: 55, stage_key: "closed", entity_type: "opportunities", track_key: ENROLLMENT_TRACK_FAMILY_KEY, terminal: true },

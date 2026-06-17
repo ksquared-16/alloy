@@ -10,6 +10,10 @@ vi.mock("@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent", () => ({
     emitDomainLifecycleStatusChangedEvent: vi.fn().mockResolvedValue({ error: null }),
 }));
 
+vi.mock("@/lib/lifecycle/emitDomainLifecycleSignalEvent", () => ({
+    emitDomainLifecycleSignalEvent: vi.fn().mockResolvedValue({ error: null }),
+}));
+
 vi.mock("@/lib/admin/statusTransitionRules", () => ({
     validateStatusTransition: vi.fn().mockResolvedValue({ ok: true }),
 }));
@@ -19,6 +23,7 @@ vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
 }));
 
 import { emitDomainLifecycleStatusChangedEvent } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
+import { emitDomainLifecycleSignalEvent } from "@/lib/lifecycle/emitDomainLifecycleSignalEvent";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 
 function baseBooking(over: Partial<TourBookingRow>): TourBookingRow {
@@ -97,6 +102,7 @@ describe("deriveTourMetadataMirrorFromBooking", () => {
 describe("applyTourBookingOpportunityIntegration", () => {
     beforeEach(() => {
         vi.mocked(emitDomainLifecycleStatusChangedEvent).mockClear();
+        vi.mocked(emitDomainLifecycleSignalEvent).mockClear();
         vi.mocked(validateStatusTransition).mockClear();
     });
 
@@ -237,43 +243,24 @@ describe("applyTourBookingOpportunityIntegration", () => {
         );
     });
 
-    it("canceled sets needs-attention metadata without status change", async () => {
+    it("canceled emits domain lifecycle signal without status change", async () => {
         const booking = baseBooking({ status_key: "canceled" });
-        const selectChain = {
-            eq: vi.fn().mockReturnThis(),
-            maybeSingle: vi.fn(async () => ({
-                data: {
-                    id: "opp-1",
-                    org_id: "org-1",
-                    status_key: "tour_scheduled",
-                    metadata: {},
-                    work_unit_id: null,
-                },
-                error: null,
-            })),
-        };
-        const updateChain = {
-            eq: vi.fn().mockReturnThis(),
-        };
-        updateChain.eq.mockImplementation(function (this: typeof updateChain, col: string) {
-            if (col === "org_id") {
-                return Promise.resolve({ error: null });
-            }
-            return updateChain;
+        const supabase = makeSupabase({
+            id: "opp-1",
+            org_id: "org-1",
+            status_key: "tour_scheduled",
+            metadata: {},
+            work_unit_id: null,
         });
-        const supabase = {
-            from: vi.fn((table: string) => {
-                if (table === "opportunities") {
-                    return {
-                        select: vi.fn(() => selectChain),
-                        update: vi.fn(() => updateChain),
-                    };
-                }
-                throw new Error(`unexpected table ${table}`);
-            }),
-        } as never;
         await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "canceled" });
         expect(emitDomainLifecycleStatusChangedEvent).not.toHaveBeenCalled();
+        expect(emitDomainLifecycleSignalEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                domain: "tour_booking",
+                signal: "canceled",
+                opportunityId: "opp-1",
+            }),
+        );
     });
 
     it("confirmed_mirror skips when booking is not firm", async () => {

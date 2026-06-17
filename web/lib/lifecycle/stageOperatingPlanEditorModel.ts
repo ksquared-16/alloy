@@ -11,6 +11,7 @@ import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1"
 import { normalizeOperatingPlanDraftForPersist } from "@/lib/lifecycle/stageOperatingPlanConvergence";
 import { normalizeOutcomeRulesOnPersist } from "@/lib/lifecycle/stageOutcomeAutomation";
 import { ENROLLMENT_PROCESS_KEY } from "@/lib/lifecycle/lifecycleProcessTypes";
+import { validateStageOperatingPlanWorkDefinitions } from "@/lib/lifecycle/validateStageOperatingPlanWorkDefinitions";
 
 export type StageOperatingPlanEditorDraft = {
     purpose: string;
@@ -73,6 +74,12 @@ export function stageOperatingPlanDraftToPersisted(
     };
     const purpose = normalized.purpose.trim();
     if (purpose) plan.purpose = purpose;
+
+    const validation = validateStageOperatingPlanWorkDefinitions(plan);
+    if (!validation.ok) {
+        const first = validation.issues[0]!;
+        throw new Error(first.message);
+    }
 
     return parseStageOperatingPlanV1(plan);
 }

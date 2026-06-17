@@ -30,7 +30,7 @@ const LEGACY_GRANULAR_STATUS_TO_STAGE: Record<string, string> = {
     tour_requested: "tour_scheduled",
     tour_scheduled: "tour_scheduled",
     tour_completed: "tour_completed",
-    tour_no_show: "tour_completed",
+    tour_no_show: "tour_scheduled",
     follow_up_attempted: "tour_completed",
     decision_pending: "decision_pending",
 };

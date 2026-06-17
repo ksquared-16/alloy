@@ -73,9 +73,19 @@ export type StageOutcomeRuleTargetV1 = {
     due_days?: number | null;
 };
 
+export type StageDomainSignalTriggerV1 = {
+    domain: string;
+    signal: string;
+};
+
 export type StageOutcomeRuleV1 = {
     rule_key: string;
-    when_outcome_key: string;
+    /** Manual work-outcome completion in the operating plan editor. */
+    when_outcome_key?: string | null;
+    /** Apply when opportunity status_key enters this value. */
+    when_enter_status_key?: string | null;
+    /** Apply when a domain lifecycle signal is emitted (no status change). */
+    when_domain_signal?: StageDomainSignalTriggerV1 | null;
     targets: StageOutcomeRuleTargetV1[];
     /** Apply only when attempt count is strictly less than this value. */
     when_attempt_count_lt?: number;
@@ -240,19 +250,37 @@ function parseTarget(raw: unknown): StageOutcomeRuleTargetV1 | null {
     return target;
 }
 
+function parseDomainSignalTrigger(raw: unknown): StageDomainSignalTriggerV1 | null {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+    const o = raw as Record<string, unknown>;
+    const domain = trimNonEmpty(o.domain);
+    const signal = trimNonEmpty(o.signal);
+    if (!domain || !signal) return null;
+    return { domain, signal };
+}
+
 function parseOutcomeRule(raw: unknown): StageOutcomeRuleV1 | null {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
     const o = raw as Record<string, unknown>;
     const rule_key = trimNonEmpty(o.rule_key);
     const when_outcome_key = trimNonEmpty(o.when_outcome_key);
-    if (!rule_key || !when_outcome_key || !Array.isArray(o.targets)) return null;
+    const when_enter_status_key = trimNonEmpty(o.when_enter_status_key);
+    const when_domain_signal = parseDomainSignalTrigger(o.when_domain_signal);
+    if (!rule_key || !Array.isArray(o.targets)) return null;
+    if (!when_outcome_key && !when_enter_status_key && !when_domain_signal) return null;
     const targets: StageOutcomeRuleTargetV1[] = [];
     for (const t of o.targets) {
         const parsed = parseTarget(t);
         if (parsed) targets.push(parsed);
     }
     if (!targets.length) return null;
-    const rule: StageOutcomeRuleV1 = { rule_key, when_outcome_key, targets };
+    const rule: StageOutcomeRuleV1 = {
+        rule_key,
+        ...(when_outcome_key ? { when_outcome_key } : {}),
+        ...(when_enter_status_key ? { when_enter_status_key } : {}),
+        ...(when_domain_signal ? { when_domain_signal } : {}),
+        targets,
+    };
     if (typeof o.when_attempt_count_lt === "number" && Number.isFinite(o.when_attempt_count_lt)) {
         rule.when_attempt_count_lt = Math.max(0, Math.floor(o.when_attempt_count_lt));
     }
@@ -383,11 +411,35 @@ export function outcomeRulesForKey(
     const key = outcomeKey.trim();
     const attemptCount = options?.attemptCount;
     return plan.outcome_rules.filter((r) => {
-        if (r.when_outcome_key !== key) return false;
+        if ((r.when_outcome_key ?? "").trim() !== key) return false;
         if (attemptCount == null) return true;
         if (r.when_attempt_count_lt != null && attemptCount >= r.when_attempt_count_lt) return false;
         if (r.when_attempt_count_gte != null && attemptCount < r.when_attempt_count_gte) return false;
         return true;
+    });
+}
+
+export function statusEntryRulesForStatusKey(
+    plan: StageOperatingPlanV1,
+    statusKey: string,
+): StageOutcomeRuleV1[] {
+    const key = statusKey.trim();
+    if (!key) return [];
+    return plan.outcome_rules.filter((r) => (r.when_enter_status_key ?? "").trim() === key);
+}
+
+export function domainSignalRulesForSignal(
+    plan: StageOperatingPlanV1,
+    domain: string,
+    signal: string,
+): StageOutcomeRuleV1[] {
+    const domainKey = domain.trim();
+    const signalKey = signal.trim();
+    if (!domainKey || !signalKey) return [];
+    return plan.outcome_rules.filter((r) => {
+        const trigger = r.when_domain_signal;
+        if (!trigger) return false;
+        return trigger.domain.trim() === domainKey && trigger.signal.trim() === signalKey;
     });
 }
 

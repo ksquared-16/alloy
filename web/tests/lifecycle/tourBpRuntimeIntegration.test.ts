@@ -112,17 +112,17 @@ describe("tourBpRuntimeIntegration", () => {
             status_key: "tour_no_show",
             status_label: "Tour No-Show",
             sort_order: 32,
-            stage_key: "tour_completed",
+            stage_key: "tour_scheduled",
             entity_type: "opportunities",
             track_key: "family_track",
         });
-        expect(noShow.process_stage_key).toBe("tour_completed");
+        expect(noShow.process_stage_key).toBe("tour_scheduled");
     });
 
     it("resolves granular legacy stage assignment when coarse tour stage is not configured", () => {
         const configured = ["tour_scheduled", "tour_completed", "decision_pending"];
         expect(legacyGranularProcessStageForStatusKey("tour_scheduled")).toBe("tour_scheduled");
-        expect(legacyGranularProcessStageForStatusKey("tour_no_show")).toBe("tour_completed");
+        expect(legacyGranularProcessStageForStatusKey("tour_no_show")).toBe("tour_scheduled");
         expect(
             resolveStatusProcessStageAssignment("tour_completed", null, configured).stage,
         ).toBe("tour_completed");
@@ -161,6 +161,46 @@ describe("tourBpRuntimeIntegration", () => {
         expect(transition.stageChanged).toBe(true);
         expect(transition.previousBuilderStageKey).toBe("tour_scheduled");
         expect(transition.nextBuilderStageKey).toBe("tour_completed");
+    });
+
+    it("does not spawn BP work when tour_no_show keeps builder stage unchanged", async () => {
+        const scheduledMeta = enrollmentStatusVocabularyMetadata({
+            status_key: "tour_scheduled",
+            status_label: "Tour Scheduled",
+            sort_order: 25,
+            stage_key: "tour_scheduled",
+            entity_type: "opportunities",
+            track_key: "family_track",
+        });
+        const noShowMeta = enrollmentStatusVocabularyMetadata({
+            status_key: "tour_no_show",
+            status_label: "Tour No-Show",
+            sort_order: 32,
+            stage_key: "tour_scheduled",
+            entity_type: "opportunities",
+            track_key: "family_track",
+        });
+        const transition = detectBuilderStageTransition({
+            previousStatusKey: "tour_scheduled",
+            nextStatusKey: "tour_no_show",
+            departmentMetadata: granularTourDepartmentMetadata(),
+            previousStatusMetadata: scheduledMeta,
+            nextStatusMetadata: noShowMeta,
+        });
+        expect(transition.stageChanged).toBe(false);
+
+        const supabase = makeSupabaseForStageEntry();
+        const result = await onStageEntrySpawnWorkIntent({
+            supabase: supabase as never,
+            orgId,
+            userId,
+            opportunityId,
+            previousStatusKey: "tour_scheduled",
+            nextStatusKey: "tour_no_show",
+        });
+        expect(result.action).toBe("skipped");
+        expect(result.reason).toBe("stage_unchanged");
+        expect(mockInstantiate).not.toHaveBeenCalled();
     });
 
     it("does not spawn BP work on tour_scheduled stage entry", async () => {

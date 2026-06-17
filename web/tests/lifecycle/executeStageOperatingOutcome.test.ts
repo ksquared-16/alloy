@@ -67,7 +67,7 @@ describe("executeStageOperatingOutcome", () => {
 
     it("create_next_work uses shared stage work instantiation with idempotency", async () => {
         mockInstantiate.mockResolvedValue({ status: "created", work_id: "work-1" });
-        const plan = defaultStageOperatingPlanForEnrollmentStage("tour")!;
+        const plan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
         plan.outcome_rules = [
             {
                 rule_key: "spawn_outcome_work",
@@ -94,7 +94,7 @@ describe("executeStageOperatingOutcome", () => {
             expect.objectContaining({
                 orgId: "org-1",
                 opportunityId: "opp-1",
-                stageKey: "tour",
+                stageKey: "tour_completed",
                 departmentId: "dept-1",
                 template: expect.objectContaining({
                     template_key: "record_tour_outcome_work",
@@ -106,7 +106,7 @@ describe("executeStageOperatingOutcome", () => {
 
     it("create_next_work dedupes repeated outcome execution", async () => {
         mockInstantiate.mockResolvedValue({ status: "deduped", work_id: "work-existing" });
-        const plan = defaultStageOperatingPlanForEnrollmentStage("tour")!;
+        const plan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
         plan.outcome_rules = [
             {
                 rule_key: "spawn_outcome_work",
@@ -130,5 +130,37 @@ describe("executeStageOperatingOutcome", () => {
 
         expect(result.errors).toEqual([]);
         expect(mockInstantiate).toHaveBeenCalledTimes(1);
+    });
+
+    it("move_to_stage is a passthrough when paired with update_family_case_status", async () => {
+        const { updateOpportunityStatusWithEvent } = await import(
+            "@/lib/opportunities/updateOpportunityStatusWithEvent"
+        );
+        const plan = defaultStageOperatingPlanForEnrollmentStage("qualification")!;
+        plan.outcome_rules = [
+            {
+                rule_key: "qualified_move",
+                when_outcome_key: "qualified",
+                targets: [
+                    { kind: "update_family_case_status", status_key: "contacted" },
+                    { kind: "move_to_stage", stage_key: "qualification" },
+                    { kind: "mark_stage_work_complete" },
+                ],
+            },
+        ];
+
+        const result = await executeStageOperatingOutcome({
+            supabase: { from: vi.fn() } as never,
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            plan,
+            outcomeKey: "qualified",
+            subject: { journey_segment: "family", opportunity_id: "opp-1" },
+        });
+
+        expect(result.errors).toEqual([]);
+        expect(result.status_updated).toBe(true);
+        expect(updateOpportunityStatusWithEvent).toHaveBeenCalled();
     });
 });

@@ -8,6 +8,7 @@ export type BuildBusinessProcessWorkTaskMetadataInput = {
     lifecycleStageKey: string;
     departmentId?: string | null;
     attemptCount?: number;
+    bpRuntimeFingerprint?: string | null;
     extra?: Record<string, unknown> | null;
 };
 
@@ -29,6 +30,7 @@ export function buildBusinessProcessWorkTaskMetadata(
     }
 
     const departmentId = trimOrNull(input.departmentId ?? null);
+    const bpRuntimeFingerprint = trimOrNull(input.bpRuntimeFingerprint ?? null);
     const attemptCount =
         typeof input.attemptCount === "number" && Number.isFinite(input.attemptCount) && input.attemptCount >= 0
             ? Math.floor(input.attemptCount)
@@ -43,5 +45,6 @@ export function buildBusinessProcessWorkTaskMetadata(
         operating_plan_template: true,
         attempt_count: attemptCount,
         ...(departmentId ? { department_id: departmentId } : {}),
+        ...(bpRuntimeFingerprint ? { bp_runtime_fingerprint: bpRuntimeFingerprint } : {}),
     };
 }

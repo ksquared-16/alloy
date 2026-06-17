@@ -30,24 +30,6 @@ const PRIMARY_WORK_INTENT_BY_STAGE: Record<string, Omit<PrimaryWorkIntentV1, "pr
         work_definition_key: "collect_missing_information",
         due_policy: { kind: "offset_days", days: 1 },
     },
-    tour_completed: {
-        work_intent_key: "record_tour_outcome_work",
-        label: "Record tour outcome",
-        work_definition_key: "record_tour_outcome",
-        due_policy: { kind: "offset_days", days: 1 },
-    },
-    decision_pending: {
-        work_intent_key: "follow_up_decision",
-        label: "Follow up on enrollment decision",
-        work_definition_key: "contact_family",
-        due_policy: { kind: "offset_days", days: 2 },
-    },
-    tour: {
-        work_intent_key: "complete_tour_process",
-        label: "Complete Tour Process",
-        work_definition_key: "record_tour_outcome",
-        due_policy: { kind: "offset_days", days: 1 },
-    },
     enrolling: {
         work_intent_key: "complete_enrollment",
         label: "Complete Enrollment",
@@ -55,8 +37,6 @@ const PRIMARY_WORK_INTENT_BY_STAGE: Record<string, Omit<PrimaryWorkIntentV1, "pr
         due_policy: { kind: "offset_days", days: 1 },
     },
 };
-
-const NO_SPAWN_STAGES = new Set(["enrolled", "waitlist", "decision", "closed", "closed_withdrawn", "tour_scheduled"]);
 
 function primaryIntentFromWorkTemplate(template: StageWorkTemplateV1): PrimaryWorkIntentV1 {
     const resolved = resolveWorkDefinitionKeyFromTemplate(template);
@@ -77,10 +57,13 @@ export function resolvePrimaryWorkIntentForStage(
     operatingPlan?: Pick<StageOperatingPlanV1, "work_templates"> | null,
 ): PrimaryWorkIntentV1 | null {
     const key = builderStageKey.trim();
-    if (!key || NO_SPAWN_STAGES.has(key)) return null;
+    if (!key) return null;
 
     const fromPlan = resolveEffectivePrimaryWorkTemplate(operatingPlan ?? null);
     if (fromPlan) return primaryIntentFromWorkTemplate(fromPlan);
+
+    // When an operating plan is present (even with zero templates), config owns spawn behavior.
+    if (operatingPlan != null) return null;
 
     const legacy = PRIMARY_WORK_INTENT_BY_STAGE[key];
     if (!legacy) return null;

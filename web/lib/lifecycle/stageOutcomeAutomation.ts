@@ -56,7 +56,7 @@ function trimKey(value: unknown): string | null {
 }
 
 function rulesForOutcome(rules: StageOutcomeRuleV1[], outcomeKey: string): StageOutcomeRuleV1[] {
-    return rules.filter((r) => r.when_outcome_key === outcomeKey);
+    return rules.filter((r) => (r.when_outcome_key ?? "").trim() === outcomeKey.trim());
 }
 
 function detectAutomationKind(targets: StageOutcomeRuleTargetV1[]): OutcomeAutomationKind {
@@ -263,5 +263,10 @@ export function normalizeOutcomeRulesOnPersist(
     outcomes: StageOperatingPlanV1["outcomes"],
 ): StageOutcomeRuleV1[] {
     const outcomeKeys = new Set(outcomes.map((o) => o.outcome_key));
-    return rules.filter((r) => outcomeKeys.has(r.when_outcome_key));
+    return rules.filter(
+        (r) =>
+            Boolean((r.when_enter_status_key ?? "").trim()) ||
+            Boolean(r.when_domain_signal?.domain && r.when_domain_signal?.signal) ||
+            outcomeKeys.has((r.when_outcome_key ?? "").trim()),
+    );
 }

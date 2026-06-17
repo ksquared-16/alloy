@@ -3,6 +3,7 @@ import {
     buildLifecycleIntentIdempotencyKey,
     resolvePrimaryWorkIntentForStage,
 } from "@/lib/lifecycle/resolvePrimaryWorkIntentForStage";
+import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 
 describe("resolvePrimaryWorkIntentForStage", () => {
     it("maps lead to Make Contact / contact_family when no operating plan", () => {
@@ -22,13 +23,6 @@ describe("resolvePrimaryWorkIntentForStage", () => {
         });
     });
 
-    it("maps tour to Complete Tour Process", () => {
-        expect(resolvePrimaryWorkIntentForStage("tour")).toMatchObject({
-            work_intent_key: "complete_tour_process",
-            work_definition_key: "record_tour_outcome",
-        });
-    });
-
     it("maps enrolling to Complete Enrollment", () => {
         expect(resolvePrimaryWorkIntentForStage("enrolling")).toMatchObject({
             work_intent_key: "complete_enrollment",
@@ -36,13 +30,37 @@ describe("resolvePrimaryWorkIntentForStage", () => {
         });
     });
 
-    it("returns null for enrolled", () => {
+    it("returns null for enrolled when no operating plan", () => {
         expect(resolvePrimaryWorkIntentForStage("enrolled")).toBeNull();
     });
 
-    it("returns null for waitlist and decision", () => {
-        expect(resolvePrimaryWorkIntentForStage("waitlist")).toBeNull();
-        expect(resolvePrimaryWorkIntentForStage("decision")).toBeNull();
+    it("returns null when operating plan has empty work_templates", () => {
+        const plan = defaultStageOperatingPlanForEnrollmentStage("tour_scheduled");
+        expect(plan?.work_templates).toEqual([]);
+        expect(resolvePrimaryWorkIntentForStage("tour_scheduled", plan)).toBeNull();
+    });
+
+    it("returns null when operating plan has empty work_templates for terminal stages", () => {
+        const plan = defaultStageOperatingPlanForEnrollmentStage("enrolled");
+        expect(resolvePrimaryWorkIntentForStage("enrolled", plan)).toBeNull();
+    });
+
+    it("resolves primary work from configured operating plan templates", () => {
+        const plan = defaultStageOperatingPlanForEnrollmentStage("tour_completed");
+        expect(resolvePrimaryWorkIntentForStage("tour_completed", plan)).toMatchObject({
+            work_intent_key: "record_tour_outcome_work",
+            work_definition_key: "record_tour_outcome",
+            provenance: "operating_plan",
+        });
+    });
+
+    it("resolves decision_pending work only from operating plan config", () => {
+        const plan = defaultStageOperatingPlanForEnrollmentStage("decision_pending");
+        expect(resolvePrimaryWorkIntentForStage("decision_pending", plan)).toMatchObject({
+            work_intent_key: "follow_up_decision",
+            provenance: "operating_plan",
+        });
+        expect(resolvePrimaryWorkIntentForStage("decision_pending")).toBeNull();
     });
 
     it("builds stable lifecycle intent idempotency keys", () => {

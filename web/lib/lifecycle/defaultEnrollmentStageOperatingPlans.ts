@@ -627,6 +627,16 @@ const ENROLLMENT_STAGE_OPERATING_DEFAULTS: Record<string, Omit<StageOperatingPla
                 when_outcome_key: "cancelled",
                 targets: attention("Tour canceled — follow up required"),
             },
+            {
+                rule_key: "status_tour_no_show_attention",
+                when_enter_status_key: "tour_no_show",
+                targets: attention("Tour no-show — follow up required"),
+            },
+            {
+                rule_key: "domain_tour_booking_canceled_attention",
+                when_domain_signal: { domain: "tour_booking", signal: "canceled" },
+                targets: attention("Tour canceled — follow up required"),
+            },
         ],
         attention_rules: [],
     },

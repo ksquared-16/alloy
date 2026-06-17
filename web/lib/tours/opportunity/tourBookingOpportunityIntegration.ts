@@ -6,10 +6,7 @@ import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import { OPPORTUNITY_TOUR_COMPLETED_DATE_METADATA_KEY } from "@/lib/admin/actions/lifecycleActionMetadataKeys";
 import { isValidIanaTimeZone, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 import { emitDomainLifecycleStatusChangedEvent } from "@/lib/lifecycle/emitDomainLifecycleStatusChangedEvent";
-import {
-    mergeEnrollmentOperationalIntoMetadata,
-    sanitizeEnrollmentOperationalPatch,
-} from "@/lib/opportunities/enrollmentOperationalMetadata";
+import { emitDomainLifecycleSignalEvent } from "@/lib/lifecycle/emitDomainLifecycleSignalEvent";
 
 /** V1: opportunity CRM status aligned to authoritative `tour_bookings` (scheduling SoT). */
 export const TOUR_BOOKING_OPPORTUNITY_STATUS = {
@@ -242,36 +239,6 @@ async function patchOpportunityTerminalFromTour(input: {
     }
 }
 
-async function applyTourBookingCanceledAttention(input: {
-    supabase: SupabaseClient;
-    orgId: string;
-    opportunityId: string;
-    booking: TourBookingRow;
-}): Promise<void> {
-    const { supabase, orgId, opportunityId, booking } = input;
-    const opp = await loadOpportunityForTourSync(supabase, orgId, opportunityId);
-    if (!opp) return;
-
-    const patch = sanitizeEnrollmentOperationalPatch({
-        wait_bucket: "waiting_on_staff",
-        wait_reason: "Tour canceled — follow up required",
-        wait_since: new Date().toISOString(),
-    });
-    if (!patch) return;
-
-    const metadata = asMetadataRecord(opp.metadata);
-    const merged = mergeEnrollmentOperationalIntoMetadata(metadata, patch);
-
-    const { error } = await supabase
-        .from("opportunities")
-        .update({ metadata: merged, updated_at: new Date().toISOString() })
-        .eq("id", opportunityId)
-        .eq("org_id", orgId);
-    if (error) {
-        throw new Error(`tour_booking: cancel attention failed — ${error.message}`);
-    }
-}
-
 /**
  * Keep `opportunities` metadata + `status_key` aligned for enrollment CRM / queue consumers.
  * Call after the `tour_bookings` row is committed, before tour lifecycle workflow events.
@@ -291,7 +258,18 @@ export async function applyTourBookingOpportunityIntegration(
     if (!orgId || !opportunityId) return;
 
     if (kind === "canceled") {
-        await applyTourBookingCanceledAttention({ supabase, orgId, opportunityId, booking });
+        const { error } = await emitDomainLifecycleSignalEvent({
+            supabase,
+            orgId,
+            opportunityId,
+            domain: TOUR_BOOKING_DOMAIN,
+            signal: "canceled",
+            actorUserId: resolveTourIntegrationActorUserId(booking, actorUserId),
+            metadata: { booking_id: booking.id },
+        });
+        if (error) {
+            throw new Error(`tour_booking: cancel signal failed — ${error.message}`);
+        }
         return;
     }
 
