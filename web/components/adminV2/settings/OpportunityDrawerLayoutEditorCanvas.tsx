@@ -93,10 +93,11 @@ function SectionPreviewBody({
         :   "default" as const;
     const previewCompositionHints = useMemo(
         () =>
-            leadOverviewVisualEditorCompositionHints(
-                section && sectionIsKpiTile(section) ? { summaryStripCompactRow: false } : {},
-            ),
-        [section],
+            leadOverviewVisualEditorCompositionHints({
+                ...(section && sectionIsKpiTile(section) ? { summaryStripCompactRow: false } : {}),
+                ...(sectionPresentation === "default" ? { suppressDrawerOverviewSectionHeader: true } : {}),
+            }),
+        [section, sectionPresentation],
     );
 
     if (!sectionDoc || hidden) {
@@ -214,9 +215,9 @@ function KpiTileSectionFrame({
         <div
             role="button"
             tabIndex={0}
-            className={`group relative min-h-[4.25rem] rounded-xl border border-l-[3px] transition-all duration-150 ${railClass} ${
+            className={`group relative min-h-[4.25rem] cursor-pointer rounded-xl border border-l-[3px] transition-all duration-150 ${railClass} ${
                 isSelected || widgetSelected ?
-                    "border-alloy-pine/35 ring-2 ring-alloy-pine/20 shadow-[0_2px_8px_rgba(45,106,79,0.08)]"
+                    "border-alloy-pine/40 ring-1 ring-alloy-pine/25 shadow-[0_2px_8px_rgba(45,106,79,0.08)]"
                 :   "border-alloy-stone/12 bg-white hover:border-alloy-pine/30 hover:shadow-[0_2px_8px_rgba(24,39,58,0.05)]"
             } ${hidden ? "opacity-60" : ""}`}
             data-testid={`visual-editor-section-${section.key}`}
@@ -227,6 +228,7 @@ function KpiTileSectionFrame({
                 if (widgetPath) onSelectFieldPath(widgetPath);
             }}
             onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
                 if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     onSelectSection(section.key);
@@ -262,12 +264,12 @@ function KpiTileSectionFrame({
                 </div>
             :   null}
 
-            <div onClick={(e) => e.stopPropagation()}>
+            <div className="pointer-events-none">
                 <SectionPreviewBody
                     doc={doc}
                     sectionKey={section.key}
                     hidden={hidden}
-                    traceEnabled={isBuild}
+                    traceEnabled={false}
                     selectedFieldPath={selectedFieldPath}
                     onSelectFieldPath={(path) => {
                         onSelectFieldPath(path);
@@ -328,10 +330,8 @@ function WidgetStripSectionFrame({
         <div
             role="group"
             className={`relative rounded-xl transition-all duration-150 ${
-                isSelected && hasItemSelected ?
-                    "ring-2 ring-alloy-blue/15"
-                : isSelected ?
-                    "ring-2 ring-alloy-pine/20"
+                isSelected ?
+                    "ring-1 ring-alloy-pine/25"
                 :   "hover:ring-1 hover:ring-alloy-pine/15"
             } ${hidden ? "opacity-60" : ""}`}
             data-testid={`visual-editor-section-${section.key}`}
@@ -446,6 +446,7 @@ function EditableSectionFrame({
                 onSelectBlockId(null);
             }}
             onKeyDown={(e) => {
+                if (e.target !== e.currentTarget) return;
                 if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     onSelectSection(section.key);
@@ -454,10 +455,8 @@ function EditableSectionFrame({
                 }
             }}
             className={`group relative cursor-pointer rounded-xl border bg-white shadow-sm transition-all duration-150 ${
-                isSelected && hasItemSelected ?
-                    "border-alloy-blue/35 ring-2 ring-alloy-blue/15"
-                : isSelected ?
-                    "border-alloy-pine/45 ring-2 ring-alloy-pine/20 shadow-[0_2px_8px_rgba(45,106,79,0.08)]"
+                isSelected ?
+                    "border-alloy-pine/40 ring-1 ring-alloy-pine/25 shadow-[0_2px_8px_rgba(45,106,79,0.08)]"
                 :   "border-alloy-stone/12 hover:border-alloy-pine/30 hover:shadow-[0_2px_8px_rgba(24,39,58,0.05)]"
             } ${hidden ? "opacity-60" : ""}`}
             data-testid={`visual-editor-section-${section.key}`}
@@ -469,6 +468,7 @@ function EditableSectionFrame({
                     type="text"
                     value={section.title}
                     onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) => applyDoc(renameSectionTitle(doc, section.key, e.target.value))}
                     className="w-full bg-transparent text-sm font-semibold text-alloy-midnight outline-none placeholder:text-alloy-midnight/35 focus:ring-0"
                     aria-label="Card title"

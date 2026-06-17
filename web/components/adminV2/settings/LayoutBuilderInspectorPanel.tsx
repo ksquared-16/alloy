@@ -159,7 +159,7 @@ export default function LayoutBuilderInspectorPanel({
 
     return (
         <aside
-            className="flex max-h-full flex-col overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-sm"
+            className="flex max-h-full min-w-0 flex-col overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-sm"
             data-testid="layout-builder-inspector-panel"
         >
             <div className="border-b border-alloy-forge/8 bg-gradient-to-r from-white to-alloy-stone/[0.03] px-4 py-3">
@@ -171,7 +171,7 @@ export default function LayoutBuilderInspectorPanel({
                 :   <p className={opSectionSupport}>Click a card, field, or tile on the canvas.</p>}
             </div>
 
-            <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3">
                 {!section ?
                     <div
                         className="rounded-xl border border-dashed border-alloy-forge/12 bg-alloy-stone/[0.02] px-4 py-8 text-center"

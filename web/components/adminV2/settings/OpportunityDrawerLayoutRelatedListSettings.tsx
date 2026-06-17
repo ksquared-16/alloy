@@ -13,8 +13,8 @@ import {
     type LayoutEditorRelatedListEntityType,
     type LayoutEditorRelatedListPresentationMode,
 } from "@/lib/layout/layoutEditorRelatedListConfig";
-import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
-import { useMemo } from "react";
+import { buildRelatedListFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
+import { useMemo, useState } from "react";
 
 type Props = {
     doc: LayoutDoc;
@@ -22,7 +22,7 @@ type Props = {
     applyDoc: (next: LayoutDoc) => void;
 };
 
-const ROW_LABELS = ["Primary row", "Secondary row", "Tertiary row"] as const;
+const ROW_LABELS = ["Row 1", "Row 2", "Row 3"] as const;
 
 function rowKey(index: number): "primaryRow" | "secondaryRow" | "tertiaryRow" {
     if (index === 0) return "primaryRow";
@@ -30,15 +30,46 @@ function rowKey(index: number): "primaryRow" | "secondaryRow" | "tertiaryRow" {
     return "tertiaryRow";
 }
 
+function RelatedListFieldSelect({
+    value,
+    groups,
+    testId,
+    onChange,
+}: {
+    value: string;
+    groups: ReturnType<typeof buildRelatedListFieldPickerGroups>;
+    testId: string;
+    onChange: (refKey: string) => void;
+}) {
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="mt-0.5 w-full min-w-0 rounded-md border border-alloy-forge/15 px-2 py-1 text-xs"
+            data-testid={testId}
+        >
+            <option value="">—</option>
+            {groups.map((group) => (
+                <optgroup key={group.entityKey} label={group.entityLabel}>
+                    {group.fields.map((field) => (
+                        <option key={field.refKey} value={field.refKey}>
+                            {field.fieldLabel}
+                        </option>
+                    ))}
+                </optgroup>
+            ))}
+        </select>
+    );
+}
+
 export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectionKey, applyDoc }: Props) {
     const section = doc.sections.find((s) => s.key === sectionKey);
     const config = section ? readLayoutEditorRelatedListConfig(section) : DEFAULT_CHILDREN_RELATED_LIST_CONFIG;
-    const fieldOptions = useMemo(
-        () =>
-            buildOpportunityDrawerEditorFieldPickerGroups()
-                .flatMap((g) => g.fields)
-                .filter((f) => f.fieldType !== "action"),
-        [],
+    const [showAllFields, setShowAllFields] = useState(false);
+
+    const fieldGroups = useMemo(
+        () => buildRelatedListFieldPickerGroups(config.entityType, { includeAllEntities: showAllFields }),
+        [config.entityType, showAllFields],
     );
 
     const rows = [config.primaryRow, config.secondaryRow, config.tertiaryRow];
@@ -100,6 +131,18 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                 </select>
             </label>
 
+            <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] text-alloy-midnight/50">Fields grouped by entity</p>
+                <button
+                    type="button"
+                    className="shrink-0 text-[10px] font-medium text-alloy-pine hover:underline"
+                    onClick={() => setShowAllFields((v) => !v)}
+                    data-testid="visual-editor-related-list-toggle-all-fields"
+                >
+                    {showAllFields ? "Entity fields only" : "All fields"}
+                </button>
+            </div>
+
             {ROW_LABELS.map((label, index) => {
                 const key = rowKey(index);
                 const row = rows[index];
@@ -110,11 +153,12 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                         {[0, 1, 2].map((slot) => (
                             <label key={slot} className="block text-[10px] text-alloy-midnight/50">
                                 Field {slot + 1}
-                                <select
+                                <RelatedListFieldSelect
                                     value={fields[slot] ?? ""}
-                                    onChange={(e) => {
+                                    groups={fieldGroups}
+                                    testId={`visual-editor-related-list-${key}-${slot}`}
+                                    onChange={(value) => {
                                         const nextFields = [...fields];
-                                        const value = e.target.value;
                                         if (value) nextFields[slot] = value;
                                         else nextFields.splice(slot, 1);
                                         applyDoc(
@@ -123,16 +167,7 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                                             }),
                                         );
                                     }}
-                                    className="mt-0.5 w-full rounded-md border border-alloy-forge/15 px-2 py-1 text-xs"
-                                    data-testid={`visual-editor-related-list-${key}-${slot}`}
-                                >
-                                    <option value="">—</option>
-                                    {fieldOptions.map((field) => (
-                                        <option key={field.refKey} value={field.refKey}>
-                                            {field.fieldLabel}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             </label>
                         ))}
                     </fieldset>

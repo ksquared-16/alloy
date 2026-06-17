@@ -155,7 +155,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                     <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                         <span className="text-[10px] font-medium text-alloy-midnight/55">
                             {friendlyLabels ?
-                                `Section row ${row.rowIndex + 1} · ${row.columnCount} column${row.columnCount === 1 ? "" : "s"}`
+                                `Row ${row.rowIndex + 1}`
                             :   `Row ${row.rowIndex + 1} · ${row.columnCount} column${row.columnCount === 1 ? "" : "s"}`}
                         </span>
                         <span className="flex gap-1">
@@ -199,7 +199,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                     onClick={() => applyDoc(removeSectionRow(doc, sectionKey, row.rowIndex))}
                                     data-testid={`visual-editor-remove-section-row-${row.rowIndex}`}
                                 >
-                                    Remove
+                                    {friendlyLabels ? "Remove row" : "Remove"}
                                 </button>
                             :   null}
                         </span>
@@ -227,6 +227,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                             doc={doc}
                                             sectionKey={sectionKey}
                                             applyDoc={applyDoc}
+                                            friendlyLabels={friendlyLabels}
                                             onSelect={() => onSelectItemId(selectedItemId === entry.itemId ? null : entry.itemId)}
                                             onRemove={() => {
                                                 applyDoc(removeSectionItem(doc, sectionKey, entry.itemId));
@@ -297,7 +298,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
 
                                 <div className="mt-2 flex flex-wrap gap-1">
                                     <AddItemButton
-                                        label="Field"
+                                        label={friendlyLabels ? "Add field" : "Field"}
                                         testId={`visual-editor-add-field-${row.rowIndex}-${col.colIndex}`}
                                         onClick={() => {
                                             setPickerTarget({ rowIndex: row.rowIndex, colIndex: col.colIndex, kind: "field" });
@@ -414,6 +415,7 @@ function SectionItemRow({
     doc,
     sectionKey,
     applyDoc,
+    friendlyLabels = false,
     onSelect,
     onRemove,
     onMoveVertical,
@@ -426,6 +428,7 @@ function SectionItemRow({
     doc: LayoutDoc;
     sectionKey: string;
     applyDoc: (next: LayoutDoc) => void;
+    friendlyLabels?: boolean;
     onSelect: () => void;
     onRemove: () => void;
     onMoveVertical: (dir: -1 | 1) => void;
@@ -452,25 +455,45 @@ function SectionItemRow({
                         :   null}
                     </span>
                 </button>
-                <span className="flex shrink-0 gap-0.5">
+                <span className="flex shrink-0 flex-wrap justify-end gap-0.5">
                     {canMoveLeft ?
-                        <button type="button" className="px-1 text-alloy-midnight/50 hover:text-alloy-pine" onClick={() => onMoveHorizontal(-1)} aria-label="Move left">
-                            ←
+                        <button
+                            type="button"
+                            className="rounded px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/30 hover:text-alloy-pine"
+                            onClick={() => onMoveHorizontal(-1)}
+                        >
+                            {friendlyLabels ? "←" : "←"}
                         </button>
                     :   null}
                     {canMoveRight ?
-                        <button type="button" className="px-1 text-alloy-midnight/50 hover:text-alloy-pine" onClick={() => onMoveHorizontal(1)} aria-label="Move right">
-                            →
+                        <button
+                            type="button"
+                            className="rounded px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/30 hover:text-alloy-pine"
+                            onClick={() => onMoveHorizontal(1)}
+                        >
+                            {friendlyLabels ? "→" : "→"}
                         </button>
                     :   null}
-                    <button type="button" className="px-1 text-alloy-midnight/50 hover:text-alloy-pine" onClick={() => onMoveVertical(-1)} aria-label="Move up">
-                        ↑
+                    <button
+                        type="button"
+                        className="rounded px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/30 hover:text-alloy-pine"
+                        onClick={() => onMoveVertical(-1)}
+                    >
+                        {friendlyLabels ? "Up" : "↑"}
                     </button>
-                    <button type="button" className="px-1 text-alloy-midnight/50 hover:text-alloy-pine" onClick={() => onMoveVertical(1)} aria-label="Move down">
-                        ↓
+                    <button
+                        type="button"
+                        className="rounded px-1.5 py-0.5 text-[10px] text-alloy-midnight/55 hover:bg-alloy-stone/30 hover:text-alloy-pine"
+                        onClick={() => onMoveVertical(1)}
+                    >
+                        {friendlyLabels ? "Down" : "↓"}
                     </button>
-                    <button type="button" className="px-1 text-red-500/70 hover:text-red-600" onClick={onRemove} aria-label="Remove">
-                        ✕
+                    <button
+                        type="button"
+                        className="rounded px-1.5 py-0.5 text-[10px] text-red-500/70 hover:bg-red-50 hover:text-red-600"
+                        onClick={onRemove}
+                    >
+                        {friendlyLabels ? "Remove" : "✕"}
                     </button>
                 </span>
             </div>

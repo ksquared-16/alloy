@@ -1697,6 +1697,18 @@ function SectionView({
                 DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS
             :   DRAWER_OVERVIEW_PANEL_BODY_CLASS;
 
+        if (composition.suppressDrawerOverviewSectionHeader) {
+            return (
+                <div
+                    className={bodyClassName}
+                    data-layout-runtime-section-key={section.key}
+                    data-layout-runtime-section-presentation="composition_body_only"
+                >
+                    {body}
+                </div>
+            );
+        }
+
         return (
             <DrawerOverviewPanelShell
                 sectionKey={section.key}

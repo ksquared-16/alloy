@@ -41,6 +41,7 @@ export function mapPersonHouseholdChildToLayoutRuntimeRow(row: Record<string, un
         "child.schedule": "",
         "child.status": "",
         "child.age_band": "",
+        "child.age": "",
         "inquiry_child.desired_start_date": "",
         "inquiry_child.location_id": "",
         "inquiry_child.program_room_cohort_key": "",

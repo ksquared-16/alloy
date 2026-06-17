@@ -42,6 +42,8 @@ export type LayoutRuntimeCompositionHints = {
     childFamilyCardList?: boolean;
     /** Patch 20 — child overview composition active. */
     childOverviewComposition?: boolean;
+    /** Experience Builder canvas preview — card title is edited outside runtime chrome. */
+    suppressDrawerOverviewSectionHeader?: boolean;
     /** Patch 20 — child enrollment/care summary cards in strip. */
     childOperatingSummaryCards?: boolean;
     /** Summary-strip family widget shows count only. */
