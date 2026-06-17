@@ -44,7 +44,6 @@ import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
 import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
-import { AdminV2ShellDrawerScope } from "./AdminV2ShellDrawerScope";
 import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
 
 /**
