@@ -140,9 +140,6 @@ export function countLayoutBuilderItems(doc: LayoutDoc): number {
     );
 }
 
-/** True when the layout is mostly platform defaults — show the start guide. */
-export function shouldShowLayoutBuilderStartGuide(doc: LayoutDoc): boolean {
-    const customSections = doc.sections.filter((s) => isValidCustomSectionKeyPattern(s.key));
-    if (customSections.length === 0 && countLayoutBuilderItems(doc) < 12) return true;
-    return customSections.length <= 1 && countLayoutBuilderItems(doc) < 6;
+export function shouldShowLayoutBuilderStartGuide(_doc: LayoutDoc): boolean {
+    return false;
 }

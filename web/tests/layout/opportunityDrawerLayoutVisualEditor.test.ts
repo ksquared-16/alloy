@@ -248,7 +248,6 @@ describe("layouts settings visual editor wiring", () => {
         expect(editor).toContain("visual-editor-publish");
         expect(editor).toContain("LayoutBuilderPalettePanel");
         expect(editor).toContain("LayoutBuilderInspectorPanel");
-        expect(canvas).toContain("LayoutBuilderCanvasStartGuide");
         expect(canvas).toContain("LayoutBuilderPreviewDrawerFrame");
         expect(canvas).toContain('data-visual-editor-editable="true"');
     });

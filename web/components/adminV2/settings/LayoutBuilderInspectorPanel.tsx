@@ -29,17 +29,17 @@ import {
     CARD_WIDTH_FRACTION_KEYS,
     CARD_WIDTH_FRACTIONS,
     readCardWidthFraction,
-    setCardWidthFraction,
     type CardWidthFractionKey,
 } from "@/lib/layout/layoutBuilderCardWidth";
 import { EXPERIENCE_BUILDER_PEER_BLOCK_LABELS } from "@/lib/layout/layoutBuilderCardAuthoring";
 import { listSectionCompositionRows, removeSectionItem } from "@/lib/layout/layoutEditorSectionComposition";
 import { sectionZoneLabel } from "@/lib/layout/layoutBuilderStudioUx";
 import {
-    applyKpiTileWidth,
-    packKpiTilesInZone,
-    repackKpiTilesAfterZoneReorder,
-} from "@/lib/layout/layoutBuilderKpiTileRows";
+    applyPeerCardWidth,
+    packPeerCardsInZone,
+    repackPeerCardsAfterZoneReorder,
+} from "@/lib/layout/layoutBuilderPeerCardRows";
+import { applyKpiTileWidth } from "@/lib/layout/layoutBuilderKpiTileRows";
 import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { listSectionWidgetItems, sectionIsKpiTile, sectionIsWidgetStrip, WIDGET_STRIP_WIDTH_PRESETS } from "@/lib/layout/layoutBuilderWidgetStrip";
 import { setRowColumnCount } from "@/lib/layout/builderOps";
@@ -138,13 +138,13 @@ export default function LayoutBuilderInspectorPanel({
     const applyWidthChange = (widthKey: CardWidthFractionKey) => {
         if (!section) return;
         if (kpiTile) applyDoc(applyKpiTileWidth(doc, section.key, widthKey));
-        else applyDoc(setCardWidthFraction(doc, section.key, widthKey));
+        else applyDoc(applyPeerCardWidth(doc, section.key, widthKey));
     };
 
     const applyReorder = (direction: -1 | 1) => {
         if (!section) return;
         let next = reorderSectionInZone(doc, section.key, direction);
-        if (kpiTile) next = repackKpiTilesAfterZoneReorder(next, section.key);
+        next = repackPeerCardsAfterZoneReorder(next, section.key);
         applyDoc(next);
     };
 
@@ -152,7 +152,7 @@ export default function LayoutBuilderInspectorPanel({
         if (!section || !deleteGate.ok) return;
         const zone = resolveOpportunityDrawerSectionZone(section);
         let next = deleteOpportunityDrawerSection(doc, section.key);
-        if (kpiTile) next = packKpiTilesInZone(next, zone);
+        next = packPeerCardsInZone(next, zone);
         applyDoc(next);
         onClearSelection();
     };

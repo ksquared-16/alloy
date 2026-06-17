@@ -14,13 +14,13 @@ import {
     addRelatedListOpportunityDrawerSection,
     addWidgetOpportunityDrawerSection,
 } from "@/lib/layout/layoutEditorSectionLayout";
-import { setCardWidthFraction, type CardWidthFractionKey } from "@/lib/layout/layoutBuilderCardWidth";
 import {
     applyKpiTileWidth,
     markSectionAsKpiTile,
-    packKpiTilesInZone,
     setKpiTileSectionTitleHidden,
 } from "@/lib/layout/layoutBuilderKpiTileRows";
+import { applyPeerCardWidth, packPeerCardsInZone } from "@/lib/layout/layoutBuilderPeerCardRows";
+import type { CardWidthFractionKey } from "@/lib/layout/layoutBuilderCardWidth";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { OpportunityDrawerLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
 
@@ -117,7 +117,7 @@ export function createExperienceBuilderCard(
         }
         next = applyKpiTileWidth(next, sectionKey, widthKey);
     } else {
-        next = setCardWidthFraction(next, sectionKey, widthKey);
+        next = applyPeerCardWidth(next, sectionKey, widthKey);
         if (input.cardType === "text") {
             const added = addSectionTextItem(next, sectionKey, 0, 0);
             if (added.ok && added.doc) {
@@ -127,8 +127,8 @@ export function createExperienceBuilderCard(
         }
     }
 
-    if (input.cardType === "widget") {
-        next = packKpiTilesInZone(next, zone);
+    if (input.cardType !== "widget") {
+        next = packPeerCardsInZone(next, zone);
     }
 
     return { doc: next, sectionKey, itemId };

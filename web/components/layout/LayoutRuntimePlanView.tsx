@@ -1544,11 +1544,22 @@ function ColumnView({ record, column, anchorEntity }: { record: ProofRuntimeReco
 function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; row: LayoutRow; anchorEntity: string }) {
     if (!evaluateLayoutCondition(record, row.visibleWhen)) return null;
     const { stackRows } = useContext(LayoutRuntimeSectionContext);
+    const kpiTile = useLayoutRuntimeKpiTile();
     const summaryCompact = useLayoutRuntimeSummaryStrip() && useLayoutRuntimeCompositionHints().summaryStripCompactRow;
 
     if (stackRows) {
         return (
             <div className="flex flex-col gap-2.5" data-layout-runtime-stack-rows="true">
+                {row.columns.map((col) => (
+                    <ColumnView key={col.id} record={record} column={col} anchorEntity={anchorEntity} />
+                ))}
+            </div>
+        );
+    }
+
+    if (summaryCompact && kpiTile) {
+        return (
+            <div className="flex min-w-0 flex-col gap-2" data-layout-runtime-summary-row="true">
                 {row.columns.map((col) => (
                     <ColumnView key={col.id} record={record} column={col} anchorEntity={anchorEntity} />
                 ))}

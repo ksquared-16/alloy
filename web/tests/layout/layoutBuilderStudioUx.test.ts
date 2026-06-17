@@ -65,8 +65,8 @@ describe("layoutBuilderStudioUx", () => {
         expect(isPlatformOwnedDrawerSection("lead_source")).toBe(false);
     });
 
-    it("shows start guide for sparse layouts", () => {
+    it("does not show start guide for sparse layouts", () => {
         const sparse = { ...buildLeadDrawerDefaultDoc(), sections: [] };
-        expect(shouldShowLayoutBuilderStartGuide(sparse)).toBe(true);
+        expect(shouldShowLayoutBuilderStartGuide(sparse)).toBe(false);
     });
 });

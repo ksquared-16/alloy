@@ -4,7 +4,6 @@ import { useMemo } from "react";
 import LayoutRuntimePlanView from "@/components/layout/LayoutRuntimePlanView";
 import LayoutEditorSectionFlowView from "@/components/layout/LayoutEditorSectionFlowView";
 import LayoutBuilderPreviewDrawerFrame from "@/components/adminV2/settings/LayoutBuilderPreviewDrawerFrame";
-import LayoutBuilderCanvasStartGuide from "@/components/adminV2/settings/LayoutBuilderCanvasStartGuide";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import {
     buildSingleSectionPreviewDoc,
@@ -31,8 +30,7 @@ import {
 import { leadOverviewVisualEditorCompositionHints, partitionLeadOverviewBodySections } from "@/lib/layout/runtime/leadOverviewComposition";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
-import { repackKpiTilesAfterZoneReorder } from "@/lib/layout/layoutBuilderKpiTileRows";
-import { shouldShowLayoutBuilderStartGuide } from "@/lib/layout/layoutBuilderStudioUx";
+import { repackPeerCardsAfterZoneReorder } from "@/lib/layout/layoutBuilderPeerCardRows";
 import { sectionIsKpiTile, sectionIsWidgetStrip, listSectionWidgetItems, widgetStripColumnCount } from "@/lib/layout/layoutBuilderWidgetStrip";
 import { readLayoutEditorWidgetStyle, resolveLayoutEditorWidgetToneRailClass } from "@/lib/layout/layoutEditorWidgetStyle";
 
@@ -93,6 +91,13 @@ function SectionPreviewBody({
         section && (sectionIsKpiTile(section) || resolveOpportunityDrawerSectionZone(section) === "summary_strip") ?
             "summary_strip" as const
         :   "default" as const;
+    const previewCompositionHints = useMemo(
+        () =>
+            leadOverviewVisualEditorCompositionHints(
+                section && sectionIsKpiTile(section) ? { summaryStripCompactRow: false } : {},
+            ),
+        [section],
+    );
 
     if (!sectionDoc || hidden) {
         return (
@@ -104,7 +109,7 @@ function SectionPreviewBody({
 
     return (
         <LayoutEditorRuntimeTraceProvider value={traceValue}>
-            <LayoutRuntimeCompositionProvider value={leadOverviewVisualEditorCompositionHints()}>
+            <LayoutRuntimeCompositionProvider value={previewCompositionHints}>
                 <div
                     className={`relative ${sectionKey === "lead_summary" ? DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS : ""}`}
                 >
@@ -114,7 +119,7 @@ function SectionPreviewBody({
                         variant="production"
                         sectionPresentation={sectionPresentation}
                     />
-                    {traceEnabled && widgets.length > 0 ?
+                    {traceEnabled && widgets.length > 0 && section && !sectionIsKpiTile(section) && !sectionIsWidgetStrip(section) ?
                         <div
                             className="pointer-events-none absolute inset-0 grid gap-2 p-1"
                             style={{ gridTemplateColumns: `repeat(${widgetColumnCount}, minmax(0, 1fr))` }}
@@ -185,7 +190,7 @@ function KpiTileSectionFrame({
 
     const applyKpiReorder = (direction: -1 | 1) => {
         let next = reorderSectionInZone(doc, section.key, direction);
-        next = repackKpiTilesAfterZoneReorder(next, section.key);
+        next = repackPeerCardsAfterZoneReorder(next, section.key);
         applyDoc(next);
     };
 
@@ -584,11 +589,18 @@ function CompositionGrid({
         );
     };
 
-    const overflowSections = [
-        ...(slots.notes ? [slots.notes] : []),
-        ...(slots.activity ? [slots.activity] : []),
-        ...slots.overflow,
-    ];
+    const overflowSections = (() => {
+        const renderedInZones = new Set([
+            ...summarySections.map((section) => section.key),
+            ...zones.right_rail.map((section) => section.key),
+            ...zones.footer_actions.map((section) => section.key),
+        ]);
+        return [
+            ...(slots.notes ? [slots.notes] : []),
+            ...(slots.activity ? [slots.activity] : []),
+            ...slots.overflow.filter((section) => !renderedInZones.has(section.key)),
+        ];
+    })();
 
     return (
         <div
@@ -653,11 +665,8 @@ export default function OpportunityDrawerLayoutEditorCanvas({
     onSelectFieldPath,
     onSelectBlockId,
     applyDoc,
-    onQuickStart,
 }: Props) {
     const isPreview = editorMode === "preview";
-    const showStartGuide =
-        editorMode === "build" && !selectedSectionId && shouldShowLayoutBuilderStartGuide(doc) && onQuickStart;
 
     return (
         <div className="relative" data-testid="visual-editor-drawer-frame">
@@ -685,10 +694,6 @@ export default function OpportunityDrawerLayoutEditorCanvas({
                     applyDoc={applyDoc}
                 />
             }
-
-            {showStartGuide ?
-                <LayoutBuilderCanvasStartGuide onQuickStart={onQuickStart} />
-            :   null}
         </div>
     );
 }

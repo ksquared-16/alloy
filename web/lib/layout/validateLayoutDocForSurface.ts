@@ -43,6 +43,7 @@ import {
     LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
 } from "@/lib/layout/layoutEditorGeneratedKeys";
+import { LAYOUT_EDITOR_KPI_TILE_METADATA_KEY } from "@/lib/layout/layoutBuilderKpiTileRows";
 
 export type LayoutSurfaceValidationResult = {
     ok: boolean;
@@ -70,6 +71,7 @@ const ALLOWED_SECTION_METADATA_KEYS = new Set([
     "layoutEditorSectionRowSpan",
     "layoutEditorSectionType",
     "layoutEditorRelatedListConfig",
+    LAYOUT_EDITOR_KPI_TILE_METADATA_KEY,
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
     LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,
 ]);
