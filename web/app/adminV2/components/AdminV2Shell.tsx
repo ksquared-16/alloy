@@ -44,6 +44,7 @@ import BosDrawerGeometryDiagnostics from "./BosDrawerGeometryDiagnostics";
 import { useWorkspaceCommandRailDrawerOffset } from "./useWorkspaceCommandRailDrawerOffset";
 import { DrawerCommandRailActionsProvider } from "@/contexts/DrawerCommandRailActionsContext";
 import { WorkspaceCommandRailRegistryProvider } from "@/contexts/WorkspaceCommandRailRegistryContext";
+import { AdminV2ShellDrawerScope } from "./AdminV2ShellDrawerScope";
 import { isExperienceBuilderStudioActive } from "@/lib/layout/experienceBuilderStudioMode";
 
 /**
@@ -155,15 +156,17 @@ function AdminV2ShellInner({
             <DrawerCommandRailActionsProvider>
               <BosDrawerGeometryDiagnostics />
               <AskBosHandoffListener />
-              <WorkspaceSiteFilterProvider>
-                <div
-                  className="flex h-screen w-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#EEF2F8]"
-                  data-adminv2-app-shell="experience-builder-studio"
-                  data-experience-builder-studio="true"
-                >
-                  <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
-                </div>
-              </WorkspaceSiteFilterProvider>
+              <AdminV2ShellDrawerScope>
+                <WorkspaceSiteFilterProvider>
+                  <div
+                    className="flex h-screen w-full min-h-0 min-w-0 flex-col overflow-hidden bg-[#EEF2F8]"
+                    data-adminv2-app-shell="experience-builder-studio"
+                    data-experience-builder-studio="true"
+                  >
+                    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
+                  </div>
+                </WorkspaceSiteFilterProvider>
+              </AdminV2ShellDrawerScope>
             </DrawerCommandRailActionsProvider>
           </WorkspaceCommandRailRegistryProvider>
         </CommandRailBosMount>

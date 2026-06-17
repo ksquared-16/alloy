@@ -114,19 +114,29 @@ describe("Configuration Workspace V3 — enrollment workflow readiness", () => {
     it("configuration pages share workspace shell patterns", () => {
         expect(read("app/adminV2/settings/fields/page.tsx")).toContain('variant="hero"');
         expect(read("app/adminV2/settings/business-processes/page.tsx")).toContain('variant="hero"');
-        expect(read("app/adminV2/settings/layouts/page.tsx")).toContain('variant="hero"');
+        expect(read("components/adminV2/settings/LayoutsSettingsPageShell.tsx")).toContain('variant="hero"');
         expect(read("components/adminV2/settings/LocationsHierarchySettingsClient.tsx")).toContain('variant="hero"');
         expect(read("components/adminV2/settings/SettingsWorkspaceNav.tsx")).toContain("configuration-workspace-nav");
     });
 
     it("layouts audit — gallery primary with legacy builder fallback", () => {
         const layouts = read("app/adminV2/settings/layouts/page.tsx");
-        expect(layouts).toContain("LayoutsSettingsPageClient");
-        expect(layouts).toContain("LAYOUTS_HUB_REGISTRY_TRUST_NOTE");
+        expect(layouts).toContain("LayoutsSettingsPageShell");
+        expect(read("components/adminV2/settings/LayoutsSettingsPageShell.tsx")).toContain("LAYOUTS_HUB_REGISTRY_TRUST_NOTE");
         expect(layouts).not.toContain("<LayoutConfigClient");
         const shell = read("app/adminV2/settings/layouts/LayoutsSettingsPageClient.tsx");
         expect(shell).toContain("LayoutGalleryClient");
         expect(shell).toContain("legacy builder");
+    });
+
+    it("experience builder studio shell does not mount AdminEntityDrawer without drawer provider", () => {
+        const providers = read("app/adminV2/settings/AdminV2SettingsClientProviders.tsx");
+        expect(providers).not.toContain(
+            'data-experience-builder-studio="true"\n                    >\n                        {children}\n                    </div>\n                    <AdminEntityDrawer />',
+        );
+        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toMatch(
+            /experienceBuilderStudio[\s\S]*AdminV2ShellDrawerScope/,
+        );
     });
 
     it("enrollment QA doc includes configuration verification section", () => {

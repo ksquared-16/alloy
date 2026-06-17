@@ -58,7 +58,6 @@ function AdminV2SettingsClientProvidersInner({
                     >
                         {children}
                     </div>
-                    <AdminEntityDrawer />
                 </EntityLabelsProvider>
             </AdminAuthProvider>
         );

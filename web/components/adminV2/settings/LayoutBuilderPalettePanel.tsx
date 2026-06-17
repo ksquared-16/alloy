@@ -177,7 +177,7 @@ export default function LayoutBuilderPalettePanel({
     );
 
     return (
-        <>
+        <div className="contents" data-testid="layout-builder-palette-root">
             <aside
                 className="flex max-h-full flex-col overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-sm"
                 data-testid="layout-builder-palette-panel"
@@ -286,6 +286,6 @@ export default function LayoutBuilderPalettePanel({
                 onClose={() => setAddCardOpen(false)}
                 onSubmit={handleAddCard}
             />
-        </>
+        </div>
     );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { Suspense, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import LayoutGalleryClient from "@/components/adminV2/settings/LayoutGalleryClient";
@@ -14,6 +14,20 @@ function layoutsBasePath(pathname: string): string {
 }
 
 export default function LayoutsSettingsPageClient() {
+    return (
+        <Suspense
+            fallback={
+                <div className="rounded-xl border border-alloy-forge/12 bg-white/90 px-5 py-8 text-sm text-alloy-midnight/55">
+                    Loading layout editor…
+                </div>
+            }
+        >
+            <LayoutsSettingsPageClientInner />
+        </Suspense>
+    );
+}
+
+function LayoutsSettingsPageClientInner() {
     const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
