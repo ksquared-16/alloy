@@ -206,8 +206,14 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
 
             {/* Work surface (scrolls) */}
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-                {/* What kind of artifact this is (non-form sources). Read-only; no extraction. */}
-                <ClassificationPanel classification={detail.classification} primarySourceKind={primary?.kind ?? null} />
+                {/* What kind of artifact this is (non-form sources). Read-only display + operator
+                    correction (annotation only — never changes status/records/extraction). */}
+                <ClassificationPanel
+                    classification={detail.classification}
+                    primarySourceKind={primary?.kind ?? null}
+                    caseId={caseId}
+                    onCorrected={() => void load()}
+                />
 
                 {/* Core POS moment: what Alloy understood + what it recommends */}
                 {!isClosed ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}

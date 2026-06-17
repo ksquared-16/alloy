@@ -48,6 +48,8 @@ export interface ProcessingClassificationResult {
 /** What actually lands in `processing_cases.metadata.classification` (result + persistence stamp). */
 export interface StoredProcessingClassification extends ProcessingClassificationResult {
     classified_at: string;
+    /** Set when an operator confirmed/corrected the classification (provenance + audit). */
+    corrected_at?: string;
 }
 
 /** Signals available to the deterministic classifier. All optional except sourceKind. */

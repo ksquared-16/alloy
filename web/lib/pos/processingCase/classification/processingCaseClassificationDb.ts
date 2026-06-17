@@ -16,9 +16,12 @@ import type { ProcessingClassificationResult, StoredProcessingClassification } f
 /** Stamp the deterministic result with persistence time (kept out of the pure classifier). */
 export function toStoredClassification(
     result: ProcessingClassificationResult,
-    now: Date = new Date()
+    now: Date = new Date(),
+    correctedAt?: Date
 ): StoredProcessingClassification {
-    return { ...result, classified_at: now.toISOString() };
+    const stored: StoredProcessingClassification = { ...result, classified_at: now.toISOString() };
+    if (correctedAt) stored.corrected_at = correctedAt.toISOString();
+    return stored;
 }
 
 /**
@@ -27,9 +30,16 @@ export function toStoredClassification(
  */
 export async function dbStoreProcessingCaseClassification(
     supabase: SupabaseClient,
-    args: { orgId: string; caseId: string; result: ProcessingClassificationResult; now?: Date }
+    args: {
+        orgId: string;
+        caseId: string;
+        result: ProcessingClassificationResult;
+        now?: Date;
+        /** When set, stamps `corrected_at` (operator confirm/correct provenance). */
+        correctedAt?: Date;
+    }
 ): Promise<StoredProcessingClassification> {
-    const stored = toStoredClassification(args.result, args.now ?? new Date());
+    const stored = toStoredClassification(args.result, args.now ?? new Date(), args.correctedAt);
 
     const { data: existing, error: readErr } = await supabase
         .from("processing_cases")
@@ -59,13 +69,15 @@ export function parseStoredClassification(metadata: unknown): StoredProcessingCl
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const c = raw as Record<string, unknown>;
     if (typeof c.classification_key !== "string" || typeof c.status !== "string") return null;
-    return {
+    const parsed: StoredProcessingClassification = {
         classification_key: c.classification_key as StoredProcessingClassification["classification_key"],
-        label: typeof c.label === "string" ? c.label : c.classification_key as string,
+        label: typeof c.label === "string" ? c.label : (c.classification_key as string),
         confidence: typeof c.confidence === "number" ? c.confidence : 0,
         signals: Array.isArray(c.signals) ? (c.signals as StoredProcessingClassification["signals"]) : [],
         status: c.status as StoredProcessingClassification["status"],
         classifier_version: typeof c.classifier_version === "string" ? c.classifier_version : "unknown",
         classified_at: typeof c.classified_at === "string" ? c.classified_at : "",
     };
+    if (typeof c.corrected_at === "string") parsed.corrected_at = c.corrected_at;
+    return parsed;
 }
