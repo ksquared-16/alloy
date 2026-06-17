@@ -57,7 +57,7 @@ describe("opportunityDrawerEntityLayoutVisibility", () => {
         }
     });
 
-    it("does not hide unregistered section keys", () => {
+    it("does not hide arbitrary unregistered section keys without visual-editor metadata", () => {
         const section: LayoutSection = {
             id: "sec-custom",
             key: "custom_section",
@@ -68,6 +68,23 @@ describe("opportunityDrawerEntityLayoutVisibility", () => {
             metadata: { [LAYOUT_SECTION_EDITOR_HIDDEN_METADATA_KEY]: true },
         };
         expect(shouldSuppressOpportunityDrawerSectionForEditorHidden(section, true)).toBe(false);
+    });
+
+    it("hides visual-editor custom sections when layoutEditorHidden is set", () => {
+        const section: LayoutSection = {
+            id: "sec-custom",
+            key: "custom_section_abc",
+            title: "",
+            collapsible: false,
+            defaultExpanded: true,
+            rows: [],
+            metadata: {
+                [LAYOUT_SECTION_EDITOR_HIDDEN_METADATA_KEY]: true,
+                createdByVisualEditor: true,
+                layoutEditorKpiTile: true,
+            },
+        };
+        expect(shouldSuppressOpportunityDrawerSectionForEditorHidden(section, true)).toBe(true);
     });
 
     it("treats absent metadata as visible (no throw)", () => {

@@ -12,6 +12,7 @@ import {
     partitionOpportunityDrawerSectionsByZone,
     renameSectionTitle,
     reorderSectionInZone,
+    resolveOpportunityDrawerSectionZone,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { readSectionType } from "@/lib/layout/layoutEditorSectionLayout";
 import { listSectionLayoutBlocks } from "@/lib/layout/layoutEditorCompositionModel";
@@ -30,12 +31,9 @@ import {
 import { leadOverviewVisualEditorCompositionHints, partitionLeadOverviewBodySections } from "@/lib/layout/runtime/leadOverviewComposition";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
+import { repackKpiTilesAfterZoneReorder } from "@/lib/layout/layoutBuilderKpiTileRows";
 import { shouldShowLayoutBuilderStartGuide } from "@/lib/layout/layoutBuilderStudioUx";
-import {
-    listSectionWidgetItems,
-    sectionIsWidgetStrip,
-    widgetStripColumnCount,
-} from "@/lib/layout/layoutBuilderWidgetStrip";
+import { sectionIsKpiTile, sectionIsWidgetStrip, listSectionWidgetItems, widgetStripColumnCount } from "@/lib/layout/layoutBuilderWidgetStrip";
 import { readLayoutEditorWidgetStyle, resolveLayoutEditorWidgetToneRailClass } from "@/lib/layout/layoutEditorWidgetStyle";
 
 export type LayoutBuilderEditorMode = "build" | "preview";
@@ -90,6 +88,11 @@ function SectionPreviewBody({
 
     const widgets = useMemo(() => listSectionWidgetItems(doc, sectionKey), [doc, sectionKey]);
     const widgetColumnCount = useMemo(() => widgetStripColumnCount(doc, sectionKey), [doc, sectionKey]);
+    const section = useMemo(() => doc.sections.find((s) => s.key === sectionKey) ?? null, [doc, sectionKey]);
+    const sectionPresentation =
+        section && (sectionIsKpiTile(section) || resolveOpportunityDrawerSectionZone(section) === "summary_strip") ?
+            "summary_strip" as const
+        :   "default" as const;
 
     if (!sectionDoc || hidden) {
         return (
@@ -105,7 +108,12 @@ function SectionPreviewBody({
                 <div
                     className={`relative ${sectionKey === "lead_summary" ? DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS : ""}`}
                 >
-                    <LayoutRuntimePlanView doc={sectionDoc} record={LAYOUT_DRAWER_PREVIEW_RECORD} variant="production" />
+                    <LayoutRuntimePlanView
+                        doc={sectionDoc}
+                        record={LAYOUT_DRAWER_PREVIEW_RECORD}
+                        variant="production"
+                        sectionPresentation={sectionPresentation}
+                    />
                     {traceEnabled && widgets.length > 0 ?
                         <div
                             className="pointer-events-none absolute inset-0 grid gap-2 p-1"
@@ -141,6 +149,129 @@ function SectionPreviewBody({
                 </div>
             </LayoutRuntimeCompositionProvider>
         </LayoutEditorRuntimeTraceProvider>
+    );
+}
+
+function KpiTileSectionFrame({
+    doc,
+    section,
+    editorMode,
+    selectedSectionId,
+    selectedFieldPath,
+    hasItemSelected,
+    onSelectSection,
+    onSelectFieldPath,
+    applyDoc,
+}: {
+    doc: LayoutDoc;
+    section: LayoutSection;
+    editorMode: LayoutBuilderEditorMode;
+    selectedSectionId: string | null;
+    selectedFieldPath: string | null;
+    hasItemSelected: boolean;
+    onSelectSection: (sectionKey: string | null) => void;
+    onSelectFieldPath: (path: string | null) => void;
+    applyDoc: (next: LayoutDoc) => void;
+}) {
+    const hidden = isSectionEditorHidden(section);
+    const isSelected = selectedSectionId === section.key;
+    const isBuild = editorMode === "build";
+    const widgets = listSectionWidgetItems(doc, section.key);
+    const widget = widgets[0];
+    const widgetPath = widget ? `field:${section.key}:${widget.itemId}` : null;
+    const widgetSelected = Boolean(widgetPath && selectedFieldPath === widgetPath);
+    const tone = widget ? readLayoutEditorWidgetStyle(widget.item.metadata).tone : undefined;
+    const railClass = resolveLayoutEditorWidgetToneRailClass(tone);
+
+    const applyKpiReorder = (direction: -1 | 1) => {
+        let next = reorderSectionInZone(doc, section.key, direction);
+        next = repackKpiTilesAfterZoneReorder(next, section.key);
+        applyDoc(next);
+    };
+
+    if (!isBuild) {
+        return (
+            <div data-testid={`visual-editor-section-${section.key}`} data-visual-editor-kpi-tile="true">
+                <SectionPreviewBody
+                    doc={doc}
+                    sectionKey={section.key}
+                    hidden={hidden}
+                    traceEnabled={false}
+                    selectedFieldPath={null}
+                    onSelectFieldPath={() => {}}
+                    onSelectSection={() => {}}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div
+            role="button"
+            tabIndex={0}
+            className={`group relative min-h-[4.25rem] rounded-xl border border-l-[3px] transition-all duration-150 ${railClass} ${
+                isSelected || widgetSelected ?
+                    "border-alloy-pine/35 ring-2 ring-alloy-pine/20 shadow-[0_2px_8px_rgba(45,106,79,0.08)]"
+                :   "border-alloy-stone/12 bg-white hover:border-alloy-pine/30 hover:shadow-[0_2px_8px_rgba(24,39,58,0.05)]"
+            } ${hidden ? "opacity-60" : ""}`}
+            data-testid={`visual-editor-section-${section.key}`}
+            data-visual-editor-kpi-tile="true"
+            data-visual-editor-editable="true"
+            onClick={() => {
+                onSelectSection(section.key);
+                if (widgetPath) onSelectFieldPath(widgetPath);
+            }}
+            onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectSection(section.key);
+                    if (widgetPath) onSelectFieldPath(widgetPath);
+                }
+            }}
+        >
+            <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-end gap-1 p-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="pointer-events-auto flex gap-1 rounded-lg border border-alloy-forge/8 bg-white/95 p-1 shadow-sm">
+                    <button
+                        type="button"
+                        className="rounded-md px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
+                        onClick={() => applyKpiReorder(-1)}
+                    >
+                        Move ←
+                    </button>
+                    <button
+                        type="button"
+                        className="rounded-md px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
+                        onClick={() => applyKpiReorder(1)}
+                    >
+                        Move →
+                    </button>
+                </div>
+            </div>
+
+            {hidden ?
+                <div className="absolute left-2 top-2 z-10 rounded-full bg-alloy-stone/85 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60">
+                    Hidden after publish
+                </div>
+            :   null}
+
+            <div onClick={(e) => e.stopPropagation()}>
+                <SectionPreviewBody
+                    doc={doc}
+                    sectionKey={section.key}
+                    hidden={hidden}
+                    traceEnabled={isBuild}
+                    selectedFieldPath={selectedFieldPath}
+                    onSelectFieldPath={(path) => {
+                        onSelectFieldPath(path);
+                        if (path) onSelectSection(section.key);
+                    }}
+                    onSelectSection={onSelectSection}
+                />
+            </div>
+        </div>
     );
 }
 
@@ -403,6 +534,22 @@ function CompositionGrid({
 
     const renderSection = (section: LayoutSection | null) => {
         if (!section) return null;
+        if (sectionIsKpiTile(section)) {
+            return (
+                <KpiTileSectionFrame
+                    key={section.key}
+                    doc={doc}
+                    section={section}
+                    editorMode={editorMode}
+                    selectedSectionId={selectedSectionId}
+                    selectedFieldPath={selectedFieldPath}
+                    hasItemSelected={hasItemSelected}
+                    onSelectSection={onSelectSection}
+                    onSelectFieldPath={onSelectFieldPath}
+                    applyDoc={applyDoc}
+                />
+            );
+        }
         if (sectionIsWidgetStrip(section)) {
             return (
                 <WidgetStripSectionFrame
@@ -452,13 +599,13 @@ function CompositionGrid({
                 <div
                     data-visual-editor-zone="summary_strip"
                     data-testid="visual-editor-zone-summary_strip"
-                    className={`${DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS} flex flex-wrap items-stretch gap-2`}
+                    className={DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS}
                 >
                     <LayoutEditorSectionFlowView
                         sections={summarySections}
                         renderSection={renderSection}
-                        stackClassName=""
-                        rowClassName="min-w-0"
+                        stackClassName="min-w-0"
+                        rowClassName="min-w-0 w-full"
                         rowCellClassName="min-w-0"
                     />
                 </div>

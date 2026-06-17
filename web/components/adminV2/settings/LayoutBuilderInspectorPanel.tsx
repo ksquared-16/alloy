@@ -32,10 +32,16 @@ import {
     setCardWidthFraction,
     type CardWidthFractionKey,
 } from "@/lib/layout/layoutBuilderCardWidth";
-import { EXPERIENCE_BUILDER_CARD_TYPE_LABELS } from "@/lib/layout/layoutBuilderCardAuthoring";
+import { EXPERIENCE_BUILDER_PEER_BLOCK_LABELS } from "@/lib/layout/layoutBuilderCardAuthoring";
 import { listSectionCompositionRows, removeSectionItem } from "@/lib/layout/layoutEditorSectionComposition";
 import { sectionZoneLabel } from "@/lib/layout/layoutBuilderStudioUx";
-import { sectionIsWidgetStrip, WIDGET_STRIP_WIDTH_PRESETS } from "@/lib/layout/layoutBuilderWidgetStrip";
+import {
+    applyKpiTileWidth,
+    packKpiTilesInZone,
+    repackKpiTilesAfterZoneReorder,
+} from "@/lib/layout/layoutBuilderKpiTileRows";
+import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import { listSectionWidgetItems, sectionIsKpiTile, sectionIsWidgetStrip, WIDGET_STRIP_WIDTH_PRESETS } from "@/lib/layout/layoutBuilderWidgetStrip";
 import { setRowColumnCount } from "@/lib/layout/builderOps";
 import { opSectionSupport, opSectionTitle } from "@/lib/operational/ui/operationalVisualTokens";
 
@@ -106,7 +112,13 @@ export default function LayoutBuilderInspectorPanel({
     const section = selectedSectionId ? doc.sections.find((s) => s.key === selectedSectionId) : null;
     const selectedItemId = resolveSelectedItemId(selectedSectionId, selectedFieldPath, selectedBlockId);
     const sectionType = section ? readSectionType(section) : null;
+    const kpiTile = section ? sectionIsKpiTile(section) : false;
     const widgetStrip = section ? sectionIsWidgetStrip(section) : false;
+
+    const kpiWidgetItem = useMemo(() => {
+        if (!section || !kpiTile) return null;
+        return listSectionWidgetItems(doc, section.key)[0] ?? null;
+    }, [doc, section, kpiTile]);
 
     const selectedItem = useMemo(() => {
         if (!selectedSectionId || !selectedItemId) return null;
@@ -114,12 +126,36 @@ export default function LayoutBuilderInspectorPanel({
         return rows.flatMap((r) => r.columns.flatMap((c) => c.items)).find((it) => it.itemId === selectedItemId) ?? null;
     }, [doc, selectedSectionId, selectedItemId]);
 
+    const inspectorItem = selectedItem ?? kpiWidgetItem;
+
     const deleteGate = section ? canDeleteOpportunityDrawerSection(section) : { ok: false, reason: "" };
 
     const selectionTitle =
-        selectedItem ? selectedItem.title
-        : section ? section.title
+        inspectorItem ? inspectorItem.title
+        : section && !kpiTile ? section.title
         : null;
+
+    const applyWidthChange = (widthKey: CardWidthFractionKey) => {
+        if (!section) return;
+        if (kpiTile) applyDoc(applyKpiTileWidth(doc, section.key, widthKey));
+        else applyDoc(setCardWidthFraction(doc, section.key, widthKey));
+    };
+
+    const applyReorder = (direction: -1 | 1) => {
+        if (!section) return;
+        let next = reorderSectionInZone(doc, section.key, direction);
+        if (kpiTile) next = repackKpiTilesAfterZoneReorder(next, section.key);
+        applyDoc(next);
+    };
+
+    const applyDeleteBlock = () => {
+        if (!section || !deleteGate.ok) return;
+        const zone = resolveOpportunityDrawerSectionZone(section);
+        let next = deleteOpportunityDrawerSection(doc, section.key);
+        if (kpiTile) next = packKpiTilesInZone(next, zone);
+        applyDoc(next);
+        onClearSelection();
+    };
 
     return (
         <aside
@@ -146,18 +182,38 @@ export default function LayoutBuilderInspectorPanel({
                             Click any card on the canvas, or add a component from the palette.
                         </p>
                     </div>
-                : selectedItem ?
+                : inspectorItem ?
                     <div className="rounded-xl border border-alloy-forge/10 bg-alloy-stone/[0.02] p-3" data-testid="visual-editor-item-settings">
                         <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                            {selectedItem.kind === "widget" ? "Tile settings"
-                            : selectedItem.kind === "field" ? "Field settings"
-                            : "Item settings"}
+                            {inspectorItem.kind === "widget" ? "KPI tile"
+                            : inspectorItem.kind === "field" ? "Field"
+                            : "Item"}
                         </p>
                         <p className="mb-3 text-[10px] text-alloy-midnight/45">Changes preview instantly. Publish to update the live drawer.</p>
+
+                        {kpiTile ?
+                            <div className="mb-3">
+                                <InspectorField label="Width" helper="Tiles on the same row pack left-to-right when widths fit.">
+                                    <select
+                                        value={readCardWidthFraction(section)}
+                                        onChange={(e) => applyWidthChange(e.target.value as CardWidthFractionKey)}
+                                        className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                        data-testid="visual-editor-kpi-tile-width"
+                                    >
+                                        {CARD_WIDTH_FRACTION_KEYS.map((key) => (
+                                            <option key={key} value={key}>
+                                                {CARD_WIDTH_FRACTIONS[key].label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </InspectorField>
+                            </div>
+                        :   null}
+
                         <LayoutBuilderItemInspector
                             doc={doc}
                             sectionKey={section.key}
-                            entry={selectedItem}
+                            entry={inspectorItem}
                             fieldPickerGroups={fieldPickerGroups}
                             validationOk={validationOk}
                             applyDoc={applyDoc}
@@ -168,12 +224,16 @@ export default function LayoutBuilderInspectorPanel({
                             type="button"
                             className="mt-3 w-full rounded-lg border border-red-200/80 bg-red-50/80 px-3 py-2 text-left text-[11px] font-semibold text-red-700 hover:bg-red-100/80"
                             onClick={() => {
-                                applyDoc(removeSectionItem(doc, section.key, selectedItem.itemId));
+                                if (kpiTile) {
+                                    applyDeleteBlock();
+                                    return;
+                                }
+                                applyDoc(removeSectionItem(doc, section.key, inspectorItem.itemId));
                                 onClearItemSelection();
                             }}
                             data-testid="layout-builder-inspector-delete-item"
                         >
-                            Delete
+                            {kpiTile ? "Delete tile" : "Delete"}
                         </button>
                     </div>
                 :   <div className="space-y-4" data-testid="visual-editor-section-settings-panel">
@@ -191,12 +251,10 @@ export default function LayoutBuilderInspectorPanel({
                             />
                         </InspectorField>
 
-                        <InspectorField label="Width" helper="How wide this card appears on the canvas.">
+                        <InspectorField label="Width" helper="How wide this block appears on the canvas.">
                             <select
                                 value={readCardWidthFraction(section)}
-                                onChange={(e) =>
-                                    applyDoc(setCardWidthFraction(doc, section.key, e.target.value as CardWidthFractionKey))
-                                }
+                                onChange={(e) => applyWidthChange(e.target.value as CardWidthFractionKey)}
                                 className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
                                 data-testid="visual-editor-section-row-layout"
                             >
@@ -219,9 +277,9 @@ export default function LayoutBuilderInspectorPanel({
                             >
                                 {LAYOUT_EDITOR_SECTION_TYPES.map((type) => (
                                     <option key={type} value={type}>
-                                        {type === "content" ? EXPERIENCE_BUILDER_CARD_TYPE_LABELS.fields
-                                        : type === "widget" ? EXPERIENCE_BUILDER_CARD_TYPE_LABELS.widget
-                                        : EXPERIENCE_BUILDER_CARD_TYPE_LABELS.related_list}
+                                        {type === "content" ? EXPERIENCE_BUILDER_PEER_BLOCK_LABELS.fields
+                                        : type === "widget" ? EXPERIENCE_BUILDER_PEER_BLOCK_LABELS.widget
+                                        : EXPERIENCE_BUILDER_PEER_BLOCK_LABELS.related_list}
                                     </option>
                                 ))}
                             </select>
@@ -301,7 +359,7 @@ export default function LayoutBuilderInspectorPanel({
                             <button
                                 type="button"
                                 className="rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:border-alloy-pine/25"
-                                onClick={() => applyDoc(reorderSectionInZone(doc, section.key, -1))}
+                                onClick={() => applyReorder(-1)}
                                 data-testid="visual-editor-section-move-up"
                             >
                                 Move up
@@ -309,7 +367,7 @@ export default function LayoutBuilderInspectorPanel({
                             <button
                                 type="button"
                                 className="rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/70 hover:border-alloy-pine/25"
-                                onClick={() => applyDoc(reorderSectionInZone(doc, section.key, 1))}
+                                onClick={() => applyReorder(1)}
                                 data-testid="visual-editor-section-move-down"
                             >
                                 Move down
@@ -324,12 +382,11 @@ export default function LayoutBuilderInspectorPanel({
                                 title={deleteGate.ok ? undefined : deleteGate.reason}
                                 onClick={() => {
                                     if (!deleteGate.ok) return;
-                                    applyDoc(deleteOpportunityDrawerSection(doc, section.key));
-                                    onClearSelection();
+                                    applyDeleteBlock();
                                 }}
                                 data-testid="visual-editor-delete-section"
                             >
-                                Delete this card
+                                {kpiTile ? "Delete tile" : "Delete this card"}
                             </button>
                             {!deleteGate.ok ?
                                 <p className="mt-1.5 text-[10px] leading-relaxed text-alloy-midnight/45">{deleteGate.reason}</p>

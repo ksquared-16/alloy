@@ -9,6 +9,7 @@
 
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import type { EntityDrawerOperatingEntity } from "@/lib/admin/drawer/entityDrawerOperatingModel";
+import { isOpportunityDrawerLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
 
 /** Section keys routed to the platform summary strip container (not hardcoded widgets). */
 export const DRAWER_SUMMARY_STRIP_SECTION_KEYS: Readonly<
@@ -34,6 +35,12 @@ function summaryKeysForEntity(entity: EntityDrawerOperatingEntity): readonly str
     return DRAWER_SUMMARY_STRIP_SECTION_KEYS[entity] ?? [];
 }
 
+function sectionBelongsToSummaryStrip(section: LayoutSection, summaryKeySet: Set<string>): boolean {
+    if (summaryKeySet.has(section.key)) return true;
+    const layoutZone = section.metadata?.layoutZone;
+    return isOpportunityDrawerLayoutZone(layoutZone) && layoutZone === "summary_strip";
+}
+
 /** Partition a drawer LayoutDoc into summary-strip vs scroll-body sections. */
 export function splitDrawerLayoutDocShellZones(
     doc: LayoutDoc,
@@ -44,7 +51,7 @@ export function splitDrawerLayoutDocShellZones(
     const bodySections: LayoutSection[] = [];
 
     for (const section of doc.sections) {
-        if (summaryKeySet.has(section.key)) {
+        if (sectionBelongsToSummaryStrip(section, summaryKeySet)) {
             summarySections.push(section);
         } else {
             bodySections.push(section);

@@ -5,6 +5,7 @@
  * Opportunity drawer only; gated by layout runtime feature flags.
  */
 
+import { sectionIsKpiTile } from "@/lib/layout/runtime/layoutRuntimeKpiTilePresentation";
 import type { LayoutSection } from "@/lib/layout/layoutV2";
 import { LAYOUT_SECTION_EDITOR_HIDDEN_METADATA_KEY } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import {
@@ -31,8 +32,11 @@ export function shouldSuppressOpportunityDrawerSectionForEditorHidden(
 ): boolean {
     if (!adoptionEnabled) return false;
     if (PLATFORM_RESERVED_SECTION_KEYS.has(section.key)) return false;
-    if (!isOpportunityDrawerRegisteredLayoutSectionKey(section.key)) return false;
-    return isLayoutSectionEditorHiddenMetadata(section);
+    if (!isLayoutSectionEditorHiddenMetadata(section)) return false;
+    if (isOpportunityDrawerRegisteredLayoutSectionKey(section.key)) return true;
+    if (section.metadata?.createdByVisualEditor === true) return true;
+    if (sectionIsKpiTile(section)) return true;
+    return false;
 }
 
 export function buildOpportunityDrawerRuntimeSectionVisibilityContext(

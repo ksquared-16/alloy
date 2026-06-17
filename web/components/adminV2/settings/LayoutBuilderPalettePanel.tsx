@@ -18,6 +18,7 @@ import {
     addSectionWidgetItem,
 } from "@/lib/layout/layoutEditorSectionComposition";
 import { readSectionType } from "@/lib/layout/layoutEditorSectionLayout";
+import { listSectionWidgetItems, sectionIsKpiTile } from "@/lib/layout/layoutBuilderWidgetStrip";
 import {
     buildAddSuccessMessage,
     resolvePaletteTargetSectionId,
@@ -71,6 +72,14 @@ export default function LayoutBuilderPalettePanel({
     const [showMore, setShowMore] = useState(false);
 
     const selectedSection = selectedSectionId ? doc.sections.find((s) => s.key === selectedSectionId) : null;
+    const selectedSectionLabel = useMemo(() => {
+        if (!selectedSection) return null;
+        if (sectionIsKpiTile(selectedSection)) {
+            const widget = listSectionWidgetItems(doc, selectedSection.key)[0];
+            return widget?.title || "KPI tile";
+        }
+        return selectedSection.title;
+    }, [doc, selectedSection]);
     const selectedSectionType = selectedSection ? readSectionType(selectedSection) : null;
     const canAddFieldsToSelection =
         selectedSection && selectedSectionType !== "widget" && selectedSectionType !== "related_list";
@@ -87,7 +96,9 @@ export default function LayoutBuilderPalettePanel({
     const handleAddCard = (input: LayoutBuilderAddCardDialogSubmit) => {
         setAddCardOpen(false);
         const result = createExperienceBuilderCard(doc, input);
-        const title = result.doc.sections.find((s) => s.key === result.sectionKey)?.title ?? input.title;
+        const title =
+            input.cardType === "widget" ? input.title
+            : result.doc.sections.find((s) => s.key === result.sectionKey)?.title ?? input.title;
         focusCreatedCard(
             result.doc,
             result.sectionKey,
@@ -111,7 +122,7 @@ export default function LayoutBuilderPalettePanel({
         if (itemKind === "widget" && options?.forceNewCard) {
             const result = createExperienceBuilderCard(doc, {
                 title: itemLabel,
-                widthKey: "quarter",
+                widthKey: "third",
                 cardType: "widget",
                 widgetKey: options.widgetKey,
             });
@@ -119,7 +130,7 @@ export default function LayoutBuilderPalettePanel({
                 result.doc,
                 result.sectionKey,
                 result.itemId,
-                `Added KPI tile "${itemLabel}".`,
+            `Added KPI tile "${itemLabel}".`,
             );
             return;
         }
@@ -143,7 +154,7 @@ export default function LayoutBuilderPalettePanel({
                 return;
             }
         } else {
-            onStudioNotice({ tone: "error", message: "Select a card on the canvas first, or use + Add card." });
+            onStudioNotice({ tone: "error", message: "Select a card on the canvas first, or use + Add." });
             return;
         }
 
@@ -190,11 +201,11 @@ export default function LayoutBuilderPalettePanel({
                         data-testid="layout-builder-add-card-primary"
                     >
                         <span className="text-lg leading-none">+</span>
-                        Add card
+                        Add
                     </button>
                     {selectedSection ?
                         <p className="mt-3 text-xs text-alloy-midnight/55" data-testid="layout-builder-palette-target">
-                            Selected: <strong className="text-alloy-midnight">{selectedSection.title}</strong>
+                            Selected: <strong className="text-alloy-midnight">{selectedSectionLabel}</strong>
                         </p>
                     :   <p className="mt-3 text-xs leading-relaxed text-alloy-midnight/45" data-testid="layout-builder-palette-target-hint">
                             Click a card on the canvas to add fields inside it.
@@ -232,7 +243,7 @@ export default function LayoutBuilderPalettePanel({
 
                     <section data-testid="layout-builder-palette-group-widgets">
                         <h4 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">Add KPI tile</h4>
-                        <p className="mt-1 text-[11px] text-alloy-midnight/45">Each tile is its own card — place several side by side.</p>
+                        <p className="mt-1 text-[11px] text-alloy-midnight/45">Each tile is its own block — they pack into rows by width.</p>
                         <div className="mt-2 grid grid-cols-2 gap-2">
                             {quickWidgets.map((widget) => (
                                 <button

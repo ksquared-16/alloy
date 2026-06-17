@@ -43,7 +43,7 @@ import {
     shouldShowLayoutEditorFieldIcon,
     shouldShowLayoutEditorFieldLabel,
 } from "@/lib/layout/runtime/applyLayoutEditorFieldDisplay";
-import { readLayoutEditorRelatedListConfigFromItem } from "@/lib/layout/runtime/resolveLayoutRuntimeRelatedListPresentation";
+import { sectionIsKpiTile } from "@/lib/layout/runtime/layoutRuntimeKpiTilePresentation";
 import LayoutRuntimeRelatedListCompactRows from "@/components/layout/LayoutRuntimeRelatedListCompactRows";
 import {
     LayoutRuntimeBlockEditProvider,
@@ -229,11 +229,13 @@ type LayoutRuntimeSectionContextValue = {
     sectionPresentation: LayoutRuntimeSectionPresentation;
     sectionKey: string;
     stackRows?: boolean;
+    kpiTile?: boolean;
 };
 
 const LayoutRuntimeSectionContext = createContext<LayoutRuntimeSectionContextValue>({
     sectionPresentation: "default",
     sectionKey: "",
+    kpiTile: false,
 });
 
 function useLayoutRuntimeOperatorSurfaces(): boolean {
@@ -242,7 +244,12 @@ function useLayoutRuntimeOperatorSurfaces(): boolean {
 }
 
 function useLayoutRuntimeSummaryStrip(): boolean {
-    return useContext(LayoutRuntimeSectionContext).sectionPresentation === "summary_strip";
+    const ctx = useContext(LayoutRuntimeSectionContext);
+    return ctx.sectionPresentation === "summary_strip" || ctx.kpiTile === true;
+}
+
+function useLayoutRuntimeKpiTile(): boolean {
+    return useContext(LayoutRuntimeSectionContext).kpiTile === true;
 }
 
 const INTERNAL_OPERATOR_TOKENS =
@@ -1148,7 +1155,10 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     const personCards = composition.personOperatingSummaryCards === true;
     const childCards = composition.childOperatingSummaryCards === true;
     const operatingCards = leadCards || personCards || childCards;
+    const kpiTile = useLayoutRuntimeKpiTile();
     const compact = useLayoutRuntimeSummaryStrip();
+    const operatingCard = (operatingCards || kpiTile) && compact;
+    const leadOperatingCard = (leadCards || kpiTile) && compact;
     const widgetStyle = readLayoutEditorWidgetStyle(item.metadata);
     if (widgetStyle.hidden) return null;
     const configuredAccentRail = resolveLayoutEditorWidgetAccentRail(widgetStyle);
@@ -1174,7 +1184,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
 
     if (widgetKey === "current_work") {
         const opportunityId = String(record.id ?? record.opportunity_id ?? "").trim();
-        if (operatingCards && compact) {
+        if (operatingCard) {
             return (
                 <LeadOperatingSummaryCard
                     title={title || "Current Work"}
@@ -1206,8 +1216,8 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
 
     if (widgetKey === "follow_ups") {
         const followUps = mapLayoutRuntimeTasksFromVm(record as Record<string, unknown>);
-        if (compact && followUps.length === 0) return null;
-        if (operatingCards && compact) {
+        if (compact && followUps.length === 0 && !kpiTile) return null;
+        if (operatingCard) {
             return (
                 <LeadOperatingSummaryCard
                     title={title || "Follow-ups"}
@@ -1227,8 +1237,8 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     if (widgetKey === "tasks") {
         const followUps = mapLayoutRuntimeTasksFromVm(record as Record<string, unknown>);
         const followUpTitle = title === "Tasks" ? "Follow-ups" : title;
-        if (operatingCards && compact && followUps.length === 0) return null;
-        if (operatingCards && compact) {
+        if (operatingCard && followUps.length === 0 && !kpiTile) return null;
+        if (operatingCard) {
             return (
                 <LeadOperatingSummaryCard
                     title={followUpTitle}
@@ -1304,7 +1314,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 ? (record._overview_data as Record<string, unknown>)
                 : record;
         const visible = isDrawerHeaderAttentionVisible(overview);
-        if (leadCards && compact) {
+        if (leadOperatingCard) {
             return (
                 <LeadOperatingSummaryCard
                     title={title}
@@ -1355,7 +1365,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
         const lastTouch = resolveLeadSummaryLastTouch(record);
         const hasContent = lastTouch.kind !== "empty";
         const cardTitle = title.trim() || "Last Touch";
-        if (leadCards && compact) {
+        if (leadOperatingCard) {
             return (
                 <LeadOperatingSummaryCard
                     title={cardTitle}
@@ -1383,7 +1393,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     if (widgetKey === "children_list") {
         const enrollmentHealth = summarizeLeadDrawerEnrollmentHealth(record);
         const cardTitle = title.trim() || "Enrollment Health";
-        if (leadCards && compact) {
+        if (leadOperatingCard) {
             return (
                 <LeadOperatingSummaryCard
                     title={cardTitle}
@@ -1466,6 +1476,22 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             />
         );
         return composition.compositionSectionSurface ? markup : <WidgetChrome title={title}>{markup}</WidgetChrome>;
+    }
+
+    if (kpiTile) {
+        return (
+            <LeadOperatingSummaryCard
+                title={title}
+                icon={<CheckSquare2 className="h-3.5 w-3.5" aria-hidden />}
+                accent={configuredLeadAccent ?? "neutral"}
+                widgetKey={widgetKey}
+            >
+                {widgetDescription ?
+                    <p className="mb-1 text-[10px] text-alloy-midnight/50">{widgetDescription}</p>
+                :   null}
+                {empty}
+            </LeadOperatingSummaryCard>
+        );
     }
 
     return (
@@ -1574,10 +1600,14 @@ function SectionView({
     const host = useContext(LayoutRuntimeHostContext);
     if (!evaluateLayoutCondition(record, section.visibleWhen)) return null;
 
+    const isKpiTile = sectionIsKpiTile(section);
+    const effectiveSectionPresentation: LayoutRuntimeSectionPresentation =
+        sectionPresentation === "summary_strip" || isKpiTile ? "summary_strip" : sectionPresentation;
+
     const useCompositionSurfaceEarly = composition.compositionSectionSurface === true && operatorSurfaces;
     const visibilityCtx = {
         compositionShell: useCompositionSurfaceEarly,
-        sectionPresentation,
+        sectionPresentation: effectiveSectionPresentation,
         opportunityEntityLayoutsVisualConfig: isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient(),
     };
     if (!shouldRenderLayoutRuntimeSection(section, record, visibilityCtx)) {
@@ -1594,8 +1624,9 @@ function SectionView({
         }) && !sectionHasLayoutOwnedComposition(section);
 
     const sectionContext = {
-        sectionPresentation,
+        sectionPresentation: effectiveSectionPresentation,
         sectionKey: section.key,
+        kpiTile: isKpiTile,
         stackRows:
             composition.compositionSectionSurface === true
             && (section.key === "household_contact" || section.key === "household_relationships")
@@ -1623,9 +1654,13 @@ function SectionView({
             </LayoutRuntimeSectionContext.Provider>
         );
 
-    if (sectionPresentation === "summary_strip") {
+    if (effectiveSectionPresentation === "summary_strip") {
         return (
-            <div className="flex flex-col gap-2" data-layout-runtime-section-presentation="summary_strip">
+            <div
+                className={isKpiTile ? "min-w-0" : "flex flex-col gap-2"}
+                data-layout-runtime-section-presentation="summary_strip"
+                {...(isKpiTile ? { "data-layout-runtime-kpi-tile": "true" } : {})}
+            >
                 {body}
             </div>
         );

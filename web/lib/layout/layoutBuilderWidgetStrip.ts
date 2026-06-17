@@ -21,8 +21,16 @@ function countSectionWidgets(section: LayoutSection): number {
     );
 }
 
+/** Single-widget KPI tile — first-class surface block, not a card wrapper. */
+export function sectionIsKpiTile(section: LayoutSection): boolean {
+    if (section.metadata?.layoutEditorKpiTile === true) return true;
+    if (readSectionType(section) !== "widget") return false;
+    return countSectionWidgets(section) === 1;
+}
+
 /** True when a card hosts multiple KPI widgets in one row (legacy strip layout). */
 export function sectionIsWidgetStrip(section: LayoutSection): boolean {
+    if (sectionIsKpiTile(section)) return false;
     const widgetCount = countSectionWidgets(section);
     if (widgetCount <= 1) return false;
     if (readSectionType(section) === "widget") return true;
