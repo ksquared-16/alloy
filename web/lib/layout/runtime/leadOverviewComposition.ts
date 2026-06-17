@@ -140,8 +140,10 @@ export function leadOverviewCompositionHints(
 }
 
 /** Visual editor preview — match published LayoutDoc block rendering. */
-export function leadOverviewVisualEditorCompositionHints(): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
-    return leadOverviewCompositionHints({ honorLayoutDocBlocks: true });
+export function leadOverviewVisualEditorCompositionHints(
+    overrides: Partial<import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints> = {},
+): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
+    return leadOverviewCompositionHints({ honorLayoutDocBlocks: true, ...overrides });
 }
 
 export function summarizeLeadDrawerChildrenStrip(record: ProofRuntimeRecord): {
