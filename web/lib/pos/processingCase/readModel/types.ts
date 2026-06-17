@@ -13,7 +13,6 @@ import type {
 } from "../types";
 import type { StoredProcessingClassification } from "../classification/types";
 import type { StoredProcessingExtraction } from "../extraction/types";
-import type { StoredDocumentFormPreview } from "../structure/types";
 
 export type { ProcessingCaseSourceKind, ProcessingCaseSourceRole, ProcessingCaseStatus };
 
@@ -60,8 +59,6 @@ export interface ProcessingCaseDetail {
     classification: StoredProcessingClassification | null;
     /** POS-FP10 read-only intake extraction (from `metadata.extraction`): source/facts/candidates; null until extracted. Proposed values only — never committed. */
     extraction: StoredProcessingExtraction | null;
-    /** POS-FP11 read-only Document → Form preview (from `metadata.document_form_preview`); null until generated. Preview only — no form created. */
-    documentFormPreview: StoredDocumentFormPreview | null;
 }
 
 export type ProcessingCaseQueueSortKey = "created_at" | "status_changed_at";

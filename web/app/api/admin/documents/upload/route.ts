@@ -16,11 +16,9 @@ import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { emitEvent } from "@/lib/emitEvent";
-import { resolveUploadEntityTarget } from "@/lib/admin/resolveUploadEntityTarget";
 import { maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
 import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/classification/maybeClassifyProcessingCaseFromDocumentSafe";
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
-import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -81,21 +79,19 @@ export async function POST(request: NextRequest) {
     // that don't send this flag are completely unaffected.
     const openProcessingCase = formData.get("open_processing_case") === "true";
 
-    // Resolve where this document attaches. Normal uploads still require a valid entity;
-    // POS intake (open_processing_case=true) may upload without one (entity-less artifact).
-    const target = resolveUploadEntityTarget({ openProcessingCase, entityTypeRaw, entityId }, CANONICAL_ENTITY_TYPE);
-    if (!target.ok) {
-        return NextResponse.json({ error: target.message, code: target.code }, { status: 400 });
+    if (!entityTypeRaw || !entityId) {
+        return NextResponse.json({ error: "entity_type and entity_id are required", code: "MISSING_ENTITY" }, { status: 400 });
+    }
+
+    const canonicalType = CANONICAL_ENTITY_TYPE[entityTypeRaw] ?? entityTypeRaw;
+    if (!CANONICAL_ENTITY_TYPE[entityTypeRaw] && !Object.values(CANONICAL_ENTITY_TYPE).includes(canonicalType)) {
+        return NextResponse.json({ error: "Unsupported entity_type", code: "UNSUPPORTED_ENTITY" }, { status: 400 });
     }
 
     const supabase = createAdminClient();
-    const canonicalType: string | null = target.mode === "entity" ? target.canonicalType : null;
-    const rowEntityId: string | null = target.mode === "entity" ? target.entityId : null;
-    if (target.mode === "entity") {
-        const okEntity = await assertEntityInOrg(supabase, ctx.orgId, target.canonicalType, target.entityId);
-        if (!okEntity) {
-            return NextResponse.json({ error: "Entity not found for this organization", code: "ENTITY_NOT_FOUND" }, { status: 404 });
-        }
+    const okEntity = await assertEntityInOrg(supabase, ctx.orgId, canonicalType, entityId);
+    if (!okEntity) {
+        return NextResponse.json({ error: "Entity not found for this organization", code: "ENTITY_NOT_FOUND" }, { status: 404 });
     }
 
     const bucket = process.env.ADMIN_DOCUMENTS_BUCKET?.trim() || DEFAULT_ORG_DOCUMENTS_BUCKET;
@@ -104,8 +100,7 @@ export async function POST(request: NextRequest) {
     const origName = file instanceof File && file.name ? file.name : "upload";
     const safeName = sanitizeFilename(origName);
     const objectId = randomUUID();
-    const pathSegment = canonicalType ? `${canonicalType}/${rowEntityId}` : "pos_intake";
-    const storagePath = `${ctx.orgId}/${pathSegment}/${objectId}-${safeName}`;
+    const storagePath = `${ctx.orgId}/${canonicalType}/${entityId}/${objectId}-${safeName}`;
 
     const { error: upErr } = await supabase.storage.from(bucket).upload(storagePath, buffer, {
         contentType: file.type || "application/octet-stream",
@@ -128,7 +123,7 @@ export async function POST(request: NextRequest) {
         .insert({
             org_id: ctx.orgId,
             entity_type: canonicalType,
-            entity_id: rowEntityId,
+            entity_id: entityId,
             doc_type: docType,
             title,
             original_filename: origName !== "upload" ? origName : null,
@@ -164,7 +159,7 @@ export async function POST(request: NextRequest) {
             entity_id: docId,
             payload: {
                 canonical_entity_type: canonicalType,
-                entity_id: rowEntityId,
+                entity_id: entityId,
                 doc_type: docType,
                 storage_path: storagePath,
                 actor_user_id: ctx.userId,
@@ -181,11 +176,7 @@ export async function POST(request: NextRequest) {
     let processingCaseId: string | null = null;
     let classificationKey: string | null = null;
     let candidateCount: number | null = null;
-    // Defensive outer guard: the upload has already succeeded (storage + row + event).
-    // Opening the case / classification / extraction are all best-effort and must NEVER
-    // turn a successful upload into a failed response, even if a helper is changed later.
-    try {
-      if (openProcessingCase) {
+    if (openProcessingCase) {
         const opened = await maybeOpenProcessingCaseFromNonFormSourceSafe(supabase, {
             orgId: ctx.orgId,
             sourceKind: "document",
@@ -239,21 +230,7 @@ export async function POST(request: NextRequest) {
                         })
                     )?.candidates.length ?? null;
             }
-
-            // POS-FP11: build a Document → Form structure PREVIEW (text → sections/fields).
-            // Preview only — no form created, no publish, no record write. Best-effort;
-            // honest empty preview when no document text is available.
-            await maybeBuildDocumentFormPreviewSafe(supabase, {
-                orgId: ctx.orgId,
-                caseId: processingCaseId,
-                documentId: docId,
-            });
         }
-      }
-    } catch (e) {
-        // Swallowed: a successful upload must not be reported as a failure because a
-        // downstream best-effort step (open case / classify / extract) errored.
-        console.warn("[documents/upload] processing-case side-effect", e instanceof Error ? e.message : e);
     }
 
     return NextResponse.json({

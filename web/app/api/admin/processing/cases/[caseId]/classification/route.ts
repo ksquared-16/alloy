@@ -7,7 +7,6 @@ import {
     validateOperatorCorrection,
 } from "@/lib/pos/processingCase/classification/operatorCorrection";
 import { dbStoreProcessingCaseClassification } from "@/lib/pos/processingCase/classification/processingCaseClassificationDb";
-import { maybeReextractProcessingCaseAfterClassificationSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
 
 export const dynamic = "force-dynamic";
 
@@ -69,21 +68,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             correctedAt: now,
         });
 
-        // Re-run extraction with the corrected classification so candidates never go stale.
-        // Best-effort: a failure here must NOT fail the correction (annotation already saved).
-        const reextracted = await maybeReextractProcessingCaseAfterClassificationSafe(supabase, {
-            orgId: ctx.orgId,
-            caseId,
-            classificationKey: validation.classification_key,
-        });
-
         // Lifecycle status is echoed back unchanged (the store never writes `status`).
-        return jsonData({
-            caseId,
-            status: (caseRow as { status: string }).status,
-            classification: stored,
-            extraction_candidate_count: reextracted?.candidates.length ?? null,
-        });
+        return jsonData({ caseId, status: (caseRow as { status: string }).status, classification: stored });
     } catch (e) {
         return NextResponse.json(
             { error: e instanceof Error ? e.message : "Failed to update classification" },

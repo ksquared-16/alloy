@@ -126,9 +126,7 @@ export function bosSuggestionsFromExtraction(
         payload_key: f.payload_key,
         field_label: GATHER_LABEL_BY_KEY[f.payload_key] ?? f.payload_key,
         suggested_value: f.value,
-        // This BOS suggestion surface only models three tiers; an "invalid" extraction
-        // collapses to the lowest tier at the boundary.
-        confidence: f.confidence === "invalid" ? ("low" as const) : f.confidence,
+        confidence: f.confidence,
     }));
 }
 

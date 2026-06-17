@@ -59,10 +59,6 @@ export function parseStoredExtraction(metadata: unknown): StoredProcessingExtrac
     if (!e.source || typeof e.source !== "object") return null;
     if (!Array.isArray(e.facts) || !Array.isArray(e.candidates)) return null;
     return {
-        // Older rows (pre-stamp) fall back to "unknown" so staleness can still be detected.
-        classification_key: typeof e.classification_key === "string"
-            ? (e.classification_key as StoredProcessingExtraction["classification_key"])
-            : "unknown",
         source: e.source as StoredProcessingExtraction["source"],
         facts: e.facts as StoredProcessingExtraction["facts"],
         candidates: e.candidates as StoredProcessingExtraction["candidates"],
@@ -70,17 +66,4 @@ export function parseStoredExtraction(metadata: unknown): StoredProcessingExtrac
         extractor_version: typeof e.extractor_version === "string" ? e.extractor_version : "unknown",
         extracted_at: typeof e.extracted_at === "string" ? e.extracted_at : "",
     };
-}
-
-/**
- * Pure: are the stored candidates stale relative to the case's current classification?
- * True when an extraction exists but was built for a different classification (i.e. the
- * operator corrected the classification and extraction has not been re-run).
- */
-export function isExtractionStale(
-    extraction: { classification_key: string } | null,
-    currentClassificationKey: string | null
-): boolean {
-    if (!extraction || !currentClassificationKey) return false;
-    return extraction.classification_key !== currentClassificationKey;
 }
