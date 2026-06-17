@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import LayoutRuntimePlanView from "@/components/layout/LayoutRuntimePlanView";
 import LayoutEditorSectionFlowView from "@/components/layout/LayoutEditorSectionFlowView";
 import LayoutBuilderPreviewDrawerFrame from "@/components/adminV2/settings/LayoutBuilderPreviewDrawerFrame";
+import ExperienceBuilderEditableCardShell from "@/components/adminV2/settings/ExperienceBuilderEditableCardShell";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import {
     buildSingleSectionPreviewDoc,
@@ -31,6 +32,7 @@ import { leadOverviewVisualEditorCompositionHints, partitionLeadOverviewBodySect
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
 import { repackPeerCardsAfterZoneReorder } from "@/lib/layout/layoutBuilderPeerCardRows";
+import { readCardWidthFraction } from "@/lib/layout/layoutBuilderCardWidth";
 import { sectionIsKpiTile, sectionIsWidgetStrip, listSectionWidgetItems, widgetStripColumnCount } from "@/lib/layout/layoutBuilderWidgetStrip";
 import { readLayoutEditorWidgetStyle, resolveLayoutEditorWidgetToneRailClass } from "@/lib/layout/layoutEditorWidgetStyle";
 
@@ -91,14 +93,20 @@ function SectionPreviewBody({
         section && (sectionIsKpiTile(section) || resolveOpportunityDrawerSectionZone(section) === "summary_strip") ?
             "summary_strip" as const
         :   "default" as const;
-    const previewCompositionHints = useMemo(
-        () =>
-            leadOverviewVisualEditorCompositionHints({
-                ...(section && sectionIsKpiTile(section) ? { summaryStripCompactRow: false } : {}),
-                ...(sectionPresentation === "default" ? { suppressDrawerOverviewSectionHeader: true } : {}),
-            }),
-        [section, sectionPresentation],
-    );
+    const previewCompositionHints = useMemo(() => {
+        const cardWidth = section ? readCardWidthFraction(section) : "full";
+        const narrowCard = cardWidth === "third" || cardWidth === "quarter" || cardWidth === "half";
+        return leadOverviewVisualEditorCompositionHints({
+            ...(section && sectionIsKpiTile(section) ? { summaryStripCompactRow: false } : {}),
+            ...(sectionPresentation === "default" ?
+                {
+                    suppressDrawerOverviewSectionHeader: true,
+                    suppressRelatedListPanelHeader: true,
+                    stackFieldColumns: narrowCard,
+                }
+            :   {}),
+        });
+    }, [section, sectionPresentation]);
 
     if (!sectionDoc || hidden) {
         return (
@@ -454,44 +462,32 @@ function EditableSectionFrame({
                     onSelectBlockId(null);
                 }
             }}
-            className={`group relative cursor-pointer rounded-xl border bg-white shadow-sm transition-all duration-150 ${
-                isSelected ?
-                    "border-alloy-pine/40 ring-1 ring-alloy-pine/25 shadow-[0_2px_8px_rgba(45,106,79,0.08)]"
-                :   "border-alloy-stone/12 hover:border-alloy-pine/30 hover:shadow-[0_2px_8px_rgba(24,39,58,0.05)]"
-            } ${hidden ? "opacity-60" : ""}`}
+            className={`group relative cursor-pointer ${hidden ? "opacity-60" : ""}`}
             data-testid={`visual-editor-section-${section.key}`}
             data-visual-editor-editable="true"
             data-visual-editor-section-type={sectionType}
         >
-            <div className="border-b border-alloy-stone/8 bg-gradient-to-r from-white to-alloy-stone/[0.02] px-3 py-2">
-                <input
-                    type="text"
-                    value={section.title}
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                    onChange={(e) => applyDoc(renameSectionTitle(doc, section.key, e.target.value))}
-                    className="w-full bg-transparent text-sm font-semibold text-alloy-midnight outline-none placeholder:text-alloy-midnight/35 focus:ring-0"
-                    aria-label="Card title"
-                    data-testid={`visual-editor-section-title-inline-${section.key}`}
-                />
-            </div>
-
             <div
-                className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-end gap-1 p-2 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
-                onClick={(e) => e.stopPropagation()}
+                className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-end gap-1 p-2 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100"
             >
                 <div className="pointer-events-auto flex gap-1 rounded-lg border border-alloy-forge/8 bg-white/95 p-1 shadow-sm">
                     <button
                         type="button"
                         className="rounded-md px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
-                        onClick={() => applyDoc(reorderSectionInZone(doc, section.key, -1))}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            applyDoc(reorderSectionInZone(doc, section.key, -1));
+                        }}
                     >
                         Move ↑
                     </button>
                     <button
                         type="button"
                         className="rounded-md px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
-                        onClick={() => applyDoc(reorderSectionInZone(doc, section.key, 1))}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            applyDoc(reorderSectionInZone(doc, section.key, 1));
+                        }}
                     >
                         Move ↓
                     </button>
@@ -499,25 +495,32 @@ function EditableSectionFrame({
             </div>
 
             {hidden ?
-                <div className="absolute left-2 top-2 z-10 rounded-full bg-alloy-stone/85 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60">
+                <div className="pointer-events-none absolute left-2 top-12 z-20 rounded-full bg-alloy-stone/85 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60">
                     Hidden after publish
                 </div>
             :   null}
 
-            <div onClick={(e) => e.stopPropagation()}>
-                <SectionPreviewBody
-                    doc={doc}
-                    sectionKey={section.key}
-                    hidden={hidden}
-                    traceEnabled={isBuild}
-                    selectedFieldPath={selectedFieldPath}
-                    onSelectFieldPath={(path) => {
-                        onSelectFieldPath(path);
-                        if (path) onSelectSection(section.key);
-                    }}
-                    onSelectSection={onSelectSection}
-                />
-            </div>
+            <ExperienceBuilderEditableCardShell
+                sectionKey={section.key}
+                title={section.title}
+                isSelected={isSelected}
+                onTitleChange={(title) => applyDoc(renameSectionTitle(doc, section.key, title))}
+            >
+                <div onClick={(e) => e.stopPropagation()}>
+                    <SectionPreviewBody
+                        doc={doc}
+                        sectionKey={section.key}
+                        hidden={hidden}
+                        traceEnabled={isBuild}
+                        selectedFieldPath={selectedFieldPath}
+                        onSelectFieldPath={(path) => {
+                            onSelectFieldPath(path);
+                            if (path) onSelectSection(section.key);
+                        }}
+                        onSelectSection={onSelectSection}
+                    />
+                </div>
+            </ExperienceBuilderEditableCardShell>
         </div>
     );
 }

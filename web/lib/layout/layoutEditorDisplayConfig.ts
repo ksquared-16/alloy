@@ -17,13 +17,38 @@ export type LayoutLinkBehavior = (typeof LAYOUT_LINK_BEHAVIORS)[number];
 /** Operator-facing labels; internal values remain stable for storage. */
 export const LAYOUT_LINK_BEHAVIOR_LABELS: Record<LayoutLinkBehavior, string> = {
     none: "No action",
-    open_record: "Open related record page",
-    open_drawer: "Open related record drawer",
+    open_record: "Link to record",
+    open_drawer: "Open record drawer",
     open_modal: "Open modal",
     external_url: "Open external URL",
-    mailto: "Open email composer",
+    mailto: "Email",
     tel: "Call phone number",
 };
+
+/** MVP link behaviors shown in Experience Builder — advanced options remain in storage only. */
+export const LAYOUT_LINK_BEHAVIORS_EDITOR: LayoutLinkBehavior[] = [
+    "none",
+    "open_record",
+    "open_drawer",
+    "mailto",
+    "tel",
+];
+
+export const LAYOUT_TYPOGRAPHY_INTENT_LABELS: Record<LayoutTypographyIntent, string> = {
+    primary: "Primary",
+    secondary: "Secondary",
+    muted: "Muted",
+    caption: "Small",
+    emphasis: "Primary (bold)",
+};
+
+/** Typography presets exposed in Experience Builder field settings. */
+export const LAYOUT_TYPOGRAPHY_INTENTS_EDITOR: LayoutTypographyIntent[] = [
+    "primary",
+    "secondary",
+    "caption",
+    "muted",
+];
 
 export const LAYOUT_LABEL_POSITIONS = ["above", "inline", "hidden"] as const;
 export type LayoutLabelPosition = (typeof LAYOUT_LABEL_POSITIONS)[number];
@@ -167,6 +192,8 @@ export function renderHintForDisplayType(displayType: LayoutEditorDisplayType | 
 
 export function typographyIntentClass(intent: LayoutTypographyIntent | undefined): string {
     switch (intent) {
+        case "primary":
+            return "text-sm font-medium text-alloy-midnight";
         case "secondary":
             return "text-sm text-alloy-midnight/70";
         case "muted":
@@ -180,6 +207,22 @@ export function typographyIntentClass(intent: LayoutTypographyIntent | undefined
     }
 }
 
+function resolveOpenDrawerActionForRefKey(
+    refKey: string | undefined,
+): { type: "open_drawer"; entity: "person" | "child" | "opportunity"; idPath?: string } | undefined {
+    const key = refKey?.trim() ?? "";
+    if (key.startsWith("person.")) {
+        return { type: "open_drawer", entity: "person", idPath: "opportunity.primary_person_id" };
+    }
+    if (key.startsWith("child.") || key.startsWith("inquiry_child.")) {
+        return { type: "open_drawer", entity: "child", idPath: "child.id" };
+    }
+    if (key.startsWith("opportunity.")) {
+        return { type: "open_drawer", entity: "opportunity", idPath: "id" };
+    }
+    return undefined;
+}
+
 export function applyDisplayConfigToItemPatch(
     item: LayoutItem,
     config: LayoutEditorDisplayConfig,
@@ -191,12 +234,44 @@ export function applyDisplayConfigToItemPatch(
         const hint = renderHintForDisplayType(config.displayType);
         if (hint) patch.renderHint = hint;
     }
-    if (config.icon) {
-        const adornmentPosition =
-            config.iconPosition === "right" ? "right"
-            : "left";
+
+    const linkBehavior = config.linkBehavior;
+    const icon = config.icon ?? item.adornment?.icon;
+    const position = item.adornment?.position ?? (config.iconPosition === "right" ? "right" : "left");
+
+    if (linkBehavior === "open_drawer") {
+        const action = resolveOpenDrawerActionForRefKey(item.refKey);
+        if (action) {
+            patch.adornment = {
+                position,
+                icon: icon ?? "link",
+                action,
+            };
+        }
+    } else if (linkBehavior === "open_record") {
+        const action = resolveOpenDrawerActionForRefKey(item.refKey);
+        if (action) {
+            patch.adornment = {
+                position,
+                icon: icon ?? "link",
+                action,
+            };
+        }
+    } else if (linkBehavior === "mailto" || linkBehavior === "tel" || linkBehavior === "none") {
+        if (icon) {
+            patch.adornment = {
+                position,
+                icon,
+            };
+        } else if (linkBehavior === "none" && item.adornment?.action) {
+            patch.adornment = {
+                position: item.adornment.position,
+                icon: item.adornment.icon,
+            };
+        }
+    } else if (config.icon) {
         patch.adornment = {
-            position: adornmentPosition,
+            position,
             icon: config.icon,
             ...(item.adornment?.action ? { action: item.adornment.action } : {}),
         };

@@ -44,6 +44,10 @@ export type LayoutRuntimeCompositionHints = {
     childOverviewComposition?: boolean;
     /** Experience Builder canvas preview — card title is edited outside runtime chrome. */
     suppressDrawerOverviewSectionHeader?: boolean;
+    /** Builder preview — hide related-list inner panel headers (outer card title is enough). */
+    suppressRelatedListPanelHeader?: boolean;
+    /** Stack field columns vertically in narrow builder cards to avoid cutoff. */
+    stackFieldColumns?: boolean;
     /** Patch 20 — child enrollment/care summary cards in strip. */
     childOperatingSummaryCards?: boolean;
     /** Summary-strip family widget shows count only. */

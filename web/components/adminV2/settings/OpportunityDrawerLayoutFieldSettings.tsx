@@ -6,9 +6,11 @@ import {
     LAYOUT_DATE_FORMATS,
     LAYOUT_ICON_POSITIONS,
     LAYOUT_LABEL_POSITIONS,
-    LAYOUT_LINK_BEHAVIORS,
+    LAYOUT_LINK_BEHAVIORS_EDITOR,
     LAYOUT_LINK_BEHAVIOR_LABELS,
     LAYOUT_STATUS_FORMATS,
+    LAYOUT_TYPOGRAPHY_INTENT_LABELS,
+    LAYOUT_TYPOGRAPHY_INTENTS_EDITOR,
     type LayoutEditorDisplayConfig,
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import {
@@ -52,7 +54,8 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                 Custom label
                 <input
                     type="text"
-                    defaultValue={node.title}
+                    value={node.title}
+                    onKeyDown={(e) => e.stopPropagation()}
                     onChange={(e) => onChange({ label: e.target.value })}
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                     data-testid="visual-editor-field-label"
@@ -197,19 +200,47 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                 </select>
             </label>
 
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Text size</p>
+
+            <label className="mt-1 block text-[11px] text-alloy-midnight/60">
+                Emphasis
+                <select
+                    value={display.typographyIntent ?? "primary"}
+                    onChange={(e) =>
+                        onChange({
+                            display: {
+                                typographyIntent: e.target.value as LayoutEditorDisplayConfig["typographyIntent"],
+                            },
+                        })
+                    }
+                    className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                    data-testid="visual-editor-field-typography-intent"
+                >
+                    {LAYOUT_TYPOGRAPHY_INTENTS_EDITOR.map((intent) => (
+                        <option key={intent} value={intent}>
+                            {LAYOUT_TYPOGRAPHY_INTENT_LABELS[intent]}
+                        </option>
+                    ))}
+                </select>
+            </label>
+
             <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Behavior</p>
 
             <label className="mt-1 block text-[11px] text-alloy-midnight/60">
                 Link behavior
                 <select
-                    value={display.linkBehavior ?? "none"}
+                    value={
+                        display.linkBehavior && LAYOUT_LINK_BEHAVIORS_EDITOR.includes(display.linkBehavior) ?
+                            display.linkBehavior
+                        :   "none"
+                    }
                     onChange={(e) =>
                         onChange({ display: { linkBehavior: e.target.value as LayoutEditorDisplayConfig["linkBehavior"] } })
                     }
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                     data-testid="visual-editor-field-link-behavior"
                 >
-                    {LAYOUT_LINK_BEHAVIORS.map((b) => (
+                    {LAYOUT_LINK_BEHAVIORS_EDITOR.map((b) => (
                         <option key={b} value={b}>
                             {LAYOUT_LINK_BEHAVIOR_LABELS[b]}
                         </option>
@@ -223,21 +254,22 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                     <span className="mt-1 block text-[10px] text-alloy-midnight/45">
                         Opens the related record in the side drawer without leaving this context.
                     </span>
+                : display.linkBehavior === "mailto" ?
+                    <span className="mt-1 block text-[10px] text-alloy-midnight/45">
+                        Tapping the value opens the operator email composer.
+                    </span>
+                : display.linkBehavior === "tel" ?
+                    <span className="mt-1 block text-[10px] text-alloy-midnight/45">
+                        Tapping the value starts a phone call.
+                    </span>
                 :   null}
             </label>
 
-            {display.linkBehavior === "external_url" ?
-                <label className="mt-2 block text-[11px] text-alloy-midnight/60">
-                    External URL
-                    <input
-                        type="url"
-                        value={display.externalUrl ?? ""}
-                        placeholder="https://"
-                        onChange={(e) => onChange({ display: { externalUrl: e.target.value } })}
-                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
-                        data-testid="visual-editor-field-external-url"
-                    />
-                </label>
+            {display.linkBehavior === "external_url" || display.linkBehavior === "open_modal" ?
+                <p className="mt-2 rounded-md border border-amber-200/80 bg-amber-50/80 px-2 py-1.5 text-[10px] text-amber-900">
+                    This layout still uses an advanced link setting ({LAYOUT_LINK_BEHAVIOR_LABELS[display.linkBehavior]}).
+                    Choose a supported action or clear it before publishing.
+                </p>
             :   null}
 
             <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Visibility</p>

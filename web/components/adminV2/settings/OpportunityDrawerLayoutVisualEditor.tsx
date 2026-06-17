@@ -442,7 +442,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             :   null}
 
             <div
-                className={`grid min-h-0 flex-1 gap-3 overflow-hidden ${isBuild ? "xl:grid-cols-[minmax(280px,300px)_minmax(0,1fr)_minmax(380px,440px)]" : "grid-cols-1"}`}
+                className={`grid min-h-0 flex-1 gap-3 overflow-hidden ${isBuild ? "xl:grid-cols-[minmax(280px,300px)_minmax(0,1fr)_minmax(420px,480px)]" : "grid-cols-1"}`}
                 data-testid="layout-builder-studio-grid"
             >
                 {isBuild && studioNotice ?

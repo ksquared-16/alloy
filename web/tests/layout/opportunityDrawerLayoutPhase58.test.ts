@@ -133,8 +133,8 @@ describe("inline editing UX", () => {
 
 describe("link behavior labels", () => {
     it("uses human-readable link behavior labels", () => {
-        expect(LAYOUT_LINK_BEHAVIOR_LABELS.open_drawer).toBe("Open related record drawer");
-        expect(LAYOUT_LINK_BEHAVIOR_LABELS.open_record).toBe("Open related record page");
+        expect(LAYOUT_LINK_BEHAVIOR_LABELS.open_drawer).toBe("Open record drawer");
+        expect(LAYOUT_LINK_BEHAVIOR_LABELS.open_record).toBe("Link to record");
     });
 });
 

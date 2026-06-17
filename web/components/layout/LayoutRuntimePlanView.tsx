@@ -315,6 +315,7 @@ function ValueCell({
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const edit = useLayoutRuntimeDrawerEdit();
     const blockEdit = useLayoutRuntimeBlockEdit();
+    const onAdornmentAction = useContext(AdornmentActionContext);
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
     const displayConfig = readLayoutEditorDisplayConfig(item);
@@ -340,6 +341,65 @@ function ValueCell({
         layoutRuntimeBlockAllowsFieldEdit(blockEdit);
     const editValue = canEdit && edit ? edit.getFieldValue(refKey, display ?? "") : display ?? "";
     const actionButton = item.refKey === "_action_button" ? readLayoutEditorActionButtonConfig(item.metadata) : null;
+
+    const valueBody = (() => {
+        if (!formattedDisplay) {
+            return (
+                <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>{emptyDisplay}</span>
+            );
+        }
+        if (r.renderHint === "status" || displayConfig.displayType === "badge" || displayConfig.displayType === "pill") {
+            return (
+                <span className={layoutEditorStatusFormatClass(displayConfig, item.renderHint) || undefined}>
+                    {formattedDisplay}
+                </span>
+            );
+        }
+        const linkBehavior = displayConfig.linkBehavior;
+        const linkClass = "min-w-0 break-words text-alloy-pine hover:underline";
+        if (linkBehavior === "mailto") {
+            return (
+                <a href={`mailto:${formattedDisplay}`} className={linkClass} title={formattedDisplay}>
+                    {formattedDisplay}
+                </a>
+            );
+        }
+        if (linkBehavior === "tel") {
+            const dial = formattedDisplay.replace(/[^\d+]/g, "");
+            return (
+                <a href={`tel:${dial}`} className={linkClass} title={formattedDisplay}>
+                    {formattedDisplay}
+                </a>
+            );
+        }
+        if (
+            (linkBehavior === "open_drawer" || linkBehavior === "open_record")
+            && item.adornment?.action
+            && onAdornmentAction
+        ) {
+            return (
+                <button
+                    type="button"
+                    className={`${linkClass} text-left`}
+                    title={formattedDisplay}
+                    onClick={(e) => {
+                        if (trace?.inspectMode) {
+                            e.stopPropagation();
+                            return;
+                        }
+                        onAdornmentAction(item, item.adornment!, undefined);
+                    }}
+                >
+                    {formattedDisplay}
+                </button>
+            );
+        }
+        return (
+            <span className="min-w-0 break-words" title={formattedDisplay}>
+                {formattedDisplay}
+            </span>
+        );
+    })();
 
     return (
         <div
@@ -388,13 +448,7 @@ function ValueCell({
                     >
                         {actionButton.label ?? item.label ?? "Action"}
                     </button>
-                :   <span className={`min-w-0 ${!formattedDisplay ? PRESENTATION_VALUE_PLACEHOLDER : "truncate"}`}>
-                        {!formattedDisplay ?
-                            <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>{emptyDisplay}</span>
-                        : r.renderHint === "status" || displayConfig.displayType === "badge" || displayConfig.displayType === "pill" ?
-                            <span className={layoutEditorStatusFormatClass(displayConfig, item.renderHint) || undefined}>{formattedDisplay}</span>
-                        :   formattedDisplay}
-                    </span>
+                :   <span className={!formattedDisplay ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>{valueBody}</span>
                 }
                 {showIcon && item.adornment && item.adornment.position === "right" ? <Adorn item={item} /> : null}
             </div>
@@ -583,6 +637,7 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
     }
 
     const composition = useLayoutRuntimeCompositionHints();
+    const suppressRelatedListHeader = composition.suppressRelatedListPanelHeader === true;
     const columns = item.columns as LayoutCollectionColumn[];
     const allRows = readLayoutRuntimeRepeaterRows(record, item);
     const title = operatorLabel(item, variant);
@@ -675,11 +730,13 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
 
         return (
             <div className={LAYOUT_RUNTIME_PANEL_SURFACE}>
-                <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
-                    <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                        {title || "Contacts"}
-                    </span>
-                </div>
+                {suppressRelatedListHeader ? null : (
+                    <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                            {title || "Contacts"}
+                        </span>
+                    </div>
+                )}
                 {showContactsEmpty ?
                     <div className="p-2">
                         <DrawerOverviewEmptyState
@@ -759,11 +816,13 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
         return (
             <div className={`${LAYOUT_RUNTIME_PANEL_SURFACE} ${LAYOUT_RUNTIME_WORK_RAIL}`}>
                 <LayoutRuntimeLinkDebugModeBanner />
-                <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
-                    <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                        {title || "Related records"}
-                    </span>
-                </div>
+                {suppressRelatedListHeader ? null : (
+                    <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                            {title || "Related records"}
+                        </span>
+                    </div>
+                )}
                 {showChildrenEmpty ?
                     <LayoutRuntimeChildrenEmptyState
                         opportunityId={host.entityId ?? ""}
@@ -843,7 +902,8 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
             || (useChildFamilyPresentation && composition.familyPrimaryColumnsOnly),
         ),
     );
-    const hideInnerHeader = useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyPresentation;
+    const hideInnerHeader =
+        useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyPresentation || suppressRelatedListHeader;
     const rowLimit =
         useEnrollmentReadTable && maxEnrollmentRows != null && !enrollmentExpanded ? maxEnrollmentRows
         : usePersonConnectedChildrenTable && maxConnectedChildrenRows != null && !enrollmentExpanded ?
@@ -1546,10 +1606,15 @@ function RowView({ record, row, anchorEntity }: { record: ProofRuntimeRecord; ro
     const { stackRows } = useContext(LayoutRuntimeSectionContext);
     const kpiTile = useLayoutRuntimeKpiTile();
     const summaryCompact = useLayoutRuntimeSummaryStrip() && useLayoutRuntimeCompositionHints().summaryStripCompactRow;
+    const stackFieldColumns = useLayoutRuntimeCompositionHints().stackFieldColumns;
 
-    if (stackRows) {
+    if (stackRows || stackFieldColumns) {
         return (
-            <div className="flex flex-col gap-2.5" data-layout-runtime-stack-rows="true">
+            <div
+                className="flex flex-col gap-2.5"
+                data-layout-runtime-stack-rows={stackRows ? "true" : undefined}
+                data-layout-runtime-stack-field-columns={stackFieldColumns ? "true" : undefined}
+            >
                 {row.columns.map((col) => (
                     <ColumnView key={col.id} record={record} column={col} anchorEntity={anchorEntity} />
                 ))}

@@ -33,6 +33,8 @@ import {
 } from "@/lib/layout/layoutBuilderCardWidth";
 import { EXPERIENCE_BUILDER_PEER_BLOCK_LABELS } from "@/lib/layout/layoutBuilderCardAuthoring";
 import { listSectionCompositionRows, removeSectionItem } from "@/lib/layout/layoutEditorSectionComposition";
+import { addSectionFieldItem, addSectionRow } from "@/lib/layout/layoutEditorSectionComposition";
+import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
 import { sectionZoneLabel } from "@/lib/layout/layoutBuilderStudioUx";
 import {
     applyPeerCardWidth,
@@ -73,6 +75,19 @@ function resolveSelectedItemId(
     return null;
 }
 
+function collectSectionFieldRefKeys(doc: LayoutDoc, sectionKey: string): Set<string> {
+    const rows = listSectionCompositionRows(doc, sectionKey);
+    const keys = new Set<string>();
+    for (const row of rows) {
+        for (const col of row.columns) {
+            for (const entry of col.items) {
+                if (entry.kind === "field" && entry.item.refKey) keys.add(entry.item.refKey);
+            }
+        }
+    }
+    return keys;
+}
+
 function InspectorField({
     label,
     helper,
@@ -109,6 +124,7 @@ export default function LayoutBuilderInspectorPanel({
     layoutVersion,
 }: Props) {
     const [showStructure, setShowStructure] = useState(false);
+    const [showAddField, setShowAddField] = useState(true);
     const section = selectedSectionId ? doc.sections.find((s) => s.key === selectedSectionId) : null;
     const selectedItemId = resolveSelectedItemId(selectedSectionId, selectedFieldPath, selectedBlockId);
     const sectionType = section ? readSectionType(section) : null;
@@ -129,6 +145,11 @@ export default function LayoutBuilderInspectorPanel({
     const inspectorItem = selectedItem ?? kpiWidgetItem;
 
     const deleteGate = section ? canDeleteOpportunityDrawerSection(section) : { ok: false, reason: "" };
+
+    const usedFieldRefKeys = useMemo(
+        () => (section ? collectSectionFieldRefKeys(doc, section.key) : new Set<string>()),
+        [doc, section],
+    );
 
     const selectionTitle =
         inspectorItem ? inspectorItem.title
@@ -162,7 +183,7 @@ export default function LayoutBuilderInspectorPanel({
             className="flex max-h-full min-w-0 flex-col overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-sm"
             data-testid="layout-builder-inspector-panel"
         >
-            <div className="border-b border-alloy-forge/8 bg-gradient-to-r from-white to-alloy-stone/[0.03] px-4 py-3">
+            <div className="sticky top-0 z-10 border-b border-alloy-forge/8 bg-white/95 px-4 py-3 backdrop-blur-sm">
                 <h3 className={opSectionTitle}>Properties</h3>
                 {selectionTitle ?
                     <p className="mt-1 truncate text-sm font-semibold text-alloy-midnight" data-testid="layout-builder-inspector-selection-title">
@@ -171,7 +192,7 @@ export default function LayoutBuilderInspectorPanel({
                 :   <p className={opSectionSupport}>Click a card, field, or tile on the canvas.</p>}
             </div>
 
-            <div className="min-h-0 flex-1 space-y-3 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3">
+            <div className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3">
                 {!section ?
                     <div
                         className="rounded-xl border border-dashed border-alloy-forge/12 bg-alloy-stone/[0.02] px-4 py-8 text-center"
@@ -245,11 +266,49 @@ export default function LayoutBuilderInspectorPanel({
                             <input
                                 type="text"
                                 value={section.title}
+                                onKeyDown={(e) => e.stopPropagation()}
                                 onChange={(e) => applyDoc(renameSectionTitle(doc, section.key, e.target.value))}
                                 className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
                                 data-testid="visual-editor-section-title"
                             />
                         </InspectorField>
+
+                        {sectionType === "content" && !inspectorItem ?
+                            <div className="space-y-2" data-testid="layout-builder-inspector-add-field">
+                                <button
+                                    type="button"
+                                    className="flex w-full items-center justify-between rounded-lg border border-alloy-pine/25 bg-alloy-pine/[0.05] px-3 py-2 text-left text-xs font-semibold text-alloy-midnight hover:bg-alloy-pine/[0.08]"
+                                    onClick={() => setShowAddField((v) => !v)}
+                                >
+                                    + Add field
+                                    <span className="text-alloy-midnight/35">{showAddField ? "−" : "+"}</span>
+                                </button>
+                                {showAddField ?
+                                    <OpportunityDrawerLayoutFieldPicker
+                                        groups={fieldPickerGroups}
+                                        disabled={!validationOk}
+                                        variant="inspector"
+                                        stayOpen
+                                        usedRefKeys={usedFieldRefKeys}
+                                        onPickField={(field) => {
+                                            if (!section) return;
+                                            let next = doc;
+                                            if (section.rows.length === 0) {
+                                                next = addSectionRow(next, section.key, 1);
+                                            }
+                                            const result = addSectionFieldItem(next, section.key, 0, 0, field);
+                                            if (!result.ok) {
+                                                onFieldAddError(result.error);
+                                                return;
+                                            }
+                                            applyDoc(result.doc);
+                                            onSelectItem(result.itemId);
+                                            onFieldAddError(null);
+                                        }}
+                                    />
+                                :   null}
+                            </div>
+                        :   null}
 
                         <InspectorField label="Width" helper="How wide this block appears on the canvas.">
                             <select
