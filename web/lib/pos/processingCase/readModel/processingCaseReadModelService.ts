@@ -23,6 +23,7 @@ import type {
     SourceRef,
 } from "./types";
 import { descriptorKey, genericFallbackDescriptor, resolveSourceDescriptors } from "./sourceDisplayResolvers";
+import { parseStoredClassification } from "../classification/processingCaseClassificationDb";
 
 function toRef(row: ReadModelSourceRow): SourceRef {
     return { kind: row.source_kind, id: row.source_id, role: row.role, linkedAt: row.linked_at };
@@ -120,5 +121,6 @@ export async function getProcessingCaseDetail(
         updatedAt: c.updated_at,
         archivedAt: c.archived_at,
         sources,
+        classification: parseStoredClassification(c.metadata),
     };
 }

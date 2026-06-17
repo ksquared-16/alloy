@@ -119,9 +119,10 @@ export function makeProcessingCaseReadDeps(supabase: SupabaseClient): Processing
         },
 
         async getCase({ orgId, id }) {
+            // Detail read also pulls `metadata` (carries FP9 `metadata.classification`).
             const { data, error } = await supabase
                 .from("processing_cases")
-                .select(CASE_COLUMNS)
+                .select(`${CASE_COLUMNS}, metadata`)
                 .eq("org_id", orgId)
                 .eq("id", id)
                 .maybeSingle();

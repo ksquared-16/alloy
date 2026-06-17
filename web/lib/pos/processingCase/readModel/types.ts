@@ -11,6 +11,7 @@ import type {
     ProcessingCaseSourceRole,
     ProcessingCaseStatus,
 } from "../types";
+import type { StoredProcessingClassification } from "../classification/types";
 
 export type { ProcessingCaseSourceKind, ProcessingCaseSourceRole, ProcessingCaseStatus };
 
@@ -53,6 +54,8 @@ export interface ProcessingCaseDetail {
     updatedAt: string | null;
     archivedAt: string | null;
     sources: Array<SourceRef & { display: SourceDisplayDescriptor }>;
+    /** POS-FP9 read-only classification (from `metadata.classification`); null until classified. */
+    classification: StoredProcessingClassification | null;
 }
 
 export type ProcessingCaseQueueSortKey = "created_at" | "status_changed_at";
@@ -92,6 +95,8 @@ export interface ReadModelCaseRow {
     status_changed_at: string;
     updated_at: string | null;
     archived_at: string | null;
+    /** Present only on detail reads (getCase); carries `metadata.classification` for FP9. */
+    metadata?: Record<string, unknown> | null;
 }
 
 export interface ReadModelSourceRow {

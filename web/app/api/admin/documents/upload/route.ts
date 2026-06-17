@@ -17,6 +17,7 @@ import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { emitEvent } from "@/lib/emitEvent";
 import { maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
+import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/classification/maybeClassifyProcessingCaseFromDocumentSafe";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -172,6 +173,7 @@ export async function POST(request: NextRequest) {
     // upload response. No extraction/matching/commit happens here — that stays honest
     // in the review spine (a document source resolves to a "routed" no-op on approval).
     let processingCaseId: string | null = null;
+    let classificationKey: string | null = null;
     if (openProcessingCase) {
         const opened = await maybeOpenProcessingCaseFromNonFormSourceSafe(supabase, {
             orgId: ctx.orgId,
@@ -179,7 +181,38 @@ export async function POST(request: NextRequest) {
             sourceId: docId,
         });
         processingCaseId = opened?.processingCaseId ?? null;
+
+        // POS-FP9: classify the opened case from cheap document signals (filename /
+        // mime / doc_type / metadata). Classification ONLY — no extraction, no record
+        // writes, no status change. Best-effort; never blocks the upload response.
+        if (processingCaseId) {
+            const docRow = row as {
+                original_filename?: string | null;
+                mime_type?: string | null;
+                doc_type?: string | null;
+                title?: string | null;
+                metadata?: Record<string, unknown> | null;
+            };
+            const classified = await maybeClassifyProcessingCaseFromDocumentSafe(supabase, {
+                orgId: ctx.orgId,
+                caseId: processingCaseId,
+                document: {
+                    sourceKind: "document",
+                    fileName: docRow.original_filename ?? origName,
+                    mimeType: docRow.mime_type ?? (file.type || null),
+                    docType: docRow.doc_type ?? docType,
+                    title: docRow.title ?? title,
+                    metadata: docRow.metadata ?? null,
+                },
+            });
+            classificationKey = classified?.classification_key ?? null;
+        }
     }
 
-    return NextResponse.json({ document, raw: row, processing_case_id: processingCaseId });
+    return NextResponse.json({
+        document,
+        raw: row,
+        processing_case_id: processingCaseId,
+        classification_key: classificationKey,
+    });
 }
