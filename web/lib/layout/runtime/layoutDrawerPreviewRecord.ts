@@ -93,7 +93,11 @@ export const LAYOUT_DRAWER_PREVIEW_RECORD: ProofRuntimeRecord = {
                 primary_email: "jordan@example.com",
             },
         },
-        household: { id: "preview-household", name: "Nguyen Household" },
+        household: {
+            handle: "Nguyen Household",
+            entityType: "customer",
+            fields: { name: "Nguyen Household" },
+        },
     },
 };
 
