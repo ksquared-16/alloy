@@ -85,7 +85,7 @@ export default function PosHome({
     );
 
     return (
-        <div className="h-full overflow-y-auto bg-[#f7f6f3] p-4">
+        <div className="h-full overflow-y-auto bg-white p-4">
             <div className="mb-4">
                 <h3 className="text-sm font-semibold text-stone-900">Information entered Alloy</h3>
                 <p className="mt-0.5 text-xs text-stone-500">

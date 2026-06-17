@@ -24,8 +24,8 @@ export const BEND_PINE_HOVER = "#009276";
 
 /** Canvas: white platform surface (no beige). */
 export const WS_CANVAS = "bg-white";
-/** Optional faint page field behind floating panels (kept near-white, never beige). */
-export const WS_PAGE_FIELD = "bg-[#f7f6f3]";
+/** Optional faint page field behind floating panels — cool neutral, never beige. */
+export const WS_PAGE_FIELD = "bg-neutral-50";
 /** Column / region separators. */
 export const WS_DIVIDER = "border-alloy-stone/12";
 /** Title bar: white, subtle bottom border, midnight text (never navy). */
