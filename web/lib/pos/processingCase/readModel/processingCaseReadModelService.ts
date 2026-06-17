@@ -27,6 +27,7 @@ import { parseStoredClassification } from "../classification/processingCaseClass
 import { parseStoredExtraction } from "../extraction/processingCaseExtractionDb";
 import { parseStoredDocumentFormPreview } from "../structure/documentFormPreviewDb";
 import { parseStoredFormDraftPreview } from "../formDraft/formDraftPreviewDb";
+import { parseFormDraftCreated } from "../formDraft/createFormFromCaseDraft";
 
 function toRef(row: ReadModelSourceRow): SourceRef {
     return { kind: row.source_kind, id: row.source_id, role: row.role, linkedAt: row.linked_at };
@@ -128,5 +129,6 @@ export async function getProcessingCaseDetail(
         extraction: parseStoredExtraction(c.metadata),
         documentFormPreview: parseStoredDocumentFormPreview(c.metadata),
         formDraftPreview: parseStoredFormDraftPreview(c.metadata),
+        formDraftCreated: parseFormDraftCreated(c.metadata),
     };
 }

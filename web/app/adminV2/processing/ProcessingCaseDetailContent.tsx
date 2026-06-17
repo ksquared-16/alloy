@@ -112,15 +112,16 @@ function FormDraftSection({
     caseId,
     primarySourceKind,
     initial,
-    onNavigate,
+    created,
 }: {
     caseId: string;
     primarySourceKind: string | null;
     initial: StoredFormDraftPreview | null;
-    onNavigate?: (section: string) => void;
+    created: { form_id: string; form_version_id: string; created_at: string } | null;
 }) {
     const [draft, setDraft] = useState<StoredFormDraftPreview | null>(initial);
     const [busy, setBusy] = useState(false);
+    const [creating, setCreating] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     if (primarySourceKind !== "document") return null;
@@ -143,7 +144,27 @@ function FormDraftSection({
         }
     };
 
+    const createForm = async () => {
+        setCreating(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/create`, {
+                method: "POST",
+                credentials: "same-origin",
+            });
+            const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string; builder_path?: string }; error?: string };
+            if (!res.ok) throw new Error(body.error || `Couldn’t create form (${res.status})`);
+            const path = body.data?.builder_path ?? (body.data?.form_id ? `/admin/forms/${body.data.form_id}` : null);
+            if (path) window.location.href = path; // open the unpublished form in the builder
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Couldn’t create form");
+        } finally {
+            setCreating(false);
+        }
+    };
+
     const fieldById = (id: string) => draft?.fields.find((f) => f.id === id);
+    const builderPath = created ? `/admin/forms/${created.form_id}` : null;
 
     return (
         <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
@@ -157,25 +178,38 @@ function FormDraftSection({
             </div>
 
             <div className="mb-2 flex flex-wrap items-center gap-2">
-                <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void generate()}
-                    className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
-                >
-                    {busy ? "Drafting…" : draft ? "Regenerate form draft" : "Create form from document"}
-                </button>
-                {draft ? (
-                    <button
-                        type="button"
-                        disabled
-                        title="Opening the draft in the Forms builder ships next — see remaining blocker"
-                        className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-stone-200 px-2.5 py-1.5 text-[12px] text-stone-400"
-                    >
-                        Review draft in Forms
-                        <span className="rounded bg-stone-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-stone-400">Next</span>
-                    </button>
-                ) : null}
+                {created ? (
+                    <>
+                        <a
+                            href={builderPath ?? "#"}
+                            className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276]"
+                        >
+                            Open in Forms builder
+                        </a>
+                        <span className="text-[11px] text-emerald-700">Editable draft form created — not published.</span>
+                    </>
+                ) : (
+                    <>
+                        <button
+                            type="button"
+                            disabled={busy || creating}
+                            onClick={() => void generate()}
+                            className="rounded-md border border-stone-300 px-3 py-1.5 text-[12.5px] font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-50"
+                        >
+                            {busy ? "Drafting…" : draft ? "Regenerate draft" : "Create form from document"}
+                        </button>
+                        {draft && draft.fields.length > 0 ? (
+                            <button
+                                type="button"
+                                disabled={creating || busy}
+                                onClick={() => void createForm()}
+                                className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
+                            >
+                                {creating ? "Creating…" : "Create editable form"}
+                            </button>
+                        ) : null}
+                    </>
+                )}
             </div>
             {error ? <div className="mb-2 text-[11.5px] text-amber-700">{error}</div> : null}
 
@@ -624,6 +658,7 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     caseId={caseId}
                     primarySourceKind={primary?.kind ?? null}
                     initial={detail.formDraftPreview}
+                    created={detail.formDraftCreated}
                 />
 
                 {/* What Alloy found (facts) + what it maps to (candidates) — proposals only. */}

@@ -15,6 +15,7 @@ import type { StoredProcessingClassification } from "../classification/types";
 import type { StoredProcessingExtraction } from "../extraction/types";
 import type { StoredDocumentFormPreview } from "../structure/types";
 import type { StoredFormDraftPreview } from "../formDraft/types";
+import type { FormDraftCreatedLink } from "../formDraft/createFormFromCaseDraft";
 
 export type { ProcessingCaseSourceKind, ProcessingCaseSourceRole, ProcessingCaseStatus };
 
@@ -65,6 +66,8 @@ export interface ProcessingCaseDetail {
     documentFormPreview: StoredDocumentFormPreview | null;
     /** POS-FP12 read-only Document → Form draft (from `metadata.form_draft_preview`); null until "Create form from document". Preview only — no form created/published. */
     formDraftPreview: StoredFormDraftPreview | null;
+    /** POS-FP13 link to the unpublished editable form created from the draft (from `metadata.form_draft_created`); null until created. */
+    formDraftCreated: FormDraftCreatedLink | null;
 }
 
 export type ProcessingCaseQueueSortKey = "created_at" | "status_changed_at";
