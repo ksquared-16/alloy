@@ -20,6 +20,7 @@ function detailWith(sources: { kind: ProcessingCaseSourceKind; id: string; role:
         })),
         classification: null,
         extraction: null,
+        documentFormPreview: null,
     };
 }
 

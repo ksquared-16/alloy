@@ -10,11 +10,14 @@
  */
 
 import type { IntakeFact, IntakeFieldCandidate, IntakeSourceEnvelope } from "@/lib/intake/types";
+import type { ProcessingClassificationKey } from "../classification/types";
 
 export type { DocumentSignals } from "./documentFacts";
 
 /** Output of the shared pipeline for one document case (pre-persistence). */
 export interface ProcessingExtractionResult {
+    /** The classification the candidates were mapped for — lets the UI detect stale candidates. */
+    classification_key: ProcessingClassificationKey;
     source: IntakeSourceEnvelope;
     facts: IntakeFact[];
     candidates: IntakeFieldCandidate[];
