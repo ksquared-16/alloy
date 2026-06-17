@@ -20,6 +20,7 @@ import { resolveUploadEntityTarget } from "@/lib/admin/resolveUploadEntityTarget
 import { maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
 import { maybeClassifyProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/classification/maybeClassifyProcessingCaseFromDocumentSafe";
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
+import { maybeBuildDocumentFormPreviewSafe } from "@/lib/pos/processingCase/structure/maybeBuildDocumentFormPreviewSafe";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -238,6 +239,15 @@ export async function POST(request: NextRequest) {
                         })
                     )?.candidates.length ?? null;
             }
+
+            // POS-FP11: build a Document → Form structure PREVIEW (text → sections/fields).
+            // Preview only — no form created, no publish, no record write. Best-effort;
+            // honest empty preview when no document text is available.
+            await maybeBuildDocumentFormPreviewSafe(supabase, {
+                orgId: ctx.orgId,
+                caseId: processingCaseId,
+                documentId: docId,
+            });
         }
       }
     } catch (e) {

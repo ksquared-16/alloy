@@ -25,6 +25,7 @@ import type {
 import { descriptorKey, genericFallbackDescriptor, resolveSourceDescriptors } from "./sourceDisplayResolvers";
 import { parseStoredClassification } from "../classification/processingCaseClassificationDb";
 import { parseStoredExtraction } from "../extraction/processingCaseExtractionDb";
+import { parseStoredDocumentFormPreview } from "../structure/documentFormPreviewDb";
 
 function toRef(row: ReadModelSourceRow): SourceRef {
     return { kind: row.source_kind, id: row.source_id, role: row.role, linkedAt: row.linked_at };
@@ -124,5 +125,6 @@ export async function getProcessingCaseDetail(
         sources,
         classification: parseStoredClassification(c.metadata),
         extraction: parseStoredExtraction(c.metadata),
+        documentFormPreview: parseStoredDocumentFormPreview(c.metadata),
     };
 }

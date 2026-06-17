@@ -19,6 +19,8 @@ import ReviewDecideCard, { DECISION_TO_ACTION, type RecommendationView } from "@
 import ClassificationPanel from "@/app/adminV2/processing/ClassificationPanel";
 import type { StoredProcessingExtraction } from "@/lib/pos/processingCase/extraction/types";
 import { isExtractionStale } from "@/lib/pos/processingCase/extraction/processingCaseExtractionDb";
+import type { StoredDocumentFormPreview } from "@/lib/pos/processingCase/structure/types";
+import { describeTextUnavailableReason } from "@/lib/pos/processingCase/structure/extractDocumentTextSafe";
 
 /** Operator decision vocabulary shown on every case (recommended one is highlighted; others are prototype). */
 const OPERATOR_ACTIONS: Array<{ key: string; label: string }> = [
@@ -101,6 +103,123 @@ function OpenDocumentButton({ documentId }: { documentId: string }) {
             </button>
             {error ? <div className="mt-0.5 text-[11px] text-amber-700">{error}</div> : null}
         </div>
+    );
+}
+
+/** FP11 — Document → Form preview: honest state + read-only outline. Never creates a form. */
+function DocumentFormPreviewSection({
+    preview,
+    primarySourceKind,
+}: {
+    preview: StoredDocumentFormPreview | null;
+    primarySourceKind: string | null;
+}) {
+    // Only relevant for document sources.
+    if (primarySourceKind !== "document") return null;
+
+    const CreateDraftButton = ({ reason }: { reason: string }) => (
+        <button
+            type="button"
+            disabled
+            title={reason}
+            className="mt-2 inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-stone-200 px-2.5 py-1 text-[12px] text-stone-400"
+        >
+            Create form draft
+            <span className="rounded bg-stone-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-stone-400">Planned</span>
+        </button>
+    );
+
+    const Shell = ({ children }: { children: ReactNode }) => (
+        <section className="mb-5 rounded-lg border border-stone-200 bg-white p-3.5 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-stone-500">Document → Form</span>
+                {preview ? (
+                    <span className="text-[10px] text-stone-400">
+                        {preview.generator_version} · {formatWhen(preview.generated_at)}
+                    </span>
+                ) : null}
+            </div>
+            {children}
+        </section>
+    );
+
+    if (!preview) {
+        return (
+            <Shell>
+                <div className="text-[13px] font-medium text-stone-700">Structure detection pending</div>
+                <p className="mt-0.5 text-[12px] text-stone-500">No form preview has been generated for this document yet.</p>
+            </Shell>
+        );
+    }
+
+    if (!preview.extracted_text_available) {
+        const reasonTag = preview.warnings.find((w) => w.startsWith("text_unavailable:"));
+        const reason = reasonTag ? reasonTag.slice("text_unavailable:".length) : null;
+        return (
+            <Shell>
+                <div className="text-[13px] font-medium text-stone-700">Text extraction unavailable</div>
+                <p className="mt-0.5 text-[12px] text-stone-500">{describeTextUnavailableReason(reason)}</p>
+                <CreateDraftButton reason="Needs document text before a structure can be detected" />
+            </Shell>
+        );
+    }
+
+    if (preview.sections.length === 0) {
+        return (
+            <Shell>
+                <div className="text-[13px] font-medium text-stone-700">No structure detected</div>
+                <p className="mt-0.5 text-[12px] text-stone-500">
+                    Text was available but no labelled sections or fields were found.
+                </p>
+                <CreateDraftButton reason="No sections/fields detected to draft from" />
+            </Shell>
+        );
+    }
+
+    return (
+        <Shell>
+            <div className="mb-2 flex items-center gap-2">
+                <span className="rounded-md bg-[#00A283] px-2 py-0.5 text-[11px] font-semibold text-white">
+                    Draft outline available
+                </span>
+                <span className="text-[11px] text-stone-500">
+                    {preview.sections.length} section{preview.sections.length === 1 ? "" : "s"}
+                </span>
+            </div>
+            <div className="space-y-2.5">
+                {preview.sections.map((s, si) => (
+                    <div key={`${s.title}:${si}`} className="rounded-md border border-stone-200 p-2.5">
+                        <div className="mb-1 flex items-center gap-2">
+                            <span className="text-[12.5px] font-medium text-stone-800">{s.title}</span>
+                            <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px] text-stone-500">{s.confidence}</span>
+                        </div>
+                        <ul className="space-y-0.5">
+                            {s.fields.map((f, fi) => (
+                                <li key={`${f.label}:${fi}`} className="flex items-center gap-2 text-[12px] text-stone-600">
+                                    <span className="min-w-0 flex-1 truncate">{f.label}</span>
+                                    {f.required ? <span className="text-[10px] text-amber-700">required</span> : null}
+                                    <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px] text-stone-500">
+                                        {f.suggested_type}
+                                    </span>
+                                    <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px] text-stone-400">{f.confidence}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                ))}
+            </div>
+            {preview.warnings.filter((w) => !w.startsWith("text_unavailable:")).length > 0 ? (
+                <ul className="mt-2 list-inside list-disc text-[11.5px] text-amber-700">
+                    {preview.warnings
+                        .filter((w) => !w.startsWith("text_unavailable:"))
+                        .map((w, i) => (
+                            <li key={i}>{w}</li>
+                        ))}
+                </ul>
+            ) : null}
+            <CreateDraftButton reason="Draft creation + review path is not built yet (preview only)" />
+            <p className="mt-1.5 text-[10.5px] text-stone-400">Preview only — no form is created.</p>
+        </Shell>
     );
 }
 
@@ -371,6 +490,12 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     extraction={detail.extraction}
                     currentClassificationKey={detail.caseType}
                     classificationStatus={detail.classification?.status ?? null}
+                />
+
+                {/* Document → Form preview (read-only structure outline; no form is created). */}
+                <DocumentFormPreviewSection
+                    preview={detail.documentFormPreview}
+                    primarySourceKind={primary?.kind ?? null}
                 />
 
                 {/* Core POS moment: what Alloy understood + what it recommends */}
