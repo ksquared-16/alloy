@@ -4,10 +4,8 @@
 
 import { isValidCustomSectionKeyPattern } from "@/lib/layout/layoutEditorGeneratedKeys";
 import { readSectionType } from "@/lib/layout/layoutEditorSectionLayout";
-import {
-    resolveOpportunityDrawerSectionZone,
-    type OpportunityDrawerLayoutZone,
-} from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import type { OpportunityDrawerLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
 import { LEAD_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/leadOverviewComposition";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 
