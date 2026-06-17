@@ -46,14 +46,25 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
     if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
     const d = raw as Record<string, unknown>;
     if (typeof d.title !== "string" || !Array.isArray(d.sections) || !Array.isArray(d.fields)) return null;
+    const diag = d.diagnostics && typeof d.diagnostics === "object" && !Array.isArray(d.diagnostics)
+        ? (d.diagnostics as Record<string, unknown>)
+        : {};
+    const fields = d.fields as StoredFormDraftPreview["fields"];
+    const sections = d.sections as StoredFormDraftPreview["sections"];
     return {
         source_document_id: typeof d.source_document_id === "string" ? d.source_document_id : null,
         title: d.title,
         title_from_text: d.title_from_text === true,
         extracted_text_available: d.extracted_text_available === true,
-        sections: d.sections as StoredFormDraftPreview["sections"],
-        fields: d.fields as StoredFormDraftPreview["fields"],
+        sections,
+        fields,
         warnings: Array.isArray(d.warnings) ? (d.warnings as string[]) : [],
+        diagnostics: {
+            extracted_text_length: typeof diag.extracted_text_length === "number" ? diag.extracted_text_length : 0,
+            extracted_text_preview: typeof diag.extracted_text_preview === "string" ? diag.extracted_text_preview : "",
+            section_count: typeof diag.section_count === "number" ? diag.section_count : sections.length,
+            field_count: typeof diag.field_count === "number" ? diag.field_count : fields.length,
+        },
         generated_at: typeof d.generated_at === "string" ? d.generated_at : "",
         generator_version: typeof d.generator_version === "string" ? d.generator_version : "unknown",
     };

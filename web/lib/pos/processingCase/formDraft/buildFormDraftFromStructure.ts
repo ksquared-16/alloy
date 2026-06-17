@@ -96,6 +96,9 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
         warnings.push("No fields were drafted — the document had no detectable labelled prompts.");
     }
 
+    const text = (input.extractedText ?? "").trim();
+    const preview = text.replace(/\s+\n/g, "\n").slice(0, 600);
+
     return {
         source_document_id: input.sourceDocumentId,
         title,
@@ -104,6 +107,12 @@ export function buildFormDraftFromStructure(input: BuildFormDraftInput): StoredF
         sections,
         fields,
         warnings: [...new Set(warnings)],
+        diagnostics: {
+            extracted_text_length: text.length,
+            extracted_text_preview: preview,
+            section_count: sections.length,
+            field_count: fields.length,
+        },
         generator_version: FORM_DRAFT_GENERATOR_VERSION,
         generated_at: "", // stamped by the store layer
     };

@@ -18,6 +18,7 @@ import type {
     ResolvedSourceLabel,
     SourceDisplayResolverRegistry,
 } from "./types";
+import { deriveDocumentDisplayName } from "../formDraft/deriveDocumentTitle";
 
 const CASE_COLUMNS = "id, status, case_type, created_at, status_changed_at, updated_at, archived_at";
 const SOURCE_COLUMNS = "processing_case_id, source_kind, source_id, role, linked_at";
@@ -218,19 +219,22 @@ function makeDocumentResolver(supabase: SupabaseClient, orgId: string): BatchedS
     return async (ids) => {
         const out = new Map<string, ResolvedSourceLabel>();
         if (ids.length === 0) return out;
+        // NOTE: the documents table has `title`, NOT `name` — selecting a non-existent
+        // column made this query fail and fall back to the generic "document" label in the
+        // queue/detail. Use `title` + the same cleaned display name as the Documents list.
         const { data: docs } = await supabase
             .from("documents")
-            .select("id, name, original_filename, created_at")
+            .select("id, title, original_filename, created_at")
             .eq("org_id", orgId)
             .in("id", ids);
         for (const d of (docs ?? []) as {
             id: string;
-            name: string | null;
+            title: string | null;
             original_filename: string | null;
             created_at: string;
         }[]) {
             out.set(d.id, {
-                label: d.name ?? d.original_filename ?? "Document",
+                label: deriveDocumentDisplayName(d.title, d.original_filename),
                 receivedAt: d.created_at,
                 channel: "document",
             });

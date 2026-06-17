@@ -229,6 +229,21 @@ function FormDraftSection({
                         </div>
                     </div>
 
+                    {/* Debug visibility: what Alloy actually saw (helps explain zero-field results). */}
+                    <details className="mb-2 rounded-md border border-stone-200 bg-stone-50/60 p-2">
+                        <summary className="cursor-pointer text-[10.5px] font-medium uppercase tracking-wide text-stone-500">
+                            Diagnostics — extracted text {draft.diagnostics.extracted_text_length} chars ·{" "}
+                            {draft.diagnostics.section_count} sections · {draft.diagnostics.field_count} fields
+                        </summary>
+                        {draft.diagnostics.extracted_text_preview ? (
+                            <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-snug text-stone-600">
+                                {draft.diagnostics.extracted_text_preview}
+                            </pre>
+                        ) : (
+                            <div className="mt-1 text-[11px] text-stone-400">No extracted text.</div>
+                        )}
+                    </details>
+
                     {draft.sections.length === 0 ? (
                         <div className="text-[12px] text-stone-400">No sections/fields were detected to draft.</div>
                     ) : (

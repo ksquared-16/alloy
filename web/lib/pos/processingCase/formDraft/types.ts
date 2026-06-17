@@ -39,6 +39,14 @@ export interface DraftFormSection {
     field_ids: string[];
 }
 
+/** Debug visibility into what Alloy saw — so operators can understand zero-field results. */
+export interface FormDraftDiagnostics {
+    extracted_text_length: number;
+    extracted_text_preview: string;
+    section_count: number;
+    field_count: number;
+}
+
 /** What lands in `processing_cases.metadata.form_draft_preview`. Preview only — no form created. */
 export interface StoredFormDraftPreview {
     source_document_id: string | null;
@@ -49,6 +57,7 @@ export interface StoredFormDraftPreview {
     sections: DraftFormSection[];
     fields: DraftFormField[];
     warnings: string[];
+    diagnostics: FormDraftDiagnostics;
     generated_at: string;
     generator_version: string;
 }
