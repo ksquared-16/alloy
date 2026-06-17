@@ -18,6 +18,7 @@ import {
     formatMoneyFromDollars,
     formatPhoneUS,
 } from "@/lib/adminFormatters";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import type { LayoutItem } from "./layoutV2";
 import { parseRefKey } from "./fieldCatalog";
 import { normalizeRefKeyOnRead } from "./layoutRefKeyAliases";
@@ -103,12 +104,13 @@ export function resolveItemValue(record: Record<string, unknown>, item: LayoutIt
 
     // Status: prefer the hydrated display label, else the raw key value.
     if (hint === "status") {
-        const display = record["_status_display"] ?? resolveRaw(record, item.refKey);
+        const raw = record["_status_display"] ?? resolveRaw(record, item.refKey);
+        const display = formatLayoutRuntimeStatusLabel(raw, { refKey: item.refKey, renderHint: hint });
         return {
-            display: hasValue(display) ? String(display) : null,
+            display,
             isPlaceholder: !hasValue(display),
             renderHint: hint,
-            raw: display ?? null,
+            raw: raw ?? null,
         };
     }
 
@@ -142,6 +144,9 @@ export function resolveItemValue(record: Record<string, unknown>, item: LayoutIt
             display = String(raw);
             break;
     }
+
+    const statusLabel = formatLayoutRuntimeStatusLabel(display, { refKey: item.refKey, renderHint: hint });
+    if (statusLabel) display = statusLabel;
 
     return { display, isPlaceholder: false, renderHint: hint, raw };
 }

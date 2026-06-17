@@ -26,6 +26,7 @@ import {
 } from "@/lib/layout/layoutEditorRelatedListConfig";
 import { buildRelatedListFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 
 type Props = {
     doc: LayoutDoc;
@@ -304,35 +305,48 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                 />
             ))}
 
-            {selectedFieldNode ?
-                <OpportunityDrawerLayoutFieldSettings
-                    inline
-                    node={selectedFieldNode}
-                    onClose={() => setSelectedRefKey(null)}
-                    onChange={(patch) => {
-                        let next = doc;
-                        if (patch.label !== undefined || patch.display) {
-                            next = patchLayoutEditorFieldDisplay(
-                                next,
-                                selectedFieldNode.path,
-                                patch.display ?? {},
-                                patch.label,
-                            );
-                        }
-                        if (patch.visibility) {
-                            next = patchLayoutEditorFieldVisibility(
-                                next,
-                                selectedFieldNode.path,
-                                patch.visibility,
-                                selectedFieldNode.refKey,
-                            );
-                        }
-                        if (patch.editable !== undefined) {
-                            next = patchLayoutEditorFieldEditable(next, selectedFieldNode.path, patch.editable);
-                        }
-                        applyDoc(next);
-                    }}
-                />
+            {selectedFieldNode && typeof document !== "undefined" ?
+                createPortal(
+                    <div
+                        className="fixed inset-0 z-[200] flex items-center justify-center bg-alloy-midnight/40 p-4"
+                        data-testid="visual-editor-related-list-field-modal"
+                        onClick={() => setSelectedRefKey(null)}
+                    >
+                        <div
+                            className="max-h-[min(90vh,40rem)] w-full max-w-lg overflow-y-auto rounded-xl border border-alloy-stone/15 bg-white p-4 shadow-xl"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <OpportunityDrawerLayoutFieldSettings
+                                node={selectedFieldNode}
+                                onClose={() => setSelectedRefKey(null)}
+                                onChange={(patch) => {
+                                    let next = doc;
+                                    if (patch.label !== undefined || patch.display) {
+                                        next = patchLayoutEditorFieldDisplay(
+                                            next,
+                                            selectedFieldNode.path,
+                                            patch.display ?? {},
+                                            patch.label,
+                                        );
+                                    }
+                                    if (patch.visibility) {
+                                        next = patchLayoutEditorFieldVisibility(
+                                            next,
+                                            selectedFieldNode.path,
+                                            patch.visibility,
+                                            selectedFieldNode.refKey,
+                                        );
+                                    }
+                                    if (patch.editable !== undefined) {
+                                        next = patchLayoutEditorFieldEditable(next, selectedFieldNode.path, patch.editable);
+                                    }
+                                    applyDoc(next);
+                                }}
+                            />
+                        </div>
+                    </div>,
+                    document.body,
+                )
             :   null}
         </div>
     );

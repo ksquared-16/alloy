@@ -87,7 +87,16 @@ export function readLayoutRuntimeRepeaterFieldRaw(
     }
 
     if (entityKey === "person") {
-        if (hasValue(row[refKey])) return row[refKey];
+        const namespaced = `person.${fieldKey}`;
+        if (hasValue(row[namespaced])) return row[namespaced];
+        const roleScoped =
+            fieldKey.startsWith("secondary_")
+            || fieldKey.startsWith("emergency_")
+            || fieldKey.startsWith("billing_");
+        if (roleScoped) {
+            if (hasValue(row[fieldKey])) return row[fieldKey];
+            return undefined;
+        }
         if (fieldKey === "name" || fieldKey === "display_name" || fieldKey === "primary_contact_name") {
             return row["person.primary_contact_name"] ?? row["person.display_name"] ?? row["person.name"];
         }

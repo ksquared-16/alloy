@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
 import { oppInqEyebrow } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import { formatTaskDueDate } from "@/lib/presentation/presentationDateFormat";
@@ -31,6 +32,8 @@ type Props = {
     canMutate?: boolean;
     /** Summary-strip chromeless body — hides outer card border. */
     chromeless?: boolean;
+    /** KPI overlay popover — simplified detail without layout shift. */
+    overlayMode?: boolean;
 };
 
 function DueBadge({ urgency }: { urgency: WorkIntentRuntimeProjection["due_urgency"] }) {
@@ -57,12 +60,14 @@ function WorkItemBlock({
     opportunityId,
     canMutate,
     isPrimary,
+    overlayMode = false,
 }: {
     item: StageWorkItemProjection;
     runtime: StageWorkRuntimeProjection;
     opportunityId: string;
     canMutate: boolean;
     isPrimary: boolean;
+    overlayMode?: boolean;
 }) {
     const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
     const projection = workIntentProjectionForStageWorkItem(runtime, item);
@@ -75,6 +80,7 @@ function WorkItemBlock({
         item.requires_outcome_picker &&
         item.outcomes.length > 0 &&
         canMutate;
+    const [outcomeExpanded, setOutcomeExpanded] = useState(false);
 
     return (
         <div
@@ -117,7 +123,7 @@ function WorkItemBlock({
                 </p>
             :   null}
 
-            {item.outcome_automation_preview.length > 0 ?
+            {item.outcome_automation_preview.length > 0 && !overlayMode ?
                 <div className="mt-2 space-y-0.5">
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                         Automation
@@ -140,18 +146,43 @@ function WorkItemBlock({
             :   null}
 
             {showOutcomePicker ?
-                <div className="mt-3 border-t border-alloy-stone/10 pt-3">
-                    <StageWorkOutcomePicker
-                        workTitle={item.label}
-                        outcomes={item.outcomes}
-                        busy={busy}
-                        onSelect={(outcomeKey) => {
-                            clearError();
-                            void completeOutcome(projection, outcomeKey);
-                        }}
-                        onCancel={() => undefined}
-                    />
-                </div>
+                overlayMode ?
+                    <div className="mt-2 border-t border-alloy-stone/10 pt-2">
+                        <button
+                            type="button"
+                            className="text-[10px] font-medium text-alloy-midnight/55 underline-offset-2 hover:text-alloy-midnight/75 hover:underline"
+                            aria-expanded={outcomeExpanded}
+                            onClick={() => setOutcomeExpanded((prev) => !prev)}
+                        >
+                            {outcomeExpanded ? "Hide task outcome" : "Record task outcome"}
+                        </button>
+                        {outcomeExpanded ?
+                            <div className="mt-2 border-t border-alloy-stone/10 pt-2">
+                                <StageWorkOutcomePicker
+                                    workTitle={item.label}
+                                    outcomes={item.outcomes}
+                                    busy={busy}
+                                    onSelect={(outcomeKey) => {
+                                        clearError();
+                                        void completeOutcome(projection, outcomeKey);
+                                    }}
+                                    onCancel={() => undefined}
+                                />
+                            </div>
+                        :   null}
+                    </div>
+                :   <div className="mt-3 border-t border-alloy-stone/10 pt-3">
+                        <StageWorkOutcomePicker
+                            workTitle={item.label}
+                            outcomes={item.outcomes}
+                            busy={busy}
+                            onSelect={(outcomeKey) => {
+                                clearError();
+                                void completeOutcome(projection, outcomeKey);
+                            }}
+                            onCancel={() => undefined}
+                        />
+                    </div>
             :   null}
         </div>
     );
@@ -163,6 +194,7 @@ export default function CurrentWorkRuntimeCard({
     runtime,
     canMutate = true,
     chromeless = false,
+    overlayMode = false,
 }: Props) {
     const primary = runtime.primary;
     const allItems = [primary, ...runtime.additional].filter(
@@ -181,6 +213,7 @@ export default function CurrentWorkRuntimeCard({
                         opportunityId={opportunityId}
                         canMutate={canMutate}
                         isPrimary={index === 0}
+                        overlayMode={overlayMode}
                     />
                 ))}
             </div>;

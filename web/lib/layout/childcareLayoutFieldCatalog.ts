@@ -111,6 +111,9 @@ function childField(
 }
 
 const PRIMARY_CONTACT_PICKER_DESCRIPTION = "Uses the linked primary contact on this lead";
+const SECONDARY_CONTACT_PICKER_DESCRIPTION = "Uses the linked secondary contact on this lead";
+const EMERGENCY_CONTACT_PICKER_DESCRIPTION = "Uses the linked emergency contact on this lead";
+const BILLING_CONTACT_PICKER_DESCRIPTION = "Uses the linked billing / payer contact on this lead";
 
 /** Lead layout: primary contact projections (opportunities.primary_person_id → persons). */
 function parentPrimaryContactProjection(
@@ -132,6 +135,35 @@ function parentPrimaryContactProjection(
         computed: true,
         relationshipProjection: true,
         pickerDescription: PRIMARY_CONTACT_PICKER_DESCRIPTION,
+        layoutAnchors: ["opportunities"],
+    };
+}
+
+/** Lead layout: role-scoped contact projections (family contacts on opportunity). */
+function parentRoleContactProjection(
+    role: "secondary" | "emergency" | "billing",
+    refKey: string,
+    pickerLabel: string,
+    fieldType: string,
+    sortOrder: number,
+    personsColumn: string,
+): ChildcareCatalogFieldEntry {
+    const description =
+        role === "secondary" ? SECONDARY_CONTACT_PICKER_DESCRIPTION
+        : role === "emergency" ? EMERGENCY_CONTACT_PICKER_DESCRIPTION
+        : BILLING_CONTACT_PICKER_DESCRIPTION;
+    return {
+        refKey,
+        operatorEntity: "parent",
+        pickerLabel,
+        fieldType,
+        sortOrder,
+        storageTable: "opportunities",
+        storageColumn: "primary_person_id",
+        storagePath: `opportunity family contacts → persons.${personsColumn}`,
+        computed: true,
+        relationshipProjection: true,
+        pickerDescription: description,
         layoutAnchors: ["opportunities"],
     };
 }
@@ -323,6 +355,15 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     parentPrimaryContactProjection("person.primary_contact_name", "Primary contact name", "text", 5, "display_name"),
     parentPrimaryContactProjection("person.primary_email", "Primary contact email", "text", 6, "email"),
     parentPrimaryContactProjection("person.primary_phone", "Primary contact phone", "phone", 7, "phone"),
+    parentRoleContactProjection("secondary", "person.secondary_contact_name", "Secondary contact name", "text", 8, "display_name"),
+    parentRoleContactProjection("secondary", "person.secondary_email", "Secondary contact email", "text", 9, "email"),
+    parentRoleContactProjection("secondary", "person.secondary_phone", "Secondary contact phone", "phone", 10, "phone"),
+    parentRoleContactProjection("emergency", "person.emergency_contact_name", "Emergency contact name", "text", 11, "display_name"),
+    parentRoleContactProjection("emergency", "person.emergency_contact_email", "Emergency contact email", "text", 12, "email"),
+    parentRoleContactProjection("emergency", "person.emergency_contact_phone", "Emergency contact phone", "phone", 13, "phone"),
+    parentRoleContactProjection("billing", "person.billing_contact_name", "Billing contact name", "text", 14, "display_name"),
+    parentRoleContactProjection("billing", "person.billing_contact_email", "Billing contact email", "text", 15, "email"),
+    parentRoleContactProjection("billing", "person.billing_contact_phone", "Billing contact phone", "phone", 16, "phone"),
 
     // Parent / Contact — persons native + config
     parent("person.first_name", "First name", "text", 10, "first_name"),
@@ -403,7 +444,6 @@ export const CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS = [
 /** FC-3 relationship projections — documented but not picker-eligible yet. */
 export const CHILDCARE_FC3_DEFERRED_REF_KEYS = [
     "customer.household_address",
-    "person.secondary_contact_phone",
     "customer.primary_contact_name",
 ] as const;
 
@@ -418,7 +458,6 @@ export const CHILDCARE_HIDDEN_REF_KEYS = new Set<string>([
     "opportunity.job_date",
     "opportunity.location",
     "person.person_number",
-    "person.secondary_contact_name",
     "location.location_number",
     "child.program",
     "child.desired_start_date",

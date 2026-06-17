@@ -624,10 +624,19 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-sidebar-panel.adminv2-dr
     min-width: 12rem;
   }
 
-  .adminv2-drawer-overview-lead-source-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.25rem;
-  }
+.adminv2-drawer-overview-lead-source-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  align-items: stretch;
+}
+
+.adminv2-drawer-overview-main-zone-flow {
+  gap: 1rem;
+}
+
+.adminv2-drawer-overview-main-zone-flow [data-layout-section-row-group] {
+  align-items: stretch;
+}
 
   .adminv2-drawer-enrollment-field-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

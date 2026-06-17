@@ -6,6 +6,7 @@ import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutEditorDataContext } from "@/lib/layout/layoutEditorBlockConfig";
 import {
     contactRoleFieldRefs,
+    LAYOUT_EDITOR_CONTACT_ROLE_LABELS,
     type LayoutEditorContactRole,
 } from "@/lib/layout/layoutEditorContactRoles";
 import { buildOpportunityDrawerEditorFieldPickerGroups, resolveLayoutEditorFieldRefLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
@@ -52,10 +53,12 @@ export function buildBlockContextFieldPickerGroups(input: {
     let groups = reorderGroups(all, entityOrder);
 
     if (input.dataContext === "contact" && input.contactRole) {
+        const roleLabel = LAYOUT_EDITOR_CONTACT_ROLE_LABELS[input.contactRole];
         const suggested = contactRoleSuggestedFields(input.contactRole);
         const suggestedGroup: LayoutCatalogGroup = {
             entityKey: "contact_role",
-            entityLabel: "Contact role fields",
+            entityLabel: `${roleLabel} Contact`,
+            groupDescription: `Suggested fields for the ${roleLabel.toLowerCase()} contact role`,
             fields: suggested.map((s) => {
                 const fromAll = all.flatMap((g) => g.fields).find((f) => f.refKey === s.refKey);
                 return (

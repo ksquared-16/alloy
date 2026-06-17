@@ -16,6 +16,7 @@ import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2
 import { DRAWER_OVERVIEW_SHELL_GRID } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 
 export const LEAD_OVERVIEW_SECTION_KEYS = {
     summary: "lead_summary",
@@ -162,8 +163,11 @@ export function summarizeLeadDrawerChildrenStrip(record: ProofRuntimeRecord): {
         .map((row) => {
             const raw = row["child.status"] ?? row["inquiry_child.outcome_status_key"];
             if (raw == null) return null;
-            const text = String(raw).trim();
-            return text.length > 0 ? text : null;
+            const text = formatLayoutRuntimeStatusLabel(raw, {
+                refKey: row["child.status"] != null ? "child.status" : "inquiry_child.outcome_status_key",
+                renderHint: "status",
+            });
+            return text && text.length > 0 ? text : null;
         })
         .filter((v): v is string => Boolean(v));
     const unique = [...new Set(statuses)];

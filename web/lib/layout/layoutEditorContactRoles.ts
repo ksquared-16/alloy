@@ -25,7 +25,7 @@ export const LAYOUT_EDITOR_CONTACT_ROLE_LABELS: Record<LayoutEditorContactRole, 
     primary: "Primary",
     secondary: "Secondary",
     emergency: "Emergency",
-    billing: "Billing",
+    billing: "Billing/Payer",
     any: "Any",
 };
 
@@ -33,7 +33,7 @@ export const LAYOUT_EDITOR_CONTACT_ROLE_BLOCK_TITLES: Record<LayoutEditorContact
     primary: "Primary Contact Card",
     secondary: "Secondary Contact Card",
     emergency: "Emergency Contact Card",
-    billing: "Billing Contact Card",
+    billing: "Billing/Payer Contact Card",
     any: "Contact Card",
 };
 

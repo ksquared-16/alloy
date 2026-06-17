@@ -39,7 +39,7 @@ export default function DrawerOverviewPanelShell({
 
     return (
         <section
-            className={surfaceClass}
+            className={`${surfaceClass} flex h-full min-h-0 flex-col`}
             data-drawer-overview-panel="true"
             data-drawer-overview-panel-section={sectionKey}
             data-layout-runtime-section-key={sectionKey}
@@ -60,7 +60,7 @@ export default function DrawerOverviewPanelShell({
                     </div>
                 </div>
             </header>
-            <div className={`flex min-w-0 flex-col ${bodyClassName}`}>{children}</div>
+            <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${bodyClassName}`}>{children}</div>
         </section>
     );
 }

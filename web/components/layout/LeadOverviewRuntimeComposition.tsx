@@ -173,7 +173,7 @@ export default function LeadOverviewRuntimeComposition({
                 </div>
 
                 {showLeadSource && slots.leadSource ?
-                    <div className={DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS}>
+                    <div className={`${DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS} items-stretch`}>
                         <CompositionSlot
                             slotKey="lead_source"
                             sectionKeys={[slots.leadSource.key]}
@@ -182,6 +182,7 @@ export default function LeadOverviewRuntimeComposition({
                             entityId={entityId}
                             canMutate={canMutate}
                             onAdornmentAction={onAdornmentAction}
+                            className="flex h-full min-h-0 flex-col"
                         />
                     </div>
                 :   null}

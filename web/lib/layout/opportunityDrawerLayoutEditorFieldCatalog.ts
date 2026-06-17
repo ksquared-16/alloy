@@ -110,6 +110,68 @@ function refKeyToCatalogField(refKey: string): LayoutCatalogField | null {
 }
 
 /** Entity-first field picker groups constrained to opportunity drawer allowed refKeys. */
+const CONTACT_ROLE_PICKER_GROUP_DEFS = [
+    {
+        entityKey: "contact_primary",
+        entityLabel: "Primary Contact",
+        groupDescription: "Uses the linked primary contact on this lead",
+        refKeys: ["person.primary_contact_name", "person.primary_email", "person.primary_phone"],
+    },
+    {
+        entityKey: "contact_secondary",
+        entityLabel: "Secondary Contact",
+        groupDescription: "Uses the linked secondary contact on this lead",
+        refKeys: ["person.secondary_contact_name", "person.secondary_email", "person.secondary_phone"],
+    },
+    {
+        entityKey: "contact_billing",
+        entityLabel: "Billing/Payer Contact",
+        groupDescription: "Uses the linked billing / payer contact on this lead",
+        refKeys: ["person.billing_contact_name", "person.billing_contact_email", "person.billing_contact_phone"],
+    },
+    {
+        entityKey: "contact_emergency",
+        entityLabel: "Emergency Contact",
+        groupDescription: "Uses the linked emergency contact on this lead",
+        refKeys: ["person.emergency_contact_name", "person.emergency_contact_email", "person.emergency_contact_phone"],
+    },
+] as const;
+
+function splitPersonContactRolePickerGroups(groups: LayoutCatalogGroup[]): LayoutCatalogGroup[] {
+    const output: LayoutCatalogGroup[] = [];
+    for (const group of groups) {
+        if (group.entityKey !== "person") {
+            output.push(group);
+            continue;
+        }
+        const byRef = new Map(group.fields.map((field) => [field.refKey, field]));
+        const consumed = new Set<string>();
+        for (const roleGroup of CONTACT_ROLE_PICKER_GROUP_DEFS) {
+            const fields = roleGroup.refKeys
+                .map((refKey) => byRef.get(refKey))
+                .filter((field): field is NonNullable<typeof field> => Boolean(field));
+            if (fields.length === 0) continue;
+            for (const field of fields) consumed.add(field.refKey);
+            output.push({
+                entityKey: roleGroup.entityKey,
+                entityLabel: roleGroup.entityLabel,
+                groupDescription: roleGroup.groupDescription,
+                fields,
+            });
+        }
+        const remaining = group.fields.filter((field) => !consumed.has(field.refKey));
+        if (remaining.length > 0) {
+            output.push({
+                ...group,
+                entityLabel: "Contact (other fields)",
+                groupDescription: undefined,
+                fields: remaining,
+            });
+        }
+    }
+    return output;
+}
+
 export function buildOpportunityDrawerEditorFieldPickerGroups(): LayoutCatalogGroup[] {
     const fields: LayoutCatalogField[] = [];
     for (const refKey of OPPORTUNITY_DRAWER_SURFACE.allowedFieldRefKeys) {
@@ -120,7 +182,7 @@ export function buildOpportunityDrawerEditorFieldPickerGroups(): LayoutCatalogGr
     }
 
     const groups = organizeChildcarePickerGroups(fields, "opportunities") as LayoutCatalogGroup[];
-    return finalizeCatalogGroupsForPicker(groups);
+    return finalizeCatalogGroupsForPicker(splitPersonContactRolePickerGroups(groups));
 }
 
 /** Entity namespace keys shown in related-list field pickers per list entity type. */

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, type MouseEvent } from "react";
-import CurrentWorkRuntimeCard from "@/components/workIntent/CurrentWorkRuntimeCard";
+import CurrentWorkDetailPopover from "@/components/layout/lead/CurrentWorkDetailPopover";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import type { StageWorkRuntimeProjection } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 
@@ -26,19 +26,35 @@ type Props = {
     canMutate?: boolean;
 };
 
-/** Compact KPI Current Work tile — fixed height summary with expandable detail. */
+/** Compact KPI Current Work tile — fixed height summary with overlay detail. */
 export default function LeadOperatingCurrentWorkSummaryCard({ record, opportunityId, canMutate = true }: Props) {
     const runtime = readStageWorkRuntime(record);
     const summaryLine = resolveCurrentWorkSummaryLine(runtime);
     const itemCount = runtime ? [runtime.primary, ...runtime.additional].filter(Boolean).length : 0;
     const showMoreDetail = itemCount > 0;
 
-    const [expanded, setExpanded] = useState(false);
+    const [open, setOpen] = useState(false);
+    const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
 
-    const toggle = useCallback(() => {
-        if (!showMoreDetail) return;
-        setExpanded((prev) => !prev);
-    }, [showMoreDetail]);
+    const closePopover = useCallback(() => {
+        setOpen(false);
+        setAnchorEl(null);
+    }, []);
+
+    const togglePopover = useCallback(
+        (el: HTMLElement) => {
+            if (!showMoreDetail || !runtime) return;
+            setOpen((prev) => {
+                if (prev) {
+                    setAnchorEl(null);
+                    return false;
+                }
+                setAnchorEl(el);
+                return true;
+            });
+        },
+        [runtime, showMoreDetail],
+    );
 
     const stopBubble = (e: MouseEvent) => {
         e.stopPropagation();
@@ -54,35 +70,39 @@ export default function LeadOperatingCurrentWorkSummaryCard({ record, opportunit
             data-lead-current-work-summary-card="true"
             onClick={stopBubble}
         >
-            <p className="line-clamp-2 text-[11px] leading-snug text-alloy-midnight/75">{summaryLine}</p>
-            {itemCount > 1 ?
-                <p className="text-[10px] text-alloy-midnight/45">
-                    +{itemCount - 1} more item{itemCount - 1 === 1 ? "" : "s"}
-                </p>
+            {!open ?
+                <>
+                    <p className="line-clamp-2 text-[11px] leading-snug text-alloy-midnight/75">{summaryLine}</p>
+                    {itemCount > 1 ?
+                        <p className="text-[10px] text-alloy-midnight/45">
+                            +{itemCount - 1} more item{itemCount - 1 === 1 ? "" : "s"}
+                        </p>
+                    :   null}
+                </>
             :   null}
             {showMoreDetail ?
                 <button
                     type="button"
                     className="self-start text-left text-[10px] font-medium text-alloy-midnight/55 underline-offset-2 hover:text-alloy-midnight/75 hover:underline"
                     data-lead-current-work-more-detail="true"
-                    aria-expanded={expanded}
+                    aria-expanded={open}
                     onClick={(e) => {
                         stopBubble(e);
-                        toggle();
+                        togglePopover(e.currentTarget);
                     }}
                 >
-                    {expanded ? "Hide detail" : "View detail"}
+                    {open ? "Hide detail" : "View detail"}
                 </button>
             :   null}
-            {expanded ?
-                <div className="mt-1 max-h-48 overflow-y-auto border-t border-alloy-stone/10 pt-2">
-                    <CurrentWorkRuntimeCard
-                        opportunityId={opportunityId}
-                        runtime={runtime!}
-                        canMutate={canMutate}
-                        chromeless
-                    />
-                </div>
+            {open && anchorEl && runtime ?
+                <CurrentWorkDetailPopover
+                    anchorEl={anchorEl}
+                    title={summaryLine}
+                    opportunityId={opportunityId}
+                    runtime={runtime}
+                    canMutate={canMutate}
+                    onClose={closePopover}
+                />
             :   null}
         </div>
     );

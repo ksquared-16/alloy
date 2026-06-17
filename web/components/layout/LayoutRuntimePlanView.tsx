@@ -1798,15 +1798,17 @@ function SectionView({
         }
 
         return (
-            <DrawerOverviewPanelShell
-                sectionKey={section.key}
-                eyebrow={sectionEyebrow}
-                title={section.title}
-                variant={drawerOverviewSectionIsCenterpiece(section.key) ? "centerpiece" : "default"}
-                bodyClassName={bodyClassName}
-            >
-                {body}
-            </DrawerOverviewPanelShell>
+            <div className="flex h-full min-h-0 flex-col" data-layout-runtime-section-shell="true">
+                <DrawerOverviewPanelShell
+                    sectionKey={section.key}
+                    eyebrow={sectionEyebrow}
+                    title={section.title}
+                    variant={drawerOverviewSectionIsCenterpiece(section.key) ? "centerpiece" : "default"}
+                    bodyClassName={bodyClassName}
+                >
+                    {body}
+                </DrawerOverviewPanelShell>
+            </div>
         );
     }
 
