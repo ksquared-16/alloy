@@ -44,6 +44,7 @@ import {
     shouldShowLayoutEditorFieldLabel,
 } from "@/lib/layout/runtime/applyLayoutEditorFieldDisplay";
 import { sectionIsKpiTile } from "@/lib/layout/runtime/layoutRuntimeKpiTilePresentation";
+import { readLayoutEditorRelatedListConfigFromItem } from "@/lib/layout/runtime/resolveLayoutRuntimeRelatedListPresentation";
 import LayoutRuntimeRelatedListCompactRows from "@/components/layout/LayoutRuntimeRelatedListCompactRows";
 import {
     LayoutRuntimeBlockEditProvider,
