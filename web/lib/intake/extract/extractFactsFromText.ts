@@ -10,6 +10,17 @@ import {
     looksLikeNameLine,
     splitPersonName,
 } from "@/lib/intake/normalize/personName";
+import { normalizeIntakeText } from "@/lib/intake/normalize/text";
+
+const PARENTS_MULTI_RE = /^parents?\s*[:\-]\s*(.+)$/i;
+const CHILDREN_HEADER_RE = /^children?\s*:?\s*$/i;
+const CHILD_NAME_AGE_SPACE_RE =
+    /^([A-Za-z][\w'\-]+(?:\s+[A-Za-z][\w'\-]+)*)\s+age\s+(\d{1,2})\b/i;
+const CHILD_NAME_DOB_INLINE_RE =
+    /^([A-Za-z][\w'\-]+(?:\s+[A-Za-z][\w'\-]+)*)\s+DOB\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/i;
+const STREET_ADDRESS_RE =
+    /^\d+\s+[A-Za-z0-9][\w\s.'#-]*\b(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|way|blvd|boulevard|court|ct)\.?$/i;
+const CITY_STATE_ZIP_RE = /^([A-Za-z\s.'-]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i;
 
 const PARENT_LABEL_RE =
     /^(?:parent|guardian|mother|mom|father|dad|contact|primary(?:\s+contact)?)\s*[:\-]\s*(.+)$/i;
@@ -116,7 +127,49 @@ function extractChildNameFromLine(line: string): string | null {
     const nameAge = line.match(CHILD_NAME_AGE_COMMA_RE);
     if (nameAge?.[1]) return nameAge[1].trim();
 
+    const nameAgeSpace = line.match(CHILD_NAME_AGE_SPACE_RE);
+    if (nameAgeSpace?.[1]) return nameAgeSpace[1].trim();
+
+    const nameDob = line.match(CHILD_NAME_DOB_INLINE_RE);
+    if (nameDob?.[1]) return nameDob[1].trim();
+
     return null;
+}
+
+function childNameConfidence(line: string, rawName: string): IntakeFact["confidence"] {
+    if (line.match(CHILD_LABEL_RE)) return "high";
+    if (splitPersonName(rawName)) return "high";
+    return "medium";
+}
+
+function pushMultiParentNames(
+    out: IntakeFact[],
+    seen: Set<string>,
+    raw: string,
+    sourceLine: number,
+): boolean {
+    const chunks = raw
+        .split(/\s+and\s+|,/i)
+        .map((c) => c.trim())
+        .filter(Boolean);
+    let pushed = false;
+    for (const chunk of chunks) {
+        if (!splitPersonName(chunk)) continue;
+        pushPersonNameFact(out, seen, {
+            raw: chunk,
+            role_hint: "parent",
+            confidence: "high",
+            source_line: sourceLine,
+            evidence: "Multi-parent labeled line",
+        });
+        pushed = true;
+    }
+    return pushed;
+}
+
+function looksLikeAddressLine(line: string): boolean {
+    const t = line.trim();
+    return STREET_ADDRESS_RE.test(t) || CITY_STATE_ZIP_RE.test(t);
 }
 
 function looksLikeLocationLine(line: string): boolean {
@@ -146,7 +199,7 @@ export function extractFactsFromText(input: {
     source_id?: string;
 }): IntakeFactExtractionResult {
     resetFactCounter();
-    const raw_text = input.text.trim();
+    const raw_text = normalizeIntakeText(input.text.trim());
     const source = buildSourceEnvelope(raw_text, input.source_id);
 
     if (!raw_text) {
@@ -246,12 +299,37 @@ export function extractFactsFromText(input: {
             continue;
         }
 
+        const parentsMulti = line.match(PARENTS_MULTI_RE);
+        if (parentsMulti?.[1]) {
+            if (pushMultiParentNames(facts, seen, parentsMulti[1], lineNum)) {
+                adultNameClaimed = true;
+            }
+            continue;
+        }
+
+        if (CHILDREN_HEADER_RE.test(line)) {
+            continue;
+        }
+
+        if (looksLikeAddressLine(line)) {
+            pushFact(facts, seen, {
+                fact_type: "address",
+                raw_value: line,
+                normalized_value: line.trim(),
+                confidence: "medium",
+                validation_state: "unknown",
+                source_line: lineNum,
+                evidence: "Address-like line",
+            });
+            continue;
+        }
+
         const childName = extractChildNameFromLine(line);
         if (childName) {
             pushPersonNameFact(facts, seen, {
                 raw: childName,
                 role_hint: "child",
-                confidence: line.match(CHILD_LABEL_RE) ? "high" : "medium",
+                confidence: childNameConfidence(line, childName),
                 source_line: lineNum,
                 evidence: "Child name from labeled or narrative pattern",
             });
@@ -297,6 +375,37 @@ export function extractFactsFromText(input: {
                 evidence: "Name, age comma pattern",
                 role_hint: "child",
             });
+        }
+
+        const nameAgeSpace = line.match(CHILD_NAME_AGE_SPACE_RE);
+        if (nameAgeSpace?.[2]) {
+            pushFact(facts, seen, {
+                fact_type: "age_years",
+                raw_value: nameAgeSpace[0],
+                normalized_value: Number(nameAgeSpace[2]),
+                confidence: "high",
+                validation_state: "valid",
+                source_line: lineNum,
+                evidence: "Name age space pattern",
+                role_hint: "child",
+            });
+        }
+
+        const nameDobInline = line.match(CHILD_NAME_DOB_INLINE_RE);
+        if (nameDobInline?.[2]) {
+            const normalized = parseFlexibleDate(nameDobInline[2]);
+            if (normalized) {
+                pushFact(facts, seen, {
+                    fact_type: "dob",
+                    raw_value: nameDobInline[2],
+                    normalized_value: normalized,
+                    confidence: "high",
+                    validation_state: "valid",
+                    source_line: lineNum,
+                    evidence: "Inline name DOB pattern",
+                    role_hint: "child",
+                });
+            }
         }
 
         const dobLabel = line.match(DOB_LABEL_RE);
@@ -467,6 +576,7 @@ export function extractFactsFromText(input: {
                 }
                 if (extractLabeledAge(line) || LOOKING_FOR_RE.test(line)) return false;
                 if (isChildContextLine(line) || extractChildNameFromLine(line)) return false;
+                if (looksLikeAddressLine(line)) return false;
                 if (looksLikeNameLine(line) && adultNameClaimed) return false;
                 if (looksLikeLocationLine(line)) return false;
                 return true;

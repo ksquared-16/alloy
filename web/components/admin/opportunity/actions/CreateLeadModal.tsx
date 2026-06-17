@@ -257,7 +257,15 @@ export function CreateLeadModal(props: {
             setGatherPhase("paste");
             try {
                 const spec = intakeSpec ?? platformFallbackBundle(departmentId).spec;
-                const extraction = createLeadIntakePasteParser.parse({ text, spec });
+                const locationOptions = (siteFilter?.bootstrap?.sites ?? []).map((s) => ({
+                    value: s.id,
+                    label: s.label,
+                }));
+                const extraction = createLeadIntakePasteParser.parse({
+                    text,
+                    spec,
+                    field_options: { location_id: locationOptions },
+                });
                 if (extraction.fields.length === 0) {
                     setAnalyzeError("BOS could not extract structured fields. Try adding labels like Parent: or Email:.");
                     setSuggestions([]);
@@ -287,7 +295,7 @@ export function CreateLeadModal(props: {
                 setAnalyzing(false);
             }
         },
-        [departmentId, gatherFields, intakeSpec, pasteText],
+        [departmentId, gatherFields, intakeSpec, pasteText, siteFilter?.bootstrap?.sites],
     );
 
     const applySuggestions = useCallback(() => {

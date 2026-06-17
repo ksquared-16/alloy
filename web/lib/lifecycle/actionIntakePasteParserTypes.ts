@@ -14,11 +14,17 @@ export type ActionIntakePasteExtractionResult = {
     /** Text that could not be mapped to a known field. */
     unmapped_text: string;
     raw_text: string;
+    /** Household grouping + location resolution warnings for operator review. */
+    review_warnings?: string[];
 };
 
 /** Swappable boundary for BOS-assisted paste parsing (V1: deterministic; later: AI). */
 export type ActionIntakePasteParser = {
-    parse: (input: { text: string; spec: ActionIntakeSpec }) => ActionIntakePasteExtractionResult;
+    parse: (input: {
+        text: string;
+        spec: ActionIntakeSpec;
+        field_options?: Partial<Record<string, readonly { value: string; label: string }[]>>;
+    }) => ActionIntakePasteExtractionResult;
 };
 
 export type ActionIntakePasteFieldMeta = {
