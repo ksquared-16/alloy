@@ -27,7 +27,9 @@ import {
     type SectionRowWidthPresetKey,
 } from "@/lib/layout/layoutEditorSectionLayout";
 import { listSectionCompositionRows } from "@/lib/layout/layoutEditorSectionComposition";
-import { isPlatformOwnedDrawerSection, sectionZoneLabel } from "@/lib/layout/layoutBuilderStudioUx";
+import { sectionZoneLabel } from "@/lib/layout/layoutBuilderStudioUx";
+import { sectionIsWidgetStrip, WIDGET_STRIP_WIDTH_PRESETS } from "@/lib/layout/layoutBuilderWidgetStrip";
+import { setRowColumnCount } from "@/lib/layout/builderOps";
 import { opSectionSupport, opSectionTitle } from "@/lib/operational/ui/operationalVisualTokens";
 
 type Props = {
@@ -97,7 +99,7 @@ export default function LayoutBuilderInspectorPanel({
     const section = selectedSectionId ? doc.sections.find((s) => s.key === selectedSectionId) : null;
     const selectedItemId = resolveSelectedItemId(selectedSectionId, selectedFieldPath, selectedBlockId);
     const sectionType = section ? readSectionType(section) : null;
-    const platformOwned = section ? isPlatformOwnedDrawerSection(section.key) : false;
+    const widgetStrip = section ? sectionIsWidgetStrip(section) : false;
 
     const selectedItem = useMemo(() => {
         if (!selectedSectionId || !selectedItemId) return null;
@@ -114,7 +116,7 @@ export default function LayoutBuilderInspectorPanel({
 
     return (
         <aside
-            className="flex max-h-[calc(100vh-8rem)] flex-col overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-sm"
+            className="flex max-h-full flex-col overflow-hidden rounded-xl border border-alloy-forge/10 bg-white shadow-sm"
             data-testid="layout-builder-inspector-panel"
         >
             <div className="border-b border-alloy-forge/8 bg-gradient-to-r from-white to-alloy-stone/[0.03] px-4 py-3">
@@ -123,7 +125,7 @@ export default function LayoutBuilderInspectorPanel({
                     <p className="mt-1 truncate text-sm font-semibold text-alloy-midnight" data-testid="layout-builder-inspector-selection-title">
                         {selectionTitle}
                     </p>
-                :   <p className={opSectionSupport}>Select a drawer card, field, or widget on the canvas.</p>}
+                :   <p className={opSectionSupport}>Select a card, field, or widget on the canvas.</p>}
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto overscroll-contain px-4 py-3">
@@ -134,7 +136,7 @@ export default function LayoutBuilderInspectorPanel({
                     >
                         <p className="text-sm font-medium text-alloy-midnight/60">Nothing selected</p>
                         <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/45">
-                            Click any section on the canvas, or add a component from the palette.
+                            Click any card on the canvas, or add a component from the palette.
                         </p>
                     </div>
                 : selectedItem ?
@@ -157,13 +159,6 @@ export default function LayoutBuilderInspectorPanel({
                         />
                     </div>
                 :   <div className="space-y-4" data-testid="visual-editor-section-settings-panel">
-                        {platformOwned ?
-                            <p className="rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.04] px-3 py-2 text-[11px] leading-relaxed text-alloy-midnight/55">
-                                This section is platform-owned — its position in the drawer grid stays fixed. You can
-                                customize the label, contents, and visibility.
-                            </p>
-                        :   null}
-
                         <p className="text-[10px] text-alloy-midnight/45">
                             In <strong>{sectionZoneLabel(doc, section.key)}</strong> · live after publish
                         </p>
@@ -178,7 +173,7 @@ export default function LayoutBuilderInspectorPanel({
                             />
                         </InspectorField>
 
-                        <InspectorField label="Card type" helper="How this section behaves in the drawer.">
+                        <InspectorField label="Card type" helper="How this card behaves in the drawer.">
                             <select
                                 value={sectionType ?? "content"}
                                 onChange={(e) =>
@@ -194,6 +189,29 @@ export default function LayoutBuilderInspectorPanel({
                                 ))}
                             </select>
                         </InspectorField>
+
+                        {widgetStrip ?
+                            <InspectorField label="Widget strip layout" helper="Equal-width KPI widgets across the strip.">
+                                <select
+                                    defaultValue={String(WIDGET_STRIP_WIDTH_PRESETS.find((p) => p.count === (section?.rows[0]?.columns.length ?? 4))?.count ?? 4)}
+                                    onChange={(e) => {
+                                        const count = Number(e.target.value);
+                                        if (!section) return;
+                                        const sIdx = doc.sections.findIndex((s) => s.key === section.key);
+                                        if (sIdx < 0) return;
+                                        applyDoc(setRowColumnCount(doc, sIdx, 0, count));
+                                    }}
+                                    className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                    data-testid="visual-editor-widget-strip-width"
+                                >
+                                    {WIDGET_STRIP_WIDTH_PRESETS.map((preset) => (
+                                        <option key={preset.key} value={preset.count}>
+                                            {preset.label}
+                                        </option>
+                                    ))}
+                                </select>
+                            </InspectorField>
+                        :   null}
 
                         <InspectorField label="Width" helper="How much horizontal space this card shares with neighbors.">
                             <select

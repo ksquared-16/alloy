@@ -27,22 +27,22 @@ export const LAYOUT_BUILDER_PALETTE_GROUPS: LayoutBuilderPaletteGroup[] = [
     {
         key: "starter_templates",
         label: "Starter templates",
-        description: "Production-ready drawer section patterns.",
+        description: "Production-ready drawer patterns.",
     },
     {
         key: "sections",
-        label: "Sections",
+        label: "Cards",
         description: "Add a new card or content region to the drawer.",
     },
     {
         key: "fields",
         label: "Fields",
-        description: "Add a data field to the selected section.",
+        description: "Add a data field to the selected card.",
     },
     {
         key: "widgets",
         label: "Widgets",
-        description: "KPI tiles, notes, activity, and enrollment summaries.",
+        description: "KPI tiles for the top summary strip.",
     },
     {
         key: "related_lists",
@@ -57,13 +57,13 @@ export const LAYOUT_BUILDER_PALETTE_GROUPS: LayoutBuilderPaletteGroup[] = [
     {
         key: "text",
         label: "Text",
-        description: "Headings and helper copy inside a section.",
+        description: "Headings and helper copy inside a card.",
     },
 ];
 
 export const LAYOUT_BUILDER_SECTION_ADD_OPTIONS = [
-    { key: "custom", label: "Content section", description: "A flexible card for fields and blocks." },
-    { key: "widget", label: "KPI / widget strip", description: "Summary widgets across the top of the drawer." },
+    { key: "custom", label: "Content card", description: "A flexible card for fields and blocks." },
+    { key: "widget", label: "KPI widget strip", description: "Summary widgets across the top of the drawer." },
     { key: "related_list", label: "Related list", description: "Repeating contacts, children, or relationships." },
 ] as const;
 

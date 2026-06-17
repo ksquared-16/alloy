@@ -1,8 +1,12 @@
 "use client";
 
 import type { ReactNode } from "react";
+import {
+    resolveLayoutEditorWidgetToneRailClass,
+    type LayoutEditorWidgetRuntimeTone,
+} from "@/lib/layout/layoutEditorWidgetStyle";
 
-export type LeadOperatingCardAccent = "attention" | "work" | "neutral" | "muted";
+export type LeadOperatingCardAccent = LayoutEditorWidgetRuntimeTone;
 
 type Props = {
     title: string;
@@ -11,13 +15,6 @@ type Props = {
     minimized?: boolean;
     widgetKey?: string;
     children: ReactNode;
-};
-
-const ACCENT_RAIL: Record<LeadOperatingCardAccent, string> = {
-    attention: "border-l-alloy-ember/75",
-    work: "border-l-alloy-juniper/70",
-    neutral: "border-l-alloy-stone/25",
-    muted: "border-l-alloy-stone/15",
 };
 
 /** Premium operating summary card for Lead drawer top strip. */
@@ -29,12 +26,13 @@ export default function LeadOperatingSummaryCard({
     widgetKey,
     children,
 }: Props) {
-    const railAccent = ACCENT_RAIL[accent];
+    const railAccent = resolveLayoutEditorWidgetToneRailClass(accent);
     return (
         <div
             className={`flex h-full min-h-[4.25rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/12 border-l-[3px] ${railAccent} bg-white shadow-[0_1px_4px_rgba(24,39,58,0.05)]`}
             data-lead-operating-summary-card="true"
             data-layout-runtime-summary-widget="true"
+            data-layout-runtime-widget-tone={accent}
             {...(widgetKey ? { "data-lead-operating-summary-card-key": widgetKey } : {})}
             {...(minimized ? { "data-lead-operating-summary-card-minimized": "true" } : {})}
         >

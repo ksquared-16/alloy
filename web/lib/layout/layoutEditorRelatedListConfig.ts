@@ -11,6 +11,7 @@ import {
 import { LAYOUT_EDITOR_BLOCK_TEMPLATE_METADATA_KEY } from "@/lib/layout/layoutEditorBlockRegistry";
 import { writeLayoutEditorRowTemplateConfig, DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG } from "@/lib/layout/layoutEditorRowTemplateConfig";
 import type { LayoutCollectionColumn, LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
+import { relatedListPresentationToDisplayMode } from "@/lib/layout/runtime/resolveLayoutRuntimeRelatedListPresentation";
 import { isAllowedOpportunityDrawerFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
 
 export const LAYOUT_EDITOR_RELATED_LIST_CONFIG_METADATA_KEY = "layoutEditorRelatedListConfig" as const;
@@ -28,8 +29,18 @@ export type LayoutEditorRelatedListRowTemplate = {
     fields: string[];
 };
 
+export const LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_MODES = ["table", "cards", "compact"] as const;
+export type LayoutEditorRelatedListPresentationMode = (typeof LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_MODES)[number];
+
+export const LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_LABELS: Record<LayoutEditorRelatedListPresentationMode, string> = {
+    table: "Table",
+    cards: "Cards",
+    compact: "Compact summary",
+};
+
 export type LayoutEditorRelatedListConfig = {
     entityType: LayoutEditorRelatedListEntityType;
+    presentationMode?: LayoutEditorRelatedListPresentationMode;
     primaryRow: LayoutEditorRelatedListRowTemplate;
     secondaryRow?: LayoutEditorRelatedListRowTemplate;
     tertiaryRow?: LayoutEditorRelatedListRowTemplate;
@@ -89,6 +100,10 @@ function isEntityType(v: string): v is LayoutEditorRelatedListEntityType {
     return (LAYOUT_EDITOR_RELATED_LIST_ENTITY_TYPES as readonly string[]).includes(v);
 }
 
+function isPresentationMode(v: string): v is LayoutEditorRelatedListPresentationMode {
+    return (LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_MODES as readonly string[]).includes(v);
+}
+
 function normalizeRowTemplate(raw: unknown): LayoutEditorRelatedListRowTemplate | null {
     if (!raw || typeof raw !== "object") return null;
     const bag = raw as Record<string, unknown>;
@@ -110,7 +125,11 @@ export function readLayoutEditorRelatedListConfig(section: LayoutSection): Layou
     const primaryRow = normalizeRowTemplate(bag.primaryRow) ?? defaults.primaryRow;
     const secondaryRow = normalizeRowTemplate(bag.secondaryRow) ?? defaults.secondaryRow;
     const tertiaryRow = normalizeRowTemplate(bag.tertiaryRow) ?? defaults.tertiaryRow;
-    return { entityType, primaryRow, secondaryRow, tertiaryRow };
+    const presentationMode =
+        typeof bag.presentationMode === "string" && isPresentationMode(bag.presentationMode) ?
+            bag.presentationMode
+        :   "table";
+    return { entityType, presentationMode, primaryRow, secondaryRow, tertiaryRow };
 }
 
 export function writeLayoutEditorRelatedListConfig(
@@ -121,6 +140,7 @@ export function writeLayoutEditorRelatedListConfig(
         ...(metadata ?? {}),
         [LAYOUT_EDITOR_RELATED_LIST_CONFIG_METADATA_KEY]: {
             entityType: config.entityType,
+            ...(config.presentationMode ? { presentationMode: config.presentationMode } : {}),
             primaryRow: config.primaryRow,
             ...(config.secondaryRow ? { secondaryRow: config.secondaryRow } : {}),
             ...(config.tertiaryRow ? { tertiaryRow: config.tertiaryRow } : {}),
@@ -205,6 +225,29 @@ function findRelatedListItem(section: LayoutSection): { rIdx: number; cIdx: numb
     return null;
 }
 
+function writeRelatedListConfigOnItem(
+    config: LayoutEditorRelatedListConfig,
+    childRowGroups: LayoutEditorChildRowGroup[],
+    dataContext: "child" | "contact" | "lead",
+): Record<string, unknown> {
+    return {
+        [LAYOUT_EDITOR_BLOCK_TEMPLATE_METADATA_KEY]: "child_row_template",
+        [LAYOUT_EDITOR_RELATED_LIST_CONFIG_METADATA_KEY]: {
+            entityType: config.entityType,
+            presentationMode: config.presentationMode ?? "table",
+            primaryRow: config.primaryRow,
+            ...(config.secondaryRow ? { secondaryRow: config.secondaryRow } : {}),
+            ...(config.tertiaryRow ? { tertiaryRow: config.tertiaryRow } : {}),
+        },
+        ...writeLayoutEditorRowTemplateConfig(undefined, DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG),
+        ...writeLayoutEditorBlockConfig(undefined, {
+            blockType: "child_row_template",
+            dataContext,
+            childRowGroups,
+        }),
+    };
+}
+
 function makeRelatedListItem(config: LayoutEditorRelatedListConfig): LayoutItem {
     const columns = buildColumnsFromConfig(config);
     const childRowGroups = buildChildRowGroups(config, columns);
@@ -219,22 +262,14 @@ function makeRelatedListItem(config: LayoutEditorRelatedListConfig): LayoutItem 
         refKey,
         label: LAYOUT_EDITOR_RELATED_LIST_ENTITY_LABELS[config.entityType],
         source: refKey === "children" ? "children" : refKey,
-        displayMode: "table",
+        displayMode: relatedListPresentationToDisplayMode(config.presentationMode),
         related: {
             entityType:
                 config.entityType === "children" ? "child"
                 : config.entityType === "household_members" ? "household_member"
                 : config.entityType,
         },
-        metadata: {
-            [LAYOUT_EDITOR_BLOCK_TEMPLATE_METADATA_KEY]: "child_row_template",
-            ...writeLayoutEditorRowTemplateConfig(undefined, DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG),
-            ...writeLayoutEditorBlockConfig(undefined, {
-                blockType: "child_row_template",
-                dataContext,
-                childRowGroups,
-            }),
-        },
+        metadata: writeRelatedListConfigOnItem(config, childRowGroups, dataContext),
         columns,
     };
 }
@@ -273,14 +308,12 @@ export function syncRelatedListSectionToItem(doc: LayoutDoc, sectionKey: string)
     item.source = config.entityType === "children" ? "children" : ENTITY_REF_KEYS[config.entityType];
     item.label = LAYOUT_EDITOR_RELATED_LIST_ENTITY_LABELS[config.entityType];
     item.columns = columns;
-    item.metadata = writeLayoutEditorBlockConfig(item.metadata, {
-        blockType: "child_row_template",
-        dataContext:
-            config.entityType === "children" ? "child"
-            : config.entityType === "contacts" || config.entityType === "household_members" ? "contact"
-            :   "lead",
-        childRowGroups,
-    });
+    item.displayMode = relatedListPresentationToDisplayMode(config.presentationMode);
+    const dataContext =
+        config.entityType === "children" ? "child"
+        : config.entityType === "contacts" || config.entityType === "household_members" ? "contact"
+        :   "lead";
+    item.metadata = writeRelatedListConfigOnItem(config, childRowGroups, dataContext);
 
     const row = nextSection.rows[existing.rIdx]!;
     const col = row.columns[existing.cIdx]!;

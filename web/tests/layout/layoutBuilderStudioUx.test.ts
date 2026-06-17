@@ -53,8 +53,9 @@ describe("layoutBuilderStudioUx", () => {
         ).toContain("Tour summary");
     });
 
-    it("flags platform-owned drawer sections", () => {
-        expect(isPlatformOwnedDrawerSection("household_contact")).toBe(true);
+    it("does not flag drawer cards as platform-owned in experience builder", () => {
+        expect(isPlatformOwnedDrawerSection("household_contact")).toBe(false);
+        expect(isPlatformOwnedDrawerSection("lead_summary")).toBe(false);
         expect(isPlatformOwnedDrawerSection("lead_source")).toBe(false);
     });
 

@@ -5,10 +5,13 @@ import {
     DEFAULT_CHILDREN_RELATED_LIST_CONFIG,
     LAYOUT_EDITOR_RELATED_LIST_ENTITY_LABELS,
     LAYOUT_EDITOR_RELATED_LIST_ENTITY_TYPES,
+    LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_LABELS,
+    LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_MODES,
     patchLayoutEditorRelatedListConfig,
     readLayoutEditorRelatedListConfig,
     relatedListEntityTypeRuntimeSupported,
     type LayoutEditorRelatedListEntityType,
+    type LayoutEditorRelatedListPresentationMode,
 } from "@/lib/layout/layoutEditorRelatedListConfig";
 import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import { useMemo } from "react";
@@ -39,10 +42,40 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
     );
 
     const rows = [config.primaryRow, config.secondaryRow, config.tertiaryRow];
+    const presentationMode = config.presentationMode ?? "table";
 
     return (
         <div className="mt-3 space-y-3 rounded-lg border border-alloy-blue/20 bg-alloy-blue/[0.04] p-2" data-testid="visual-editor-related-list-settings">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-blue">Related list</p>
+
+            <label className="block text-[11px] text-alloy-midnight/60">
+                Presentation
+                <select
+                    value={presentationMode}
+                    onChange={(e) =>
+                        applyDoc(
+                            patchLayoutEditorRelatedListConfig(doc, sectionKey, {
+                                presentationMode: e.target.value as LayoutEditorRelatedListPresentationMode,
+                            }),
+                        )
+                    }
+                    className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                    data-testid="visual-editor-related-list-presentation"
+                >
+                    {LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_MODES.map((mode) => (
+                        <option key={mode} value={mode}>
+                            {LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_LABELS[mode]}
+                        </option>
+                    ))}
+                </select>
+                <span className="mt-1 block text-[10px] text-alloy-midnight/45">
+                    {presentationMode === "table" ?
+                        "Full table with columns — best for scanning many fields."
+                    : presentationMode === "cards" ?
+                        "Card per record with labeled rows — best for child or contact summaries."
+                    :   "Single-line summary per record — best for dense drawers."}
+                </span>
+            </label>
 
             <label className="block text-[11px] text-alloy-midnight/60">
                 Entity type

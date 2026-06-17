@@ -42,6 +42,7 @@ export function buildLayoutEditorInspectInfo(
 }
 
 export function buildLayoutEditorItemIdPathIndex(
+    sectionKey: string,
     blocks: LayoutEditorBlockNode[],
 ): {
     byItemId: Map<string, LayoutEditorInspectInfo>;
@@ -50,6 +51,19 @@ export function buildLayoutEditorItemIdPathIndex(
     const byItemId = new Map<string, LayoutEditorInspectInfo>();
     const byRefKey = new Map<string, LayoutEditorInspectInfo>();
     for (const block of blocks) {
+        if (block.kind === "widget" && block.itemId) {
+            const info: LayoutEditorInspectInfo = {
+                blockTitle: block.title,
+                fieldTitle: block.title,
+                refKey: block.title,
+                displayType: "widget",
+                visibilityLabel: "Always show",
+                sourceLabel: "widget",
+                serializedPath: `field:${sectionKey}:${block.itemId}`,
+            };
+            byItemId.set(block.itemId, info);
+            continue;
+        }
         for (const field of block.children) {
             const info = buildLayoutEditorInspectInfo(block, field);
             if (field.path.kind === "field") {

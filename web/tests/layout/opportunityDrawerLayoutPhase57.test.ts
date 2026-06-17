@@ -164,6 +164,7 @@ describe("inspect mode", () => {
     it("indexes preview item ids and ref keys for trace lookup", () => {
         const doc = buildLeadDrawerDefaultDoc();
         const { byItemId, byRefKey } = buildLayoutEditorItemIdPathIndex(
+            "household_contact",
             listSectionLayoutBlocks(doc, "household_contact"),
         );
         expect(byRefKey.get("person.primary_email")?.fieldTitle).toBeTruthy();

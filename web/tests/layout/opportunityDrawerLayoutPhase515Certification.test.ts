@@ -127,13 +127,13 @@ describe("publish guard certification", () => {
         expect(validated.errors.some((e) => e.includes("not_a_widget"))).toBe(true);
     });
 
-    it("protects platform composition slots and lead summary from delete", () => {
+    it("allows operators to delete drawer cards including lead summary", () => {
         const doc = buildLeadDrawerDefaultDoc();
         for (const key of ["lead_summary", "household_contact", "children_enrollment"] as const) {
             const section = doc.sections.find((s) => s.key === key)!;
-            expect(canDeleteOpportunityDrawerSection(section).ok).toBe(false);
+            expect(canDeleteOpportunityDrawerSection(section).ok).toBe(true);
             const afterDelete = deleteOpportunityDrawerSection(doc, key);
-            expect(afterDelete.sections.some((s) => s.key === key)).toBe(true);
+            expect(afterDelete.sections.some((s) => s.key === key)).toBe(false);
         }
     });
 });

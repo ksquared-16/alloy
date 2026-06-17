@@ -31,6 +31,12 @@ import { leadOverviewVisualEditorCompositionHints, partitionLeadOverviewBodySect
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
 import { shouldShowLayoutBuilderStartGuide } from "@/lib/layout/layoutBuilderStudioUx";
+import {
+    listSectionWidgetItems,
+    sectionIsWidgetStrip,
+    widgetStripColumnCount,
+} from "@/lib/layout/layoutBuilderWidgetStrip";
+import { readLayoutEditorWidgetStyle, resolveLayoutEditorWidgetToneRailClass } from "@/lib/layout/layoutEditorWidgetStyle";
 
 export type LayoutBuilderEditorMode = "build" | "preview";
 
@@ -68,7 +74,7 @@ function SectionPreviewBody({
     const sectionDoc = useMemo(() => buildSingleSectionPreviewDoc(doc, sectionKey), [doc, sectionKey]);
     const traceValue = useMemo(() => {
         const blocks = listSectionLayoutBlocks(doc, sectionKey);
-        const { byItemId, byRefKey } = buildLayoutEditorItemIdPathIndex(blocks);
+        const { byItemId, byRefKey } = buildLayoutEditorItemIdPathIndex(sectionKey, blocks);
         return {
             enabled: traceEnabled,
             inspectMode: traceEnabled,
@@ -82,6 +88,9 @@ function SectionPreviewBody({
         };
     }, [doc, sectionKey, traceEnabled, selectedFieldPath, onSelectFieldPath, onSelectSection]);
 
+    const widgets = useMemo(() => listSectionWidgetItems(doc, sectionKey), [doc, sectionKey]);
+    const widgetColumnCount = useMemo(() => widgetStripColumnCount(doc, sectionKey), [doc, sectionKey]);
+
     if (!sectionDoc || hidden) {
         return (
             <p className="px-3 py-6 text-xs text-alloy-midnight/45" data-testid={`visual-editor-section-hidden-${sectionKey}`}>
@@ -93,11 +102,157 @@ function SectionPreviewBody({
     return (
         <LayoutEditorRuntimeTraceProvider value={traceValue}>
             <LayoutRuntimeCompositionProvider value={leadOverviewVisualEditorCompositionHints()}>
-                <div className={sectionKey === "lead_summary" ? DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS : undefined}>
+                <div
+                    className={`relative ${sectionKey === "lead_summary" ? DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS : ""}`}
+                >
                     <LayoutRuntimePlanView doc={sectionDoc} record={LAYOUT_DRAWER_PREVIEW_RECORD} variant="production" />
+                    {traceEnabled && widgets.length > 0 ?
+                        <div
+                            className="pointer-events-none absolute inset-0 grid gap-2 p-1"
+                            style={{ gridTemplateColumns: `repeat(${widgetColumnCount}, minmax(0, 1fr))` }}
+                            data-testid={`visual-editor-widget-strip-overlay-${sectionKey}`}
+                        >
+                            {widgets.map((widget) => {
+                                const path = `field:${sectionKey}:${widget.itemId}`;
+                                const selected = selectedFieldPath === path;
+                                const tone = readLayoutEditorWidgetStyle(widget.item.metadata).tone;
+                                const railClass = resolveLayoutEditorWidgetToneRailClass(tone);
+                                return (
+                                    <button
+                                        key={widget.itemId}
+                                        type="button"
+                                        className={`pointer-events-auto min-h-[3.5rem] rounded-xl border border-transparent border-l-[3px] transition-all ${railClass} ${
+                                            selected ?
+                                                "ring-2 ring-alloy-pine/35 bg-alloy-pine/[0.04]"
+                                            :   "hover:ring-2 hover:ring-alloy-pine/20 hover:bg-white/40"
+                                        }`}
+                                        data-testid={`visual-editor-widget-select-${widget.itemId}`}
+                                        data-layout-editor-widget-selected={selected ? "true" : undefined}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            traceValue.onSelectPath(path);
+                                        }}
+                                        aria-label={`Select widget ${widget.title}`}
+                                    />
+                                );
+                            })}
+                        </div>
+                    :   null}
                 </div>
             </LayoutRuntimeCompositionProvider>
         </LayoutEditorRuntimeTraceProvider>
+    );
+}
+
+function WidgetStripSectionFrame({
+    doc,
+    section,
+    editorMode,
+    selectedSectionId,
+    selectedFieldPath,
+    hasItemSelected,
+    onSelectSection,
+    onSelectFieldPath,
+    onSelectBlockId,
+    applyDoc,
+}: {
+    doc: LayoutDoc;
+    section: LayoutSection;
+    editorMode: LayoutBuilderEditorMode;
+    selectedSectionId: string | null;
+    selectedFieldPath: string | null;
+    hasItemSelected: boolean;
+    onSelectSection: (sectionKey: string | null) => void;
+    onSelectFieldPath: (path: string | null) => void;
+    onSelectBlockId: (blockId: string | null) => void;
+    applyDoc: (next: LayoutDoc) => void;
+}) {
+    const hidden = isSectionEditorHidden(section);
+    const isSelected = selectedSectionId === section.key;
+    const isBuild = editorMode === "build";
+    const columnCount = widgetStripColumnCount(doc, section.key);
+
+    if (!isBuild) {
+        return (
+            <div data-testid={`visual-editor-section-${section.key}`} data-visual-editor-widget-strip="true">
+                <SectionPreviewBody
+                    doc={doc}
+                    sectionKey={section.key}
+                    hidden={hidden}
+                    traceEnabled={false}
+                    selectedFieldPath={null}
+                    onSelectFieldPath={() => {}}
+                    onSelectSection={() => {}}
+                />
+            </div>
+        );
+    }
+
+    return (
+        <div
+            role="group"
+            className={`relative rounded-xl transition-all duration-150 ${
+                isSelected && hasItemSelected ?
+                    "ring-2 ring-alloy-blue/15"
+                : isSelected ?
+                    "ring-2 ring-alloy-pine/20"
+                :   "hover:ring-1 hover:ring-alloy-pine/15"
+            } ${hidden ? "opacity-60" : ""}`}
+            data-testid={`visual-editor-section-${section.key}`}
+            data-visual-editor-widget-strip="true"
+            data-visual-editor-editable="true"
+            onClick={() => {
+                onSelectSection(section.key);
+                onSelectFieldPath(null);
+                onSelectBlockId(null);
+            }}
+        >
+            <div
+                className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-end gap-1 p-1 opacity-0 transition group-hover:opacity-100"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <div className="pointer-events-auto flex gap-1 rounded-lg border border-alloy-forge/8 bg-white/95 p-1 text-[10px] shadow-sm">
+                    <button
+                        type="button"
+                        className="rounded-md px-2 py-0.5 font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
+                        onClick={() => applyDoc(reorderSectionInZone(doc, section.key, -1))}
+                    >
+                        Move ↑
+                    </button>
+                    <button
+                        type="button"
+                        className="rounded-md px-2 py-0.5 font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
+                        onClick={() => applyDoc(reorderSectionInZone(doc, section.key, 1))}
+                    >
+                        Move ↓
+                    </button>
+                </div>
+            </div>
+
+            <div
+                className="mb-1 flex items-center justify-between gap-2 px-1"
+                onClick={(e) => e.stopPropagation()}
+            >
+                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/40">
+                    KPI strip · {columnCount} widget{columnCount === 1 ? "" : "s"}
+                </span>
+            </div>
+
+            <div onClick={(e) => e.stopPropagation()}>
+                <SectionPreviewBody
+                    doc={doc}
+                    sectionKey={section.key}
+                    hidden={hidden}
+                    traceEnabled={isBuild}
+                    selectedFieldPath={selectedFieldPath}
+                    onSelectFieldPath={(path) => {
+                        onSelectFieldPath(path);
+                        if (path) onSelectSection(section.key);
+                    }}
+                    onSelectSection={onSelectSection}
+                />
+            </div>
+        </div>
     );
 }
 
@@ -180,7 +335,7 @@ function EditableSectionFrame({
                     onClick={(e) => e.stopPropagation()}
                     onChange={(e) => applyDoc(renameSectionTitle(doc, section.key, e.target.value))}
                     className="w-full bg-transparent text-sm font-semibold text-alloy-midnight outline-none placeholder:text-alloy-midnight/35 focus:ring-0"
-                    aria-label="Section title"
+                    aria-label="Card title"
                     data-testid={`visual-editor-section-title-inline-${section.key}`}
                 />
             </div>
@@ -248,6 +403,23 @@ function CompositionGrid({
 
     const renderSection = (section: LayoutSection | null) => {
         if (!section) return null;
+        if (sectionIsWidgetStrip(section)) {
+            return (
+                <WidgetStripSectionFrame
+                    key={section.key}
+                    doc={doc}
+                    section={section}
+                    editorMode={editorMode}
+                    selectedSectionId={selectedSectionId}
+                    selectedFieldPath={selectedFieldPath}
+                    hasItemSelected={hasItemSelected}
+                    onSelectSection={onSelectSection}
+                    onSelectFieldPath={onSelectFieldPath}
+                    onSelectBlockId={onSelectBlockId}
+                    applyDoc={applyDoc}
+                />
+            );
+        }
         return (
             <EditableSectionFrame
                 key={section.key}
@@ -277,7 +449,11 @@ function CompositionGrid({
             data-testid="visual-editor-main-composition-grid"
         >
             {summarySections.length > 0 ?
-                <div data-visual-editor-zone="summary_strip" data-testid="visual-editor-zone-summary_strip" className="space-y-2">
+                <div
+                    data-visual-editor-zone="summary_strip"
+                    data-testid="visual-editor-zone-summary_strip"
+                    className={DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS}
+                >
                     <LayoutEditorSectionFlowView
                         sections={summarySections}
                         renderSection={renderSection}

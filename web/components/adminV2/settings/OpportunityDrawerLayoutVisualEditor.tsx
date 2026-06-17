@@ -13,7 +13,6 @@ import LayoutBuilderInspectorPanel from "@/components/adminV2/settings/LayoutBui
 import LayoutBuilderPalettePanel, {
     type LayoutBuilderStudioNotice,
 } from "@/components/adminV2/settings/LayoutBuilderPalettePanel";
-import { isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient } from "@/lib/layout/featureFlag";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
 import type { EntityLayoutRecord, LayoutDoc } from "@/lib/layout/layoutV2";
@@ -294,22 +293,24 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const isBuild = editorMode === "build";
 
     return (
-        <div className="space-y-4" data-testid="opportunity-drawer-visual-editor">
-            <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-alloy-forge/12 bg-white/95 p-4 shadow-sm">
-                <div>
-                    <h2 className="text-sm font-semibold text-alloy-midnight">Opportunity Drawer layout</h2>
-                    <p className="mt-0.5 text-xs text-alloy-midnight/50">
-                        Design the drawer like your operators see it — build on the canvas, preview the live experience.
-                    </p>
-                    {isLayoutRuntimeOpportunityDrawerEntityLayoutsVisualConfigEnabledClient() ?
-                        <p
-                            className="mt-1 rounded-md border border-alloy-pine/20 bg-alloy-pine/[0.06] px-2 py-1 text-[11px] text-alloy-midnight/70"
-                            data-testid="visual-editor-live-publish-notice"
+        <div className="flex h-full min-h-0 flex-1 flex-col gap-3 p-3 sm:p-4" data-testid="opportunity-drawer-visual-editor">
+            <div
+                className="flex shrink-0 flex-wrap items-center justify-between gap-3 rounded-xl border border-alloy-forge/10 bg-white/95 px-4 py-3 shadow-sm"
+                data-testid="experience-builder-studio-toolbar"
+            >
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            className="text-xs font-medium text-alloy-pine hover:underline"
+                            data-testid="experience-builder-back-to-gallery"
                         >
-                            <strong>Live drawer:</strong> publishing updates section visibility, order, and fields in
-                            supported sections for your org.
-                        </p>
-                    :   null}
+                            ← Gallery
+                        </button>
+                        <span className="text-alloy-midnight/25">·</span>
+                        <h2 className="text-sm font-semibold text-alloy-midnight">Experience Builder</h2>
+                    </div>
                     <input
                         type="text"
                         value={workingName}
@@ -317,8 +318,9 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                             setWorkingName(e.target.value);
                             setDirty(true);
                         }}
-                        className="mt-2 w-full max-w-md rounded-md border border-alloy-forge/20 px-2 py-1 text-sm"
+                        className="mt-1.5 w-full max-w-md rounded-md border border-alloy-forge/15 bg-white px-2.5 py-1 text-sm"
                         aria-label="Layout name"
+                        data-testid="experience-builder-layout-name"
                     />
                     <p
                         className={`mt-1 text-[10px] font-medium uppercase tracking-wide ${
@@ -400,7 +402,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
 
             {autoRepairNotice ?
                 <div
-                    className="rounded-lg border border-alloy-pine/25 bg-alloy-pine/[0.08] px-3 py-2 text-sm text-alloy-midnight"
+                    className="shrink-0 rounded-lg border border-alloy-pine/25 bg-alloy-pine/[0.08] px-3 py-2 text-sm text-alloy-midnight"
                     data-testid="visual-editor-auto-repair-notice"
                 >
                     {autoRepairNotice}
@@ -408,12 +410,12 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             :   null}
 
             {error ?
-                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
+                <div className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
             :   null}
 
             {!validation.ok ?
                 <div
-                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                    className="shrink-0 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
                     data-testid="visual-editor-validation-errors"
                 >
                     <p className="font-semibold">Fix validation issues before saving:</p>
@@ -440,7 +442,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             :   null}
 
             <div
-                className={`grid gap-4 ${isBuild ? "xl:grid-cols-[260px_minmax(0,1fr)_300px]" : "grid-cols-1"}`}
+                className={`grid min-h-0 flex-1 gap-3 overflow-hidden ${isBuild ? "xl:grid-cols-[240px_minmax(0,1fr)_300px]" : "grid-cols-1"}`}
                 data-testid="layout-builder-studio-grid"
             >
                 {isBuild && studioNotice ?
@@ -474,7 +476,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     />
                 :   null}
 
-                <div className={`relative min-w-0 rounded-xl ${isBuild ? "" : ""} ${opCaseFileCanvas}`} data-testid="layout-builder-canvas-host">
+                <div className={`relative min-h-0 min-w-0 overflow-y-auto rounded-xl ${opCaseFileCanvas}`} data-testid="layout-builder-canvas-host">
                     <OpportunityDrawerLayoutEditorCanvas
                         doc={workingDoc}
                         editorMode={editorMode}
@@ -515,10 +517,6 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                     />
                 :   null}
             </div>
-
-            <button type="button" onClick={onBack} className="text-xs font-medium text-alloy-pine hover:underline">
-                ← Back to gallery
-            </button>
         </div>
     );
 }

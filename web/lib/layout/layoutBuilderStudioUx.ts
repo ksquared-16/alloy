@@ -6,19 +6,11 @@ import { isValidCustomSectionKeyPattern } from "@/lib/layout/layoutEditorGenerat
 import { readSectionType } from "@/lib/layout/layoutEditorSectionLayout";
 import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import type { OpportunityDrawerLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
-import { LEAD_OVERVIEW_SECTION_KEYS } from "@/lib/layout/runtime/leadOverviewComposition";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 
 export type LayoutBuilderPaletteItemKind = "field" | "widget" | "block" | "text" | "related_list";
 
-const PLATFORM_OWNED_SECTION_KEYS = new Set<string>([
-    LEAD_OVERVIEW_SECTION_KEYS.summary,
-    LEAD_OVERVIEW_SECTION_KEYS.household,
-    LEAD_OVERVIEW_SECTION_KEYS.enrollment,
-    "lead_summary",
-    "household_contact",
-    "children_enrollment",
-]);
+const PLATFORM_OWNED_SECTION_KEYS = new Set<string>([]);
 
 function sectionAcceptsWidgets(section: LayoutSection): boolean {
     if (readSectionType(section) === "widget") return true;

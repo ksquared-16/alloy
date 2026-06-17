@@ -71,12 +71,12 @@ describe("publish guards", () => {
 });
 
 describe("fixed platform composition slots", () => {
-    it("prevents deleting household_contact and children_enrollment", () => {
+    it("allows operators to delete legacy platform drawer cards", () => {
         const doc = buildLeadDrawerDefaultDoc();
         const household = doc.sections.find((s) => s.key === "household_contact")!;
         const enrollment = doc.sections.find((s) => s.key === "children_enrollment")!;
-        expect(canDeleteOpportunityDrawerSection(household).ok).toBe(false);
-        expect(canDeleteOpportunityDrawerSection(enrollment).ok).toBe(false);
+        expect(canDeleteOpportunityDrawerSection(household).ok).toBe(true);
+        expect(canDeleteOpportunityDrawerSection(enrollment).ok).toBe(true);
     });
 });
 

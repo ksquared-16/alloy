@@ -679,10 +679,10 @@ export function LayoutBuilderItemInspector({
     if (entry.kind === "widget") {
         const style = readLayoutEditorWidgetStyle(entry.item.metadata);
         return (
-            <div className="space-y-2">
-                <SettingsHeader title="Widget settings" onClose={onClose} />
+            <div className="space-y-3">
+                <SettingsHeader title="Widget properties" onClose={onClose} />
                 <label className="block text-[11px] text-alloy-midnight/60">
-                    Widget title
+                    Title
                     <input
                         type="text"
                         value={entry.item.label ?? entry.title}
@@ -694,7 +694,25 @@ export function LayoutBuilderItemInspector({
                     />
                 </label>
                 <label className="block text-[11px] text-alloy-midnight/60">
-                    Visual tone
+                    Subtitle
+                    <input
+                        type="text"
+                        value={style.subtitle ?? ""}
+                        onChange={(e) =>
+                            applyDoc(
+                                patchSectionItem(doc, sectionKey, entry.itemId, {
+                                    metadata: writeLayoutEditorWidgetStyle(entry.item.metadata, {
+                                        subtitle: e.target.value,
+                                    }),
+                                }),
+                            )
+                        }
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-widget-subtitle"
+                    />
+                </label>
+                <label className="block text-[11px] text-alloy-midnight/60">
+                    Tone / color
                     <select
                         value={style.tone ?? "neutral"}
                         onChange={(e) =>
@@ -733,6 +751,44 @@ export function LayoutBuilderItemInspector({
                         className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                         data-testid="visual-editor-widget-description"
                     />
+                </label>
+                <label className="block text-[11px] text-alloy-midnight/60">
+                    Width in strip
+                    <select
+                        value={style.width ?? "equal"}
+                        onChange={(e) =>
+                            applyDoc(
+                                patchSectionItem(doc, sectionKey, entry.itemId, {
+                                    metadata: writeLayoutEditorWidgetStyle(entry.item.metadata, {
+                                        width: e.target.value as "auto" | "equal" | "compact",
+                                    }),
+                                }),
+                            )
+                        }
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-widget-width"
+                    >
+                        <option value="equal">Equal width</option>
+                        <option value="auto">Auto</option>
+                        <option value="compact">Compact</option>
+                    </select>
+                </label>
+                <label className="flex items-center gap-2 text-[11px] text-alloy-midnight/70">
+                    <input
+                        type="checkbox"
+                        checked={style.hidden === true}
+                        onChange={(e) =>
+                            applyDoc(
+                                patchSectionItem(doc, sectionKey, entry.itemId, {
+                                    metadata: writeLayoutEditorWidgetStyle(entry.item.metadata, {
+                                        hidden: e.target.checked,
+                                    }),
+                                }),
+                            )
+                        }
+                        data-testid="visual-editor-widget-hidden"
+                    />
+                    Hide widget after publish
                 </label>
             </div>
         );

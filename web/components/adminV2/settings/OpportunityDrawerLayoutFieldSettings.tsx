@@ -3,9 +3,12 @@
 import { LAYOUT_ADORNMENT_ICONS } from "@/lib/layout/layoutV2";
 import {
     LAYOUT_EDITOR_DISPLAY_TYPES,
+    LAYOUT_DATE_FORMATS,
+    LAYOUT_ICON_POSITIONS,
+    LAYOUT_LABEL_POSITIONS,
     LAYOUT_LINK_BEHAVIORS,
     LAYOUT_LINK_BEHAVIOR_LABELS,
-    LAYOUT_TYPOGRAPHY_INTENTS,
+    LAYOUT_STATUS_FORMATS,
     type LayoutEditorDisplayConfig,
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import {
@@ -46,7 +49,7 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
             </div>
 
             <label className="block text-[11px] text-alloy-midnight/60">
-                Label override
+                Custom label
                 <input
                     type="text"
                     defaultValue={node.title}
@@ -67,6 +70,31 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
             </label>
 
             <label className="mt-2 block text-[11px] text-alloy-midnight/60">
+                Label position
+                <select
+                    value={display.labelPosition ?? (display.showLabel === false ? "hidden" : "above")}
+                    onChange={(e) =>
+                        onChange({
+                            display: {
+                                labelPosition: e.target.value as LayoutEditorDisplayConfig["labelPosition"],
+                                showLabel: e.target.value !== "hidden",
+                            },
+                        })
+                    }
+                    className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                    data-testid="visual-editor-field-label-position"
+                >
+                    {LAYOUT_LABEL_POSITIONS.map((position) => (
+                        <option key={position} value={position}>
+                            {position === "above" ? "Above value" : position === "inline" ? "Inline with value" : "Hidden"}
+                        </option>
+                    ))}
+                </select>
+            </label>
+
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Formatting</p>
+
+            <label className="mt-1 block text-[11px] text-alloy-midnight/60">
                 Display type
                 <select
                     value={display.displayType ?? "text"}
@@ -80,6 +108,58 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                         </option>
                     ))}
                 </select>
+            </label>
+
+            {(display.displayType === "date" || !display.displayType) ?
+                <label className="mt-2 block text-[11px] text-alloy-midnight/60">
+                    Date format
+                    <select
+                        value={display.dateFormat ?? "medium"}
+                        onChange={(e) =>
+                            onChange({ display: { dateFormat: e.target.value as LayoutEditorDisplayConfig["dateFormat"] } })
+                        }
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-field-date-format"
+                    >
+                        {LAYOUT_DATE_FORMATS.map((format) => (
+                            <option key={format} value={format}>
+                                {format}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            :   null}
+
+            {display.displayType === "status" || display.displayType === "badge" || display.displayType === "pill" ?
+                <label className="mt-2 block text-[11px] text-alloy-midnight/60">
+                    Status / pill format
+                    <select
+                        value={display.statusFormat ?? (display.displayType === "pill" ? "pill" : "badge")}
+                        onChange={(e) =>
+                            onChange({ display: { statusFormat: e.target.value as LayoutEditorDisplayConfig["statusFormat"] } })
+                        }
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-field-status-format"
+                    >
+                        {LAYOUT_STATUS_FORMATS.map((format) => (
+                            <option key={format} value={format}>
+                                {format}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            :   null}
+
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Icon</p>
+
+            <label className="mt-1 flex items-center gap-2 text-[11px] text-alloy-midnight/70">
+                <input
+                    type="checkbox"
+                    checked={display.showIcon !== false && Boolean(display.icon)}
+                    onChange={(e) => onChange({ display: { showIcon: e.target.checked } })}
+                    data-testid="visual-editor-field-show-icon"
+                />
+                Show icon
             </label>
 
             <label className="mt-2 block text-[11px] text-alloy-midnight/60">
@@ -100,47 +180,26 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
             </label>
 
             <label className="mt-2 block text-[11px] text-alloy-midnight/60">
-                Typography
+                Icon position
                 <select
-                    value={display.typographyIntent ?? "primary"}
+                    value={display.iconPosition ?? "left"}
                     onChange={(e) =>
-                        onChange({ display: { typographyIntent: e.target.value as LayoutEditorDisplayConfig["typographyIntent"] } })
+                        onChange({ display: { iconPosition: e.target.value as LayoutEditorDisplayConfig["iconPosition"] } })
                     }
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
-                    data-testid="visual-editor-field-typography"
+                    data-testid="visual-editor-field-icon-position"
                 >
-                    {LAYOUT_TYPOGRAPHY_INTENTS.map((t) => (
-                        <option key={t} value={t}>
-                            {t}
+                    {LAYOUT_ICON_POSITIONS.map((position) => (
+                        <option key={position} value={position}>
+                            {position}
                         </option>
                     ))}
                 </select>
             </label>
 
-            <label className="mt-2 block text-[11px] text-alloy-midnight/60">
-                Empty state
-                <input
-                    type="text"
-                    value={display.emptyState ?? ""}
-                    placeholder="No phone number"
-                    onChange={(e) => onChange({ display: { emptyState: e.target.value } })}
-                    className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
-                    data-testid="visual-editor-field-empty-state"
-                />
-            </label>
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Behavior</p>
 
-            <label className="mt-2 block text-[11px] text-alloy-midnight/60">
-                Helper text
-                <input
-                    type="text"
-                    value={display.helperText ?? ""}
-                    onChange={(e) => onChange({ display: { helperText: e.target.value } })}
-                    className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
-                    data-testid="visual-editor-field-helper-text"
-                />
-            </label>
-
-            <label className="mt-2 block text-[11px] text-alloy-midnight/60">
+            <label className="mt-1 block text-[11px] text-alloy-midnight/60">
                 Link behavior
                 <select
                     value={display.linkBehavior ?? "none"}
@@ -167,8 +226,24 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                 :   null}
             </label>
 
-            <label className="mt-2 block text-[11px] text-alloy-midnight/60">
-                Visibility
+            {display.linkBehavior === "external_url" ?
+                <label className="mt-2 block text-[11px] text-alloy-midnight/60">
+                    External URL
+                    <input
+                        type="url"
+                        value={display.externalUrl ?? ""}
+                        placeholder="https://"
+                        onChange={(e) => onChange({ display: { externalUrl: e.target.value } })}
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-field-external-url"
+                    />
+                </label>
+            :   null}
+
+            <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Visibility</p>
+
+            <label className="mt-1 block text-[11px] text-alloy-midnight/60">
+                When to show
                 <select
                     value={node.visibilityRule}
                     onChange={(e) => onChange({ visibility: e.target.value as LayoutEditorVisibilityRule })}

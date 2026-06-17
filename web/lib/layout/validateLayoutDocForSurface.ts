@@ -92,6 +92,7 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "layoutEditorBlockConfig",
     "layoutEditorActionButton",
     "layoutEditorWidgetStyle",
+    "layoutEditorRelatedListConfig",
     "enrollmentRosterReadFirst",
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
     LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,

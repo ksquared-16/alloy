@@ -388,7 +388,7 @@ export default function LayoutBuilderPalettePanel({
                                         onClick={() =>
                                             applyDocWithNewSections(
                                                 addRegisteredSection(doc, key as OpportunityDrawerSectionKey),
-                                                `Added ${layoutBuilderFriendlySectionKeyLabel(key)} section.`,
+                                                `Added ${layoutBuilderFriendlySectionKeyLabel(key)} card.`,
                                             )
                                         }
                                     />

@@ -11,7 +11,7 @@ export const LAYOUT_EDITOR_DISPLAY_METADATA_KEY = "layoutEditorDisplay" as const
 export const LAYOUT_TYPOGRAPHY_INTENTS = ["primary", "secondary", "muted", "caption", "emphasis"] as const;
 export type LayoutTypographyIntent = (typeof LAYOUT_TYPOGRAPHY_INTENTS)[number];
 
-export const LAYOUT_LINK_BEHAVIORS = ["none", "open_record", "open_drawer", "mailto", "tel"] as const;
+export const LAYOUT_LINK_BEHAVIORS = ["none", "open_record", "open_drawer", "open_modal", "external_url", "mailto", "tel"] as const;
 export type LayoutLinkBehavior = (typeof LAYOUT_LINK_BEHAVIORS)[number];
 
 /** Operator-facing labels; internal values remain stable for storage. */
@@ -19,9 +19,26 @@ export const LAYOUT_LINK_BEHAVIOR_LABELS: Record<LayoutLinkBehavior, string> = {
     none: "No action",
     open_record: "Open related record page",
     open_drawer: "Open related record drawer",
+    open_modal: "Open modal",
+    external_url: "Open external URL",
     mailto: "Open email composer",
     tel: "Call phone number",
 };
+
+export const LAYOUT_LABEL_POSITIONS = ["above", "inline", "hidden"] as const;
+export type LayoutLabelPosition = (typeof LAYOUT_LABEL_POSITIONS)[number];
+
+export const LAYOUT_ICON_POSITIONS = ["left", "right", "above"] as const;
+export type LayoutIconPosition = (typeof LAYOUT_ICON_POSITIONS)[number];
+
+export const LAYOUT_DATE_FORMATS = ["short", "medium", "long", "relative"] as const;
+export type LayoutDateFormat = (typeof LAYOUT_DATE_FORMATS)[number];
+
+export const LAYOUT_CURRENCY_FORMATS = ["standard", "compact", "accounting"] as const;
+export type LayoutCurrencyFormat = (typeof LAYOUT_CURRENCY_FORMATS)[number];
+
+export const LAYOUT_STATUS_FORMATS = ["badge", "pill", "text"] as const;
+export type LayoutStatusFormat = (typeof LAYOUT_STATUS_FORMATS)[number];
 
 /** Editor-facing display types mapped to renderHint where supported. */
 export const LAYOUT_EDITOR_DISPLAY_TYPES = [
@@ -40,12 +57,19 @@ export type LayoutEditorDisplayType = (typeof LAYOUT_EDITOR_DISPLAY_TYPES)[numbe
 
 export type LayoutEditorDisplayConfig = {
     showLabel?: boolean;
+    labelPosition?: LayoutLabelPosition;
     typographyIntent?: LayoutTypographyIntent;
     emptyState?: string;
     helperText?: string;
     linkBehavior?: LayoutLinkBehavior;
+    externalUrl?: string;
     icon?: LayoutAdornmentIcon;
+    showIcon?: boolean;
+    iconPosition?: LayoutIconPosition;
     displayType?: LayoutEditorDisplayType;
+    dateFormat?: LayoutDateFormat;
+    currencyFormat?: LayoutCurrencyFormat;
+    statusFormat?: LayoutStatusFormat;
 };
 
 const DISPLAY_TYPE_TO_RENDER_HINT: Partial<Record<LayoutEditorDisplayType, LayoutRenderHint>> = {
@@ -71,14 +95,21 @@ export function readLayoutEditorDisplayConfig(source: {
     const bag = raw as Record<string, unknown>;
     const out: LayoutEditorDisplayConfig = {};
     if (typeof bag.showLabel === "boolean") out.showLabel = bag.showLabel;
+    if (typeof bag.labelPosition === "string" && isLabelPosition(bag.labelPosition)) out.labelPosition = bag.labelPosition;
     if (typeof bag.typographyIntent === "string" && isTypographyIntent(bag.typographyIntent)) {
         out.typographyIntent = bag.typographyIntent;
     }
     if (typeof bag.emptyState === "string") out.emptyState = bag.emptyState.trim();
     if (typeof bag.helperText === "string") out.helperText = bag.helperText.trim();
     if (typeof bag.linkBehavior === "string" && isLinkBehavior(bag.linkBehavior)) out.linkBehavior = bag.linkBehavior;
+    if (typeof bag.externalUrl === "string") out.externalUrl = bag.externalUrl.trim();
     if (typeof bag.icon === "string" && isAdornmentIcon(bag.icon)) out.icon = bag.icon;
+    if (typeof bag.showIcon === "boolean") out.showIcon = bag.showIcon;
+    if (typeof bag.iconPosition === "string" && isIconPosition(bag.iconPosition)) out.iconPosition = bag.iconPosition;
     if (typeof bag.displayType === "string" && isDisplayType(bag.displayType)) out.displayType = bag.displayType;
+    if (typeof bag.dateFormat === "string" && isDateFormat(bag.dateFormat)) out.dateFormat = bag.dateFormat;
+    if (typeof bag.currencyFormat === "string" && isCurrencyFormat(bag.currencyFormat)) out.currencyFormat = bag.currencyFormat;
+    if (typeof bag.statusFormat === "string" && isStatusFormat(bag.statusFormat)) out.statusFormat = bag.statusFormat;
     return out;
 }
 
@@ -91,12 +122,19 @@ export function writeLayoutEditorDisplayConfig(
     const merged = { ...prev, ...patch };
     const cleaned: Record<string, unknown> = {};
     if (merged.showLabel !== undefined) cleaned.showLabel = merged.showLabel;
+    if (merged.labelPosition) cleaned.labelPosition = merged.labelPosition;
     if (merged.typographyIntent) cleaned.typographyIntent = merged.typographyIntent;
     if (merged.emptyState) cleaned.emptyState = merged.emptyState;
     if (merged.helperText) cleaned.helperText = merged.helperText;
     if (merged.linkBehavior) cleaned.linkBehavior = merged.linkBehavior;
+    if (merged.externalUrl) cleaned.externalUrl = merged.externalUrl;
     if (merged.icon) cleaned.icon = merged.icon;
+    if (merged.showIcon !== undefined) cleaned.showIcon = merged.showIcon;
+    if (merged.iconPosition) cleaned.iconPosition = merged.iconPosition;
     if (merged.displayType) cleaned.displayType = merged.displayType;
+    if (merged.dateFormat) cleaned.dateFormat = merged.dateFormat;
+    if (merged.currencyFormat) cleaned.currencyFormat = merged.currencyFormat;
+    if (merged.statusFormat) cleaned.statusFormat = merged.statusFormat;
     if (Object.keys(cleaned).length === 0) {
         delete next[LAYOUT_EDITOR_DISPLAY_METADATA_KEY];
     } else {
@@ -154,8 +192,11 @@ export function applyDisplayConfigToItemPatch(
         if (hint) patch.renderHint = hint;
     }
     if (config.icon) {
+        const adornmentPosition =
+            config.iconPosition === "right" ? "right"
+            : "left";
         patch.adornment = {
-            position: item.adornment?.position ?? "left",
+            position: adornmentPosition,
             icon: config.icon,
             ...(item.adornment?.action ? { action: item.adornment.action } : {}),
         };
@@ -196,6 +237,26 @@ function isDisplayType(v: string): v is LayoutEditorDisplayType {
 
 function isAdornmentIcon(v: string): v is LayoutAdornmentIcon {
     return (LAYOUT_ADORNMENT_ICONS as readonly string[]).includes(v);
+}
+
+function isLabelPosition(v: string): v is LayoutLabelPosition {
+    return (LAYOUT_LABEL_POSITIONS as readonly string[]).includes(v);
+}
+
+function isIconPosition(v: string): v is LayoutIconPosition {
+    return (LAYOUT_ICON_POSITIONS as readonly string[]).includes(v);
+}
+
+function isDateFormat(v: string): v is LayoutDateFormat {
+    return (LAYOUT_DATE_FORMATS as readonly string[]).includes(v);
+}
+
+function isCurrencyFormat(v: string): v is LayoutCurrencyFormat {
+    return (LAYOUT_CURRENCY_FORMATS as readonly string[]).includes(v);
+}
+
+function isStatusFormat(v: string): v is LayoutStatusFormat {
+    return (LAYOUT_STATUS_FORMATS as readonly string[]).includes(v);
 }
 
 export function isLayoutRenderHintValue(v: unknown): boolean {

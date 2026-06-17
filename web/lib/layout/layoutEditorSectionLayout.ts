@@ -221,16 +221,7 @@ export function setSectionType(doc: LayoutDoc, sectionKey: string, sectionType: 
     }));
 }
 
-export function canDeleteOpportunityDrawerSection(section: LayoutSection): { ok: true } | { ok: false; reason: string } {
-    if (section.key === "lead_summary") {
-        return { ok: false, reason: "The summary strip section cannot be deleted. Hide it in section settings instead." };
-    }
-    if (section.key === "household_contact" || section.key === "children_enrollment") {
-        return {
-            ok: false,
-            reason: `"${section.title}" is a platform composition slot. Hide it or customize its contents — the slot position stays fixed in the drawer grid.`,
-        };
-    }
+export function canDeleteOpportunityDrawerSection(_section: LayoutSection): { ok: true } | { ok: false; reason: string } {
     return { ok: true };
 }
 
