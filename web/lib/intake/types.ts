@@ -54,7 +54,12 @@ export type IntakeFactExtractionResult = {
     unmapped_text?: string;
 };
 
-export type IntakePersonCandidateRole = "parent" | "guardian" | "child" | "unknown";
+export type IntakePersonCandidateRole = "parent" | "guardian" | "child" | "dependent" | "unknown";
+
+export type IntakeCalculatedAge = {
+    value: { years: number; months: number };
+    display: string;
+};
 
 export type IntakePersonCandidate = {
     candidate_id: string;
@@ -64,12 +69,17 @@ export type IntakePersonCandidate = {
     emails: string[];
     phones: string[];
     dob: string | null;
+    /** Extracted approximate age when DOB is absent. */
     age_years: number | null;
+    /** Derived from DOB when available — preferred for display. */
+    calculated_age: IntakeCalculatedAge | null;
     program_interest: string | null;
     source_fact_ids: string[];
     confidence: IntakeFactConfidence;
     validation_state: IntakeValidationState;
     source_line?: number;
+    /** True when last name was inferred from household parents. */
+    last_name_inferred?: boolean;
 };
 
 export type IntakeAddressCandidate = {
@@ -90,6 +100,22 @@ export type IntakeLocationCandidate = {
     validation_state: IntakeValidationState;
 };
 
+export type IntakeRelationshipKind =
+    | "parent_guardian_to_child"
+    | "household_to_person"
+    | "lead_to_person"
+    | "unresolved";
+
+export type IntakeRelationshipCandidate = {
+    relationship_id: string;
+    kind: IntakeRelationshipKind;
+    from_candidate_id: string;
+    to_candidate_id: string;
+    confidence: IntakeFactConfidence;
+    validation_state: IntakeValidationState;
+    source_fact_ids: string[];
+};
+
 export type IntakeRelatedRecordCandidate = {
     candidate_id: string;
     entity_type: "person" | "address" | "location";
@@ -108,8 +134,13 @@ export type IntakeHouseholdCandidate = {
     location: IntakeLocationCandidate | null;
     source: string | null;
     notes: string | null;
+    program_interest: string | null;
+    desired_start_date: string | null;
+    relationships: IntakeRelationshipCandidate[];
     unassigned_fact_ids: string[];
     review_warnings: string[];
+    /** When true, commit path can only persist primary parent + first child. */
+    commit_limited_to_primary?: boolean;
 };
 
 export type IntakeSelectOption = {

@@ -131,15 +131,15 @@ function mapPrimaryChild(
             fact_ids: child.source_fact_ids,
             validation_state: "valid",
         });
-    }
-    if (child.age_years != null) {
+    } else if (child.age_years != null) {
         pushCandidate(candidates, seen, {
             payload_key: "child_age",
             rule_id: null,
             value: String(child.age_years),
-            confidence: "high",
+            confidence: "medium",
             fact_ids: child.source_fact_ids,
-            validation_state: "valid",
+            validation_state: "unknown",
+            display_value: `~${child.age_years} yrs (approximate)`,
         });
     }
 }
@@ -284,11 +284,31 @@ export function mapFactsToActionIntake(input: {
     }
 
     if (household.address) {
-        review_warnings.push("Mailing address detected — not mapped to Create Lead fields in this form.");
+        review_warnings.push("Mailing address detected — review in household details below.");
     }
 
-    if (household.children.length > 1 || household.parents.length > 1) {
-        review_warnings.push("Additional household members detected but not shown in this form.");
+    if (household.program_interest && !seen.has("child_program")) {
+        pushCandidate(candidates, seen, {
+            payload_key: "child_program",
+            rule_id: fieldByPayloadKey(input.spec, "child_program")?.rule_id ?? "child:program_interest",
+            value: household.program_interest,
+            confidence: "medium",
+            fact_ids: [],
+            validation_state: "unknown",
+        });
+    }
+
+    if (household.desired_start_date && !seen.has("child_desired_start_date")) {
+        pushCandidate(candidates, seen, {
+            payload_key: "child_desired_start_date",
+            rule_id:
+                fieldByPayloadKey(input.spec, "child_desired_start_date")?.rule_id ??
+                "child:desired_start_date",
+            value: household.desired_start_date,
+            confidence: "high",
+            fact_ids: [],
+            validation_state: "valid",
+        });
     }
 
     mapLegacyFactsWithoutHousehold({

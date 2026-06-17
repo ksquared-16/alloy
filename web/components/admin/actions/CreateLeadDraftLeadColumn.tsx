@@ -14,6 +14,8 @@ import {
 } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
+import { IntakeHouseholdReviewPanel } from "@/components/admin/intake/IntakeHouseholdReviewPanel";
+import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 type Props = {
     findings: CreateLeadLiveFinding[];
@@ -33,6 +35,7 @@ type Props = {
     analyzeError: string | null;
     validationIssues: string[];
     fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
+    household?: IntakeHouseholdCandidate | null;
 };
 
 function DraftFieldCard({
@@ -166,6 +169,7 @@ export function CreateLeadDraftLeadColumn({
     analyzeError,
     validationIssues,
     fieldConfidence,
+    household,
 }: Props) {
     const showDraftForm = manualMode || draftEditMode;
     const reviewSuggestions = suggestions.filter((s) => s.confidence !== "high");
@@ -239,6 +243,9 @@ export function CreateLeadDraftLeadColumn({
 
                 {showDraftForm ?
                     <div data-testid="create-lead-gather-fields">
+                        {household ?
+                            <IntakeHouseholdReviewPanel household={household} className="mb-4" />
+                        :   null}
                         <ActionWorkspaceGatherFields
                             sections={sections}
                             values={values}
@@ -250,6 +257,9 @@ export function CreateLeadDraftLeadColumn({
                         />
                     </div>
                 :   <div className="space-y-2" data-testid="create-lead-draft-fields">
+                        {household && !analyzing ?
+                            <IntakeHouseholdReviewPanel household={household} className="mb-2" />
+                        :   null}
                         {findings.map((finding) => (
                             <DraftFieldCard
                                 key={finding.id}

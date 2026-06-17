@@ -13,7 +13,9 @@ import {
 import { normalizeIntakeText } from "@/lib/intake/normalize/text";
 
 const PARENTS_MULTI_RE = /^parents?\s*[:\-]\s*(.+)$/i;
-const CHILDREN_HEADER_RE = /^children?\s*:?\s*$/i;
+const GUARDIANS_MULTI_RE = /^guardians?\s*[:\-]\s*(.+)$/i;
+const PARENT_NUMBERED_RE = /^parent\s+(\d+)\s*[:\-]\s*(.+)$/i;
+const CHILDREN_HEADER_RE = /^(?:children?|kids?|dependents?|students?)\s*:?\s*$/i;
 const CHILD_NAME_AGE_SPACE_RE =
     /^([A-Za-z][\w'\-]+(?:\s+[A-Za-z][\w'\-]+)*)\s+age\s+(\d{1,2})\b/i;
 const CHILD_NAME_DOB_INLINE_RE =
@@ -113,7 +115,14 @@ function pushPersonNameFact(
 
 function extractChildNameFromLine(line: string): string | null {
     const labeled = line.match(CHILD_LABEL_RE);
-    if (labeled?.[1]) return labeled[1].trim();
+    if (labeled?.[1]) {
+        const raw = labeled[1].trim();
+        const inlineDob = raw.match(CHILD_NAME_DOB_INLINE_RE);
+        if (inlineDob?.[1]) return inlineDob[1].trim();
+        const inlineAge = raw.match(CHILD_NAME_AGE_SPACE_RE);
+        if (inlineAge?.[1]) return inlineAge[1].trim();
+        return raw;
+    }
 
     const narrativeIs = line.match(CHILD_NARRATIVE_IS_RE);
     if (narrativeIs?.[1]) return narrativeIs[1].trim();
@@ -147,6 +156,7 @@ function pushMultiParentNames(
     seen: Set<string>,
     raw: string,
     sourceLine: number,
+    evidence: string,
 ): boolean {
     const chunks = raw
         .split(/\s+and\s+|,/i)
@@ -160,11 +170,32 @@ function pushMultiParentNames(
             role_hint: "parent",
             confidence: "high",
             source_line: sourceLine,
-            evidence: "Multi-parent labeled line",
+            evidence,
         });
         pushed = true;
     }
     return pushed;
+}
+
+function extractMultiAdultNamesFromLine(line: string): string[] {
+    const t = line.trim();
+    if (!t || isContactOnlyLine(t) || isChildContextLine(t)) return [];
+    if (CHILD_NAME_DOB_INLINE_RE.test(t) || CHILD_NAME_AGE_SPACE_RE.test(t) || CHILD_NAME_AGE_COMMA_RE.test(t)) {
+        return [];
+    }
+    if (PARENT_LABEL_RE.test(t) || PARENTS_MULTI_RE.test(t) || GUARDIANS_MULTI_RE.test(t)) return [];
+    if (!/\band\b|,/.test(t)) return [];
+    const chunks = t.split(/\s+and\s+|,/i).map((c) => c.trim()).filter(Boolean);
+    if (chunks.length < 2) return [];
+    const names = chunks.filter(
+        (c) =>
+            splitPersonName(c) &&
+            !/^age\s+\d/i.test(c) &&
+            !/^\d{1,2}$/.test(c) &&
+            !isChildContextLine(c),
+    );
+    if (names.length < 2 || names.length !== chunks.length) return [];
+    return names;
 }
 
 function looksLikeAddressLine(line: string): boolean {
@@ -211,6 +242,7 @@ export function extractFactsFromText(input: {
     const seen = new Set<string>();
     let adultNameClaimed = false;
     let notesClaimed = false;
+    let inChildSection = false;
 
     const emailRaw = findEmailCandidate(raw_text);
     if (emailRaw) {
@@ -286,6 +318,22 @@ export function extractFactsFromText(input: {
             continue;
         }
 
+        const multiAdults = extractMultiAdultNamesFromLine(line);
+        if (multiAdults.length >= 2) {
+            for (const name of multiAdults) {
+                pushPersonNameFact(facts, seen, {
+                    raw: name,
+                    role_hint: "parent",
+                    confidence: "high",
+                    source_line: lineNum,
+                    evidence: "Multi-adult name line",
+                });
+            }
+            adultNameClaimed = true;
+            inChildSection = false;
+            continue;
+        }
+
         const parent = line.match(PARENT_LABEL_RE);
         if (parent?.[1]) {
             pushPersonNameFact(facts, seen, {
@@ -299,15 +347,37 @@ export function extractFactsFromText(input: {
             continue;
         }
 
-        const parentsMulti = line.match(PARENTS_MULTI_RE);
-        if (parentsMulti?.[1]) {
-            if (pushMultiParentNames(facts, seen, parentsMulti[1], lineNum)) {
+        const guardiansMulti = line.match(GUARDIANS_MULTI_RE);
+        if (guardiansMulti?.[1]) {
+            if (pushMultiParentNames(facts, seen, guardiansMulti[1], lineNum, "Multi-guardian labeled line")) {
                 adultNameClaimed = true;
             }
             continue;
         }
 
+        const parentsMulti = line.match(PARENTS_MULTI_RE);
+        if (parentsMulti?.[1]) {
+            if (pushMultiParentNames(facts, seen, parentsMulti[1], lineNum, "Multi-parent labeled line")) {
+                adultNameClaimed = true;
+            }
+            continue;
+        }
+
+        const parentNumbered = line.match(PARENT_NUMBERED_RE);
+        if (parentNumbered?.[2]) {
+            pushPersonNameFact(facts, seen, {
+                raw: parentNumbered[2].trim(),
+                role_hint: "parent",
+                confidence: "high",
+                source_line: lineNum,
+                evidence: "Numbered parent line",
+            });
+            adultNameClaimed = true;
+            continue;
+        }
+
         if (CHILDREN_HEADER_RE.test(line)) {
+            inChildSection = true;
             continue;
         }
 
@@ -331,7 +401,7 @@ export function extractFactsFromText(input: {
                 role_hint: "child",
                 confidence: childNameConfidence(line, childName),
                 source_line: lineNum,
-                evidence: "Child name from labeled or narrative pattern",
+                evidence: inChildSection ? "Child section line" : "Child name from labeled or narrative pattern",
             });
         }
 

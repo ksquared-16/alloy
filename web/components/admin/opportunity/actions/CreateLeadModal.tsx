@@ -461,6 +461,7 @@ export function CreateLeadModal(props: {
                         materialAnalyzed={materialAnalyzed}
                         validationIssues={validationIssues}
                         fieldConfidence={draftEditMode ? fieldConfidence : undefined}
+                        household={lastExtraction?.household ?? null}
                     />
                 </div>
             </ActionWorkspaceStepContent>

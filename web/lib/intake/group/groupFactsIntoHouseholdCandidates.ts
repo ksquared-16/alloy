@@ -5,7 +5,9 @@ import type {
     IntakeLocationCandidate,
     IntakePersonCandidate,
 } from "@/lib/intake/types";
+import { calculateAgeFromDob } from "@/lib/intake/normalize/calculateAgeFromDob";
 import { splitPersonName } from "@/lib/intake/normalize/personName";
+import { buildHouseholdRelationships } from "@/lib/intake/relationship/buildHouseholdRelationships";
 
 let candidateCounter = 0;
 
@@ -24,7 +26,7 @@ function personFromNameFact(
 ): IntakePersonCandidate | null {
     const normalized = String(fact.normalized_value ?? fact.raw_value).trim();
     const split = splitPersonName(normalized);
-    const first = split?.first ?? (role === "child" ? normalized : null);
+    const first = firstId(split, normalized, role);
     const last = split?.last ?? null;
     if (!first && !last) return null;
 
@@ -38,12 +40,23 @@ function personFromNameFact(
         phones: [],
         dob: null,
         age_years: null,
+        calculated_age: null,
         program_interest: null,
         source_fact_ids: [fact.fact_id],
         confidence: hasStructuredName ? (fact.confidence === "low" ? "medium" : fact.confidence) : "medium",
         validation_state: hasStructuredName ? "valid" : "ambiguous",
         source_line: fact.source_line,
     };
+}
+
+function firstId(
+    split: ReturnType<typeof splitPersonName>,
+    normalized: string,
+    role: IntakePersonCandidate["role"],
+): string | null {
+    if (split?.first) return split.first;
+    if (role === "child" || role === "dependent") return normalized || null;
+    return null;
 }
 
 function attachChildContext(
@@ -78,15 +91,52 @@ function attachChildContext(
         }
     }
 
+    const calculated_age = dob ? calculateAgeFromDob(dob) : null;
     const corroborated = Boolean(dob || age != null);
     return {
         ...child,
         dob,
         age_years: age,
+        calculated_age,
         source_fact_ids: [...new Set(factIds)],
         confidence: corroborated || child.confidence === "high" ? "high" : child.confidence,
         validation_state: child.validation_state === "ambiguous" && corroborated ? "valid" : child.validation_state,
     };
+}
+
+function inferChildLastNames(
+    parents: IntakePersonCandidate[],
+    children: IntakePersonCandidate[],
+    review_warnings: string[],
+): IntakePersonCandidate[] {
+    const parentLastNames = parents
+        .map((p) => p.last_name?.trim())
+        .filter((name): name is string => Boolean(name));
+    const uniqueParentLastNames = [...new Set(parentLastNames)];
+
+    if (uniqueParentLastNames.length === 1) {
+        const sharedLast = uniqueParentLastNames[0]!;
+        return children.map((child) => {
+            if (child.last_name?.trim()) return child;
+            if (!child.first_name?.trim()) return child;
+            return {
+                ...child,
+                last_name: sharedLast,
+                last_name_inferred: true,
+                validation_state: child.validation_state === "ambiguous" ? "valid" : child.validation_state,
+                confidence: child.confidence === "medium" ? "high" : child.confidence,
+            };
+        });
+    }
+
+    const needsReview = children.some((c) => c.first_name && !c.last_name?.trim());
+    if (needsReview && uniqueParentLastNames.length > 1) {
+        review_warnings.push(
+            "Child last name could not be inferred — parent/guardian surnames differ. Please review child names.",
+        );
+    }
+
+    return children;
 }
 
 function mergeAddressFacts(facts: IntakeFact[]): IntakeAddressCandidate | null {
@@ -127,14 +177,14 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
 
     const parents: IntakePersonCandidate[] = [];
     for (const fact of parentFacts) {
-        const person = personFromNameFact(fact, fact.role_hint === "parent" ? "parent" : "guardian");
+        const person = personFromNameFact(fact, "parent");
         if (person) {
             parents.push(person);
             assignedFactIds.add(fact.fact_id);
         }
     }
 
-    const children: IntakePersonCandidate[] = [];
+    let children: IntakePersonCandidate[] = [];
     for (const fact of childFacts) {
         const base = personFromNameFact(fact, "child");
         if (!base) continue;
@@ -149,6 +199,8 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
             children[i] = attachChildContext(children[i]!, facts);
         }
     }
+
+    children = inferChildLastNames(parents, children, review_warnings);
 
     for (const child of children) {
         for (const id of child.source_fact_ids) assignedFactIds.add(id);
@@ -165,8 +217,12 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
 
     const sourceFact = facts.find((f) => f.fact_type === "source");
     const notesFact = facts.find((f) => f.fact_type === "notes");
+    const programFact = facts.find((f) => f.fact_type === "program_interest");
+    const startDateFact = facts.find((f) => f.fact_type === "date");
     if (sourceFact) assignedFactIds.add(sourceFact.fact_id);
     if (notesFact) assignedFactIds.add(notesFact.fact_id);
+    if (programFact) assignedFactIds.add(programFact.fact_id);
+    if (startDateFact) assignedFactIds.add(startDateFact.fact_id);
 
     const address = mergeAddressFacts(facts);
     if (address) {
@@ -178,14 +234,13 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         for (const id of location.source_fact_ids) assignedFactIds.add(id);
     }
 
-    if (parents.length > 1) {
+    const relationships = buildHouseholdRelationships({ parents, children });
+
+    const extraParents = parents.length - 1;
+    const extraChildren = children.length - 1;
+    if (extraParents > 0 || extraChildren > 0) {
         review_warnings.push(
-            `${parents.length - 1} additional parent/guardian candidate(s) detected but not shown in this form.`,
-        );
-    }
-    if (children.length > 1) {
-        review_warnings.push(
-            `${children.length - 1} additional child candidate(s) detected but not shown in this form.`,
+            "Additional household members were detected. Review is available, but only the primary parent/first child will be created by this action until multi-record commit is enabled.",
         );
     }
 
@@ -199,7 +254,13 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         location,
         source: sourceFact ? String(sourceFact.normalized_value ?? sourceFact.raw_value).trim() : null,
         notes: notesFact ? String(notesFact.normalized_value ?? notesFact.raw_value).trim() : null,
+        program_interest:
+            programFact ? String(programFact.normalized_value ?? programFact.raw_value).trim() : null,
+        desired_start_date:
+            startDateFact ? String(startDateFact.normalized_value ?? startDateFact.raw_value).trim() : null,
+        relationships,
         unassigned_fact_ids,
         review_warnings,
+        commit_limited_to_primary: extraParents > 0 || extraChildren > 0,
     };
 }

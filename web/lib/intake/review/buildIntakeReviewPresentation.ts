@@ -1,0 +1,94 @@
+import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
+
+export type IntakeReviewPersonCard = {
+    candidate_id: string;
+    role: string;
+    display_name: string;
+    emails: string[];
+    phones: string[];
+    dob: string | null;
+    age_display: string | null;
+    is_primary: boolean;
+    needs_review: boolean;
+};
+
+export type IntakeReviewPresentation = {
+    parents: IntakeReviewPersonCard[];
+    children: IntakeReviewPersonCard[];
+    location_label: string | null;
+    location_resolved_label: string | null;
+    address_lines: string[];
+    program_interest: string | null;
+    desired_start_date: string | null;
+    source: string | null;
+    notes: string | null;
+    review_warnings: string[];
+    commit_limited: boolean;
+};
+
+function personDisplayName(person: IntakePersonCandidate): string {
+    const first = person.first_name?.trim() ?? "";
+    const last = person.last_name?.trim() ?? "";
+    return [first, last].filter(Boolean).join(" ") || "Unknown";
+}
+
+function personAgeDisplay(person: IntakePersonCandidate): string | null {
+    if (person.calculated_age?.display) return person.calculated_age.display;
+    if (person.age_years != null) return `~${person.age_years} yrs (approximate)`;
+    return null;
+}
+
+function toPersonCard(
+    person: IntakePersonCandidate,
+    roleLabel: string,
+    isPrimary: boolean,
+): IntakeReviewPersonCard {
+    return {
+        candidate_id: person.candidate_id,
+        role: roleLabel,
+        display_name: personDisplayName(person),
+        emails: person.emails,
+        phones: person.phones,
+        dob: person.dob,
+        age_display: personAgeDisplay(person),
+        is_primary: isPrimary,
+        needs_review: person.validation_state === "ambiguous" || person.validation_state === "invalid",
+    };
+}
+
+/** Build compact review cards from grouped household candidates (action-agnostic). */
+export function buildIntakeReviewPresentation(
+    household: IntakeHouseholdCandidate | null | undefined,
+): IntakeReviewPresentation | null {
+    if (!household) return null;
+    if (
+        household.parents.length === 0 &&
+        household.children.length === 0 &&
+        !household.location &&
+        !household.address
+    ) {
+        return null;
+    }
+
+    return {
+        parents: household.parents.map((p, i) => toPersonCard(p, p.role, i === 0)),
+        children: household.children.map((c, i) => toPersonCard(c, c.role, i === 0)),
+        location_label: household.location?.label ?? null,
+        location_resolved_label: household.location?.resolved_label ?? null,
+        address_lines: household.address?.lines ?? [],
+        program_interest: household.program_interest,
+        desired_start_date: household.desired_start_date,
+        source: household.source,
+        notes: household.notes,
+        review_warnings: household.review_warnings,
+        commit_limited: household.commit_limited_to_primary ?? false,
+    };
+}
+
+function formatDobForDisplay(iso: string): string {
+    const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return iso;
+    return `${match[2]}/${match[3]}/${match[1]}`;
+}
+
+export { formatDobForDisplay };

@@ -1,4 +1,5 @@
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
+import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 export type ActionIntakePasteConfidence = "high" | "medium" | "low" | "invalid";
 
@@ -16,6 +17,8 @@ export type ActionIntakePasteExtractionResult = {
     raw_text: string;
     /** Household grouping + location resolution warnings for operator review. */
     review_warnings?: string[];
+    /** Grouped related-record candidates from shared intake engine. */
+    household?: IntakeHouseholdCandidate;
 };
 
 /** Swappable boundary for BOS-assisted paste parsing (V1: deterministic; later: AI). */

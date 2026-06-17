@@ -47,7 +47,7 @@ describe("mapFactsToActionIntake — Ravi narrative with location options", () =
         expect(fields.last_name).toBe("Almead");
         expect(fields.child_first_name).toBe("Kai");
         expect(fields.child_last_name).toBe("Almead");
-        expect(fields.child_age).toBe("2");
+        expect(fields.child_age).toBeUndefined();
         expect(fields.child_date_of_birth).toBe("2024-06-06");
         expect(fields.location_id).toBe("site-north");
 
@@ -79,7 +79,7 @@ describe("mapFactsToActionIntake — multiple children", () => {
         const fields = byKey(mapped);
         expect(fields.child_first_name).toBe("Kai");
         expect(mapped.household?.children).toHaveLength(2);
-        expect(mapped.review_warnings?.some((w) => w.toLowerCase().includes("additional"))).toBe(true);
+        expect(mapped.review_warnings?.some((w) => w.includes("multi-record commit"))).toBe(true);
     });
 });
 
@@ -94,7 +94,7 @@ describe("mapFactsToActionIntake — two parents", () => {
         const mapped = mapPaste(text, []);
         expect(byKey(mapped).first_name).toBe("Ravi");
         expect(mapped.household?.parents).toHaveLength(2);
-        expect(mapped.review_warnings?.some((w) => w.includes("parent"))).toBe(true);
+        expect(mapped.review_warnings?.some((w) => w.includes("multi-record commit"))).toBe(true);
     });
 });
 
