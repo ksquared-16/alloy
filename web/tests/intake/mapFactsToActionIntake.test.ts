@@ -79,7 +79,7 @@ describe("mapFactsToActionIntake — multiple children", () => {
         const fields = byKey(mapped);
         expect(fields.child_first_name).toBe("Kai");
         expect(mapped.household?.children).toHaveLength(2);
-        expect(mapped.review_warnings?.some((w) => w.includes("multi-record commit"))).toBe(true);
+        expect(mapped.review_warning_items?.some((w) => w.code === "extra_children_commit_limited")).toBe(true);
     });
 });
 
@@ -94,7 +94,7 @@ describe("mapFactsToActionIntake — two parents", () => {
         const mapped = mapPaste(text, []);
         expect(byKey(mapped).first_name).toBe("Ravi");
         expect(mapped.household?.parents).toHaveLength(2);
-        expect(mapped.review_warnings?.some((w) => w.includes("multi-record commit"))).toBe(true);
+        expect(mapped.review_warning_items?.some((w) => w.code === "extra_parents_commit_limited")).toBe(true);
     });
 });
 

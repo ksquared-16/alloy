@@ -15,6 +15,7 @@ import {
 import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
 import { IntakeHouseholdReviewPanel } from "@/components/admin/intake/IntakeHouseholdReviewPanel";
+import { IntakeReviewWarningsBanner } from "@/components/admin/intake/IntakeReviewWarningsBanner";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 type Props = {
@@ -220,6 +221,12 @@ export function CreateLeadDraftLeadColumn({
                     :   null}
                 </div>
             </div>
+
+            {household?.review_warnings?.length ?
+                <div className="shrink-0 border-b border-alloy-stone/10 px-4 py-2.5">
+                    <IntakeReviewWarningsBanner warnings={household.review_warnings} />
+                </div>
+            :   null}
 
             <div className="min-h-0 flex-1 overflow-y-auto p-3">
                 {analyzeError ?

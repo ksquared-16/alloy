@@ -98,7 +98,7 @@ function ReviewSection({
     );
 }
 
-function HouseholdReviewBody({ review }: { review: IntakeReviewPresentation }) {
+function HouseholdReviewBody({ review, showWarnings = false }: { review: IntakeReviewPresentation; showWarnings?: boolean }) {
     const hasParents = review.parents.length > 0;
     const hasChildren = review.children.length > 0;
     const hasDetails =
@@ -111,7 +111,7 @@ function HouseholdReviewBody({ review }: { review: IntakeReviewPresentation }) {
 
     return (
         <div className="space-y-4" data-testid="intake-household-review-body">
-            {review.review_warnings.length > 0 ?
+            {showWarnings && review.review_warnings.length > 0 ?
                 <div
                     className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-950"
                     data-testid="intake-household-review-warnings"

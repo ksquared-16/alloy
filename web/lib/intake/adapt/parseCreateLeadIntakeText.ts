@@ -36,6 +36,7 @@ export function parseCreateLeadIntakeText(input: {
         unmapped_text: mapping.unmapped_text ?? extraction.unmapped_text ?? "",
         raw_text,
         review_warnings: mapping.review_warnings,
+        review_warning_items: mapping.review_warning_items,
         household: mapping.household,
     };
 }

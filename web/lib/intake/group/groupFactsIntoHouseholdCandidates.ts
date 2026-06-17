@@ -5,7 +5,11 @@ import type {
     IntakeLocationCandidate,
     IntakePersonCandidate,
 } from "@/lib/intake/types";
-import { calculateAgeFromDob } from "@/lib/intake/normalize/calculateAgeFromDob";
+import { deriveAgeFromDateOfBirth } from "@/lib/fields/derived/ageFromDateOfBirth";
+import {
+    buildHouseholdReviewWarnings,
+    householdCommitLimited,
+} from "@/lib/intake/review/intakeReviewWarnings";
 import { splitPersonName } from "@/lib/intake/normalize/personName";
 import { buildHouseholdRelationships } from "@/lib/intake/relationship/buildHouseholdRelationships";
 
@@ -91,7 +95,9 @@ function attachChildContext(
         }
     }
 
-    const calculated_age = dob ? calculateAgeFromDob(dob) : null;
+    const derived = dob ? deriveAgeFromDateOfBirth(dob) : null;
+    const calculated_age =
+        derived?.value ? { value: derived.value, display: derived.display } : null;
     const corroborated = Boolean(dob || age != null);
     return {
         ...child,
@@ -107,7 +113,6 @@ function attachChildContext(
 function inferChildLastNames(
     parents: IntakePersonCandidate[],
     children: IntakePersonCandidate[],
-    review_warnings: string[],
 ): IntakePersonCandidate[] {
     const parentLastNames = parents
         .map((p) => p.last_name?.trim())
@@ -127,13 +132,6 @@ function inferChildLastNames(
                 confidence: child.confidence === "medium" ? "high" : child.confidence,
             };
         });
-    }
-
-    const needsReview = children.some((c) => c.first_name && !c.last_name?.trim());
-    if (needsReview && uniqueParentLastNames.length > 1) {
-        review_warnings.push(
-            "Child last name could not be inferred — parent/guardian surnames differ. Please review child names.",
-        );
     }
 
     return children;
@@ -170,7 +168,6 @@ function mergeLocationFacts(facts: IntakeFact[]): IntakeLocationCandidate | null
 /** Group source-agnostic facts into household/person candidates for any intake surface. */
 export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHouseholdCandidate {
     const assignedFactIds = new Set<string>();
-    const review_warnings: string[] = [];
 
     const parentFacts = facts.filter((f) => f.fact_type === "person_name" && f.role_hint === "parent");
     const childFacts = facts.filter((f) => f.fact_type === "person_name" && f.role_hint === "child");
@@ -200,7 +197,7 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         }
     }
 
-    children = inferChildLastNames(parents, children, review_warnings);
+    children = inferChildLastNames(parents, children);
 
     for (const child of children) {
         for (const id of child.source_fact_ids) assignedFactIds.add(id);
@@ -236,13 +233,12 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
 
     const relationships = buildHouseholdRelationships({ parents, children });
 
-    const extraParents = parents.length - 1;
-    const extraChildren = children.length - 1;
-    if (extraParents > 0 || extraChildren > 0) {
-        review_warnings.push(
-            "Additional household members were detected. Review is available, but only the primary parent/first child will be created by this action until multi-record commit is enabled.",
-        );
-    }
+    const review_warnings = buildHouseholdReviewWarnings({
+        parents,
+        children,
+        has_address: Boolean(address),
+        action_has_address_field: false,
+    });
 
     const unassigned_fact_ids = facts.filter((f) => !assignedFactIds.has(f.fact_id)).map((f) => f.fact_id);
 
@@ -261,6 +257,6 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         relationships,
         unassigned_fact_ids,
         review_warnings,
-        commit_limited_to_primary: extraParents > 0 || extraChildren > 0,
+        commit_limited_to_primary: householdCommitLimited(review_warnings),
     };
 }

@@ -1,4 +1,6 @@
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
+import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
+import { formatIntakeReviewWarnings } from "@/lib/intake/review/intakeReviewWarnings";
 
 export type IntakeReviewPersonCard = {
     candidate_id: string;
@@ -23,6 +25,7 @@ export type IntakeReviewPresentation = {
     source: string | null;
     notes: string | null;
     review_warnings: string[];
+    review_warning_items: IntakeReviewWarning[];
     commit_limited: boolean;
 };
 
@@ -80,7 +83,8 @@ export function buildIntakeReviewPresentation(
         desired_start_date: household.desired_start_date,
         source: household.source,
         notes: household.notes,
-        review_warnings: household.review_warnings,
+        review_warnings: formatIntakeReviewWarnings(household.review_warnings),
+        review_warning_items: household.review_warnings,
         commit_limited: household.commit_limited_to_primary ?? false,
     };
 }

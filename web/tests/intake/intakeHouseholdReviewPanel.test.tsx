@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { IntakeHouseholdReviewPanel } from "@/components/admin/intake/IntakeHouseholdReviewPanel";
+import { IntakeReviewWarningsBanner } from "@/components/admin/intake/IntakeReviewWarningsBanner";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 const SAMPLE_HOUSEHOLD: IntakeHouseholdCandidate = {
@@ -63,13 +64,17 @@ const SAMPLE_HOUSEHOLD: IntakeHouseholdCandidate = {
     relationships: [],
     unassigned_fact_ids: [],
     review_warnings: [
-        "Additional household members were detected. Review is available, but only the primary parent/first child will be created by this action until multi-record commit is enabled.",
+        {
+            code: "extra_parents_commit_limited",
+            severity: "warning",
+            message: "2 parents/guardians detected. Only the primary parent will be created by this action.",
+        },
     ],
     commit_limited_to_primary: true,
 };
 
 describe("IntakeHouseholdReviewPanel", () => {
-    it("renders parent cards, child cards, and commit warning", () => {
+    it("renders parent cards and child cards", () => {
         const html = renderToStaticMarkup(<IntakeHouseholdReviewPanel household={SAMPLE_HOUSEHOLD} />);
         expect(html).toContain('data-testid="intake-household-review-panel"');
         expect(html).toContain('data-testid="intake-household-review-parents"');
@@ -77,6 +82,15 @@ describe("IntakeHouseholdReviewPanel", () => {
         expect(html).toContain("Alex Lyons");
         expect(html).toContain("Jason Lyons");
         expect(html).toContain("Jaxon Lyons");
-        expect(html).toContain("multi-record commit");
+    });
+});
+
+describe("IntakeReviewWarningsBanner", () => {
+    it("renders structured warnings prominently", () => {
+        const html = renderToStaticMarkup(
+            <IntakeReviewWarningsBanner warnings={SAMPLE_HOUSEHOLD.review_warnings} />,
+        );
+        expect(html).toContain('data-testid="intake-review-warnings-banner"');
+        expect(html).toContain("2 parents/guardians detected");
     });
 });

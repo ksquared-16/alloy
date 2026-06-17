@@ -56,7 +56,7 @@ describe("groupFactsIntoHouseholdCandidates — multiple children", () => {
         expect(household.children).toHaveLength(2);
         expect(household.children[0]?.first_name).toBe("Kai");
         expect(household.children[1]?.first_name).toBe("Mia");
-        expect(household.review_warnings.some((w) => w.includes("multi-record commit"))).toBe(true);
+        expect(household.review_warnings.some((w) => w.code === "extra_children_commit_limited")).toBe(true);
     });
 });
 
@@ -74,7 +74,7 @@ describe("groupFactsIntoHouseholdCandidates — two parents", () => {
         expect(household.parents[0]?.first_name).toBe("Ravi");
         expect(household.parents[1]?.first_name).toBe("Sam");
         expect(household.children[0]?.first_name).toBe("Kai");
-        expect(household.review_warnings.some((w) => w.includes("multi-record commit"))).toBe(true);
+        expect(household.review_warnings.some((w) => w.code === "extra_parents_commit_limited")).toBe(true);
     });
 });
 

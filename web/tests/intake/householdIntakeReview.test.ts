@@ -76,7 +76,8 @@ describe("Alex/Jason household intake", () => {
         expect(byKey.child_date_of_birth).toBe("2013-11-23");
         expect(byKey.child_age).toBeUndefined();
         expect(byKey.location_id).toBe("south-id");
-        expect(mapped.review_warnings?.some((w) => w.includes("multi-record commit"))).toBe(true);
+        expect(mapped.review_warning_items?.some((w) => w.code === "extra_parents_commit_limited")).toBe(true);
+        expect(mapped.review_warning_items?.some((w) => w.code === "extra_children_commit_limited")).toBe(true);
 
         const review = buildIntakeReviewPresentation(mapped.household);
         expect(review?.parents).toHaveLength(2);
@@ -95,7 +96,7 @@ describe("last name inference — mixed parent surnames", () => {
         const household = groupFactsIntoHouseholdCandidates(extraction.facts);
         expect(household.children[0]?.last_name).toBeNull();
         expect(
-            household.review_warnings.some((w) => w.toLowerCase().includes("last name could not be inferred")),
+            household.review_warnings.some((w) => w.code === "child_last_name_needs_review"),
         ).toBe(true);
     });
 });

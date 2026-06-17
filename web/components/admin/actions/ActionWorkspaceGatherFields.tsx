@@ -16,7 +16,10 @@ import {
     placementFieldKeysInValues,
 } from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
 import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
-import { calculateAgeFromDob } from "@/lib/intake/normalize/calculateAgeFromDob";
+import {
+    CREATE_LEAD_DERIVED_FIELD_BINDINGS,
+    resolveDerivedFieldDisplay,
+} from "@/lib/fields/derived/resolveDerivedFieldDisplay";
 import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
 import {
     CREATE_LEAD_UNIFIED_OPTIONAL_KEYS,
@@ -150,32 +153,33 @@ export function ActionWorkspaceGatherFields({
             return null;
         }
 
-        if (field.payload_key === "child_age") {
-            const dob = (values.child_date_of_birth ?? "").trim();
-            if (dob) {
-                const calculated = calculateAgeFromDob(dob);
-                return (
-                    <div
-                        key={field.payload_key}
-                        className="border-l-2 border-alloy-stone/10 pl-2"
-                        data-testid={`${dataTestIdPrefix}-field-${field.payload_key}`}
-                    >
-                        <div className={`${LABEL} flex items-start gap-2`}>
-                            <span>{field.field_label}</span>
-                            {fieldConfidence?.[field.payload_key] ?
-                                <FieldConfidenceBadge level={fieldConfidence[field.payload_key]!} />
-                            :   null}
-                        </div>
-                        <p
-                            className="mt-2 rounded-xl border border-alloy-stone/10 bg-alloy-stone/5 px-4 py-3 text-[15px] font-medium text-alloy-midnight"
-                            data-testid={`${dataTestIdPrefix}-calculated-age`}
-                        >
-                            {calculated?.display ?? "—"}
-                        </p>
-                        <p className="mt-1 text-[11px] text-alloy-midnight/45">Calculated from date of birth</p>
+        const derivedDisplay = resolveDerivedFieldDisplay({
+            target_key: field.payload_key,
+            values,
+            bindings: CREATE_LEAD_DERIVED_FIELD_BINDINGS,
+        });
+        if (derivedDisplay) {
+            return (
+                <div
+                    key={field.payload_key}
+                    className="border-l-2 border-alloy-stone/10 pl-2"
+                    data-testid={`${dataTestIdPrefix}-field-${field.payload_key}`}
+                >
+                    <div className={`${LABEL} flex items-start gap-2`}>
+                        <span>{field.field_label}</span>
+                        {fieldConfidence?.[field.payload_key] ?
+                            <FieldConfidenceBadge level={fieldConfidence[field.payload_key]!} />
+                        :   null}
                     </div>
-                );
-            }
+                    <p
+                        className="mt-2 rounded-xl border border-alloy-stone/10 bg-alloy-stone/5 px-4 py-3 text-[15px] font-medium text-alloy-midnight"
+                        data-testid={`${dataTestIdPrefix}-derived-${field.payload_key}`}
+                    >
+                        {derivedDisplay.display}
+                    </p>
+                    <p className="mt-1 text-[11px] text-alloy-midnight/45">Calculated from date of birth</p>
+                </div>
+            );
         }
 
         let selectOptions = field.option_set_key ? (optionsBySetKey[field.option_set_key] ?? []) : [];

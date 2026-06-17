@@ -1,3 +1,5 @@
+import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
+
 export type IntakeSourceKind =
     | "paste_text"
     | "form_submission"
@@ -54,12 +56,8 @@ export type IntakeFactExtractionResult = {
     unmapped_text?: string;
 };
 
-export type IntakePersonCandidateRole = "parent" | "guardian" | "child" | "dependent" | "unknown";
-
-export type IntakeCalculatedAge = {
-    value: { years: number; months: number };
-    display: string;
-};
+import type { DerivedFieldResult } from "@/lib/fields/derived/types";
+import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
 
 export type IntakePersonCandidate = {
     candidate_id: string;
@@ -72,7 +70,7 @@ export type IntakePersonCandidate = {
     /** Extracted approximate age when DOB is absent. */
     age_years: number | null;
     /** Derived from DOB when available — preferred for display. */
-    calculated_age: IntakeCalculatedAge | null;
+    calculated_age: Pick<DerivedFieldResult, "value" | "display"> | null;
     program_interest: string | null;
     source_fact_ids: string[];
     confidence: IntakeFactConfidence;
@@ -138,7 +136,7 @@ export type IntakeHouseholdCandidate = {
     desired_start_date: string | null;
     relationships: IntakeRelationshipCandidate[];
     unassigned_fact_ids: string[];
-    review_warnings: string[];
+    review_warnings: IntakeReviewWarning[];
     /** When true, commit path can only persist primary parent + first child. */
     commit_limited_to_primary?: boolean;
 };
@@ -165,4 +163,5 @@ export type IntakeFieldMappingResult = {
     unmapped_text?: string;
     household?: IntakeHouseholdCandidate;
     review_warnings?: string[];
+    review_warning_items?: IntakeReviewWarning[];
 };
