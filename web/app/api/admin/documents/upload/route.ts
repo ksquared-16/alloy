@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     // in the review spine (a document source resolves to a "routed" no-op on approval).
     let processingCaseId: string | null = null;
     let classificationKey: string | null = null;
-    let proposalCount: number | null = null;
+    let candidateCount: number | null = null;
     if (openProcessingCase) {
         const opened = await maybeOpenProcessingCaseFromNonFormSourceSafe(supabase, {
             orgId: ctx.orgId,
@@ -209,17 +209,18 @@ export async function POST(request: NextRequest) {
             });
             classificationKey = classified?.classification_key ?? null;
 
-            // POS-FP10: given the classification, propose field values from the same cheap
-            // document signals. PROPOSALS ONLY — no extraction of record truth, no matching,
-            // no commit, no status change. Best-effort; never blocks the upload response.
+            // POS-FP10 (intake-aligned): run the shared intake pipeline (document → facts →
+            // field candidates) for the classified case. PROPOSALS ONLY — no extraction of
+            // record truth, no matching, no commit, no status change. Best-effort.
             if (classified) {
                 const docMeta = (docRow.metadata ?? null) as Record<string, unknown> | null;
-                proposalCount =
+                candidateCount =
                     (
                         await maybeExtractProcessingCaseFromDocumentSafe(supabase, {
                             orgId: ctx.orgId,
                             caseId: processingCaseId,
                             classificationKey: classified.classification_key,
+                            sourceId: docId,
                             document: {
                                 fileName: docRow.original_filename ?? origName,
                                 title: docRow.title ?? title,
@@ -227,7 +228,7 @@ export async function POST(request: NextRequest) {
                                 metadata: docMeta,
                             },
                         })
-                    )?.proposals.length ?? null;
+                    )?.candidates.length ?? null;
             }
         }
     }
@@ -237,6 +238,6 @@ export async function POST(request: NextRequest) {
         raw: row,
         processing_case_id: processingCaseId,
         classification_key: classificationKey,
-        extraction_proposal_count: proposalCount,
+        extraction_candidate_count: candidateCount,
     });
 }

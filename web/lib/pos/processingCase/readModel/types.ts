@@ -12,7 +12,7 @@ import type {
     ProcessingCaseStatus,
 } from "../types";
 import type { StoredProcessingClassification } from "../classification/types";
-import type { StoredExtractionProposalSet } from "../extraction/types";
+import type { StoredProcessingExtraction } from "../extraction/types";
 
 export type { ProcessingCaseSourceKind, ProcessingCaseSourceRole, ProcessingCaseStatus };
 
@@ -57,8 +57,8 @@ export interface ProcessingCaseDetail {
     sources: Array<SourceRef & { display: SourceDisplayDescriptor }>;
     /** POS-FP9 read-only classification (from `metadata.classification`); null until classified. */
     classification: StoredProcessingClassification | null;
-    /** POS-FP10 read-only extraction proposals (from `metadata.extraction`); null until extracted. Proposed values only — never committed. */
-    extraction: StoredExtractionProposalSet | null;
+    /** POS-FP10 read-only intake extraction (from `metadata.extraction`): source/facts/candidates; null until extracted. Proposed values only — never committed. */
+    extraction: StoredProcessingExtraction | null;
 }
 
 export type ProcessingCaseQueueSortKey = "created_at" | "status_changed_at";

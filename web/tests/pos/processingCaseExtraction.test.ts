@@ -1,32 +1,89 @@
 /**
- * POS-FP10 — extraction proposals (deterministic, proposal-only).
+ * POS-FP10 (intake-aligned) — document → facts → field candidates.
  *
- * Proves: subsidy/remittance/immunization proposals come from real signals; unknown
- * yields none; confidence is preserved; values are never fabricated; and persistence
- * is annotation-only — it writes ONLY metadata.extraction (no case_type, no status,
- * no insert, no other table), so no record update / lifecycle change / commit occurs.
+ * Proves POS reuses the shared Intake Engine contracts (no POS-specific proposal model):
+ * document metadata produces `IntakeFact[]`; facts map to shared `IntakeFieldCandidate[]`
+ * (classification-scoped); unknown produces no candidates; confidence is preserved as the
+ * shared string tiers; and persistence is annotation-only (metadata only, no case_type,
+ * no status, no insert, no other table → no record/lifecycle change, no commit).
  */
 
 import { describe, it, expect } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import {
-    extractProposalsForClassification,
-    normalizeDate,
-    normalizeAmount,
-    EXTRACTOR_VERSION,
-} from "@/lib/pos/processingCase/extraction/extractProposalsForClassification";
+import { buildDocumentSourceEnvelope, extractFactsFromDocument } from "@/lib/pos/processingCase/extraction/documentFacts";
+import { buildProcessingExtraction, EXTRACTOR_VERSION } from "@/lib/pos/processingCase/extraction/buildProcessingExtraction";
 import {
     dbStoreProcessingCaseExtraction,
     parseStoredExtraction,
     toStoredExtraction,
 } from "@/lib/pos/processingCase/extraction/processingCaseExtractionDb";
 import { maybeExtractProcessingCaseFromDocumentSafe } from "@/lib/pos/processingCase/extraction/maybeExtractProcessingCaseFromDocumentSafe";
+import { __resetHouseholdCandidateCounterForTests } from "@/lib/intake/group/groupFactsIntoHouseholdCandidates";
+import type { ProcessingClassificationKey } from "@/lib/pos/processingCase/classification/types";
 
-describe("extractProposalsForClassification — by classification", () => {
-    it("subsidy_contract: proposes agency/child/start/end from metadata, confidence preserved", () => {
-        const set = extractProposalsForClassification({
-            classificationKey: "subsidy_contract",
-            fileName: "subsidy_contract.pdf",
+const CAPTURED_AT = "2026-06-17T12:00:00.000Z";
+
+function build(classificationKey: ProcessingClassificationKey, signals: {
+    fileName?: string;
+    title?: string;
+    docType?: string;
+    metadata?: Record<string, unknown>;
+}) {
+    __resetHouseholdCandidateCounterForTests();
+    const envelope = buildDocumentSourceEnvelope(signals, { sourceId: "doc-1", capturedAt: CAPTURED_AT });
+    return buildProcessingExtraction({ envelope, classificationKey });
+}
+
+function cand(result: ReturnType<typeof build>, key: string) {
+    return result.candidates.find((c) => c.payload_key === key);
+}
+
+describe("extractFactsFromDocument — source-agnostic IntakeFact[]", () => {
+    it("emits typed facts (date/amount/person_name) with the shared shape; never target keys", () => {
+        const envelope = buildDocumentSourceEnvelope(
+            { fileName: "x.pdf", metadata: { child_name: "Jane Doe", authorization_start_date: "2026-07-01", amount: "$1,250.00" } },
+            { sourceId: "doc-1", capturedAt: CAPTURED_AT }
+        );
+        const { source, facts } = extractFactsFromDocument(envelope);
+        expect(source.source_kind).toBe("document");
+        const types = facts.map((f) => f.fact_type).sort();
+        expect(types).toEqual(["amount", "date", "person_name"]);
+        // confidence is the shared string tier, not a number
+        for (const f of facts) expect(["high", "medium", "low"]).toContain(f.confidence);
+        const name = facts.find((f) => f.fact_type === "person_name");
+        expect(name?.role_hint).toBe("child");
+        expect(name?.normalized_value).toBe("Jane Doe");
+        const date = facts.find((f) => f.fact_type === "date");
+        expect(date?.normalized_value).toBe("2026-07-01");
+        const amt = facts.find((f) => f.fact_type === "amount");
+        expect(amt?.normalized_value).toBe("1250");
+    });
+
+    it("org/agency names are NOT facts (no shared fact_type) — left on envelope metadata", () => {
+        const envelope = buildDocumentSourceEnvelope(
+            { metadata: { agency_name: "Bright Futures DHS" } },
+            { sourceId: "doc-1", capturedAt: CAPTURED_AT }
+        );
+        const { facts } = extractFactsFromDocument(envelope);
+        expect(facts).toEqual([]);
+        expect((envelope.metadata as Record<string, unknown>).agency_name).toBe("Bright Futures DHS");
+    });
+
+    it("parses a single underscore-adjacent date from the filename (weaker confidence)", () => {
+        const envelope = buildDocumentSourceEnvelope(
+            { fileName: "remittance_2026-07-15.pdf", metadata: {} },
+            { sourceId: "doc-1", capturedAt: CAPTURED_AT }
+        );
+        const { facts } = extractFactsFromDocument(envelope);
+        const d = facts.find((f) => f.fact_type === "date");
+        expect(d?.normalized_value).toBe("2026-07-15");
+        expect(d?.confidence).toBe("medium");
+    });
+});
+
+describe("mapProcessingFactsToCandidates (via buildProcessingExtraction) — shared IntakeFieldCandidate[]", () => {
+    it("subsidy_contract: agency/child/start/end candidates, confidence preserved", () => {
+        const r = build("subsidy_contract", {
             metadata: {
                 agency_name: "Bright Futures DHS",
                 child_name: "Jane Doe",
@@ -34,98 +91,53 @@ describe("extractProposalsForClassification — by classification", () => {
                 authorization_end_date: "2026-09-30",
             },
         });
-        expect(set.classification_key).toBe("subsidy_contract");
-        const byKey = Object.fromEntries(set.proposals.map((p) => [p.field_key, p]));
-        expect(byKey.agency_name.value).toBe("Bright Futures DHS");
-        expect(byKey.child_name.value).toBe("Jane Doe");
-        expect(byKey.authorization_start_date.value).toBe("2026-07-01");
-        expect(byKey.authorization_end_date.value).toBe("2026-09-30");
-        // confidence preserved + honest (explicit metadata => 0.9)
-        for (const p of set.proposals) {
-            expect(p.confidence).toBe(0.9);
-            expect(p.signals[0].source.startsWith("metadata.")).toBe(true);
-        }
+        expect(cand(r, "agency_name")?.value).toBe("Bright Futures DHS");
+        expect(cand(r, "child_name")?.value).toBe("Jane Doe");
+        expect(cand(r, "authorization_start_date")?.value).toBe("2026-07-01");
+        expect(cand(r, "authorization_end_date")?.value).toBe("2026-09-30");
+        // shared candidate shape
+        const c = cand(r, "authorization_start_date")!;
+        expect(c).toHaveProperty("payload_key");
+        expect(c).toHaveProperty("rule_id");
+        expect(c).toHaveProperty("fact_ids");
+        expect(["high", "medium", "low", "invalid"]).toContain(c.confidence);
+        expect(c.fact_ids.length).toBeGreaterThan(0);
+        // agency has no backing fact (org names aren't facts)
+        expect(cand(r, "agency_name")!.fact_ids).toEqual([]);
     });
 
-    it("subsidy_contract: only proposes fields that have a real signal (no fabrication)", () => {
-        const set = extractProposalsForClassification({
-            classificationKey: "subsidy_contract",
-            fileName: "subsidy_contract.pdf",
-            metadata: { agency_name: "Bright Futures" },
-        });
-        const keys = set.proposals.map((p) => p.field_key);
-        expect(keys).toEqual(["agency_name"]);
-        // child_name / dates absent → not proposed
-        expect(keys).not.toContain("child_name");
-        expect(keys).not.toContain("authorization_start_date");
-    });
-
-    it("remittance: payer/amount/date, amount + date normalized", () => {
-        const set = extractProposalsForClassification({
-            classificationKey: "remittance",
+    it("remittance: payer/amount/date candidates", () => {
+        const r = build("remittance", {
             fileName: "remit.pdf",
             metadata: { payer: "State CCAP", amount: "$1,250.00", payment_date: "07/15/2026" },
         });
-        const byKey = Object.fromEntries(set.proposals.map((p) => [p.field_key, p]));
-        expect(byKey.payer_name.value).toBe("State CCAP");
-        expect(byKey.payment_amount.value).toBe("1250");
-        expect(byKey.payment_date.value).toBe("2026-07-15");
+        expect(cand(r, "payer_name")?.value).toBe("State CCAP");
+        expect(cand(r, "payment_amount")?.value).toBe("1250");
+        expect(cand(r, "payment_date")?.value).toBe("2026-07-15");
     });
 
-    it("remittance: payment_date can come from a single date in the filename (lower confidence)", () => {
-        const set = extractProposalsForClassification({
-            classificationKey: "remittance",
-            fileName: "remittance_2026-07-15.pdf",
-            metadata: { payer: "State CCAP" },
-        });
-        const byKey = Object.fromEntries(set.proposals.map((p) => [p.field_key, p]));
-        expect(byKey.payment_date.value).toBe("2026-07-15");
-        expect(byKey.payment_date.confidence).toBe(0.6);
-        expect(byKey.payment_date.signals[0].source).toBe("filename");
+    it("remittance: payment_date falls back to a filename date", () => {
+        const r = build("remittance", { fileName: "remittance_2026-07-15.pdf", metadata: { payer: "X" } });
+        expect(cand(r, "payment_date")?.value).toBe("2026-07-15");
+        expect(cand(r, "payment_date")?.confidence).toBe("medium");
     });
 
     it("immunization_record: child + immunization date", () => {
-        const set = extractProposalsForClassification({
-            classificationKey: "immunization_record",
-            fileName: "immunization.pdf",
-            metadata: { child_name: "Sam Lee", immunization_date: "2026-05-02" },
-        });
-        const byKey = Object.fromEntries(set.proposals.map((p) => [p.field_key, p]));
-        expect(byKey.child_name.value).toBe("Sam Lee");
-        expect(byKey.immunization_date.value).toBe("2026-05-02");
+        const r = build("immunization_record", { metadata: { child_name: "Sam Lee", immunization_date: "2026-05-02" } });
+        expect(cand(r, "child_name")?.value).toBe("Sam Lee");
+        expect(cand(r, "immunization_date")?.value).toBe("2026-05-02");
     });
 
-    it("unknown: returns no proposals", () => {
-        const set = extractProposalsForClassification({ classificationKey: "unknown", fileName: "IMG_1.pdf", metadata: { agency_name: "x" } });
-        expect(set.proposals).toEqual([]);
+    it("unknown: no candidates", () => {
+        const r = build("unknown", { metadata: { agency_name: "x", child_name: "Y Z" } });
+        expect(r.candidates).toEqual([]);
     });
 
-    it("no document signals -> honest empty proposals (no fabrication)", () => {
-        const set = extractProposalsForClassification({ classificationKey: "subsidy_contract", fileName: "scan.pdf" });
-        expect(set.proposals).toEqual([]);
-        expect(set.extractor_version).toBe(EXTRACTOR_VERSION);
-    });
-
-    it("ambiguous (two dates) in filename -> no filename-derived date", () => {
-        const set = extractProposalsForClassification({
-            classificationKey: "remittance",
-            fileName: "remit_2026-07-01_2026-07-31.pdf",
-            metadata: { payer: "x" },
-        });
-        const byKey = Object.fromEntries(set.proposals.map((p) => [p.field_key, p]));
-        expect(byKey.payment_date).toBeUndefined();
-    });
-});
-
-describe("normalizers", () => {
-    it("normalizeDate handles ISO + US, rejects junk", () => {
-        expect(normalizeDate("2026-07-01")).toBe("2026-07-01");
-        expect(normalizeDate("7/1/2026")).toBe("2026-07-01");
-        expect(normalizeDate("not a date")).toBeNull();
-    });
-    it("normalizeAmount strips currency formatting", () => {
-        expect(normalizeAmount("$1,250.00")).toBe("1250");
-        expect(normalizeAmount("abc")).toBeNull();
+    it("no document signals -> no facts and no candidates (honest empty)", () => {
+        const r = build("subsidy_contract", { fileName: "scan.pdf" });
+        expect(r.facts).toEqual([]);
+        expect(r.candidates).toEqual([]);
+        expect(r.extractor_version).toBe(EXTRACTOR_VERSION);
     });
 });
 
@@ -152,52 +164,42 @@ function makeFakeSupabase(existingMetadata: Record<string, unknown> = {}) {
     return { supabase, updates, get inserted() { return inserted; } };
 }
 
-describe("dbStoreProcessingCaseExtraction — annotation only (no commit / no record / no status)", () => {
-    it("writes ONLY metadata (not case_type, not status); merges; no insert", async () => {
+describe("dbStoreProcessingCaseExtraction — annotation only (no commit / record / status)", () => {
+    it("writes ONLY metadata (source/facts/candidates), preserves siblings, no insert", async () => {
         const fake = makeFakeSupabase({ classification: { classification_key: "subsidy_contract" }, operational_result: { x: 1 } });
-        const set = extractProposalsForClassification({
-            classificationKey: "subsidy_contract",
-            metadata: { agency_name: "Bright Futures" },
-        });
+        const result = build("subsidy_contract", { metadata: { agency_name: "Bright Futures", child_name: "Jane Doe" } });
         const stored = await dbStoreProcessingCaseExtraction(fake.supabase, {
-            orgId: "o1", caseId: "c1", set, now: new Date("2026-06-17T09:00:00.000Z"),
+            orgId: "o1", caseId: "c1", result, now: new Date("2026-06-17T09:00:00.000Z"),
         });
 
         expect(fake.updates).toHaveLength(1);
         const payload = fake.updates[0].payload;
-        // Only metadata is written — NOT case_type, NOT status.
         expect(Object.keys(payload)).toEqual(["metadata"]);
         expect("case_type" in payload).toBe(false);
         expect("status" in payload).toBe(false);
         const meta = payload.metadata as Record<string, unknown>;
-        // sibling metadata preserved (classification + operational_result untouched).
         expect(meta.classification).toEqual({ classification_key: "subsidy_contract" });
         expect(meta.operational_result).toEqual({ x: 1 });
-        expect((meta.extraction as { proposals: unknown[] }).proposals.length).toBe(1);
+        const ext = meta.extraction as { source: unknown; facts: unknown[]; candidates: unknown[] };
+        expect(ext.source).toBeTruthy();
+        expect(Array.isArray(ext.candidates)).toBe(true);
         expect(stored.extracted_at).toBe("2026-06-17T09:00:00.000Z");
         expect(fake.inserted).toBe(false);
-    });
-
-    it("storing proposals performs no commit action (no other table, ever)", async () => {
-        const fake = makeFakeSupabase();
-        await dbStoreProcessingCaseExtraction(fake.supabase, {
-            orgId: "o1", caseId: "c1",
-            set: extractProposalsForClassification({ classificationKey: "remittance", metadata: { payer: "x" } }),
-        });
-        expect(fake.updates.every((u) => u.table === "processing_cases")).toBe(true);
     });
 });
 
 describe("maybeExtractProcessingCaseFromDocumentSafe — best-effort", () => {
-    it("extracts + stores, never inserts a case", async () => {
+    it("runs pipeline + stores, never inserts a case", async () => {
         const fake = makeFakeSupabase();
         const stored = await maybeExtractProcessingCaseFromDocumentSafe(fake.supabase, {
-            orgId: "o1", caseId: "c1", classificationKey: "immunization_record",
-            document: { fileName: "immun.pdf", metadata: { child_name: "Sam", immunization_date: "2026-05-02" } },
+            orgId: "o1", caseId: "c1", classificationKey: "immunization_record", sourceId: "doc-1",
+            document: { metadata: { child_name: "Sam Lee", immunization_date: "2026-05-02" } },
         });
-        expect(stored?.proposals.length).toBe(2);
+        expect(stored?.candidates.map((c) => c.payload_key).sort()).toEqual(["child_name", "immunization_date"]);
+        expect(stored?.source.source_kind).toBe("document");
         expect(fake.inserted).toBe(false);
     });
+
     it("never throws; returns null on failure", async () => {
         const exploding = { from() { throw new Error("db down"); } } as unknown as SupabaseClient;
         const out = await maybeExtractProcessingCaseFromDocumentSafe(exploding, {
@@ -208,9 +210,9 @@ describe("maybeExtractProcessingCaseFromDocumentSafe — best-effort", () => {
 });
 
 describe("parseStoredExtraction — read model projection", () => {
-    it("round-trips a stored extraction set", () => {
+    it("round-trips a stored intake extraction", () => {
         const stored = toStoredExtraction(
-            extractProposalsForClassification({ classificationKey: "subsidy_contract", metadata: { agency_name: "BF" } }),
+            build("subsidy_contract", { metadata: { agency_name: "BF", child_name: "Jane Doe" } }),
             new Date("2026-06-17T09:00:00.000Z")
         );
         expect(parseStoredExtraction({ extraction: stored, classification: { k: 1 } })).toEqual(stored);
@@ -218,6 +220,6 @@ describe("parseStoredExtraction — read model projection", () => {
     it("returns null when absent/malformed", () => {
         expect(parseStoredExtraction({})).toBeNull();
         expect(parseStoredExtraction(null)).toBeNull();
-        expect(parseStoredExtraction({ extraction: { classification_key: "x" } })).toBeNull(); // no proposals[]
+        expect(parseStoredExtraction({ extraction: { facts: [] } })).toBeNull(); // no source/candidates
     });
 });
