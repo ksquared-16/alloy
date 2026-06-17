@@ -1,3 +1,4 @@
+import type { DerivedFieldResult } from "@/lib/fields/derived/types";
 import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
 
 export type IntakeSourceKind =
@@ -56,8 +57,7 @@ export type IntakeFactExtractionResult = {
     unmapped_text?: string;
 };
 
-import type { DerivedFieldResult } from "@/lib/fields/derived/types";
-import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
+export type IntakePersonCandidateRole = "parent" | "guardian" | "child" | "dependent" | "unknown";
 
 export type IntakePersonCandidate = {
     candidate_id: string;
