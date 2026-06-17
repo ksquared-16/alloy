@@ -38,6 +38,7 @@ import {
 import { resolveCreateLeadProgressStep } from "@/lib/admin/actions/createLeadProgressStep";
 import { CreateLeadProgressRail } from "@/components/admin/actions/CreateLeadProgressRail";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
+import { buildIntakeDebugTrace, logIntakeDebugTrace } from "@/lib/intake/debug/buildIntakeDebugTrace";
 import { fetchActionIntakeSpec } from "@/lib/lifecycle/fetchActionIntakeSpec";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
 import { CreateLeadOperationalIntake } from "@/components/admin/actions/CreateLeadOperationalIntake";
@@ -266,6 +267,16 @@ export function CreateLeadModal(props: {
                     spec,
                     field_options: { location_id: locationOptions },
                 });
+                if (process.env.NODE_ENV !== "production") {
+                    logIntakeDebugTrace(
+                        buildIntakeDebugTrace({
+                            text,
+                            spec,
+                            field_options: { location_id: locationOptions },
+                        }),
+                        "create-lead",
+                    );
+                }
                 if (extraction.fields.length === 0) {
                     setAnalyzeError("BOS could not extract structured fields. Try adding labels like Parent: or Email:.");
                     setSuggestions([]);

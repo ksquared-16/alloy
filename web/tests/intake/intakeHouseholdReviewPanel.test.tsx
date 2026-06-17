@@ -6,6 +6,38 @@ import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 const SAMPLE_HOUSEHOLD: IntakeHouseholdCandidate = {
     household_id: "household-1",
+    parents_guardians: [
+        {
+            candidate_id: "p1",
+            role: "parent",
+            first_name: "Alex",
+            last_name: "Lyons",
+            emails: ["alex.lyons@test.com"],
+            phones: ["4804804800"],
+            dob: null,
+            age_years: null,
+            calculated_age: null,
+            program_interest: null,
+            source_fact_ids: [],
+            confidence: "high",
+            validation_state: "valid",
+        },
+        {
+            candidate_id: "p2",
+            role: "parent",
+            first_name: "Jason",
+            last_name: "Lyons",
+            emails: [],
+            phones: [],
+            dob: null,
+            age_years: null,
+            calculated_age: null,
+            program_interest: null,
+            source_fact_ids: [],
+            confidence: "high",
+            validation_state: "valid",
+        },
+    ],
     parents: [
         {
             candidate_id: "p1",
@@ -38,6 +70,22 @@ const SAMPLE_HOUSEHOLD: IntakeHouseholdCandidate = {
             validation_state: "valid",
         },
     ],
+    household_contacts: [
+        {
+            kind: "email",
+            value: "alex.lyons@test.com",
+            raw_value: "alex.lyons@test.com",
+            validation_state: "valid",
+            source_fact_ids: [],
+        },
+        {
+            kind: "phone",
+            value: "4804804800",
+            raw_value: "4804804800",
+            validation_state: "valid",
+            source_fact_ids: [],
+        },
+    ],
     children: [
         {
             candidate_id: "c1",
@@ -63,6 +111,7 @@ const SAMPLE_HOUSEHOLD: IntakeHouseholdCandidate = {
     desired_start_date: null,
     relationships: [],
     unassigned_fact_ids: [],
+    unmapped_facts: [],
     review_warnings: [
         {
             code: "extra_parents_commit_limited",
@@ -79,6 +128,7 @@ describe("IntakeHouseholdReviewPanel", () => {
         expect(html).toContain('data-testid="intake-household-review-panel"');
         expect(html).toContain('data-testid="intake-household-review-parents"');
         expect(html).toContain('data-testid="intake-household-review-children"');
+        expect(html).toContain("Household detected");
         expect(html).toContain("Alex Lyons");
         expect(html).toContain("Jason Lyons");
         expect(html).toContain("Jaxon Lyons");

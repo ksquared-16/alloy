@@ -34,4 +34,16 @@ describe("buildHouseholdReviewWarnings", () => {
         expect(warnings.some((w) => w.message.includes("2 children detected"))).toBe(true);
         expect(warnings.some((w) => w.message.includes("no address field"))).toBe(true);
     });
+
+    it("emits invalid phone warning when present", () => {
+        const warnings = buildHouseholdReviewWarnings({
+            parents: [{ candidate_id: "p1" }] as never,
+            children: [],
+            has_address: false,
+            has_invalid_phone: true,
+            invalid_phone_value: "987988899",
+        });
+        expect(warnings.some((w) => w.code === "invalid_phone")).toBe(true);
+        expect(warnings.some((w) => w.message.includes("987988899"))).toBe(true);
+    });
 });

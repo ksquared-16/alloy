@@ -124,10 +124,23 @@ export type IntakeRelatedRecordCandidate = {
     validation_state: IntakeValidationState;
 };
 
+export type IntakeHouseholdContact = {
+    kind: "email" | "phone";
+    value: string;
+    raw_value: string;
+    validation_state: IntakeValidationState;
+    source_fact_ids: string[];
+};
+
 export type IntakeHouseholdCandidate = {
     household_id: string;
+    /** Canonical guardian/parent people candidates. */
+    parents_guardians: IntakePersonCandidate[];
+    /** @deprecated Use parents_guardians — kept for transitional imports. */
     parents: IntakePersonCandidate[];
     children: IntakePersonCandidate[];
+    /** Household-level contacts not yet assigned to a specific person. */
+    household_contacts: IntakeHouseholdContact[];
     address: IntakeAddressCandidate | null;
     location: IntakeLocationCandidate | null;
     source: string | null;
@@ -136,6 +149,8 @@ export type IntakeHouseholdCandidate = {
     desired_start_date: string | null;
     relationships: IntakeRelationshipCandidate[];
     unassigned_fact_ids: string[];
+    /** Full unassigned facts for review/debug surfaces. */
+    unmapped_facts: IntakeFact[];
     review_warnings: IntakeReviewWarning[];
     /** When true, commit path can only persist primary parent + first child. */
     commit_limited_to_primary?: boolean;

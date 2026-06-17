@@ -174,6 +174,7 @@ export function validateCreateLeadPlatformMinimum(
 
     const hasEmail = email.length > 0;
     const hasPhone = phone.length > 0;
+    const emailValid = hasEmail && isValidCreateLeadEmail(email);
     if (!hasEmail && !hasPhone) {
         issues.push("Email or phone is required.");
     }
@@ -181,7 +182,7 @@ export function validateCreateLeadPlatformMinimum(
     if (hasEmail && !isValidCreateLeadEmail(email)) {
         issues.push("Enter a valid email address.");
     }
-    if (hasPhone && !isValidCreateLeadPhone(phone)) {
+    if (hasPhone && !isValidCreateLeadPhone(phone) && !emailValid) {
         issues.push("Enter a valid 10-digit phone number.");
     }
 

@@ -11,11 +11,13 @@ import {
     splitPersonName,
 } from "@/lib/intake/normalize/personName";
 import { normalizeIntakeText } from "@/lib/intake/normalize/text";
+import { expandSharedSurnameNames } from "@/lib/intake/normalize/sharedSurnameNames";
+import { isChildBlockLine, parseChildBlockEntries } from "@/lib/intake/extract/parseChildBlockEntries";
 
 const PARENTS_MULTI_RE = /^parents?\s*[:\-]\s*(.+)$/i;
 const GUARDIANS_MULTI_RE = /^guardians?\s*[:\-]\s*(.+)$/i;
 const PARENT_NUMBERED_RE = /^parent\s+(\d+)\s*[:\-]\s*(.+)$/i;
-const CHILDREN_HEADER_RE = /^(?:children?|kids?|dependents?|students?)\s*:?\s*$/i;
+const CHILDREN_HEADER_RE = /^(?:child|children|kid|kids|dependent|dependents|student|students)\s*:?\s*$/i;
 const CHILD_NAME_AGE_SPACE_RE =
     /^([A-Za-z][\w'\-]+(?:\s+[A-Za-z][\w'\-]+)*)\s+age\s+(\d{1,2})\b/i;
 const CHILD_NAME_DOB_INLINE_RE =
@@ -23,6 +25,7 @@ const CHILD_NAME_DOB_INLINE_RE =
 const STREET_ADDRESS_RE =
     /^\d+\s+[A-Za-z0-9][\w\s.'#-]*\b(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|way|blvd|boulevard|court|ct)\.?$/i;
 const CITY_STATE_ZIP_RE = /^([A-Za-z\s.'-]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i;
+const CITY_STATE_ZIP_SPACE_RE = /^([A-Za-z\s.'-]+)\s+([A-Za-z]{2,})\s+(\d{5}(?:-\d{4})?)$/i;
 
 const PARENT_LABEL_RE =
     /^(?:parent|guardian|mother|mom|father|dad|contact|primary(?:\s+contact)?)\s*[:\-]\s*(.+)$/i;
@@ -158,33 +161,52 @@ function pushMultiParentNames(
     sourceLine: number,
     evidence: string,
 ): boolean {
-    const chunks = raw
-        .split(/\s+and\s+|,/i)
-        .map((c) => c.trim())
-        .filter(Boolean);
-    let pushed = false;
-    for (const chunk of chunks) {
-        if (!splitPersonName(chunk)) continue;
+    const names = expandSharedSurnameNames(raw);
+    if (names.length === 0) {
+        const chunks = raw
+            .split(/\s+and\s+|,/i)
+            .map((c) => c.trim())
+            .filter(Boolean);
+        for (const chunk of chunks) {
+            if (!splitPersonName(chunk)) continue;
+            pushPersonNameFact(out, seen, {
+                raw: chunk,
+                role_hint: "parent",
+                confidence: "high",
+                source_line: sourceLine,
+                evidence,
+            });
+        }
+        return chunks.some((chunk) => splitPersonName(chunk));
+    }
+
+    for (const name of names) {
         pushPersonNameFact(out, seen, {
-            raw: chunk,
+            raw: name,
             role_hint: "parent",
             confidence: "high",
             source_line: sourceLine,
             evidence,
         });
-        pushed = true;
     }
-    return pushed;
+    return names.length > 0;
 }
 
 function extractMultiAdultNamesFromLine(line: string): string[] {
     const t = line.trim();
-    if (!t || isContactOnlyLine(t) || isChildContextLine(t)) return [];
+    if (!t || isContactOnlyLine(t) || isChildContextLine(t) || isChildBlockLine(t)) return [];
+    if (looksLikeAddressLine(t)) return [];
+    if (/^(?:child|children|kid|kids|dependent|dependents|student|students)\s*[:\-]/i.test(t)) return [];
+    if (/\(\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*DOB\s*\)/i.test(t)) return [];
     if (CHILD_NAME_DOB_INLINE_RE.test(t) || CHILD_NAME_AGE_SPACE_RE.test(t) || CHILD_NAME_AGE_COMMA_RE.test(t)) {
         return [];
     }
     if (PARENT_LABEL_RE.test(t) || PARENTS_MULTI_RE.test(t) || GUARDIANS_MULTI_RE.test(t)) return [];
     if (!/\band\b|,/.test(t)) return [];
+
+    const sharedSurnameNames = expandSharedSurnameNames(t);
+    if (sharedSurnameNames.length >= 2) return sharedSurnameNames;
+
     const chunks = t.split(/\s+and\s+|,/i).map((c) => c.trim()).filter(Boolean);
     if (chunks.length < 2) return [];
     const names = chunks.filter(
@@ -192,15 +214,65 @@ function extractMultiAdultNamesFromLine(line: string): string[] {
             splitPersonName(c) &&
             !/^age\s+\d/i.test(c) &&
             !/^\d{1,2}$/.test(c) &&
-            !isChildContextLine(c),
+            !isChildContextLine(c) &&
+            !/\bdob\b/i.test(c) &&
+            !/\(\d{1,2}[\/\-]\d{1,2}/.test(c),
     );
     if (names.length < 2 || names.length !== chunks.length) return [];
     return names;
 }
 
+function pushChildBlockEntries(
+    out: IntakeFact[],
+    seen: Set<string>,
+    line: string,
+    lineNum: number,
+): boolean {
+    const entries = parseChildBlockEntries(line);
+    if (entries.length === 0) return false;
+
+    for (const entry of entries) {
+        const rawName = entry.last_name ? `${entry.first_name} ${entry.last_name}` : entry.first_name;
+        pushPersonNameFact(out, seen, {
+            raw: rawName,
+            role_hint: "child",
+            confidence: entry.last_name ? "high" : "medium",
+            source_line: lineNum,
+            evidence: "Child block entry",
+        });
+        if (entry.dob) {
+            pushFact(out, seen, {
+                fact_type: "dob",
+                raw_value: entry.dob,
+                normalized_value: entry.dob,
+                confidence: "high",
+                validation_state: "valid",
+                source_line: lineNum,
+                evidence: `Child DOB for ${entry.first_name}`,
+                role_hint: "child",
+                dedupe_key: `dob:child:${lineNum}:${entry.first_name}:${entry.dob}`,
+            });
+        }
+    }
+    return true;
+}
+
+function normalizeAddressLine(line: string): string {
+    const t = line.trim();
+    const spaceMatch = t.match(CITY_STATE_ZIP_SPACE_RE);
+    if (spaceMatch) {
+        return `${spaceMatch[1]!.trim()}, ${spaceMatch[2]!.trim()} ${spaceMatch[3]!}`;
+    }
+    return t;
+}
+
 function looksLikeAddressLine(line: string): boolean {
     const t = line.trim();
-    return STREET_ADDRESS_RE.test(t) || CITY_STATE_ZIP_RE.test(t);
+    if (!t || isContactOnlyLine(t)) return false;
+    if (STREET_ADDRESS_RE.test(t)) return true;
+    if (CITY_STATE_ZIP_RE.test(t)) return true;
+    if (CITY_STATE_ZIP_SPACE_RE.test(t)) return true;
+    return false;
 }
 
 function looksLikeLocationLine(line: string): boolean {
@@ -318,6 +390,11 @@ export function extractFactsFromText(input: {
             continue;
         }
 
+        if (isChildBlockLine(line) && pushChildBlockEntries(facts, seen, line, lineNum)) {
+            inChildSection = true;
+            continue;
+        }
+
         const multiAdults = extractMultiAdultNamesFromLine(line);
         if (multiAdults.length >= 2) {
             for (const name of multiAdults) {
@@ -336,13 +413,26 @@ export function extractFactsFromText(input: {
 
         const parent = line.match(PARENT_LABEL_RE);
         if (parent?.[1]) {
-            pushPersonNameFact(facts, seen, {
-                raw: parent[1],
-                role_hint: "parent",
-                confidence: "high",
-                source_line: lineNum,
-                evidence: "Labeled parent/guardian line",
-            });
+            const expanded = expandSharedSurnameNames(parent[1]);
+            if (expanded.length > 0) {
+                for (const name of expanded) {
+                    pushPersonNameFact(facts, seen, {
+                        raw: name,
+                        role_hint: "parent",
+                        confidence: "high",
+                        source_line: lineNum,
+                        evidence: "Labeled parent/guardian line",
+                    });
+                }
+            } else {
+                pushPersonNameFact(facts, seen, {
+                    raw: parent[1],
+                    role_hint: "parent",
+                    confidence: "high",
+                    source_line: lineNum,
+                    evidence: "Labeled parent/guardian line",
+                });
+            }
             adultNameClaimed = true;
             continue;
         }
@@ -382,10 +472,11 @@ export function extractFactsFromText(input: {
         }
 
         if (looksLikeAddressLine(line)) {
+            const normalized = normalizeAddressLine(line);
             pushFact(facts, seen, {
                 fact_type: "address",
                 raw_value: line,
-                normalized_value: line.trim(),
+                normalized_value: normalized,
                 confidence: "medium",
                 validation_state: "unknown",
                 source_line: lineNum,

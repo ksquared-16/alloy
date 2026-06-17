@@ -2,6 +2,7 @@ import type {
     IntakeAddressCandidate,
     IntakeFact,
     IntakeHouseholdCandidate,
+    IntakeHouseholdContact,
     IntakeLocationCandidate,
     IntakePersonCandidate,
 } from "@/lib/intake/types";
@@ -30,7 +31,7 @@ function personFromNameFact(
 ): IntakePersonCandidate | null {
     const normalized = String(fact.normalized_value ?? fact.raw_value).trim();
     const split = splitPersonName(normalized);
-    const first = firstId(split, normalized, role);
+    const first = split?.first ?? (role === "child" || role === "dependent" ? normalized : null);
     const last = split?.last ?? null;
     if (!first && !last) return null;
 
@@ -53,25 +54,21 @@ function personFromNameFact(
     };
 }
 
-function firstId(
-    split: ReturnType<typeof splitPersonName>,
-    normalized: string,
-    role: IntakePersonCandidate["role"],
-): string | null {
-    if (split?.first) return split.first;
-    if (role === "child" || role === "dependent") return normalized || null;
-    return null;
-}
-
 function attachChildContext(
     child: IntakePersonCandidate,
     facts: IntakeFact[],
-    options?: { allowCrossLine?: boolean },
+    options?: {
+        allowCrossLine?: boolean;
+        matchChildFirstName?: boolean;
+        consumedDobFactIds?: Set<string>;
+    },
 ): IntakePersonCandidate {
     const line = child.source_line;
+    const firstName = child.first_name?.trim().toLowerCase() ?? "";
     let dob: string | null = child.dob;
     let age: number | null = child.age_years;
     const factIds = [...child.source_fact_ids];
+    const consumed = options?.consumedDobFactIds ?? new Set<string>();
 
     for (const fact of facts) {
         if (
@@ -84,10 +81,17 @@ function attachChildContext(
         }
         if (fact.fact_type !== "dob" && fact.fact_type !== "age_years") continue;
         if (fact.role_hint === "parent") continue;
+        if (consumed.has(fact.fact_id)) continue;
+
+        if (options?.matchChildFirstName && firstName) {
+            const evidence = String(fact.evidence ?? "").toLowerCase();
+            if (evidence && !evidence.includes(firstName)) continue;
+        }
 
         if (fact.fact_type === "dob" && !dob) {
             dob = String(fact.normalized_value ?? fact.raw_value);
             factIds.push(fact.fact_id);
+            consumed.add(fact.fact_id);
         }
         if (fact.fact_type === "age_years" && age == null) {
             age = Number(fact.normalized_value ?? fact.raw_value);
@@ -137,6 +141,21 @@ function inferChildLastNames(
     return children;
 }
 
+function inferParentSharedSurnames(parents: IntakePersonCandidate[]): IntakePersonCandidate[] {
+    const shared = parents.find((p) => p.last_name?.trim())?.last_name?.trim();
+    if (!shared) return parents;
+    return parents.map((parent) => {
+        if (parent.last_name?.trim() || !parent.first_name?.trim()) return parent;
+        return {
+            ...parent,
+            last_name: shared,
+            last_name_inferred: true,
+            validation_state: "valid",
+            confidence: parent.confidence === "medium" ? "high" : parent.confidence,
+        };
+    });
+}
+
 function mergeAddressFacts(facts: IntakeFact[]): IntakeAddressCandidate | null {
     const addressFacts = facts.filter((f) => f.fact_type === "address");
     if (addressFacts.length === 0) return null;
@@ -165,6 +184,21 @@ function mergeLocationFacts(facts: IntakeFact[]): IntakeLocationCandidate | null
     };
 }
 
+function buildHouseholdContacts(facts: IntakeFact[]): IntakeHouseholdContact[] {
+    const contacts: IntakeHouseholdContact[] = [];
+    for (const fact of facts) {
+        if (fact.fact_type !== "email" && fact.fact_type !== "phone") continue;
+        contacts.push({
+            kind: fact.fact_type,
+            value: String(fact.normalized_value ?? fact.raw_value).trim(),
+            raw_value: fact.raw_value,
+            validation_state: fact.validation_state,
+            source_fact_ids: [fact.fact_id],
+        });
+    }
+    return contacts;
+}
+
 /** Group source-agnostic facts into household/person candidates for any intake surface. */
 export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHouseholdCandidate {
     const assignedFactIds = new Set<string>();
@@ -172,7 +206,7 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
     const parentFacts = facts.filter((f) => f.fact_type === "person_name" && f.role_hint === "parent");
     const childFacts = facts.filter((f) => f.fact_type === "person_name" && f.role_hint === "child");
 
-    const parents: IntakePersonCandidate[] = [];
+    let parents: IntakePersonCandidate[] = [];
     for (const fact of parentFacts) {
         const person = personFromNameFact(fact, "parent");
         if (person) {
@@ -180,6 +214,7 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
             assignedFactIds.add(fact.fact_id);
         }
     }
+    parents = inferParentSharedSurnames(parents);
 
     let children: IntakePersonCandidate[] = [];
     for (const fact of childFacts) {
@@ -189,11 +224,18 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         assignedFactIds.add(fact.fact_id);
     }
 
+    const consumedDobFactIds = new Set<string>();
     if (children.length === 1) {
-        children[0] = attachChildContext(children[0]!, facts, { allowCrossLine: true });
+        children[0] = attachChildContext(children[0]!, facts, {
+            allowCrossLine: true,
+            consumedDobFactIds,
+        });
     } else {
         for (let i = 0; i < children.length; i++) {
-            children[i] = attachChildContext(children[i]!, facts);
+            children[i] = attachChildContext(children[i]!, facts, {
+                matchChildFirstName: true,
+                consumedDobFactIds,
+            });
         }
     }
 
@@ -203,6 +245,7 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         for (const id of child.source_fact_ids) assignedFactIds.add(id);
     }
 
+    const household_contacts = buildHouseholdContacts(facts);
     const householdEmails = facts.filter((f) => f.fact_type === "email");
     const householdPhones = facts.filter((f) => f.fact_type === "phone");
     if (parents.length > 0) {
@@ -233,19 +276,25 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
 
     const relationships = buildHouseholdRelationships({ parents, children });
 
+    const invalidPhone = householdPhones.some((f) => f.validation_state === "invalid");
     const review_warnings = buildHouseholdReviewWarnings({
         parents,
         children,
         has_address: Boolean(address),
         action_has_address_field: false,
+        has_invalid_phone: invalidPhone,
+        invalid_phone_value: invalidPhone ? String(householdPhones[0]?.raw_value ?? "") : null,
     });
 
     const unassigned_fact_ids = facts.filter((f) => !assignedFactIds.has(f.fact_id)).map((f) => f.fact_id);
+    const unmapped_facts = facts.filter((f) => unassigned_fact_ids.includes(f.fact_id));
 
     return {
         household_id: nextId("household"),
+        parents_guardians: parents,
         parents,
         children,
+        household_contacts,
         address,
         location,
         source: sourceFact ? String(sourceFact.normalized_value ?? sourceFact.raw_value).trim() : null,
@@ -256,6 +305,7 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
             startDateFact ? String(startDateFact.normalized_value ?? startDateFact.raw_value).trim() : null,
         relationships,
         unassigned_fact_ids,
+        unmapped_facts,
         review_warnings,
         commit_limited_to_primary: householdCommitLimited(review_warnings),
     };

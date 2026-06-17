@@ -6,6 +6,8 @@ export type IntakeReviewWarningCode =
     | "address_no_action_field"
     | "child_last_name_inferred"
     | "child_last_name_needs_review"
+    | "parent_last_name_inferred"
+    | "invalid_phone"
     | "location_ambiguous"
     | "location_unmatched";
 
@@ -26,6 +28,8 @@ export function buildHouseholdReviewWarnings(input: {
     children: IntakePersonCandidate[];
     has_address: boolean;
     action_has_address_field?: boolean;
+    has_invalid_phone?: boolean;
+    invalid_phone_value?: string | null;
 }): IntakeReviewWarning[] {
     const warnings: IntakeReviewWarning[] = [];
     const extraParents = Math.max(0, input.parents.length - 1);
@@ -53,6 +57,24 @@ export function buildHouseholdReviewWarnings(input: {
             severity: "info",
             message: "Address detected but no address field exists on this action.",
         });
+    }
+
+    if (input.has_invalid_phone) {
+        warnings.push({
+            code: "invalid_phone",
+            severity: "warning",
+            message: `Phone number${input.invalid_phone_value ? ` (${input.invalid_phone_value})` : ""} is invalid — US phone numbers must be 10 digits. Email can still be used as contact.`,
+        });
+    }
+
+    for (const parent of input.parents) {
+        if (parent.last_name_inferred) {
+            warnings.push({
+                code: "parent_last_name_inferred",
+                severity: "info",
+                message: `Parent/guardian last name "${parent.last_name}" inferred for ${parent.first_name ?? "guardian"}.`,
+            });
+        }
     }
 
     for (const child of input.children) {

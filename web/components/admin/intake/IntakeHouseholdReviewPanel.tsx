@@ -14,17 +14,33 @@ type Props = {
     className?: string;
 };
 
-function ContactBadges({ emails, phones }: { emails: string[]; phones: string[] }) {
-    const items = [...emails, ...phones].filter(Boolean);
+function ContactBadges({
+    emails,
+    phones,
+    invalidPhone,
+}: {
+    emails: string[];
+    phones: string[];
+    invalidPhone?: boolean;
+}) {
+    const items = [
+        ...emails.map((v) => ({ kind: "email" as const, value: v, invalid: false })),
+        ...phones.map((v) => ({ kind: "phone" as const, value: v, invalid: invalidPhone ?? false })),
+    ].filter((item) => item.value);
     if (!items.length) return null;
     return (
         <div className="mt-1 flex flex-wrap gap-1">
             {items.map((item) => (
                 <span
-                    key={item}
-                    className="rounded-md bg-alloy-stone/8 px-1.5 py-0.5 text-[10px] font-medium text-alloy-midnight/60"
+                    key={`${item.kind}:${item.value}`}
+                    className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+                        item.invalid ?
+                            "bg-alloy-ember/10 text-alloy-ember"
+                        :   "bg-alloy-stone/8 text-alloy-midnight/60"
+                    }`}
                 >
-                    {item}
+                    {item.kind === "phone" && item.invalid ? "invalid phone: " : ""}
+                    {item.value}
                 </span>
             ))}
         </div>
@@ -98,48 +114,42 @@ function ReviewSection({
     );
 }
 
-function HouseholdReviewBody({ review, showWarnings = false }: { review: IntakeReviewPresentation; showWarnings?: boolean }) {
-    const hasParents = review.parents.length > 0;
-    const hasChildren = review.children.length > 0;
-    const hasDetails =
-        review.address_lines.length > 0 ||
-        review.program_interest ||
-        review.desired_start_date ||
-        review.source ||
-        review.notes ||
-        review.location_label;
+function HouseholdReviewBody({
+    review,
+    household,
+}: {
+    review: IntakeReviewPresentation;
+    household: IntakeHouseholdCandidate;
+}) {
+    const invalidPhone = household.household_contacts.some(
+        (c) => c.kind === "phone" && c.validation_state === "invalid",
+    );
 
     return (
         <div className="space-y-4" data-testid="intake-household-review-body">
-            {showWarnings && review.review_warnings.length > 0 ?
-                <div
-                    className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-950"
-                    data-testid="intake-household-review-warnings"
-                    role="status"
-                >
-                    {review.review_warnings.map((warning) => (
-                        <p key={warning}>{warning}</p>
-                    ))}
-                </div>
-            :   null}
-
-            {hasParents ?
+            {review.parents.length > 0 ?
                 <ReviewSection title="Parents / Guardians" testId="intake-household-review-parents">
-                    {review.parents.map((parent) => (
+                    {review.parents.map((parent, index) => (
                         <PersonCard
                             key={parent.candidate_id}
                             name={parent.display_name}
                             isPrimary={parent.is_primary}
                             needsReview={parent.needs_review}
                             badges={
-                                <ContactBadges emails={parent.emails} phones={parent.phones} />
+                                index === 0 ?
+                                    <ContactBadges
+                                        emails={parent.emails}
+                                        phones={parent.phones}
+                                        invalidPhone={invalidPhone}
+                                    />
+                                :   null
                             }
                         />
                     ))}
                 </ReviewSection>
             :   null}
 
-            {hasChildren ?
+            {review.children.length > 0 ?
                 <ReviewSection title="Children" testId="intake-household-review-children">
                     {review.children.map((child) => {
                         const detailParts = [
@@ -159,7 +169,21 @@ function HouseholdReviewBody({ review, showWarnings = false }: { review: IntakeR
                 </ReviewSection>
             :   null}
 
-            {hasDetails ?
+            {review.address_lines.length > 0 ?
+                <ReviewSection title="Address" testId="intake-household-review-address">
+                    {review.address_lines.map((line) => (
+                        <p key={line} className="text-[12px] text-alloy-midnight/70">
+                            {line}
+                        </p>
+                    ))}
+                </ReviewSection>
+            :   null}
+
+            {(review.program_interest ||
+                review.desired_start_date ||
+                review.source ||
+                review.notes ||
+                review.location_label) ?
                 <ReviewSection
                     title="Additional intake details"
                     defaultOpen={false}
@@ -171,11 +195,6 @@ function HouseholdReviewBody({ review, showWarnings = false }: { review: IntakeR
                             {review.location_resolved_label ?? review.location_label}
                         </p>
                     :   null}
-                    {review.address_lines.map((line) => (
-                        <p key={line} className="text-[12px] text-alloy-midnight/70">
-                            {line}
-                        </p>
-                    ))}
                     {review.program_interest ?
                         <p className="text-[12px] text-alloy-midnight/70">
                             <span className="font-medium">Program:</span> {review.program_interest}
@@ -202,10 +221,10 @@ function HouseholdReviewBody({ review, showWarnings = false }: { review: IntakeR
     );
 }
 
-/** Compact household review for multi-record intake (shared intake engine presentation). */
+/** Compact household graph review for multi-record intake (shared intake engine presentation). */
 export function IntakeHouseholdReviewPanel({ household, className = "" }: Props) {
     const review = buildIntakeReviewPresentation(household);
-    if (!review) return null;
+    if (!review || !household) return null;
 
     return (
         <section
@@ -213,10 +232,10 @@ export function IntakeHouseholdReviewPanel({ household, className = "" }: Props)
             data-testid="intake-household-review-panel"
         >
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-alloy-midnight/45">
-                Household intake review
+                Household detected
             </p>
             <div className="mt-3">
-                <HouseholdReviewBody review={review} />
+                <HouseholdReviewBody review={review} household={household} />
             </div>
         </section>
     );

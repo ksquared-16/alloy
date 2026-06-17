@@ -64,8 +64,9 @@ export function buildIntakeReviewPresentation(
     household: IntakeHouseholdCandidate | null | undefined,
 ): IntakeReviewPresentation | null {
     if (!household) return null;
+    const guardians = household.parents_guardians?.length ? household.parents_guardians : household.parents;
     if (
-        household.parents.length === 0 &&
+        guardians.length === 0 &&
         household.children.length === 0 &&
         !household.location &&
         !household.address
@@ -74,7 +75,7 @@ export function buildIntakeReviewPresentation(
     }
 
     return {
-        parents: household.parents.map((p, i) => toPersonCard(p, p.role, i === 0)),
+        parents: guardians.map((p, i) => toPersonCard(p, p.role, i === 0)),
         children: household.children.map((c, i) => toPersonCard(c, c.role, i === 0)),
         location_label: household.location?.label ?? null,
         location_resolved_label: household.location?.resolved_label ?? null,

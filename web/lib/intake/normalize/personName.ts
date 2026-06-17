@@ -50,10 +50,12 @@ export function looksLikeNameLine(line: string): boolean {
 export function isChildContextLine(line: string): boolean {
     const t = line.trim();
     if (!t) return false;
-    if (/^(?:child|kid|son|daughter|student|enrollee?)\s*[:\-]/i.test(t)) return true;
+    if (/^(?:child|kid|son|daughter|student|enrollee?|children|kids|dependents|students)\s*[:\-]/i.test(t)) return true;
     if (/\b(?:child|kid)\s+is\b/i.test(t)) return true;
     if (/\b(?:daughter|son)\s+is\b/i.test(t)) return true;
     if (/\b(?:daughter|son)\s+[A-Za-z]/i.test(t) && !/^(?:daughter|son)\s*:/i.test(t)) return true;
+    if (/\(\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*DOB\s*\)/i.test(t)) return true;
+    if (/\(\s*DOB\s+\d{1,2}[\/\-]\d{1,2}/i.test(t)) return true;
     if (/\b(?:years?\s+old|yrs?\s+old|\d{1,2}yo)\b/i.test(t) && /\b(?:child|kid|son|daughter|he|she)\b/i.test(t)) {
         return true;
     }
