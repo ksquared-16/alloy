@@ -48,7 +48,7 @@ describe("Kelly Kurzman contact blob parse + auto-apply", () => {
         expect(byKey.last_name?.value).toBe("Kurzman");
         expect(byKey.last_name?.confidence).toBe("high");
         expect(byKey.email?.value).toBe("kelly.kurzman@gmail.com");
-        expect(byKey.phone?.value).toMatch(/602.*290.*4816|\(602\) 290-4816/);
+        expect(byKey.phone?.value).toBe("6022904816");
     });
 
     it("auto-applied values satisfy first/last/email/phone in required banner", () => {
@@ -57,7 +57,7 @@ describe("Kelly Kurzman contact blob parse + auto-apply", () => {
         expect(values.first_name).toBe("Kelly");
         expect(values.last_name).toBe("Kurzman");
         expect(values.email).toBe("kelly.kurzman@gmail.com");
-        expect(values.phone).toMatch(/602.*290.*4816|\(602\) 290-4816/);
+        expect(values.phone).toBe("6022904816");
 
         const missing = missingRequiredLabelsForCreateLead(spec, values);
         expect(missing).not.toContain("First name");

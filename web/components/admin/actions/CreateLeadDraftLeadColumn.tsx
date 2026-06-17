@@ -245,6 +245,7 @@ export function CreateLeadDraftLeadColumn({
                             onChange={onFieldChange}
                             platformRequiredKeys={requiredPayloadKeys}
                             fieldConfidence={fieldConfidence}
+                            layout="unified"
                             dataTestIdPrefix="create-lead-gather"
                         />
                     </div>

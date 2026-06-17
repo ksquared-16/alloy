@@ -206,6 +206,7 @@ describe("create lead BOS guidance", () => {
             last_name: "Lee",
             email: "jordan@example.com",
             phone: "",
+            location_id: "site-1",
         });
         expect(guidance.ready).toBe(true);
         expect(guidance.headline).toContain("create this lead");
@@ -215,7 +216,7 @@ describe("create lead BOS guidance", () => {
         const { resolveCreateLeadBosGuidance } = await import("@/lib/admin/actions/createLeadBosGuidance");
         const guidance = resolveCreateLeadBosGuidance({ first_name: "Jordan" });
         expect(guidance.ready).toBe(false);
-        expect(guidance.missingItems).toContain("Last name");
+        expect(guidance.missingItems).toContain("Parent/Guardian Last Name");
         expect(guidance.missingItems).toContain("contact method");
     });
 
@@ -225,6 +226,7 @@ describe("create lead BOS guidance", () => {
             first_name: "Jordan",
             last_name: "Lee",
             email: "jordan@example.com",
+            location_id: "site-1",
         });
         expect(guidance.ready).toBe(true);
         expect(guidance.advisoryItems).toContain("child information");
@@ -296,6 +298,7 @@ describe("create lead platform minimum", () => {
             first_name: "Ada",
             last_name: "Lovelace",
             email: "ada@example.com",
+            location_id: "site-1",
         });
         expect(valid.ok).toBe(true);
     });
@@ -359,6 +362,7 @@ describe("create lead gather phases", () => {
                 last_name: "Lee",
                 email: "jordan@example.com",
                 phone: "",
+                location_id: "site-1",
             },
             appliedFromBos: true,
             valuesEditedAfterApply: false,
@@ -400,6 +404,7 @@ describe("create lead gather phases", () => {
                 last_name: "Lee",
                 email: "jordan@example.com",
                 phone: "",
+                location_id: "site-1",
             },
             appliedFromBos: true,
             valuesEditedAfterApply: false,

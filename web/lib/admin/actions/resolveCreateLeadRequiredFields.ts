@@ -16,7 +16,13 @@ import type { ActionIntakePasteExtractionResult } from "@/lib/lifecycle/actionIn
 import { applyActionIntakePasteExtraction } from "@/lib/lifecycle/applyActionIntakePasteExtraction";
 import { CREATE_LEAD_GATHER_FIELDS } from "@/lib/admin/actions/createLeadPlatformGather";
 
-const CONTEXT_OPTIONAL_KEYS = new Set(["source", "intake_notes"]);
+const CONTEXT_OPTIONAL_KEYS = new Set(["source", "intake_notes", "child_age"]);
+const PLATFORM_CONFIDENCE_KEYS = new Set([
+    "location_id",
+    "email",
+    "phone",
+    ...CONTEXT_OPTIONAL_KEYS,
+]);
 
 function sectionForEntity(entity: LifecycleRequirementEntityKey): {
     section: ActionWorkspaceGatherField["section"];
@@ -48,7 +54,7 @@ export function gatherFieldsFromActionIntakeSpec(spec: ActionIntakeSpec): Action
     const fromSpec = [...spec.required, ...spec.recommended, ...spec.optional].map(actionIntakeFieldToGatherField);
     const seen = new Set(fromSpec.map((f) => f.payload_key));
     const extras = CREATE_LEAD_GATHER_FIELDS.filter(
-        (f) => CONTEXT_OPTIONAL_KEYS.has(f.payload_key) && !seen.has(f.payload_key),
+        (f) => PLATFORM_CONFIDENCE_KEYS.has(f.payload_key) && !seen.has(f.payload_key),
     );
     return [...fromSpec, ...extras];
 }
@@ -110,14 +116,14 @@ export function applyHighConfidenceCreateLeadExtraction(
     values: Record<string, string>,
     extraction: ActionIntakePasteExtractionResult,
 ): Record<string, string> {
-    const highConfidence: ActionIntakePasteExtractionResult = {
+    const applicable: ActionIntakePasteExtractionResult = {
         ...extraction,
-        fields: extraction.fields.filter((f) => f.confidence === "high"),
+        fields: extraction.fields.filter((f) => f.confidence === "high" || f.confidence === "invalid"),
     };
     return applyActionIntakePasteExtraction({
         current_values: values,
         current_meta: {},
-        extraction: highConfidence,
+        extraction: applicable,
     }).values;
 }
 
@@ -126,13 +132,13 @@ export function reviewSuggestionsFromExtraction(
     fieldLabels: Record<string, string>,
 ): ActionWorkspaceBosSuggestion[] {
     return extraction.fields
-        .filter((f) => f.confidence !== "high")
+        .filter((f) => f.confidence !== "high" && f.confidence !== "invalid")
         .map((f) => ({
             id: `${f.payload_key}:${f.value}`,
             payload_key: f.payload_key,
             field_label: fieldLabels[f.payload_key] ?? f.payload_key,
             suggested_value: f.value,
-            confidence: f.confidence,
+            confidence: f.confidence as "medium" | "low",
             selected: f.confidence === "medium",
         }));
 }

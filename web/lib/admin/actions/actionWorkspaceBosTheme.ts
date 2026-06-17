@@ -4,7 +4,7 @@ import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveC
 
 export type BosConfidenceLevel = ActionWorkspaceBosSuggestion["confidence"];
 
-export type BosFieldConfidenceDisplayLevel = BosConfidenceLevel | "undetected" | "manual";
+export type BosFieldConfidenceDisplayLevel = BosConfidenceLevel | "undetected" | "manual" | "invalid";
 
 export const BOS_FIELD_CONFIDENCE_STYLES: Record<
     BosFieldConfidenceDisplayLevel,
@@ -34,6 +34,11 @@ export const BOS_FIELD_CONFIDENCE_STYLES: Record<
         badge: "bg-alloy-stone/10 text-alloy-midnight/55 border-alloy-stone/20",
         border: "border-l-alloy-stone/30",
         label: "Entered manually",
+    },
+    invalid: {
+        badge: "bg-red-100 text-red-900 border-red-200",
+        border: "border-l-red-500",
+        label: "Invalid",
     },
 };
 

@@ -30,7 +30,7 @@ describe("parseCreateLeadIntakeText", () => {
         expect(byKey.first_name).toBe("Jordan");
         expect(byKey.last_name).toBe("Lee");
         expect(byKey.email).toBe("jordan@example.com");
-        expect(byKey.phone).toBe("(555) 123-4567");
+        expect(byKey.phone).toBe("5551234567");
         expect(byKey.child_first_name).toBe("Riley");
         expect(byKey.child_last_name).toBe("Lee");
         expect(byKey.source).toBe("Website form");
@@ -46,7 +46,7 @@ describe("parseCreateLeadIntakeText", () => {
         expect(byKey.first_name).toBe("Kelly");
         expect(byKey.last_name).toBe("Kurzman");
         expect(byKey.email).toBe("kelly.kurzman@gmail.com");
-        expect(byKey.phone).toMatch(/602.*290.*4816|\(602\) 290-4816/);
+        expect(byKey.phone).toBe("6022904816");
     });
 
     it("does not treat call-note phrasing as a high-confidence parent name", () => {
@@ -91,6 +91,7 @@ describe("create lead platform minimum validation", () => {
             last_name: "Lovelace",
             email: "ada@example.com",
             phone: "",
+            location_id: "site-1",
         });
         expect(valid.ok).toBe(true);
     });
@@ -103,7 +104,7 @@ describe("BOS suggestions from extraction", () => {
             spec,
         });
         const suggestions = bosSuggestionsFromExtraction(extraction);
-        expect(suggestions.some((s) => s.field_label === "First name")).toBe(true);
+        expect(suggestions.some((s) => s.field_label === "Parent/Guardian First Name")).toBe(true);
         expect(suggestions.some((s) => s.suggested_value === "ada@example.com")).toBe(true);
     });
 });

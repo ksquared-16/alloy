@@ -17,6 +17,10 @@ import {
 } from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
 import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
 import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
+import {
+    CREATE_LEAD_UNIFIED_OPTIONAL_KEYS,
+    CREATE_LEAD_UNIFIED_REQUIRED_KEYS,
+} from "@/lib/admin/actions/createLeadPlatformGather";
 
 const LABEL = "text-[13px] font-medium text-alloy-midnight/75";
 const INPUT =
@@ -33,6 +37,8 @@ type Props = {
     platformRequiredKeys?: readonly string[];
     /** BOS extraction confidence — shown after Analyze in draft edit mode. */
     fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
+    /** Unified draft lead layout — no entity tabs (Create Lead review step). */
+    layout?: "tabs" | "unified";
 };
 
 function FieldConfidenceBadge({ level }: { level: BosFieldConfidenceDisplayLevel }) {
@@ -85,6 +91,7 @@ export function ActionWorkspaceGatherFields({
     dataTestIdPrefix = "action-workspace-gather",
     platformRequiredKeys = [],
     fieldConfidence,
+    layout = "tabs",
 }: Props) {
     const [activeTab, setActiveTab] = useState(sections[0]?.key ?? "person");
     const activeSection = sections.find((s) => s.key === activeTab) ?? sections[0];
@@ -132,6 +139,123 @@ export function ActionWorkspaceGatherFields({
         [onChange, values]
     );
 
+    const fieldsByKey = useMemo(
+        () => Object.fromEntries(allFields.map((f) => [f.payload_key, f])),
+        [allFields],
+    );
+
+    const renderField = (field: ActionWorkspaceGatherField) => {
+        if (field.payload_key === "child_location_id" && (values.location_id ?? "").trim()) {
+            return null;
+        }
+
+        let selectOptions = field.option_set_key ? (optionsBySetKey[field.option_set_key] ?? []) : [];
+        let fieldDisabled = disabled;
+        let placeholder = "Select…";
+
+        if (field.placement_select === "site") {
+            selectOptions = cascade.siteOptions;
+            placeholder = "Select a school";
+        } else if (field.placement_select === "site_program") {
+            selectOptions = cascade.programOptions;
+            fieldDisabled = disabled || cascade.programDisabled;
+            placeholder = cascade.programDisabled ? "Select a school first" : "Select a program";
+        } else if (field.placement_select === "site_room") {
+            selectOptions = cascade.roomOptions;
+            fieldDisabled = disabled || cascade.roomDisabled;
+            placeholder = cascade.roomDisabled ? "Select a school first" : "Select a room";
+        }
+
+        const isRequired =
+            platformRequiredKeys.includes(field.payload_key) ||
+            CREATE_LEAD_UNIFIED_REQUIRED_KEYS.includes(
+                field.payload_key as (typeof CREATE_LEAD_UNIFIED_REQUIRED_KEYS)[number],
+            );
+
+        return (
+            <label
+                key={field.payload_key}
+                className={`${field.multiline ? "col-span-2" : ""} ${
+                    fieldConfidence?.[field.payload_key] ?
+                        BOS_FIELD_CONFIDENCE_STYLES[fieldConfidence[field.payload_key]!].border
+                    :   ""
+                } border-l-2 pl-2`}
+                data-testid={`${dataTestIdPrefix}-field-${field.payload_key}`}
+            >
+                <div className={`${LABEL} flex items-start gap-2`}>
+                    <span>
+                        {field.field_label}
+                        {isRequired && field.payload_key !== "email" && field.payload_key !== "phone" ?
+                            <span className="text-alloy-ember"> *</span>
+                        :   null}
+                        {(field.payload_key === "email" || field.payload_key === "phone") ?
+                            <span className="ml-1 text-[11px] font-normal text-alloy-midnight/40">
+                                (one required)
+                            </span>
+                        :   null}
+                    </span>
+                    {fieldConfidence?.[field.payload_key] ?
+                        <FieldConfidenceBadge level={fieldConfidence[field.payload_key]!} />
+                    :   null}
+                </div>
+                {field.multiline ?
+                    <textarea
+                        value={values[field.payload_key] ?? ""}
+                        disabled={disabled}
+                        onChange={(e) => handleFieldChange(field.payload_key, e.target.value)}
+                        rows={4}
+                        className={`${INPUT} mt-2 resize-none`}
+                        data-testid={`${dataTestIdPrefix}-input-${field.payload_key}`}
+                    />
+                : field.value_kind === "select" ?
+                    <SelectFieldControl
+                        value={values[field.payload_key] ?? ""}
+                        disabled={fieldDisabled}
+                        onChange={(v) => handleFieldChange(field.payload_key, v)}
+                        options={selectOptions}
+                        placeholder={placeholder}
+                        className={`${INPUT} mt-2`}
+                        data-testid={`${dataTestIdPrefix}-select-${field.payload_key}`}
+                        aria-label={field.field_label}
+                    />
+                :   <input
+                        type={inputType(field)}
+                        value={values[field.payload_key] ?? ""}
+                        disabled={disabled}
+                        onChange={(e) => handleFieldChange(field.payload_key, e.target.value)}
+                        className={`${INPUT} mt-2`}
+                        data-testid={`${dataTestIdPrefix}-input-${field.payload_key}`}
+                    />
+                }
+            </label>
+        );
+    };
+
+    if (layout === "unified") {
+        const requiredFields = CREATE_LEAD_UNIFIED_REQUIRED_KEYS.map((key) => fieldsByKey[key]).filter(Boolean);
+        const optionalFields = CREATE_LEAD_UNIFIED_OPTIONAL_KEYS.map((key) => fieldsByKey[key]).filter(Boolean);
+
+        return (
+            <div className="flex h-full min-h-0 flex-col gap-8" data-testid={`${dataTestIdPrefix}-fields`}>
+                <div data-testid={`${dataTestIdPrefix}-section-required`}>
+                    <h3 className="text-[13px] font-semibold text-alloy-midnight">Required to create lead</h3>
+                    <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-6 content-start">
+                        {requiredFields.map((field) => renderField(field!))}
+                    </div>
+                </div>
+                <div data-testid={`${dataTestIdPrefix}-section-optional`}>
+                    <h3 className="text-[13px] font-semibold text-alloy-midnight">Optional if available</h3>
+                    <p className="mt-1 text-[12px] text-alloy-midnight/45">
+                        Child, program, and source details — not required to create the lead.
+                    </p>
+                    <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-6 content-start">
+                        {optionalFields.map((field) => renderField(field!))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="flex h-full min-h-0 flex-col gap-6" data-testid={`${dataTestIdPrefix}-fields`}>
             <div className="flex shrink-0 gap-6 border-b border-alloy-stone/10">
@@ -171,84 +295,7 @@ export function ActionWorkspaceGatherFields({
                                 if (field.payload_key !== "child_location_id") return true;
                                 return !(values.location_id ?? "").trim();
                             })
-                            .map((field) => {
-                            let selectOptions =
-                                field.option_set_key ? (optionsBySetKey[field.option_set_key] ?? []) : [];
-                            let fieldDisabled = disabled;
-                            let placeholder = "Select…";
-
-                            if (field.placement_select === "site") {
-                                selectOptions = cascade.siteOptions;
-                                placeholder = "Select a school";
-                            } else if (field.placement_select === "site_program") {
-                                selectOptions = cascade.programOptions;
-                                fieldDisabled = disabled || cascade.programDisabled;
-                                placeholder =
-                                    cascade.programDisabled ? "Select a school first" : "Select a program";
-                            } else if (field.placement_select === "site_room") {
-                                selectOptions = cascade.roomOptions;
-                                fieldDisabled = disabled || cascade.roomDisabled;
-                                placeholder = cascade.roomDisabled ? "Select a school first" : "Select a room";
-                            }
-
-                            return (
-                                <label
-                                    key={field.payload_key}
-                                    className={`${field.multiline ? "col-span-2" : ""} ${
-                                        fieldConfidence?.[field.payload_key] ?
-                                            BOS_FIELD_CONFIDENCE_STYLES[fieldConfidence[field.payload_key]!].border
-                                        :   ""
-                                    } border-l-2 pl-2`}
-                                    data-testid={`${dataTestIdPrefix}-field-${field.payload_key}`}
-                                >
-                                    <div className={`${LABEL} flex items-start gap-2`}>
-                                        <span>
-                                            {field.field_label}
-                                            {platformRequiredKeys.includes(field.payload_key) ?
-                                                <span className="text-alloy-ember"> *</span>
-                                            :   null}
-                                            {(field.payload_key === "email" || field.payload_key === "phone") ?
-                                                <span className="ml-1 text-[11px] font-normal text-alloy-midnight/40">
-                                                    (one required)
-                                                </span>
-                                            :   null}
-                                        </span>
-                                        {fieldConfidence?.[field.payload_key] ?
-                                            <FieldConfidenceBadge level={fieldConfidence[field.payload_key]!} />
-                                        :   null}
-                                    </div>
-                                    {field.multiline ?
-                                        <textarea
-                                            value={values[field.payload_key] ?? ""}
-                                            disabled={disabled}
-                                            onChange={(e) => handleFieldChange(field.payload_key, e.target.value)}
-                                            rows={4}
-                                            className={`${INPUT} mt-2 resize-none`}
-                                            data-testid={`${dataTestIdPrefix}-input-${field.payload_key}`}
-                                        />
-                                    : field.value_kind === "select" ?
-                                        <SelectFieldControl
-                                            value={values[field.payload_key] ?? ""}
-                                            disabled={fieldDisabled}
-                                            onChange={(v) => handleFieldChange(field.payload_key, v)}
-                                            options={selectOptions}
-                                            placeholder={placeholder}
-                                            className={`${INPUT} mt-2`}
-                                            data-testid={`${dataTestIdPrefix}-select-${field.payload_key}`}
-                                            aria-label={field.field_label}
-                                        />
-                                    :   <input
-                                            type={inputType(field)}
-                                            value={values[field.payload_key] ?? ""}
-                                            disabled={disabled}
-                                            onChange={(e) => handleFieldChange(field.payload_key, e.target.value)}
-                                            className={`${INPUT} mt-2`}
-                                            data-testid={`${dataTestIdPrefix}-input-${field.payload_key}`}
-                                        />
-                                    }
-                                </label>
-                            );
-                        })}
+                            .map((field) => renderField(field))}
                     </div>
                 </div>
             :   null}

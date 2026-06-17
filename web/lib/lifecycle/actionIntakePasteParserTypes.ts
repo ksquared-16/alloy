@@ -1,6 +1,6 @@
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 
-export type ActionIntakePasteConfidence = "high" | "medium" | "low";
+export type ActionIntakePasteConfidence = "high" | "medium" | "low" | "invalid";
 
 export type ActionIntakePasteExtractedField = {
     payload_key: string;

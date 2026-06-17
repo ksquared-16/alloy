@@ -25,12 +25,14 @@ export function resolveCreateLeadBosGuidance(values: Record<string, string>): Cr
     const last = (values.last_name ?? "").trim();
     const email = (values.email ?? "").trim();
     const phone = (values.phone ?? "").trim();
+    const location = (values.location_id ?? "").trim();
     const childFirst = (values.child_first_name ?? "").trim();
     const program = (values.child_program ?? "").trim();
     const source = (values.source ?? "").trim();
 
     if (!first) missingItems.push(LABEL_BY_KEY.first_name ?? "First Name");
     if (!last) missingItems.push(LABEL_BY_KEY.last_name ?? "Last Name");
+    if (!location) missingItems.push(LABEL_BY_KEY.location_id ?? "Location");
     if (!email && !phone) missingItems.push("contact method");
 
     if (!childFirst) advisoryItems.push("child information");

@@ -6,9 +6,18 @@ import type {
     ActionIntakePasteParser,
 } from "@/lib/lifecycle/actionIntakePasteParserTypes";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
+import {
+    isValidCreateLeadEmail,
+    isValidCreateLeadPhone,
+    normalizeCreateLeadPhoneDigits,
+} from "@/lib/admin/actions/createLeadIntakeValidation";
 
-const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
-const PHONE_RE = /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}/;
+const EMAIL_EXTRACT_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+/** Finds email-shaped tokens including invalid TLDs — validated separately. */
+const LOOSE_EMAIL_EXTRACT_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+/i;
+const PHONE_BARE_RE = /\b\d{10}\b/;
+const PHONE_FORMATTED_RE =
+    /(?:\+?1[-.\s]?)?\(\d{3}\)\s*\d{3}[-.\s]?\d{4}|\b\d{3}[-.\s]\d{3}[-.\s]\d{4}\b/;
 const ISO_DATE_RE = /\b(\d{4}-\d{2}-\d{2})\b/;
 const US_DATE_RE = /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/;
 
@@ -22,20 +31,13 @@ const NOTES_LABEL_RE = /^(?:notes?|comments?|additional\s+info(?:rmation)?)\s*[:
 const START_DATE_LABEL_RE =
     /^(?:desired\s+start(?:\s+date)?|start\s+date|enrollment\s+date)\s*[:\-]\s*(.+)$/i;
 const DOB_LABEL_RE = /^(?:dob|date\s+of\s+birth|birth\s*date)\s*[:\-]\s*(.+)$/i;
+const AGE_LABEL_RE = /^age\s*[:\-]\s*(\d{1,2})\b/i;
+const LOOKING_FOR_RE = /^(?:looking\s+for|interested\s+in)\s+(.+)$/i;
+const EMAIL_LABEL_RE = /^e(?:\-?mail)?\s*[:\-]\s*(.+)$/i;
+const PHONE_LABEL_RE = /^phone\s*[:\-]\s*(.+)$/i;
 
 function trim(v: string): string {
     return v.trim();
-}
-
-function normalizePhone(raw: string): string {
-    const digits = raw.replace(/\D/g, "");
-    if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
-    return digits.length >= 10 ? digits.slice(-10) : digits;
-}
-
-function formatPhoneDisplay(digits: string): string {
-    if (digits.length !== 10) return digits;
-    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 function parseDateValue(raw: string): string | null {
@@ -60,6 +62,22 @@ function splitPersonName(raw: string): { first: string; last: string } | null {
     return { first: parts[0] ?? "", last: parts.slice(1).join(" ") };
 }
 
+function emailConfidence(raw: string): { value: string; confidence: ActionIntakePasteConfidence } {
+    const value = trim(raw);
+    return {
+        value,
+        confidence: isValidCreateLeadEmail(value) ? "high" : "invalid",
+    };
+}
+
+function phoneConfidence(raw: string): { value: string; confidence: ActionIntakePasteConfidence } {
+    const digits = normalizeCreateLeadPhoneDigits(raw);
+    return {
+        value: digits,
+        confidence: isValidCreateLeadPhone(digits) ? "high" : "invalid",
+    };
+}
+
 const NAME_STOP_WORDS = new Set([
     "called",
     "emailed",
@@ -74,22 +92,58 @@ const NAME_STOP_WORDS = new Set([
     "regarding",
 ]);
 
+function findPhoneCandidate(text: string): string | null {
+    const lines = text.split(/\r?\n/).map((l) => trim(l)).filter(Boolean);
+    for (const line of lines) {
+        const digitsOnly = line.replace(/\D/g, "");
+        if (/^[\d\s\-+().]+$/.test(line) && digitsOnly.length >= 7) {
+            return line;
+        }
+        const bare = line.match(PHONE_BARE_RE);
+        if (bare) return bare[0];
+        const formatted = line.match(PHONE_FORMATTED_RE);
+        if (formatted) return formatted[0];
+    }
+    const bare = text.match(PHONE_BARE_RE);
+    if (bare) return bare[0];
+    const formatted = text.match(PHONE_FORMATTED_RE);
+    if (formatted) return formatted[0];
+    return null;
+}
+
+function findEmailCandidate(text: string): string | null {
+    const valid = text.match(EMAIL_EXTRACT_RE);
+    if (valid?.[0]) return valid[0];
+    const loose = text.match(LOOSE_EMAIL_EXTRACT_RE);
+    if (loose?.[0]) return loose[0];
+    return null;
+}
 function looksLikeNameLine(line: string): boolean {
     const t = trim(line);
     if (!t || t.includes("@")) return false;
-    if (PHONE_RE.test(t)) return false;
+    if (findPhoneCandidate(t) && normalizeCreateLeadPhoneDigits(t).length >= 7) return false;
+    if (EMAIL_EXTRACT_RE.test(t) || LOOSE_EMAIL_EXTRACT_RE.test(t)) return false;
     const parts = t.split(/\s+/).filter(Boolean);
     if (parts.length < 2 || parts.length > 4 || !/^[A-Za-z]/.test(parts[0] ?? "")) return false;
     if (parts.some((p) => NAME_STOP_WORDS.has(p.toLowerCase()))) return false;
     return true;
 }
 
+function isContactOnlyLine(line: string): boolean {
+    const t = trim(line);
+    if (!t) return false;
+    if (EMAIL_EXTRACT_RE.test(t) || LOOSE_EMAIL_EXTRACT_RE.test(t)) return true;
+    const digits = normalizeCreateLeadPhoneDigits(t);
+    if (/^[\d\s\-+().]+$/.test(t) && digits.length >= 7) return true;
+    return false;
+}
+
 function fieldByPayloadKey(
     spec: ActionIntakeSpec,
-    payloadKey: string
+    payloadKey: string,
 ): ActionIntakeFieldSpec | undefined {
     return [...spec.required, ...spec.recommended, ...spec.optional].find(
-        (f) => f.payload_key === payloadKey
+        (f) => f.payload_key === payloadKey,
     );
 }
 
@@ -101,7 +155,7 @@ function pushField(
         rule_id: string | null;
         value: string;
         confidence: ActionIntakePasteConfidence;
-    }
+    },
 ): void {
     const value = trim(input.value);
     if (!value || seen.has(input.payload_key)) return;
@@ -119,6 +173,30 @@ function extractLabeledLines(lines: string[], spec: ActionIntakeSpec): ActionInt
     const seen = new Set<string>();
 
     for (const line of lines) {
+        const emailLabel = line.match(EMAIL_LABEL_RE);
+        if (emailLabel?.[1]) {
+            const parsed = emailConfidence(emailLabel[1]);
+            pushField(out, seen, {
+                payload_key: "email",
+                rule_id: fieldByPayloadKey(spec, "email")?.rule_id ?? "person:email",
+                value: parsed.value,
+                confidence: parsed.confidence,
+            });
+            continue;
+        }
+
+        const phoneLabel = line.match(PHONE_LABEL_RE);
+        if (phoneLabel?.[1]) {
+            const parsed = phoneConfidence(phoneLabel[1]);
+            pushField(out, seen, {
+                payload_key: "phone",
+                rule_id: fieldByPayloadKey(spec, "phone")?.rule_id ?? "person:phone",
+                value: parsed.value,
+                confidence: parsed.confidence,
+            });
+            continue;
+        }
+
         const parent = line.match(PARENT_LABEL_RE);
         if (parent?.[1]) {
             const split = splitPersonName(parent[1]);
@@ -168,6 +246,28 @@ function extractLabeledLines(lines: string[], spec: ActionIntakeSpec): ActionInt
             continue;
         }
 
+        const age = line.match(AGE_LABEL_RE);
+        if (age?.[1]) {
+            pushField(out, seen, {
+                payload_key: "child_age",
+                rule_id: null,
+                value: age[1],
+                confidence: "high",
+            });
+            continue;
+        }
+
+        const lookingFor = line.match(LOOKING_FOR_RE);
+        if (lookingFor?.[1]) {
+            pushField(out, seen, {
+                payload_key: "child_program",
+                rule_id: fieldByPayloadKey(spec, "child_program")?.rule_id ?? "child:program_interest",
+                value: lookingFor[1],
+                confidence: "medium",
+            });
+            continue;
+        }
+
         const source = line.match(SOURCE_LABEL_RE);
         if (source?.[1]) {
             pushField(out, seen, {
@@ -202,6 +302,15 @@ function extractLabeledLines(lines: string[], spec: ActionIntakeSpec): ActionInt
                         "child:desired_start_date",
                     value: parsed,
                     confidence: "high",
+                });
+            } else {
+                pushField(out, seen, {
+                    payload_key: "child_desired_start_date",
+                    rule_id:
+                        fieldByPayloadKey(spec, "child_desired_start_date")?.rule_id ??
+                        "child:desired_start_date",
+                    value: startDate[1],
+                    confidence: "medium",
                 });
             }
             continue;
@@ -239,24 +348,25 @@ function extractContactSignals(text: string, spec: ActionIntakeSpec): ActionInta
     const out: ActionIntakePasteExtractedField[] = [];
     const seen = new Set<string>();
 
-    const email = text.match(EMAIL_RE);
-    if (email?.[0]) {
+    const emailRaw = findEmailCandidate(text);
+    if (emailRaw) {
+        const parsed = emailConfidence(emailRaw);
         pushField(out, seen, {
             payload_key: "email",
             rule_id: fieldByPayloadKey(spec, "email")?.rule_id ?? "person:email",
-            value: email[0],
-            confidence: "high",
+            value: parsed.value,
+            confidence: parsed.confidence,
         });
     }
 
-    const phone = text.match(PHONE_RE);
-    if (phone?.[0]) {
-        const digits = normalizePhone(phone[0]);
+    const phoneRaw = findPhoneCandidate(text);
+    if (phoneRaw) {
+        const parsed = phoneConfidence(phoneRaw);
         pushField(out, seen, {
             payload_key: "phone",
             rule_id: fieldByPayloadKey(spec, "phone")?.rule_id ?? "person:phone",
-            value: formatPhoneDisplay(digits),
-            confidence: "high",
+            value: parsed.value,
+            confidence: parsed.confidence,
         });
     }
 
@@ -267,14 +377,14 @@ function extractNameFromContactBlob(text: string, spec: ActionIntakeSpec): Actio
     const lines = text.split(/\r?\n/).map((l) => trim(l)).filter(Boolean);
     if (lines.length !== 1) return [];
     const line = lines[0]!;
-    if (!EMAIL_RE.test(line) && !PHONE_RE.test(line)) return [];
+    if (!findEmailCandidate(line) && !findPhoneCandidate(line)) return [];
     if (PARENT_LABEL_RE.test(line) || CHILD_LABEL_RE.test(line)) return [];
 
     let remainder = line;
-    const email = line.match(EMAIL_RE);
-    if (email?.[0]) remainder = remainder.replace(email[0], " ");
-    const phone = line.match(PHONE_RE);
-    if (phone?.[0]) remainder = remainder.replace(phone[0], " ");
+    const emailRaw = findEmailCandidate(line);
+    if (emailRaw) remainder = remainder.replace(emailRaw, " ");
+    const phoneRaw = findPhoneCandidate(line);
+    if (phoneRaw) remainder = remainder.replace(phoneRaw, " ");
     remainder = remainder.replace(/\s+/g, " ").trim();
     if (!remainder || remainder.includes(":")) return [];
     const split = splitPersonName(remainder);
@@ -302,6 +412,7 @@ function extractHeuristicNames(lines: string[], spec: ActionIntakeSpec): ActionI
     const seen = new Set<string>();
 
     for (const line of lines) {
+        if (isContactOnlyLine(line)) continue;
         if (!looksLikeNameLine(line)) continue;
         const split = splitPersonName(line);
         if (!split) continue;
@@ -309,13 +420,13 @@ function extractHeuristicNames(lines: string[], spec: ActionIntakeSpec): ActionI
             payload_key: "first_name",
             rule_id: fieldByPayloadKey(spec, "first_name")?.rule_id ?? "person:first_name",
             value: split.first,
-            confidence: "medium",
+            confidence: "high",
         });
         pushField(out, seen, {
             payload_key: "last_name",
             rule_id: fieldByPayloadKey(spec, "last_name")?.rule_id ?? "person:last_name",
             value: split.last,
-            confidence: "medium",
+            confidence: "high",
         });
         break;
     }
@@ -354,12 +465,14 @@ export function parseCreateLeadIntakeText(input: {
     if (!fields.some((f) => f.payload_key === "intake_notes")) {
         const leftover = lines
             .filter((line) => {
-                if (EMAIL_RE.test(line) || PHONE_RE.test(line)) return false;
+                if (EMAIL_EXTRACT_RE.test(line) || isContactOnlyLine(line)) return false;
                 if (PARENT_LABEL_RE.test(line) || CHILD_LABEL_RE.test(line)) return false;
                 if (SOURCE_LABEL_RE.test(line) || PROGRAM_LABEL_RE.test(line)) return false;
                 if (NOTES_LABEL_RE.test(line) || START_DATE_LABEL_RE.test(line) || DOB_LABEL_RE.test(line)) {
                     return false;
                 }
+                if (AGE_LABEL_RE.test(line) || LOOKING_FOR_RE.test(line)) return false;
+                if (looksLikeNameLine(line)) return false;
                 return true;
             })
             .join("\n")
@@ -375,7 +488,7 @@ export function parseCreateLeadIntakeText(input: {
     }
 
     const mappedFragments = new Set(
-        fields.flatMap((f) => f.value.split(/\s+/).filter((w) => w.length > 2))
+        fields.flatMap((f) => f.value.split(/\s+/).filter((w) => w.length > 2)),
     );
     const unmapped_text = lines
         .filter((line) => !Array.from(mappedFragments).some((frag) => line.includes(frag)))

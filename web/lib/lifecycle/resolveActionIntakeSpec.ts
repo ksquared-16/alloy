@@ -20,6 +20,10 @@ import {
     validationRulesForIntakeField,
 } from "@/lib/lifecycle/createLeadIntakeFieldMap";
 import {
+    isValidCreateLeadEmail,
+    isValidCreateLeadPhone,
+} from "@/lib/admin/actions/createLeadIntakeValidation";
+import {
     lifecycleEntityLabel,
     lifecycleFieldRequirementById,
 } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
@@ -305,9 +309,9 @@ function passesValidationRule(value: string, rule: ActionIntakeValidationRule): 
         case "non_empty":
             return value.length > 0;
         case "email":
-            return value.length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+            return value.length === 0 || isValidCreateLeadEmail(value);
         case "phone":
-            return value.length === 0 || value.replace(/\D/g, "").length >= 7;
+            return value.length === 0 || isValidCreateLeadPhone(value);
         case "date_iso":
             return value.length === 0 || /^\d{4}-\d{2}-\d{2}$/.test(value);
         default:

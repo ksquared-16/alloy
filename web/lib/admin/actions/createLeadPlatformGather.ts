@@ -2,19 +2,45 @@ import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { ActionIntakePasteExtractionResult } from "@/lib/lifecycle/actionIntakePasteParserTypes";
 import { CREATE_LEAD_PAYLOAD_KEY_BY_RULE } from "@/lib/lifecycle/createLeadIntakeFieldMap";
+import {
+    isValidCreateLeadEmail,
+    isValidCreateLeadPhone,
+} from "@/lib/admin/actions/createLeadIntakeValidation";
 
 /** Platform minimum to create a lead — not lifecycle Required Information. */
-export const CREATE_LEAD_PLATFORM_REQUIRED_KEYS = ["first_name", "last_name"] as const;
+export const CREATE_LEAD_PLATFORM_REQUIRED_KEYS = ["first_name", "last_name", "location_id"] as const;
 export const CREATE_LEAD_PLATFORM_CONTACT_KEYS = ["email", "phone"] as const;
 
+/** Unified draft layout — required block (action-oriented, not entity tabs). */
+export const CREATE_LEAD_UNIFIED_REQUIRED_KEYS = [
+    "first_name",
+    "last_name",
+    "email",
+    "phone",
+    "location_id",
+] as const;
+
+export const CREATE_LEAD_UNIFIED_OPTIONAL_KEYS = [
+    "child_first_name",
+    "child_last_name",
+    "child_date_of_birth",
+    "child_age",
+    "child_desired_start_date",
+    "child_program",
+    "child_program_room_cohort_key",
+    "source",
+    "intake_notes",
+] as const;
+
 export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = [
-    { payload_key: "first_name", field_label: "First name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
-    { payload_key: "last_name", field_label: "Last name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
+    { payload_key: "first_name", field_label: "Parent/Guardian First Name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
+    { payload_key: "last_name", field_label: "Parent/Guardian Last Name", section: "person", section_label: "Parent / guardian", tier: "required", value_kind: "text" },
     { payload_key: "email", field_label: "Email", section: "person", section_label: "Parent / guardian", tier: "optional", value_kind: "email" },
     { payload_key: "phone", field_label: "Phone", section: "person", section_label: "Parent / guardian", tier: "optional", value_kind: "phone" },
-    { payload_key: "child_first_name", field_label: "Child first name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
-    { payload_key: "child_last_name", field_label: "Child last name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
-    { payload_key: "child_date_of_birth", field_label: "Date of birth", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
+    { payload_key: "child_first_name", field_label: "Child First Name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
+    { payload_key: "child_last_name", field_label: "Child Last Name", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
+    { payload_key: "child_date_of_birth", field_label: "Child DOB", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
+    { payload_key: "child_age", field_label: "Child Age", section: "child", section_label: "Child", tier: "optional", value_kind: "text" },
     {
         payload_key: "child_program",
         field_label: "Program interest",
@@ -26,7 +52,7 @@ export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = 
     },
     {
         payload_key: "child_program_room_cohort_key",
-        field_label: "Room / cohort",
+        field_label: "Classroom",
         section: "child",
         section_label: "Child",
         tier: "optional",
@@ -45,10 +71,10 @@ export const CREATE_LEAD_GATHER_FIELDS: readonly ActionWorkspaceGatherField[] = 
     { payload_key: "child_desired_start_date", field_label: "Desired start date", section: "child", section_label: "Child", tier: "optional", value_kind: "date" },
     {
         payload_key: "location_id",
-        field_label: "School / location",
+        field_label: "Location",
         section: "context",
         section_label: "Context",
-        tier: "optional",
+        tier: "required",
         value_kind: "select",
         placement_select: "site",
     },
@@ -122,12 +148,14 @@ export function bosSuggestionsFromExtraction(
     suggested_value: string;
     confidence: "high" | "medium" | "low";
 }> {
-    return extraction.fields.map((f) => ({
-        payload_key: f.payload_key,
-        field_label: GATHER_LABEL_BY_KEY[f.payload_key] ?? f.payload_key,
-        suggested_value: f.value,
-        confidence: f.confidence,
-    }));
+    return extraction.fields
+        .filter((f) => f.confidence === "medium" || f.confidence === "low")
+        .map((f) => ({
+            payload_key: f.payload_key,
+            field_label: GATHER_LABEL_BY_KEY[f.payload_key] ?? f.payload_key,
+            suggested_value: f.value,
+            confidence: f.confidence as "medium" | "low",
+        }));
 }
 
 export function validateCreateLeadPlatformMinimum(
@@ -138,16 +166,23 @@ export function validateCreateLeadPlatformMinimum(
     const last = (values.last_name ?? "").trim();
     const email = (values.email ?? "").trim();
     const phone = (values.phone ?? "").trim();
+    const location = (values.location_id ?? "").trim();
 
-    if (!first) issues.push("Parent/guardian first name is required.");
-    if (!last) issues.push("Parent/guardian last name is required.");
-    if (!email && !phone) issues.push("Email or phone is required.");
+    if (!first) issues.push("Parent/Guardian first name is required.");
+    if (!last) issues.push("Parent/Guardian last name is required.");
+    if (!location) issues.push("Location is required.");
 
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    const hasEmail = email.length > 0;
+    const hasPhone = phone.length > 0;
+    if (!hasEmail && !hasPhone) {
+        issues.push("Email or phone is required.");
+    }
+
+    if (hasEmail && !isValidCreateLeadEmail(email)) {
         issues.push("Enter a valid email address.");
     }
-    if (phone && phone.replace(/\D/g, "").length < 7) {
-        issues.push("Enter a valid phone number.");
+    if (hasPhone && !isValidCreateLeadPhone(phone)) {
+        issues.push("Enter a valid 10-digit phone number.");
     }
 
     if (issues.length) return { ok: false, issues };
