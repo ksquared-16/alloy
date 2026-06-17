@@ -16,6 +16,7 @@ import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 import { emitEvent } from "@/lib/emitEvent";
+import { maybeOpenProcessingCaseFromNonFormSourceSafe } from "@/lib/pos/processingCase/maybeOpenProcessingCaseFromNonFormSourceSafe";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -71,6 +72,10 @@ export async function POST(request: NextRequest) {
     const entityId = typeof formData.get("entity_id") === "string" ? (formData.get("entity_id") as string).trim() : "";
     const docType = typeof formData.get("doc_type") === "string" ? (formData.get("doc_type") as string).trim() || null : null;
     const titleRaw = typeof formData.get("title") === "string" ? (formData.get("title") as string).trim() || null : null;
+    // POS-FP1c opt-in: when explicitly requested, route the uploaded document into the
+    // existing Processing Case spine (non-form on-ramp). Default OFF — existing callers
+    // that don't send this flag are completely unaffected.
+    const openProcessingCase = formData.get("open_processing_case") === "true";
 
     if (!entityTypeRaw || !entityId) {
         return NextResponse.json({ error: "entity_type and entity_id are required", code: "MISSING_ENTITY" }, { status: 400 });
@@ -161,5 +166,20 @@ export async function POST(request: NextRequest) {
     } catch (e) {
         console.warn("[documents/upload] emitEvent", e instanceof Error ? e.message : e);
     }
-    return NextResponse.json({ document, raw: row });
+
+    // POS-FP1c: opt-in, best-effort non-form on-ramp. Reuses the existing Processing
+    // Case engine (idempotent on the primary source); never throws, never blocks the
+    // upload response. No extraction/matching/commit happens here — that stays honest
+    // in the review spine (a document source resolves to a "routed" no-op on approval).
+    let processingCaseId: string | null = null;
+    if (openProcessingCase) {
+        const opened = await maybeOpenProcessingCaseFromNonFormSourceSafe(supabase, {
+            orgId: ctx.orgId,
+            sourceKind: "document",
+            sourceId: docId,
+        });
+        processingCaseId = opened?.processingCaseId ?? null;
+    }
+
+    return NextResponse.json({ document, raw: row, processing_case_id: processingCaseId });
 }
