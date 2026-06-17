@@ -16,6 +16,7 @@ import type { ProcessingCaseDetail } from "@/lib/pos/processingCase/readModel/ty
 import type { SourceEvidence } from "@/lib/pos/processingCase/readModel/resolveSourceEvidence";
 import type { HandoffResult } from "@/lib/pos/processingCase/approveHandoff";
 import ReviewDecideCard, { DECISION_TO_ACTION, type RecommendationView } from "@/app/adminV2/processing/ReviewDecideCard";
+import ClassificationPanel from "@/app/adminV2/processing/ClassificationPanel";
 
 /** Operator decision vocabulary shown on every case (recommended one is highlighted; others are prototype). */
 const OPERATOR_ACTIONS: Array<{ key: string; label: string }> = [
@@ -184,7 +185,7 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
     return (
         <div className="flex h-full min-h-0 flex-col">
             {/* Context header */}
-            <div className="shrink-0 border-l-2 border-emerald-600 bg-emerald-50/60 px-4 py-3">
+            <div className="shrink-0 border-l-2 border-alloy-juniper bg-emerald-50/60 px-4 py-3">
                 <div className="flex items-center gap-2">
                     <span className="truncate text-[15px] font-medium text-stone-900">
                         {primary?.display.label ?? "Processing case"}
@@ -205,6 +206,9 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
 
             {/* Work surface (scrolls) */}
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                {/* What kind of artifact this is (non-form sources). Read-only; no extraction. */}
+                <ClassificationPanel classification={detail.classification} primarySourceKind={primary?.kind ?? null} />
+
                 {/* Core POS moment: what Alloy understood + what it recommends */}
                 {!isClosed ? <ReviewDecideCard view={rec} loading={recLoading} /> : null}
 
@@ -334,7 +338,7 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                                 type="button"
                                 disabled={approving}
                                 onClick={() => void approve()}
-                                className="rounded-md bg-emerald-600 px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+                                className="rounded-md bg-[#00A283] px-3.5 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
                             >
                                 {approving
                                     ? "Approving…"
