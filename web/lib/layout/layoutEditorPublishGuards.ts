@@ -87,7 +87,7 @@ export function validateOpportunityDrawerLayoutPublishGuards(doc: LayoutDoc): st
                     ),
                 );
                 item.columns?.forEach((col, colIdx) => {
-                    const display = readLayoutEditorDisplayConfig({ metadata: col.metadata, renderHint: col.renderHint, adornment: col.adornment });
+                    const display = readLayoutEditorDisplayConfig({ renderHint: col.renderHint, adornment: col.adornment });
                     errors.push(
                         ...collectLayoutEditorDisplayPublishGuardErrors(display, `${path} column ${colIdx + 1}`),
                     );

@@ -124,6 +124,18 @@ export function resolveLayoutEditorWidgetRuntimeTone(
     return "neutral";
 }
 
+/** Accepts runtime tones plus legacy summary-card aliases (`work`, `attention`). */
+export type LeadOperatingCardAccentInput = LayoutEditorWidgetRuntimeTone | "work" | "attention";
+
+export function resolveLeadOperatingCardAccent(
+    accent: LeadOperatingCardAccentInput | undefined,
+): LayoutEditorWidgetRuntimeTone {
+    if (!accent) return "neutral";
+    if (accent === "work") return "green";
+    if (accent === "attention") return "amber";
+    return accent;
+}
+
 export function resolveLayoutEditorWidgetAccentRail(
     style: LayoutEditorWidgetStyle | undefined,
 ): "work" | "attention" | undefined {

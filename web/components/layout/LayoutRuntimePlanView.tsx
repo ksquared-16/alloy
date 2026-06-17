@@ -32,7 +32,9 @@ import {
     resolveLayoutEditorWidgetRuntimeTone,
     resolveLayoutEditorWidgetToneDotClass,
     resolveLayoutEditorWidgetToneRailClass,
+    resolveLeadOperatingCardAccent,
     type LayoutEditorWidgetRuntimeTone,
+    type LeadOperatingCardAccentInput,
 } from "@/lib/layout/layoutEditorWidgetStyle";
 import {
     formatLayoutEditorFieldDateValue,
@@ -1043,18 +1045,18 @@ function WidgetChrome({
     tone?: LayoutEditorWidgetRuntimeTone;
     minimized?: boolean;
     widgetKey?: string;
-    leadCard?: { icon: ReactNode; accent: LayoutEditorWidgetRuntimeTone };
+    leadCard?: { icon: ReactNode; accent: LeadOperatingCardAccentInput };
 }) {
     const compact = useLayoutRuntimeSummaryStrip();
     const composition = useLayoutRuntimeCompositionHints();
-    const resolvedTone = tone ?? leadCard?.accent;
+    const resolvedTone = tone ? resolveLeadOperatingCardAccent(tone) : leadCard ? resolveLeadOperatingCardAccent(leadCard.accent) : undefined;
 
     if (compact && (composition.leadOperatingSummaryCards || composition.personOperatingSummaryCards || composition.childOperatingSummaryCards) && leadCard) {
         return (
             <LeadOperatingSummaryCard
                 title={title}
                 icon={leadCard.icon}
-                accent={leadCard.accent}
+                accent={resolveLeadOperatingCardAccent(leadCard.accent)}
                 minimized={minimized}
                 widgetKey={widgetKey}
             >
