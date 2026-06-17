@@ -21,6 +21,7 @@ import type { StoredProcessingExtraction } from "@/lib/pos/processingCase/extrac
 import { isExtractionStale } from "@/lib/pos/processingCase/extraction/processingCaseExtractionDb";
 import type { StoredDocumentFormPreview } from "@/lib/pos/processingCase/structure/types";
 import { describeTextUnavailableReason } from "@/lib/pos/processingCase/structure/extractDocumentTextSafe";
+import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
 
 /** Operator decision vocabulary shown on every case (recommended one is highlighted; others are prototype). */
 const OPERATOR_ACTIONS: Array<{ key: string; label: string }> = [
@@ -103,6 +104,139 @@ function OpenDocumentButton({ documentId }: { documentId: string }) {
             </button>
             {error ? <div className="mt-0.5 text-[11px] text-amber-700">{error}</div> : null}
         </div>
+    );
+}
+
+/** FP12 — Workflow A: "Create form from document" → draft form outline. Preview only; no form created/published. */
+function FormDraftSection({
+    caseId,
+    primarySourceKind,
+    initial,
+    onNavigate,
+}: {
+    caseId: string;
+    primarySourceKind: string | null;
+    initial: StoredFormDraftPreview | null;
+    onNavigate?: (section: string) => void;
+}) {
+    const [draft, setDraft] = useState<StoredFormDraftPreview | null>(initial);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    if (primarySourceKind !== "document") return null;
+
+    const generate = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft`, {
+                method: "POST",
+                credentials: "same-origin",
+            });
+            const body = (await res.json().catch(() => ({}))) as { data?: { form_draft_preview?: StoredFormDraftPreview }; error?: string };
+            if (!res.ok) throw new Error(body.error || `Couldn’t create form draft (${res.status})`);
+            setDraft(body.data?.form_draft_preview ?? null);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Couldn’t create form draft");
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    const fieldById = (id: string) => draft?.fields.find((f) => f.id === id);
+
+    return (
+        <section className="mb-5 rounded-lg border border-emerald-200 bg-white p-3.5 shadow-sm">
+            <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700">Recreate as a form</span>
+                {draft ? (
+                    <span className="text-[10px] text-stone-400">
+                        {draft.generator_version} · {formatWhen(draft.generated_at)}
+                    </span>
+                ) : null}
+            </div>
+
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+                <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void generate()}
+                    className="rounded-md bg-[#00A283] px-3 py-1.5 text-[12.5px] font-medium text-white hover:bg-[#009276] disabled:opacity-50"
+                >
+                    {busy ? "Drafting…" : draft ? "Regenerate form draft" : "Create form from document"}
+                </button>
+                {draft ? (
+                    <button
+                        type="button"
+                        disabled
+                        title="Opening the draft in the Forms builder ships next — see remaining blocker"
+                        className="inline-flex cursor-not-allowed items-center gap-1 rounded-md border border-stone-200 px-2.5 py-1.5 text-[12px] text-stone-400"
+                    >
+                        Review draft in Forms
+                        <span className="rounded bg-stone-100 px-1 py-0.5 text-[9px] font-semibold uppercase text-stone-400">Next</span>
+                    </button>
+                ) : null}
+            </div>
+            {error ? <div className="mb-2 text-[11.5px] text-amber-700">{error}</div> : null}
+
+            {!draft ? (
+                <p className="text-[12px] text-stone-500">
+                    Recreate this document’s structure as an editable Alloy form draft. Nothing is created or published — you review it first.
+                </p>
+            ) : (
+                <div>
+                    <div className="mb-2">
+                        <div className="text-[10.5px] font-medium uppercase tracking-wide text-stone-400">Form title</div>
+                        <div className="text-[14px] font-medium text-stone-900">{draft.title}</div>
+                        <div className="text-[10.5px] text-stone-400">
+                            {draft.title_from_text ? "from document text" : "from filename / classification"} ·{" "}
+                            {draft.fields.length} field{draft.fields.length === 1 ? "" : "s"} · {draft.sections.length} section
+                            {draft.sections.length === 1 ? "" : "s"}
+                        </div>
+                    </div>
+
+                    {draft.sections.length === 0 ? (
+                        <div className="text-[12px] text-stone-400">No sections/fields were detected to draft.</div>
+                    ) : (
+                        <div className="space-y-2.5">
+                            {draft.sections.map((s) => (
+                                <div key={s.id} className="rounded-md border border-stone-200 p-2.5">
+                                    <div className="mb-1 text-[12.5px] font-medium text-stone-800">{s.title}</div>
+                                    <ul className="space-y-0.5">
+                                        {s.field_ids.map((fid) => {
+                                            const f = fieldById(fid);
+                                            if (!f) return null;
+                                            return (
+                                                <li key={fid} className="flex items-center gap-2 text-[12px] text-stone-600">
+                                                    <span className="min-w-0 flex-1 truncate">{f.label}</span>
+                                                    {f.required ? <span className="text-[10px] text-amber-700">required</span> : null}
+                                                    <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px] text-stone-500">{f.type}</span>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {draft.warnings.length > 0 ? (
+                        <ul className="mt-2 list-inside list-disc text-[11.5px] text-amber-700">
+                            {draft.warnings
+                                .filter((w) => !w.startsWith("text_unavailable:"))
+                                .map((w, i) => (
+                                    <li key={i}>{w}</li>
+                                ))}
+                            {draft.warnings.some((w) => w.startsWith("text_unavailable:")) ? (
+                                <li>{describeTextUnavailableReason(draft.warnings.find((w) => w.startsWith("text_unavailable:"))!.slice("text_unavailable:".length))}</li>
+                            ) : null}
+                        </ul>
+                    ) : null}
+
+                    <p className="mt-2 text-[10.5px] text-stone-400">Draft only — no form is created or published until you review it.</p>
+                </div>
+            )}
+        </section>
     );
 }
 
@@ -483,6 +617,13 @@ export default function ProcessingCaseDetailContent({ caseId }: { caseId: string
                     primarySourceKind={primary?.kind ?? null}
                     caseId={caseId}
                     onCorrected={() => void load()}
+                />
+
+                {/* Workflow A — the product moment: recreate this document as a form draft. */}
+                <FormDraftSection
+                    caseId={caseId}
+                    primarySourceKind={primary?.kind ?? null}
+                    initial={detail.formDraftPreview}
                 />
 
                 {/* What Alloy found (facts) + what it maps to (candidates) — proposals only. */}

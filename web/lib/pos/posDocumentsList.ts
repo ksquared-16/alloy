@@ -9,6 +9,8 @@
  * Read-only projection. No record writes, no matching, no commit.
  */
 
+import { deriveDocumentDisplayName } from "./processingCase/formDraft/deriveDocumentTitle";
+
 export interface PosDocumentRow {
     id: string;
     title: string | null;
@@ -41,11 +43,9 @@ export interface PosDocumentListItem {
 }
 
 function documentLabel(doc: PosDocumentRow): string {
-    return (
-        (doc.title && doc.title.trim()) ||
-        (doc.original_filename && doc.original_filename.trim()) ||
-        "Untitled document"
-    );
+    // Prefer a real title, else a cleaned filename (e.g. "mo500-...-report_0.pdf" →
+    // "Mo500 ... Report") so uploads aren't shown as raw filenames or "document".
+    return deriveDocumentDisplayName(doc.title, doc.original_filename);
 }
 
 export function buildPosDocumentsList(
