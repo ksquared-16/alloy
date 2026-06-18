@@ -1,5 +1,6 @@
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
 import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
+import { formatIsoDateForDisplay } from "@/lib/intake/normalize/date";
 import { formatIntakeReviewWarnings } from "@/lib/intake/review/intakeReviewWarnings";
 
 export type IntakeReviewPersonCard = {
@@ -91,9 +92,7 @@ export function buildIntakeReviewPresentation(
 }
 
 function formatDobForDisplay(iso: string): string {
-    const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return iso;
-    return `${match[2]}/${match[3]}/${match[1]}`;
+    return formatIsoDateForDisplay(iso);
 }
 
 export { formatDobForDisplay };

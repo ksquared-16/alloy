@@ -1,4 +1,4 @@
-import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
+import type { IntakePersonCandidate } from "@/lib/intake/types";
 
 export type IntakeReviewWarningCode =
     | "extra_parents_commit_limited"
@@ -8,6 +8,7 @@ export type IntakeReviewWarningCode =
     | "child_last_name_needs_review"
     | "parent_last_name_inferred"
     | "invalid_phone"
+    | "invalid_email"
     | "location_ambiguous"
     | "location_unmatched";
 
@@ -18,6 +19,10 @@ export type IntakeReviewWarning = {
     message: string;
     severity: IntakeReviewWarningSeverity;
 };
+
+function personName(person: IntakePersonCandidate): string {
+    return [person.first_name, person.last_name].filter(Boolean).join(" ").trim();
+}
 
 export function formatIntakeReviewWarnings(warnings: readonly IntakeReviewWarning[]): string[] {
     return warnings.map((w) => w.message);
@@ -30,24 +35,36 @@ export function buildHouseholdReviewWarnings(input: {
     action_has_address_field?: boolean;
     has_invalid_phone?: boolean;
     invalid_phone_value?: string | null;
+    has_invalid_email?: boolean;
+    invalid_email_value?: string | null;
 }): IntakeReviewWarning[] {
     const warnings: IntakeReviewWarning[] = [];
     const extraParents = Math.max(0, input.parents.length - 1);
     const extraChildren = Math.max(0, input.children.length - 1);
+    const primaryParent = personName(input.parents[0] ?? ({} as IntakePersonCandidate));
 
     if (extraParents > 0) {
+        const extraNames = input.parents.slice(1).map(personName).filter(Boolean);
         warnings.push({
             code: "extra_parents_commit_limited",
             severity: "warning",
-            message: `${input.parents.length} parents/guardians detected. Only the primary parent will be created by this action.`,
+            message:
+                extraNames.length ?
+                    `${extraNames.join(", ")} will not be created — Create Lead commits only the primary parent${primaryParent ? ` (${primaryParent})` : ""}. Add additional guardians after opening the lead.`
+                :   `${input.parents.length} parents/guardians detected — only the primary parent will be created.`,
         });
     }
 
     if (extraChildren > 0) {
+        const extraNames = input.children.slice(1).map(personName).filter(Boolean);
+        const firstChild = personName(input.children[0] ?? ({} as IntakePersonCandidate));
         warnings.push({
             code: "extra_children_commit_limited",
             severity: "warning",
-            message: `${input.children.length} children detected. Only the first child will be created by this action.`,
+            message:
+                extraNames.length ?
+                    `${extraNames.join(", ")} will not be created — Create Lead commits only the first child${firstChild ? ` (${firstChild})` : ""}. Add siblings after opening the lead.`
+                :   `${input.children.length} children detected — only the first child will be created.`,
         });
     }
 
@@ -55,7 +72,8 @@ export function buildHouseholdReviewWarnings(input: {
         warnings.push({
             code: "address_no_action_field",
             severity: "info",
-            message: "Address detected but no address field exists on this action.",
+            message:
+                "Address was detected but Create Lead has no address field — copy it manually or add it after opening the lead.",
         });
     }
 
@@ -63,7 +81,15 @@ export function buildHouseholdReviewWarnings(input: {
         warnings.push({
             code: "invalid_phone",
             severity: "warning",
-            message: `Phone number${input.invalid_phone_value ? ` (${input.invalid_phone_value})` : ""} is invalid — US phone numbers must be 10 digits. Email can still be used as contact.`,
+            message: `Phone${input.invalid_phone_value ? ` (${input.invalid_phone_value})` : ""} is invalid — enter a 10-digit US number or remove it. A valid email can still satisfy contact requirements.`,
+        });
+    }
+
+    if (input.has_invalid_email) {
+        warnings.push({
+            code: "invalid_email",
+            severity: "warning",
+            message: `Email${input.invalid_email_value ? ` (${input.invalid_email_value})` : ""} is invalid — correct the address or use a valid phone number instead.`,
         });
     }
 
@@ -72,7 +98,7 @@ export function buildHouseholdReviewWarnings(input: {
             warnings.push({
                 code: "parent_last_name_inferred",
                 severity: "info",
-                message: `Parent/guardian last name "${parent.last_name}" inferred for ${parent.first_name ?? "guardian"}.`,
+                message: `Last name "${parent.last_name}" inferred for ${parent.first_name ?? "guardian"} from shared household surname — confirm before commit.`,
             });
         }
     }
@@ -82,13 +108,13 @@ export function buildHouseholdReviewWarnings(input: {
             warnings.push({
                 code: "child_last_name_inferred",
                 severity: "info",
-                message: `Child last name "${child.last_name}" inferred from household for ${child.first_name ?? "child"}.`,
+                message: `Child last name "${child.last_name}" inferred for ${child.first_name ?? "child"} from household parents — confirm before commit.`,
             });
         } else if (child.first_name && !child.last_name?.trim() && !child.last_name_inferred) {
             warnings.push({
                 code: "child_last_name_needs_review",
                 severity: "warning",
-                message: `Child "${child.first_name}" is missing a last name — please review before commit.`,
+                message: `Child "${child.first_name}" is missing a last name — add it before commit or confirm the household surname.`,
             });
         }
     }
@@ -99,12 +125,13 @@ export function buildHouseholdReviewWarnings(input: {
 export function mergeIntakeReviewWarnings(
     ...groups: readonly (readonly IntakeReviewWarning[])[]
 ): IntakeReviewWarning[] {
-    const seen = new Set<IntakeReviewWarningCode>();
+    const seen = new Set<string>();
     const out: IntakeReviewWarning[] = [];
     for (const group of groups) {
         for (const warning of group) {
-            if (seen.has(warning.code)) continue;
-            seen.add(warning.code);
+            const key = `${warning.code}:${warning.message}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
             out.push(warning);
         }
     }

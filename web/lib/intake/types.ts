@@ -112,6 +112,8 @@ export type IntakeRelationshipCandidate = {
     confidence: IntakeFactConfidence;
     validation_state: IntakeValidationState;
     source_fact_ids: string[];
+    /** True when inferred from household grouping (parent × child), not an explicit relationship fact. */
+    inferred?: boolean;
 };
 
 export type IntakeRelatedRecordCandidate = {

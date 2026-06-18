@@ -303,6 +303,7 @@ Bend, Oregon 97701",
     {
       "confidence": "high",
       "from_candidate_id": "person-1",
+      "inferred": true,
       "kind": "parent_guardian_to_child",
       "relationship_id": "relationship-1",
       "source_fact_ids": [
@@ -316,6 +317,7 @@ Bend, Oregon 97701",
     {
       "confidence": "high",
       "from_candidate_id": "person-2",
+      "inferred": true,
       "kind": "parent_guardian_to_child",
       "relationship_id": "relationship-2",
       "source_fact_ids": [
@@ -329,6 +331,7 @@ Bend, Oregon 97701",
     {
       "confidence": "high",
       "from_candidate_id": "person-1",
+      "inferred": true,
       "kind": "parent_guardian_to_child",
       "relationship_id": "relationship-3",
       "source_fact_ids": [
@@ -342,6 +345,7 @@ Bend, Oregon 97701",
     {
       "confidence": "high",
       "from_candidate_id": "person-2",
+      "inferred": true,
       "kind": "parent_guardian_to_child",
       "relationship_id": "relationship-4",
       "source_fact_ids": [
@@ -356,32 +360,32 @@ Bend, Oregon 97701",
   "review_warnings": [
     {
       "code": "extra_parents_commit_limited",
-      "message": "2 parents/guardians detected. Only the primary parent will be created by this action.",
+      "message": "Jason Lyons will not be created — Create Lead commits only the primary parent (Alex Lyons). Add additional guardians after opening the lead.",
       "severity": "warning",
     },
     {
       "code": "extra_children_commit_limited",
-      "message": "2 children detected. Only the first child will be created by this action.",
+      "message": "Max Lyons will not be created — Create Lead commits only the first child (Jaxon Lyons). Add siblings after opening the lead.",
       "severity": "warning",
     },
     {
       "code": "address_no_action_field",
-      "message": "Address detected but no address field exists on this action.",
+      "message": "Address was detected but Create Lead has no address field — copy it manually or add it after opening the lead.",
       "severity": "info",
     },
     {
       "code": "invalid_phone",
-      "message": "Phone number (987988899) is invalid — US phone numbers must be 10 digits. Email can still be used as contact.",
+      "message": "Phone (987988899) is invalid — enter a 10-digit US number or remove it. A valid email can still satisfy contact requirements.",
       "severity": "warning",
     },
     {
       "code": "child_last_name_inferred",
-      "message": "Child last name "Lyons" inferred from household for Jaxon.",
+      "message": "Child last name "Lyons" inferred for Jaxon from household parents — confirm before commit.",
       "severity": "info",
     },
     {
       "code": "child_last_name_inferred",
-      "message": "Child last name "Lyons" inferred from household for Max.",
+      "message": "Child last name "Lyons" inferred for Max from household parents — confirm before commit.",
       "severity": "info",
     },
   ],

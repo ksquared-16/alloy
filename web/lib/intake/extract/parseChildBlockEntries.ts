@@ -14,17 +14,29 @@ const CHILD_BLOCK_HEADER_RE =
 const CHILD_ENTRY_SPLIT_RE = /\s+and\s+(?=[A-Za-z])/i;
 
 function parseDobFromFragment(fragment: string): string | null {
-    const parenDateDob = fragment.match(/\((\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\s*DOB\s*\)/i);
-    if (parenDateDob?.[1]) return parseFlexibleDate(parenDateDob[1]);
+    const parenDateDob = fragment.match(/\(([^)]+?)\s*DOB\s*\)/i);
+    if (parenDateDob?.[1]) {
+        const parsed = parseFlexibleDate(parenDateDob[1].trim());
+        if (parsed) return parsed;
+    }
 
-    const parenDobDate = fragment.match(/\(\s*DOB\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\s*\)/i);
-    if (parenDobDate?.[1]) return parseFlexibleDate(parenDobDate[1]);
+    const parenDobDate = fragment.match(/\(\s*DOB\s+([^)]+)\)/i);
+    if (parenDobDate?.[1]) {
+        const parsed = parseFlexibleDate(parenDobDate[1].trim());
+        if (parsed) return parsed;
+    }
 
-    const inlineDob = fragment.match(/\bDOB\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/i);
-    if (inlineDob?.[1]) return parseFlexibleDate(inlineDob[1]);
+    const inlineDob = fragment.match(/\bDOB\s+(.+?)(?:\s*$|\s+and\b|\))/i);
+    if (inlineDob?.[1]) {
+        const parsed = parseFlexibleDate(inlineDob[1].trim());
+        if (parsed) return parsed;
+    }
 
-    const bareDate = fragment.match(/\((\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})\)/);
-    if (bareDate?.[1]) return parseFlexibleDate(bareDate[1]);
+    const bareDate = fragment.match(/\(([^)]+)\)/);
+    if (bareDate?.[1]) {
+        const parsed = parseFlexibleDate(bareDate[1].trim());
+        if (parsed) return parsed;
+    }
 
     return null;
 }
@@ -90,8 +102,12 @@ export function isChildBlockLine(line: string): boolean {
     if (/\b(?:child|kid)\s+is\b/i.test(t)) return false;
     if (/\b(?:daughter|son)\s+is\b/i.test(t)) return false;
     if (CHILD_BLOCK_HEADER_RE.test(t)) return true;
-    if (/^[A-Z][\w'\-]+\s+DOB\s+\d{1,2}[\/\-]\d{1,2}/i.test(t)) return true;
-    if (/^[A-Z][\w'\-]+(?:\s+[A-Z][\w'\-]+)?\s*\(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*DOB\s*\)/i.test(t)) {
+    const inlineDob = t.match(/^[A-Za-z][\w'\-]+\s+DOB\s+(.+)$/i);
+    if (inlineDob?.[1] && parseFlexibleDate(inlineDob[1].trim())) return true;
+    if (/^[A-Z][\w'\-]+(?:\s+[A-Z][\w'\-]+)?\s*\(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s*DOB\s*\)/i.test(t)) {
+        return true;
+    }
+    if (/^[A-Z][\w'\-]+(?:\s+[A-Z][\w'\-]+)?\s*\(\s*[A-Za-z]+\s+\d{1,2}/i.test(t) && /\bDOB\b/i.test(t)) {
         return true;
     }
     return false;

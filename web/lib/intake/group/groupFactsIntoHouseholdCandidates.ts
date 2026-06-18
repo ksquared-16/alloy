@@ -277,6 +277,7 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
     const relationships = buildHouseholdRelationships({ parents, children });
 
     const invalidPhone = householdPhones.some((f) => f.validation_state === "invalid");
+    const invalidEmail = householdEmails.some((f) => f.validation_state === "invalid");
     const review_warnings = buildHouseholdReviewWarnings({
         parents,
         children,
@@ -284,6 +285,8 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         action_has_address_field: false,
         has_invalid_phone: invalidPhone,
         invalid_phone_value: invalidPhone ? String(householdPhones[0]?.raw_value ?? "") : null,
+        has_invalid_email: invalidEmail,
+        invalid_email_value: invalidEmail ? String(householdEmails[0]?.raw_value ?? "") : null,
     });
 
     const unassigned_fact_ids = facts.filter((f) => !assignedFactIds.has(f.fact_id)).map((f) => f.fact_id);

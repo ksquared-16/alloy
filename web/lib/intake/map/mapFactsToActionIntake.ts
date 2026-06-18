@@ -164,13 +164,13 @@ function mapCreateLeadHouseholdToFields(input: {
             mappingWarnings.push({
                 code: "location_ambiguous",
                 severity: "warning",
-                message: `Location "${household.location.label}" matches multiple sites — please select manually.`,
+                message: `Location "${household.location.label}" matches multiple sites — select the correct location in the form before creating the lead.`,
             });
         } else if (locationOptions.length > 0) {
             mappingWarnings.push({
                 code: "location_unmatched",
                 severity: "warning",
-                message: `Location "${household.location.label}" could not be matched to an available site.`,
+                message: `Location "${household.location.label}" does not match any available site — pick a location manually or check the spelling.`,
             });
         } else if (!seen.has(keys.location_id)) {
             push({

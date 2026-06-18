@@ -21,7 +21,7 @@ const CHILDREN_HEADER_RE = /^(?:child|children|kid|kids|dependent|dependents|stu
 const CHILD_NAME_AGE_SPACE_RE =
     /^([A-Za-z][\w'\-]+(?:\s+[A-Za-z][\w'\-]+)*)\s+age\s+(\d{1,2})\b/i;
 const CHILD_NAME_DOB_INLINE_RE =
-    /^([A-Za-z][\w'\-]+(?:\s+[A-Za-z][\w'\-]+)*)\s+DOB\s+(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/i;
+    /^([A-Za-z][\w'\-]+(?:\s+[A-Za-z][\w'\-]+)*)\s+DOB\s+(.+)$/i;
 const STREET_ADDRESS_RE =
     /^\d+\s+[A-Za-z0-9][\w\s.'#-]*\b(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|way|blvd|boulevard|court|ct)\.?$/i;
 const CITY_STATE_ZIP_RE = /^([A-Za-z\s.'-]+),\s*([A-Z]{2})\s+(\d{5}(?:-\d{4})?)$/i;
@@ -554,7 +554,7 @@ export function extractFactsFromText(input: {
 
         const nameDobInline = line.match(CHILD_NAME_DOB_INLINE_RE);
         if (nameDobInline?.[2]) {
-            const normalized = parseFlexibleDate(nameDobInline[2]);
+            const normalized = parseFlexibleDate(nameDobInline[2].trim());
             if (normalized) {
                 pushFact(facts, seen, {
                     fact_type: "dob",
