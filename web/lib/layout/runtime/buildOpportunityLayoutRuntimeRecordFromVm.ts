@@ -4,7 +4,10 @@
  * Operators see handles and labels only — never raw UUIDs, OCM ids, or table names.
  */
 
-import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import {
+    opportunityDisplayLocationFromRecord,
+    resolveOpportunityLeadLocationFields,
+} from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
 import type { LayoutDoc } from "../layoutV2";
 import { normalizeRefKeyOnRead } from "../layoutRefKeyAliases";
@@ -47,6 +50,26 @@ function asDisplayValue(raw: unknown): string | null {
     return text;
 }
 
+function pickDisplay(...values: unknown[]): string | null {
+    for (const value of values) {
+        if (value == null) continue;
+        const text = String(value).trim();
+        if (!text || isOpaqueIdValue(text)) continue;
+        return text;
+    }
+    return null;
+}
+
+/** Preserve stored ids (e.g. location_id UUID) for editable select bindings. */
+function pickStoredId(...values: unknown[]): string {
+    for (const value of values) {
+        if (value == null) continue;
+        const text = String(value).trim();
+        if (text) return text;
+    }
+    return "";
+}
+
 /**
  * Map one configured field refKey to a value from the VM record. Tries: the exact
  * key, the alias-on-read key, then namespace heuristics (opportunity.* ↔ bare key,
@@ -54,6 +77,14 @@ function asDisplayValue(raw: unknown): string | null {
  * exists so the field still renders a label + blank placeholder ("—").
  */
 function mapFieldRefKeyValue(refKey: string, vmRecord: Record<string, unknown>, record: Record<string, unknown>): string {
+    if (refKey === "opportunity.location_id") {
+        return pickStoredId(record["opportunity.location_id"], vmRecord.location_id, vmRecord._location_id);
+    }
+    if (refKey === "opportunity.location") {
+        const label = pickDisplay(record["opportunity.location"], vmRecord._location_label, vmRecord._location_name);
+        if (label) return label;
+    }
+
     const direct = asDisplayValue(vmRecord[refKey]);
     if (direct != null) return direct;
 
@@ -101,16 +132,6 @@ export function buildLayoutRuntimeRecordBindingEvidence(
         runtimeRecordKeys: [...recordKeys],
         missingRefKeys: layoutItemRefKeys.filter((rk) => !recordKeys.has(rk)),
     };
-}
-
-function pickDisplay(...values: unknown[]): string | null {
-    for (const value of values) {
-        if (value == null) continue;
-        const text = String(value).trim();
-        if (!text || isOpaqueIdValue(text)) continue;
-        return text;
-    }
-    return null;
 }
 
 function parseHouseholdLastName(name: string | null | undefined): string {
@@ -172,11 +193,20 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
     );
 
     const location = opportunityDisplayLocationFromRecord(vmRecord);
-    const opportunityLocationId = pickDisplay(vmRecord.location_id, vmRecord._location_id);
+    const leadLocation = resolveOpportunityLeadLocationFields(vmRecord);
+    const opportunityLocationId = pickStoredId(
+        vmRecord.location_id,
+        vmRecord._location_id,
+        leadLocation.locationId,
+    );
+    const leadLocationLabel =
+        leadLocation.locationLabel
+        || pickDisplay(vmRecord._location_label, vmRecord._location_name, vmRecord["opportunity.location"])
+        || "";
     const siteLabel =
         location.kind === "single" ? location.label
         : location.kind === "multiple" ? location.label
-        : pickDisplay(vmRecord._location_label, vmRecord._location_name, vmRecord["opportunity.location"]);
+        : leadLocationLabel || null;
 
     const householdAddress = pickDisplay(
         vmRecord["location.formatted_address"],
@@ -246,8 +276,10 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         status_key: statusKey ?? "",
         _status_display: statusLabel ?? statusKey ?? "",
         "opportunity.status_key": statusKey ?? "",
-        "opportunity.location": siteLabel ?? "",
-        "opportunity.location_id": opportunityLocationId ?? "",
+        location_id: opportunityLocationId || null,
+        _location_id: opportunityLocationId || null,
+        "opportunity.location": leadLocationLabel || siteLabel || "",
+        "opportunity.location_id": opportunityLocationId,
         "opportunity.tour_date": tourDate ?? "",
         "opportunity.tour_status": tourStatus ?? "",
         "opportunity.source": source ?? "",

@@ -443,6 +443,12 @@ function EditableSectionFrame({
     const isBuild = editorMode === "build";
     const sectionType = readSectionType(section);
 
+    const applySectionReorder = (direction: -1 | 1) => {
+        let next = reorderSectionInZone(doc, section.key, direction);
+        next = repackPeerCardsAfterZoneReorder(next, section.key);
+        applyDoc(next);
+    };
+
     if (!isBuild) {
         return (
             <div className={`${hidden ? "opacity-60" : ""}`} data-testid={`visual-editor-section-${section.key}`}>
@@ -492,7 +498,7 @@ function EditableSectionFrame({
                         className="rounded-md px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
                         onClick={(e) => {
                             e.stopPropagation();
-                            applyDoc(reorderSectionInZone(doc, section.key, -1));
+                            applySectionReorder(-1);
                         }}
                     >
                         Move ↑
@@ -502,7 +508,7 @@ function EditableSectionFrame({
                         className="rounded-md px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
                         onClick={(e) => {
                             e.stopPropagation();
-                            applyDoc(reorderSectionInZone(doc, section.key, 1));
+                            applySectionReorder(1);
                         }}
                     >
                         Move ↓

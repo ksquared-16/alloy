@@ -214,12 +214,50 @@ function defaultAdornmentIconForRefKey(
     if (linkBehavior === "mailto") return "mail";
     if (linkBehavior === "tel") return "phone";
     const key = refKey?.trim() ?? "";
+    if (key.includes("location")) return "location";
+    if (key.includes("dob") || key.includes("age") || key.includes("birth") || key.includes("start_date")) return "calendar";
     if (key.startsWith("person.")) return "person";
     if (key.startsWith("child.") || key.startsWith("inquiry_child.")) return "child";
     if (key.startsWith("opportunity.")) return "opportunity";
     if (key.includes("phone")) return "phone";
     if (key.includes("email") || key.includes("mail")) return "mail";
+    if (key.includes("program") || key.includes("room")) return "program";
     return "person";
+}
+
+/** Default icon for a layout refKey — used when show-icon is enabled without an explicit pick. */
+export function resolveLayoutEditorDefaultIconForRefKey(
+    refKey: string | undefined,
+    linkBehavior?: LayoutLinkBehavior,
+): LayoutAdornmentIcon {
+    return defaultAdornmentIconForRefKey(refKey, linkBehavior);
+}
+
+export function resolveLayoutCollectionColumnShowIcon(col: Pick<LayoutCollectionColumn, "refKey" | "adornment" | "metadata">): boolean {
+    const config = readLayoutEditorDisplayConfig(col);
+    if (config.showIcon === false) return false;
+    if (config.showIcon === true) return true;
+    return Boolean(config.icon ?? col.adornment?.icon);
+}
+
+export function resolveLayoutCollectionColumnAdornment(
+    col: Pick<LayoutCollectionColumn, "refKey" | "adornment" | "metadata">,
+): LayoutItem["adornment"] | undefined {
+    const config = readLayoutEditorDisplayConfig(col);
+    if (!resolveLayoutCollectionColumnShowIcon(col)) return undefined;
+    const icon =
+        config.icon
+        ?? col.adornment?.icon
+        ?? defaultAdornmentIconForRefKey(col.refKey, config.linkBehavior);
+    const position =
+        config.iconPosition === "right" ? "right"
+        : config.iconPosition === "above" ? "left"
+        : col.adornment?.position ?? "left";
+    return {
+        position,
+        icon,
+        ...(col.adornment?.action ? { action: col.adornment.action } : {}),
+    };
 }
 
 function resolveOpenDrawerActionForRefKey(
@@ -328,12 +366,17 @@ export function applyDisplayConfigToColumnPatch(
                 icon: col.adornment.icon,
             };
         }
-    } else if (config.icon) {
+    } else if (config.icon || config.showIcon === true) {
+        const resolvedIcon = config.icon ?? defaultAdornmentIconForRefKey(col.refKey, config.linkBehavior);
         patch.adornment = {
             position,
-            icon: config.icon,
+            icon: resolvedIcon,
             ...(col.adornment?.action ? { action: col.adornment.action } : {}),
         };
+    } else if (config.showIcon === false) {
+        if (col.adornment?.action) {
+            patch.adornment = { position: col.adornment.position, icon: col.adornment.icon, action: col.adornment.action };
+        }
     }
     return patch;
 }

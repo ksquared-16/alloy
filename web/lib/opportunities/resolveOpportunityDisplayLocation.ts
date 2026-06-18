@@ -135,6 +135,19 @@ export function opportunityDisplayLocationFromRecord(
     });
 }
 
+/** Native opportunity row location — not child-location aggregate precedence. */
+export function resolveOpportunityLeadLocationFields(record: Record<string, unknown>): {
+    locationId: string;
+    locationLabel: string;
+} {
+    const locationId = trimOrNull(record.location_id ?? record._location_id ?? record["opportunity.location_id"]) ?? "";
+    const locationLabel =
+        trimOrNull(record._location_label ?? record._location_name ?? record["opportunity.location"])
+        ?? (locationId && !isUuidLike(locationId) ? locationId : "")
+        ?? "";
+    return { locationId, locationLabel };
+}
+
 /** Primary operator-facing label for opportunity location surfaces (header, overview). */
 export function opportunityDisplayLocationLabel(record: Record<string, unknown>): string | null {
     const resolved = opportunityDisplayLocationFromRecord(record);

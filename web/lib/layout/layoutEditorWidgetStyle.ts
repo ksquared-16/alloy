@@ -191,6 +191,26 @@ export function resolveLayoutEditorWidgetToneTitleClass(tone: LayoutEditorWidget
     }
 }
 
+/** Subtle KPI/summary tile header wash — compact, not a full field-card header. */
+export function resolveLayoutEditorWidgetToneHeaderWashClass(tone: LayoutEditorWidgetRuntimeTone | undefined): string {
+    switch (tone ?? "neutral") {
+        case "green":
+            return "bg-gradient-to-r from-emerald-50/75 via-emerald-50/25 to-white";
+        case "blue":
+            return "bg-gradient-to-r from-sky-50/75 via-sky-50/25 to-white";
+        case "amber":
+            return "bg-gradient-to-r from-amber-50/75 via-amber-50/25 to-white";
+        case "red":
+            return "bg-gradient-to-r from-red-50/65 via-red-50/20 to-white";
+        case "purple":
+            return "bg-gradient-to-r from-violet-50/65 via-violet-50/20 to-white";
+        case "muted":
+            return "bg-gradient-to-r from-alloy-stone/[0.06] via-white to-white";
+        default:
+            return "bg-gradient-to-r from-alloy-stone/[0.04] via-white to-white";
+    }
+}
+
 export function resolveLayoutEditorWidgetToneIconClass(tone: LayoutEditorWidgetRuntimeTone | undefined): string {
     switch (tone ?? "neutral") {
         case "green":

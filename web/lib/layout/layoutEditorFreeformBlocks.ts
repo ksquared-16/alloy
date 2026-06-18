@@ -509,12 +509,16 @@ export function listCustomBlockRowLayout(item: LayoutItem): CustomBlockRowLayout
                         colIndex: slot,
                         colId: `${item.id}-row-${rowIndex}-col-${slot}`,
                         relatedColumnIndex: colIdx != null && colIdx >= 0 ? colIdx : undefined,
-                        items: col ?
+                            items: col ?
                             [{
                                 id: `${item.id}-col-${colIdx}`,
                                 kind: "field" as const,
                                 refKey: col.refKey,
                                 label: col.label,
+                                renderHint: col.renderHint,
+                                adornment: col.adornment,
+                                editable: col.editable,
+                                metadata: col.metadata,
                             }]
                         :   [],
                     };

@@ -22,7 +22,12 @@ import {
 } from "@/lib/layout/layoutV2";
 import { resolveItemValue } from "@/lib/layout/resolveItemValue";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "@/lib/layout/runtime/layoutRuntimePlan";
-import { readLayoutEditorDisplayConfig, typographyIntentClass } from "@/lib/layout/layoutEditorDisplayConfig";
+import {
+    readLayoutEditorDisplayConfig,
+    typographyIntentClass,
+    resolveLayoutCollectionColumnAdornment,
+    resolveLayoutCollectionColumnShowIcon,
+} from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
 import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfig";
 import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
@@ -606,12 +611,14 @@ function RepeaterCellContent({
     const edit = useLayoutRuntimeDrawerEdit();
     const onAction = useContext(AdornmentActionContext);
     const displayConfig = readLayoutEditorDisplayConfig(col);
+    const columnAdornment = resolveLayoutCollectionColumnAdornment(col);
+    const showColumnIcon = resolveLayoutCollectionColumnShowIcon(col);
     const synthetic: LayoutItem = {
         id: col.refKey,
         kind: "field",
         refKey: col.refKey,
         renderHint: col.renderHint,
-        adornment: col.adornment,
+        adornment: columnAdornment ?? col.adornment,
         editable: col.editable,
         metadata: col.metadata,
     };
@@ -665,7 +672,7 @@ function RepeaterCellContent({
             {columnLabel ?
                 <span className="shrink-0 text-[11px] font-medium text-alloy-midnight/55">{columnLabel}</span>
             :   null}
-            {col.adornment && col.adornment.position !== "right" ?
+            {showColumnIcon && synthetic.adornment && synthetic.adornment.position !== "right" ?
                 <Adorn item={synthetic} rowRecord={row} />
             :   null}
             {canEdit && edit ?
@@ -685,7 +692,7 @@ function RepeaterCellContent({
                     :   formattedDisplay}
                 </span>
             }
-            {col.adornment && col.adornment.position === "right" ?
+            {showColumnIcon && synthetic.adornment && synthetic.adornment.position === "right" ?
                 <Adorn item={synthetic} rowRecord={row} />
             :   null}
         </span>
@@ -1594,6 +1601,20 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             composition.childOverviewComposition || composition.personOverviewComposition ?
                 <PersonActivityPreview entries={entries} onViewAll={viewAll} />
             :   <LeadActivityPreview entries={entries} onViewAll={viewAll} />;
+
+        if (operatingCard || kpiTile) {
+            return (
+                <LeadOperatingSummaryCard
+                    title={title || "Activity"}
+                    icon={<MessageSquare className="h-3.5 w-3.5" aria-hidden />}
+                    accent={configuredLeadAccent ?? "blue"}
+                    widgetKey="activity"
+                >
+                    {preview}
+                </LeadOperatingSummaryCard>
+            );
+        }
+
         const activityMarkup = (
             <div
                 className="min-w-0 break-words px-1"
@@ -1608,11 +1629,21 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 const rail = resolveLayoutEditorWidgetToneRailClass(configuredTone);
                 return (
                     <div className={`rounded-lg border border-alloy-stone/12 border-l-[3px] ${rail} bg-white px-2 py-2 shadow-[0_1px_4px_rgba(24,39,58,0.04)]`}>
+                        <div className="mb-1 truncate text-[10px] font-semibold uppercase tracking-[0.07em] text-alloy-midnight/55">
+                            {title || "Activity"}
+                        </div>
                         {activityMarkup}
                     </div>
                 );
             }
-            return activityMarkup;
+            return (
+                <div className="rounded-lg border border-alloy-stone/12 bg-white px-2 py-2 shadow-[0_1px_4px_rgba(24,39,58,0.04)]">
+                    <div className="mb-1 truncate text-[10px] font-semibold uppercase tracking-[0.07em] text-alloy-midnight/55">
+                        {title || "Activity"}
+                    </div>
+                    {activityMarkup}
+                </div>
+            );
         }
         return <WidgetChrome title={title} tone={configuredTone}>{activityMarkup}</WidgetChrome>;
     }
