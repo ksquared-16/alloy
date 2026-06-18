@@ -12,6 +12,7 @@ import {
     contactRoleFieldRefs,
     normalizeLayoutEditorContactRole,
     type LayoutEditorContactRole,
+    type LayoutEditorContactResolutionRole,
 } from "@/lib/layout/layoutEditorContactRoles";
 import { resolveOpportunityPrimaryContactPerson } from "@/lib/layout/runtime/resolveOpportunityPrimaryContactPerson";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
@@ -57,12 +58,12 @@ function isHouseholdPrimaryContactRole(roleType: string | null | undefined): boo
     return key === "primary_contact" || key === "primary";
 }
 
-function rowMatchesRole(roleType: string | null | undefined, role: LayoutEditorContactRole): boolean {
+function rowMatchesRole(roleType: string | null | undefined, role: LayoutEditorContactResolutionRole): boolean {
     const key = normRoleKey(roleType);
     if (!key) return false;
     if (role === "billing") return BILLING_ROLE_KEYS.has(key) || key.includes("billing") || key.includes("payer");
     if (role === "emergency") return EMERGENCY_ROLE_KEYS.has(key) || key.includes("emergency");
-    if (role === "parents" || role === "secondary") {
+    if (role === "parents") {
         return PARENT_ROLE_KEYS.has(key) || key.includes("parent") || key.includes("guardian");
     }
     return false;
@@ -112,7 +113,7 @@ export function resolveLayoutEditorContactBlockPerson(
         if (!personId) return false;
         if (primaryId && personId === primaryId) return false;
         if (excluded.has(personId)) return false;
-        if (role !== "parents" && role !== "secondary" && isHouseholdPrimaryContactRole(row.role_type)) return false;
+        if (role !== "parents" && isHouseholdPrimaryContactRole(row.role_type)) return false;
         return rowMatchesRole(row.role_type, role);
     });
 
@@ -135,7 +136,7 @@ export function overlayLayoutEditorContactBlockRecord(
 ): ProofRuntimeRecord {
     const role = normalizeLayoutEditorContactRole(roleInput);
     const refs =
-        role === "parents" || role === "secondary" ? contactRoleFieldRefs("secondary")
+        role === "parents" ? contactRoleFieldRefs("secondary")
         : role === "billing" ? contactRoleFieldRefs("billing")
         : role === "emergency" ? contactRoleFieldRefs("emergency")
         : contactRoleFieldRefs("primary");
