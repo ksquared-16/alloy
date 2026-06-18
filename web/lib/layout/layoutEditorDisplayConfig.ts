@@ -221,7 +221,7 @@ function defaultAdornmentIconForRefKey(
     if (key.startsWith("opportunity.")) return "opportunity";
     if (key.includes("phone")) return "phone";
     if (key.includes("email") || key.includes("mail")) return "mail";
-    if (key.includes("program") || key.includes("room")) return "program";
+    if (key.includes("program") || key.includes("room")) return "school";
     return "person";
 }
 
