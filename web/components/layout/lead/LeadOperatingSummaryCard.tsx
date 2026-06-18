@@ -5,6 +5,7 @@ import {
     resolveLayoutEditorWidgetToneRailClass,
     resolveLeadOperatingCardAccent,
     resolveLayoutEditorWidgetToneIconClass,
+    resolveLayoutEditorWidgetToneTitleClass,
     type LeadOperatingCardAccentInput,
 } from "@/lib/layout/layoutEditorWidgetStyle";
 
@@ -31,6 +32,7 @@ export default function LeadOperatingSummaryCard({
     const resolvedAccent = resolveLeadOperatingCardAccent(accent);
     const railAccent = resolveLayoutEditorWidgetToneRailClass(resolvedAccent);
     const iconAccent = resolveLayoutEditorWidgetToneIconClass(resolvedAccent);
+    const titleAccent = resolveLayoutEditorWidgetToneTitleClass(resolvedAccent);
     return (
         <div
             className={`flex h-full min-h-[4.25rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/12 border-l-[3px] ${railAccent} bg-white shadow-[0_1px_4px_rgba(24,39,58,0.05)]`}
@@ -44,7 +46,7 @@ export default function LeadOperatingSummaryCard({
                 <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border ${iconAccent}`}>
                     {icon}
                 </div>
-                <span className="truncate text-[10px] font-semibold uppercase tracking-[0.07em] text-alloy-midnight/55">
+                <span className={`truncate text-[10px] font-semibold uppercase tracking-[0.07em] ${titleAccent}`}>
                     {title}
                 </span>
             </div>

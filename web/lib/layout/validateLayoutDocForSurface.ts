@@ -194,6 +194,13 @@ function walkItem(
             if (col.refKey && !isAllowedOpportunityDrawerFieldRefKey(col.refKey)) {
                 ctx.errors.push(`${path}.columns[${ci}]: unknown field refKey "${col.refKey}"`);
             }
+            if (isObject(col.metadata)) {
+                collectUnknownKeys(col.metadata, ALLOWED_ITEM_METADATA_KEYS, `${path}.columns[${ci}].metadata`, ctx.errors);
+                const display = readLayoutEditorDisplayConfig({ metadata: col.metadata });
+                ctx.errors.push(
+                    ...validateLayoutEditorDisplayConfig(display, `${path}.columns[${ci}].metadata.layoutEditorDisplay`),
+                );
+            }
         });
     }
 

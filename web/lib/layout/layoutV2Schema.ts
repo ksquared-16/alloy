@@ -245,6 +245,7 @@ export function parseLayoutDoc(input: unknown, options?: ParseLayoutDocOptions):
                     if (ctpl !== undefined) col.template = ctpl;
                     const ccond = parseCondition(c.visibleWhen, `${path}.columns[${ci}]`);
                     if (ccond) col.visibleWhen = ccond;
+                    if (isObject(c.metadata)) col.metadata = c.metadata;
                     cols.push(col);
                 });
                 item.columns = cols;

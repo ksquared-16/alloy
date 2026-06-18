@@ -61,7 +61,7 @@ export const DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS = "px-0 pb-0 pt-0";
 
 /** Premium drawer overview panel — pine accent + soft header (Lead reference styling). */
 export const DRAWER_OVERVIEW_PANEL_SURFACE =
-    "overflow-hidden rounded-lg border border-alloy-stone/15 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_4px_rgba(24,39,58,0.05)]";
+    "overflow-hidden rounded-lg border border-alloy-stone/18 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_5px_rgba(24,39,58,0.06)]";
 
 export const DRAWER_OVERVIEW_PANEL_CENTERPIECE_SURFACE =
     "overflow-hidden rounded-xl border border-alloy-stone/20 border-l-[3px] border-l-alloy-juniper/75 bg-white shadow-[0_2px_8px_rgba(24,39,58,0.06)] ring-1 ring-alloy-stone/10";

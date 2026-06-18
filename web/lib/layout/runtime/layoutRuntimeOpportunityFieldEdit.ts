@@ -73,8 +73,29 @@ export async function saveLayoutRuntimeOpportunityNativeEdits(input: {
 export function collectLayoutRuntimeOpportunityNativeBaseline(record: ProofRuntimeRecord): Record<string, string> {
     const out: Record<string, string> = {};
     for (const refKey of LAYOUT_RUNTIME_OPPORTUNITY_NATIVE_EDITABLE_REF_KEYS) {
-        const raw = record[refKey] ?? record.location_id;
+        const raw =
+            record[refKey]
+            ?? record.location_id
+            ?? record._location_id;
         out[refKey] = raw == null ? "" : String(raw);
     }
     return out;
+}
+
+/** Sync display label after location_id draft changes (optimistic drawer refresh). */
+export function syncOpportunityLocationDisplayLabel(
+    record: ProofRuntimeRecord,
+    locationId: string,
+    locationLabel: string,
+): ProofRuntimeRecord {
+    const next: ProofRuntimeRecord = { ...record };
+    next["opportunity.location_id"] = locationId;
+    next.location_id = locationId || null;
+    next._location_id = locationId || null;
+    next["opportunity.location"] = locationLabel;
+    if (locationLabel) {
+        next._location_label = locationLabel;
+        next._location_name = locationLabel;
+    }
+    return next;
 }

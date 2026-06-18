@@ -19,7 +19,7 @@ import {
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { applyLayoutRuntimeDraftToRecord } from "@/lib/layout/runtime/applyLayoutRuntimeDraftToRecord";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
-import { isLayoutRuntimeEditableRefKeySupported } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import { isLayoutRuntimeEditableRefKeySupported, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
     collectLayoutRuntimeChildRepeaterBaselines,
     saveLayoutRuntimeChildRepeaterEdits,
@@ -62,9 +62,7 @@ function composeDraftKey(refKey: string, rowKey?: string): string {
 }
 
 function resolveEditableRefKey(refKey: string): string {
-    const normalized = normalizeRefKeyOnRead(refKey);
-    if (isLayoutRuntimeEditableRefKeySupported(normalized)) return normalized;
-    return refKey;
+    return resolveLayoutRuntimeEditableRefKey(refKey);
 }
 
 function collectPersonContactBaseline(record: ProofRuntimeRecord): Record<string, string> {

@@ -2,6 +2,8 @@
  * Layout editor widget presentation metadata (Phase 5.14B + Experience Builder 5.17).
  */
 
+import type { LayoutSection } from "@/lib/layout/layoutV2";
+
 export const LAYOUT_EDITOR_WIDGET_STYLE_METADATA_KEY = "layoutEditorWidgetStyle" as const;
 
 /** Operator-facing tone palette — maps to runtime accent rails via resolvers below. */
@@ -170,6 +172,25 @@ export function resolveLayoutEditorWidgetToneDotClass(tone: LayoutEditorWidgetRu
     }
 }
 
+export function resolveLayoutEditorWidgetToneTitleClass(tone: LayoutEditorWidgetRuntimeTone | undefined): string {
+    switch (tone ?? "neutral") {
+        case "green":
+            return "text-alloy-juniper/80";
+        case "blue":
+            return "text-alloy-blue/80";
+        case "amber":
+            return "text-alloy-ember/85";
+        case "red":
+            return "text-red-600/85";
+        case "purple":
+            return "text-violet-600/85";
+        case "muted":
+            return "text-alloy-midnight/45";
+        default:
+            return "text-alloy-midnight/55";
+    }
+}
+
 export function resolveLayoutEditorWidgetToneIconClass(tone: LayoutEditorWidgetRuntimeTone | undefined): string {
     switch (tone ?? "neutral") {
         case "green":
@@ -207,4 +228,18 @@ export function resolveLayoutEditorWidgetToneRailClass(tone: LayoutEditorWidgetT
         default:
             return "border-l-alloy-stone/25";
     }
+}
+
+/** Read configured widget tone from the first widget item in a section. */
+export function resolveLayoutSectionWidgetTone(section: LayoutSection): LayoutEditorWidgetRuntimeTone | undefined {
+    for (const row of section.rows) {
+        for (const col of row.columns) {
+            for (const item of col.items) {
+                if (item.kind !== "widget_placeholder") continue;
+                const style = readLayoutEditorWidgetStyle(item.metadata);
+                if (style.tone) return resolveLayoutEditorWidgetRuntimeTone(style);
+            }
+        }
+    }
+    return undefined;
 }

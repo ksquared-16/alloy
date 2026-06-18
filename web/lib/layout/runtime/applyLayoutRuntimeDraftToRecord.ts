@@ -52,6 +52,16 @@ function applyOpportunityNativeDraft(
         if (refKey === "opportunity.location_id") {
             next.location_id = value || null;
             next._location_id = value || null;
+            const label = (draft["opportunity.location"] ?? "").trim();
+            if (label) {
+                next["opportunity.location"] = label;
+                next._location_label = label;
+                next._location_name = label;
+            } else if (!value) {
+                next["opportunity.location"] = "";
+                next._location_label = "";
+                next._location_name = "";
+            }
         }
     }
     return next;

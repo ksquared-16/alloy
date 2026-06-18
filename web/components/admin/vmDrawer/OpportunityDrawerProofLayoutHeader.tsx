@@ -4,12 +4,11 @@
  * Live opportunity drawer header — composes VM controls into the layout runtime shell.
  */
 
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { X } from "lucide-react";
-import LeadDrawerCommandHeader from "@/components/layout/lead/LeadDrawerCommandHeader";
-import ProofRecordModalHeaderShell, {
-    type ProofHeaderTab,
-} from "@/components/layout/proofShell/ProofRecordModalHeaderShell";
+import LeadDrawerCommandHeader, {
+    type LeadDrawerCommandHeaderTab,
+} from "@/components/layout/lead/LeadDrawerCommandHeader";
 import { OpportunityDrawerHeaderControls } from "@/components/admin/opportunity/OpportunityDrawerHeaderControls";
 import VmProgressiveStatusDropdown from "@/components/admin/vmDrawer/VmProgressiveStatusDropdown";
 import type { OpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/types";
@@ -19,7 +18,6 @@ import type { RecordManageMenuActionKey, RecordManageMenuItem } from "@/lib/admi
 import type { ActionPreflightUiPayload } from "@/lib/admin/actions/actionPreflightPresentation";
 import type { OpportunityQueuePreviewSeed } from "@/lib/adminV2/bos/activeOperationalContext";
 import type { StatusControlVm } from "@/lib/adminV2/viewModel/drawer/types";
-import { resolveLeadDrawerHeaderContext } from "@/lib/layout/runtime/resolveLeadDrawerHeaderContext";
 
 export type OpportunityDrawerProofLayoutHeaderProps = {
     title: string;
@@ -46,7 +44,7 @@ export type OpportunityDrawerProofLayoutHeaderProps = {
     onDismissActionPreflightBlocked: () => void;
     registryActionFeedback: OpportunityDrawerRegistryActionFeedback | null;
     tabLabels: Partial<Record<DrawerTabKey, string>>;
-    /** When true, render Lead command-center header anatomy (Patch 8). */
+    /** @deprecated Layout cutover always uses LeadDrawerCommandHeader. */
     leadCompositionActive?: boolean;
     /** Queue prev/next — under header actions/status, same row band as title. */
     queueNavigation?: ReactNode | null;
@@ -57,7 +55,6 @@ export default function OpportunityDrawerProofLayoutHeader({
     locationLabel,
     opportunityId,
     record,
-    displayVm,
     queuePreviewSeed,
     statusLabel,
     currentStatusKey,
@@ -76,45 +73,12 @@ export default function OpportunityDrawerProofLayoutHeader({
     onDismissActionPreflightBlocked,
     registryActionFeedback,
     tabLabels,
-    leadCompositionActive = false,
     queueNavigation = null,
 }: OpportunityDrawerProofLayoutHeaderProps) {
-    const proofTabs: ProofHeaderTab[] = tabs.map((key) => ({
+    const proofTabs: LeadDrawerCommandHeaderTab[] = tabs.map((key) => ({
         key,
         label: tabLabels[key] ?? key,
     }));
-
-    const titleContext = useMemo(() => {
-        const ctx = resolveLeadDrawerHeaderContext(record);
-        const parts: ReactNode[] = [];
-        if (ctx.primaryContactLabel) {
-            parts.push(
-                <span key="contact" className="font-medium text-alloy-midnight/75">
-                    {ctx.primaryContactLabel}
-                </span>,
-            );
-        }
-        if (ctx.contactLine) {
-            parts.push(
-                <span key="line" className="text-alloy-midnight/45">
-                    {ctx.contactLine}
-                </span>,
-            );
-        }
-        if (ctx.householdLabel && ctx.householdLabel !== ctx.primaryContactLabel) {
-            parts.push(
-                <span key="household" className="text-alloy-midnight/45">
-                    {ctx.householdLabel}
-                </span>,
-            );
-        }
-        if (parts.length === 0) return null;
-        return parts.reduce<ReactNode[]>((acc, node, index) => {
-            if (index > 0) acc.push(<span key={`sep-${index}`} className="text-alloy-midnight/25" aria-hidden>·</span>);
-            acc.push(node);
-            return acc;
-        }, []);
-    }, [record]);
 
     const headerControlsRow = (
         <div
@@ -166,33 +130,18 @@ export default function OpportunityDrawerProofLayoutHeader({
         </button>
     );
 
-    return leadCompositionActive ?
-            <LeadDrawerCommandHeader
-                title={title}
-                record={record}
-                locationLabel={locationLabel}
-                tabs={proofTabs}
-                activeTab={activeTab}
-                onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
-                lifecycleRail={lifecycleRail}
-                actionsControl={headerControlsRow}
-                closeButton={closeButton}
-                queueNavigation={queueNavigation}
-            />
-        :   <ProofRecordModalHeaderShell
+    return (
+        <LeadDrawerCommandHeader
             title={title}
+            record={record}
             locationLabel={locationLabel}
-            titleContext={titleContext}
-            showLocationChip
-            statusControl={null}
-            actionsControl={headerControlsRow}
-            closeButton={closeButton}
-            attention={null}
             tabs={proofTabs}
             activeTab={activeTab}
             onTabSelect={(tab) => onTabSelect(tab as DrawerTabKey)}
             lifecycleRail={lifecycleRail}
-            dataAttribute="opportunity-drawer-runtime"
+            actionsControl={headerControlsRow}
+            closeButton={closeButton}
             queueNavigation={queueNavigation}
-        />;
+        />
+    );
 }

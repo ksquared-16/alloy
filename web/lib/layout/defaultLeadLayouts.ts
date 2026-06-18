@@ -200,7 +200,7 @@ export function buildLeadDrawerDefaultDoc(): LayoutDoc {
         row(id(hcBase, "r0"), [
             col(id(hcBase, "r0"), 0, HALF, [
                 templateItem(id(hcBase, "r0c0"), "household", "{last_name} Household", "Household", HOME_ICON),
-                fieldItem(id(hcBase, "r0c0"), "opportunity.location", "Location", "text", undefined, LOCATION_ICON),
+                fieldItem(id(hcBase, "r0c0"), "opportunity.location_id", "Location", "text", undefined, LOCATION_ICON),
                 fieldItem(id(hcBase, "r0c0"), "opportunity.status_key", "Lead status", "status"),
             ]),
             col(id(hcBase, "r0"), 1, HALF, [

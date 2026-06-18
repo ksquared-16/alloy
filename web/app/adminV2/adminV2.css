@@ -695,14 +695,16 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail {
     padding-bottom: 0.75rem !important;
   }
 
-  /* Preserve lead command header card treatment — density only, not flattening */
-  [data-lead-drawer-command-header="true"] {
+  /* Preserve command header card treatment — match person drawer density */
+  [data-lead-drawer-command-header="true"],
+  [data-person-drawer-command-header="true"] {
     padding: 0.875rem 1rem !important;
   }
 
-  [data-lead-drawer-command-avatar="true"] {
-    width: 2.75rem !important;
-    height: 2.75rem !important;
+  [data-lead-drawer-command-avatar="true"],
+  [data-person-drawer-command-avatar="true"] {
+    width: 3rem !important;
+    height: 3rem !important;
   }
 
   [data-proof-layout-header-controls="true"] {

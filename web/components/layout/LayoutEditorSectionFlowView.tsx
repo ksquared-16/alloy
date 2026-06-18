@@ -52,7 +52,11 @@ export default function LayoutEditorSectionFlowView({
                         data-layout-section-segment="row"
                     >
                         {segment.sections.map((section) => (
-                            <div key={section.key} className={`${rowCellClassName} flex h-full min-h-0 flex-col`}>
+                            <div
+                                key={section.key}
+                                className={`${rowCellClassName} flex h-full min-h-0 flex-col`}
+                                data-layout-runtime-peer-row-card="true"
+                            >
                                 {renderSection(section)}
                             </div>
                         ))}

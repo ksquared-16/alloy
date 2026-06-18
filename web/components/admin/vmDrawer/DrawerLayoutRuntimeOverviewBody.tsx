@@ -44,6 +44,7 @@ type Props = {
     onAdornmentAction?: import("@/components/layout/LayoutRuntimePlanView").AdornmentActionHandler;
     /** When set, renders this doc instead of layoutBody.doc (shell zone body partition). */
     layoutDocOverride?: LayoutDoc | null;
+    onLayoutRuntimeSaved?: () => void | Promise<void>;
 };
 
 function shouldShowStagingDiagnostic(): boolean {
@@ -58,6 +59,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
     onAdornmentAction,
     canMutate = false,
     layoutDocOverride,
+    onLayoutRuntimeSaved,
 }: Props) {
     const effectiveDoc = layoutDocOverride ?? layoutBody.doc;
 
@@ -170,7 +172,7 @@ export default function DrawerLayoutRuntimeOverviewBody({
                             Layout configured but no items rendered. Enable staging diagnostic for item evidence.
                         </div>
                     :   null}
-                    <LayoutRuntimeDrawerEditProvider record={layoutBody.record}>
+                    <LayoutRuntimeDrawerEditProvider record={layoutBody.record} onSaved={onLayoutRuntimeSaved}>
                         {useLeadComposition ?
                             <LeadOverviewRuntimeComposition
                                 doc={effectiveDoc}

@@ -37,7 +37,10 @@ import {
     resolveLayoutEditorWidgetLeadCardAccent,
     resolveLayoutEditorWidgetRuntimeTone,
     resolveLayoutEditorWidgetToneDotClass,
+    resolveLayoutEditorWidgetToneIconClass,
     resolveLayoutEditorWidgetToneRailClass,
+    resolveLayoutEditorWidgetToneTitleClass,
+    resolveLayoutSectionWidgetTone,
     resolveLeadOperatingCardAccent,
     type LayoutEditorWidgetRuntimeTone,
     type LeadOperatingCardAccentInput,
@@ -86,7 +89,7 @@ import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDra
 import LayoutRuntimeFieldInput, {
     layoutRuntimeDependentValueReader,
 } from "@/components/layout/LayoutRuntimeFieldInput";
-import { layoutRuntimeFieldIsEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import { layoutRuntimeFieldIsEditable, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import LayoutRuntimeAdornmentButton from "@/components/layout/LayoutRuntimeAdornmentButton";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import LayoutRuntimeEnrollmentGrid from "@/components/layout/LayoutRuntimeEnrollmentGrid";
@@ -374,11 +377,12 @@ function ValueCell({
         :   display;
     const emptyDisplay = displayConfig.emptyState?.trim() || "—";
     const refKey = item.refKey ?? "";
+    const editableRefKey = resolveLayoutRuntimeEditableRefKey(refKey);
     const canEdit =
         layoutRuntimeFieldIsEditable(item, variant) &&
         Boolean(edit) &&
         layoutRuntimeBlockAllowsFieldEdit(blockEdit);
-    const editValue = canEdit && edit ? edit.getFieldValue(refKey, display ?? "") : display ?? "";
+    const editValue = canEdit && edit ? edit.getFieldValue(editableRefKey, display ?? "") : display ?? "";
     const actionButton = item.refKey === "_action_button" ? readLayoutEditorActionButtonConfig(item.metadata) : null;
 
     const valueBody = (() => {
@@ -474,9 +478,14 @@ function ValueCell({
                 {showIcon && item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
                 {canEdit && edit ?
                     <LayoutRuntimeFieldInput
-                        refKey={refKey}
+                        refKey={editableRefKey}
                         value={editValue}
-                        onChange={(v) => edit.setFieldValue(refKey, v)}
+                        onChange={(v) => edit.setFieldValue(editableRefKey, v)}
+                        onPickOption={(value, label) => {
+                            if (editableRefKey === "opportunity.location_id" && label) {
+                                edit.setFieldValue("opportunity.location", label);
+                            }
+                        }}
                         getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue)}
                     />
                 : actionButton ?
@@ -1204,11 +1213,13 @@ function WidgetChrome({
 
     if (compact) {
         const railClass =
-            resolvedTone ? resolveLayoutEditorWidgetToneDotClass(resolvedTone)
-            : accentRail === "attention" ? "bg-alloy-ember/80"
-            : accentRail === "work" ? "bg-alloy-juniper/70"
-            :   "bg-alloy-stone/35";
-        const surfaceClass = LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE;
+            resolvedTone ? resolveLayoutEditorWidgetToneRailClass(resolvedTone)
+            : accentRail === "attention" ? "border-l-alloy-ember/75"
+            : accentRail === "work" ? "border-l-alloy-juniper/70"
+            :   "";
+        const iconBadgeClass = resolvedTone ? resolveLayoutEditorWidgetToneIconClass(resolvedTone) : "";
+        const titleClass = resolvedTone ? resolveLayoutEditorWidgetToneTitleClass(resolvedTone) : "text-alloy-midnight/50";
+        const surfaceClass = `${LAYOUT_RUNTIME_SUMMARY_WIDGET_SURFACE}${railClass ? ` border-l-[3px] ${railClass}` : ""}`;
         return (
             <div
                 className={surfaceClass}
@@ -1216,9 +1227,14 @@ function WidgetChrome({
                 {...(resolvedTone ? { "data-layout-runtime-widget-tone": resolvedTone } : {})}
                 {...(minimized ? { "data-layout-runtime-summary-widget-minimized": "true" } : {})}
             >
-                <div className={LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER}>
-                    <span className={`h-1 w-1 shrink-0 rounded-full ${railClass}`} aria-hidden />
-                    <span className="truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/50">
+                <div className={`${LAYOUT_RUNTIME_SUMMARY_WIDGET_HEADER}${resolvedTone ? " gap-2 border-b border-alloy-stone/8 px-2.5 py-1.5" : ""}`}>
+                    {resolvedTone ?
+                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${iconBadgeClass}`} aria-hidden>
+                            <span className={`h-1.5 w-1.5 rounded-full ${resolveLayoutEditorWidgetToneDotClass(resolvedTone)}`} />
+                        </span>
+                    :   <span className={`h-1 w-1 shrink-0 rounded-full ${resolveLayoutEditorWidgetToneDotClass(resolvedTone)}`} aria-hidden />
+                    }
+                    <span className={`truncate text-[9px] font-semibold uppercase tracking-[0.08em] ${titleClass}`}>
                         {title}
                     </span>
                 </div>
@@ -1230,14 +1246,23 @@ function WidgetChrome({
         resolvedTone ? resolveLayoutEditorWidgetToneRailClass(resolvedTone)
         : accentRail === "attention" ? "border-l-alloy-ember/75"
         : accentRail === "work" ? "border-l-alloy-juniper/45"
-        : "";
+        : "border-l-alloy-juniper/70";
+    const iconBadgeClass = resolvedTone ? resolveLayoutEditorWidgetToneIconClass(resolvedTone) : "";
+    const titleClass = resolvedTone ? resolveLayoutEditorWidgetToneTitleClass(resolvedTone) : "";
     return (
         <div
-            className={`${LAYOUT_RUNTIME_PANEL_SURFACE} ${rail ? `border-l-[3px] ${rail}` : ""}`}
+            className={`${LAYOUT_RUNTIME_PANEL_SURFACE} border-l-[3px] ${rail} shadow-[0_1px_5px_rgba(24,39,58,0.06)]`}
             {...(resolvedTone ? { "data-layout-runtime-widget-tone": resolvedTone } : {})}
         >
-            <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
-                <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>{title}</span>
+            <div className={`${LAYOUT_RUNTIME_PANEL_HEADER} gap-2 bg-gradient-to-r from-emerald-50/60 via-white to-white`}>
+                {resolvedTone ?
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${iconBadgeClass}`} aria-hidden>
+                        <span className={`h-1.5 w-1.5 rounded-full ${resolveLayoutEditorWidgetToneDotClass(resolvedTone)}`} />
+                    </span>
+                :   null}
+                <span className={`text-[11px] font-semibold uppercase tracking-wide ${titleClass || ""}`} style={titleClass ? undefined : { color: MUTED }}>
+                    {title}
+                </span>
             </div>
             <div className="px-2.5 py-2">{children}</div>
         </div>
@@ -1570,11 +1595,26 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 <PersonActivityPreview entries={entries} onViewAll={viewAll} />
             :   <LeadActivityPreview entries={entries} onViewAll={viewAll} />;
         const activityMarkup = (
-            <div className="min-w-0 break-words px-1" data-layout-runtime-activity-widget="true">
+            <div
+                className="min-w-0 break-words px-1"
+                data-layout-runtime-activity-widget="true"
+                {...(configuredTone ? { "data-layout-runtime-widget-tone": configuredTone } : {})}
+            >
                 {preview}
             </div>
         );
-        return composition.compositionSectionSurface ? activityMarkup : <WidgetChrome title={title}>{activityMarkup}</WidgetChrome>;
+        if (composition.compositionSectionSurface) {
+            if (configuredTone) {
+                const rail = resolveLayoutEditorWidgetToneRailClass(configuredTone);
+                return (
+                    <div className={`rounded-lg border border-alloy-stone/12 border-l-[3px] ${rail} bg-white px-2 py-2 shadow-[0_1px_4px_rgba(24,39,58,0.04)]`}>
+                        {activityMarkup}
+                    </div>
+                );
+            }
+            return activityMarkup;
+        }
+        return <WidgetChrome title={title} tone={configuredTone}>{activityMarkup}</WidgetChrome>;
     }
 
     if (widgetKey === "documents") {
@@ -1855,6 +1895,7 @@ function SectionView({
                     eyebrow={sectionEyebrow}
                     title={section.title}
                     variant={drawerOverviewSectionIsCenterpiece(section.key) ? "centerpiece" : "default"}
+                    tone={resolveLayoutSectionWidgetTone(section)}
                     bodyClassName={bodyClassName}
                 >
                     {body}

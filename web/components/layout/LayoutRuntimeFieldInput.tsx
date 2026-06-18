@@ -22,6 +22,7 @@ type Props = {
     refKey: string;
     value: string;
     onChange: (value: string) => void;
+    onPickOption?: (value: string, label: string) => void;
     rowKey?: string;
     getDependentValue?: (dependsOnOcmKey: InquiryChildNativeOcmFieldKey) => string;
     disabled?: boolean;
@@ -87,6 +88,7 @@ export default function LayoutRuntimeFieldInput({
     refKey,
     value,
     onChange,
+    onPickOption,
     rowKey,
     getDependentValue,
     disabled = false,
@@ -148,7 +150,12 @@ export default function LayoutRuntimeFieldInput({
             <select
                 className={selectClass}
                 value={value}
-                onChange={(e) => onChange(e.target.value)}
+                onChange={(e) => {
+                    const next = e.target.value;
+                    onChange(next);
+                    const picked = selectMeta.options.find((opt) => opt.value === next);
+                    if (picked?.label) onPickOption?.(next, picked.label);
+                }}
                 disabled={fieldDisabled}
                 data-layout-runtime-editable="true"
                 data-layout-runtime-ref-key={refKey}

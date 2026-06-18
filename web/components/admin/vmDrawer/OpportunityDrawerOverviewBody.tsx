@@ -37,6 +37,7 @@ type Props = {
     layoutBody?: UseDrawerLayoutRuntimeBodyResult;
     /** Shell zone body partition — omits summary-strip sections when boundary is active. */
     layoutDocBodyOverride?: LayoutDoc | null;
+    onLayoutRuntimeSaved?: () => void | Promise<void>;
 };
 
 function VmOverviewBody({
@@ -70,6 +71,7 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
         layoutRuntimeShadow,
         layoutBody: layoutBodyProp,
         layoutDocBodyOverride,
+        onLayoutRuntimeSaved,
     } = props;
 
     const { openDrawer } = useAdminDrawer();
@@ -158,6 +160,7 @@ export default function OpportunityDrawerOverviewBody(props: Props) {
                 surface="opportunity_drawer_overview"
                 canMutate={canMutate}
                 onAdornmentAction={onAdornmentAction}
+                onLayoutRuntimeSaved={onLayoutRuntimeSaved}
             />
             {showDebugPanel ?
                 <OpportunityDrawerLayoutRuntimeBodyStatus
