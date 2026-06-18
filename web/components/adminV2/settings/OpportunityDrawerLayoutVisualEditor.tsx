@@ -16,6 +16,7 @@ import LayoutBuilderPalettePanel, {
 } from "@/components/adminV2/settings/LayoutBuilderPalettePanel";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
+import LayoutBuilderInspectorResizeHandle from "@/components/adminV2/settings/LayoutBuilderInspectorResizeHandle";
 import type { EntityLayoutRecord, LayoutDoc } from "@/lib/layout/layoutV2";
 import {
     fetchEntityLayoutRecord,
@@ -45,6 +46,10 @@ import {
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { opCaseFileCanvas } from "@/lib/operational/ui/operationalVisualTokens";
 import { useLayoutBuilderPreviewRecord } from "@/lib/layout/layoutBuilderPreviewRecordState";
+import {
+    LAYOUT_BUILDER_INSPECTOR_RAIL_DEFAULT_PX,
+    readLayoutBuilderInspectorRailWidth,
+} from "@/lib/layout/layoutBuilderInspectorRailWidth";
 import Link from "next/link";
 
 type Props = {
@@ -70,6 +75,11 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const [forceAdvanced, setForceAdvanced] = useState(false);
     const [autoRepairNotice, setAutoRepairNotice] = useState<string | null>(null);
     const previewRecordState = useLayoutBuilderPreviewRecord();
+    const [inspectorRailWidth, setInspectorRailWidth] = useState(LAYOUT_BUILDER_INSPECTOR_RAIL_DEFAULT_PX);
+
+    useEffect(() => {
+        setInspectorRailWidth(readLayoutBuilderInspectorRailWidth());
+    }, []);
 
     const advancedHref = `${basePath}?editor=1&layout=${encodeURIComponent(layoutId)}&advanced=1`;
 
@@ -446,7 +456,12 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             :   null}
 
             <div
-                className={`grid min-h-0 flex-1 gap-3 overflow-hidden ${isBuild ? "xl:grid-cols-[minmax(280px,300px)_minmax(0,1fr)_minmax(420px,480px)]" : "grid-cols-1"}`}
+                className={`grid min-h-0 flex-1 gap-3 overflow-hidden ${isBuild ? "" : "grid-cols-1"}`}
+                style={
+                    isBuild ?
+                        { gridTemplateColumns: `minmax(280px, 300px) minmax(0, 1fr) ${inspectorRailWidth}px` }
+                    :   undefined
+                }
                 data-testid="layout-builder-studio-grid"
             >
                 {isBuild && studioNotice ?
@@ -496,7 +511,9 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                 </div>
 
                 {isBuild ?
-                    <LayoutBuilderInspectorPanel
+                    <div className="relative min-h-0 min-w-0">
+                        <LayoutBuilderInspectorResizeHandle onResize={setInspectorRailWidth} />
+                        <LayoutBuilderInspectorPanel
                         doc={workingDoc}
                         selectedSectionId={selectedSectionId}
                         selectedFieldPath={selectedFieldPath}
@@ -520,6 +537,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         layoutRecordId={record.id}
                         layoutVersion={record.version}
                     />
+                    </div>
                 :   null}
             </div>
         </div>

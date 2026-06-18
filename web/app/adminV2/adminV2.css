@@ -691,20 +691,18 @@ html[data-adminv2-workspace-shell="v2"] .adminv2-drawer-modal-panel--bos-rail {
   }
 
   [data-proof-layout-header-row="lifecycle"] {
-    padding-top: 0.25rem !important;
-    padding-bottom: 0.5rem !important;
+    padding-top: 0.5rem !important;
+    padding-bottom: 0.75rem !important;
   }
 
+  /* Preserve lead command header card treatment — density only, not flattening */
   [data-lead-drawer-command-header="true"] {
-    padding: 0.5rem 0.75rem !important;
-    gap: 0.625rem !important;
-    border-radius: 0.75rem !important;
-    box-shadow: 0 1px 4px rgba(24, 39, 58, 0.05) !important;
+    padding: 0.875rem 1rem !important;
   }
 
   [data-lead-drawer-command-avatar="true"] {
-    width: 2.25rem !important;
-    height: 2.25rem !important;
+    width: 2.75rem !important;
+    height: 2.75rem !important;
   }
 
   [data-proof-layout-header-controls="true"] {

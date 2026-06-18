@@ -65,6 +65,7 @@ function SectionPreviewBody({
     selectedFieldPath,
     onSelectFieldPath,
     onSelectSection,
+    editorMode = "build",
 }: {
     doc: LayoutDoc;
     sectionKey: string;
@@ -73,6 +74,7 @@ function SectionPreviewBody({
     selectedFieldPath: string | null;
     onSelectFieldPath: (path: string | null) => void;
     onSelectSection: (sectionKey: string) => void;
+    editorMode?: LayoutBuilderEditorMode;
 }) {
     const previewRecord = useContext(LayoutBuilderPreviewRecordContext);
     const sectionDoc = useMemo(() => buildSingleSectionPreviewDoc(doc, sectionKey), [doc, sectionKey]);
@@ -102,17 +104,20 @@ function SectionPreviewBody({
     const previewCompositionHints = useMemo(() => {
         const cardWidth = section ? readCardWidthFraction(section) : "full";
         const narrowCard = cardWidth === "quarter";
+        const suppressRuntimeCardChrome = editorMode === "build" && sectionPresentation === "default";
         return leadOverviewVisualEditorCompositionHints({
             ...(section && sectionIsKpiTile(section) ? { summaryStripCompactRow: false } : {}),
-            ...(sectionPresentation === "default" ?
+            ...(suppressRuntimeCardChrome ?
                 {
                     suppressDrawerOverviewSectionHeader: true,
                     suppressRelatedListPanelHeader: true,
                     stackFieldColumns: narrowCard,
                 }
-            :   {}),
+            :   {
+                    stackFieldColumns: narrowCard,
+                }),
         });
-    }, [section, sectionPresentation]);
+    }, [editorMode, section, sectionPresentation]);
 
     if (!sectionDoc || hidden) {
         return (
@@ -220,6 +225,7 @@ function KpiTileSectionFrame({
                     selectedFieldPath={null}
                     onSelectFieldPath={() => {}}
                     onSelectSection={() => {}}
+                    editorMode={editorMode}
                 />
             </div>
         );
@@ -290,6 +296,7 @@ function KpiTileSectionFrame({
                         if (path) onSelectSection(section.key);
                     }}
                     onSelectSection={onSelectSection}
+                    editorMode={editorMode}
                 />
             </div>
         </div>
@@ -335,6 +342,7 @@ function WidgetStripSectionFrame({
                     selectedFieldPath={null}
                     onSelectFieldPath={() => {}}
                     onSelectSection={() => {}}
+                    editorMode={editorMode}
                 />
             </div>
         );
@@ -400,6 +408,7 @@ function WidgetStripSectionFrame({
                         if (path) onSelectSection(section.key);
                     }}
                     onSelectSection={onSelectSection}
+                    editorMode={editorMode}
                 />
             </div>
         </div>
@@ -445,6 +454,7 @@ function EditableSectionFrame({
                     selectedFieldPath={null}
                     onSelectFieldPath={() => {}}
                     onSelectSection={() => {}}
+                    editorMode={editorMode}
                 />
             </div>
         );

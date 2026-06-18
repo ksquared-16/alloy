@@ -16,6 +16,8 @@ export type StageWorkOutcomeAutomationPreview = {
 export type StageWorkItemProjection = {
     template_key: string;
     label: string;
+    /** Work template description from the stage operating plan. */
+    description?: string | null;
     role: "primary" | "secondary";
     state: WorkIntentRuntimeState;
     /** True when open work has selectable outcomes in Current Work. */

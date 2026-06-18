@@ -202,6 +202,7 @@ function buildWorkItemProjection(args: {
         return {
             template_key: template.template_key,
             label: trimOrNull(openRow.title) ?? template.label,
+            description: trimOrNull(template.description),
             role,
             state: "open",
             requires_outcome_picker: outcomes.length > 0,
@@ -224,6 +225,7 @@ function buildWorkItemProjection(args: {
         return {
             template_key: template.template_key,
             label: trimOrNull(completedRow.title) ?? template.label,
+            description: trimOrNull(template.description),
             role,
             state: "completed",
             requires_outcome_picker: false,
@@ -244,6 +246,7 @@ function buildWorkItemProjection(args: {
     return {
         template_key: template.template_key,
         label: template.label,
+        description: trimOrNull(template.description),
         role,
         state: "planned",
         requires_outcome_picker: false,

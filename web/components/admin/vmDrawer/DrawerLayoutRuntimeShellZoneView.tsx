@@ -38,10 +38,11 @@ export default function DrawerLayoutRuntimeShellZoneView({
 
     const isSummaryStrip = zone === "summary_strip";
     const compositionHints =
-        isSummaryStrip && shouldUseLeadOverviewComposition(doc) ? leadOverviewCompositionHints()
+        isSummaryStrip && shouldUseLeadOverviewComposition(doc) ? leadOverviewCompositionHints({ honorLayoutDocBlocks: true })
         : isSummaryStrip && shouldUsePersonOverviewComposition(doc) ? personOverviewCompositionHints()
         : isSummaryStrip && shouldUseChildOverviewComposition(doc) ? childOverviewCompositionHints()
-        : !isSummaryStrip && shouldUseLeadOverviewComposition(doc) ? leadOverviewCompositionHints({ summaryStripCompactRow: false })
+        : !isSummaryStrip && shouldUseLeadOverviewComposition(doc) ?
+            leadOverviewCompositionHints({ summaryStripCompactRow: false, honorLayoutDocBlocks: true })
         : !isSummaryStrip && shouldUsePersonOverviewComposition(doc) ? personOverviewCompositionHints()
         : !isSummaryStrip && shouldUseChildOverviewComposition(doc) ? childOverviewCompositionHints()
         :   {};

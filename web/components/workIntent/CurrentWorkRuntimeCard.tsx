@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import StageWorkOutcomePicker from "@/components/admin/StageWorkOutcomePicker";
+import StageWorkOutcomeConfirm from "@/components/workIntent/StageWorkOutcomeConfirm";
 import { oppInqEyebrow } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import { formatTaskDueDate } from "@/lib/presentation/presentationDateFormat";
 import type {
@@ -10,6 +11,7 @@ import type {
 } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import { workIntentProjectionForStageWorkItem } from "@/lib/lifecycle/stageWorkRuntimeTypes";
 import type { WorkIntentRuntimeProjection } from "@/lib/lifecycle/workIntentRuntimeTypes";
+import { stageWorkOutcomeEffectLines } from "@/lib/workIntent/stageWorkOutcomeEffectLines";
 import { useWorkIntentOutcomeCompletion } from "@/components/workIntent/useWorkIntentOutcomeCompletion";
 
 const DUE_LABEL: Record<WorkIntentRuntimeProjection["due_urgency"], string> = {
@@ -32,8 +34,6 @@ type Props = {
     canMutate?: boolean;
     /** Summary-strip chromeless body — hides outer card border. */
     chromeless?: boolean;
-    /** KPI overlay popover — simplified detail without layout shift. */
-    overlayMode?: boolean;
 };
 
 function DueBadge({ urgency }: { urgency: WorkIntentRuntimeProjection["due_urgency"] }) {
@@ -60,14 +60,12 @@ function WorkItemBlock({
     opportunityId,
     canMutate,
     isPrimary,
-    overlayMode = false,
 }: {
     item: StageWorkItemProjection;
     runtime: StageWorkRuntimeProjection;
     opportunityId: string;
     canMutate: boolean;
     isPrimary: boolean;
-    overlayMode?: boolean;
 }) {
     const { completeOutcome, busy, error, clearError } = useWorkIntentOutcomeCompletion(opportunityId);
     const projection = workIntentProjectionForStageWorkItem(runtime, item);
@@ -80,7 +78,22 @@ function WorkItemBlock({
         item.requires_outcome_picker &&
         item.outcomes.length > 0 &&
         canMutate;
-    const [outcomeExpanded, setOutcomeExpanded] = useState(false);
+    const [outcomeStep, setOutcomeStep] = useState<"idle" | "picker" | "confirm">("idle");
+    const [pendingOutcomeKey, setPendingOutcomeKey] = useState<string | null>(null);
+    const pendingOutcome = item.outcomes.find((row) => row.outcome_key === pendingOutcomeKey) ?? null;
+
+    const resetOutcomeFlow = useCallback(() => {
+        setOutcomeStep("idle");
+        setPendingOutcomeKey(null);
+        clearError();
+    }, [clearError]);
+
+    const handleConfirm = useCallback(() => {
+        if (!pendingOutcomeKey) return;
+        void completeOutcome(projection, pendingOutcomeKey).then(() => {
+            resetOutcomeFlow();
+        });
+    }, [completeOutcome, pendingOutcomeKey, projection, resetOutcomeFlow]);
 
     return (
         <div
@@ -105,6 +118,10 @@ function WorkItemBlock({
                 {showDue ? <DueBadge urgency={item.due_urgency} /> : null}
             </div>
 
+            {item.description?.trim() ?
+                <p className="mt-2 text-[12px] leading-relaxed text-alloy-midnight/65">{item.description.trim()}</p>
+            :   null}
+
             {item.state === "open" && (showAttempts || showLastOutcome || item.completion_policy_summary) ?
                 <p className="mt-2 text-[12px] text-alloy-midnight/60">
                     {showAttempts ? `Attempt ${item.attempt_count}` : null}
@@ -123,22 +140,6 @@ function WorkItemBlock({
                 </p>
             :   null}
 
-            {item.outcome_automation_preview.length > 0 && !overlayMode ?
-                <div className="mt-2 space-y-0.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                        Automation
-                    </p>
-                    {item.outcome_automation_preview.map((line) => (
-                        <p
-                            key={`${line.outcome_key}:${line.effect_label}`}
-                            className="text-[11px] text-alloy-midnight/55"
-                        >
-                            {line.outcome_label} → {line.effect_label}
-                        </p>
-                    ))}
-                </div>
-            :   null}
-
             {error ?
                 <p className="mt-2 text-[12px] font-medium text-red-800/90" role="alert">
                     {error}
@@ -146,42 +147,46 @@ function WorkItemBlock({
             :   null}
 
             {showOutcomePicker ?
-                overlayMode ?
-                    <div className="mt-2 border-t border-alloy-stone/10 pt-2">
-                        <button
-                            type="button"
-                            className="text-[10px] font-medium text-alloy-midnight/55 underline-offset-2 hover:text-alloy-midnight/75 hover:underline"
-                            aria-expanded={outcomeExpanded}
-                            onClick={() => setOutcomeExpanded((prev) => !prev)}
-                        >
-                            {outcomeExpanded ? "Hide task outcome" : "Record task outcome"}
-                        </button>
-                        {outcomeExpanded ?
-                            <div className="mt-2 border-t border-alloy-stone/10 pt-2">
-                                <StageWorkOutcomePicker
-                                    workTitle={item.label}
-                                    outcomes={item.outcomes}
-                                    busy={busy}
-                                    onSelect={(outcomeKey) => {
-                                        clearError();
-                                        void completeOutcome(projection, outcomeKey);
-                                    }}
-                                    onCancel={() => undefined}
-                                />
-                            </div>
-                        :   null}
+                outcomeStep === "confirm" && pendingOutcome ?
+                    <div className="mt-3 border-t border-alloy-stone/10 pt-3">
+                        <StageWorkOutcomeConfirm
+                            outcomeLabel={pendingOutcome.label}
+                            effectLines={stageWorkOutcomeEffectLines(item, pendingOutcome.outcome_key)}
+                            busy={busy}
+                            onConfirm={handleConfirm}
+                            onCancel={() => {
+                                setPendingOutcomeKey(null);
+                                setOutcomeStep("picker");
+                            }}
+                        />
                     </div>
-                :   <div className="mt-3 border-t border-alloy-stone/10 pt-3">
+                : outcomeStep === "picker" ?
+                    <div className="mt-3 border-t border-alloy-stone/10 pt-3">
                         <StageWorkOutcomePicker
                             workTitle={item.label}
                             outcomes={item.outcomes}
+                            automationPreview={item.outcome_automation_preview}
                             busy={busy}
                             onSelect={(outcomeKey) => {
                                 clearError();
-                                void completeOutcome(projection, outcomeKey);
+                                setPendingOutcomeKey(outcomeKey);
+                                setOutcomeStep("confirm");
                             }}
-                            onCancel={() => undefined}
+                            onCancel={resetOutcomeFlow}
                         />
+                    </div>
+                :   <div className="mt-3 border-t border-alloy-stone/10 pt-3">
+                        <button
+                            type="button"
+                            className="rounded-lg border border-alloy-pine/25 bg-alloy-pine/[0.06] px-3 py-1.5 text-[12px] font-semibold text-alloy-pine hover:border-alloy-pine/35 hover:bg-alloy-pine/[0.1]"
+                            data-testid="current-work-record-outcome-inline"
+                            onClick={() => {
+                                clearError();
+                                setOutcomeStep("picker");
+                            }}
+                        >
+                            Record outcome
+                        </button>
                     </div>
             :   null}
         </div>
@@ -194,7 +199,6 @@ export default function CurrentWorkRuntimeCard({
     runtime,
     canMutate = true,
     chromeless = false,
-    overlayMode = false,
 }: Props) {
     const primary = runtime.primary;
     const allItems = [primary, ...runtime.additional].filter(
@@ -213,7 +217,6 @@ export default function CurrentWorkRuntimeCard({
                         opportunityId={opportunityId}
                         canMutate={canMutate}
                         isPrimary={index === 0}
-                        overlayMode={overlayMode}
                     />
                 ))}
             </div>;

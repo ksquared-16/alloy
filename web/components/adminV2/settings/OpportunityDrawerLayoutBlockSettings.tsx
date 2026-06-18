@@ -190,7 +190,7 @@ export default function OpportunityDrawerLayoutBlockSettings({
                     </p>
                     <fieldset className="space-y-1">
                         <legend className="text-[11px] font-medium text-alloy-midnight/60">Relationship role</legend>
-                        {LAYOUT_EDITOR_CONTACT_ROLES.map((role) => (
+                        {LAYOUT_EDITOR_CONTACT_ROLES.filter((role) => role !== "secondary" && role !== "any").map((role) => (
                             <label key={role} className="flex items-center gap-2 text-[11px] text-alloy-midnight/75">
                                 <input
                                     type="radio"

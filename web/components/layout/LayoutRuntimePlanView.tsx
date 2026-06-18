@@ -25,6 +25,12 @@ import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "@/lib/layout/run
 import { readLayoutEditorDisplayConfig, typographyIntentClass } from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
 import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfig";
+import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
+import {
+    overlayLayoutEditorContactBlockRecord,
+    resolveLayoutEditorContactBlockPerson,
+    shouldHideEmptyLayoutEditorContactBlock,
+} from "@/lib/layout/runtime/resolveLayoutEditorContactBlockRecord";
 import {
     readLayoutEditorWidgetStyle,
     resolveLayoutEditorWidgetAccentRail,
@@ -242,6 +248,35 @@ const LayoutRuntimeSectionContext = createContext<LayoutRuntimeSectionContextVal
     sectionKey: "",
     kpiTile: false,
 });
+
+type LayoutRuntimeRenderedContactIdsContextValue = {
+    renderedPersonIds: Set<string>;
+    registerPersonId: (personId: string) => void;
+};
+
+const LayoutRuntimeRenderedContactIdsContext = createContext<LayoutRuntimeRenderedContactIdsContextValue>({
+    renderedPersonIds: new Set<string>(),
+    registerPersonId: () => undefined,
+});
+
+function LayoutRuntimeRenderedContactIdsProvider({ children }: { children: ReactNode }) {
+    const [renderedPersonIds] = useState(() => new Set<string>());
+    const value = useMemo(
+        () => ({
+            renderedPersonIds,
+            registerPersonId: (personId: string) => {
+                const trimmed = personId.trim();
+                if (trimmed) renderedPersonIds.add(trimmed);
+            },
+        }),
+        [renderedPersonIds],
+    );
+    return (
+        <LayoutRuntimeRenderedContactIdsContext.Provider value={value}>
+            {children}
+        </LayoutRuntimeRenderedContactIdsContext.Provider>
+    );
+}
 
 function useLayoutRuntimeOperatorSurfaces(): boolean {
     const variant = useContext(LayoutRuntimeVariantContext);
@@ -466,9 +501,23 @@ function ValueCell({
 function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const blockConfig = readLayoutEditorBlockConfig(item.metadata);
     const editMode = blockConfig.editMode ?? "display_only";
+    const isContactBlock = item.kind === "field_group" && item.refKey === "contact_block";
+    const renderedContacts = useContext(LayoutRuntimeRenderedContactIdsContext);
+
+    let contactRecord = record;
+    if (isContactBlock) {
+        const contactRole = readLayoutEditorContactRole(item.metadata);
+        const person = resolveLayoutEditorContactBlockPerson(record, contactRole, {
+            excludedPersonIds: renderedContacts.renderedPersonIds,
+        });
+        if (shouldHideEmptyLayoutEditorContactBlock(contactRole, person)) return null;
+        if (person?.personId) renderedContacts.registerPersonId(person.personId);
+        contactRecord = overlayLayoutEditorContactBlockRecord(record, contactRole, person);
+    }
+
     return (
         <LayoutRuntimeBlockEditProvider editMode={editMode}>
-            <GroupCellContent record={record} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
+            <GroupCellContent record={contactRecord} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
         </LayoutRuntimeBlockEditProvider>
     );
 }
@@ -1747,11 +1796,13 @@ function SectionView({
             canMutate={host.canMutate}
         />
     :   (
-            <LayoutRuntimeSectionContext.Provider value={sectionContext}>
-                {section.rows.map((row) => (
-                    <RowView key={row.id} record={record} row={row} anchorEntity={anchorEntity} />
-                ))}
-            </LayoutRuntimeSectionContext.Provider>
+            <LayoutRuntimeRenderedContactIdsProvider>
+                <LayoutRuntimeSectionContext.Provider value={sectionContext}>
+                    {section.rows.map((row) => (
+                        <RowView key={row.id} record={record} row={row} anchorEntity={anchorEntity} />
+                    ))}
+                </LayoutRuntimeSectionContext.Provider>
+            </LayoutRuntimeRenderedContactIdsProvider>
         );
 
     if (effectiveSectionPresentation === "summary_strip") {

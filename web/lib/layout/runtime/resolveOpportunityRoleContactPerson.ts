@@ -27,7 +27,16 @@ function normRoleKey(raw: string | null | undefined): string {
         .replace(/\s+/g, "_");
 }
 
-const SECONDARY_ROLE_KEYS = new Set(["secondary_contact", "secondary", "spouse", "partner", "co_parent", "coparent"]);
+const SECONDARY_ROLE_KEYS = new Set([
+    "secondary_contact",
+    "secondary",
+    "spouse",
+    "partner",
+    "co_parent",
+    "coparent",
+    "parent",
+    "guardian",
+]);
 const EMERGENCY_ROLE_KEYS = new Set(["emergency_contact", "emergency"]);
 const BILLING_ROLE_KEYS = new Set(["billing_contact", "billing", "payer", "financial_contact"]);
 
@@ -64,12 +73,14 @@ function resolveFromFamilyRows(
     const primaryId = resolveLeadSummaryPrimaryPersonId(vmRecord);
     const roleKeys = roleKeysFor(kind);
     const rows = buildOpportunityFamilyContactRows(vmRecord);
-    const match =
-        rows.find((row) => roleKeys.has(normRoleKey(row.role_type)))
-        ?? rows.find((row) => {
-            const id = String(row.person_id ?? "").trim();
-            return id && id !== (primaryId ?? "") && kind === "secondary";
-        });
+    const match = rows.find((row) => {
+        const personId = String(row.person_id ?? "").trim();
+        if (!personId) return false;
+        if (primaryId && personId === primaryId) return false;
+        const roleKey = normRoleKey(row.role_type);
+        if (roleKey === "primary_contact" || roleKey === "primary") return false;
+        return roleKeys.has(roleKey) || (kind === "secondary" && (roleKey.includes("parent") || roleKey.includes("guardian")));
+    });
     if (!match) return null;
     const personId = String(match.person_id ?? "").trim() || null;
     if (primaryId && personId === primaryId) return null;

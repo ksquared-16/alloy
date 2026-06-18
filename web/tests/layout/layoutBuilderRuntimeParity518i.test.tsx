@@ -21,9 +21,9 @@ describe("layoutBuilderRuntimeParity 5.18I", () => {
         expect(html).toContain("flex-1");
     });
 
-    it("humanizes status keys for layout runtime display", () => {
+    it("resolves opportunity status keys from configured vocabulary", () => {
         expect(formatLayoutRuntimeStatusLabel("new_inquiry", { refKey: "opportunity.status_key", renderHint: "status" })).toBe(
-            "New Inquiry",
+            "New Lead",
         );
         const resolved = resolveItemValue({ status_key: "tour_scheduled" }, {
             id: "status",
@@ -50,10 +50,10 @@ describe("layoutBuilderRuntimeParity 5.18I", () => {
         const groups = buildOpportunityDrawerEditorFieldPickerGroups();
         const labels = groups.map((group) => group.entityLabel);
         expect(labels).toContain("Primary Contact");
-        expect(labels).toContain("Secondary Contact");
+        expect(labels).toContain("Additional Parents");
         expect(labels).toContain("Billing/Payer Contact");
         expect(labels).toContain("Emergency Contact");
-        const secondary = groups.find((group) => group.entityLabel === "Secondary Contact");
-        expect(secondary?.fields.some((field) => field.refKey === "person.secondary_contact_name")).toBe(true);
+        const parents = groups.find((group) => group.entityLabel === "Additional Parents");
+        expect(parents?.fields.some((field) => field.refKey === "person.secondary_contact_name")).toBe(true);
     });
 });

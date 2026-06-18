@@ -14,6 +14,8 @@ import LeadOverviewRuntimeComposition from "@/components/layout/LeadOverviewRunt
 import PersonOverviewRuntimeComposition from "@/components/layout/person/PersonOverviewRuntimeComposition";
 import ChildOverviewRuntimeComposition from "@/components/layout/child/ChildOverviewRuntimeComposition";
 import LayoutRuntimeDrawerEditProvider from "@/components/layout/LayoutRuntimeDrawerEditProvider";
+import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
+import { leadOverviewCompositionHints } from "@/lib/layout/runtime/leadOverviewComposition";
 import LayoutRuntimeErrorPanel from "@/components/layout/LayoutRuntimeErrorPanel";
 import {
     isLayoutRuntimeHardCutoverActiveClient,
@@ -193,13 +195,15 @@ export default function DrawerLayoutRuntimeOverviewBody({
                                 canMutate={canMutate}
                                 onAdornmentAction={onAdornmentAction}
                             />
-                        :   <LayoutRuntimeDrawerBodyView
-                                doc={effectiveDoc}
-                                record={layoutBody.record}
-                                entityId={entityId}
-                                canMutate={canMutate}
-                                onAdornmentAction={onAdornmentAction}
-                            />
+                        :   <LayoutRuntimeCompositionProvider value={leadOverviewCompositionHints({ honorLayoutDocBlocks: true })}>
+                                <LayoutRuntimeDrawerBodyView
+                                    doc={effectiveDoc}
+                                    record={layoutBody.record}
+                                    entityId={entityId}
+                                    canMutate={canMutate}
+                                    onAdornmentAction={onAdornmentAction}
+                                />
+                            </LayoutRuntimeCompositionProvider>
                         }
                     </LayoutRuntimeDrawerEditProvider>
                 </div>

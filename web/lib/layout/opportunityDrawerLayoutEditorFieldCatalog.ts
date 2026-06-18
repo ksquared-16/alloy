@@ -118,9 +118,9 @@ const CONTACT_ROLE_PICKER_GROUP_DEFS = [
         refKeys: ["person.primary_contact_name", "person.primary_email", "person.primary_phone"],
     },
     {
-        entityKey: "contact_secondary",
-        entityLabel: "Secondary Contact",
-        groupDescription: "Uses the linked secondary contact on this lead",
+        entityKey: "contact_parents",
+        entityLabel: "Additional Parents",
+        groupDescription: "Parent/guardian relationships excluding the primary contact",
         refKeys: ["person.secondary_contact_name", "person.secondary_email", "person.secondary_phone"],
     },
     {

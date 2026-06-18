@@ -49,6 +49,11 @@ describe("AdminV2 drawer outside click", () => {
         expect(shouldCloseAdminV2DrawerOnOutsideTarget(commandBar)).toBe(false);
         expect(shouldCloseAdminV2DrawerOnOutsideTarget(commandSurface)).toBe(false);
         expect(shouldCloseAdminV2DrawerOnOutsideTarget(outside)).toBe(true);
+        expect(
+            shouldCloseAdminV2DrawerOnOutsideTarget(
+                mockTarget({ "data-current-work-detail-popover": "true" }),
+            ),
+        ).toBe(false);
     });
 
     it("ignores nested targets inside the drawer panel", () => {

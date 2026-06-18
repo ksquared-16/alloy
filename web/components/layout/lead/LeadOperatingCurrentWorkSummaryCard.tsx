@@ -97,7 +97,6 @@ export default function LeadOperatingCurrentWorkSummaryCard({ record, opportunit
             {open && anchorEl && runtime ?
                 <CurrentWorkDetailPopover
                     anchorEl={anchorEl}
-                    title={summaryLine}
                     opportunityId={opportunityId}
                     runtime={runtime}
                     canMutate={canMutate}
