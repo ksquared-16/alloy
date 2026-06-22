@@ -1,13 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ENROLLMENT_INTAKE_PERSON_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import {
     applyCreateLeadChildParticipationFromIdentity,
     type CreateLeadChildOcmFields,
 } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import type { CreateLeadCommitRecord, CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
 import { includedCommitRecords } from "@/lib/intake/commit/createLeadCommitSelection";
+import {
+    ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
+    enrollmentIntakePersonStatusFields,
+} from "@/lib/admin/person/enrollmentPersonDefaultStatus";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
-import { enrollmentIntakePersonStatusFields } from "@/lib/admin/person/enrollmentPersonDefaultStatus";
 
 function trim(v: unknown): string {
     return v != null ? String(v).trim() : "";
