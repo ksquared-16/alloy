@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { isAllowedQueueRecordWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
 import {
     catalogGroupDisplayLabel,
     type LayoutCatalogField,
@@ -40,6 +41,8 @@ type Props = {
     onClose: () => void;
     /** Hide the widgets tab — queue record column builder is fields-only. */
     fieldsOnly?: boolean;
+    /** When surface is queue — drives widget allow-list (pipeline vs waitlist). */
+    queueIsWaitlist?: boolean;
 };
 
 function FieldPickerRow({
@@ -88,6 +91,7 @@ export default function LayoutFieldPickerOverlay({
     onPickWidget,
     onClose,
     fieldsOnly = false,
+    queueIsWaitlist = false,
 }: Props) {
     const [searchQuery, setSearchQuery] = useState("");
     const [showUsedFields, setShowUsedFields] = useState(false);
@@ -118,10 +122,20 @@ export default function LayoutFieldPickerOverlay({
         [catalog.groups, usedRefKeys],
     );
 
-    const widgetIsRelevant = (w: LayoutCatalogWidget) => !w.relevantSurfaces || w.relevantSurfaces.includes(surface);
+    const widgetIsRelevant = (w: LayoutCatalogWidget) => {
+        if (surface === "queue") {
+            return isAllowedQueueRecordWidgetKey(w.widgetKey, queueIsWaitlist);
+        }
+        if (w.relevantSurfaces && !w.relevantSurfaces.includes("drawer")) return false;
+        return true;
+    };
     const byCategory = WIDGET_CATEGORY_ORDER.map((cat) => ({
         cat,
-        widgets: catalog.widgets.filter((w) => (w.category ?? "Work") === cat),
+        widgets: catalog.widgets.filter((w) => {
+            if ((w.category ?? "Work") !== cat) return false;
+            if (surface === "queue") return isAllowedQueueRecordWidgetKey(w.widgetKey, queueIsWaitlist);
+            return true;
+        }),
     })).filter((x) => x.widgets.length > 0);
 
     const hiddenUsedCount = used.length;

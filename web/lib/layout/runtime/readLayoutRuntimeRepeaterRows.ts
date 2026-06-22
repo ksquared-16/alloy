@@ -19,6 +19,12 @@ import {
     enrichLayoutRuntimeChildRowIdentifiers,
     enrichLayoutRuntimeChildRowsFromAnchor,
 } from "./enrichLayoutRuntimeChildRowIdentifiers";
+import {
+    filterRelatedListRowsExcludingActiveRecord,
+    isLayoutRuntimePersonRelatedRepeater,
+    resolveLayoutRuntimeActiveRecordContext,
+    type ReadLayoutRuntimeRepeaterOptions,
+} from "./layoutRuntimeRelatedListActiveRecord";
 import type { ProofRuntimeRecord } from "./proofRecordContext";
 
 const REPEATER_COLLECTION_KEYS = [
@@ -29,6 +35,7 @@ const REPEATER_COLLECTION_KEYS = [
     "_inquiry_children",
     "_household_children",
     "_children",
+    "family_adults",
 ] as const;
 
 function mapRawRepeaterCollection(raw: unknown[], key: string): ProofRuntimeRecord[] {
@@ -47,6 +54,14 @@ function mapRawRepeaterCollection(raw: unknown[], key: string): ProofRuntimeReco
         const fromInquiry = mapVmInquiryChildrenToLayoutRuntimeRows(raw);
         if (fromInquiry.length > 0) return fromInquiry;
     }
+    if (key === "family_adults") {
+        return raw
+            .map((row, index) => {
+                if (!row || typeof row !== "object") return null;
+                return row as ProofRuntimeRecord;
+            })
+            .filter((row): row is ProofRuntimeRecord => row != null);
+    }
 
     return raw
         .map((row, index) => normalizeLayoutRuntimeChildRow(row, index))
@@ -57,9 +72,10 @@ function mapRawRepeaterCollection(raw: unknown[], key: string): ProofRuntimeReco
 export function readLayoutRuntimeRepeaterRows(
     record: ProofRuntimeRecord,
     item: LayoutItem,
+    options?: ReadLayoutRuntimeRepeaterOptions,
 ): ProofRuntimeRecord[] {
     if (isLayoutRuntimeContactRepeater(item)) {
-        return readLayoutRuntimeContactRepeaterRows(record, item);
+        return readLayoutRuntimeContactRepeaterRows(record, item, options);
     }
 
     const keys = [
@@ -89,6 +105,11 @@ export function readLayoutRuntimeRepeaterRows(
 
     if (mapped.length === 0) return [];
 
+    if (isLayoutRuntimePersonRelatedRepeater(item) && !isLayoutRuntimeContactRepeater(item)) {
+        const activeContext = resolveLayoutRuntimeActiveRecordContext(record, options?.activeRecord);
+        return filterRelatedListRowsExcludingActiveRecord(mapped, item, activeContext);
+    }
+
     const inquiryChildren =
         record._inquiry_children
         ?? (record.metadata && typeof record.metadata === "object"
@@ -100,19 +121,22 @@ export function readLayoutRuntimeRepeaterRows(
             ? String(primaryChildPersonIdRaw).trim()
             : null;
 
-    return mapped.map((row, index) => {
-        const enriched = enrichLayoutRuntimeChildRowIdentifiers(row, {
+    const enriched = mapped.map((row, index) => {
+        const mappedRow = enrichLayoutRuntimeChildRowIdentifiers(row, {
             index,
             inquiryChildren,
             primaryChildPersonId,
             totalChildCount: mapped.length,
         });
         return {
-            ...enriched.row,
+            ...mappedRow.row,
             _layout_runtime_child_collection_key: collectionKey,
-            _layout_runtime_child_mapper_source: enriched.mapperSource,
+            _layout_runtime_child_mapper_source: mappedRow.mapperSource,
         };
     });
+
+    const activeContext = resolveLayoutRuntimeActiveRecordContext(record, options?.activeRecord);
+    return filterRelatedListRowsExcludingActiveRecord(enriched, item, activeContext);
 }
 
 /** Shared empty check for drawer stats, evidence, and empty-state gating. */

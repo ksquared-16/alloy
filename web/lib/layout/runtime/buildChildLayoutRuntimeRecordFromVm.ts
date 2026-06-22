@@ -9,6 +9,7 @@ import type {
     PersonHouseholdCustomerAddressRow,
 } from "@/lib/admin/person/personDrawerVisibilityTypes";
 import { isOpaqueIdValue, pickEntityId, type ProofRuntimeRecord } from "./proofRecordContext";
+import { stampLayoutRuntimeActiveRecordContext } from "./layoutRuntimeRelatedListActiveRecord";
 import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
 
 function pickDisplay(...values: unknown[]): string | null {
@@ -183,5 +184,8 @@ export function buildChildLayoutRuntimeRecordFromVm(input: {
         };
     }
 
-    return record;
+    return stampLayoutRuntimeActiveRecordContext(record, {
+        anchorEntity: "child",
+        entityId: personId,
+    });
 }

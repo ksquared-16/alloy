@@ -151,16 +151,10 @@ export function parseScopePresetKey(key: string): QueueRecordScope {
     return { type: "main_record" };
 }
 
-function inferDisplayFromCatalog(f: LayoutCatalogField): QueueRecordFieldDisplay {
-    const rk = f.refKey.toLowerCase();
-    if (/status/.test(rk) && !/tour_status/.test(rk)) return "pill";
-    if (/email/.test(rk)) return "email";
-    if (/phone/.test(rk)) return "phone";
-    if (/date|tour|appointment|created_at|updated_at/.test(rk) || f.fieldType === "date") return "date";
-    if (/name|contact|household|title/.test(rk)) return "link";
-    if (/source|updated_at|\.id$/.test(rk)) return "muted";
-    return "text";
-}
+import {
+    inferQueueRecordFieldDisplayFromCatalog,
+    normalizeQueueRecordFieldDisplay,
+} from "@/lib/layout/runtime/queueRecordFieldDisplayBridge";
 
 function inferLinkFromCatalog(f: LayoutCatalogField): QueueRecordFieldConfig["link"] | undefined {
     if (f.entityKey === "child" || f.refKey.startsWith("child.")) {
@@ -176,7 +170,7 @@ function inferLinkFromCatalog(f: LayoutCatalogField): QueueRecordFieldConfig["li
 }
 
 export function catalogFieldToQueueRecordFieldConfig(f: LayoutCatalogField): QueueRecordFieldConfig {
-    const display = inferDisplayFromCatalog(f);
+    const display = inferQueueRecordFieldDisplayFromCatalog(f);
     const inferredLink = inferLinkFromCatalog(f);
     const link =
         inferredLink

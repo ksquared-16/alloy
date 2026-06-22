@@ -3,6 +3,7 @@
  */
 
 import type { ProofRuntimeRecord } from "./proofRecordContext";
+import { stampLayoutRuntimeActiveRecordContext } from "./layoutRuntimeRelatedListActiveRecord";
 
 export function buildProofChildRecord(overrides: Partial<ProofRuntimeRecord> = {}): ProofRuntimeRecord {
     const base: ProofRuntimeRecord = {
@@ -40,9 +41,15 @@ export function buildProofChildRecord(overrides: Partial<ProofRuntimeRecord> = {
         documents: [{ label: "Immunization record", status: "missing" }],
     };
 
-    return {
-        ...base,
-        ...overrides,
-        _relations: { ...base._relations, ...overrides._relations },
-    };
+    return stampLayoutRuntimeActiveRecordContext(
+        {
+            ...base,
+            ...overrides,
+            _relations: { ...base._relations, ...overrides._relations },
+        },
+        {
+            anchorEntity: "child",
+            entityId: String(overrides.id ?? base.id),
+        },
+    );
 }

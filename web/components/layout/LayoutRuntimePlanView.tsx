@@ -82,6 +82,11 @@ import {
 } from "@/lib/layout/runtime/resolveProofBindingValue";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { readLayoutRuntimeRepeaterRows } from "@/lib/layout/runtime/readLayoutRuntimeRepeaterRows";
+import {
+    isLayoutRuntimeChildrenRepeaterItem,
+    layoutRuntimeRelatedListEmptyMessage,
+    resolveLayoutRuntimeActiveRecordContext,
+} from "@/lib/layout/runtime/layoutRuntimeRelatedListActiveRecord";
 import { logLayoutRuntimeChildrenRenderDebug } from "@/lib/layout/runtime/logLayoutRuntimeChildrenRenderDebug";
 import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveLayoutRuntimeRepeaterFieldValue } from "@/lib/layout/runtime/resolveLayoutRuntimeRepeaterFieldValue";
@@ -226,14 +231,9 @@ const TEXT = LAYOUT_RUNTIME_TEXT;
 const MUTED = LAYOUT_RUNTIME_MUTED;
 const BORDER = "#e2e6ec";
 
-const CHILDREN_REPEATER_KEYS = new Set([
-    "children",
-    "enrollment_children",
-    "inquiry_children",
-    "_inquiry_children",
-    "household_children",
-    "_household_children",
-]);
+function isLayoutRuntimeChildrenRepeater(item: LayoutItem): boolean {
+    return isLayoutRuntimeChildrenRepeaterItem(item);
+}
 
 type LayoutRuntimeHostContextValue = {
     entityId?: string;
@@ -245,11 +245,6 @@ const LayoutRuntimeHostContext = createContext<LayoutRuntimeHostContextValue>({}
 
 export function useLayoutRuntimeHostContext(): LayoutRuntimeHostContextValue {
     return useContext(LayoutRuntimeHostContext);
-}
-
-function isLayoutRuntimeChildrenRepeater(item: LayoutItem): boolean {
-    const keys = [item.source, item.refKey].filter(Boolean).map(String);
-    return keys.some((key) => CHILDREN_REPEATER_KEYS.has(key));
 }
 
 export type AdornmentActionHandler = (
@@ -918,7 +913,12 @@ function RelatedCellInner({
     const composition = useLayoutRuntimeCompositionHints();
     const suppressRelatedListHeader = composition.suppressRelatedListPanelHeader === true;
     const columns = item.columns as LayoutCollectionColumn[];
-    const allRows = readLayoutRuntimeRepeaterRows(record, item);
+    const activeRecordContext = resolveLayoutRuntimeActiveRecordContext(record, {
+        entityId: host.entityId,
+        anchorEntity: host.anchorEntity,
+    });
+    const allRows = readLayoutRuntimeRepeaterRows(record, item, { activeRecord: activeRecordContext });
+    const relatedListEmptyMessage = layoutRuntimeRelatedListEmptyMessage(item, activeRecordContext);
     const title = operatorLabel(item, variant);
     const isChildrenRepeater = isLayoutRuntimeChildrenRepeater(item);
     const isContactRepeater = isLayoutRuntimeContactRepeater(item);
@@ -970,6 +970,10 @@ function RelatedCellInner({
     if (isContactRepeater) {
         const entityLabel = item.refKey === "household_members" ? "household members" : "contacts";
         const presentation = editorRelatedList ? editorPresentation : "cards";
+        const contactEmptyMessage =
+            activeRecordContext.anchorEntity === "person" || activeRecordContext.anchorEntity === "child" ?
+                relatedListEmptyMessage
+            :   `No ${entityLabel} on this record yet.`;
 
         const contactTableMarkup = (
             <div className="overflow-x-auto">
@@ -987,7 +991,7 @@ function RelatedCellInner({
                         {allRows.length === 0 ?
                             <tr>
                                 <td colSpan={columns.length} className="px-3 py-4 text-alloy-muted">
-                                    No {entityLabel} on this record yet.
+                                    {contactEmptyMessage}
                                 </td>
                             </tr>
                         :   allRows.map((rw, i) => {
@@ -1020,7 +1024,7 @@ function RelatedCellInner({
                 {showContactsEmpty ?
                     <div className="p-2">
                         <DrawerOverviewEmptyState
-                            message={`No ${entityLabel} on this record yet.`}
+                            message={contactEmptyMessage}
                             hint="Add household adults or contact details to populate this list."
                             compact
                         />
@@ -1032,7 +1036,7 @@ function RelatedCellInner({
                         rows={allRows}
                         anchorRecord={record}
                         onAdornmentAction={onAdornmentAction}
-                        emptyMessage={`No ${entityLabel} on this record yet.`}
+                        emptyMessage={contactEmptyMessage}
                     />
                 : presentation === "table" ?
                     contactTableMarkup
@@ -1070,7 +1074,7 @@ function RelatedCellInner({
                         {allRows.length === 0 ?
                             <tr>
                                 <td colSpan={columns.length} className="px-3 py-4 text-alloy-muted">
-                                    No children linked yet.
+                                    {relatedListEmptyMessage}
                                 </td>
                             </tr>
                         :   allRows.map((rw, i) => {
@@ -1124,7 +1128,7 @@ function RelatedCellInner({
                         rows={allRows}
                         anchorRecord={record}
                         onAdornmentAction={onAdornmentAction}
-                        emptyMessage="No children linked yet."
+                        emptyMessage={relatedListEmptyMessage}
                     />
                 :   childTableMarkup,
         });
@@ -1279,9 +1283,7 @@ function RelatedCellInner({
                         <tr>
                             <td colSpan={visibleColumns.length} className="px-3 py-4 text-alloy-muted">
                                 {variant === "production" ?
-                                    sectionKey === "family_relationships" ?
-                                        "No linked family members yet."
-                                    :   "No children linked yet."
+                                    relatedListEmptyMessage
                                 :   "No rows in proof context."}
                             </td>
                         </tr>

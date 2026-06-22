@@ -74,6 +74,8 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
     const [expandedFieldId, setExpandedFieldId] = useState<string | null>(null);
     const [addColumnOpen, setAddColumnOpen] = useState(false);
 
+    const isWaitlist = isWaitlistQueueLayoutDoc(doc);
+
     const patch = (next: QueueRecordLayoutEditorConfig) => {
         setEditorConfig(next);
         onChange(next);
@@ -110,7 +112,7 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
 
     const handleAddWidget = (widget: LayoutCatalogWidget) => {
         if (!picker) return;
-        patch(addWidgetToBlock(editorConfig, picker.columnId, picker.blockId, widget));
+        patch(addWidgetToBlock(editorConfig, picker.columnId, picker.blockId, widget, isWaitlist));
         setPicker(null);
     };
 
@@ -532,6 +534,7 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                 <LayoutFieldPickerOverlay
                     catalog={scopedCatalog}
                     surface="queue"
+                    queueIsWaitlist={isWaitlist}
                     tab={pickerTab}
                     setTab={setPickerTab}
                     group={pickerGroup}

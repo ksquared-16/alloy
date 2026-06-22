@@ -5,8 +5,14 @@
 import type { LayoutItem } from "@/lib/layout/layoutV2";
 import {
     resolveOpportunityDrawerHouseholdContacts,
+    resolvePersonDrawerHouseholdContacts,
     type DrawerHouseholdContactRow,
 } from "@/lib/layout/runtime/resolveDrawerHouseholdContacts";
+import {
+    filterRelatedListRowsExcludingActiveRecord,
+    resolveLayoutRuntimeActiveRecordContext,
+    type ReadLayoutRuntimeRepeaterOptions,
+} from "@/lib/layout/runtime/layoutRuntimeRelatedListActiveRecord";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 export const CONTACT_REPEATER_REF_KEYS = new Set(["contacts", "household_members"]);
@@ -48,15 +54,21 @@ function filterHouseholdMembers(contacts: DrawerHouseholdContactRow[]): DrawerHo
     });
 }
 
-/** Resolve contact / household-member related_list rows for opportunity drawer runtime. */
+/** Resolve contact / household-member related_list rows for drawer runtime. */
 export function readLayoutRuntimeContactRepeaterRows(
     record: ProofRuntimeRecord,
     item: LayoutItem,
+    options?: ReadLayoutRuntimeRepeaterOptions,
 ): ProofRuntimeRecord[] {
     const refKey = String(item.refKey ?? item.source ?? "").trim();
     if (!CONTACT_REPEATER_REF_KEYS.has(refKey)) return [];
 
-    const projection = resolveOpportunityDrawerHouseholdContacts(record, { maxVisible: Number.MAX_SAFE_INTEGER });
+    const context = resolveLayoutRuntimeActiveRecordContext(record, options?.activeRecord);
+    const projection =
+        context.anchorEntity === "person" ?
+            resolvePersonDrawerHouseholdContacts(record, { maxVisible: Number.MAX_SAFE_INTEGER })
+        :   resolveOpportunityDrawerHouseholdContacts(record, { maxVisible: Number.MAX_SAFE_INTEGER });
     const source = refKey === "household_members" ? filterHouseholdMembers(projection.contacts) : projection.contacts;
-    return source.map(contactRowToRepeaterRecord);
+    const rows = source.map(contactRowToRepeaterRecord);
+    return filterRelatedListRowsExcludingActiveRecord(rows, item, context);
 }

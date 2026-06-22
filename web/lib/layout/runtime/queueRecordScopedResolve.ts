@@ -14,6 +14,7 @@ import type {
     QueueRecordFieldLinkTarget,
     QueueRecordScope,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { formatQueueRecordStatusDisplay } from "@/lib/layout/runtime/queueRecordFieldDisplayBridge";
 import { isQueueRowSubjectFieldVisible } from "@/lib/layout/runtime/queueRowSubjectPresentation";
 
 export type QueueRecordResolvedField = {
@@ -113,7 +114,10 @@ export function resolveQueueRecordFieldDisplay(
         const statusDisplay = record["_status_display"] ?? record["opportunity.status_label"];
         if (hasResolvableValue(statusDisplay)) {
             const rawDisplay = String(statusDisplay).trim();
-            return { display: formatQueueRecordFieldValue(rawDisplay, field), isPlaceholder: false };
+            return {
+                display: formatQueueRecordStatusDisplay(rawDisplay, field.fieldKey),
+                isPlaceholder: false,
+            };
         }
     }
 
@@ -279,10 +283,18 @@ export function scopeAllowsFieldKey(scope: QueueRecordScope, fieldKey: string): 
         return fieldKey.startsWith("person.");
     }
     if (scope.type === "lifecycle_context") {
-        return /status|attention|next_step|stage|tour|lifecycle|work_unit/.test(fieldKey);
+        return (
+            /status|attention|next_step|stage|tour|lifecycle|work_unit|queue_row/.test(fieldKey)
+            || fieldKey.startsWith("opportunity.")
+        );
     }
     if (scope.type === "main_record") {
-        return fieldKey.startsWith("opportunity.") || fieldKey.startsWith("customer.");
+        return (
+            fieldKey.startsWith("opportunity.")
+            || fieldKey.startsWith("customer.")
+            || fieldKey.startsWith("person.")
+            || fieldKey.startsWith("queue_row.")
+        );
     }
     return true;
 }

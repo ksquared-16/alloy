@@ -7,6 +7,7 @@ import { mergeCanonicalOpportunityLayoutRuntimeChildRows } from "./mergeCanonica
 import { isOpaqueIdValue, pickEntityId, type ProofRuntimeRecord } from "./proofRecordContext";
 import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
 import { resolvePersonAddressFieldValues } from "./resolvePersonAddressFieldValues";
+import { stampLayoutRuntimeActiveRecordContext } from "./layoutRuntimeRelatedListActiveRecord";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -246,5 +247,8 @@ export function buildPersonLayoutRuntimeRecordFromVm(input: {
         };
     }
 
-    return record;
+    return stampLayoutRuntimeActiveRecordContext(record, {
+        anchorEntity: "person",
+        entityId: personId,
+    });
 }

@@ -6,6 +6,7 @@
  */
 
 import type { ProofRuntimeRecord } from "./proofRecordContext";
+import { stampLayoutRuntimeActiveRecordContext } from "./layoutRuntimeRelatedListActiveRecord";
 
 export function buildProofPersonRecord(overrides: Partial<ProofRuntimeRecord> = {}): ProofRuntimeRecord {
     const base: ProofRuntimeRecord = {
@@ -61,9 +62,15 @@ export function buildProofPersonRecord(overrides: Partial<ProofRuntimeRecord> = 
         ],
     };
 
-    return {
-        ...base,
-        ...overrides,
-        _relations: { ...base._relations, ...overrides._relations },
-    };
+    return stampLayoutRuntimeActiveRecordContext(
+        {
+            ...base,
+            ...overrides,
+            _relations: { ...base._relations, ...overrides._relations },
+        },
+        {
+            anchorEntity: "person",
+            entityId: String(overrides.id ?? base.id),
+        },
+    );
 }

@@ -2,9 +2,16 @@
 
 import type { MouseEvent, ReactNode } from "react";
 import AdornmentIcon from "@/components/layout/AdornmentIcon";
+import QueueRecordActivityTimelineWidget from "@/components/layout/queueRecord/QueueRecordActivityTimelineWidget";
 import QueueRecordAttentionWidget from "@/components/layout/queueRecord/QueueRecordAttentionWidget";
 import QueueRecordTasksWidget from "@/components/layout/queueRecord/QueueRecordTasksWidget";
 import QueueRowOpenZone from "@/components/layout/QueueRowOpenZone";
+import { isAllowedQueueRecordWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
+import type { QueueRecordBlockConfig } from "@/lib/layout/queueRecordLayoutV3";
+import {
+    queueRecordFieldShowsLabel,
+    type QueueRecordFieldConfig,
+} from "@/lib/layout/queueRecordLayoutV3";
 import { isQueueRowLinkQaEnabled, resolveQueueRowLinkQaLabel } from "@/lib/debug/queueRowLinkQa";
 import type { LayoutItem } from "@/lib/layout/layoutV2";
 import type { QueueLayoutDrawerIconHandlers } from "@/lib/layout/runtime/buildQueueLayoutRuntimeAdornmentHandler";
@@ -14,11 +21,6 @@ import {
     linkTargetEntity,
     type QueueRecordResolvedField,
 } from "@/lib/layout/runtime/queueRecordScopedResolve";
-import {
-    queueRecordFieldShowsLabel,
-    type QueueRecordBlockConfig,
-    type QueueRecordFieldConfig,
-} from "@/lib/layout/queueRecordLayoutV3";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     queueRecordFieldModifierClass,
@@ -264,21 +266,38 @@ export function QueueRecordWidgetRenderer({
     block,
     record,
     onOpen,
+    isWaitlist = false,
 }: {
     block: Extract<QueueRecordBlockConfig, { type: "widget" }>;
     record: ProofRuntimeRecord;
     onOpen?: () => void;
+    isWaitlist?: boolean;
 }): ReactNode {
-    const key = block.widgetKey.toLowerCase();
+    const widgetKey = block.widgetKey.trim();
+    if (!isAllowedQueueRecordWidgetKey(widgetKey, isWaitlist)) {
+        return null;
+    }
+
+    const key = widgetKey.toLowerCase();
     const nextStep = String(record["opportunity.next_step"] ?? record.next_step ?? "").trim();
     const widgetTitle = block.label?.trim() || undefined;
 
-    if (key.includes("task")) {
+    if (key === "tasks" || key.includes("task")) {
         return <QueueRecordTasksWidget record={record} title={widgetTitle ?? "Tasks"} maxVisible={2} />;
     }
 
-    if (key.includes("attention")) {
+    if (key === "attention" || key.includes("attention")) {
         return <QueueRecordAttentionWidget record={record} title={widgetTitle ?? "Attention"} />;
+    }
+
+    if (key === "activity_timeline") {
+        return (
+            <QueueRecordActivityTimelineWidget
+                record={record}
+                title={widgetTitle ?? "Activity"}
+                config={block.config}
+            />
+        );
     }
 
     if ((key.includes("next") || key.includes("step")) && nextStep) {

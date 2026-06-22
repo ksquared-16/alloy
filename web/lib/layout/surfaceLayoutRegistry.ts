@@ -13,6 +13,7 @@ import type { ActionSurface } from "@/lib/admin/actions/types";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildPersonDrawerDefaultDoc } from "@/lib/layout/defaultPersonLayouts";
 import { buildChildDrawerDefaultDoc } from "@/lib/layout/defaultChildLayouts";
+import { QUEUE_RECORD_WAITLIST_WIDGET_KEYS } from "@/lib/layout/queueRecordLayoutAllowList";
 import { GLOBAL_WIDGET_CATALOG, type LayoutCatalogGroup, type LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
 import {
     collectRefKeysFromLayoutDoc,
@@ -501,7 +502,9 @@ const COMING_SOON_SURFACES: Omit<SurfaceLayoutRegistryEntry, "allowedFieldRefKey
 const COMING_SOON_ENTRIES: SurfaceLayoutRegistryEntry[] = COMING_SOON_SURFACES.map((s) => ({
     ...s,
     allowedFieldRefKeys: [],
-    allowedWidgetKeys: [],
+    allowedWidgetKeys:
+        s.surfaceKey === "queue_record" ? [...QUEUE_RECORD_WAITLIST_WIDGET_KEYS]
+        :   [],
 }));
 
 export const SURFACE_LAYOUT_REGISTRY: Readonly<Record<SurfaceLayoutKey, SurfaceLayoutRegistryEntry>> = {
@@ -641,6 +644,8 @@ export function isAllowedChildDrawerWidgetKey(widgetKey: string): boolean {
     if (!trimmed) return false;
     return CHILD_DRAWER_SURFACE.allowedWidgetKeys.includes(trimmed);
 }
+
+export { isAllowedQueueRecordWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
 
 export function isOpportunityDrawerLayoutZone(v: unknown): v is OpportunityDrawerLayoutZone {
     return typeof v === "string" && (OPPORTUNITY_DRAWER_LAYOUT_ZONES as readonly string[]).includes(v);

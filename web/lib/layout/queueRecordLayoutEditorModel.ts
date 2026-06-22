@@ -18,6 +18,7 @@ import {
     type QueueRecordLayoutConfigV3,
     type QueueRecordScope,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { isAllowedQueueRecordWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
 import { migrateToQueueRecordLayoutV3 } from "@/lib/layout/queueRecordLayoutMigration";
 import { normalizeQueueRecordLayoutConfig } from "@/lib/layout/runtime/normalizeQueueRecordLayoutConfig";
 import { buildOperationalQueueRowContentGridFromColumns } from "@/lib/layout/operationalQueueRowShell";
@@ -136,7 +137,9 @@ export function addWidgetToBlock(
     columnId: string,
     blockId: string,
     widget: LayoutCatalogWidget,
+    isWaitlist = false,
 ): QueueRecordLayoutEditorConfig {
+    if (!isAllowedQueueRecordWidgetKey(widget.widgetKey, isWaitlist)) return config;
     const block = createWidgetBlock(widget.widgetKey, widget.label);
     return addBlockToColumn(config, columnId, block);
 }

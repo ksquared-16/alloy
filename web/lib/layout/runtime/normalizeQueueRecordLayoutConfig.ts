@@ -10,6 +10,8 @@ import type {
     QueueRecordFixedControls,
     QueueRecordLayoutConfigV3,
 } from "@/lib/layout/queueRecordLayoutV3";
+import { normalizeQueueRecordFieldDisplay } from "@/lib/layout/runtime/queueRecordFieldDisplayBridge";
+import { normalizeQueueRecordWidgetBlockConfig } from "@/lib/layout/runtime/queueRecordWidgetConfig";
 
 const DEFAULT_REPEATED_MAX_ITEMS = 5;
 
@@ -27,15 +29,12 @@ function normalizeFixedControls(fixedControls?: Partial<QueueRecordFixedControls
     };
 }
 
-function isQueueStatusFieldKey(fieldKey: string): boolean {
-    return (
-        /(?:^|\.)(?:status|lifecycle_status|stage)(?:_key|_label|_name)?$/i.test(fieldKey)
-        && !/tour_status/i.test(fieldKey)
-    );
+function inferMissingFieldDisplay(field: QueueRecordFieldConfig): QueueRecordFieldConfig {
+    if (field.display) return normalizeQueueRecordFieldDisplay(field);
+    return normalizeQueueRecordFieldDisplay(inferMissingFieldDisplayLegacy(field));
 }
 
-function inferMissingFieldDisplay(field: QueueRecordFieldConfig): QueueRecordFieldConfig {
-    if (field.display) return field;
+function inferMissingFieldDisplayLegacy(field: QueueRecordFieldConfig): QueueRecordFieldConfig {
     const rk = field.fieldKey.toLowerCase();
     let display: QueueRecordFieldDisplay = "text";
     if (/status/.test(rk) && !/tour_status/.test(rk)) display = "pill";
@@ -57,6 +56,9 @@ function normalizeBlock(block: QueueRecordBlockConfig): QueueRecordBlockConfig {
     }
     if (block.type === "field_group") {
         return { ...block, fields: block.fields.map(inferMissingFieldDisplay) };
+    }
+    if (block.type === "widget") {
+        return normalizeQueueRecordWidgetBlockConfig(block);
     }
     return block;
 }

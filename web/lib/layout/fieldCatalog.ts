@@ -180,6 +180,7 @@ export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
         label: "Activity Timeline",
         category: "Communication",
         description: "Configurable event timeline for this record (and optional related records)",
+        relevantSurfaces: ["drawer", "queue"],
         defaultDisplayMode: "vertical_timeline",
     },
     // Waitlist (queue-meaningful; shown disabled on drawer surfaces)
