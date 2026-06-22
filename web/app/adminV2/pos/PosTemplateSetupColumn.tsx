@@ -59,6 +59,10 @@ function sourceReason(evidence?: string): string {
             return "question";
         case "label above blank line":
             return "label above blank";
+        case "pdf_field":
+            return "PDF form field";
+        case "operator":
+            return "added manually";
         default:
             return evidence || "text";
     }
@@ -462,7 +466,10 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
                                                             {f.confidence}
                                                         </span>
                                                     </div>
-                                                    <div className="text-[10px] text-stone-400">detected from {sourceReason(f.evidence)}</div>
+                                                    <div className="text-[10px] text-stone-400">
+                                                        detected from {sourceReason(f.evidence)}
+                                                        {f.page ? ` · page ${f.page}` : ""}
+                                                    </div>
                                                 </li>
                                             );
                                         })}

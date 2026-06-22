@@ -29,6 +29,10 @@ export interface DraftFormField {
     confidence: DraftFieldConfidence;
     /** Where this field came from in the source document (provenance, not promoted). */
     evidence?: string;
+    /** PDF AcroForm provenance (when the field came from a real widget): page + bbox. */
+    pdf_field_name?: string;
+    page?: number;
+    bbox?: [number, number, number, number];
 }
 
 export interface DraftFormSection {
