@@ -10,6 +10,7 @@ import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/forms/engine/FormEngineRenderer";
 import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
+import { buildParentSubmissionSummary } from "@/lib/forms/parentSubmissionSummary";
 
 type ResolvePacketMeta = {
     packet_session_id: string;
@@ -193,7 +194,11 @@ export function FormEmbedClient({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ payload: initialPayload }),
             });
-            const cr = (await created.json()) as { ok: boolean; data?: { id: string }; error?: string };
+            const cr = (await created.json()) as {
+                ok: boolean;
+                data?: { id: string; payload?: FormPayload };
+                error?: string;
+            };
             if (!cr.ok || !cr.data?.id) {
                 setPhase("error");
                 setMessage(cr.error ?? "Could not start form session");
@@ -201,7 +206,21 @@ export function FormEmbedClient({
             }
             setSubmissionId(cr.data.id);
             window.sessionStorage.setItem(storageKey(token), cr.data.id);
-            setPayload(initialPayload);
+            // For packets, the server merges known-record prefill into the created draft
+            // and returns it. Use that so the parent sees known info to CONFIRM on first
+            // open (single forms keep the empty initial payload — no behavior change).
+            let firstPayload: FormPayload = initialPayload;
+            if (json.data.packet && cr.data.payload && typeof cr.data.payload === "object") {
+                const serverPayload = cr.data.payload;
+                firstPayload = {
+                    ...serverPayload,
+                    values: filterPayloadValuesToSchemaFields(
+                        parsedSchema,
+                        (serverPayload.values ?? {}) as Record<string, unknown>
+                    ),
+                };
+            }
+            setPayload(firstPayload);
             setPhase("ready");
         } finally {
             setAdvancingToNextPacketStep(false);
@@ -377,6 +396,10 @@ export function FormEmbedClient({
     }
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
+    // Confirm-known / provide-missing summary (packets only — the POS parent experience).
+    const parentSummary = packetProgress
+        ? buildParentSubmissionSummary(schema, (payload.values ?? {}) as Record<string, unknown>)
+        : null;
     const summaries = packetProgress?.step_summaries ?? [];
     const currentStepNum = packetProgress ? packetProgress.current_sequence_index + 1 : 0;
     const remaining = packetProgress
@@ -412,6 +435,25 @@ export function FormEmbedClient({
                         ) : (
                             <p className="mt-2 text-xs text-neutral-600">This is the last form in the packet.</p>
                         )}
+                    </div>
+                ) : null}
+                {parentSummary && parentSummary.knownCount > 0 ? (
+                    <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm">
+                        <p className="font-semibold text-emerald-900">
+                            We already have {parentSummary.knownCount} detail{parentSummary.knownCount === 1 ? "" : "s"} —
+                            please confirm{parentSummary.neededCount > 0 ? " and add what's missing" : ""}.
+                        </p>
+                        <p className="mt-1 text-emerald-800">
+                            Pre-filled: {parentSummary.known.slice(0, 6).map((k) => k.label).join(", ")}
+                            {parentSummary.known.length > 6 ? `, +${parentSummary.known.length - 6} more` : ""}.
+                        </p>
+                        {parentSummary.neededCount > 0 ? (
+                            <p className="mt-1 text-emerald-800">
+                                Still needed ({parentSummary.requiredNeededCount} required):{" "}
+                                {parentSummary.needed.slice(0, 6).map((n) => n.label).join(", ")}
+                                {parentSummary.needed.length > 6 ? `, +${parentSummary.needed.length - 6} more` : ""}.
+                            </p>
+                        ) : null}
                     </div>
                 ) : null}
                 <FormEngineRenderer
