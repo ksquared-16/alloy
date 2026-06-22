@@ -23,9 +23,65 @@ import type {
     RejectedLabelExample,
     StructureDiagnostics,
     StructureFieldType,
+    StructureQuality,
 } from "./types";
 
-export const STRUCTURE_GENERATOR_VERSION = "fp11.2";
+export const STRUCTURE_GENERATOR_VERSION = "fp11.3";
+
+/**
+ * Department / agency / title noise — these are NEVER fields (and never signatures).
+ * Real PDF extraction often yields the masthead as a long run of text; a long line that
+ * merely CONTAINS "signature" must not become a signature field labelled with the header.
+ */
+const HEADER_NOISE_RE =
+    /\b(department|office of|division|bureau|ministry|agency|commission|compliance|elementary|secondary education|state of|county of|dese|dhss|page \d|form \d|rev\.?\s*\d|omb|see instructions|for office use|do not write)\b/i;
+
+/**
+ * Known gov / childcare / health labels. Used as a SWEEP over the raw text so we still
+ * recover fields when extraction is a near-newline-less blob (the real MO500 case). Only
+ * phrases literally present in the text are emitted — never fabricated.
+ */
+interface KnownLabel {
+    re: RegExp;
+    canonical: string;
+    type: StructureFieldType;
+    section?: boolean;
+}
+const KNOWN_LABELS: KnownLabel[] = [
+    // sections
+    { re: /identifying information/i, canonical: "Identifying Information", type: "text", section: true },
+    { re: /health (history|information)/i, canonical: "Health History", type: "text", section: true },
+    { re: /physical examination/i, canonical: "Physical Examination", type: "text", section: true },
+    { re: /emergency (information|contact)/i, canonical: "Emergency Information", type: "text", section: true },
+    // fields
+    { re: /(child'?s?\s+name|name of child)/i, canonical: "Child's Name", type: "text" },
+    { re: /\b(birth\s?date|date of birth|d\.?o\.?b\.?)\b/i, canonical: "Birthdate", type: "date" },
+    { re: /\bsex\b/i, canonical: "Sex", type: "select" },
+    { re: /health statement/i, canonical: "Health Statement", type: "text" },
+    {
+        re: /special health (or|and) medical requirements/i,
+        canonical: "Special Health or Medical Requirements",
+        type: "text",
+    },
+    { re: /(allergies|allergy)/i, canonical: "Allergies", type: "text" },
+    { re: /(medications?|medicine)/i, canonical: "Medications", type: "text" },
+    {
+        re: /(parent\/?\s?guardian|parent or guardian)\s+signature/i,
+        canonical: "Parent/Guardian Signature",
+        type: "signature",
+    },
+    {
+        re: /(physician|provider|health\s*care\s*provider)\s+signature/i,
+        canonical: "Physician Signature",
+        type: "signature",
+    },
+    { re: /\bdate\b/i, canonical: "Date", type: "date" },
+];
+
+/** True when a label/line is masthead/agency noise rather than a real field. */
+function isHeaderNoise(s: string): boolean {
+    return HEADER_NOISE_RE.test(s);
+}
 
 const PLACEHOLDER_RE = /^[\s_xX.,/\\[\]()·•–—-]*$/;
 const CHECKBOX_MARK = /(\[\s?[xX]?\s?\]|☐|□|■|✓|✔|◯|○|\(\s?[xX]?\s?\))/;
@@ -212,13 +268,38 @@ function extractYesNoQuestion(line: string): string | null {
 }
 
 function extractSignature(line: string): string | null {
-    if (/\bsignature\b/i.test(line)) {
-        const cleaned = line.replace(/[_:.]+/g, " ").replace(/\s+/g, " ").trim();
-        return cleaned.slice(0, 40) || "Signature";
+    const t = line.trim();
+    if (/\bsignature\b/i.test(t)) {
+        // Only when the line is short enough to BE a signature label — never a long header
+        // that merely contains the word "signature" (e.g. a department masthead).
+        if (t.length > 48 || isHeaderNoise(t)) return null;
+        const cleaned = t.replace(/[_:.]+/g, " ").replace(/\s+/g, " ").trim();
+        const m = cleaned.match(/^(.*?\bsignature)\b/i); // keep up to "signature" inclusive
+        const label = (m ? m[1] : cleaned).trim();
+        return label.slice(0, 40) || "Signature";
     }
-    if (/^x[_\s]{3,}/i.test(line.trim())) return "Signature";
-    if (/\bsign here\b/i.test(line)) return "Signature";
+    if (/^x[_\s]{3,}/i.test(t)) return "Signature";
+    if (/\bsign here\b/i.test(t)) return "Signature";
     return null;
+}
+
+/**
+ * Sweep the raw text for KNOWN labels — recovers fields when extraction is a sparse,
+ * near-newline-less blob (the real MO500 case) that line-based detection can't parse.
+ * Deterministic: emits each known canonical label at most once, in order of appearance,
+ * grouped under the most recent known section. Only phrases present in the text.
+ */
+function sweepKnownLabels(rawText: string): Array<{ canonical: string; type: StructureFieldType; section: boolean; index: number }> {
+    const hits: Array<{ canonical: string; type: StructureFieldType; section: boolean; index: number }> = [];
+    const taken = new Set<string>();
+    for (const k of KNOWN_LABELS) {
+        const m = k.re.exec(rawText);
+        if (!m) continue;
+        if (taken.has(k.canonical)) continue;
+        taken.add(k.canonical);
+        hits.push({ canonical: k.canonical, type: k.type, section: Boolean(k.section), index: m.index });
+    }
+    return hits.sort((a, b) => a.index - b.index);
 }
 
 function extractQuestion(line: string): string | null {
@@ -249,7 +330,10 @@ export function detectDocumentStructure(text: string | null): DocumentStructureC
                 candidate_labels: 0,
                 section_headers: [],
                 rejected_examples: [],
+                rejected_headers: [],
+                detected_known_labels: [],
                 confidence_summary: { high: 0, medium: 0, low: 0 },
+                quality: "failed",
             },
         };
     }
@@ -259,12 +343,17 @@ export function detectDocumentStructure(text: string | null): DocumentStructureC
     const sections: DocumentStructureSection[] = [];
     const sectionHeaders: string[] = [];
     const rejected: RejectedLabelExample[] = [];
+    const rejectedHeaders: string[] = [];
     let current: DocumentStructureSection | null = null;
     const seen = new Set<string>();
 
     const recordRejection = (line: string, reason: string) => {
         if (rejected.length >= 12) return;
         rejected.push({ text: line.slice(0, 60), reason });
+    };
+    const recordHeader = (line: string) => {
+        if (rejectedHeaders.length >= 8) return;
+        if (!rejectedHeaders.includes(line)) rejectedHeaders.push(line.slice(0, 80));
     };
 
     const startSection = (title: string, confidence: DocumentStructureSection["confidence"]) => {
@@ -275,7 +364,7 @@ export function detectDocumentStructure(text: string | null): DocumentStructureC
 
     const ensureSection = (): DocumentStructureSection => {
         if (!current) {
-            current = { title: "Untitled section", confidence: "low", fields: [] };
+            current = { title: "Detected fields", confidence: "low", fields: [] };
             sections.push(current);
         }
         return current;
@@ -290,6 +379,11 @@ export function detectDocumentStructure(text: string | null): DocumentStructureC
     ): boolean => {
         const clean = label.replace(/\s+/g, " ").trim();
         if (!clean || clean.length < 2) return false;
+        // Department / agency / title noise is NEVER a field (and never a signature).
+        if (isHeaderNoise(clean) || clean.length > 60) {
+            recordHeader(clean);
+            return false;
+        }
         const key = clean.toLowerCase();
         if (seen.has(key)) {
             recordRejection(clean, "duplicate");
@@ -309,6 +403,12 @@ export function detectDocumentStructure(text: string | null): DocumentStructureC
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i]!;
         const next = lines[i + 1];
+
+        // Department / agency masthead — drop entirely (never a field, never a section).
+        if (isHeaderNoise(line) && !matchesFieldLexicon(line)) {
+            recordHeader(line);
+            continue;
+        }
 
         if (isHeadingLine(line)) {
             startSection(
@@ -399,6 +499,27 @@ export function detectDocumentStructure(text: string | null): DocumentStructureC
         }
     }
 
+    // --- blob-recovery sweep: ONLY when line-based detection was weak (e.g. a sparse,
+    // near-newline-less extraction). Pulls KNOWN labels straight from the raw text, in
+    // order, under their nearest known section. Skipped on well-lined forms so we don't
+    // duplicate variants ("Child Name" vs "Child's Name"). Deterministic; text-only. ---
+    const lineFieldCount = sections.reduce((n, s) => n + s.fields.length, 0);
+    if (lineFieldCount < 2) {
+        current = null;
+        for (const h of sweepKnownLabels(raw)) {
+            if (h.section) {
+                const existing = sections.find((s) => s.title === h.canonical);
+                if (existing) current = existing;
+                else startSection(h.canonical, "medium");
+            } else {
+                addField(h.canonical, h.type, "medium", "known label (text sweep)", h.canonical);
+            }
+        }
+    }
+    const detectedKnownLabels = [
+        ...new Set(KNOWN_LABELS.filter((k) => !k.section && k.re.test(raw)).map((k) => k.canonical)),
+    ];
+
     const nonEmpty = sections.filter((s) => s.fields.length > 0);
     const allFields = nonEmpty.flatMap((s) => s.fields);
     const totalFields = allFields.length;
@@ -410,26 +531,45 @@ export function detectDocumentStructure(text: string | null): DocumentStructureC
         else if (f.confidence === "low") confidence_summary.low += 1;
     }
 
+    // Quality verdict gates the Template Setup UX. "strong" requires enough good fields AND
+    // that the text actually had line structure — a recovered blob is honestly "weak".
+    const medGood = confidence_summary.high + confidence_summary.medium;
+    const quality: StructureQuality =
+        totalFields === 0 ? "failed" : totalFields >= 4 && medGood >= 3 && lines.length >= 6 ? "strong" : "weak";
+
     const diagnostics: StructureDiagnostics = {
         text_length: raw.length,
         line_count: lines.length,
         candidate_labels: totalFields,
         section_headers: sectionHeaders,
         rejected_examples: rejected,
+        rejected_headers: rejectedHeaders,
+        detected_known_labels: detectedKnownLabels,
         confidence_summary,
+        quality,
     };
 
+    const headerNote = rejectedHeaders.length ? ` Ignored ${rejectedHeaders.length} header/agency line(s).` : "";
     if (totalFields === 0) {
         const sample = rejected.slice(0, 3).map((r) => `“${r.text}” (${r.reason})`).join(", ");
         warnings.push(
             `Text was available but no labelled fields were detected — ${diagnostics.text_length} chars, ${diagnostics.line_count} lines.` +
                 (sectionHeaders.length ? ` Section headers seen: ${sectionHeaders.join(", ")}.` : "") +
+                headerNote +
                 (sample ? ` Rejected examples: ${sample}.` : "")
+        );
+    } else if (quality === "weak") {
+        warnings.push(
+            `Weak detection: only ${totalFields} field${totalFields === 1 ? "" : "s"} found from ${diagnostics.text_length} chars of text ` +
+                `(${diagnostics.line_count} lines). This is a text-assisted draft, not exact PDF mapping — use the PDF preview to review and add fields before creating.` +
+                headerNote
         );
     } else {
         warnings.push(
             `Detected ${totalFields} field${totalFields === 1 ? "" : "s"} across ${nonEmpty.length} section${nonEmpty.length === 1 ? "" : "s"} ` +
-                `(confidence — high: ${confidence_summary.high}, medium: ${confidence_summary.medium}, low: ${confidence_summary.low}). Review before creating the form.`
+                `(confidence — high: ${confidence_summary.high}, medium: ${confidence_summary.medium}, low: ${confidence_summary.low}). ` +
+                `Text-assisted draft (no PDF coordinate mapping yet) — review before creating.` +
+                headerNote
         );
     }
 

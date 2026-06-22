@@ -44,6 +44,9 @@ export interface RejectedLabelExample {
     reason: string;
 }
 
+/** Detection quality verdict — gates the Template Setup UX (strong / weak / failed). */
+export type StructureQuality = "strong" | "weak" | "failed";
+
 /** Deterministic detection diagnostics — explains WHY a document did/didn't yield fields. */
 export interface StructureDiagnostics {
     text_length: number;
@@ -54,8 +57,14 @@ export interface StructureDiagnostics {
     section_headers: string[];
     /** Sample of label-ish lines that were NOT turned into fields, with reasons (capped). */
     rejected_examples: RejectedLabelExample[];
+    /** Department / agency / title lines explicitly rejected as fields (never signatures). */
+    rejected_headers: string[];
+    /** Known gov/childcare/health labels recognized in the text (e.g. "Child's Name"). */
+    detected_known_labels: string[];
     /** Field-candidate confidence breakdown. */
     confidence_summary: { high: number; medium: number; low: number };
+    /** Overall verdict: failed (0), weak (few/low-confidence), strong (enough good fields). */
+    quality: StructureQuality;
 }
 
 /** The deterministic detector's output. Never fabricated — empty when no text. */
