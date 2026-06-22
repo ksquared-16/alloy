@@ -10,7 +10,7 @@ import {
     layoutRuntimeBlockAllowsFieldEdit,
     useLayoutRuntimeBlockEdit,
 } from "@/components/layout/LayoutRuntimeBlockEditContext";
-import LayoutRuntimeFieldInput from "@/components/layout/LayoutRuntimeFieldInput";
+import LayoutRuntimeInlineEditFieldControl from "@/components/layout/LayoutRuntimeInlineEditFieldControl";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import LeadEnrollmentCardMetaLines from "@/components/layout/lead/LeadEnrollmentCardMetaLines";
 import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
@@ -33,6 +33,7 @@ import { resolveChildRowTemplateRowLayout } from "@/lib/layout/runtime/resolveCh
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
     PRESENTATION_LABEL,
+    PRESENTATION_LABEL_INLINE,
 } from "@/lib/presentation/presentationTypography";
 
 type Props = {
@@ -106,7 +107,7 @@ export default function LeadEnrollmentCardList({
 
         if (showInlineEdit && edit) {
             return (
-                <LayoutRuntimeFieldInput
+                <LayoutRuntimeInlineEditFieldControl
                     refKey={col.refKey}
                     value={edit.getFieldValue(
                         col.refKey,
@@ -121,7 +122,6 @@ export default function LeadEnrollmentCardList({
                         edit.getFieldValue,
                         rowKey,
                     )}
-                    compact
                 />
             );
         }
@@ -220,7 +220,7 @@ export default function LeadEnrollmentCardList({
                                             {configuredRowLayout.map((layoutRow) => (
                                                 <div
                                                     key={layoutRow.rowIndex}
-                                                    className="grid gap-2"
+                                                    className={`grid ${isEditing ? "gap-x-3 gap-y-1" : "gap-2"}`}
                                                     style={{
                                                         gridTemplateColumns: `repeat(${Math.max(1, layoutRow.columnCount)}, minmax(0, 1fr))`,
                                                     }}
@@ -235,10 +235,30 @@ export default function LeadEnrollmentCardList({
                                                                 />
                                                             );
                                                         }
+                                                        const inlineEditable =
+                                                            isEditing
+                                                            && layoutRuntimeCollectionColumnIsInlineEditable(col, "production");
                                                         return (
-                                                            <div key={col.refKey} className="min-w-0 flex flex-col gap-0.5">
-                                                                <span className={PRESENTATION_LABEL}>{col.label}</span>
-                                                                {renderEnrollmentColumnCell(row, col, rowKey, isEditing)}
+                                                            <div
+                                                                key={col.refKey}
+                                                                className="min-w-0"
+                                                                data-enrollment-field-cell="true"
+                                                                data-enrollment-field-editing={inlineEditable ? "true" : "false"}
+                                                            >
+                                                                {inlineEditable ?
+                                                                    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                                                        <span className={`shrink-0 ${PRESENTATION_LABEL_INLINE}`}>
+                                                                            {col.label}
+                                                                        </span>
+                                                                        <span className="min-w-0 flex-1">
+                                                                            {renderEnrollmentColumnCell(row, col, rowKey, isEditing)}
+                                                                        </span>
+                                                                    </div>
+                                                                :   <div className="flex flex-col gap-0.5">
+                                                                        <span className={PRESENTATION_LABEL}>{col.label}</span>
+                                                                        {renderEnrollmentColumnCell(row, col, rowKey, isEditing)}
+                                                                    </div>
+                                                                }
                                                             </div>
                                                         );
                                                     })}

@@ -11,6 +11,7 @@ import {
 import LayoutRuntimeFieldInput, {
     layoutRuntimeDependentValueReader,
 } from "@/components/layout/LayoutRuntimeFieldInput";
+import LayoutRuntimeInlineEditFieldControl from "@/components/layout/LayoutRuntimeInlineEditFieldControl";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import { useLayoutRuntimeCompositionHints } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { layoutRuntimeCollectionColumnIsInlineEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
@@ -120,13 +121,12 @@ function EnrollmentGridCell({
                 data-layout-runtime-enrollment-editable="true"
                 data-layout-runtime-ref-key={col.refKey}
             >
-                <LayoutRuntimeFieldInput
+                <LayoutRuntimeInlineEditFieldControl
                     refKey={col.refKey}
                     value={editValue}
                     rowKey={rowKey}
                     onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
                     getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
-                    compact
                 />
             </div>
         );

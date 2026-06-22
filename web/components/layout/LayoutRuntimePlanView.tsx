@@ -98,9 +98,10 @@ import { mapLayoutRuntimeTasksFromVm } from "@/lib/layout/runtime/mapLayoutRunti
 import LayoutRuntimeChildrenListWidget from "@/components/layout/LayoutRuntimeChildrenListWidget";
 import LayoutRuntimeChildrenEmptyState from "@/components/layout/LayoutRuntimeChildrenEmptyState";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
-import LayoutRuntimeFieldInput, {
+import {
     layoutRuntimeDependentValueReader,
 } from "@/components/layout/LayoutRuntimeFieldInput";
+import LayoutRuntimeInlineEditFieldControl from "@/components/layout/LayoutRuntimeInlineEditFieldControl";
 import { layoutRuntimeFieldIsEditable, resolveLayoutRuntimeEditableFieldFallback, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import LayoutRuntimeAdornmentButton from "@/components/layout/LayoutRuntimeAdornmentButton";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
@@ -507,7 +508,7 @@ function ValueCell({
                 :   null}
                 {showIcon && item.adornment && item.adornment.position !== "right" ? <Adorn item={item} /> : null}
                 {canEdit && edit ?
-                    <LayoutRuntimeFieldInput
+                    <LayoutRuntimeInlineEditFieldControl
                         refKey={editableRefKey}
                         value={editValue}
                         onChange={(v) => edit.setFieldValue(editableRefKey, v)}
@@ -771,7 +772,7 @@ function RepeaterCellContent({
                 <Adorn item={synthetic} rowRecord={row} />
             :   null}
             {canEdit && edit ?
-                <LayoutRuntimeFieldInput
+                <LayoutRuntimeInlineEditFieldControl
                     refKey={editableRefKey}
                     value={editValue}
                     rowKey={rowKey}

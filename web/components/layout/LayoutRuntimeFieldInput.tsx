@@ -26,8 +26,10 @@ type Props = {
     rowKey?: string;
     getDependentValue?: (dependsOnOcmKey: InquiryChildNativeOcmFieldKey) => string;
     disabled?: boolean;
-    /** Compact enrollment grid cell — minimal chrome until focus. */
+    /** @deprecated Prefer `variant="compact"`. */
     compact?: boolean;
+    /** Control density — inline is for drawer row/card in-place edit. */
+    variant?: "default" | "compact" | "inline";
     "data-layout-runtime-editable"?: string;
     "data-layout-runtime-ref-key"?: string;
     "data-layout-runtime-row-key"?: string;
@@ -38,6 +40,12 @@ const COMPACT_INPUT_CLASS =
 
 const COMPACT_SELECT_CLASS =
     "min-w-0 w-full max-w-full rounded border border-transparent bg-transparent px-1 py-0.5 text-[12px] text-alloy-midnight outline-none transition-colors hover:border-alloy-stone/15 focus:border-alloy-juniper/35 focus:bg-white focus:px-1.5";
+
+const INLINE_INPUT_CLASS =
+    "h-6 w-full min-w-0 max-w-[11rem] rounded border border-alloy-stone/12 bg-white/80 px-1.5 py-0 text-[11px] leading-tight text-alloy-midnight outline-none transition-[border-color,box-shadow] hover:border-alloy-stone/25 focus:border-alloy-juniper/40 focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,162,131,0.08)] [color-scheme:light]";
+
+const INLINE_SELECT_CLASS =
+    "h-6 min-w-0 w-full max-w-full rounded border border-alloy-stone/12 bg-white/80 px-1 py-0 text-[11px] leading-tight text-alloy-midnight outline-none transition-[border-color,box-shadow] hover:border-alloy-stone/25 focus:border-alloy-juniper/40 focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,162,131,0.08)]";
 
 function resolveSelectOptions(
     placement: InquiryChildPlacementFieldMetadata | undefined,
@@ -100,13 +108,21 @@ export default function LayoutRuntimeFieldInput({
     getDependentValue,
     disabled = false,
     compact = false,
+    variant: variantProp,
     ...dataAttrs
 }: Props) {
     const control = resolveLayoutRuntimeFieldControl(refKey);
     const placementData = useLayoutRuntimePlacementData();
     const optionSetOptions = useLayoutRuntimeOptionSetLoader(control.option_set_key);
-    const inputClass = compact ? COMPACT_INPUT_CLASS : INPUT_CLASS;
-    const selectClass = compact ? COMPACT_SELECT_CLASS : SELECT_CLASS;
+    const variant = variantProp ?? (compact ? "compact" : "default");
+    const inputClass =
+        variant === "inline" ? INLINE_INPUT_CLASS
+        : variant === "compact" ? COMPACT_INPUT_CLASS
+        : INPUT_CLASS;
+    const selectClass =
+        variant === "inline" ? INLINE_SELECT_CLASS
+        : variant === "compact" ? COMPACT_SELECT_CLASS
+        : SELECT_CLASS;
 
     const locationId = getDependentValue?.("location_id") ?? "";
     const programCategoryId = getDependentValue?.("desired_program_category_id") ?? "";
@@ -147,6 +163,7 @@ export default function LayoutRuntimeFieldInput({
                 data-layout-runtime-editable="true"
                 data-layout-runtime-ref-key={refKey}
                 data-layout-runtime-row-key={rowKey}
+                data-layout-runtime-field-variant={variant}
             />
         );
     }
@@ -167,6 +184,7 @@ export default function LayoutRuntimeFieldInput({
                 data-layout-runtime-editable="true"
                 data-layout-runtime-ref-key={refKey}
                 data-layout-runtime-row-key={rowKey}
+                data-layout-runtime-field-variant={variant}
                 aria-label={refKey}
             >
                 <option value="">{selectMeta.placeholder}</option>

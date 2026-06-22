@@ -1,6 +1,6 @@
 "use client";
 
-import LayoutRuntimeFieldInput from "@/components/layout/LayoutRuntimeFieldInput";
+import LayoutRuntimeInlineEditFieldControl from "@/components/layout/LayoutRuntimeInlineEditFieldControl";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import type { LayoutCollectionColumn } from "@/lib/layout/layoutV2";
 import {
@@ -43,7 +43,7 @@ function MetaInlineField({
     const edit = useLayoutRuntimeDrawerEdit();
     if (!edit) return null;
     return (
-        <LayoutRuntimeFieldInput
+        <LayoutRuntimeInlineEditFieldControl
             refKey={col.refKey}
             value={edit.getFieldValue(
                 col.refKey,
@@ -58,7 +58,6 @@ function MetaInlineField({
                 edit.getFieldValue,
                 rowKey,
             )}
-            compact
         />
     );
 }

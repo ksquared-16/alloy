@@ -58,6 +58,11 @@ Linked navigation (person ↔ opportunity): hold prior payload until swap ready.
 
 Settings layouts drive drawer composition. Effective policy on GET; PATCH enforcement on opportunity (layout-aware).
 
+**Experience Builder** (visual layout authoring) is documented in:
+
+- `experience-builder-doctrine.md` — builder + runtime contracts (inline edit, contacts, related lists)
+- `experience-builder-surface-cloning-plan.md` — Person / Child / Queue migration plan
+
 Detail: `../core/record-system.md`.
 
 ---
