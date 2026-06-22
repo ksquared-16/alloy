@@ -14,6 +14,7 @@ import {
     type GroupLoc,
 } from "@/lib/layout/builderOps";
 import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
+import { readLayoutEditorContactRole, type LayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import type { LayoutCollectionColumn, LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import {
     applyDisplayConfigToColumnPatch,
@@ -69,6 +70,7 @@ export type LayoutEditorFieldNode = {
     displayConfig: ReturnType<typeof readLayoutEditorDisplayConfig>;
     visibilityRule: LayoutEditorVisibilityRule;
     editable?: boolean;
+    contactRole?: LayoutEditorContactRole;
 };
 
 const WIDGET_BLOCK_TITLES: Record<string, string> = {
@@ -92,6 +94,7 @@ function fieldNodeFromItem(
     sectionKey: string,
     item: LayoutItem,
     path: LayoutEditorNodePath,
+    contactRole?: LayoutEditorContactRole,
 ): LayoutEditorFieldNode {
     const boundPath = item.refKey.startsWith("_") ? item.refKey : item.refKey;
     return {
@@ -102,6 +105,7 @@ function fieldNodeFromItem(
         displayConfig: readLayoutEditorDisplayConfig(item),
         visibilityRule: resolveVisibilityRuleKey(item.visibleWhen, boundPath),
         editable: item.editable === true,
+        contactRole,
     };
 }
 
@@ -153,20 +157,29 @@ export function listSectionLayoutBlocks(doc: LayoutDoc, sectionKey: string): Lay
 
             structuralItems.forEach((item) => {
                 if (item.kind === "field_group") {
+                    const contactRole =
+                        item.refKey === "contact_block" ?
+                            readLayoutEditorContactRole(item.metadata)
+                        :   undefined;
                     const children: LayoutEditorFieldNode[] = [];
                     if (item.rows?.length) {
                         item.rows.forEach((grow, gr) => {
                             grow.columns.forEach((gcol, gc) => {
                                 gcol.items.forEach((field) => {
                                     children.push(
-                                        fieldNodeFromItem(sectionKey, field, {
-                                            kind: "group_field",
+                                        fieldNodeFromItem(
                                             sectionKey,
-                                            blockItemId: item.id,
-                                            gr,
-                                            gc,
-                                            fieldId: field.id,
-                                        }),
+                                            field,
+                                            {
+                                                kind: "group_field",
+                                                sectionKey,
+                                                blockItemId: item.id,
+                                                gr,
+                                                gc,
+                                                fieldId: field.id,
+                                            },
+                                            contactRole,
+                                        ),
                                     );
                                 });
                             });
@@ -174,14 +187,19 @@ export function listSectionLayoutBlocks(doc: LayoutDoc, sectionKey: string): Lay
                     } else {
                         (item.items ?? []).forEach((field) => {
                             children.push(
-                                fieldNodeFromItem(sectionKey, field, {
-                                    kind: "group_field",
+                                fieldNodeFromItem(
                                     sectionKey,
-                                    blockItemId: item.id,
-                                    gr: 0,
-                                    gc: 0,
-                                    fieldId: field.id,
-                                }),
+                                    field,
+                                    {
+                                        kind: "group_field",
+                                        sectionKey,
+                                        blockItemId: item.id,
+                                        gr: 0,
+                                        gc: 0,
+                                        fieldId: field.id,
+                                    },
+                                    contactRole,
+                                ),
                             );
                         });
                     }

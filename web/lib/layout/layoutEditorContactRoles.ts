@@ -16,6 +16,23 @@ export type LayoutEditorContactRole = (typeof LAYOUT_EDITOR_CONTACT_ROLES)[numbe
 
 export type LayoutEditorContactResolutionRole = "primary" | "parents" | "billing" | "emergency" | "any";
 
+/** Resolution strategy — keeps secondary distinct from parent/guardian filtering. */
+export type LayoutEditorContactResolutionMode =
+    | "primary"
+    | "secondary"
+    | "parents"
+    | "billing"
+    | "emergency"
+    | "any";
+
+/** Synthetic record paths overlaid during contact_block runtime for visibility rules. */
+export const LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS = {
+    resolved: "_layout_contact_block.resolved",
+    resolvedCount: "_layout_contact_block.resolved_count",
+    isPrimary: "_layout_contact_block.is_primary",
+    isNotPrimary: "_layout_contact_block.is_not_primary",
+} as const;
+
 export const LAYOUT_EDITOR_CONTACT_ROLE_METADATA_KEY = "layoutEditorContactRole" as const;
 
 export type LayoutEditorContactRoleFieldRefs = {
@@ -79,9 +96,19 @@ export function readLayoutEditorContactRole(metadata: Record<string, unknown> | 
     return isLayoutEditorContactRole(raw) ? raw : "primary";
 }
 
-/** Map legacy secondary role to relationship-based parents resolution. */
+/** Map contact role to scalar field ref keys (secondary → secondary_* person fields). */
 export function normalizeLayoutEditorContactRole(role: LayoutEditorContactRole): LayoutEditorContactResolutionRole {
     if (role === "secondary") return "parents";
+    if (role === "parents") return "parents";
+    if (role === "billing") return "billing";
+    if (role === "emergency") return "emergency";
+    if (role === "any") return "any";
+    return "primary";
+}
+
+/** Relationship query mode for contact_block resolution — secondary is not merged into parents. */
+export function contactBlockResolutionMode(role: LayoutEditorContactRole): LayoutEditorContactResolutionMode {
+    if (role === "secondary") return "secondary";
     if (role === "parents") return "parents";
     if (role === "billing") return "billing";
     if (role === "emergency") return "emergency";
@@ -101,6 +128,9 @@ export function contactRoleEditorDescription(role: LayoutEditorContactRole): str
     const normalized = normalizeLayoutEditorContactRole(role);
     if (normalized === "primary") {
         return "Shows the household primary contact. Name, email, and phone come from the primary relationship.";
+    }
+    if (role === "secondary") {
+        return "Shows the first additional associated person (non-primary). Excludes the primary contact and people already shown in earlier contact blocks.";
     }
     if (normalized === "parents") {
         return "Shows additional parent/guardian relationships. Excludes the primary contact and people already shown in earlier contact blocks.";

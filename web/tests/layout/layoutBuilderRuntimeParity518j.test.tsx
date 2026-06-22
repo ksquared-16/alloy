@@ -19,6 +19,7 @@ import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayou
 import {
     overlayLayoutEditorContactBlockRecord,
     resolveLayoutEditorContactBlockPerson,
+    resolveLayoutEditorContactBlockResolution,
 } from "@/lib/layout/runtime/resolveLayoutEditorContactBlockRecord";
 import { resolveLayoutRuntimeRepeaterFieldValue } from "@/lib/layout/runtime/resolveLayoutRuntimeRepeaterFieldValue";
 
@@ -100,7 +101,13 @@ describe("layoutBuilderRuntimeParity 5.18J", () => {
         expect(parents?.displayName).toBe("Jamie Lyons");
         expect(emergency?.displayName).toBe("Chris Lyons");
 
-        const parentOverlay = overlayLayoutEditorContactBlockRecord(record, "parents", parents);
+        const parentOverlay = overlayLayoutEditorContactBlockRecord(
+            record,
+            "parents",
+            resolveLayoutEditorContactBlockResolution(record, "parents", {
+                excludedPersonIds: new Set([primary?.personId ?? ""]),
+            }),
+        );
         expect(parentOverlay["person.secondary_contact_name"]).toBe("Jamie Lyons");
         expect(parentOverlay["person.secondary_email"]).toBe("j@test.com");
     });

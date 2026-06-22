@@ -18,6 +18,7 @@ import {
 import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
     LAYOUT_EDITOR_VISIBILITY_PRESETS,
+    layoutEditorContactFieldVisibilityPresets,
     type LayoutEditorVisibilityRule,
 } from "@/lib/layout/layoutEditorVisibilityRules";
 import type { LayoutEditorFieldNode } from "@/lib/layout/layoutEditorCompositionModel";
@@ -36,6 +37,17 @@ type Props = {
 
 export default function OpportunityDrawerLayoutFieldSettings({ node, inline = false, onChange, onClose }: Props) {
     const display = node.displayConfig;
+    const visibilityPresets =
+        node.contactRole ?
+            layoutEditorContactFieldVisibilityPresets(node.contactRole)
+        :   LAYOUT_EDITOR_VISIBILITY_PRESETS.filter(
+                (preset) =>
+                    ![
+                        "show_when_contact_record_exists",
+                        "show_when_contact_count_gt_1",
+                        "show_when_not_primary",
+                    ].includes(preset.key),
+            );
 
     return (
         <div
@@ -318,7 +330,7 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                     data-testid="visual-editor-field-visibility"
                 >
-                    {LAYOUT_EDITOR_VISIBILITY_PRESETS.map((p) => (
+                    {visibilityPresets.map((p) => (
                         <option key={p.key} value={p.key}>
                             {p.label}
                         </option>

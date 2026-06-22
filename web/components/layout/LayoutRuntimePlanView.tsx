@@ -31,10 +31,10 @@ import {
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
 import { readLayoutEditorBlockConfig, resolveLayoutRuntimeSectionEditMode } from "@/lib/layout/layoutEditorBlockConfig";
-import { readLayoutEditorContactRole, normalizeLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
+import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
     overlayLayoutEditorContactBlockRecord,
-    resolveLayoutEditorContactBlockPerson,
+    resolveLayoutEditorContactBlockResolution,
     shouldHideEmptyLayoutEditorContactBlock,
 } from "@/lib/layout/runtime/resolveLayoutEditorContactBlockRecord";
 import {
@@ -367,6 +367,7 @@ function ValueCell({
     item: LayoutItem;
     anchorEntity: string;
 }) {
+    if (!evaluateLayoutCondition(record, item.visibleWhen)) return null;
     const variant = useContext(LayoutRuntimeVariantContext);
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const edit = useLayoutRuntimeDrawerEdit();
@@ -590,12 +591,12 @@ function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord;
     let contactRecord = record;
     if (isContactBlock) {
         const contactRole = readLayoutEditorContactRole(item.metadata);
-        const person = resolveLayoutEditorContactBlockPerson(record, contactRole, {
+        const resolution = resolveLayoutEditorContactBlockResolution(record, contactRole, {
             excludedPersonIds: renderedContacts.renderedPersonIds,
         });
-        if (shouldHideEmptyLayoutEditorContactBlock(contactRole, person)) return null;
-        if (person?.personId) renderedContacts.registerPersonId(person.personId);
-        contactRecord = overlayLayoutEditorContactBlockRecord(record, contactRole, person);
+        if (shouldHideEmptyLayoutEditorContactBlock(contactRole, resolution.person)) return null;
+        if (resolution.person?.personId) renderedContacts.registerPersonId(resolution.person.personId);
+        contactRecord = overlayLayoutEditorContactBlockRecord(record, contactRole, resolution);
     }
 
     return (
@@ -1868,15 +1869,21 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
 function evaluateLayoutItemVisibility(record: ProofRuntimeRecord, item: LayoutItem): boolean {
     if (evaluateLayoutCondition(record, item.visibleWhen)) return true;
     if (item.kind !== "field_group" || item.refKey !== "contact_block") return false;
-    const role = normalizeLayoutEditorContactRole(readLayoutEditorContactRole(item.metadata));
+    const role = readLayoutEditorContactRole(item.metadata);
     if (role === "primary") return false;
-    const person = resolveLayoutEditorContactBlockPerson(record, readLayoutEditorContactRole(item.metadata));
-    return Boolean(person?.displayName?.trim());
+    const resolution = resolveLayoutEditorContactBlockResolution(record, role);
+    return resolution.resolvedCount > 0 && Boolean(resolution.person?.displayName?.trim());
+}
+
+function evaluateLayoutFieldItemVisibility(record: ProofRuntimeRecord, item: LayoutItem): boolean {
+    if (item.kind !== "field") return evaluateLayoutItemVisibility(record, item);
+    return evaluateLayoutCondition(record, item.visibleWhen);
 }
 
 function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const variant = useContext(LayoutRuntimeVariantContext);
-    if (!evaluateLayoutItemVisibility(record, item)) return null;
+    const visibilityCheck = item.kind === "field" ? evaluateLayoutFieldItemVisibility : evaluateLayoutItemVisibility;
+    if (!visibilityCheck(record, item)) return null;
     if (variant === "production" && !isLayoutItemSupportedForProduction(item)) return null;
     if (variant === "preview" && !isLayoutItemSupportedForProduction(item)) return null;
     if (!shouldRenderProofItem(item)) return null;

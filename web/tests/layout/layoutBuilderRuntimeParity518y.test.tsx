@@ -115,13 +115,17 @@ describe("layoutBuilderRuntimeParity 5.18Y", () => {
             ],
         };
         const primary = resolveLayoutEditorContactBlockPerson(record, "primary");
-        const additional = resolveLayoutEditorContactBlockPerson(record, "parents", {
+        const additional = resolveLayoutEditorContactBlockPerson(record, "secondary", {
+            excludedPersonIds: new Set([primary?.personId ?? ""]),
+        });
+        const parentsOnly = resolveLayoutEditorContactBlockPerson(record, "parents", {
             excludedPersonIds: new Set([primary?.personId ?? ""]),
         });
         expect(primary?.displayName).toBe("Justin Wright");
         expect(additional?.displayName).toBe("Jordan Wright");
         expect(additional?.personId).not.toBe(primary?.personId);
-        expect(shouldHideEmptyLayoutEditorContactBlock("parents", additional)).toBe(false);
+        expect(parentsOnly).toBeNull();
+        expect(shouldHideEmptyLayoutEditorContactBlock("secondary", additional)).toBe(false);
     });
 
     it("hide when empty does not hide when a non-primary contact exists", () => {

@@ -10,6 +10,7 @@ import {
 } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
     LAYOUT_EDITOR_CONTACT_ROLE_METADATA_KEY,
+    LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS,
     readLayoutEditorContactRole,
     type LayoutEditorContactRole,
 } from "@/lib/layout/layoutEditorContactRoles";
@@ -282,19 +283,22 @@ export function blockVisibilityCondition(
         readLayoutEditorContactRole(metadata),
     );
     if (effective === "show_when_matching_role_exists") {
-        const role = readLayoutEditorContactRole(metadata);
-        const rolePath =
-            role === "primary" ? "person.primary_contact_name"
-            : role === "secondary" ? "person.secondary_contact_name"
-            : role === "emergency" ? "person.emergency_contact_name"
-            : role === "billing" ? "person.billing_contact_name"
-            : boundPath ?? "person.contact_name";
-        return visibilityConditionForRule("show_when_related_exists", rolePath, rolePath);
+        return visibilityConditionForRule(
+            "show_when_contact_record_exists",
+            LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolved,
+        );
     }
     if (effective === "hide_when_empty" && boundPath) {
         return visibilityConditionForRule("hide_when_empty", boundPath);
     }
     if (effective === "show_when_count_gt_1") {
+        const role = readLayoutEditorContactRole(metadata);
+        if (role && role !== "primary") {
+            return visibilityConditionForRule(
+                "show_when_contact_count_gt_1",
+                LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolvedCount,
+            );
+        }
         return visibilityConditionForRule("show_when_count_gt_1", boundPath ?? "children", "children");
     }
     return undefined;
@@ -306,6 +310,19 @@ export function resolveBlockVisibilityRuleKey(
     boundPath?: string,
 ): LayoutEditorBlockVisibilityRule {
     const role = readLayoutEditorContactRole(metadata);
+    if (
+        condition?.type === "exists"
+        && condition.path === LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolved
+        && role !== "primary"
+    ) {
+        return "show_when_matching_role_exists";
+    }
+    if (
+        condition?.type === "count_gt"
+        && condition.path === LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolvedCount
+    ) {
+        return "show_when_count_gt_1";
+    }
     const rolePath =
         role === "secondary" ? "person.secondary_contact_name"
         : role === "emergency" ? "person.emergency_contact_name"
@@ -315,8 +332,12 @@ export function resolveBlockVisibilityRuleKey(
         return "show_when_matching_role_exists";
     }
     const mapped = resolveVisibilityRuleKey(condition, boundPath ?? rolePath);
-    if (mapped === "show_when_related_exists") return "show_when_matching_role_exists";
-    if (mapped === "show_when_count_gt_1") return "show_when_count_gt_1";
+    if (mapped === "show_when_contact_record_exists" || mapped === "show_when_related_exists") {
+        return "show_when_matching_role_exists";
+    }
+    if (mapped === "show_when_contact_count_gt_1" || mapped === "show_when_count_gt_1") {
+        return "show_when_count_gt_1";
+    }
     if (mapped === "hide_when_empty") return "hide_when_empty";
     return "always";
 }
