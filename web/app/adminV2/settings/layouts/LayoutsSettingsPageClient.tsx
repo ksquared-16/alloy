@@ -1,17 +1,12 @@
 "use client";
 
-import { Suspense, useCallback, useMemo } from "react";
+import { Suspense, useCallback } from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import LayoutGalleryClient from "@/components/adminV2/settings/LayoutGalleryClient";
 import LayoutVisualEditorRouter from "@/components/adminV2/settings/LayoutVisualEditorRouter";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
-
-function layoutsBasePath(pathname: string): string {
-    if (pathname.startsWith("/admin/v2/settings")) return "/admin/v2/settings/layouts";
-    if (pathname.startsWith("/adminv2/settings")) return "/adminv2/settings/layouts";
-    return "/admin/settings/layouts";
-}
+import { LAYOUTS_SETTINGS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 
 export default function LayoutsSettingsPageClient() {
     return (
@@ -29,9 +24,8 @@ export default function LayoutsSettingsPageClient() {
 
 function LayoutsSettingsPageClientInner() {
     const router = useRouter();
-    const pathname = usePathname();
     const searchParams = useSearchParams();
-    const base = useMemo(() => layoutsBasePath(pathname), [pathname]);
+    const base = LAYOUTS_SETTINGS_HREF;
 
     const editorMode = searchParams.get("editor") === "1";
     const layoutId = searchParams.get("layout")?.trim() || null;

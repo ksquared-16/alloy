@@ -207,6 +207,9 @@ export const ADMIN_AI_ACTIVITY_HREF = `${CANONICAL_ADMIN_BASE}/ai-activity` as c
 /** Product nav — settings sub-surfaces (`/admin/settings/...`). Exact `/admin` is settings landing. */
 export const ADMIN_SETTINGS_SUBPATH_PREFIX = `${CANONICAL_ADMIN_BASE}/settings` as const;
 
+/** Product nav — Settings → Layouts gallery (Experience Builder). */
+export const LAYOUTS_SETTINGS_HREF = `${ADMIN_SETTINGS_SUBPATH_PREFIX}/layouts` as const;
+
 /** Build `/admin/settings/:subpath` for product nav (never `/adminV2/settings/...`). */
 export function adminSettingsSubpathHref(subpath: string): string {
     const trimmed = subpath.trim().replace(/^\//, "").replace(/^settings\/?/, "");

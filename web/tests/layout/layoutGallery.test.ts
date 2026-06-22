@@ -10,6 +10,7 @@ import {
     rollbackCandidateVersions,
     summarizeSurfaceLayoutRecords,
 } from "@/lib/layout/layoutGalleryModel";
+import { LAYOUTS_SETTINGS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import { buildSurfaceLayoutRegistryResponse } from "@/lib/layout/surfaceLayoutRegistry";
 
 const root = resolve(__dirname, "../..");
@@ -101,7 +102,15 @@ describe("layouts settings gallery wiring", () => {
     it("layouts page routes queue layouts through visual editor router", () => {
         const page = readFileSync(resolve(root, "app/adminV2/settings/layouts/LayoutsSettingsPageClient.tsx"), "utf8");
         expect(page).toContain("LayoutVisualEditorRouter");
+        expect(page).toContain("LAYOUTS_SETTINGS_HREF");
         const router = readFileSync(resolve(root, "components/adminV2/settings/LayoutVisualEditorRouter.tsx"), "utf8");
         expect(router).toContain("QueueRecordLayoutVisualEditor");
+    });
+
+    it("canonical layouts gallery href is /admin/settings/layouts", () => {
+        expect(LAYOUTS_SETTINGS_HREF).toBe("/admin/settings/layouts");
+        const nextConfig = readFileSync(resolve(root, "next.config.ts"), "utf8");
+        expect(nextConfig).toContain('source: "/admin/:path*"');
+        expect(nextConfig).toContain('destination: "/adminV2/:path*"');
     });
 });
