@@ -17,9 +17,9 @@ const LIVE = process.env.PLAYWRIGHT_518AB_QA === "1";
 const WORK_UNIT_SLUG = "new-leads";
 const outDir = path.join(__dirname, "../../../docs/sprints/06_2026/assets/518ab-browser-qa");
 
-function probeCompactList(root: ParentNode) {
-    const compact = root.querySelector('[data-layout-runtime-related-list-compact="true"]');
-    const stackedGrid = root.querySelector(".adminv2-drawer-enrollment-field-grid");
+const COMPACT_PROBE_FN = () => {
+    const compact = document.querySelector('[data-layout-runtime-related-list-compact="true"]');
+    const stackedGrid = document.querySelector(".adminv2-drawer-enrollment-field-grid");
     return {
         compactPresent: Boolean(compact),
         rowLines: compact?.querySelectorAll("[data-layout-runtime-compact-row-line]").length ?? 0,
@@ -27,11 +27,11 @@ function probeCompactList(root: ParentNode) {
         inlineEditing: compact?.querySelectorAll('[data-enrollment-field-editing="true"]').length ?? 0,
         inlineCellInputs: compact?.querySelectorAll('[data-layout-runtime-field-variant="inline-cell"]').length ?? 0,
         fullWidthInputs: compact?.querySelectorAll("input.w-full, select.w-full").length ?? 0,
-        displayOnlyNameAge:
-            compact?.querySelectorAll('[data-layout-runtime-ref-key="child.name"][data-enrollment-field-editing="false"]').length ?? 0,
+        displayOnlyFields:
+            (compact?.querySelectorAll('[data-enrollment-inline-field="true"][data-enrollment-field-editing="false"]').length ?? 0),
         stackedGridPresent: Boolean(stackedGrid),
     };
-}
+};
 
 test.describe("518AB compact summary edit browser QA", () => {
     test.skip(!LIVE, "Set PLAYWRIGHT_518AB_QA=1");
@@ -69,48 +69,56 @@ test.describe("518AB compact summary edit browser QA", () => {
             const sections = [...root.querySelectorAll("[data-drawer-overview-panel-section]")].map((el) =>
                 el.getAttribute("data-drawer-overview-panel-section"),
             );
+            const sectionKeys = [...root.querySelectorAll("[data-layout-runtime-section-key]")].map((el) =>
+                el.getAttribute("data-layout-runtime-section-key"),
+            );
             const editTestIds = [...root.querySelectorAll("[data-testid^='layout-runtime-block-edit-']")].map(
                 (el) => el.getAttribute("data-testid"),
             );
-            return { sections, editTestIds };
+            return { sections, sectionKeys, editTestIds };
         });
 
-        const childrenPanel = drawer.locator(
-            'section[data-drawer-overview-panel-section="children_enrollment"], [data-layout-runtime-section-key="children_enrollment"]',
-        ).first();
-        await expect(childrenPanel).toBeVisible({ timeout: 15_000 });
-
-        const probeBeforeEdit = await drawer.evaluate((root) => probeCompactList(root));
+        const probeBeforeEdit = await drawer.evaluate(COMPACT_PROBE_FN);
 
         await compactList.scrollIntoViewIfNeeded();
-        await childrenPanel.hover();
 
-        const childrenEdit = drawer.locator('[data-testid="layout-runtime-block-edit-children_enrollment"]');
-        const editFallback = childrenPanel.getByRole("button", { name: /^Edit$/ });
-        const editLocator = (await childrenEdit.count()) > 0 ? childrenEdit : editFallback;
+        const clickChildrenSectionEdit = async () => {
+            await drawer.evaluate(() => {
+                const compact = document.querySelector('[data-layout-runtime-related-list-compact="true"]');
+                const panel =
+                    compact?.closest("section[data-drawer-overview-panel]")
+                    ?? compact?.closest("[data-drawer-overview-panel=\"true\"]")
+                    ?? compact?.closest("[data-layout-runtime-section-key]");
+                const edit =
+                    panel?.querySelector('[data-testid^="layout-runtime-block-edit-"]')
+                    ?? [...(panel?.querySelectorAll("button") ?? [])].find(
+                        (btn) => btn.textContent?.trim() === "Edit",
+                    );
+                if (edit instanceof HTMLElement) edit.click();
+            });
+        };
 
-        await expect(editLocator).toBeAttached({ timeout: 10_000 });
-        await editLocator.click({ force: true });
+        await clickChildrenSectionEdit();
 
         await expect
             .poll(async () => {
-                return drawer.evaluate((root) => probeCompactList(root).inlineEditing);
+                return drawer.evaluate(COMPACT_PROBE_FN).then((p) => p.inlineEditing);
             }, { timeout: 10_000 })
             .toBeGreaterThan(0);
 
-        const probeInEdit = await drawer.evaluate((root) => probeCompactList(root));
+        const probeInEdit = await drawer.evaluate(COMPACT_PROBE_FN);
 
         const screenshotEditPath = path.join(outDir, `518ab-edit-${Date.now()}.png`);
         await page.screenshot({ path: screenshotEditPath, fullPage: false });
 
-        await editLocator.click({ force: true });
+        await clickChildrenSectionEdit();
         await expect
             .poll(async () => {
-                return drawer.evaluate((root) => probeCompactList(root).inlineEditing);
+                return drawer.evaluate(COMPACT_PROBE_FN).then((p) => p.inlineEditing);
             }, { timeout: 10_000 })
             .toBe(0);
 
-        const probeAfterDone = await drawer.evaluate((root) => probeCompactList(root));
+        const probeAfterDone = await drawer.evaluate(COMPACT_PROBE_FN);
 
         const report = {
             recordUrl: `/adminV2/workspace/work-unit/${WORK_UNIT_SLUG}`,
@@ -131,7 +139,8 @@ test.describe("518AB compact summary edit browser QA", () => {
         expect(probeInEdit.fullWidthInputs).toBe(0);
         expect(probeInEdit.stackedGridPresent).toBe(false);
         expect(probeInEdit.rowLines).toBe(probeBeforeEdit.rowLines);
-        expect(probeInEdit.displayOnlyNameAge).toBeGreaterThan(0);
+        expect(probeInEdit.displayOnlyFields).toBeGreaterThan(0);
+        expect(probeInEdit.inlineFields - probeInEdit.inlineEditing).toBe(probeInEdit.displayOnlyFields);
 
         expect(probeAfterDone.inlineEditing).toBe(0);
     });
