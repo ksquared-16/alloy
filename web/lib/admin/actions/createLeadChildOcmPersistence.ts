@@ -125,28 +125,24 @@ export type ApplyCreateLeadChildParticipationResult = {
     ocm_id: string;
 };
 
-export async function applyCreateLeadChildParticipation(
+export async function applyCreateLeadChildParticipationFromIdentity(
     supabase: SupabaseClient,
     params: {
         orgId: string;
         opportunityId: string;
         customerId: string;
-        merged: Record<string, unknown>;
-    }
-): Promise<ApplyCreateLeadChildParticipationResult | null> {
-    const parsed = parseCreateLeadChildParticipationPayload(params.merged);
-    if (!parsed) return null;
-
-    const { identity, ocm } = parsed;
-
-    const firstName = identity.first_name ?? "";
-    const lastName = identity.last_name ?? "";
+        identity: CreateLeadChildIdentity;
+        ocm: CreateLeadChildOcmFields;
+    },
+): Promise<ApplyCreateLeadChildParticipationResult> {
+    const firstName = params.identity.first_name ?? "";
+    const lastName = params.identity.last_name ?? "";
     const childPerson = await findOrCreateChildPersonInOrg(supabase, {
         orgId: params.orgId,
         customerId: params.customerId,
         firstName,
         lastName,
-        dob: identity.dob,
+        dob: params.identity.dob,
     });
     if (!childPerson?.person_id) {
         throw new Error("Could not create or resolve child person identity for lead.");
@@ -156,10 +152,10 @@ export async function applyCreateLeadChildParticipation(
         org_id: params.orgId,
         customer_id: params.customerId,
         person_id: childPerson.person_id,
-        display_name: identity.display_name,
-        first_name: identity.first_name,
-        last_name: identity.last_name,
-        dob: identity.dob,
+        display_name: params.identity.display_name,
+        first_name: params.identity.first_name,
+        last_name: params.identity.last_name,
+        dob: params.identity.dob,
         relationship: "child",
         is_active: true,
         metadata: { source: "create_lead" },
@@ -177,16 +173,16 @@ export async function applyCreateLeadChildParticipation(
 
     const enrichedProgram = await enrichOcmProgramCategoryFields(supabase, {
         orgId: params.orgId,
-        locationId: ocm.location_id,
-        desiredProgramType: ocm.desired_program_type,
-        desiredProgramCategoryId: ocm.desired_program_category_id,
+        locationId: params.ocm.location_id,
+        desiredProgramType: params.ocm.desired_program_type,
+        desiredProgramCategoryId: params.ocm.desired_program_category_id,
     });
     const ocmRow = buildCreateLeadOcmInsertRow({
         orgId: params.orgId,
         opportunityId: params.opportunityId,
         customerMemberId,
         ocm: {
-            ...ocm,
+            ...params.ocm,
             desired_program_type: enrichedProgram.desired_program_type,
             desired_program_category_id: enrichedProgram.desired_program_category_id,
         },
@@ -205,4 +201,25 @@ export async function applyCreateLeadChildParticipation(
         customer_member_id: customerMemberId,
         ocm_id: String((ocmData as { id: string }).id),
     };
+}
+
+export async function applyCreateLeadChildParticipation(
+    supabase: SupabaseClient,
+    params: {
+        orgId: string;
+        opportunityId: string;
+        customerId: string;
+        merged: Record<string, unknown>;
+    }
+): Promise<ApplyCreateLeadChildParticipationResult | null> {
+    const parsed = parseCreateLeadChildParticipationPayload(params.merged);
+    if (!parsed) return null;
+
+    return applyCreateLeadChildParticipationFromIdentity(supabase, {
+        orgId: params.orgId,
+        opportunityId: params.opportunityId,
+        customerId: params.customerId,
+        identity: parsed.identity,
+        ocm: parsed.ocm,
+    });
 }

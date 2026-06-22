@@ -1,5 +1,6 @@
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
+import { buildCreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
 import { extractFactsFromText } from "@/lib/intake/extract/extractFactsFromText";
 import { groupFactsIntoHouseholdCandidates } from "@/lib/intake/group/groupFactsIntoHouseholdCandidates";
 import { mapFactsToActionIntake } from "@/lib/intake/map/mapFactsToActionIntake";
@@ -43,6 +44,7 @@ export function buildIntakeDebugTrace(input: {
     });
     const household = mapping.household ?? groupFactsIntoHouseholdCandidates(extraction.facts);
     const values = valuesFromMappedFields(mapping.candidates);
+    const selection = household ? buildCreateLeadCommitSelection(household) : null;
 
     return {
         raw_text: input.text,
@@ -58,7 +60,7 @@ export function buildIntakeDebugTrace(input: {
             value: c.display_value ?? c.value,
             confidence: c.confidence,
         })),
-        commit_preview: buildCreateLeadCommitPreview({ values, household }),
+        commit_preview: buildCreateLeadCommitPreview({ values, household, selection }),
         review_warnings: formatIntakeReviewWarnings(
             mapping.review_warning_items ?? household.review_warnings,
         ),

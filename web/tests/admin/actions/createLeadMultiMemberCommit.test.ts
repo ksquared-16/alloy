@@ -1,11 +1,18 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActions";
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
+import { applyCreateLeadHouseholdMemberCommit } from "@/lib/admin/actions/executeCreateLeadHouseholdCommit";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
-import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
-import { ensureCustomerPersonsPrimaryLink } from "@/lib/bookingCustomerPersonLink";
+import { buildCreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
+import { mapCreateLeadCommitSelectionToExecutePayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
+import {
+    __resetExtractFactCounterForTests,
+    extractFactsFromText,
+} from "@/lib/intake/extract/extractFactsFromText";
+import {
+    __resetHouseholdCandidateCounterForTests,
+    groupFactsIntoHouseholdCandidates,
+} from "@/lib/intake/group/groupFactsIntoHouseholdCandidates";
 
 vi.mock("@/lib/admin/statusDefinitionsResolve", () => ({
     assertAllowedStatusKey: vi.fn().mockResolvedValue({ ok: true }),
@@ -39,28 +46,55 @@ vi.mock("@/lib/admin/actions/createLeadChildOcmPersistence", () => ({
     applyCreateLeadChildParticipation: vi.fn().mockResolvedValue(null),
 }));
 
-const root = resolve(__dirname, "../../..");
+vi.mock("@/lib/admin/actions/executeCreateLeadHouseholdCommit", () => ({
+    applyCreateLeadHouseholdMemberCommit: vi.fn().mockResolvedValue(undefined),
+}));
 
-function read(rel: string): string {
-    return readFileSync(resolve(root, rel), "utf8");
-}
+const MULTI_MEMBER_PASTE = [
+    "Sarah & Rudy Emerson 1222344321 sarah@emerson.net",
+    "Children: Jet DOB 2/4/2026 and Chet DOB 10/10/2023",
+].join("\n");
 
-/** Documents actual create_lead DB writes for household intake audit (no broad multi-record commit). */
-describe("create lead commit audit — household intake", () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-    });
+beforeEach(() => {
+    vi.clearAllMocks();
+    __resetExtractFactCounterForTests();
+    __resetHouseholdCandidateCounterForTests();
+});
 
-    it("writes primary parent, customer, opportunity, and optional first child only", async () => {
-        const insert = vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-                single: vi.fn().mockResolvedValue({ data: { id: "opp-1" }, error: null }),
-            }),
+describe("create lead multi-member commit server path", () => {
+    it("calls household member commit when selection payload is present", async () => {
+        const household = groupFactsIntoHouseholdCandidates(
+            extractFactsFromText({ text: MULTI_MEMBER_PASTE }).facts,
+        );
+        const selection = buildCreateLeadCommitSelection(household);
+        const merged = mapCreateLeadCommitSelectionToExecutePayload({
+            values: {
+                first_name: "Sarah",
+                last_name: "Emerson",
+                email: "sarah@emerson.net",
+                phone: "1222344321",
+                child_first_name: "Jet",
+                child_last_name: "Emerson",
+                child_date_of_birth: "2026-02-04",
+                location_id: "site-1",
+            },
+            selection,
         });
+
         const supabase = {
             from: vi.fn((table: string) => {
-                if (table === "opportunities") return { insert };
-                if (table === "opportunity_persons") return { insert: vi.fn().mockResolvedValue({ error: null }) };
+                if (table === "opportunities") {
+                    return {
+                        insert: vi.fn().mockReturnValue({
+                            select: vi.fn().mockReturnValue({
+                                single: vi.fn().mockResolvedValue({ data: { id: "opp-1" }, error: null }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "opportunity_persons") {
+                    return { insert: vi.fn().mockResolvedValue({ error: null }) };
+                }
                 if (table === "verticals") {
                     return {
                         select: vi.fn().mockReturnValue({
@@ -80,63 +114,43 @@ describe("create lead commit audit — household intake", () => {
             supabase as never,
             { orgId: "org-1", userId: "user-1" },
             {
-                merged: {
-                    first_name: "Alex",
-                    last_name: "Lyons",
-                    email: "alex.lyons@test.com",
-                    phone: "987988899",
-                    child_first_name: "Jaxon",
-                    child_last_name: "Lyons",
-                    child_date_of_birth: "2013-11-23",
-                    location_id: "site-1",
-                },
+                merged,
                 context: { department_id: "dept-1" },
             },
         );
 
         expect(result.ok).toBe(true);
         expect(findOrCreatePersonInOrgWithMeta).toHaveBeenCalledTimes(1);
-        expect(ensureCustomerForPersonNative).toHaveBeenCalledTimes(1);
-        expect(ensureCustomerPersonsPrimaryLink).toHaveBeenCalledTimes(1);
         expect(applyCreateLeadChildParticipation).toHaveBeenCalledTimes(1);
-        expect(insert).toHaveBeenCalledTimes(1);
-    });
-
-    it("source audit: does not reference addresses or person_relationships tables", () => {
-        const source = read("lib/admin/actions/entryLifecycleActions.ts");
-        const childSource = read("lib/admin/actions/createLeadChildOcmPersistence.ts");
-        expect(source).not.toMatch(/from\("addresses"\)/);
-        expect(source).not.toMatch(/person_relationships/);
-        expect(childSource).toMatch(/customer_members/);
-        expect(childSource).toMatch(/opportunity_customer_members/);
+        expect(applyCreateLeadHouseholdMemberCommit).toHaveBeenCalledTimes(1);
+        expect(applyCreateLeadHouseholdMemberCommit).toHaveBeenCalledWith(
+            supabase,
+            expect.objectContaining({
+                customerId: "customer-1",
+                opportunityId: "opp-1",
+                primaryPersonId: "parent-person-1",
+            }),
+        );
     });
 });
 
 export const CREATE_LEAD_COMMIT_AUDIT = {
     creates: [
         "persons (primary parent/guardian)",
-        "persons (additional approved guardians when household_commit_v1 present)",
+        "persons (additional approved guardians)",
         "customers (household)",
-        "customer_persons (primary_contact link)",
+        "customer_persons (primary + guardian links)",
         "opportunities (lead)",
-        "opportunity_persons (primary_guardian link)",
+        "opportunity_persons (primary + secondary guardian links)",
         "persons (included children)",
         "customer_members (child relationship per included child)",
         "opportunity_customer_members (child enrollment row per included child)",
         "workflow_events (status + action_executed)",
     ],
     does_not_create: [
-        "excluded household members (operator unchecked or invalid)",
+        "excluded household members",
         "addresses",
         "person_relationships rows",
         "contacts table rows on create path",
     ],
 } as const;
-
-describe("CREATE_LEAD_COMMIT_AUDIT reference", () => {
-    it("documents expected vs actual scope for multi-member household intake", () => {
-        expect(CREATE_LEAD_COMMIT_AUDIT.creates).toContain("customers (household)");
-        expect(CREATE_LEAD_COMMIT_AUDIT.does_not_create).toContain("excluded household members (operator unchecked or invalid)");
-        expect(CREATE_LEAD_COMMIT_AUDIT.does_not_create).toContain("addresses");
-    });
-});

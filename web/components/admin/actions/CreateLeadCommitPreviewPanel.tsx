@@ -60,13 +60,13 @@ export function CreateLeadCommitPreviewPanel({ preview, className = "" }: Props)
             </p>
             <div className="mt-3 space-y-3">
                 <PreviewList
-                    title="Will create now"
+                    title="Will create / link now"
                     items={preview.will_create}
                     tone="create"
                     testId="create-lead-commit-preview-will-create"
                 />
                 <PreviewList
-                    title="Detected but not created"
+                    title="Needs review / excluded"
                     items={preview.not_created}
                     tone="defer"
                     testId="create-lead-commit-preview-not-created"

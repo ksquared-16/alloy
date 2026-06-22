@@ -9,7 +9,6 @@ import type {
 import { deriveAgeFromDateOfBirth } from "@/lib/fields/derived/ageFromDateOfBirth";
 import {
     buildHouseholdReviewWarnings,
-    householdCommitLimited,
 } from "@/lib/intake/review/intakeReviewWarnings";
 import { splitPersonName } from "@/lib/intake/normalize/personName";
 import { buildHouseholdRelationships } from "@/lib/intake/relationship/buildHouseholdRelationships";
@@ -310,6 +309,6 @@ export function groupFactsIntoHouseholdCandidates(facts: IntakeFact[]): IntakeHo
         unassigned_fact_ids,
         unmapped_facts,
         review_warnings,
-        commit_limited_to_primary: householdCommitLimited(review_warnings),
+        commit_limited_to_primary: false,
     };
 }

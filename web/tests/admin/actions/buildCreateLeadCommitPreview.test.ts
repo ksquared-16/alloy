@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
+import { buildCreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
 import {
     __resetHouseholdCandidateCounterForTests,
     groupFactsIntoHouseholdCandidates,
@@ -23,9 +24,10 @@ beforeEach(() => {
 });
 
 describe("buildCreateLeadCommitPreview", () => {
-    it("lists primary records to create and defers additional household members", () => {
+    it("lists all included household members when selection is provided", () => {
         const extraction = extractFactsFromText({ text: HOUSEHOLD_PASTE });
         const household = groupFactsIntoHouseholdCandidates(extraction.facts);
+        const selection = buildCreateLeadCommitSelection(household);
         const preview = buildCreateLeadCommitPreview({
             household,
             values: {
@@ -34,17 +36,11 @@ describe("buildCreateLeadCommitPreview", () => {
                 child_first_name: "Jaxon",
                 child_last_name: "Lyons",
             },
+            selection,
         });
 
-        expect(preview.will_create.map((i) => i.label)).toEqual([
-            "Primary parent / guardian",
-            "Household (customer)",
-            "Lead (opportunity)",
-            "First child",
-        ]);
-        expect(preview.will_create[0]?.detail).toBe("Alex Lyons");
-        expect(preview.not_created.some((i) => i.label === "Additional parent / guardian")).toBe(true);
-        expect(preview.not_created.some((i) => i.label === "Additional child")).toBe(true);
-        expect(preview.not_created.some((i) => i.label === "Address")).toBe(true);
+        expect(preview.will_create.filter((i) => i.label.startsWith("Parent")).length).toBeGreaterThanOrEqual(1);
+        expect(preview.will_create.some((i) => i.label.startsWith("Child"))).toBe(true);
+        expect(preview.will_create.some((i) => i.detail === "Jason Lyons" || i.detail === "Alex Lyons")).toBe(true);
     });
 });

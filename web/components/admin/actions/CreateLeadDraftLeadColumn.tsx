@@ -14,11 +14,24 @@ import {
 } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import { missingRequiredLabelsForCreateLead } from "@/lib/admin/actions/resolveCreateLeadRequiredFields";
 import { ActionWorkspaceGatherFields } from "@/components/admin/actions/ActionWorkspaceGatherFields";
+import { IntakeHouseholdCommitReviewPanel } from "@/components/admin/intake/IntakeHouseholdCommitReviewPanel";
 import { IntakeHouseholdReviewPanel } from "@/components/admin/intake/IntakeHouseholdReviewPanel";
 import { IntakeReviewWarningsBanner } from "@/components/admin/intake/IntakeReviewWarningsBanner";
 import { CreateLeadCommitPreviewPanel } from "@/components/admin/actions/CreateLeadCommitPreviewPanel";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
+import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
+
+const HOUSEHOLD_MODE_SUPPRESSED_KEYS = new Set([
+    "first_name",
+    "last_name",
+    "email",
+    "phone",
+    "child_first_name",
+    "child_last_name",
+    "child_date_of_birth",
+    "child_age",
+]);
 
 type Props = {
     findings: CreateLeadLiveFinding[];
@@ -39,6 +52,8 @@ type Props = {
     validationIssues: string[];
     fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
     household?: IntakeHouseholdCandidate | null;
+    commitSelection?: CreateLeadCommitSelection | null;
+    onCommitSelectionChange?: (next: CreateLeadCommitSelection) => void;
 };
 
 function DraftFieldCard({
@@ -173,18 +188,52 @@ export function CreateLeadDraftLeadColumn({
     validationIssues,
     fieldConfidence,
     household,
+    commitSelection,
+    onCommitSelectionChange,
 }: Props) {
     const showDraftForm = manualMode || draftEditMode;
+    const householdCommitMode = Boolean(household && commitSelection && onCommitSelectionChange);
+    const contextSections =
+        householdCommitMode ?
+            sections
+                .map((section) => ({
+                    ...section,
+                    fields: section.fields.filter((f) => !HOUSEHOLD_MODE_SUPPRESSED_KEYS.has(f.payload_key)),
+                }))
+                .filter((section) => section.fields.length > 0)
+        :   sections;
     const reviewSuggestions = suggestions.filter((s) => s.confidence !== "high");
     const missing =
         intakeSpec && showDraftForm ?
-            missingRequiredLabelsForCreateLead(intakeSpec, values)
+            householdCommitMode ?
+                missingRequiredLabelsForCreateLead(intakeSpec, values).filter((label) => {
+                    const field = [...intakeSpec.required, ...intakeSpec.recommended, ...intakeSpec.optional].find(
+                        (f) => f.field_label === label,
+                    );
+                    return !field || !HOUSEHOLD_MODE_SUPPRESSED_KEYS.has(field.payload_key);
+                })
+            :   missingRequiredLabelsForCreateLead(intakeSpec, values)
         :   [];
     const showApplyReview = reviewSuggestions.length > 0 && draftEditMode;
     const commitPreview =
         household && (draftEditMode || manualMode) ?
-            buildCreateLeadCommitPreview({ values, household })
+            buildCreateLeadCommitPreview({ values, household, selection: commitSelection })
         :   null;
+
+    function renderHouseholdReview(className: string) {
+        if (!household) return null;
+        if (commitSelection && onCommitSelectionChange) {
+            return (
+                <IntakeHouseholdCommitReviewPanel
+                    household={household}
+                    selection={commitSelection}
+                    onSelectionChange={onCommitSelectionChange}
+                    className={className}
+                />
+            );
+        }
+        return <IntakeHouseholdReviewPanel household={household} className={className} />;
+    }
 
     return (
         <section
@@ -256,26 +305,38 @@ export function CreateLeadDraftLeadColumn({
 
                 {showDraftForm ?
                     <div data-testid="create-lead-gather-fields">
-                        {household ?
-                            <IntakeHouseholdReviewPanel household={household} className="mb-4" />
-                        :   null}
+                        {renderHouseholdReview("mb-4")}
                         {commitPreview ?
                             <CreateLeadCommitPreviewPanel preview={commitPreview} className="mb-4" />
                         :   null}
-                        <ActionWorkspaceGatherFields
-                            sections={sections}
-                            values={values}
-                            onChange={onFieldChange}
-                            platformRequiredKeys={requiredPayloadKeys}
-                            fieldConfidence={fieldConfidence}
-                            layout="unified"
-                            dataTestIdPrefix="create-lead-gather"
-                        />
+                        {householdCommitMode ?
+                            contextSections.length > 0 ?
+                                <ActionWorkspaceGatherFields
+                                    sections={contextSections}
+                                    values={values}
+                                    onChange={onFieldChange}
+                                    platformRequiredKeys={requiredPayloadKeys}
+                                    fieldConfidence={fieldConfidence}
+                                    layout="unified"
+                                    dataTestIdPrefix="create-lead-gather"
+                                />
+                            :   null
+                        :   !household ?
+                            <ActionWorkspaceGatherFields
+                                sections={sections}
+                                values={values}
+                                onChange={onFieldChange}
+                                platformRequiredKeys={requiredPayloadKeys}
+                                fieldConfidence={fieldConfidence}
+                                layout="unified"
+                                dataTestIdPrefix="create-lead-gather"
+                            />
+                        :   null}
                     </div>
                 :   <div className="space-y-2" data-testid="create-lead-draft-fields">
                         {household && !analyzing ?
                             <>
-                                <IntakeHouseholdReviewPanel household={household} className="mb-2" />
+                                {renderHouseholdReview("mb-2")}
                                 {commitPreview ?
                                     <CreateLeadCommitPreviewPanel preview={commitPreview} className="mb-2" />
                                 :   null}

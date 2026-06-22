@@ -1,3 +1,9 @@
+import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
+import {
+    includedCommitRecords,
+    primaryIncludedChild,
+    primaryIncludedParent,
+} from "@/lib/intake/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
 
 export type CreateLeadCommitPreviewItem = {
@@ -15,6 +21,10 @@ function personDisplayName(person: IntakePersonCandidate | undefined): string {
     return [person.first_name, person.last_name].filter(Boolean).join(" ").trim();
 }
 
+function recordDisplayName(record: { first_name: string; last_name: string }): string {
+    return [record.first_name, record.last_name].filter(Boolean).join(" ").trim();
+}
+
 function primaryParentName(
     guardians: IntakePersonCandidate[],
     values: Record<string, string>,
@@ -24,8 +34,7 @@ function primaryParentName(
     return [values.first_name, values.last_name].filter(Boolean).join(" ").trim();
 }
 
-/** Action-agnostic commit scope preview for Create Lead household intake. */
-export function buildCreateLeadCommitPreview(input: {
+function buildLegacyPreview(input: {
     values: Record<string, string>;
     household?: IntakeHouseholdCandidate | null;
 }): CreateLeadCommitPreview {
@@ -65,10 +74,9 @@ export function buildCreateLeadCommitPreview(input: {
     }
 
     for (let i = 1; i < guardians.length; i++) {
-        const name = personDisplayName(guardians[i]);
         not_created.push({
             label: "Additional parent / guardian",
-            detail: name || undefined,
+            detail: personDisplayName(guardians[i]) || undefined,
         });
     }
 
@@ -96,4 +104,81 @@ export function buildCreateLeadCommitPreview(input: {
     }
 
     return { will_create, not_created };
+}
+
+function buildSelectionPreview(input: {
+    selection: CreateLeadCommitSelection;
+    household?: IntakeHouseholdCandidate | null;
+}): CreateLeadCommitPreview {
+    const { selection, household } = input;
+    const will_create: CreateLeadCommitPreviewItem[] = [];
+    const not_created: CreateLeadCommitPreviewItem[] = [];
+
+    const { parents, children } = includedCommitRecords(selection);
+    const primaryParent = primaryIncludedParent(selection);
+
+    for (const parent of parents) {
+        const name = recordDisplayName(parent);
+        will_create.push({
+            label: parent.primary ? "Parent (primary)" : "Parent",
+            detail: name || undefined,
+        });
+    }
+
+    will_create.push({
+        label: "Household (customer)",
+        detail: primaryParent ? `${recordDisplayName(primaryParent)} household` : undefined,
+    });
+    will_create.push({ label: "Lead (opportunity)" });
+
+    for (const child of children) {
+        will_create.push({
+            label: child.primary ? "Child (primary)" : "Child",
+            detail: recordDisplayName(child) || undefined,
+        });
+    }
+
+    for (const parent of selection.parents.filter((p) => !p.include_in_commit)) {
+        const detail = [recordDisplayName(parent), ...parent.commit_blockers].filter(Boolean).join(" — ");
+        not_created.push({
+            label: "Parent excluded",
+            detail: detail || undefined,
+        });
+    }
+
+    for (const child of selection.children.filter((c) => !c.include_in_commit)) {
+        const detail = [recordDisplayName(child), ...child.commit_blockers].filter(Boolean).join(" — ");
+        not_created.push({
+            label: "Child excluded",
+            detail: detail || undefined,
+        });
+    }
+
+    if (selection.household_contacts.invalid_phone) {
+        not_created.push({
+            label: "Invalid phone",
+            detail: selection.household_contacts.phone ?? undefined,
+        });
+    }
+
+    if (selection.address_review_only || household?.address?.lines?.length) {
+        not_created.push({
+            label: "Address (review only)",
+            detail: household?.address?.lines.join(" · "),
+        });
+    }
+
+    return { will_create, not_created };
+}
+
+/** Action-agnostic commit scope preview for Create Lead household intake. */
+export function buildCreateLeadCommitPreview(input: {
+    values: Record<string, string>;
+    household?: IntakeHouseholdCandidate | null;
+    selection?: CreateLeadCommitSelection | null;
+}): CreateLeadCommitPreview {
+    if (input.selection) {
+        return buildSelectionPreview({ selection: input.selection, household: input.household });
+    }
+    return buildLegacyPreview(input);
 }

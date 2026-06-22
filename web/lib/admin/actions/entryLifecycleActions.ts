@@ -9,6 +9,8 @@ import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { NEW_LEAD_STATUS_KEY, DEFAULT_LEAD_CASE_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
 import { ENROLLMENT_INTAKE_PERSON_STATUS_KEY } from "@/lib/admin/person/enrollmentPersonDefaultStatus";
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
+import { applyCreateLeadHouseholdMemberCommit } from "@/lib/admin/actions/executeCreateLeadHouseholdCommit";
+import { readCreateLeadCommitSelectionFromPayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
@@ -167,6 +169,23 @@ export async function executeCreateLeadAction(
     } catch (e) {
         const message = e instanceof Error ? e.message : "Failed to persist child enrollment fields.";
         return { ok: false, error: message, status: 400 };
+    }
+
+    const householdCommit = readCreateLeadCommitSelectionFromPayload(input.merged);
+    if (householdCommit) {
+        try {
+            await applyCreateLeadHouseholdMemberCommit(supabase, {
+                orgId: ctx.orgId,
+                customerId,
+                opportunityId,
+                merged: input.merged,
+                selection: householdCommit,
+                primaryPersonId: personId,
+            });
+        } catch (e) {
+            const message = e instanceof Error ? e.message : "Failed to persist additional household members.";
+            return { ok: false, error: message, status: 400 };
+        }
     }
 
     try {

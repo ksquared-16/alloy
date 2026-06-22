@@ -55,7 +55,7 @@ describe("Alex/Jason household intake", () => {
         expect(household.children[1]?.dob).toBe("2017-11-14");
         expect(household.children[0]?.calculated_age?.display).toBeTruthy();
         expect(household.relationships.length).toBe(4);
-        expect(household.commit_limited_to_primary).toBe(true);
+        expect(household.commit_limited_to_primary).toBe(false);
     });
 
     it("maps primary parent/child to Create Lead fields and preserves review presentation", () => {

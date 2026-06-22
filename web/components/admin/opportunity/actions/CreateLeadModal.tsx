@@ -39,6 +39,13 @@ import { resolveCreateLeadProgressStep } from "@/lib/admin/actions/createLeadPro
 import { CreateLeadProgressRail } from "@/components/admin/actions/CreateLeadProgressRail";
 import { createLeadIntakePasteParser } from "@/lib/lifecycle/parseCreateLeadIntakeText";
 import { buildIntakeDebugTrace, logIntakeDebugTrace } from "@/lib/intake/debug/buildIntakeDebugTrace";
+import {
+    buildCreateLeadCommitSelection,
+    syncCreateLeadValuesFromCommitSelection,
+    type CreateLeadCommitSelection,
+} from "@/lib/intake/commit/createLeadCommitSelection";
+import { validateCreateLeadCommitSelection } from "@/lib/intake/commit/validateCreateLeadCommitSelection";
+import { mapCreateLeadCommitSelectionToExecutePayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import { fetchActionIntakeSpec } from "@/lib/lifecycle/fetchActionIntakeSpec";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
 import { CreateLeadOperationalIntake } from "@/components/admin/actions/CreateLeadOperationalIntake";
@@ -96,6 +103,7 @@ export function CreateLeadModal(props: {
     const [materialAnalyzed, setMaterialAnalyzed] = useState(false);
     const [fieldConfidence, setFieldConfidence] = useState<Record<string, CreateLeadFieldConfidenceState>>({});
     const [lastExtraction, setLastExtraction] = useState<ActionIntakePasteExtractionResult | null>(null);
+    const [commitSelection, setCommitSelection] = useState<CreateLeadCommitSelection | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -123,9 +131,16 @@ export function CreateLeadModal(props: {
     );
 
     const validation = useMemo(() => {
+        if (commitSelection) {
+            return validateCreateLeadCommitSelection({
+                selection: commitSelection,
+                values,
+                requireLocation: requiredPayloadKeys.includes("location_id"),
+            });
+        }
         if (intakeSpec) return validateCreateLeadFromIntakeSpec(intakeSpec, values);
         return validateCreateLeadPlatformMinimum(values);
-    }, [intakeSpec, values]);
+    }, [commitSelection, intakeSpec, values, requiredPayloadKeys]);
     const householdLabel = useMemo(() => formatCreateLeadHouseholdLabel(values), [values]);
     const bosRecommendations = useMemo(() => resolveCreateLeadPostCreateRecommendations(values), [values]);
     const successActions = useMemo(
@@ -156,6 +171,7 @@ export function CreateLeadModal(props: {
         setMaterialAnalyzed(false);
         setFieldConfidence({});
         setLastExtraction(null);
+        setCommitSelection(null);
         setAnalyzing(false);
         setAnalyzeError(null);
         setError(null);
@@ -241,6 +257,7 @@ export function CreateLeadModal(props: {
         setMaterialAnalyzed(false);
         setFieldConfidence({});
         setLastExtraction(null);
+        setCommitSelection(null);
         setAnalyzeError(null);
         setGatherPhase("paste");
     }, []);
@@ -285,6 +302,21 @@ export function CreateLeadModal(props: {
                 setValues((prev) => {
                     const nextValues = applyHighConfidenceCreateLeadExtraction(prev, extraction);
                     setLastExtraction(extraction);
+                    if (extraction.household) {
+                        const selection = buildCreateLeadCommitSelection(extraction.household);
+                        setCommitSelection(selection);
+                        const synced = syncCreateLeadValuesFromCommitSelection(nextValues, selection);
+                        setFieldConfidence(
+                            buildCreateLeadFieldConfidenceMap({
+                                extraction,
+                                values: synced,
+                                gatherFields,
+                                materialAnalyzed: true,
+                            }),
+                        );
+                        return synced;
+                    }
+                    setCommitSelection(null);
                     setFieldConfidence(
                         buildCreateLeadFieldConfidenceMap({
                             extraction,
@@ -329,12 +361,22 @@ export function CreateLeadModal(props: {
         setGatherPhase("paste");
     }, [suggestions, lastExtraction, gatherFields]);
 
+    const handleCommitSelectionChange = useCallback((next: CreateLeadCommitSelection) => {
+        setCommitSelection(next);
+        setValues((prev) => syncCreateLeadValuesFromCommitSelection(prev, next));
+    }, []);
+
     const runExecute = useCallback(async () => {
         if (!departmentId) return;
-        const check =
-            intakeSpec ?
-                validateCreateLeadFromIntakeSpec(intakeSpec, values)
-            :   validateCreateLeadPlatformMinimum(values);
+        const check = commitSelection ?
+            validateCreateLeadCommitSelection({
+                selection: commitSelection,
+                values,
+                requireLocation: requiredPayloadKeys.includes("location_id"),
+            })
+        : intakeSpec ?
+            validateCreateLeadFromIntakeSpec(intakeSpec, values)
+        :   validateCreateLeadPlatformMinimum(values);
         if (!check.ok) {
             setGatherPhase("details");
             setStep("gather");
@@ -348,7 +390,15 @@ export function CreateLeadModal(props: {
                 intakeSpec ?
                     mapActionIntakeValuesToCreateLeadPayload(intakeSpec, values)
                 :   mapCreateLeadGatherToExecutePayload(values);
-            const payload = legacyPayloadFromValues(mapped);
+            const payload =
+                commitSelection ?
+                    legacyPayloadFromValues(
+                        mapCreateLeadCommitSelectionToExecutePayload({
+                            values: mapped,
+                            selection: commitSelection,
+                        }),
+                    )
+                :   legacyPayloadFromValues(mapped);
             const result = await onSubmit(payload);
             const opportunityId = result.opportunity_id?.trim();
             if (!opportunityId) throw new Error("Lead was created but no opportunity id was returned.");
@@ -361,7 +411,7 @@ export function CreateLeadModal(props: {
             setGatherPhase("details");
             setError(e instanceof Error ? e.message : "Create lead failed");
         }
-    }, [departmentId, intakeSpec, onSubmit, values]);
+    }, [commitSelection, departmentId, intakeSpec, onSubmit, requiredPayloadKeys, values]);
 
     const footer =
         step === "gather" ?
@@ -472,6 +522,8 @@ export function CreateLeadModal(props: {
                         validationIssues={validationIssues}
                         fieldConfidence={draftEditMode ? fieldConfidence : undefined}
                         household={lastExtraction?.household ?? null}
+                        commitSelection={commitSelection}
+                        onCommitSelectionChange={handleCommitSelectionChange}
                     />
                 </div>
             </ActionWorkspaceStepContent>

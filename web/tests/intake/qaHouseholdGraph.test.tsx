@@ -169,6 +169,7 @@ describe("QA household graph — failed intake fixture", () => {
         expect(trace.household.children).toHaveLength(2);
         expect(trace.mapped_fields.some((f) => f.payload_key === "email")).toBe(true);
         expect(trace.review_warnings.some((w) => w.includes("invalid"))).toBe(true);
-        expect(trace.commit_limited).toBe(true);
+        expect(trace.commit_limited).toBe(false);
+        expect(trace.commit_preview.will_create.filter((i) => i.label.startsWith("Parent")).length).toBeGreaterThanOrEqual(1);
     });
 });

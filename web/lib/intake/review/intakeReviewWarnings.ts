@@ -47,24 +47,23 @@ export function buildHouseholdReviewWarnings(input: {
         const extraNames = input.parents.slice(1).map(personName).filter(Boolean);
         warnings.push({
             code: "extra_parents_commit_limited",
-            severity: "warning",
+            severity: "info",
             message:
                 extraNames.length ?
-                    `${extraNames.join(", ")} will not be created — Create Lead commits only the primary parent${primaryParent ? ` (${primaryParent})` : ""}. Add additional guardians after opening the lead.`
-                :   `${input.parents.length} parents/guardians detected — only the primary parent will be created.`,
+                    `Additional guardians detected (${extraNames.join(", ")}) — included in commit when selected and valid.`
+                :   `${input.parents.length} parents/guardians detected — review commit selection before creating the lead.`,
         });
     }
 
     if (extraChildren > 0) {
         const extraNames = input.children.slice(1).map(personName).filter(Boolean);
-        const firstChild = personName(input.children[0] ?? ({} as IntakePersonCandidate));
         warnings.push({
             code: "extra_children_commit_limited",
-            severity: "warning",
+            severity: "info",
             message:
                 extraNames.length ?
-                    `${extraNames.join(", ")} will not be created — Create Lead commits only the first child${firstChild ? ` (${firstChild})` : ""}. Add siblings after opening the lead.`
-                :   `${input.children.length} children detected — only the first child will be created.`,
+                    `Additional children detected (${extraNames.join(", ")}) — included in commit when selected and valid.`
+                :   `${input.children.length} children detected — review commit selection before creating the lead.`,
         });
     }
 

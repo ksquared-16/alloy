@@ -11,6 +11,7 @@ import {
 import type { BosFieldConfidenceDisplayLevel } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import { CreateLeadDraftLeadColumn } from "@/components/admin/actions/CreateLeadDraftLeadColumn";
 import { CreateLeadMaterialStackColumn } from "@/components/admin/actions/CreateLeadMaterialStackColumn";
+import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 type Props = {
@@ -38,6 +39,8 @@ type Props = {
     validationIssues: string[];
     fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
     household?: IntakeHouseholdCandidate | null;
+    commitSelection?: CreateLeadCommitSelection | null;
+    onCommitSelectionChange?: (next: CreateLeadCommitSelection) => void;
 };
 
 export function CreateLeadOperationalIntake({
@@ -65,6 +68,8 @@ export function CreateLeadOperationalIntake({
     validationIssues,
     fieldConfidence,
     household,
+    commitSelection,
+    onCommitSelectionChange,
 }: Props) {
     const [composerOpen, setComposerOpen] = useState(false);
 
@@ -135,6 +140,8 @@ export function CreateLeadOperationalIntake({
                 validationIssues={showDraftForm ? validationIssues : []}
                 fieldConfidence={fieldConfidence}
                 household={household}
+                commitSelection={commitSelection}
+                onCommitSelectionChange={onCommitSelectionChange}
             />
         </div>
     );
