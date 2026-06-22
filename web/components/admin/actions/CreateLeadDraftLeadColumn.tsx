@@ -236,8 +236,7 @@ export function CreateLeadDraftLeadColumn({
                     selection={commitSelection}
                     onSelectionChange={onCommitSelectionChange}
                     addressWarnings={addressWarnings}
-                    gatherFields={sections.flatMap((section) => section.fields)}
-                    requiredPayloadKeys={requiredPayloadKeys}
+                    intakeSpec={intakeSpec}
                     contextValues={values}
                     className={className}
                 />

@@ -21,6 +21,7 @@ export type CreateLeadCommitRecord = {
     desired_start_date: string | null;
     program_room_cohort_key: string | null;
     desired_schedule_type: string | null;
+    extra_payload_values: Record<string, string>;
     include_in_commit: boolean;
     primary: boolean;
     validation_state: "valid" | "invalid" | "ambiguous" | "unknown";
@@ -53,6 +54,7 @@ export type CreateLeadCommitSelectionPatch = Partial<
         | "desired_start_date"
         | "program_room_cohort_key"
         | "desired_schedule_type"
+        | "extra_payload_values"
         | "include_in_commit"
         | "primary"
     >
@@ -133,6 +135,7 @@ function parentRecordFromCandidate(
         desired_start_date: null,
         program_room_cohort_key: null,
         desired_schedule_type: null,
+        extra_payload_values: {},
         include_in_commit: false,
         primary: index === 0,
         validation_state: "unknown",
@@ -167,6 +170,7 @@ function childRecordFromCandidate(
         desired_start_date: household.desired_start_date,
         program_room_cohort_key: null,
         desired_schedule_type: null,
+        extra_payload_values: {},
         include_in_commit: false,
         primary: index === 0,
         validation_state: "unknown",
@@ -247,7 +251,16 @@ export function patchCreateLeadCommitRecord(
     const mapRecord = (records: CreateLeadCommitRecord[]) =>
         records.map((record) => {
             if (record.candidate_id !== candidateId) return record;
-            const next = recomputeRecord({ ...record, ...patch });
+            const mergedExtra = {
+                ...(record.extra_payload_values ?? {}),
+                ...(patch.extra_payload_values ?? {}),
+            };
+            const { extra_payload_values: _extra, ...scalarPatch } = patch;
+            const next = recomputeRecord({
+                ...record,
+                ...scalarPatch,
+                extra_payload_values: mergedExtra,
+            });
             if (next.validation_state !== "valid" && next.include_in_commit) {
                 next.include_in_commit = false;
             }
@@ -308,6 +321,11 @@ export function syncCreateLeadValuesFromCommitSelection(
     next.last_name = parent?.last_name ?? "";
     next.email = parent?.email ?? "";
     next.phone = parent?.phone ?? "";
+    if (parent?.extra_payload_values) {
+        for (const [payloadKey, value] of Object.entries(parent.extra_payload_values)) {
+            if ((value ?? "").trim()) next[payloadKey] = value;
+        }
+    }
     next.child_first_name = child?.first_name ?? "";
     next.child_last_name = child?.last_name ?? "";
     next.child_date_of_birth = child?.dob ?? "";
@@ -315,6 +333,11 @@ export function syncCreateLeadValuesFromCommitSelection(
     if (child?.desired_start_date) next.child_desired_start_date = child.desired_start_date;
     if (child?.program_room_cohort_key) next.child_program_room_cohort_key = child.program_room_cohort_key;
     if (child?.desired_schedule_type) next.child_desired_schedule_type = child.desired_schedule_type;
+    if (child?.extra_payload_values) {
+        for (const [payloadKey, value] of Object.entries(child.extra_payload_values)) {
+            if ((value ?? "").trim()) next[payloadKey] = value;
+        }
+    }
 
     return next;
 }

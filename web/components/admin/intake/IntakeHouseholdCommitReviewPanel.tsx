@@ -15,13 +15,15 @@ import {
 } from "@/lib/intake/review/buildIntakeReviewPresentation";
 import { buildCreateLeadRecordCardHints } from "@/lib/admin/actions/createLead/review/createLeadCommitCardHints";
 import {
-    commitRecordToDraftValues,
-    draftValuesToCommitPatch,
-    type CommitRecordFieldKey,
+    commitRecordToPayloadDraft,
+    payloadDraftToCommitPatch,
 } from "@/lib/admin/actions/createLead/household/commitRecordFieldMapping";
-import { resolveCreateLeadHouseholdCardEditFields } from "@/lib/admin/actions/createLead/household/resolveCreateLeadHouseholdCardEditFields";
+import {
+    resolveCreateLeadHouseholdCardEditFields,
+    type CreateLeadHouseholdCardEditFieldGroups,
+} from "@/lib/admin/actions/createLead/household/resolveCreateLeadHouseholdCardEditFields";
 import { CreateLeadHouseholdCardEditFields } from "@/components/admin/intake/CreateLeadHouseholdCardEditFields";
-import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
+import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
@@ -31,8 +33,7 @@ type Props = {
     onSelectionChange: (next: CreateLeadCommitSelection) => void;
     className?: string;
     addressWarnings?: readonly IntakeReviewWarning[];
-    gatherFields?: readonly ActionWorkspaceGatherField[];
-    requiredPayloadKeys?: readonly string[];
+    intakeSpec?: ActionIntakeSpec | null;
     contextValues?: Record<string, string>;
 };
 
@@ -41,7 +42,7 @@ function EditablePersonCard({
     entityLabel,
     recordHints,
     allowPrimaryControls,
-    editFields,
+    editFieldGroups,
     contextValues,
     onPatch,
     onToggleInclude,
@@ -51,18 +52,20 @@ function EditablePersonCard({
     entityLabel: string;
     recordHints: string[];
     allowPrimaryControls: boolean;
-    editFields: ReturnType<typeof resolveCreateLeadHouseholdCardEditFields>;
+    editFieldGroups: CreateLeadHouseholdCardEditFieldGroups;
     contextValues: Record<string, string>;
     onPatch: (patch: CreateLeadCommitSelectionPatch) => void;
     onToggleInclude: (include: boolean) => void;
     onSetPrimary?: () => void;
 }) {
     const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState<Record<CommitRecordFieldKey, string>>(() => commitRecordToDraftValues(record));
+    const [draft, setDraft] = useState<Record<string, string>>(() =>
+        commitRecordToPayloadDraft(record, record.entity_type),
+    );
 
     useEffect(() => {
         if (!editing) {
-            setDraft(commitRecordToDraftValues(record));
+            setDraft(commitRecordToPayloadDraft(record, record.entity_type));
         }
     }, [editing, record]);
 
@@ -70,12 +73,12 @@ function EditablePersonCard({
     const canInclude = record.validation_state === "valid";
 
     const saveEdit = () => {
-        onPatch(draftValuesToCommitPatch(record.entity_type, draft));
+        onPatch(payloadDraftToCommitPatch(record.entity_type, draft));
         setEditing(false);
     };
 
     const cancelEdit = () => {
-        setDraft(commitRecordToDraftValues(record));
+        setDraft(commitRecordToPayloadDraft(record, record.entity_type));
         setEditing(false);
     };
 
@@ -128,7 +131,7 @@ function EditablePersonCard({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setDraft(commitRecordToDraftValues(record));
+                                        setDraft(commitRecordToPayloadDraft(record, record.entity_type));
                                         setEditing(true);
                                     }}
                                     className="rounded-md p-1 text-alloy-midnight/55 hover:bg-alloy-stone/8"
@@ -191,7 +194,8 @@ function EditablePersonCard({
                             <CreateLeadHouseholdCardEditFields
                                 entityType={record.entity_type}
                                 record={record}
-                                fields={editFields}
+                                requiredFields={editFieldGroups.required}
+                                additionalFields={editFieldGroups.additional}
                                 draft={draft}
                                 onDraftChange={setDraft}
                                 contextValues={contextValues}
@@ -260,28 +264,25 @@ export function IntakeHouseholdCommitReviewPanel({
     onSelectionChange,
     className = "",
     addressWarnings = [],
-    gatherFields,
-    requiredPayloadKeys = [],
+    intakeSpec = null,
     contextValues = {},
 }: Props) {
     const review = buildIntakeReviewPresentation(household);
-    const parentEditFields = useMemo(
+    const parentEditFieldGroups = useMemo(
         () =>
             resolveCreateLeadHouseholdCardEditFields({
                 entityType: "parent",
-                gatherFields,
-                requiredPayloadKeys,
+                intakeSpec,
             }),
-        [gatherFields, requiredPayloadKeys],
+        [intakeSpec],
     );
-    const childEditFields = useMemo(
+    const childEditFieldGroups = useMemo(
         () =>
             resolveCreateLeadHouseholdCardEditFields({
                 entityType: "child",
-                gatherFields,
-                requiredPayloadKeys,
+                intakeSpec,
             }),
-        [gatherFields, requiredPayloadKeys],
+        [intakeSpec],
     );
 
     if (!review) return null;
@@ -314,7 +315,7 @@ export function IntakeHouseholdCommitReviewPanel({
                                 record={record}
                                 entityLabel={record.role}
                                 allowPrimaryControls
-                                editFields={parentEditFields}
+                                editFieldGroups={parentEditFieldGroups}
                                 contextValues={contextValues}
                                 recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
@@ -333,7 +334,7 @@ export function IntakeHouseholdCommitReviewPanel({
                                 record={record}
                                 entityLabel="child"
                                 allowPrimaryControls={false}
-                                editFields={childEditFields}
+                                editFieldGroups={childEditFieldGroups}
                                 contextValues={contextValues}
                                 recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}

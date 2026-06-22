@@ -4,10 +4,7 @@ import { useCallback, useMemo } from "react";
 import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 import { useOptionSetSelectOptions } from "@/lib/admin/hooks/useOptionSetSelectOptions";
-import {
-    commitRecordToPayloadValues,
-    type CommitRecordFieldKey,
-} from "@/lib/admin/actions/createLead/household/commitRecordFieldMapping";
+import { commitRecordToPayloadValues } from "@/lib/admin/actions/createLead/household/commitRecordFieldMapping";
 import type { CreateLeadHouseholdCardEditField } from "@/lib/admin/actions/createLead/household/resolveCreateLeadHouseholdCardEditFields";
 import type { CreateLeadCommitEntityType, CreateLeadCommitRecord } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { CREATE_LEAD_DERIVED_FIELD_BINDINGS, resolveDerivedFieldDisplay } from "@/lib/fields/derived/resolveDerivedFieldDisplay";
@@ -20,9 +17,10 @@ const INPUT =
 type Props = {
     entityType: CreateLeadCommitEntityType;
     record: CreateLeadCommitRecord;
-    fields: readonly CreateLeadHouseholdCardEditField[];
-    draft: Record<CommitRecordFieldKey, string>;
-    onDraftChange: (next: Record<CommitRecordFieldKey, string>) => void;
+    requiredFields: readonly CreateLeadHouseholdCardEditField[];
+    additionalFields?: readonly CreateLeadHouseholdCardEditField[];
+    draft: Record<string, string>;
+    onDraftChange: (next: Record<string, string>) => void;
     contextValues: Record<string, string>;
     dataTestIdPrefix: string;
 };
@@ -34,44 +32,48 @@ function inputTypeForField(field: CreateLeadHouseholdCardEditField): string {
     return "text";
 }
 
-/** Compact spec-driven field editor for Create Lead household commit cards. */
-export function CreateLeadHouseholdCardEditFields({
+function CardFieldList({
+    fields,
     entityType,
     record,
-    fields,
     draft,
     onDraftChange,
     contextValues,
     dataTestIdPrefix,
-}: Props) {
-    const payloadValues = useMemo(
-        () => commitRecordToPayloadValues(entityType, record, contextValues),
-        [contextValues, entityType, record],
-    );
-
-    const { optionsBySetKey } = useOptionSetSelectOptions(fields.map((field) => field.option_set_key));
-    const cascade = useInquiryChildPlacementCascade({
-        locationValue: (contextValues.location_id ?? "").trim(),
-        programValue: (payloadValues.child_program ?? draft.program_interest ?? "").trim(),
-    });
-
-    const setRecordField = useCallback(
-        (recordKey: CommitRecordFieldKey, value: string) => {
-            onDraftChange({ ...draft, [recordKey]: value });
+    optionsBySetKey,
+    cascade,
+}: {
+    fields: readonly CreateLeadHouseholdCardEditField[];
+    entityType: CreateLeadCommitEntityType;
+    record: CreateLeadCommitRecord;
+    draft: Record<string, string>;
+    onDraftChange: (next: Record<string, string>) => void;
+    contextValues: Record<string, string>;
+    dataTestIdPrefix: string;
+    optionsBySetKey: Record<string, Array<{ value: string; label: string }>>;
+    cascade: ReturnType<typeof useInquiryChildPlacementCascade>;
+}) {
+    const setPayloadValue = useCallback(
+        (payloadKey: string, value: string) => {
+            onDraftChange({ ...draft, [payloadKey]: value });
         },
         [draft, onDraftChange],
     );
 
     return (
-        <div className="space-y-1.5">
+        <>
             {fields.map((field) => {
                 if (field.derived) {
                     const derivedValues = commitRecordToPayloadValues(
                         entityType,
                         {
                             ...record,
-                            dob: draft.dob || null,
-                            program_interest: draft.program_interest || null,
+                            dob: draft.child_date_of_birth?.trim() || record.dob,
+                            program_interest: draft.child_program?.trim() || record.program_interest,
+                            extra_payload_values: {
+                                ...(record.extra_payload_values ?? {}),
+                                ...draft,
+                            },
                         },
                         contextValues,
                     );
@@ -94,7 +96,7 @@ export function CreateLeadHouseholdCardEditFields({
                     );
                 }
 
-                const value = draft[field.record_key] ?? "";
+                const value = draft[field.payload_key] ?? "";
                 const testId = `${dataTestIdPrefix}-${field.payload_key.replace(/_/g, "-")}`;
 
                 if (field.value_kind === "select" || field.placement_select) {
@@ -127,7 +129,7 @@ export function CreateLeadHouseholdCardEditFields({
                             </span>
                             <SelectFieldControl
                                 value={value}
-                                onChange={(next) => setRecordField(field.record_key, next)}
+                                onChange={(next) => setPayloadValue(field.payload_key, next)}
                                 options={selectOptions}
                                 disabled={disabled}
                                 placeholder={placeholder}
@@ -144,7 +146,7 @@ export function CreateLeadHouseholdCardEditFields({
                             <span className={LABEL}>{field.field_label}</span>
                             <textarea
                                 value={value}
-                                onChange={(e) => setRecordField(field.record_key, e.target.value)}
+                                onChange={(e) => setPayloadValue(field.payload_key, e.target.value)}
                                 rows={3}
                                 className={`${INPUT} mt-0.5 resize-y`}
                             />
@@ -171,13 +173,68 @@ export function CreateLeadHouseholdCardEditFields({
                         <input
                             type={inputTypeForField(field)}
                             value={value}
-                            onChange={(e) => setRecordField(field.record_key, e.target.value)}
+                            onChange={(e) => setPayloadValue(field.payload_key, e.target.value)}
                             className={`${INPUT} mt-0.5`}
                             data-testid={`${testId}-control`}
                         />
                     </label>
                 );
             })}
+        </>
+    );
+}
+
+/** Compact spec-driven field editor for Create Lead household commit cards. */
+export function CreateLeadHouseholdCardEditFields({
+    entityType,
+    record,
+    requiredFields,
+    additionalFields = [],
+    draft,
+    onDraftChange,
+    contextValues,
+    dataTestIdPrefix,
+}: Props) {
+    const allFields = useMemo(() => [...requiredFields, ...additionalFields], [requiredFields, additionalFields]);
+    const { optionsBySetKey } = useOptionSetSelectOptions(allFields.map((field) => field.option_set_key));
+    const cascade = useInquiryChildPlacementCascade({
+        locationValue: (contextValues.location_id ?? "").trim(),
+        programValue: (draft.child_program ?? "").trim(),
+    });
+
+    return (
+        <div className="space-y-1.5">
+            <CardFieldList
+                fields={requiredFields}
+                entityType={entityType}
+                record={record}
+                draft={draft}
+                onDraftChange={onDraftChange}
+                contextValues={contextValues}
+                dataTestIdPrefix={dataTestIdPrefix}
+                optionsBySetKey={optionsBySetKey}
+                cascade={cascade}
+            />
+            {additionalFields.length > 0 ?
+                <details className="rounded-md border border-alloy-stone/10 bg-alloy-stone/5 px-2 py-1.5" data-testid={`${dataTestIdPrefix}-additional-fields`}>
+                    <summary className="cursor-pointer text-[11px] font-semibold text-alloy-midnight/60">
+                        Additional fields
+                    </summary>
+                    <div className="mt-2 space-y-1.5">
+                        <CardFieldList
+                            fields={additionalFields}
+                            entityType={entityType}
+                            record={record}
+                            draft={draft}
+                            onDraftChange={onDraftChange}
+                            contextValues={contextValues}
+                            dataTestIdPrefix={`${dataTestIdPrefix}-additional`}
+                            optionsBySetKey={optionsBySetKey}
+                            cascade={cascade}
+                        />
+                    </div>
+                </details>
+            :   null}
         </div>
     );
 }

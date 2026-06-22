@@ -1,4 +1,5 @@
 import type { LifecycleRequirementEntityKey } from "@/lib/lifecycle/lifecycleFieldRequirementsCatalog";
+import { parseCustomFieldRuleId } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import type {
     ActionIntakeValidationRule,
     ActionIntakeValueKind,
@@ -39,7 +40,19 @@ export const CREATE_LEAD_PAYLOAD_KEY_BY_RULE: Readonly<Record<string, string>> =
 };
 
 export function createLeadPayloadKeyForRule(ruleId: string): string | null {
-    return CREATE_LEAD_PAYLOAD_KEY_BY_RULE[ruleId] ?? null;
+    const known = CREATE_LEAD_PAYLOAD_KEY_BY_RULE[ruleId];
+    if (known) return known;
+
+    const custom = parseCustomFieldRuleId(ruleId);
+    if (!custom) return null;
+
+    if (custom.entity === "child") return `child_${custom.field_key}`;
+    if (custom.entity === "person") return custom.field_key;
+    if (custom.entity === "opportunity") {
+        if (custom.field_key === "location_id") return "location_id";
+        return `opportunity_${custom.field_key}`;
+    }
+    return null;
 }
 
 export function inferActionIntakeValueKind(

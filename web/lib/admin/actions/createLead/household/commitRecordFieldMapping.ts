@@ -1,5 +1,9 @@
-import type { CreateLeadCommitRecord, CreateLeadCommitSelectionPatch } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import type {
+    CreateLeadCommitRecord,
+    CreateLeadCommitSelectionPatch,
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { CreateLeadCommitEntityType } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { CREATE_LEAD_DERIVED_FIELD_BINDINGS } from "@/lib/fields/derived/resolveDerivedFieldDisplay";
 
 export type CommitRecordFieldKey =
     | "first_name"
@@ -41,18 +45,15 @@ export function commitRecordPayloadMappings(entityType: CreateLeadCommitEntityTy
     return entityType === "parent" ? PARENT_MAPPINGS : CHILD_MAPPINGS;
 }
 
-export function payloadKeyForRecordKey(
-    entityType: CreateLeadCommitEntityType,
-    recordKey: CommitRecordFieldKey,
-): string | null {
-    return commitRecordPayloadMappings(entityType).find((m) => m.record_key === recordKey && !m.derived)?.payload_key ?? null;
-}
-
 export function recordKeyForPayloadKey(
     entityType: CreateLeadCommitEntityType,
     payloadKey: string,
 ): CommitRecordPayloadMapping | null {
-    return commitRecordPayloadMappings(entityType).find((m) => m.payload_key === payloadKey) ?? null;
+    return commitRecordPayloadMappings(entityType).find((mapping) => mapping.payload_key === payloadKey) ?? null;
+}
+
+export function isDerivedHouseholdCardPayloadKey(payloadKey: string): boolean {
+    return payloadKey in CREATE_LEAD_DERIVED_FIELD_BINDINGS;
 }
 
 function readRecordValue(record: CreateLeadCommitRecord, key: CommitRecordFieldKey): string {
@@ -61,7 +62,98 @@ function readRecordValue(record: CreateLeadCommitRecord, key: CommitRecordFieldK
     return String(raw).trim();
 }
 
-/** Draft values keyed by commit record field for card edit forms. */
+/** Payload-shaped draft values for household card editing. */
+export function commitRecordToPayloadDraft(
+    record: CreateLeadCommitRecord,
+    entityType: CreateLeadCommitEntityType,
+): Record<string, string> {
+    const draft: Record<string, string> = {};
+
+    for (const mapping of commitRecordPayloadMappings(entityType)) {
+        if (mapping.derived) continue;
+        draft[mapping.payload_key] = readRecordValue(record, mapping.record_key);
+    }
+
+    for (const [payloadKey, value] of Object.entries(record.extra_payload_values ?? {})) {
+        draft[payloadKey] = value ?? "";
+    }
+
+    return draft;
+}
+
+/** Map payload draft back to commit selection patch. */
+export function payloadDraftToCommitPatch(
+    entityType: CreateLeadCommitEntityType,
+    draft: Record<string, string>,
+): CreateLeadCommitSelectionPatch {
+    const patch: CreateLeadCommitSelectionPatch = {};
+    const extra: Record<string, string> = {};
+
+    for (const [payloadKey, rawValue] of Object.entries(draft)) {
+        const value = rawValue ?? "";
+        const mapping = recordKeyForPayloadKey(entityType, payloadKey);
+        if (mapping?.derived) continue;
+
+        if (mapping) {
+            switch (mapping.record_key) {
+                case "first_name":
+                    patch.first_name = value;
+                    break;
+                case "last_name":
+                    patch.last_name = value;
+                    break;
+                case "email":
+                    patch.email = value;
+                    break;
+                case "phone":
+                    patch.phone = value;
+                    break;
+                case "role":
+                    if (value.trim()) patch.role = value.trim();
+                    break;
+                case "dob":
+                    patch.dob = value.trim() || null;
+                    break;
+                case "program_interest":
+                    patch.program_interest = value.trim() || null;
+                    break;
+                case "desired_start_date":
+                    patch.desired_start_date = value.trim() || null;
+                    break;
+                case "program_room_cohort_key":
+                    patch.program_room_cohort_key = value.trim() || null;
+                    break;
+                case "desired_schedule_type":
+                    patch.desired_schedule_type = value.trim() || null;
+                    break;
+                default:
+                    break;
+            }
+        } else {
+            extra[payloadKey] = value;
+        }
+    }
+
+    if (Object.keys(extra).length > 0) {
+        patch.extra_payload_values = extra;
+    }
+
+    return patch;
+}
+
+/** Payload-shaped values for placement cascade and derived field display. */
+export function commitRecordToPayloadValues(
+    entityType: CreateLeadCommitEntityType,
+    record: CreateLeadCommitRecord,
+    contextValues: Record<string, string>,
+): Record<string, string> {
+    return {
+        ...contextValues,
+        ...commitRecordToPayloadDraft(record, entityType),
+    };
+}
+
+/** @deprecated Use commitRecordToPayloadDraft */
 export function commitRecordToDraftValues(record: CreateLeadCommitRecord): Record<CommitRecordFieldKey, string> {
     return {
         first_name: readRecordValue(record, "first_name"),
@@ -77,44 +169,15 @@ export function commitRecordToDraftValues(record: CreateLeadCommitRecord): Recor
     };
 }
 
-/** Map card edit draft back to commit selection patch. */
+/** @deprecated Use payloadDraftToCommitPatch */
 export function draftValuesToCommitPatch(
     entityType: CreateLeadCommitEntityType,
     draft: Record<CommitRecordFieldKey, string>,
 ): CreateLeadCommitSelectionPatch {
-    const patch: CreateLeadCommitSelectionPatch = {
-        first_name: draft.first_name,
-        last_name: draft.last_name,
-    };
-
-    if (entityType === "parent") {
-        patch.email = draft.email;
-        patch.phone = draft.phone;
-        if (draft.role.trim()) patch.role = draft.role.trim();
-    } else {
-        patch.dob = draft.dob.trim() || null;
-        patch.program_interest = draft.program_interest.trim() || null;
-        patch.desired_start_date = draft.desired_start_date.trim() || null;
-        patch.program_room_cohort_key = draft.program_room_cohort_key.trim() || null;
-        patch.desired_schedule_type = draft.desired_schedule_type.trim() || null;
-    }
-
-    return patch;
-}
-
-/** Payload-shaped values for placement cascade and derived field display. */
-export function commitRecordToPayloadValues(
-    entityType: CreateLeadCommitEntityType,
-    record: CreateLeadCommitRecord,
-    contextValues: Record<string, string>,
-): Record<string, string> {
-    const draft = commitRecordToDraftValues(record);
-    const out = { ...contextValues };
-
+    const payloadDraft: Record<string, string> = {};
     for (const mapping of commitRecordPayloadMappings(entityType)) {
         if (mapping.derived) continue;
-        out[mapping.payload_key] = draft[mapping.record_key] ?? "";
+        payloadDraft[mapping.payload_key] = draft[mapping.record_key] ?? "";
     }
-
-    return out;
+    return payloadDraftToCommitPatch(entityType, payloadDraft);
 }
