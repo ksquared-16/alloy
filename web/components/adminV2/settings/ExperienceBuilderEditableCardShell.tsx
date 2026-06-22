@@ -7,8 +7,11 @@ import {
     DRAWER_OVERVIEW_PANEL_ICON_BADGE,
     DRAWER_OVERVIEW_PANEL_SURFACE,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
-import { resolveDrawerOverviewSectionEyebrow } from "@/lib/layout/runtime/drawerOverviewSectionPresentation";
-import { resolveDrawerOverviewSectionIcon } from "@/lib/layout/runtime/drawerOverviewSectionPresentation";
+import {
+    resolveDrawerOverviewSectionEyebrow,
+    resolveDrawerOverviewSectionIcon,
+} from "@/lib/layout/runtime/drawerOverviewSectionPresentation";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
     PRESENTATION_SECTION_EYEBROW,
     PRESENTATION_SECTION_HEADER,
@@ -56,8 +59,7 @@ export default function ExperienceBuilderEditableCardShell({
                         <input
                             type="text"
                             value={title}
-                            onClick={(e) => e.stopPropagation()}
-                            onKeyDown={(e) => e.stopPropagation()}
+                            {...layoutBuilderEditableInputProps}
                             onChange={(e) => onTitleChange(e.target.value)}
                             className={`w-full truncate bg-transparent outline-none placeholder:text-alloy-midnight/35 focus:ring-0 ${PRESENTATION_SECTION_HEADER}`}
                             aria-label="Card title"

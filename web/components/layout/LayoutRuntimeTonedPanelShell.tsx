@@ -13,6 +13,7 @@ type Props = {
     title?: string | null;
     tone?: LayoutEditorWidgetRuntimeTone;
     icon?: ReactNode;
+    headerActions?: ReactNode;
     bodyClassName?: string;
     children: ReactNode;
     /** When true, omit outer border/rail (section shell already provides chrome). */
@@ -24,6 +25,7 @@ export default function LayoutRuntimeTonedPanelShell({
     title,
     tone,
     icon,
+    headerActions,
     bodyClassName = "px-2.5 py-2",
     children,
     embedded = false,
@@ -42,16 +44,23 @@ export default function LayoutRuntimeTonedPanelShell({
 
     return (
         <div className={surfaceClass} data-layout-runtime-widget-tone={tone}>
-            {title ?
-                <header className={`flex items-center gap-2 border-b border-alloy-stone/8 px-2.5 py-1.5 ${headerWash}`}>
-                    {icon ?
-                        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${iconBadge}`} aria-hidden>
-                            {icon}
-                        </span>
+            {title || headerActions ?
+                <header className={`flex items-center justify-between gap-2 border-b border-alloy-stone/8 px-2.5 py-1.5 ${headerWash}`}>
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                        {icon ?
+                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${iconBadge}`} aria-hidden>
+                                {icon}
+                            </span>
+                        :   null}
+                        {title ?
+                            <span className={`truncate text-[10px] font-semibold uppercase tracking-[0.07em] ${titleClass}`}>
+                                {title}
+                            </span>
+                        :   null}
+                    </div>
+                    {headerActions ?
+                        <div className="shrink-0">{headerActions}</div>
                     :   null}
-                    <span className={`truncate text-[10px] font-semibold uppercase tracking-[0.07em] ${titleClass}`}>
-                        {title}
-                    </span>
                 </header>
             :   null}
             <div className={bodyClassName}>{children}</div>

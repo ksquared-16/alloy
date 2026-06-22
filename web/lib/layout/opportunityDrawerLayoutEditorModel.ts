@@ -148,8 +148,7 @@ export function reorderSectionInZone(doc: LayoutDoc, sectionKey: string, directi
 export function renameSectionTitle(doc: LayoutDoc, sectionKey: string, title: string): LayoutDoc {
     const sIdx = doc.sections.findIndex((s) => s.key === sectionKey);
     if (sIdx < 0) return doc;
-    const trimmed = title.replace(/^\s+|\s+$/g, "");
-    return patchSection(doc, sIdx, { title: trimmed.length > 0 ? trimmed : doc.sections[sIdx]!.title });
+    return patchSection(doc, sIdx, { title });
 }
 
 export function setSectionEditorHidden(doc: LayoutDoc, sectionKey: string, hidden: boolean): LayoutDoc {

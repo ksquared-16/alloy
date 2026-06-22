@@ -7,6 +7,7 @@
 
 import type { InquirySummaryTaskPreviewRow } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { formatActivityTimestamp } from "@/lib/presentation/presentationDateFormat";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 export type LeadActivityPreviewKind = "note" | "communication" | "task" | "activity" | "created" | "updated";
@@ -52,6 +53,31 @@ function readOpenTasks(record: ProofRuntimeRecord): InquirySummaryTaskPreviewRow
     if (!payload || typeof payload !== "object") return [];
     const open = (payload as { open_tasks?: unknown }).open_tasks;
     return Array.isArray(open) ? (open as InquirySummaryTaskPreviewRow[]) : [];
+}
+
+function formatLifecyclePreviewDetail(text: string): string {
+    const prefix = "Family status: ";
+    if (!text.startsWith(prefix)) {
+        return formatLayoutRuntimeStatusLabel(text, {
+            refKey: "inquiry_child.outcome_status_key",
+            renderHint: "status",
+        }) ?? text;
+    }
+    const tail = text.slice(prefix.length).trim();
+    const resolved = formatLayoutRuntimeStatusLabel(tail, {
+        refKey: "inquiry_child.outcome_status_key",
+        renderHint: "status",
+    });
+    return resolved && resolved !== tail ? `${prefix}${resolved}` : text;
+}
+
+function formatStatusPreviewDetail(text: string): string {
+    return (
+        formatLayoutRuntimeStatusLabel(text, {
+            refKey: "opportunity.status_key",
+            renderHint: "status",
+        }) ?? text
+    );
 }
 
 function pushUnique(entries: LeadActivityPreviewEntry[], entry: LeadActivityPreviewEntry): void {
@@ -153,18 +179,18 @@ export function resolveLeadActivityPreview(record: ProofRuntimeRecord): LeadActi
         pushUnique(entries, {
             kind: "activity",
             label: "Lifecycle",
-            detail: truncate(lifecycleDisplay),
+            detail: truncate(formatLifecyclePreviewDetail(lifecycleDisplay)),
             at: null,
         });
     }
 
-    const statusLabel = pickLine(record._status_display, overview._status_display, record["opportunity.status_label"]);
+    const statusLabelRaw = pickLine(record._status_display, overview._status_display, record["opportunity.status_label"]);
     const statusAt = pickLine(record.updated_at, overview.updated_at);
-    if (statusLabel && statusAt) {
+    if (statusLabelRaw && statusAt) {
         pushUnique(entries, {
             kind: "activity",
             label: "Status",
-            detail: truncate(statusLabel),
+            detail: truncate(formatStatusPreviewDetail(statusLabelRaw)),
             at: formatAt(statusAt),
         });
     }

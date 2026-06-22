@@ -72,8 +72,8 @@ export function formatLayoutRuntimeStatusLabel(
     if (fromVocabulary) return fromVocabulary;
 
     if (domain === "child_enrollment" && looksLikeStatusKeyToken(text)) {
-        const opportunityOnly = vocabularyForDomain("opportunity")?.get(text);
-        if (opportunityOnly) return null;
+        const familyLabel = vocabularyForDomain("opportunity")?.get(text);
+        if (familyLabel) return familyLabel;
     }
 
     if (!looksLikeStatusKeyToken(text)) return text;

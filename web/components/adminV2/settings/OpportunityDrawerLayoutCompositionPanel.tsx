@@ -31,6 +31,7 @@ import {
     type SectionRowWidthPresetKey,
 } from "@/lib/layout/layoutEditorSectionLayout";
 import OpportunityDrawerLayoutRelatedListSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutRelatedListSettings";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 
 type Props = {
     doc: LayoutDoc;
@@ -92,6 +93,7 @@ export default function OpportunityDrawerLayoutCompositionPanel({
                 <input
                     type="text"
                     value={section.title}
+                    {...layoutBuilderEditableInputProps}
                     onChange={(e) => applyDoc(renameSectionTitle(doc, section.key, e.target.value))}
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-sm"
                     data-testid="visual-editor-section-title"

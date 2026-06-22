@@ -6,6 +6,7 @@ import LayoutRuntimePlanView from "@/components/layout/LayoutRuntimePlanView";
 import LayoutEditorSectionFlowView from "@/components/layout/LayoutEditorSectionFlowView";
 import LayoutBuilderPreviewDrawerFrame from "@/components/adminV2/settings/LayoutBuilderPreviewDrawerFrame";
 import ExperienceBuilderEditableCardShell from "@/components/adminV2/settings/ExperienceBuilderEditableCardShell";
+import { isLayoutBuilderEditableKeyboardTarget } from "@/lib/layout/layoutBuilderEditableInput";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import {
     buildSingleSectionPreviewDoc,
@@ -248,6 +249,7 @@ function KpiTileSectionFrame({
                 if (widgetPath) onSelectFieldPath(widgetPath);
             }}
             onKeyDown={(e) => {
+                if (isLayoutBuilderEditableKeyboardTarget(e.target)) return;
                 if (e.target !== e.currentTarget) return;
                 if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
@@ -476,6 +478,7 @@ function EditableSectionFrame({
                 onSelectBlockId(null);
             }}
             onKeyDown={(e) => {
+                if (isLayoutBuilderEditableKeyboardTarget(e.target)) return;
                 if (e.target !== e.currentTarget) return;
                 if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();

@@ -134,6 +134,34 @@ function collectEditableBaseline(record: ProofRuntimeRecord): Record<string, str
     };
 }
 
+function mergeEditableBaselineFromRecord(
+    prevBaseline: Record<string, string>,
+    prevDraft: Record<string, string>,
+    nextFromRecord: Record<string, string>,
+): { baseline: Record<string, string>; draft: Record<string, string> } {
+    const baseline = { ...nextFromRecord };
+    const draft = { ...nextFromRecord };
+
+    for (const key of Object.keys(prevBaseline)) {
+        const incoming = nextFromRecord[key] ?? "";
+        const prevBase = prevBaseline[key] ?? "";
+        const prevDraftVal = prevDraft[key] ?? "";
+        const isLocationField = key.includes("location");
+        if (prevBase && !incoming && isLocationField) {
+            baseline[key] = prevBase;
+            draft[key] = prevDraftVal || prevBase;
+        }
+    }
+
+    for (const key of Object.keys(prevDraft)) {
+        if ((prevDraft[key] ?? "") !== (prevBaseline[key] ?? "")) {
+            draft[key] = prevDraft[key] ?? "";
+        }
+    }
+
+    return { baseline, draft };
+}
+
 type Props = {
     record: ProofRuntimeRecord;
     children: ReactNode;
@@ -153,9 +181,12 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
 
     useEffect(() => {
         const nextBaseline = collectEditableBaseline(record);
-        baselineRef.current = nextBaseline;
-        setDraft({ ...nextBaseline });
         repeaterRef.current = collectRepeaterRows(record);
+        setDraft((prev) => {
+            const merged = mergeEditableBaselineFromRecord(baselineRef.current, prev, nextBaseline);
+            baselineRef.current = merged.baseline;
+            return merged.draft;
+        });
     }, [record]);
 
     const isDirty = useCallback(() => {

@@ -4,6 +4,7 @@
  */
 
 import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 
 export type ChildLifecycleSummaryMemberInput = {
     outcome_status_key?: string | null;
@@ -72,12 +73,30 @@ function normalizeKey(raw: unknown): string | null {
 function statusLabel(
     statusKey: string,
     memberLabel: string | null | undefined,
-    labels: Record<string, string>
+    labels: Record<string, string>,
 ): string {
     if (statusKey === MISSING_STATUS_KEY) return MISSING_STATUS_LABEL;
-    const fromMember = memberLabel?.trim();
-    if (fromMember) return fromMember;
-    return labels[statusKey] ?? humanizeSnakeCaseToken(statusKey, labels);
+    const fromCatalog = labels[statusKey];
+    if (fromCatalog) return fromCatalog;
+
+    const trimmedMember = memberLabel?.trim() ?? "";
+    if (trimmedMember && trimmedMember !== statusKey) {
+        const formattedMember = formatLayoutRuntimeStatusLabel(trimmedMember, {
+            refKey: "inquiry_child.outcome_status_key",
+            renderHint: "status",
+        });
+        if (formattedMember && formattedMember !== trimmedMember) return formattedMember;
+        if (!/^[a-z][a-z0-9_]*$/i.test(trimmedMember) || !trimmedMember.includes("_")) {
+            return trimmedMember;
+        }
+    }
+
+    return (
+        formatLayoutRuntimeStatusLabel(statusKey, {
+            refKey: "inquiry_child.outcome_status_key",
+            renderHint: "status",
+        }) ?? humanizeSnakeCaseToken(statusKey, labels)
+    );
 }
 
 function compareStatusKeys(a: string, b: string): number {
@@ -100,7 +119,16 @@ function buildCountFragments(
     labelByKey: Map<string, string>
 ): string[] {
     const keys = [...counts.keys()].sort(compareStatusKeys);
-    return keys.map((key) => formatCountFragment(counts.get(key) ?? 0, labelByKey.get(key) ?? key));
+    return keys.map((key) => {
+        const label =
+            labelByKey.get(key)
+            ?? formatLayoutRuntimeStatusLabel(key, {
+                refKey: "inquiry_child.outcome_status_key",
+                renderHint: "status",
+            })
+            ?? key;
+        return formatCountFragment(counts.get(key) ?? 0, label);
+    });
 }
 
 export function buildOpportunityChildLifecycleSummary(params: {

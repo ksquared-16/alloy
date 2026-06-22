@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
     LAYOUT_EDITOR_BLOCK_EDIT_MODES,
     LAYOUT_EDITOR_BLOCK_EDIT_MODE_LABELS,
@@ -113,6 +114,7 @@ export default function OpportunityDrawerLayoutBlockSettings({
                         <input
                             type="text"
                             value={block.title}
+                            {...layoutBuilderEditableInputProps}
                             onChange={(e) => onBlockConfigChange({ title: e.target.value })}
                             className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                             data-testid="visual-editor-block-title"

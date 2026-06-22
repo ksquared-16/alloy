@@ -530,6 +530,37 @@ function ValueCell({
     );
 }
 
+function LayoutRuntimeBlockEditToggle({
+    itemId,
+    blockEdit,
+}: {
+    itemId: string;
+    blockEdit: NonNullable<ReturnType<typeof useLayoutRuntimeBlockEdit>>;
+}) {
+    return (
+        <button
+            type="button"
+            className="rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-pine opacity-0 transition-opacity hover:border-alloy-pine/30 group-hover/block:opacity-100 focus:opacity-100"
+            onClick={() => blockEdit.setBlockEditing(!blockEdit.blockEditing)}
+            data-testid={`layout-runtime-block-edit-${itemId}`}
+        >
+            {blockEdit.blockEditing ? "Done" : "Edit"}
+        </button>
+    );
+}
+
+function wrapLayoutRuntimeCompositionWidget(
+    title: string,
+    tone: LayoutEditorWidgetRuntimeTone | undefined,
+    children: ReactNode,
+): ReactNode {
+    return (
+        <LayoutRuntimeTonedPanelShell title={title} tone={tone} bodyClassName="px-2.5 py-2">
+            {children}
+        </LayoutRuntimeTonedPanelShell>
+    );
+}
+
 function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const blockConfig = readLayoutEditorBlockConfig(item.metadata);
     const editMode = blockConfig.editMode ?? "display_only";
@@ -576,6 +607,10 @@ function GroupCellContent({
         (blockConfig.editMode === "edit_button" || blockConfig.editMode === "inline_editable") && Boolean(drawerEdit);
     const blockTone = resolveLayoutItemWidgetTone(item);
     const shellTitle = blockTone && operatorSurfaces ? title || undefined : undefined;
+    const blockEditToggle =
+        showEditButton && blockEdit ?
+            <LayoutRuntimeBlockEditToggle itemId={item.id} blockEdit={blockEdit} />
+        :   null;
     const body = (
         <div className="group/block">
             {!shellTitle && (title || showEditButton) ?
@@ -588,16 +623,7 @@ function GroupCellContent({
                             {title}
                         </div>
                     :   <span />}
-                    {showEditButton && blockEdit ?
-                        <button
-                            type="button"
-                            className="rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-pine opacity-0 transition-opacity hover:border-alloy-pine/30 group-hover/block:opacity-100 focus:opacity-100"
-                            onClick={() => blockEdit.setBlockEditing(!blockEdit.blockEditing)}
-                            data-testid={`layout-runtime-block-edit-${item.id}`}
-                        >
-                            {blockEdit.blockEditing ? "Done" : "Edit"}
-                        </button>
-                    :   null}
+                    {blockEditToggle}
                 </div>
             :   null}
             {hasSubgrid ?
@@ -617,7 +643,12 @@ function GroupCellContent({
 
     if (blockTone && operatorSurfaces) {
         return (
-            <LayoutRuntimeTonedPanelShell title={shellTitle} tone={blockTone} bodyClassName="px-2.5 py-2">
+            <LayoutRuntimeTonedPanelShell
+                title={shellTitle}
+                tone={blockTone}
+                headerActions={blockEditToggle}
+                bodyClassName="px-2.5 py-2"
+            >
                 {body}
             </LayoutRuntimeTonedPanelShell>
         );
@@ -767,12 +798,18 @@ function renderRelatedListPanelShell(input: {
     suppressHeader: boolean;
     surfaceClassName?: string;
     headerExtra?: ReactNode;
+    headerActions?: ReactNode;
     children: ReactNode;
 }) {
-    const { tone, operatorSurfaces, title, suppressHeader, surfaceClassName, headerExtra, children } = input;
+    const { tone, operatorSurfaces, title, suppressHeader, surfaceClassName, headerExtra, headerActions, children } = input;
     if (tone && operatorSurfaces) {
         return (
-            <LayoutRuntimeTonedPanelShell title={suppressHeader ? undefined : title} tone={tone} bodyClassName="p-0">
+            <LayoutRuntimeTonedPanelShell
+                title={suppressHeader ? undefined : title}
+                tone={tone}
+                headerActions={headerActions}
+                bodyClassName="p-0"
+            >
                 {headerExtra}
                 {children}
             </LayoutRuntimeTonedPanelShell>
@@ -782,10 +819,11 @@ function renderRelatedListPanelShell(input: {
         <div className={surfaceClassName ?? LAYOUT_RUNTIME_PANEL_SURFACE}>
             {headerExtra}
             {!suppressHeader ?
-                <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                <div className={`${LAYOUT_RUNTIME_PANEL_HEADER} justify-between`}>
                     <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                         {title}
                     </span>
+                    {headerActions}
                 </div>
             :   null}
             {children}
@@ -818,6 +856,14 @@ function RelatedCellInner({
     const { sectionKey } = useContext(LayoutRuntimeSectionContext);
     const host = useContext(LayoutRuntimeHostContext);
     const onAdornmentAction = useContext(AdornmentActionContext);
+    const drawerEdit = useLayoutRuntimeDrawerEdit();
+    const blockEdit = useLayoutRuntimeBlockEdit();
+    const showBlockEditButton =
+        (blockConfig.editMode === "edit_button" || blockConfig.editMode === "inline_editable") && Boolean(drawerEdit);
+    const blockEditToggle =
+        showBlockEditButton && blockEdit ?
+            <LayoutRuntimeBlockEditToggle itemId={item.id} blockEdit={blockEdit} />
+        :   null;
     const [enrollmentExpanded, setEnrollmentExpanded] = useState(false);
     // A configured collection (any displayMode — table/rows/list) renders its rows
     // whenever it has columns. This matches isLayoutItemSupportedForProduction
@@ -1021,6 +1067,7 @@ function RelatedCellInner({
             suppressHeader: suppressRelatedListHeader,
             surfaceClassName: `${LAYOUT_RUNTIME_PANEL_SURFACE} ${LAYOUT_RUNTIME_WORK_RAIL}`,
             headerExtra: <LayoutRuntimeLinkDebugModeBanner />,
+            headerActions: blockEditToggle,
             children:
                 showChildrenEmpty ?
                     <LayoutRuntimeChildrenEmptyState
@@ -1276,16 +1323,19 @@ function RelatedCellInner({
         <div className={`${LAYOUT_RUNTIME_PANEL_SURFACE} ${isChildrenRepeater ? LAYOUT_RUNTIME_WORK_RAIL : ""}`}>
             {isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null}
             {!hideInnerHeader ?
-                <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                <div className={`${LAYOUT_RUNTIME_PANEL_HEADER} justify-between`}>
                     <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                         {title || "Related records"}
                     </span>
-                    {variant === "proof" ?
-                        <span className="text-[10px]" style={{ color: MUTED }}>
-                            {rows.length} row{rows.length === 1 ? "" : "s"}
-                            {binding.relationKey === "enrollment_children" ? " · enrollment context" : ""}
-                        </span>
-                    :   null}
+                    <div className="flex items-center gap-2">
+                        {blockEditToggle}
+                        {variant === "proof" ?
+                            <span className="text-[10px]" style={{ color: MUTED }}>
+                                {rows.length} row{rows.length === 1 ? "" : "s"}
+                                {binding.relationKey === "enrollment_children" ? " · enrollment context" : ""}
+                            </span>
+                        :   null}
+                    </div>
                 </div>
             :   null}
             {showChildrenEmpty ?
@@ -1605,11 +1655,14 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             );
         }
         if (!visible) {
-            return (
-                <WidgetChrome title={title}>
+            const attentionEmpty = (
+                <WidgetChrome title={title} accentRail={configuredAccentRail} tone={configuredTone}>
                     {emptyQuiet}
                 </WidgetChrome>
             );
+            return composition.compositionSectionSurface ?
+                    wrapLayoutRuntimeCompositionWidget(title, configuredTone, emptyQuiet)
+                :   attentionEmpty;
         }
         return (
             <WidgetChrome title={title} accentRail="attention">
@@ -1741,25 +1794,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             </div>
         );
         if (composition.compositionSectionSurface) {
-            if (configuredTone) {
-                const rail = resolveLayoutEditorWidgetToneRailClass(configuredTone);
-                return (
-                    <div className={`rounded-lg border border-alloy-stone/12 border-l-[3px] ${rail} bg-white px-2 py-2 shadow-[0_1px_4px_rgba(24,39,58,0.04)]`}>
-                        <div className="mb-1 truncate text-[10px] font-semibold uppercase tracking-[0.07em] text-alloy-midnight/55">
-                            {title || "Activity"}
-                        </div>
-                        {activityMarkup}
-                    </div>
-                );
-            }
-            return (
-                <div className="rounded-lg border border-alloy-stone/12 bg-white px-2 py-2 shadow-[0_1px_4px_rgba(24,39,58,0.04)]">
-                    <div className="mb-1 truncate text-[10px] font-semibold uppercase tracking-[0.07em] text-alloy-midnight/55">
-                        {title || "Activity"}
-                    </div>
-                    {activityMarkup}
-                </div>
-            );
+            return wrapLayoutRuntimeCompositionWidget(title || "Activity", configuredTone, activityMarkup);
         }
         return <WidgetChrome title={title} tone={configuredTone}>{activityMarkup}</WidgetChrome>;
     }
@@ -1774,7 +1809,9 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
         const markup = (
             <LayoutRuntimeDocumentsOverviewWidget record={record} title={title} showEmptyState={!hasContent} />
         );
-        return composition.compositionSectionSurface ? markup : <WidgetChrome title={title}>{markup}</WidgetChrome>;
+        return composition.compositionSectionSurface ?
+                wrapLayoutRuntimeCompositionWidget(title, configuredTone, markup)
+            :   <WidgetChrome title={title} tone={configuredTone}>{markup}</WidgetChrome>;
     }
 
     if (widgetKey === "notes" || widgetKey === "recent_communication") {
@@ -1789,7 +1826,9 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
                 showEmptyState={!hasContent}
             />
         );
-        return composition.compositionSectionSurface ? markup : <WidgetChrome title={title}>{markup}</WidgetChrome>;
+        return composition.compositionSectionSurface ?
+                wrapLayoutRuntimeCompositionWidget(title, configuredTone, markup)
+            :   <WidgetChrome title={title} tone={configuredTone}>{markup}</WidgetChrome>;
     }
 
     if (kpiTile) {
@@ -1808,14 +1847,22 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
         );
     }
 
-    return (
-        <WidgetChrome title={title} accentRail={configuredAccentRail} tone={configuredTone}>
+    const fallbackBody = (
+        <>
             {widgetDescription ?
                 <p className="mb-1 text-[10px] text-alloy-midnight/50">{widgetDescription}</p>
             :   null}
             {empty}
-        </WidgetChrome>
+        </>
     );
+
+    return composition.compositionSectionSurface ?
+            wrapLayoutRuntimeCompositionWidget(title, configuredTone, fallbackBody)
+        :   (
+            <WidgetChrome title={title} accentRail={configuredAccentRail} tone={configuredTone}>
+                {fallbackBody}
+            </WidgetChrome>
+        );
 }
 
 function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {

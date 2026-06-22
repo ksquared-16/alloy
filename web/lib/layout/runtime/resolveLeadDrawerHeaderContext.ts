@@ -1,11 +1,15 @@
-/**
- * Lead drawer command header metadata — primary contact, contact details, child count, location.
- */
+import { formatPhoneUS } from "@/lib/adminFormatters";
 
 function trimOrNull(value: unknown): string | null {
     if (value == null) return null;
     const text = String(value).trim();
     return text.length > 0 ? text : null;
+}
+
+function formatHeaderPhone(value: string | null): string | null {
+    if (!value) return null;
+    const formatted = formatPhoneUS(value);
+    return formatted !== "—" ? formatted : value;
 }
 
 function countLinkedChildren(record: Record<string, unknown>): number {
@@ -33,7 +37,7 @@ export function resolveLeadDrawerHeaderContext(record: Record<string, unknown>):
         trimOrNull(record["person.primary_contact_name"]) ?? trimOrNull(primaryPerson?.label);
 
     const email = trimOrNull(record["person.primary_email"]);
-    const phone = trimOrNull(record["person.primary_phone"]);
+    const phone = formatHeaderPhone(trimOrNull(record["person.primary_phone"]));
     const contactLine =
         email && phone ? `${email} · ${phone}`
         : email ?? phone;
@@ -76,7 +80,7 @@ export function resolveLeadDrawerCommandHeaderMeta(
     const includeHousehold = Boolean(ctx.householdLabel) && householdNorm !== titleNorm;
 
     const email = trimOrNull(record["person.primary_email"]);
-    const phone = trimOrNull(record["person.primary_phone"]);
+    const phone = formatHeaderPhone(trimOrNull(record["person.primary_phone"]));
     const childCount = countLinkedChildren(record);
 
     const metaParts: string[] = [];

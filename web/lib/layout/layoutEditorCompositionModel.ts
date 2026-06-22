@@ -253,7 +253,7 @@ export function patchLayoutEditorFieldDisplay(
         const loc = findLayoutItemLocation(doc, path.itemId);
         if (!loc) return doc;
         const patch: Partial<LayoutItem> = applyDisplayConfigToItemPatch(loc.item, displayPatch);
-        if (label !== undefined) patch.label = label.replace(/^\s+|\s+$/g, "") || label;
+        if (label !== undefined) patch.label = label;
         return patchItem(doc, loc.sIdx, loc.rIdx, loc.cIdx, path.itemId, patch);
     }
 
@@ -264,7 +264,7 @@ export function patchLayoutEditorFieldDisplay(
         const field = group?.rows?.[path.gr]?.columns[path.gc]?.items.find((it) => it.id === path.fieldId);
         if (!field) return doc;
         const patch: Partial<LayoutItem> = applyDisplayConfigToItemPatch(field, displayPatch);
-        if (label !== undefined) patch.label = label.replace(/^\s+|\s+$/g, "") || label;
+        if (label !== undefined) patch.label = label;
         return groupPatchItem(doc, loc, path.gr, path.gc, path.fieldId, patch);
     }
 
@@ -276,7 +276,7 @@ export function patchLayoutEditorFieldDisplay(
         if (!col) return doc;
         const patch: Partial<LayoutCollectionColumn> = {
             ...applyDisplayConfigToColumnPatch(col, displayPatch),
-            ...(label !== undefined ? { label: label.replace(/^\s+|\s+$/g, "") || col.label } : {}),
+            ...(label !== undefined ? { label } : {}),
         };
         return relatedPatchColumn(doc, loc, path.colIdx, patch);
     }
