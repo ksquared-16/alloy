@@ -95,6 +95,40 @@ export default function LeadEnrollmentCardList({
 
     const configuredRowLayout = resolveChildRowTemplateRowLayout(item);
 
+    const renderEnrollmentColumnCell = (
+        row: ProofRuntimeRecord,
+        col: LayoutCollectionColumn,
+        rowKey: string,
+        isEditing: boolean,
+    ) => {
+        const inlineEditable = layoutRuntimeCollectionColumnIsInlineEditable(col, "production");
+        const showInlineEdit = isEditing && inlineEditable && Boolean(edit);
+
+        if (showInlineEdit && edit) {
+            return (
+                <LayoutRuntimeFieldInput
+                    refKey={col.refKey}
+                    value={edit.getFieldValue(
+                        col.refKey,
+                        formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord }),
+                        rowKey,
+                    )}
+                    rowKey={rowKey}
+                    onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
+                    getDependentValue={layoutRuntimeEnrollmentPlacementDependentValueReader(
+                        row,
+                        anchorRecord,
+                        edit.getFieldValue,
+                        rowKey,
+                    )}
+                    compact
+                />
+            );
+        }
+
+        return renderConfiguredFieldValue(row, col);
+    };
+
     const renderConfiguredFieldValue = (row: ProofRuntimeRecord, col: LayoutCollectionColumn) => {
         const display = formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord });
         const key = col.refKey.toLowerCase();
@@ -204,7 +238,7 @@ export default function LeadEnrollmentCardList({
                                                         return (
                                                             <div key={col.refKey} className="min-w-0 flex flex-col gap-0.5">
                                                                 <span className={PRESENTATION_LABEL}>{col.label}</span>
-                                                                {renderConfiguredFieldValue(row, col)}
+                                                                {renderEnrollmentColumnCell(row, col, rowKey, isEditing)}
                                                             </div>
                                                         );
                                                     })}
@@ -224,32 +258,6 @@ export default function LeadEnrollmentCardList({
                                             :   null}
                                         </div>
                                     </div>
-                                    {isEditing && edit ?
-                                        <div className="adminv2-drawer-enrollment-field-grid mt-2 border-t border-alloy-stone/8 pt-2">
-                                            {columns.filter((col) => layoutRuntimeCollectionColumnIsInlineEditable(col, "production")).map((col) => (
-                                                <label key={col.refKey} className="flex min-w-0 flex-col gap-0.5">
-                                                    <span className={PRESENTATION_LABEL}>{col.label}</span>
-                                                    <LayoutRuntimeFieldInput
-                                                        refKey={col.refKey}
-                                                        value={edit.getFieldValue(
-                                                            col.refKey,
-                                                            formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord }),
-                                                            rowKey,
-                                                        )}
-                                                        rowKey={rowKey}
-                                                        onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
-                                                        getDependentValue={layoutRuntimeEnrollmentPlacementDependentValueReader(
-                                                            row,
-                                                            anchorRecord,
-                                                            edit.getFieldValue,
-                                                            rowKey,
-                                                        )}
-                                                        compact
-                                                    />
-                                                </label>
-                                            ))}
-                                        </div>
-                                    :   null}
                                 </li>
                             );
                         }
@@ -301,6 +309,14 @@ export default function LeadEnrollmentCardList({
                                         </div>
                                         {!isEditing && showSecondaryMetadata && metaColumns.length > 0 ?
                                             <LeadEnrollmentCardMetaLines row={row} metaColumns={metaColumns} />
+                                        : isEditing && showSecondaryMetadata && metaColumns.length > 0 ?
+                                            <LeadEnrollmentCardMetaLines
+                                                row={row}
+                                                metaColumns={metaColumns}
+                                                editing
+                                                rowKey={rowKey}
+                                                anchorRecord={anchorRecord}
+                                            />
                                         :   null}
                                         </div>
                                     </div>
@@ -317,36 +333,6 @@ export default function LeadEnrollmentCardList({
                                         :   null}
                                     </div>
                                 </div>
-                                {isEditing && edit ?
-                                    <div className="adminv2-drawer-enrollment-field-grid mt-2 border-t border-alloy-stone/8 pt-2">
-                                        {columns
-                                            .filter((col) => col !== nameColumn && layoutRuntimeCollectionColumnIsInlineEditable(col, "production"))
-                                            .map((col) => (
-                                                <label key={col.refKey} className="flex min-w-0 flex-col gap-0.5">
-                                                    <span className={PRESENTATION_LABEL}>
-                                                        {col.label}
-                                                    </span>
-                                                    <LayoutRuntimeFieldInput
-                                                        refKey={col.refKey}
-                                                        value={edit.getFieldValue(
-                                                            col.refKey,
-                                                            formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord }),
-                                                            rowKey,
-                                                        )}
-                                                        rowKey={rowKey}
-                                                        onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
-                                                        getDependentValue={layoutRuntimeEnrollmentPlacementDependentValueReader(
-                                                            row,
-                                                            anchorRecord,
-                                                            edit.getFieldValue,
-                                                            rowKey,
-                                                        )}
-                                                        compact
-                                                    />
-                                                </label>
-                                            ))}
-                                    </div>
-                                :   null}
                             </li>
                         );
                     })}

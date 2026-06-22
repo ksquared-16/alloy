@@ -26,19 +26,19 @@ export type LayoutEditorContactRoleFieldRefs = {
 
 export const LAYOUT_EDITOR_CONTACT_ROLE_LABELS: Record<LayoutEditorContactRole, string> = {
     primary: "Primary Contact",
-    parents: "Additional Parents",
+    parents: "Additional Parent/Guardian",
     billing: "Billing/Payer Contact",
     emergency: "Emergency Contact",
-    secondary: "Additional Parents (legacy)",
+    secondary: "Additional Contact",
     any: "Any",
 };
 
 export const LAYOUT_EDITOR_CONTACT_ROLE_BLOCK_TITLES: Record<LayoutEditorContactRole, string> = {
-    primary: "Primary Contact Card",
-    parents: "Additional Parents Card",
-    billing: "Billing/Payer Contact Card",
-    emergency: "Emergency Contact Card",
-    secondary: "Additional Parents Card",
+    primary: "Primary Contact",
+    parents: "Additional Parent/Guardian",
+    billing: "Billing/Payer Contact",
+    emergency: "Emergency Contact",
+    secondary: "Additional Contact",
     any: "Contact Card",
 };
 

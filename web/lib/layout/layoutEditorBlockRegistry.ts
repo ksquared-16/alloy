@@ -73,8 +73,8 @@ export const LAYOUT_EDITOR_BLOCK_TEMPLATE_CATALOG: LayoutEditorBlockTemplate[] =
     },
     {
         key: "contact_secondary",
-        label: "Secondary Contact Card (starter)",
-        description: "Starter: secondary relationship contact — or use Create block → Contact card → Secondary.",
+        label: "Additional Contact Card (starter)",
+        description: "Starter: additional household contact — or use Create block → Contact card → Additional Contact.",
         kind: "field_group",
         allowedSections: ["household_contact"],
         runtimeEffective: true,

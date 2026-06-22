@@ -72,7 +72,7 @@ export default function DrawerOverviewPanelShell({
 
     return (
         <section
-            className={`${surfaceClass} flex h-full min-h-0 flex-col`}
+            className={`${surfaceClass} group/section flex h-full min-h-0 flex-col`}
             data-drawer-overview-panel="true"
             data-drawer-overview-panel-section={sectionKey}
             data-layout-runtime-section-key={sectionKey}

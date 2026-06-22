@@ -117,7 +117,18 @@ export function resolveLayoutEditorContactBlockPerson(
         return rowMatchesRole(row.role_type, role);
     });
 
-    const match = candidates[0];
+    const match =
+        candidates[0]
+        ?? (role === "parents" ?
+            familyRows(record).find((row) => {
+                const personId = String(row.person_id ?? "").trim();
+                if (!personId) return false;
+                if (primaryId && personId === primaryId) return false;
+                if (excluded.has(personId)) return false;
+                if (isHouseholdPrimaryContactRole(row.role_type)) return false;
+                return Boolean(pickDisplay(row.name));
+            })
+        :   undefined);
     if (!match) return null;
 
     return {

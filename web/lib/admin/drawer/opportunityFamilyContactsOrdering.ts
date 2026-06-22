@@ -19,7 +19,6 @@ export type OpportunityFamilyContactRow = {
 };
 
 const PRIMARY_CONTACT_ROLE_KEYS = new Set(["primary_contact", "primary", "parent"]);
-const HOUSEHOLD_GUARDIAN_ROLE_KEYS = new Set(["primary_contact", "primary", "parent", "guardian"]);
 
 function trimOrNull(v: unknown): string | null {
     const s = String(v ?? "").trim();
@@ -117,8 +116,6 @@ export function buildOpportunityFamilyContactRows(
         if (customerId && trimOrNull(row.customer_id) !== customerId) continue;
         const personId = trimOrNull(row.person_id);
         if (!personId || byPersonId.has(personId)) continue;
-        const role = normRoleKey(row.role_type);
-        if (!HOUSEHOLD_GUARDIAN_ROLE_KEYS.has(role)) continue;
         byPersonId.set(personId, {
             id: `household-cp:${personId}`,
             person_id: personId,

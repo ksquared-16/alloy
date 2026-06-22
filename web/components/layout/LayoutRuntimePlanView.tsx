@@ -542,12 +542,18 @@ function LayoutRuntimeBlockEditToggle({
     itemId: string;
     blockEdit: NonNullable<ReturnType<typeof useLayoutRuntimeBlockEdit>>;
 }) {
+    const visibleWhileEditing = blockEdit.blockEditing;
     return (
         <button
             type="button"
-            className="rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-pine opacity-60 transition-opacity hover:border-alloy-pine/30 group-hover/block:opacity-100 focus:opacity-100 focus-visible:opacity-100"
+            className={`rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-pine transition-opacity hover:border-alloy-pine/30 focus:opacity-100 focus-visible:opacity-100 ${
+                visibleWhileEditing ?
+                    "opacity-100"
+                :   "opacity-0 group-hover/section:opacity-100 group-focus-within/section:opacity-100"
+            }`}
             onClick={() => blockEdit.setBlockEditing(!blockEdit.blockEditing)}
             data-testid={`layout-runtime-block-edit-${itemId}`}
+            data-layout-runtime-block-edit-visible={visibleWhileEditing ? "editing" : "hover"}
         >
             {blockEdit.blockEditing ? "Done" : "Edit"}
         </button>
@@ -2084,7 +2090,7 @@ function SectionView({
         }
 
         return wrapSectionInlineEdit(
-            <div className="flex h-full min-h-0 flex-col" data-layout-runtime-section-shell="true">
+            <div className="group/section flex h-full min-h-0 flex-col" data-layout-runtime-section-shell="true">
                 <DrawerOverviewPanelShell
                     sectionKey={section.key}
                     eyebrow={sectionEyebrow}
@@ -2115,7 +2121,7 @@ function SectionView({
 
     return wrapSectionInlineEdit(
         <div
-            className={surfaceClass}
+            className={`${surfaceClass} group/section`}
             data-layout-runtime-section-key={section.key}
             {...(isEnrollmentSection ?
                 { "data-layout-runtime-primary-workspace-section": "true" }
