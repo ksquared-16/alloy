@@ -10,7 +10,10 @@ import {
     useState,
     type ReactNode,
 } from "react";
-import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
+import {
+    dispatchLayoutRuntimeDrawerReverted,
+    dispatchLayoutRuntimeDrawerSaved,
+} from "@/lib/layout/runtime/layoutRuntimeDrawerBlockEditEvents";
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
 import {
     registerDrawerOperatingEditSection,
@@ -198,6 +201,7 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
 
     const revert = useCallback(() => {
         setDraft({ ...baselineRef.current });
+        dispatchLayoutRuntimeDrawerReverted();
     }, []);
 
     const savePersonContact = useCallback(async (patchBaseline: Record<string, string>) => {
@@ -311,6 +315,7 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
             }
             optimisticSnapshotRef.current = null;
             optimisticRecordRef.current = null;
+            dispatchLayoutRuntimeDrawerSaved();
             onSaved?.();
         },
         [draft, onSaved, patchOptimisticRecord, record.id, saveChildRepeater, saveOpportunityNative, savePersonContact],

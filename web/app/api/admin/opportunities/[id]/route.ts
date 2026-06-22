@@ -44,6 +44,7 @@ const ALLOWED_KEYS = [
     "job_time_window",
     "status",
     "vertical_id",
+    "location_id",
     "quote_total",
     "price_breakdown",
     "notes",

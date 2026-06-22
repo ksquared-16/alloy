@@ -1,7 +1,11 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { LayoutEditorBlockEditMode } from "@/lib/layout/layoutEditorBlockConfig";
+import {
+    LAYOUT_RUNTIME_DRAWER_REVERTED_EVENT,
+    LAYOUT_RUNTIME_DRAWER_SAVED_EVENT,
+} from "@/lib/layout/runtime/layoutRuntimeDrawerBlockEditEvents";
 
 type LayoutRuntimeBlockEditContextValue = {
     editMode: LayoutEditorBlockEditMode;
@@ -19,6 +23,17 @@ export function LayoutRuntimeBlockEditProvider({
     children: ReactNode;
 }) {
     const [blockEditing, setBlockEditing] = useState(false);
+
+    useEffect(() => {
+        const exitEditMode = () => setBlockEditing(false);
+        window.addEventListener(LAYOUT_RUNTIME_DRAWER_SAVED_EVENT, exitEditMode);
+        window.addEventListener(LAYOUT_RUNTIME_DRAWER_REVERTED_EVENT, exitEditMode);
+        return () => {
+            window.removeEventListener(LAYOUT_RUNTIME_DRAWER_SAVED_EVENT, exitEditMode);
+            window.removeEventListener(LAYOUT_RUNTIME_DRAWER_REVERTED_EVENT, exitEditMode);
+        };
+    }, []);
+
     const value = useMemo(
         (): LayoutRuntimeBlockEditContextValue => ({
             editMode,

@@ -5,6 +5,10 @@ import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
+import {
+    layoutRuntimeBlockAllowsFieldEdit,
+    useLayoutRuntimeBlockEdit,
+} from "@/components/layout/LayoutRuntimeBlockEditContext";
 import LayoutRuntimeFieldInput, {
     layoutRuntimeDependentValueReader,
 } from "@/components/layout/LayoutRuntimeFieldInput";
@@ -163,7 +167,10 @@ export default function LayoutRuntimeEnrollmentGrid({
     onAdornmentAction,
 }: Props) {
     const composition = useLayoutRuntimeCompositionHints();
-    const readFirst = enrollmentRosterReadFirstActive(item, composition.enrollmentRosterReadFirst);
+    const blockEdit = useLayoutRuntimeBlockEdit();
+    const blockEditingActive = Boolean(blockEdit && layoutRuntimeBlockAllowsFieldEdit(blockEdit));
+    const readFirst =
+        !blockEditingActive && enrollmentRosterReadFirstActive(item, composition.enrollmentRosterReadFirst);
     const [editingRowKeys, setEditingRowKeys] = useState<Set<string>>(() => new Set());
     const showRowActions = readFirst && rowHasEditableFields(columns, canMutate);
 
@@ -213,7 +220,9 @@ export default function LayoutRuntimeEnrollmentGrid({
                     <div className="px-3 py-4 text-[12px] text-alloy-midnight/40">No children linked yet.</div>
                 :   rows.map((row, index) => {
                         const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);
-                        const isRowEditing = readFirst ? editingRowKeys.has(rowKey) : true;
+                        const isRowEditing =
+                            blockEditingActive
+                            || (readFirst ? editingRowKeys.has(rowKey) : true);
                         return (
                             <div
                                 key={rowKey}

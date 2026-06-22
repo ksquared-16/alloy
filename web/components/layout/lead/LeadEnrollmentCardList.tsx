@@ -7,6 +7,10 @@ import DrawerHouseholdChildLinkAvatar from "@/components/layout/DrawerHouseholdC
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
+import {
+    layoutRuntimeBlockAllowsFieldEdit,
+    useLayoutRuntimeBlockEdit,
+} from "@/components/layout/LayoutRuntimeBlockEditContext";
 import LayoutRuntimeFieldInput from "@/components/layout/LayoutRuntimeFieldInput";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import LeadEnrollmentCardMetaLines from "@/components/layout/lead/LeadEnrollmentCardMetaLines";
@@ -58,7 +62,9 @@ export default function LeadEnrollmentCardList({
     rowTemplate,
 }: Props) {
     const edit = useLayoutRuntimeDrawerEdit();
-    const readFirst = true;
+    const blockEdit = useLayoutRuntimeBlockEdit();
+    const blockEditingActive = Boolean(blockEdit && layoutRuntimeBlockAllowsFieldEdit(blockEdit));
+    const readFirst = !blockEditingActive;
     const showAvatar = rowTemplate?.showAvatar !== false;
     const showStatusPill = rowTemplate?.showStatusPill !== false;
     const showSecondaryMetadata = rowTemplate?.showSecondaryMetadata !== false;
@@ -154,8 +160,10 @@ export default function LeadEnrollmentCardList({
             :   <ul className="flex flex-col gap-2 p-2">
                     {rows.map((row, index) => {
                         const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);
-                        const isEditing = readFirst ? editingRowKeys.has(rowKey) : false;
-                        const showEdit = readFirst && rowCanEdit(rowKey, row, index);
+                        const isEditing =
+                            blockEditingActive
+                            || (readFirst && editingRowKeys.has(rowKey));
+                        const showEdit = !blockEditingActive && readFirst && rowCanEdit(rowKey, row, index);
                         const nameCol = nameColumn!;
                         const nameLinkAdornment = resolveLayoutCollectionColumnLinkAdornment(nameCol);
                         const nameSynthetic: LayoutItem = {
