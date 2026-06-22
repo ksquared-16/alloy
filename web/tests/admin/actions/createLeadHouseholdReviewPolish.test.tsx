@@ -160,6 +160,8 @@ describe("CreateLeadRequiredChecklistRow", () => {
             selection,
             values: { location_id: "site-1" },
             requireLocation: true,
+            reviewWarnings: HOUSEHOLD.review_warnings,
+            household: HOUSEHOLD,
         });
         const html = renderToStaticMarkup(<CreateLeadRequiredChecklistRow items={items} />);
         expect(html).toContain('data-testid="create-lead-required-checklist"');
@@ -213,7 +215,7 @@ describe("CreateLeadDraftLeadColumn household review polish", () => {
         );
 
         expect(html).toContain('data-testid="create-lead-required-checklist"');
-        expect(html).toContain('data-testid="create-lead-gather-section-context"');
+        expect(html).not.toContain('data-testid="create-lead-gather-section-context"');
         expect(html).not.toContain("Required to create lead");
         expect(html).not.toContain('data-testid="action-workspace-bos-missing-hints"');
         expect(html).toContain('data-testid="intake-review-warnings-banner"');

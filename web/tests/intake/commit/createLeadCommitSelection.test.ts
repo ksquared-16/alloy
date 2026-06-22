@@ -90,7 +90,7 @@ describe("buildCreateLeadCommitPreview with selection", () => {
         const preview = buildCreateLeadCommitPreview({ values, household, selection });
 
         expect(preview.will_create.map((i) => i.label)).toEqual(
-            expect.arrayContaining(["Parent (primary)", "Parent", "Child (primary)", "Child"]),
+            expect.arrayContaining(["Parent (primary)", "Parent", "Child", "Child"]),
         );
         expect(preview.will_create.some((i) => i.detail?.includes("Sarah Emerson"))).toBe(true);
         expect(preview.will_create.some((i) => i.detail?.includes("Chet"))).toBe(true);

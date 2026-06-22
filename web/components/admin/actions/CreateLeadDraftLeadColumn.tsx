@@ -22,23 +22,13 @@ import { CreateLeadCommitPreviewPanel } from "@/components/admin/actions/CreateL
 import { CreateLeadRequiredChecklistRow } from "@/components/admin/actions/CreateLeadRequiredChecklistRow";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
 import { resolveCreateLeadRequiredChecklist } from "@/lib/admin/actions/resolveCreateLeadRequiredChecklist";
+import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 import {
     filterGlobalCreateLeadValidationIssues,
     partitionIntakeReviewWarnings,
 } from "@/lib/intake/review/classifyIntakeReviewWarnings";
 import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
-
-const HOUSEHOLD_MODE_SUPPRESSED_KEYS = new Set([
-    "first_name",
-    "last_name",
-    "email",
-    "phone",
-    "child_first_name",
-    "child_last_name",
-    "child_date_of_birth",
-    "child_age",
-]);
 
 type Props = {
     findings: CreateLeadLiveFinding[];
@@ -200,23 +190,20 @@ export function CreateLeadDraftLeadColumn({
 }: Props) {
     const showDraftForm = manualMode || draftEditMode;
     const householdCommitMode = Boolean(household && commitSelection && onCommitSelectionChange);
-    const contextSections =
-        householdCommitMode ?
-            sections
-                .map((section) => ({
-                    ...section,
-                    fields: section.fields.filter((f) => !HOUSEHOLD_MODE_SUPPRESSED_KEYS.has(f.payload_key)),
-                }))
-                .filter((section) => section.fields.length > 0)
-        :   sections;
     const reviewSuggestions = suggestions.filter((s) => s.confidence !== "high");
+    const locationCascade = useInquiryChildPlacementCascade({
+        locationValue: values.location_id ?? "",
+        programValue: values.child_program ?? "",
+    });
     const requiredChecklist =
         householdCommitMode && commitSelection ?
             resolveCreateLeadRequiredChecklist({
                 selection: commitSelection,
                 values,
-                requireLocation: requiredPayloadKeys.includes("location_id"),
+                requireLocation: true,
                 intakeSpec,
+                reviewWarnings: household?.review_warnings,
+                household,
             })
         :   [];
     const { globalWarnings, addressWarnings } = partitionIntakeReviewWarnings(household?.review_warnings ?? []);
@@ -325,27 +312,30 @@ export function CreateLeadDraftLeadColumn({
                 :   null}
 
                 {showDraftForm ?
-                    <div data-testid="create-lead-gather-fields">
+                    <div
+                        data-testid={
+                            householdCommitMode ? "create-lead-household-review" : "create-lead-gather-fields"
+                        }
+                    >
                         {renderHouseholdReview("mb-3")}
                         {householdCommitMode && requiredChecklist.length ?
-                            <CreateLeadRequiredChecklistRow items={requiredChecklist} className="mb-3" />
+                            <CreateLeadRequiredChecklistRow
+                                items={requiredChecklist}
+                                className="mb-3"
+                                locationPicker={{
+                                    value: values.location_id ?? "",
+                                    onChange: (next) => onFieldChange("location_id", next),
+                                    options: locationCascade.siteOptions,
+                                }}
+                            />
                         :   null}
                         {commitPreview ?
-                            <CreateLeadCommitPreviewPanel preview={commitPreview} className="mb-3" />
+                            <CreateLeadCommitPreviewPanel
+                                preview={commitPreview}
+                                className={householdCommitMode ? "mb-0" : "mb-3"}
+                            />
                         :   null}
-                        {householdCommitMode ?
-                            contextSections.length > 0 ?
-                                <ActionWorkspaceGatherFields
-                                    sections={contextSections}
-                                    values={values}
-                                    onChange={onFieldChange}
-                                    platformRequiredKeys={requiredPayloadKeys}
-                                    fieldConfidence={fieldConfidence}
-                                    layout="context"
-                                    dataTestIdPrefix="create-lead-gather"
-                                />
-                            :   null
-                        :   !household ?
+                        {!householdCommitMode && !household ?
                             <ActionWorkspaceGatherFields
                                 sections={sections}
                                 values={values}

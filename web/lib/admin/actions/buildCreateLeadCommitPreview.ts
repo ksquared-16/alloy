@@ -133,7 +133,7 @@ function buildSelectionPreview(input: {
 
     for (const child of children) {
         will_create.push({
-            label: child.primary ? "Child (primary)" : "Child",
+            label: "Child",
             detail: recordDisplayName(child) || undefined,
         });
     }

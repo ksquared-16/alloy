@@ -5,11 +5,13 @@ import {
 import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
 import { includedCommitRecords, primaryIncludedParent } from "@/lib/intake/commit/createLeadCommitSelection";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
+import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
+import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
 
 export type CreateLeadRequiredChecklistItem = {
     key: string;
     label: string;
-    status: "ok" | "missing" | "na";
+    status: "ok" | "missing" | "ambiguous" | "na";
 };
 
 function trim(v: unknown): string {
@@ -21,12 +23,25 @@ function childRequiredBySpec(spec: ActionIntakeSpec | null | undefined): boolean
     return spec.required.some((field) => field.entity === "child" || field.payload_key.startsWith("child_"));
 }
 
+function resolveLocationStatus(input: {
+    values: Record<string, string>;
+    reviewWarnings?: readonly IntakeReviewWarning[];
+}): CreateLeadRequiredChecklistItem["status"] {
+    if (trim(input.values.location_id)) return "ok";
+    const ambiguous = input.reviewWarnings?.some(
+        (warning) => warning.code === "location_ambiguous" || warning.code === "location_unmatched",
+    );
+    return ambiguous ? "ambiguous" : "missing";
+}
+
 /** Compact required-to-create checklist for household commit review. */
 export function resolveCreateLeadRequiredChecklist(input: {
     selection: CreateLeadCommitSelection;
     values: Record<string, string>;
     requireLocation?: boolean;
     intakeSpec?: ActionIntakeSpec | null;
+    reviewWarnings?: readonly IntakeReviewWarning[];
+    household?: IntakeHouseholdCandidate | null;
 }): CreateLeadRequiredChecklistItem[] {
     const { parents, children } = includedCommitRecords(input.selection);
     const primary = primaryIncludedParent(input.selection);
@@ -57,14 +72,19 @@ export function resolveCreateLeadRequiredChecklist(input: {
         items.push({
             key: "location",
             label: "Location",
-            status: trim(input.values.location_id) ? "ok" : "missing",
+            status: resolveLocationStatus({
+                values: input.values,
+                reviewWarnings: input.reviewWarnings,
+            }),
         });
     }
 
-    if (childRequiredBySpec(input.intakeSpec)) {
+    const showChildRequirement =
+        childRequiredBySpec(input.intakeSpec) || (input.household?.children.length ?? 0) > 0;
+    if (showChildRequirement) {
         items.push({
-            key: "child",
-            label: "At least one child",
+            key: "included-children",
+            label: "Included children",
             status: children.length > 0 ? "ok" : "missing",
         });
     }

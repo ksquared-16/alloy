@@ -2,6 +2,7 @@ import {
     isValidCreateLeadEmail,
     isValidCreateLeadPhone,
 } from "@/lib/admin/actions/createLeadIntakeValidation";
+import { calculateAgeFromDob } from "@/lib/intake/normalize/calculateAgeFromDob";
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
 
 export type CreateLeadCommitEntityType = "parent" | "child";
@@ -198,14 +199,24 @@ export function primaryIncludedChild(selection: CreateLeadCommitSelection): Crea
     return selection.children.find((c) => c.include_in_commit && c.primary) ?? null;
 }
 
+function childAgeDisplayFromDob(dob: string | null): string | null {
+    const iso = isoDateOnly(dob);
+    if (!iso) return null;
+    return calculateAgeFromDob(iso)?.display ?? null;
+}
+
 function recomputeRecord(record: CreateLeadCommitRecord): CreateLeadCommitRecord {
     const blockers = record.entity_type === "parent" ? parentBlockers(record) : childBlockers(record);
     const validation_state = validationStateFromBlockers(blockers);
-    return {
+    const next: CreateLeadCommitRecord = {
         ...record,
         commit_blockers: blockers,
         validation_state,
     };
+    if (record.entity_type === "child") {
+        next.age_display = childAgeDisplayFromDob(next.dob);
+    }
+    return next;
 }
 
 export function patchCreateLeadCommitRecord(
@@ -229,10 +240,16 @@ export function patchCreateLeadCommitRecord(
     if (patch.primary === true) {
         const target = [...parents, ...children].find((r) => r.candidate_id === candidateId);
         if (target?.entity_type === "parent") {
-            parents = parents.map((p) => ({ ...p, primary: p.candidate_id === candidateId }));
-        }
-        if (target?.entity_type === "child") {
-            children = children.map((c) => ({ ...c, primary: c.candidate_id === candidateId }));
+            parents = parents.map((p) => {
+                if (p.candidate_id !== candidateId) {
+                    return { ...p, primary: false };
+                }
+                const next = { ...p, primary: true };
+                if (next.validation_state === "valid") {
+                    next.include_in_commit = true;
+                }
+                return next;
+            });
         }
     }
 

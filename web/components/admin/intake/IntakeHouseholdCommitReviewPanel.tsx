@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight, Pencil } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     patchCreateLeadCommitRecord,
     toggleCreateLeadCommitInclusion,
@@ -14,6 +14,7 @@ import {
     formatDobForDisplay,
 } from "@/lib/intake/review/buildIntakeReviewPresentation";
 import { buildCreateLeadRecordCardHints } from "@/lib/intake/review/classifyIntakeReviewWarnings";
+import { calculateAgeFromDob } from "@/lib/intake/normalize/calculateAgeFromDob";
 import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
@@ -29,6 +30,7 @@ function EditablePersonCard({
     record,
     entityLabel,
     recordHints,
+    allowPrimaryControls,
     onPatch,
     onToggleInclude,
     onSetPrimary,
@@ -36,9 +38,10 @@ function EditablePersonCard({
     record: CreateLeadCommitRecord;
     entityLabel: string;
     recordHints: string[];
+    allowPrimaryControls: boolean;
     onPatch: (patch: CreateLeadCommitSelectionPatch) => void;
     onToggleInclude: (include: boolean) => void;
-    onSetPrimary: () => void;
+    onSetPrimary?: () => void;
 }) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState({
@@ -51,6 +54,12 @@ function EditablePersonCard({
 
     const displayName = [record.first_name, record.last_name].filter(Boolean).join(" ") || entityLabel;
     const canInclude = record.validation_state === "valid";
+    const draftAgeDisplay = useMemo(() => {
+        if (record.entity_type !== "child") return null;
+        const dob = draft.dob.trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) return null;
+        return calculateAgeFromDob(dob)?.display ?? null;
+    }, [draft.dob, record.entity_type]);
 
     const saveEdit = () => {
         onPatch({
@@ -89,18 +98,25 @@ function EditablePersonCard({
                             <p className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">{entityLabel}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
-                            {record.primary ?
-                                <span className="rounded-full bg-[#00A283]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#007A63]">
-                                    Primary
-                                </span>
-                            :   <button
-                                    type="button"
-                                    onClick={onSetPrimary}
-                                    className="rounded-md px-1.5 py-0.5 text-[9px] font-medium text-alloy-midnight/45 opacity-0 transition-opacity hover:bg-alloy-stone/8 group-hover:opacity-100"
-                                >
-                                    Set primary
-                                </button>
-                            }
+                            {allowPrimaryControls ?
+                                record.primary ?
+                                    <span
+                                        className="rounded-full bg-[#00A283]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#007A63]"
+                                        data-testid={`commit-primary-badge-${record.candidate_id}`}
+                                    >
+                                        Primary
+                                    </span>
+                                :   onSetPrimary ?
+                                    <button
+                                        type="button"
+                                        onClick={onSetPrimary}
+                                        className="rounded-md border border-alloy-stone/15 px-1.5 py-0.5 text-[9px] font-medium text-alloy-midnight/60 hover:bg-alloy-stone/8"
+                                        data-testid={`commit-set-primary-${record.candidate_id}`}
+                                    >
+                                        Set primary
+                                    </button>
+                                :   null
+                            :   null}
                             {!editing ?
                                 <button
                                     type="button"
@@ -114,8 +130,9 @@ function EditablePersonCard({
                                         });
                                         setEditing(true);
                                     }}
-                                    className="rounded-md p-1 text-alloy-midnight/45 opacity-0 transition-opacity hover:bg-alloy-stone/8 group-hover:opacity-100"
+                                    className="rounded-md p-1 text-alloy-midnight/55 hover:bg-alloy-stone/8"
                                     aria-label={`Edit ${displayName}`}
+                                    data-testid={`commit-edit-${record.candidate_id}`}
                                 >
                                     <Pencil className="h-3.5 w-3.5" />
                                 </button>
@@ -131,7 +148,10 @@ function EditablePersonCard({
                                 </p>
                             :   null}
                             {record.entity_type === "child" && (record.dob || record.age_display) ?
-                                <p className="mt-1 text-[11px] text-alloy-midnight/55">
+                                <p
+                                    className="mt-1 text-[11px] text-alloy-midnight/55"
+                                    data-testid={`commit-age-display-${record.candidate_id}`}
+                                >
                                     {[
                                         record.dob ? `DOB ${formatDobForDisplay(record.dob)}` : null,
                                         record.age_display ? `Age ${record.age_display}` : null,
@@ -160,18 +180,20 @@ function EditablePersonCard({
                                 </ul>
                             :   null}
                         </>
-                    :   <div className="mt-2 space-y-1.5">
+                    :   <div className="mt-2 space-y-1.5" data-testid={`commit-edit-form-${record.candidate_id}`}>
                             <input
                                 value={draft.first_name}
                                 onChange={(e) => setDraft((d) => ({ ...d, first_name: e.target.value }))}
                                 placeholder="First name"
                                 className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
+                                data-testid={`commit-edit-first-name-${record.candidate_id}`}
                             />
                             <input
                                 value={draft.last_name}
                                 onChange={(e) => setDraft((d) => ({ ...d, last_name: e.target.value }))}
                                 placeholder="Last name"
                                 className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
+                                data-testid={`commit-edit-last-name-${record.candidate_id}`}
                             />
                             {record.entity_type === "parent" ?
                                 <>
@@ -180,26 +202,40 @@ function EditablePersonCard({
                                         onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
                                         placeholder="Email"
                                         className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
+                                        data-testid={`commit-edit-email-${record.candidate_id}`}
                                     />
                                     <input
                                         value={draft.phone}
                                         onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
                                         placeholder="Phone"
                                         className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
+                                        data-testid={`commit-edit-phone-${record.candidate_id}`}
                                     />
                                 </>
-                            :   <input
-                                    value={draft.dob}
-                                    onChange={(e) => setDraft((d) => ({ ...d, dob: e.target.value }))}
-                                    placeholder="YYYY-MM-DD"
-                                    className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
-                                />
+                            :   <>
+                                    <input
+                                        value={draft.dob}
+                                        onChange={(e) => setDraft((d) => ({ ...d, dob: e.target.value }))}
+                                        placeholder="YYYY-MM-DD"
+                                        className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
+                                        data-testid={`commit-edit-dob-${record.candidate_id}`}
+                                    />
+                                    {draftAgeDisplay ?
+                                        <p
+                                            className="text-[11px] text-alloy-midnight/55"
+                                            data-testid={`commit-edit-age-preview-${record.candidate_id}`}
+                                        >
+                                            Age {draftAgeDisplay}
+                                        </p>
+                                    :   null}
+                                </>
                             }
                             <div className="flex gap-2 pt-1">
                                 <button
                                     type="button"
                                     onClick={saveEdit}
                                     className="rounded-md bg-[#00A283]/10 px-2 py-1 text-[11px] font-semibold text-[#007A63]"
+                                    data-testid={`commit-edit-save-${record.candidate_id}`}
                                 >
                                     Save
                                 </button>
@@ -288,6 +324,7 @@ export function IntakeHouseholdCommitReviewPanel({
                                 key={record.candidate_id}
                                 record={record}
                                 entityLabel={record.role}
+                                allowPrimaryControls
                                 recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
                                 onToggleInclude={(include) => toggleInclude(record.candidate_id, include)}
@@ -304,10 +341,10 @@ export function IntakeHouseholdCommitReviewPanel({
                                 key={record.candidate_id}
                                 record={record}
                                 entityLabel="child"
+                                allowPrimaryControls={false}
                                 recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
                                 onToggleInclude={(include) => toggleInclude(record.candidate_id, include)}
-                                onSetPrimary={() => patchRecord(record.candidate_id, { primary: true })}
                             />
                         ))}
                     </ReviewSection>
