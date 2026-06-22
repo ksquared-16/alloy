@@ -2,9 +2,10 @@
  * Map person VM record → operator-safe layout runtime record.
  */
 
-import type { PersonEnrollmentMirrorRow, PersonHouseholdChildLinkRow, PersonHouseholdContextRow, PersonHouseholdCustomerAddressRow } from "@/lib/admin/person/personDrawerVisibilityTypes";
+import type { PersonEnrollmentMirrorRow, PersonHouseholdChildLinkRow, PersonHouseholdContextRow } from "@/lib/admin/person/personDrawerVisibilityTypes";
 import { mergeCanonicalOpportunityLayoutRuntimeChildRows } from "./mergeCanonicalOpportunityLayoutRuntimeChildRows";
 import { isOpaqueIdValue, pickEntityId, type ProofRuntimeRecord } from "./proofRecordContext";
+import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -29,18 +30,6 @@ function resolveHouseholdName(vmRecord: Record<string, unknown>): string | null 
             (row) => row._customer_name,
         ),
     );
-}
-
-function resolveHouseholdAddress(vmRecord: Record<string, unknown>): string | null {
-    const formatted = pickDisplay(vmRecord._household_address, vmRecord.household_address);
-    if (formatted) return formatted;
-    const row = (vmRecord._household_customer_addresses as PersonHouseholdCustomerAddressRow[] | undefined)?.[0];
-    if (!row) return null;
-    const line1 = pickDisplay(row.address_line1);
-    const cityState = [pickDisplay(row.city), pickDisplay(row.state)].filter(Boolean).join(", ");
-    const tail = [cityState, pickDisplay(row.postal_code)].filter(Boolean).join(" ");
-    const parts = [line1, pickDisplay(row.address_line2), tail].filter(Boolean);
-    return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function resolvePersonRelationship(vmRecord: Record<string, unknown>, personId: string): string | null {
@@ -188,7 +177,8 @@ export function buildPersonLayoutRuntimeRecordFromVm(input: {
     const phone = pickDisplay(vmRecord.phone, vmRecord["person.primary_phone"], vmRecord._primary_phone) ?? "";
     const email = pickDisplay(vmRecord.email, vmRecord["person.primary_email"], vmRecord._primary_email) ?? "";
     const relationship = resolvePersonRelationship(vmRecord, personId) ?? "";
-    const address = resolveHouseholdAddress(vmRecord) ?? "";
+    const addressFields = resolveHouseholdAddressFieldValues(vmRecord);
+    const address = addressFields["location.household_address"] ?? "";
     const childRows = resolvePersonLayoutRuntimeChildRows(vmRecord);
 
     const overviewData: Record<string, unknown> = {
@@ -220,6 +210,7 @@ export function buildPersonLayoutRuntimeRecordFromVm(input: {
         _household_name: householdName,
         household_name: householdName,
         "location.household_address": address,
+        ...addressFields,
         _overview_data: overviewData,
         ...(vmRecord._inquiry_summary_tasks ? { _inquiry_summary_tasks: vmRecord._inquiry_summary_tasks } : {}),
     };

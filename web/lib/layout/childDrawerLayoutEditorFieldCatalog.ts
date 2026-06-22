@@ -35,5 +35,7 @@ export function buildChildDrawerEditorFieldPickerGroups(): LayoutCatalogGroup[] 
         const field = refKeyToCatalogField(refKey);
         if (field) fields.push(field);
     }
-    return finalizeCatalogGroupsForPicker(organizeChildcarePickerGroups(fields, "child") as LayoutCatalogGroup[]);
+    return finalizeCatalogGroupsForPicker(
+        organizeChildcarePickerGroups(fields, "child", { supplementFromStarterCatalog: false }) as LayoutCatalogGroup[],
+    );
 }

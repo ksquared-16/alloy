@@ -196,7 +196,7 @@ function household(
     fieldType: string,
     sortOrder: number,
     defFieldKey: string,
-    opts?: { storageColumn?: string },
+    opts?: { storageColumn?: string; anchors?: LayoutPickerAnchorEntity[] },
 ): ChildcareCatalogFieldEntry {
     return {
         refKey,
@@ -208,7 +208,7 @@ function household(
         defFieldKey,
         storageTable: "customers",
         storageColumn: opts?.storageColumn ?? defFieldKey,
-        layoutAnchors: ["opportunities"],
+        layoutAnchors: opts?.anchors ?? ["opportunities"],
     };
 }
 
@@ -217,7 +217,7 @@ function locationField(
     pickerLabel: string,
     fieldType: string,
     sortOrder: number,
-    opts: { defFieldKey?: string; storageTable?: string; storageColumn: string },
+    opts: { defFieldKey?: string; storageTable?: string; storageColumn: string; anchors?: LayoutPickerAnchorEntity[] },
 ): ChildcareCatalogFieldEntry {
     return {
         refKey,
@@ -229,7 +229,7 @@ function locationField(
         defFieldKey: opts.defFieldKey,
         storageTable: opts.storageTable ?? "locations",
         storageColumn: opts.storageColumn,
-        layoutAnchors: ["opportunities"],
+        layoutAnchors: opts.anchors ?? [],
     };
 }
 
@@ -383,6 +383,24 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     household("customer.family_notes", "Family notes", "text", 50, "family_notes"),
     household("customer.customer_number", "Family number", "text", 70, "customer_number"),
     household("customer.status_key", "Household status", "status", 75, "status_key"),
+    household("location.household_address", "Household address", "text", 80, "formatted_address", {
+        anchors: ["opportunities", "person", "child"],
+    }),
+    household("location.household_address_line1", "Address line 1", "text", 81, "address_line1", {
+        anchors: ["opportunities", "person", "child"],
+    }),
+    household("location.household_address_line2", "Address line 2", "text", 82, "address_line2", {
+        anchors: ["opportunities", "person", "child"],
+    }),
+    household("location.household_address_city", "City", "text", 83, "city", {
+        anchors: ["opportunities", "person", "child"],
+    }),
+    household("location.household_address_state", "State", "text", 84, "state", {
+        anchors: ["opportunities", "person", "child"],
+    }),
+    household("location.household_address_postal_code", "ZIP code", "text", 85, "postal_code", {
+        anchors: ["opportunities", "person", "child"],
+    }),
 
     // Location — native columns + metadata config (20260529160000)
     locationField("location.label", "Location name", "text", 10, { storageColumn: "label" }),
@@ -482,8 +500,10 @@ export function isChildcareHiddenRefKey(refKey: string): boolean {
 }
 
 export function isChildcareCatalogRefKey(refKey: string, anchor: LayoutPickerAnchorEntity = "opportunities"): boolean {
-    if (isChildcareHiddenRefKey(refKey)) return false;
-    const entry = CHILDCARE_CATALOG_BY_REFKEY.get(refKey);
+    const trimmed = refKey.trim();
+    if (isChildcareHiddenRefKey(trimmed)) return false;
+    if ((CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS as readonly string[]).includes(trimmed)) return false;
+    const entry = CHILDCARE_CATALOG_BY_REFKEY.get(trimmed);
     if (!entry) return false;
     return entry.layoutAnchors.includes(anchor);
 }
@@ -549,7 +569,9 @@ export type CatalogGroupLike = {
 export function organizeChildcarePickerGroups(
     fields: CatalogFieldLike[],
     anchor: LayoutPickerAnchorEntity = "opportunities",
+    options?: { supplementFromStarterCatalog?: boolean },
 ): CatalogGroupLike[] {
+    const supplementFromStarterCatalog = options?.supplementFromStarterCatalog ?? true;
     const byEntity = new Map<ChildcareOperatorEntity, CatalogFieldLike[]>();
     for (const entity of CHILDCARE_OPERATOR_ENTITY_ORDER) {
         byEntity.set(entity, []);
@@ -563,20 +585,23 @@ export function organizeChildcarePickerGroups(
         present.add(f.refKey);
     }
 
-    for (const entry of CHILDCARE_STARTER_FIELD_CATALOG) {
-        if (!entry.layoutAnchors.includes(anchor)) continue;
-        if (present.has(entry.refKey)) continue;
-        const dot = entry.refKey.indexOf(".");
-        const namespace = dot === -1 ? entry.refKey : entry.refKey.slice(0, dot);
-        const fieldKey = dot === -1 ? entry.refKey : entry.refKey.slice(dot + 1);
-        byEntity.get(entry.operatorEntity)!.push({
-            entityKey: namespace,
-            entityLabel: CHILDCARE_OPERATOR_ENTITY_LABELS[entry.operatorEntity],
-            fieldKey,
-            fieldLabel: entry.pickerLabel,
-            fieldType: entry.fieldType,
-            refKey: entry.refKey,
-        });
+    if (supplementFromStarterCatalog) {
+        for (const entry of CHILDCARE_STARTER_FIELD_CATALOG) {
+            if (!entry.layoutAnchors.includes(anchor)) continue;
+            if (!isChildcareCatalogRefKey(entry.refKey, anchor)) continue;
+            if (present.has(entry.refKey)) continue;
+            const dot = entry.refKey.indexOf(".");
+            const namespace = dot === -1 ? entry.refKey : entry.refKey.slice(0, dot);
+            const fieldKey = dot === -1 ? entry.refKey : entry.refKey.slice(dot + 1);
+            byEntity.get(entry.operatorEntity)!.push({
+                entityKey: namespace,
+                entityLabel: CHILDCARE_OPERATOR_ENTITY_LABELS[entry.operatorEntity],
+                fieldKey,
+                fieldLabel: entry.pickerLabel,
+                fieldType: entry.fieldType,
+                refKey: entry.refKey,
+            });
+        }
     }
 
     const entityKeyForOperator: Record<ChildcareOperatorEntity, string> = {

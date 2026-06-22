@@ -13,6 +13,7 @@ import type { LayoutDoc } from "../layoutV2";
 import { normalizeRefKeyOnRead } from "../layoutRefKeyAliases";
 import { OPPORTUNITY_COMPUTE_KEYS } from "./opportunityRelationRegistry";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
+import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
 import { resolveOpportunityLayoutRuntimeChildrenRows } from "./mapLayoutRuntimeChildrenRows";
 import { overlayPrimaryChildScalarsOnRecord } from "./overlayPrimaryChildScalarsOnRecord";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
@@ -240,11 +241,13 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         : location.kind === "multiple" ? location.label
         : leadLocationLabel || null;
 
-    const householdAddress = pickDisplay(
-        vmRecord["location.formatted_address"],
-        vmRecord._household_address,
-        vmRecord._formatted_address,
-    );
+    const householdAddressFields = resolveHouseholdAddressFieldValues(vmRecord);
+    const householdAddress = householdAddressFields["location.household_address"]
+        ?? pickDisplay(
+            vmRecord["location.formatted_address"],
+            vmRecord._household_address,
+            vmRecord._formatted_address,
+        );
 
     const programCategory = pickDisplay(
         vmRecord["enrollment.program_category"],
@@ -342,6 +345,7 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         "person.first_name": firstName ?? "",
         "person.last_name": lastNameField ?? "",
         "opportunity.primary_person_id": primaryPersonId ?? "",
+        ...householdAddressFields,
         _overview_data: overviewData,
         _attention: attention ?? "",
         ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),

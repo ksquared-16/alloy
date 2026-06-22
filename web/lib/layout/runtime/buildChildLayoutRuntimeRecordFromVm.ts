@@ -9,6 +9,7 @@ import type {
     PersonHouseholdCustomerAddressRow,
 } from "@/lib/admin/person/personDrawerVisibilityTypes";
 import { isOpaqueIdValue, pickEntityId, type ProofRuntimeRecord } from "./proofRecordContext";
+import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -27,18 +28,6 @@ function resolveHouseholdName(vmRecord: Record<string, unknown>): string | null 
         vmRecord["customer.household_name"],
         (vmRecord._household_context as PersonHouseholdContextRow[] | undefined)?.map((row) => row.customer_name),
     );
-}
-
-function resolveHouseholdAddress(vmRecord: Record<string, unknown>): string | null {
-    const formatted = pickDisplay(vmRecord._household_address, vmRecord.household_address);
-    if (formatted) return formatted;
-    const row = (vmRecord._household_customer_addresses as PersonHouseholdCustomerAddressRow[] | undefined)?.[0];
-    if (!row) return null;
-    const line1 = pickDisplay(row.address_line1);
-    const cityState = [pickDisplay(row.city), pickDisplay(row.state)].filter(Boolean).join(", ");
-    const tail = [cityState, pickDisplay(row.postal_code)].filter(Boolean).join(" ");
-    const parts = [line1, pickDisplay(row.address_line2), tail].filter(Boolean);
-    return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 function resolvePrimaryEnrollmentMirror(vmRecord: Record<string, unknown>): PersonEnrollmentMirrorRow | null {
@@ -97,7 +86,8 @@ export function buildChildLayoutRuntimeRecordFromVm(input: {
         [vmRecord.first_name, vmRecord.last_name].filter(Boolean).join(" "),
     );
     const householdName = resolveHouseholdName(vmRecord) ?? "";
-    const address = resolveHouseholdAddress(vmRecord) ?? "";
+    const addressFields = resolveHouseholdAddressFieldValues(vmRecord);
+    const address = addressFields["location.household_address"] ?? "";
     const familyRows = resolveFamilyAdultRows(vmRecord);
 
     const overviewData: Record<string, unknown> = {
@@ -162,6 +152,7 @@ export function buildChildLayoutRuntimeRecordFromVm(input: {
         _household_name: householdName,
         household_name: householdName,
         "location.household_address": address,
+        ...addressFields,
         _overview_data: overviewData,
     };
 

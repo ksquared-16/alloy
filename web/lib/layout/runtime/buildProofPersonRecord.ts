@@ -16,6 +16,11 @@ export function buildProofPersonRecord(overrides: Partial<ProofRuntimeRecord> = 
         "person.last_name": "Johnson",
         "person.email": "jamie.j@example.com",
         "person.phone": "(555) 234-8901",
+        "location.household_address": "142 Oak Street, Austin, TX 78701",
+        "location.household_address_line1": "142 Oak Street",
+        "location.household_address_city": "Austin",
+        "location.household_address_state": "TX",
+        "location.household_address_postal_code": "78701",
 
         _relations: {
             household_customer: {

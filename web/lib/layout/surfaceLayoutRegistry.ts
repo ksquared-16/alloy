@@ -13,12 +13,17 @@ import type { ActionSurface } from "@/lib/admin/actions/types";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildPersonDrawerDefaultDoc } from "@/lib/layout/defaultPersonLayouts";
 import { buildChildDrawerDefaultDoc } from "@/lib/layout/defaultChildLayouts";
-import { GLOBAL_WIDGET_CATALOG, type LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
+import { GLOBAL_WIDGET_CATALOG, type LayoutCatalogGroup, type LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
 import {
     collectRefKeysFromLayoutDoc,
     validateRefKeyForWrite,
 } from "@/lib/layout/layoutRefKeyAliases";
-import { allPickerEligibleRefKeys } from "@/lib/layout/platformFieldResolutionManifest";
+import {
+    CHILDCARE_STARTER_FIELD_CATALOG,
+    isChildcareCatalogRefKey,
+} from "@/lib/layout/childcareLayoutFieldCatalog";
+import { HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS } from "@/lib/layout/runtime/resolveHouseholdAddressFieldValues";
+import type { LayoutPickerAnchorEntity } from "@/lib/layout/platformFieldResolutionManifest";
 import {
     LAYOUT_EDITOR_CONTACT_ROLES,
     contactRoleFieldRefs,
@@ -293,12 +298,19 @@ function drawerEligibleWidgets(): LayoutCatalogWidget[] {
     );
 }
 
+function childcareCatalogRefKeysForLayoutAnchor(anchor: LayoutPickerAnchorEntity): string[] {
+    return CHILDCARE_STARTER_FIELD_CATALOG.filter(
+        (entry) => entry.layoutAnchors.includes(anchor) && isChildcareCatalogRefKey(entry.refKey, anchor),
+    ).map((entry) => entry.refKey);
+}
+
 function buildOpportunityDrawerAllowedFieldRefKeys(): readonly string[] {
     const baseline = collectRefKeysFromLayoutDoc(buildLeadDrawerDefaultDoc());
-    const picker = allPickerEligibleRefKeys("opportunities");
+    const catalog = childcareCatalogRefKeysForLayoutAnchor("opportunities");
     const merged = new Set<string>([
         ...baseline,
-        ...picker,
+        ...catalog,
+        ...HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS,
         ...OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS,
         ...OPPORTUNITY_DRAWER_CONTACT_REPEATER_FIELD_REFS,
         ...OPPORTUNITY_DRAWER_CONTACT_BLOCK_FIELD_REFS,
@@ -310,10 +322,11 @@ const OPPORTUNITY_DRAWER_FIELD_REFS = buildOpportunityDrawerAllowedFieldRefKeys(
 
 function buildPersonDrawerAllowedFieldRefKeys(): readonly string[] {
     const baseline = collectRefKeysFromLayoutDoc(buildPersonDrawerDefaultDoc());
-    const picker = allPickerEligibleRefKeys("person");
+    const catalog = childcareCatalogRefKeysForLayoutAnchor("person");
     const merged = new Set<string>([
         ...baseline,
-        ...picker,
+        ...catalog,
+        ...HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS,
         ...PERSON_DRAWER_STRUCTURAL_REF_KEYS,
         ...OPPORTUNITY_DRAWER_CONTACT_BLOCK_FIELD_REFS,
     ]);
@@ -322,10 +335,11 @@ function buildPersonDrawerAllowedFieldRefKeys(): readonly string[] {
 
 function buildChildDrawerAllowedFieldRefKeys(): readonly string[] {
     const baseline = collectRefKeysFromLayoutDoc(buildChildDrawerDefaultDoc());
-    const picker = allPickerEligibleRefKeys("child");
+    const catalog = childcareCatalogRefKeysForLayoutAnchor("child");
     const merged = new Set<string>([
         ...baseline,
-        ...picker,
+        ...catalog,
+        ...HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS,
         ...CHILD_DRAWER_STRUCTURAL_REF_KEYS,
     ]);
     return [...merged].sort();
@@ -574,6 +588,19 @@ export function isAllowedDrawerSurfaceFieldRefKey(surfaceKey: SurfaceLayoutKey, 
     if (surfaceKey === "person_drawer") return isAllowedPersonDrawerFieldRefKey(refKey);
     if (surfaceKey === "child_drawer") return isAllowedChildDrawerFieldRefKey(refKey);
     return false;
+}
+
+/** Filter catalog groups to refs allowed on a drawer surface (validator-aligned picker). */
+export function filterCatalogGroupsForDrawerSurface(
+    surfaceKey: Extract<SurfaceLayoutKey, "opportunity_drawer" | "person_drawer" | "child_drawer">,
+    groups: LayoutCatalogGroup[],
+): LayoutCatalogGroup[] {
+    return groups
+        .map((group) => ({
+            ...group,
+            fields: group.fields.filter((field) => isAllowedDrawerSurfaceFieldRefKey(surfaceKey, field.refKey)),
+        }))
+        .filter((group) => group.fields.length > 0);
 }
 
 /** Widget key allow-list check for opportunity drawer surfaces. */

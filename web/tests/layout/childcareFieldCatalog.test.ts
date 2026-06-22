@@ -7,6 +7,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
     CHILDCARE_FC3_DEFERRED_REF_KEYS,
+    CHILDCARE_CATALOG_BY_REFKEY,
     CHILDCARE_HIDDEN_REF_KEYS,
     CHILDCARE_OPERATOR_ENTITY_LABELS,
     CHILDCARE_PRIMARY_CONTACT_PROJECTION_REF_KEYS,
@@ -97,13 +98,14 @@ describe("childcare starter field catalog manifest", () => {
         expect(parentKeys).toContain("person.employee_id");
     });
 
-    it("uses native location.label and location.address1 not metadata aliases", () => {
-        const locationKeys = childcareCatalogRefKeysForOperatorEntity("location");
-        expect(locationKeys).toContain("location.label");
-        expect(locationKeys).toContain("location.address1");
-        expect(locationKeys).toContain("location.postal_code");
-        expect(locationKeys).not.toContain("location.name");
-        expect(locationKeys).not.toContain("location.address_line1");
+    it("defines native site location columns in catalog but not on opportunity drawer anchor", () => {
+        expect(CHILDCARE_CATALOG_BY_REFKEY.has("location.label")).toBe(true);
+        expect(CHILDCARE_CATALOG_BY_REFKEY.has("location.address1")).toBe(true);
+        expect(CHILDCARE_CATALOG_BY_REFKEY.has("location.postal_code")).toBe(true);
+        expect(isChildcareCatalogRefKey("location.label", "opportunities")).toBe(false);
+        expect(isChildcareCatalogRefKey("location.address1", "opportunities")).toBe(false);
+        expect(CHILDCARE_CATALOG_BY_REFKEY.has("location.name")).toBe(false);
+        expect(CHILDCARE_CATALOG_BY_REFKEY.has("location.address_line1")).toBe(false);
     });
 
     it("hides internal, removed, and raw id refKeys", () => {
@@ -112,7 +114,7 @@ describe("childcare starter field catalog manifest", () => {
         expect(isChildcareHiddenRefKey("child_inquiry.program")).toBe(true);
         expect(isChildcareHiddenRefKey("person.relationship_to_child")).toBe(true);
         expect(isChildcareHiddenRefKey("person.address_line1")).toBe(true);
-        expect(isChildcareHiddenRefKey("person.secondary_phone")).toBe(true);
+        expect(isChildcareCatalogRefKey("person.secondary_phone", "opportunities")).toBe(false);
         expect(isChildcareHiddenRefKey("inquiry_child.location_id")).toBe(false);
         expect(isChildcareCatalogRefKey("inquiry_child.location_id")).toBe(true);
         expect(isChildcareHiddenRefKey("opportunity.location_id")).toBe(false);
@@ -172,7 +174,6 @@ describe("childcare picker output", () => {
             "Child",
             "Parent / Contact",
             "Household",
-            "Location",
         ]);
     });
 

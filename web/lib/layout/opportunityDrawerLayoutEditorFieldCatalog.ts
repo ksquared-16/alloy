@@ -181,7 +181,9 @@ export function buildOpportunityDrawerEditorFieldPickerGroups(): LayoutCatalogGr
         if (field) fields.push(field);
     }
 
-    const groups = organizeChildcarePickerGroups(fields, "opportunities") as LayoutCatalogGroup[];
+    const groups = organizeChildcarePickerGroups(fields, "opportunities", {
+        supplementFromStarterCatalog: false,
+    }) as LayoutCatalogGroup[];
     return finalizeCatalogGroupsForPicker(splitPersonContactRolePickerGroups(groups));
 }
 

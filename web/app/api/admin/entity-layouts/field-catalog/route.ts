@@ -46,6 +46,9 @@ import {
     CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP,
     isChildcareCatalogRefKey,
 } from "@/lib/layout/childcareLayoutFieldCatalog";
+import {
+    filterCatalogGroupsForDrawerSurface,
+} from "@/lib/layout/surfaceLayoutRegistry";
 
 /** Group → field_definitions entity_type (null = manifest bootstrap only). */
 const GROUP_FIELD_ENTITY: Record<LayoutEntityGroupKey, string | null> = {
@@ -190,7 +193,14 @@ export async function GET(request: NextRequest) {
             }
         }
 
-        const groups = buildLeadLayoutPickerGroups(rawGroups, anchor);
+        let groups = buildLeadLayoutPickerGroups(rawGroups, anchor);
+        if (entityType === "opportunities") {
+            groups = filterCatalogGroupsForDrawerSurface("opportunity_drawer", groups);
+        } else if (entityType === "persons" || entityType === "person") {
+            groups = filterCatalogGroupsForDrawerSurface("person_drawer", groups);
+        } else if (entityType === "customer_members" || entityType === "child") {
+            groups = filterCatalogGroupsForDrawerSurface("child_drawer", groups);
+        }
         const emittedRefKeys = collectRefKeysFromCatalogGroups(groups);
 
         return NextResponse.json({
