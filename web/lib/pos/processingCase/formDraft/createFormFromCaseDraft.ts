@@ -100,6 +100,9 @@ export async function createFormFromCaseDraft(
             source: "document_form_draft",
             source_case_id: args.caseId,
             source_document_id: preview.source_document_id,
+            // Surfaced in POS → Forms so document-originated forms show provenance + size.
+            source_document_title: preview.title,
+            field_count: preview.fields.length,
         },
     });
 

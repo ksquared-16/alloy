@@ -224,6 +224,16 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                                                     {f.has_published_version ? "Published" : "Draft"}
                                                 </span>
                                             </span>
+                                            {f.metadata?.source === "document_form_draft" ? (
+                                                <span className="mt-0.5 block max-w-full truncate text-[10px] text-stone-400">
+                                                    {typeof f.metadata?.source_document_title === "string" && f.metadata.source_document_title.trim()
+                                                        ? f.metadata.source_document_title
+                                                        : "Source document"}
+                                                    {typeof f.metadata?.field_count === "number"
+                                                        ? ` · ${f.metadata.field_count} field${f.metadata.field_count === 1 ? "" : "s"}`
+                                                        : ""}
+                                                </span>
+                                            ) : null}
                                         </button>
                                     </li>
                                 );
