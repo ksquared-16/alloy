@@ -88,7 +88,13 @@ const DRAFT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
     { value: "file_ref", label: "File" },
 ];
 
-export default function PosTemplateSetupColumn({ state }: { state: PosCaseState }) {
+export default function PosTemplateSetupColumn({
+    state,
+    onOpenForm,
+}: {
+    state: PosCaseState;
+    onOpenForm?: (formId: string) => void;
+}) {
     const { detail, reload } = state;
     const caseId = detail?.id ?? null;
 
@@ -139,7 +145,6 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
     if (!detail) return null;
 
     const created = detail.formDraftCreated;
-    const builderPath = created ? `/admin/forms/${created.form_id}` : null;
 
     const docTitle = draft?.title || primary?.display.label || "Untitled document";
     const fields = draft?.fields ?? [];
@@ -170,15 +175,15 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
         return body.data?.form_draft_preview ?? null;
     }
 
-    // Create the UNPUBLISHED editable form, then open the builder in a NEW TAB so the
-    // operator keeps their POS case context (requirement: don't dump to /admin/forms).
+    // Create the UNPUBLISHED editable form, then jump to POS → Forms with it selected —
+    // staying INSIDE the POS workspace (never route to /admin/forms, never close the modal).
     async function create(): Promise<void> {
         const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/create`, { method: "POST", credentials: "same-origin" });
-        const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string; builder_path?: string }; error?: string };
+        const body = (await res.json().catch(() => ({}))) as { data?: { form_id?: string }; error?: string };
         if (!res.ok) throw new Error(body.error || `Couldn’t create the form (${res.status})`);
-        const path = body.data?.builder_path ?? (body.data?.form_id ? `/admin/forms/${body.data.form_id}` : null);
-        if (path) window.open(path, "_blank", "noopener,noreferrer");
         await reload(); // reflect the created link; the case stays open in POS
+        const formId = body.data?.form_id ?? null;
+        if (formId && onOpenForm) onOpenForm(formId);
     }
 
     const handleDetect = async () => {
@@ -440,7 +445,7 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
                             </button>
                         </div>
                         <p className="mt-1.5 text-[10.5px] text-stone-400">
-                            Creates an unpublished draft form from exactly these fields — opens in a new tab, the case stays here.
+                            Creates an unpublished draft form from exactly these fields — opens in POS → Forms, the case stays here.
                         </p>
                     </PosPanel>
                 ) : null}
@@ -516,14 +521,13 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
                 {err ? <div className="mb-2 text-[11px] text-amber-700">{err}</div> : null}
 
                 {created ? (
-                    <a
-                        href={builderPath ?? "#"}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`${WS_ACTION_PRIMARY} inline-block w-full text-center`}
+                    <button
+                        type="button"
+                        onClick={() => created.form_id && onOpenForm?.(created.form_id)}
+                        className={`${WS_ACTION_PRIMARY} w-full`}
                     >
-                        Open in Forms builder ↗
-                    </a>
+                        Open in Forms builder
+                    </button>
                 ) : hasFields ? (
                     <button type="button" disabled={creating || busy} onClick={() => void handleCreate()} className={`${WS_ACTION_PRIMARY} w-full`}>
                         {creating ? "Creating…" : quality === "strong" ? "Create editable form" : "Create editable form (review first)"}
@@ -556,10 +560,10 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
                     ) : null}
                 </div>
                 {created ? (
-                    <p className="mt-2 text-[10.5px] text-emerald-700">Opened in a new tab — this case stays here in POS.</p>
+                    <p className="mt-2 text-[10.5px] text-emerald-700">Form created — opens in POS → Forms; this case stays here.</p>
                 ) : (
                     <p className="mt-2 text-[10.5px] text-stone-400">
-                        Creates an unpublished draft form (opens in a new tab) — text-assisted, no exact PDF mapping yet. Nothing is
+                        Creates an unpublished draft form and opens it in POS → Forms (you stay in this workspace). Nothing is
                         published until you review it.
                     </p>
                 )}

@@ -14,7 +14,7 @@
  * to the relevant POS section so the flow is demonstrable today.
  */
 
-import { ArrowRight, FileSearch, FileText, FileUp, Sparkles } from "lucide-react";
+import { ArrowRight, FileSearch, FileText, FileUp, Sparkles, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type { PosSection } from "./posSections";
 
@@ -120,6 +120,7 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
     const [docs, setDocs] = useState<PosDocListItem[]>([]);
     const [docsLoading, setDocsLoading] = useState(true);
     const [docsError, setDocsError] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const loadDocs = useCallback(async () => {
         setDocsLoading(true);
@@ -139,6 +140,26 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
     useEffect(() => {
         void loadDocs();
     }, [loadDocs]);
+
+    // Safe delete of an unused test upload (guarded server-side: refused if it produced a
+    // form template or its case is completed). Removes it from the list on success.
+    const deleteDoc = useCallback(async (documentId: string, label: string) => {
+        if (!window.confirm(`Delete “${label}”? This removes the upload and its Processing case. Forms already created are kept.`)) {
+            return;
+        }
+        setDeletingId(documentId);
+        setDocsError(null);
+        try {
+            const res = await fetch(`/api/admin/pos/documents/${documentId}`, { method: "DELETE", credentials: "same-origin" });
+            const body = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) throw new Error(body.error || `Delete failed (${res.status})`);
+            setDocs((prev) => prev.filter((d) => d.documentId !== documentId));
+        } catch (e) {
+            setDocsError(e instanceof Error ? e.message : "Delete failed");
+        } finally {
+            setDeletingId(null);
+        }
+    }, []);
 
     async function handleFile(file: File) {
         setUploading(true);
@@ -257,6 +278,17 @@ export default function PosDocumentsPanel({ onNavigate }: { onNavigate: (section
                                             Open in Processing
                                         </button>
                                     ) : null}
+                                    <button
+                                        type="button"
+                                        disabled={deletingId === d.documentId}
+                                        onClick={() => void deleteDoc(d.documentId, d.label)}
+                                        aria-label="Delete document"
+                                        title="Delete this upload (kept if it produced a form or has a completed case)"
+                                        className="inline-flex items-center gap-1 text-[11.5px] font-medium text-stone-400 hover:text-amber-700 disabled:opacity-50"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                                        {deletingId === d.documentId ? "Deleting…" : "Delete"}
+                                    </button>
                                 </div>
                             </li>
                         ))}

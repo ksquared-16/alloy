@@ -25,6 +25,7 @@
 import { useCallback, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import AdminV2WorkspaceBosModalShell from "@/app/adminV2/components/AdminV2WorkspaceBosModalShell";
+import { BosMark } from "@/app/adminV2/components/bos/identity";
 import PosWorkspaceLayout from "@/app/adminV2/pos/PosWorkspaceLayout";
 import PosHome from "@/app/adminV2/pos/PosHome";
 import PosProcessingWorkspace from "@/app/adminV2/pos/PosProcessingWorkspace";
@@ -38,16 +39,25 @@ import type { PosSection } from "@/app/adminV2/pos/posSections";
 export default function ProcessingModal({ open, onClose }: { open: boolean; onClose: () => void }) {
     const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
     const [section, setSection] = useState<PosSection>("home");
+    const [focusFormId, setFocusFormId] = useState<string | null>(null);
 
     const handleClose = useCallback(() => {
         setSelectedCaseId(null);
         setSection("home");
+        setFocusFormId(null);
         onClose();
     }, [onClose]);
 
     const openCase = useCallback((caseId: string) => {
         setSelectedCaseId(caseId);
         setSection("processing");
+    }, []);
+
+    // Stay INSIDE POS: jump to Sources → Forms with the just-created form selected
+    // (never route away to /admin/forms, never close the modal).
+    const openForm = useCallback((formId: string) => {
+        setFocusFormId(formId);
+        setSection("forms");
     }, []);
 
     let body: ReactNode;
@@ -61,6 +71,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                     selectedCaseId={selectedCaseId}
                     onSelectCase={setSelectedCaseId}
                     onGoToSources={() => setSection("documents")}
+                    onOpenForm={openForm}
                 />
             );
             break;
@@ -69,6 +80,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                 <PosProcessingWorkspace
                     selectedCaseId={selectedCaseId}
                     onSelectCase={setSelectedCaseId}
+                    onOpenForm={openForm}
                     title="Review"
                     subtitle="Cases Alloy has triaged and that are ready for your decision."
                 />
@@ -78,7 +90,7 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
             body = <PosLinkagePanel onNavigate={setSection} />;
             break;
         case "forms":
-            body = <PosFormsWorkspace />;
+            body = <PosFormsWorkspace focusFormId={focusFormId} />;
             break;
         case "packets":
             body = <PosPacketsPanel />;
@@ -104,11 +116,17 @@ export default function ProcessingModal({ open, onClose }: { open: boolean; onCl
                 className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-white"
                 data-adminv2-processing-modal="true"
             >
-                {/* Title bar (unchanged geometry) */}
-                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/15 bg-white px-3 py-2.5">
-                    <h2 id="adminv2-processing-modal-title" className="text-sm font-semibold text-alloy-midnight">
-                        POS
-                    </h2>
+                {/* Title bar — BOS mark + pine accent (operational workspace, not plain text) */}
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/15 bg-gradient-to-r from-alloy-juniper/[0.06] to-transparent px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-alloy-juniper/10 ring-1 ring-alloy-juniper/20">
+                            <BosMark size="sm" />
+                        </span>
+                        <h2 id="adminv2-processing-modal-title" className="flex items-baseline gap-1.5 text-sm font-semibold text-alloy-midnight">
+                            POS
+                            <span className="text-[10.5px] font-medium text-alloy-midnight/45">Processing &amp; Sources</span>
+                        </h2>
+                    </div>
                     <button
                         type="button"
                         onClick={handleClose}

@@ -24,12 +24,14 @@ export default function PosProcessingWorkspace({
     selectedCaseId,
     onSelectCase,
     onGoToSources,
+    onOpenForm,
     title = "Processing",
     subtitle = "Information that has entered Alloy, triaged and ready for your decision.",
 }: {
     selectedCaseId: string | null;
     onSelectCase: (caseId: string) => void;
     onGoToSources?: () => void;
+    onOpenForm?: (formId: string) => void;
     title?: string;
     subtitle?: string;
 }) {
@@ -72,7 +74,7 @@ export default function PosProcessingWorkspace({
                 ) : isDocumentCase ? (
                     /* Document → Form: one focused template-setup surface (work + decision together) */
                     <div className="flex min-w-[24rem] flex-1 flex-col overflow-hidden bg-white">
-                        <PosTemplateSetupColumn state={state} />
+                        <PosTemplateSetupColumn state={state} onOpenForm={onOpenForm} />
                     </div>
                 ) : (
                     /* Record / intake case: the existing two-column review + commit flow */

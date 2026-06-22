@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Archive } from "lucide-react";
 import { safeParseFormSchema, type FormField, type FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer } from "@/components/forms/engine/FormEngineRenderer";
@@ -58,7 +58,7 @@ const PALETTE: Array<{ type: string; label: string }> = Object.entries(FIELD_TYP
 
 const EMPTY_PAYLOAD: FormPayload = { values: {}, groups: {}, signatures: {} };
 
-export default function PosFormsWorkspace() {
+export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?: string | null } = {}) {
     const [forms, setForms] = useState<FormRow[] | null>(null);
     const [listErr, setListErr] = useState<string | null>(null);
     const [selectedFormId, setSelectedFormId] = useState<string | null>(null);
@@ -66,6 +66,7 @@ export default function PosFormsWorkspace() {
     const [schemaState, setSchemaState] = useState<"idle" | "loading" | "empty" | "error" | "ready">("idle");
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [mode, setMode] = useState<"build" | "preview">("build");
+    const [archiving, setArchiving] = useState(false);
 
     const loadForms = useCallback(async () => {
         setListErr(null);
@@ -115,6 +116,45 @@ export default function PosFormsWorkspace() {
             setSchemaState("error");
         }
     }, []);
+
+    // Stay-in-POS deep link: when the modal jumps here with a freshly-created form, select it.
+    useEffect(() => {
+        if (focusFormId && forms && forms.some((f) => f.id === focusFormId) && selectedFormId !== focusFormId) {
+            void selectForm(focusFormId);
+        }
+    }, [focusFormId, forms, selectedFormId, selectForm]);
+
+    const archiveForm = useCallback(
+        async (formId: string) => {
+            if (
+                !window.confirm(
+                    "Archive this form? It’s removed from the list and its share links are deactivated. An admin can restore it."
+                )
+            ) {
+                return;
+            }
+            setArchiving(true);
+            setListErr(null);
+            try {
+                const res = await fetch(`/api/admin/forms/${formId}/archive`, { method: "POST", credentials: "same-origin" });
+                if (!res.ok) {
+                    const b = (await res.json().catch(() => ({}))) as { error?: string };
+                    throw new Error(b.error || `Archive failed (${res.status})`);
+                }
+                if (selectedFormId === formId) {
+                    setSelectedFormId(null);
+                    setSchema(null);
+                    setSchemaState("idle");
+                }
+                await loadForms();
+            } catch (e) {
+                setListErr(e instanceof Error ? e.message : "Archive failed");
+            } finally {
+                setArchiving(false);
+            }
+        },
+        [selectedFormId, loadForms]
+    );
 
     const fieldById = useMemo(() => {
         const map = new Map<string, FormField>();
@@ -173,7 +213,10 @@ export default function PosFormsWorkspace() {
                                             }`}
                                         >
                                             <span className="truncate text-[12.5px] font-medium text-alloy-midnight">{f.name || f.key}</span>
-                                            <span className="mt-0.5 flex items-center gap-1">
+                                            <span className="mt-0.5 flex flex-wrap items-center gap-1">
+                                                {f.metadata?.source === "document_form_draft" ? (
+                                                    <span className="rounded bg-sky-50 px-1 text-[9px] font-medium text-sky-700">From document</span>
+                                                ) : null}
                                                 {f.metadata?.pos_connected === true ? (
                                                     <span className="rounded bg-emerald-50 px-1 text-[9px] font-medium text-emerald-700">Processing</span>
                                                 ) : null}
@@ -197,19 +240,31 @@ export default function PosFormsWorkspace() {
                         <>
                             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-alloy-stone/12 bg-white px-3 py-1.5">
                                 <span className="truncate text-[12.5px] font-semibold text-alloy-midnight">{selectedForm.name || selectedForm.key}</span>
-                                <div className="flex shrink-0 overflow-hidden rounded-md border border-stone-200">
-                                    {(["build", "preview"] as const).map((m) => (
-                                        <button
-                                            key={m}
-                                            type="button"
-                                            onClick={() => setMode(m)}
-                                            className={`px-2.5 py-1 text-[11px] font-medium capitalize ${
-                                                mode === m ? "bg-[#00A283] text-white" : "bg-white text-stone-500 hover:bg-stone-50"
-                                            }`}
-                                        >
-                                            {m}
-                                        </button>
-                                    ))}
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <div className="flex shrink-0 overflow-hidden rounded-md border border-stone-200">
+                                        {(["build", "preview"] as const).map((m) => (
+                                            <button
+                                                key={m}
+                                                type="button"
+                                                onClick={() => setMode(m)}
+                                                className={`px-2.5 py-1 text-[11px] font-medium capitalize ${
+                                                    mode === m ? "bg-[#00A283] text-white" : "bg-white text-stone-500 hover:bg-stone-50"
+                                                }`}
+                                            >
+                                                {m}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <button
+                                        type="button"
+                                        disabled={archiving}
+                                        onClick={() => void archiveForm(selectedForm.id)}
+                                        title={selectedForm.has_published_version ? "Archive — deactivates share links" : "Archive this draft form"}
+                                        className="inline-flex items-center gap-1 rounded-md border border-stone-200 px-2 py-1 text-[11px] font-medium text-stone-500 hover:border-amber-300 hover:text-amber-700 disabled:opacity-50"
+                                    >
+                                        <Archive className="h-3.5 w-3.5" aria-hidden />
+                                        {archiving ? "Archiving…" : "Archive"}
+                                    </button>
                                 </div>
                             </div>
                             <div className="min-h-0 flex-1 overflow-y-auto p-3">
