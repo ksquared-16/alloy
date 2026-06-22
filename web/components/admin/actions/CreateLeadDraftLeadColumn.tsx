@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Check, Loader2 } from "lucide-react";
 
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
@@ -18,7 +19,13 @@ import { IntakeHouseholdCommitReviewPanel } from "@/components/admin/intake/Inta
 import { IntakeHouseholdReviewPanel } from "@/components/admin/intake/IntakeHouseholdReviewPanel";
 import { IntakeReviewWarningsBanner } from "@/components/admin/intake/IntakeReviewWarningsBanner";
 import { CreateLeadCommitPreviewPanel } from "@/components/admin/actions/CreateLeadCommitPreviewPanel";
+import { CreateLeadRequiredChecklistRow } from "@/components/admin/actions/CreateLeadRequiredChecklistRow";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
+import { resolveCreateLeadRequiredChecklist } from "@/lib/admin/actions/resolveCreateLeadRequiredChecklist";
+import {
+    filterGlobalCreateLeadValidationIssues,
+    partitionIntakeReviewWarnings,
+} from "@/lib/intake/review/classifyIntakeReviewWarnings";
 import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
@@ -203,18 +210,31 @@ export function CreateLeadDraftLeadColumn({
                 .filter((section) => section.fields.length > 0)
         :   sections;
     const reviewSuggestions = suggestions.filter((s) => s.confidence !== "high");
-    const missing =
-        intakeSpec && showDraftForm ?
-            householdCommitMode ?
-                missingRequiredLabelsForCreateLead(intakeSpec, values).filter((label) => {
-                    const field = [...intakeSpec.required, ...intakeSpec.recommended, ...intakeSpec.optional].find(
-                        (f) => f.field_label === label,
-                    );
-                    return !field || !HOUSEHOLD_MODE_SUPPRESSED_KEYS.has(field.payload_key);
-                })
-            :   missingRequiredLabelsForCreateLead(intakeSpec, values)
+    const requiredChecklist =
+        householdCommitMode && commitSelection ?
+            resolveCreateLeadRequiredChecklist({
+                selection: commitSelection,
+                values,
+                requireLocation: requiredPayloadKeys.includes("location_id"),
+                intakeSpec,
+            })
         :   [];
+    const { globalWarnings, addressWarnings } = partitionIntakeReviewWarnings(household?.review_warnings ?? []);
+    const globalBlockerMessages = useMemo(() => {
+        if (!householdCommitMode) return globalWarnings.map((warning) => warning.message);
+        const messages = filterGlobalCreateLeadValidationIssues(validationIssues);
+        for (const warning of globalWarnings) {
+            if (warning.code === "location_ambiguous" || warning.code === "location_unmatched") {
+                if (!messages.includes(warning.message)) messages.push(warning.message);
+            }
+        }
+        return messages;
+    }, [globalWarnings, householdCommitMode, validationIssues]);
     const showApplyReview = reviewSuggestions.length > 0 && draftEditMode;
+    const missing =
+        intakeSpec && showDraftForm && !householdCommitMode ?
+            missingRequiredLabelsForCreateLead(intakeSpec, values)
+        :   [];
     const commitPreview =
         household && (draftEditMode || manualMode) ?
             buildCreateLeadCommitPreview({ values, household, selection: commitSelection })
@@ -228,6 +248,7 @@ export function CreateLeadDraftLeadColumn({
                     household={household}
                     selection={commitSelection}
                     onSelectionChange={onCommitSelectionChange}
+                    addressWarnings={addressWarnings}
                     className={className}
                 />
             );
@@ -241,7 +262,7 @@ export function CreateLeadDraftLeadColumn({
             data-create-lead-column="draft-lead"
             data-testid="create-lead-draft-lead"
         >
-            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-stone/10 px-4 py-3">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-alloy-stone/10 px-3 py-2">
                 <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-alloy-midnight/45">
                         Draft Lead
@@ -277,13 +298,13 @@ export function CreateLeadDraftLeadColumn({
                 </div>
             </div>
 
-            {household?.review_warnings?.length ?
-                <div className="shrink-0 border-b border-alloy-stone/10 px-4 py-2.5">
-                    <IntakeReviewWarningsBanner warnings={household.review_warnings} />
+            {globalBlockerMessages.length ?
+                <div className="shrink-0 border-b border-alloy-stone/10 px-3 py-2">
+                    <IntakeReviewWarningsBanner messages={globalBlockerMessages} />
                 </div>
             :   null}
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {analyzeError ?
                     <p
                         className="mb-3 rounded-xl border border-alloy-ember/20 bg-alloy-ember/5 px-3 py-2 text-[12px] text-alloy-ember"
@@ -295,7 +316,7 @@ export function CreateLeadDraftLeadColumn({
 
                 {missing.length > 0 ?
                     <div
-                        className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-950"
+                        className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-950"
                         data-testid="action-workspace-bos-missing-hints"
                     >
                         <span className="font-semibold">Still needed: </span>
@@ -305,9 +326,12 @@ export function CreateLeadDraftLeadColumn({
 
                 {showDraftForm ?
                     <div data-testid="create-lead-gather-fields">
-                        {renderHouseholdReview("mb-4")}
+                        {renderHouseholdReview("mb-3")}
+                        {householdCommitMode && requiredChecklist.length ?
+                            <CreateLeadRequiredChecklistRow items={requiredChecklist} className="mb-3" />
+                        :   null}
                         {commitPreview ?
-                            <CreateLeadCommitPreviewPanel preview={commitPreview} className="mb-4" />
+                            <CreateLeadCommitPreviewPanel preview={commitPreview} className="mb-3" />
                         :   null}
                         {householdCommitMode ?
                             contextSections.length > 0 ?
@@ -317,7 +341,7 @@ export function CreateLeadDraftLeadColumn({
                                     onChange={onFieldChange}
                                     platformRequiredKeys={requiredPayloadKeys}
                                     fieldConfidence={fieldConfidence}
-                                    layout="unified"
+                                    layout="context"
                                     dataTestIdPrefix="create-lead-gather"
                                 />
                             :   null
@@ -356,22 +380,23 @@ export function CreateLeadDraftLeadColumn({
                 }
             </div>
 
-            {validationIssues.length > 0 ?
+            {!householdCommitMode && validationIssues.length > 0 ?
                 <div
-                    className="shrink-0 border-t border-alloy-stone/10 px-4 py-2.5"
+                    className="shrink-0 border-t border-alloy-stone/10 px-3 py-2"
                     data-testid="create-lead-missing-required"
                     role="alert"
                 >
                     <p className="text-[11px] text-amber-950">{validationIssues.join(" · ")}</p>
                 </div>
-            :   <div className="shrink-0 border-t border-alloy-stone/8 px-4 py-2.5">
+            : householdCommitMode ? null : (
+                <div className="shrink-0 border-t border-alloy-stone/8 px-3 py-2">
                     <p className="text-[11px] text-alloy-midnight/40">
                         {draftEditMode ?
                             "High-confidence values are applied automatically after analyze."
                         :   "Answers appear here as material is analyzed."}
                     </p>
                 </div>
-            }
+            )}
         </section>
     );
 }

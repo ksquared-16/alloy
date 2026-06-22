@@ -42,7 +42,7 @@ type Props = {
     /** BOS extraction confidence — shown after Analyze in draft edit mode. */
     fieldConfidence?: Record<string, BosFieldConfidenceDisplayLevel>;
     /** Unified draft lead layout — no entity tabs (Create Lead review step). */
-    layout?: "tabs" | "unified";
+    layout?: "tabs" | "unified" | "context";
 };
 
 function FieldConfidenceBadge({ level }: { level: BosFieldConfidenceDisplayLevel }) {
@@ -263,6 +263,22 @@ export function ActionWorkspaceGatherFields({
             </label>
         );
     };
+
+    if (layout === "context") {
+        const contextFields = sections.flatMap((section) => section.fields);
+        if (!contextFields.length) return null;
+
+        return (
+            <div className="flex flex-col gap-4" data-testid={`${dataTestIdPrefix}-fields`}>
+                <div data-testid={`${dataTestIdPrefix}-section-context`}>
+                    <h3 className="text-[12px] font-semibold text-alloy-midnight/70">Lead context</h3>
+                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-3 content-start">
+                        {contextFields.map((field) => renderField(field))}
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (layout === "unified") {
         const requiredFields = CREATE_LEAD_UNIFIED_REQUIRED_KEYS.map((key) => fieldsByKey[key]).filter(Boolean);

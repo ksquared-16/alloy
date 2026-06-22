@@ -88,6 +88,11 @@ export function CreateLeadOperationalIntake({
     });
     const selectedSuggestionCount = suggestions.filter((s) => s.selected).length;
     const showDraftForm = manualMode || draftEditMode;
+    const householdReviewActive = draftEditMode && Boolean(household);
+    const gridClass =
+        householdReviewActive ?
+            "grid min-h-0 flex-1 grid-cols-[minmax(240px,32%)_minmax(420px,1fr)]"
+        :   "grid min-h-0 flex-1 grid-cols-[minmax(280px,38%)_minmax(420px,1fr)]";
 
     const handleClearMaterial = () => {
         setComposerOpen(false);
@@ -96,7 +101,7 @@ export function CreateLeadOperationalIntake({
 
     return (
         <div
-            className="grid min-h-0 flex-1 grid-cols-[minmax(280px,38%)_minmax(420px,1fr)]"
+            className={gridClass}
             data-testid="create-lead-operational-intake"
         >
             <CreateLeadMaterialStackColumn

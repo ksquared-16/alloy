@@ -21,7 +21,9 @@ describe("ActionWorkspaceSuccessState compact layout", () => {
             child_last_name: "Lyons",
             location_id: "site-1",
         };
-        const recommendations = resolveCreateLeadPostCreateRecommendations(values);
+        const recommendations = resolveCreateLeadPostCreateRecommendations(values, {
+            availableActionKeys: ["schedule_tour", "send_welcome_email"],
+        });
         const html = renderToStaticMarkup(
             <ActionWorkspaceSuccessState
                 title="Lead Created"

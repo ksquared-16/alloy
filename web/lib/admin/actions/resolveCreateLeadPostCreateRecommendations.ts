@@ -5,7 +5,7 @@ const LABEL_BY_KEY = Object.fromEntries(
     CREATE_LEAD_GATHER_FIELDS.map((f) => [f.payload_key, f.field_label])
 ) as Record<string, string>;
 
-const SCHEDULE_TOUR_ACTION_KEY = "schedule_tour";
+const SCHEDULE_TOUR_ACTION_KEYS = ["schedule_tour", "reschedule_tour"] as const;
 const SEND_WELCOME_ACTION_KEY = "send_welcome_email";
 
 const MISSING_FOLLOW_UP_FIELDS: { key: string; label: string }[] = [
@@ -15,6 +15,15 @@ const MISSING_FOLLOW_UP_FIELDS: { key: string; label: string }[] = [
     { key: "location_id", label: "Location" },
     { key: "child_desired_schedule_type", label: "Schedule" },
 ];
+
+export type CreateLeadPostCreateContext = {
+    /** Configured opportunity header action keys (from action registry). */
+    availableActionKeys?: readonly string[];
+};
+
+function hasConfiguredAction(available: ReadonlySet<string>, keys: readonly string[]): boolean {
+    return keys.some((key) => available.has(key));
+}
 
 function scheduleTourBlockingRequirements(values: Record<string, string>): string[] {
     const missing: string[] = [];
@@ -34,7 +43,7 @@ function buildScheduleTourRecommendation(values: Record<string, string>): BosRec
             reason: "Needs child/program info",
             readiness: "blocked",
             blockingRequirements,
-            actionKey: SCHEDULE_TOUR_ACTION_KEY,
+            actionKey: "schedule_tour",
         };
     }
 
@@ -43,7 +52,7 @@ function buildScheduleTourRecommendation(values: Record<string, string>): BosRec
         title: "Schedule Tour",
         reason: "Available after opening lead",
         readiness: "ready",
-        actionKey: SCHEDULE_TOUR_ACTION_KEY,
+        actionKey: "schedule_tour",
     };
 }
 
@@ -51,8 +60,8 @@ function buildSendWelcomeRecommendation(): BosRecommendation {
     return {
         key: "send-welcome",
         title: "Send Welcome Email",
-        reason: "Template ready soon",
-        readiness: "coming_soon",
+        reason: "Available after opening lead",
+        readiness: "ready",
         actionKey: SEND_WELCOME_ACTION_KEY,
     };
 }
@@ -73,11 +82,22 @@ function buildMissingInfoRecommendations(values: Record<string, string>): BosRec
     return recommendations;
 }
 
-/** Truthful post-create recommendations for Create Lead success. */
-export function resolveCreateLeadPostCreateRecommendations(values: Record<string, string>): BosRecommendation[] {
-    return [
-        buildScheduleTourRecommendation(values),
-        buildSendWelcomeRecommendation(),
-        ...buildMissingInfoRecommendations(values),
-    ];
+/** Truthful post-create recommendations for Create Lead success — config-driven actions only. */
+export function resolveCreateLeadPostCreateRecommendations(
+    values: Record<string, string>,
+    context?: CreateLeadPostCreateContext,
+): BosRecommendation[] {
+    const available = new Set((context?.availableActionKeys ?? []).map((key) => key.trim()).filter(Boolean));
+    const recommendations: BosRecommendation[] = [];
+
+    if (hasConfiguredAction(available, SCHEDULE_TOUR_ACTION_KEYS)) {
+        recommendations.push(buildScheduleTourRecommendation(values));
+    }
+
+    if (available.has(SEND_WELCOME_ACTION_KEY)) {
+        recommendations.push(buildSendWelcomeRecommendation());
+    }
+
+    recommendations.push(...buildMissingInfoRecommendations(values));
+    return recommendations;
 }

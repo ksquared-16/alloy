@@ -67,16 +67,17 @@ export function ActionWorkspaceSuccessState({
     bosRecommendations = [],
     maxVisibleRecommendations = 3,
 }: Props) {
+    const visibleRecommendations = bosRecommendations.filter((rec) => rec.readiness !== "coming_soon");
     const [expanded, setExpanded] = useState(false);
     const visibleCount = Math.max(0, maxVisibleRecommendations);
-    const primaryRecommendations = bosRecommendations.slice(0, visibleCount);
-    const overflowRecommendations = bosRecommendations.slice(visibleCount);
+    const primaryRecommendations = visibleRecommendations.slice(0, visibleCount);
+    const overflowRecommendations = visibleRecommendations.slice(visibleCount);
     const openLeadAction = suggestedActions.find((action) => action.id === "open-lead");
     const secondaryActions = suggestedActions.filter((action) => action.id !== "open-lead");
 
     return (
         <div
-            className="flex h-full min-h-0 flex-col px-4 py-3"
+            className="flex h-full min-h-0 flex-col px-4 py-2.5"
             data-testid="action-workspace-success-state"
         >
             <div className="flex shrink-0 flex-col items-center text-center">
@@ -95,7 +96,7 @@ export function ActionWorkspaceSuccessState({
                 :   null}
             </div>
 
-            {bosRecommendations.length > 0 ?
+            {visibleRecommendations.length > 0 ?
                 <div
                     className="mt-3 min-h-0 flex-1 overflow-y-auto"
                     data-testid="action-workspace-bos-recommendations"

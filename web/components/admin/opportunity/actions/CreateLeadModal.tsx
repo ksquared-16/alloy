@@ -24,6 +24,7 @@ import {
 } from "@/lib/admin/actions/createLeadBosGuidance";
 import { mapBosRecommendationsToSuccessActions } from "@/lib/admin/actions/mapBosRecommendationsToSuccessActions";
 import { resolveCreateLeadPostCreateRecommendations } from "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations";
+import { fetchCreateLeadPostCreateActionKeys } from "@/lib/admin/actions/fetchCreateLeadPostCreateActionKeys";
 import { CREATE_LEAD_WORKSPACE_TITLE } from "@/lib/admin/actions/bosWorkspaceShell";
 import {
     applyHighConfidenceCreateLeadExtraction,
@@ -108,6 +109,8 @@ export function CreateLeadModal(props: {
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [successDetail, setSuccessDetail] = useState<string | null>(null);
+    const [postCreateActionKeys, setPostCreateActionKeys] = useState<string[]>([]);
+    const [createdOpportunityId, setCreatedOpportunityId] = useState<string | null>(null);
     const createdIdRef = useRef<string | null>(null);
     const drawerWarmRef = useRef<Promise<void> | null>(null);
 
@@ -142,7 +145,13 @@ export function CreateLeadModal(props: {
         return validateCreateLeadPlatformMinimum(values);
     }, [commitSelection, intakeSpec, values, requiredPayloadKeys]);
     const householdLabel = useMemo(() => formatCreateLeadHouseholdLabel(values), [values]);
-    const bosRecommendations = useMemo(() => resolveCreateLeadPostCreateRecommendations(values), [values]);
+    const bosRecommendations = useMemo(
+        () =>
+            resolveCreateLeadPostCreateRecommendations(values, {
+                availableActionKeys: postCreateActionKeys,
+            }),
+        [values, postCreateActionKeys],
+    );
     const successActions = useMemo(
         () =>
             mapBosRecommendationsToSuccessActions(bosRecommendations, {
@@ -176,6 +185,8 @@ export function CreateLeadModal(props: {
         setAnalyzeError(null);
         setError(null);
         setSuccessDetail(null);
+        setPostCreateActionKeys([]);
+        setCreatedOpportunityId(null);
         createdIdRef.current = null;
         drawerWarmRef.current = null;
     }, []);
@@ -236,6 +247,31 @@ export function CreateLeadModal(props: {
             cancelled = true;
         };
     }, [open, departmentId, resetWorkspaceState, siteFilter?.selectedSiteId, siteFilter?.bootstrap?.sites]);
+
+    useEffect(() => {
+        if (!open || !departmentId) return;
+        let cancelled = false;
+        void fetchCreateLeadPostCreateActionKeys({ departmentId }).then((keys) => {
+            if (!cancelled) setPostCreateActionKeys(keys);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [open, departmentId]);
+
+    useEffect(() => {
+        if (step !== "success" || !departmentId || !createdOpportunityId) return;
+        let cancelled = false;
+        void fetchCreateLeadPostCreateActionKeys({
+            departmentId,
+            opportunityId: createdOpportunityId,
+        }).then((keys) => {
+            if (!cancelled) setPostCreateActionKeys(keys);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [step, departmentId, createdOpportunityId]);
 
     useEffect(() => {
         if (step !== "success" || !createdIdRef.current) return;
@@ -403,6 +439,7 @@ export function CreateLeadModal(props: {
             const opportunityId = result.opportunity_id?.trim();
             if (!opportunityId) throw new Error("Lead was created but no opportunity id was returned.");
             createdIdRef.current = opportunityId;
+            setCreatedOpportunityId(opportunityId);
             drawerWarmRef.current = warmCreateLeadOpportunityDrawer(opportunityId, { department_id: departmentId });
             setSuccessDetail(null);
             setStep("success");

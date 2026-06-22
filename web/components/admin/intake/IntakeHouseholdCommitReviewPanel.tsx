@@ -13,6 +13,8 @@ import {
     buildIntakeReviewPresentation,
     formatDobForDisplay,
 } from "@/lib/intake/review/buildIntakeReviewPresentation";
+import { buildCreateLeadRecordCardHints } from "@/lib/intake/review/classifyIntakeReviewWarnings";
+import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 type Props = {
@@ -20,17 +22,20 @@ type Props = {
     selection: CreateLeadCommitSelection;
     onSelectionChange: (next: CreateLeadCommitSelection) => void;
     className?: string;
+    addressWarnings?: readonly IntakeReviewWarning[];
 };
 
 function EditablePersonCard({
     record,
     entityLabel,
+    recordHints,
     onPatch,
     onToggleInclude,
     onSetPrimary,
 }: {
     record: CreateLeadCommitRecord;
     entityLabel: string;
+    recordHints: string[];
     onPatch: (patch: CreateLeadCommitSelectionPatch) => void;
     onToggleInclude: (include: boolean) => void;
     onSetPrimary: () => void;
@@ -138,6 +143,22 @@ function EditablePersonCard({
                             {record.commit_blockers.length ?
                                 <p className="mt-1 text-[11px] text-amber-900">{record.commit_blockers.join(" ")}</p>
                             :   null}
+                            {recordHints.length ?
+                                <ul
+                                    className="mt-1 space-y-0.5"
+                                    data-testid={`commit-record-hints-${record.candidate_id}`}
+                                >
+                                    {recordHints.map((hint) => (
+                                        <li
+                                            key={hint}
+                                            className="text-[10px] font-medium text-alloy-midnight/55"
+                                            data-commit-record-hint={hint}
+                                        >
+                                            {hint}
+                                        </li>
+                                    ))}
+                                </ul>
+                            :   null}
                         </>
                     :   <div className="mt-2 space-y-1.5">
                             <input
@@ -235,6 +256,7 @@ export function IntakeHouseholdCommitReviewPanel({
     selection,
     onSelectionChange,
     className = "",
+    addressWarnings = [],
 }: Props) {
     const review = buildIntakeReviewPresentation(household);
     if (!review) return null;
@@ -249,16 +271,16 @@ export function IntakeHouseholdCommitReviewPanel({
 
     return (
         <section
-            className={`rounded-xl border border-alloy-stone/10 bg-[#FAFBFC] p-3 ${className}`}
+            className={`rounded-xl border border-alloy-stone/10 bg-[#FAFBFC] p-2.5 ${className}`}
             data-testid="intake-household-commit-review-panel"
         >
             <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-alloy-midnight/45">
                 Household detected
             </p>
-            <p className="mt-1 text-[11px] text-alloy-midnight/45">
+            <p className="mt-0.5 text-[11px] text-alloy-midnight/45">
                 Review each person, edit details, and choose who to include in this lead.
             </p>
-            <div className="mt-3 space-y-4">
+            <div className="mt-2 space-y-3">
                 {selection.parents.length > 0 ?
                     <ReviewSection title="Parents / Guardians" testId="intake-household-review-parents">
                         {selection.parents.map((record) => (
@@ -266,6 +288,7 @@ export function IntakeHouseholdCommitReviewPanel({
                                 key={record.candidate_id}
                                 record={record}
                                 entityLabel={record.role}
+                                recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
                                 onToggleInclude={(include) => toggleInclude(record.candidate_id, include)}
                                 onSetPrimary={() => patchRecord(record.candidate_id, { primary: true })}
@@ -281,6 +304,7 @@ export function IntakeHouseholdCommitReviewPanel({
                                 key={record.candidate_id}
                                 record={record}
                                 entityLabel="child"
+                                recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
                                 onToggleInclude={(include) => toggleInclude(record.candidate_id, include)}
                                 onSetPrimary={() => patchRecord(record.candidate_id, { primary: true })}
@@ -294,6 +318,15 @@ export function IntakeHouseholdCommitReviewPanel({
                         {review.address_lines.map((line) => (
                             <p key={line} className="text-[12px] text-alloy-midnight/70">
                                 {line}
+                            </p>
+                        ))}
+                        {addressWarnings.map((warning) => (
+                            <p
+                                key={warning.code}
+                                className="text-[11px] text-amber-900/90"
+                                data-intake-review-warning={warning.code}
+                            >
+                                {warning.message}
                             </p>
                         ))}
                     </ReviewSection>

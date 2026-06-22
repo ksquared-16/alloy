@@ -35,6 +35,7 @@ export function mapBosRecommendationsToSuccessActions(
 
     for (const rec of recommendations) {
         if (!rec.actionKey) continue;
+        if (rec.readiness === "coming_soon") continue;
         const icon = SUCCESS_ACTION_ICONS[rec.key];
         if (!icon) continue;
         const clickable = isClickableOnSuccess(rec);

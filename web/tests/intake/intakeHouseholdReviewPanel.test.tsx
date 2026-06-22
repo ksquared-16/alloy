@@ -143,4 +143,11 @@ describe("IntakeReviewWarningsBanner", () => {
         expect(html).toContain('data-testid="intake-review-warnings-banner"');
         expect(html).toContain("2 parents/guardians detected");
     });
+
+    it("renders global blocker messages", () => {
+        const html = renderToStaticMarkup(
+            <IntakeReviewWarningsBanner messages={["Location is required."]} />,
+        );
+        expect(html).toContain("Location is required.");
+    });
 });

@@ -241,11 +241,14 @@ describe("create lead BOS guidance", () => {
         const { mapBosRecommendationsToSuccessActions } = await import(
             "@/lib/admin/actions/mapBosRecommendationsToSuccessActions"
         );
-        const sparse = resolveCreateLeadPostCreateRecommendations({
-            first_name: "Jordan",
-            last_name: "Lee",
-            child_date_of_birth: "",
-        });
+        const sparse = resolveCreateLeadPostCreateRecommendations(
+            {
+                first_name: "Jordan",
+                last_name: "Lee",
+                child_date_of_birth: "",
+            },
+            { availableActionKeys: ["schedule_tour", "send_welcome_email"] },
+        );
         const scheduleSparse = sparse.find((r) => r.key === "schedule-tour");
         expect(scheduleSparse?.reason).toBe("Needs child/program info");
         expect(scheduleSparse?.readiness).toBe("blocked");
@@ -258,20 +261,36 @@ describe("create lead BOS guidance", () => {
 
         const actions = mapBosRecommendationsToSuccessActions(sparse, { onOpenLead: () => {} });
         expect(actions.find((a) => a.id === "schedule-tour")?.disabled).toBe(true);
-        expect(actions.find((a) => a.id === "send-welcome")?.status).toBe("Template ready soon");
+        expect(actions.find((a) => a.id === "send-welcome")?.status).toBe("Available after opening lead");
         expect(actions.find((a) => a.id === "open-lead")?.disabled).toBeFalsy();
 
-        const ready = resolveCreateLeadPostCreateRecommendations({
-            first_name: "Jordan",
-            last_name: "Lee",
-            child_first_name: "Sam",
-            child_program: "prog-1",
-            location_id: "loc-1",
-            child_desired_start_date: "2026-09-01",
-        });
+        const ready = resolveCreateLeadPostCreateRecommendations(
+            {
+                first_name: "Jordan",
+                last_name: "Lee",
+                child_first_name: "Sam",
+                child_program: "prog-1",
+                location_id: "loc-1",
+                child_desired_start_date: "2026-09-01",
+            },
+            { availableActionKeys: ["schedule_tour", "send_welcome_email"] },
+        );
         expect(ready.find((r) => r.key === "schedule-tour")?.readiness).toBe("ready");
         expect(ready.find((r) => r.key === "schedule-tour")?.reason).toBe("Available after opening lead");
-        expect(ready.find((r) => r.key === "send-welcome")?.readiness).toBe("coming_soon");
+        expect(ready.find((r) => r.key === "send-welcome")?.readiness).toBe("ready");
+
+        const unconfigured = resolveCreateLeadPostCreateRecommendations(
+            {
+                first_name: "Jordan",
+                last_name: "Lee",
+                child_first_name: "Sam",
+                child_program: "prog-1",
+                location_id: "loc-1",
+            },
+            { availableActionKeys: [] },
+        );
+        expect(unconfigured.some((r) => r.key === "schedule-tour")).toBe(false);
+        expect(unconfigured.some((r) => r.key === "send-welcome")).toBe(false);
     });
 
     it("formats household label with Family naming", async () => {
