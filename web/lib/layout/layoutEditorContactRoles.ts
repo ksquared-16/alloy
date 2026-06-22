@@ -3,6 +3,8 @@
  * Fields inherit refKeys from the selected role; operators never pick raw name fields.
  */
 
+import { contactRoleAddressLayoutRefKey, type PersonAddressValueKey } from "@/lib/layout/personDrawerAddressLayoutRefs";
+
 export const LAYOUT_EDITOR_CONTACT_ROLES = [
     "primary",
     "parents",
@@ -39,7 +41,32 @@ export type LayoutEditorContactRoleFieldRefs = {
     name: string;
     email: string;
     phone: string;
+    addressLine1: string;
+    addressLine2: string;
+    city: string;
+    state: string;
+    postalCode: string;
 };
+
+function addressRefsForRole(role: LayoutEditorContactResolutionRole): Pick<
+    LayoutEditorContactRoleFieldRefs,
+    "addressLine1" | "addressLine2" | "city" | "state" | "postalCode"
+> {
+    const keys: PersonAddressValueKey[] = [
+        "address_line1",
+        "address_line2",
+        "city",
+        "state",
+        "postal_code",
+    ];
+    return {
+        addressLine1: contactRoleAddressLayoutRefKey(role, keys[0]!),
+        addressLine2: contactRoleAddressLayoutRefKey(role, keys[1]!),
+        city: contactRoleAddressLayoutRefKey(role, keys[2]!),
+        state: contactRoleAddressLayoutRefKey(role, keys[3]!),
+        postalCode: contactRoleAddressLayoutRefKey(role, keys[4]!),
+    };
+}
 
 export const LAYOUT_EDITOR_CONTACT_ROLE_LABELS: Record<LayoutEditorContactRole, string> = {
     primary: "Primary Contact",
@@ -64,26 +91,31 @@ const CONTACT_ROLE_FIELD_REFS: Record<LayoutEditorContactResolutionRole, LayoutE
         name: "person.primary_contact_name",
         email: "person.primary_email",
         phone: "person.primary_phone",
+        ...addressRefsForRole("primary"),
     },
     parents: {
         name: "person.secondary_contact_name",
         email: "person.secondary_email",
         phone: "person.secondary_phone",
+        ...addressRefsForRole("parents"),
     },
     billing: {
         name: "person.billing_contact_name",
         email: "person.billing_contact_email",
         phone: "person.billing_contact_phone",
+        ...addressRefsForRole("billing"),
     },
     emergency: {
         name: "person.emergency_contact_name",
         email: "person.emergency_contact_email",
         phone: "person.emergency_contact_phone",
+        ...addressRefsForRole("emergency"),
     },
     any: {
         name: "person.contact_name",
         email: "person.contact_email",
         phone: "person.contact_phone",
+        ...addressRefsForRole("any"),
     },
 };
 
@@ -127,7 +159,7 @@ export function contactRoleBlockTitle(role: LayoutEditorContactRole): string {
 export function contactRoleEditorDescription(role: LayoutEditorContactRole): string {
     const normalized = normalizeLayoutEditorContactRole(role);
     if (normalized === "primary") {
-        return "Shows the household primary contact. Name, email, and phone come from the primary relationship.";
+        return "Shows the household primary contact. Name, email, phone, and address come from the primary relationship.";
     }
     if (role === "secondary") {
         return "Shows the first additional associated person (non-primary). Excludes the primary contact and people already shown in earlier contact blocks.";

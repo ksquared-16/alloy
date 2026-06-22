@@ -14,6 +14,7 @@ import { normalizeRefKeyOnRead } from "../layoutRefKeyAliases";
 import { OPPORTUNITY_COMPUTE_KEYS } from "./opportunityRelationRegistry";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
 import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
+import { resolveContactRolePersonAddressFieldValues } from "./resolvePersonAddressFieldValues";
 import { resolveOpportunityLayoutRuntimeChildrenRows } from "./mapLayoutRuntimeChildrenRows";
 import { overlayPrimaryChildScalarsOnRecord } from "./overlayPrimaryChildScalarsOnRecord";
 import { collectLayoutItems } from "./classifyLayoutItemBinding";
@@ -213,6 +214,13 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
 
     const emergencyContact = resolveOpportunityEmergencyContactPerson(vmRecord);
     const billingContact = resolveOpportunityBillingContactPerson(vmRecord);
+    const contactRoleAddressFields = resolveContactRolePersonAddressFieldValues({
+        vmRecord,
+        primaryPersonId: primaryContact.personId,
+        secondaryPersonId: secondaryContact.personId,
+        emergencyPersonId: emergencyContact.personId,
+        billingPersonId: billingContact.personId,
+    });
 
     const firstName = pickDisplay(
         vmRecord["person.first_name"],
@@ -346,6 +354,7 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         "person.last_name": lastNameField ?? "",
         "opportunity.primary_person_id": primaryPersonId ?? "",
         ...householdAddressFields,
+        ...contactRoleAddressFields,
         _overview_data: overviewData,
         _attention: attention ?? "",
         ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),

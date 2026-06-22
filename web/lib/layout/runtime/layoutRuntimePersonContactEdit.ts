@@ -6,8 +6,12 @@ import {
     patchLinkedPersonFromOpportunityDrawer,
     primaryPersonIdFromOpportunityRecord,
 } from "@/lib/admin/drawer/linkedRecordFieldEditing";
+import {
+    isPersonAddressLayoutRefKey,
+    personAddressValueKeyFromLayoutRefKey,
+} from "@/lib/layout/personDrawerAddressLayoutRefs";
 
-const PERSON_FIELD_BY_REF_KEY: Record<string, "first_name" | "last_name" | "email" | "phone"> = {
+const PERSON_NATIVE_FIELD_BY_REF_KEY: Record<string, "first_name" | "last_name" | "email" | "phone"> = {
     "person.first_name": "first_name",
     "person.last_name": "last_name",
     first_name: "first_name",
@@ -21,7 +25,15 @@ const PERSON_FIELD_BY_REF_KEY: Record<string, "first_name" | "last_name" | "emai
 };
 
 export function isLayoutRuntimePersonContactRefKey(refKey: string): boolean {
-    return refKey in PERSON_FIELD_BY_REF_KEY;
+    return refKey in PERSON_NATIVE_FIELD_BY_REF_KEY;
+}
+
+export function isLayoutRuntimePersonAddressRefKey(refKey: string): boolean {
+    return isPersonAddressLayoutRefKey(refKey);
+}
+
+export function isLayoutRuntimePersonFieldRefKey(refKey: string): boolean {
+    return isLayoutRuntimePersonContactRefKey(refKey) || isLayoutRuntimePersonAddressRefKey(refKey);
 }
 
 function trimPersonId(v: unknown): string | null {
@@ -55,13 +67,23 @@ export function resolveLayoutRuntimePersonId(record: Record<string, unknown>): s
 export function buildLayoutRuntimePersonContactPatch(
     baseline: Record<string, string>,
     draft: Record<string, string>,
-): Partial<Record<"first_name" | "last_name" | "email" | "phone", string>> {
-    const patch: Partial<Record<"first_name" | "last_name" | "email" | "phone", string>> = {};
-    for (const [refKey, personField] of Object.entries(PERSON_FIELD_BY_REF_KEY)) {
+): Record<string, string> {
+    const patch: Record<string, string> = {};
+    for (const [refKey, personField] of Object.entries(PERSON_NATIVE_FIELD_BY_REF_KEY)) {
         const base = (baseline[refKey] ?? "").trim();
         const next = (draft[refKey] ?? "").trim();
         if (base !== next) {
             patch[personField] = next;
+        }
+    }
+    for (const refKey of Object.keys(draft)) {
+        if (!isLayoutRuntimePersonAddressRefKey(refKey)) continue;
+        const valueKey = personAddressValueKeyFromLayoutRefKey(refKey);
+        if (!valueKey) continue;
+        const base = (baseline[refKey] ?? "").trim();
+        const next = (draft[refKey] ?? "").trim();
+        if (base !== next) {
+            patch[valueKey] = next;
         }
     }
     return patch;

@@ -109,31 +109,47 @@ function refKeyToCatalogField(refKey: string): LayoutCatalogField | null {
     };
 }
 
+import { contactRoleFieldRefs, type LayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
+
+function contactRolePickerRefKeys(role: LayoutEditorContactRole): string[] {
+    const refs = contactRoleFieldRefs(role);
+    return [
+        refs.name,
+        refs.email,
+        refs.phone,
+        refs.addressLine1,
+        refs.addressLine2,
+        refs.city,
+        refs.state,
+        refs.postalCode,
+    ];
+}
+
 /** Entity-first field picker groups constrained to opportunity drawer allowed refKeys. */
 const CONTACT_ROLE_PICKER_GROUP_DEFS = [
     {
         entityKey: "contact_primary",
         entityLabel: "Primary Contact",
         groupDescription: "Uses the linked primary contact on this lead",
-        refKeys: ["person.primary_contact_name", "person.primary_email", "person.primary_phone"],
+        refKeys: contactRolePickerRefKeys("primary"),
     },
     {
         entityKey: "contact_parents",
         entityLabel: "Additional Parents",
         groupDescription: "Parent/guardian relationships excluding the primary contact",
-        refKeys: ["person.secondary_contact_name", "person.secondary_email", "person.secondary_phone"],
+        refKeys: contactRolePickerRefKeys("parents"),
     },
     {
         entityKey: "contact_billing",
         entityLabel: "Billing/Payer Contact",
         groupDescription: "Uses the linked billing / payer contact on this lead",
-        refKeys: ["person.billing_contact_name", "person.billing_contact_email", "person.billing_contact_phone"],
+        refKeys: contactRolePickerRefKeys("billing"),
     },
     {
         entityKey: "contact_emergency",
         entityLabel: "Emergency Contact",
         groupDescription: "Uses the linked emergency contact on this lead",
-        refKeys: ["person.emergency_contact_name", "person.emergency_contact_email", "person.emergency_contact_phone"],
+        refKeys: contactRolePickerRefKeys("emergency"),
     },
 ] as const;
 

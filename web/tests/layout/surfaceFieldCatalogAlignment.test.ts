@@ -18,6 +18,11 @@ import {
 import { validateLayoutDocForSurface } from "@/lib/layout/validateLayoutDocForSurface";
 import { tryAddFieldRefToSection } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS } from "@/lib/layout/runtime/resolveHouseholdAddressFieldValues";
+import { PERSON_ADDRESS_LAYOUT_REF_KEYS } from "@/lib/layout/personDrawerAddressLayoutRefs";
+import { contactRoleFieldRefs } from "@/lib/layout/layoutEditorContactRoles";
+import { isLayoutRuntimeEditableRefKeySupported } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import { layoutRuntimeFieldReadOnlyReason } from "@/lib/layout/runtime/layoutRuntimeFieldReadOnlyReason";
+import { CHILDCARE_CATALOG_BY_REFKEY } from "@/lib/layout/childcareLayoutFieldCatalog";
 
 function flatRefKeys(groups: { fields: { refKey: string }[] }[]): string[] {
     return groups.flatMap((g) => g.fields.map((f) => f.refKey));
@@ -34,6 +39,54 @@ describe("drawer surface field picker / validator alignment", () => {
         const refs = flatRefKeys(buildOpportunityDrawerEditorFieldPickerGroups());
         for (const refKey of refs) {
             expect(isAllowedOpportunityDrawerFieldRefKey(refKey), refKey).toBe(true);
+        }
+    });
+
+    it("opportunity primary contact picker exposes person address refs and not site address", () => {
+        const refs = flatRefKeys(buildOpportunityDrawerEditorFieldPickerGroups());
+        const primaryRefs = contactRoleFieldRefs("primary");
+        expect(refs).toContain(primaryRefs.addressLine1);
+        expect(refs).toContain(primaryRefs.city);
+        expect(refs).not.toContain("location.address1");
+        expect(refs).not.toContain("person.address_line1");
+    });
+
+    it("opportunity secondary contact picker exposes role-scoped address refs only", () => {
+        const refs = flatRefKeys(buildOpportunityDrawerEditorFieldPickerGroups());
+        const secondaryRefs = contactRoleFieldRefs("parents");
+        expect(refs).toContain(secondaryRefs.addressLine1);
+        expect(refs).toContain(secondaryRefs.postalCode);
+    });
+
+    it("person drawer picker exposes person address refs allowed by validator", () => {
+        const refs = flatRefKeys(buildPersonDrawerEditorFieldPickerGroups());
+        for (const refKey of PERSON_ADDRESS_LAYOUT_REF_KEYS) {
+            expect(refs, refKey).toContain(refKey);
+            expect(isAllowedPersonDrawerFieldRefKey(refKey), refKey).toBe(true);
+        }
+    });
+
+    it("household address refs remain separate and clearly labeled in catalog", () => {
+        expect(CHILDCARE_CATALOG_BY_REFKEY.get("location.household_address_line1")?.pickerLabel).toBe(
+            "Household address line 1",
+        );
+        expect(CHILDCARE_CATALOG_BY_REFKEY.get("location.address1")?.pickerLabel).toBe("Site address line 1");
+        const refs = flatRefKeys(buildPersonDrawerEditorFieldPickerGroups());
+        expect(refs).toContain("location.household_address_line1");
+        expect(refs).not.toContain("location.address1");
+    });
+
+    it("person address saves on person drawer; contact role address stays read-only on opportunity", () => {
+        expect(isLayoutRuntimeEditableRefKeySupported("person.address_line1")).toBe(true);
+        expect(isLayoutRuntimeEditableRefKeySupported("person.primary_address_line1")).toBe(false);
+        expect(layoutRuntimeFieldReadOnlyReason("person.primary_address_line1")).toContain("read-only");
+        expect(layoutRuntimeFieldReadOnlyReason("location.household_address")).toContain("Household address");
+    });
+
+    it("every person picker ref passes surface validator", () => {
+        const refs = flatRefKeys(buildPersonDrawerEditorFieldPickerGroups());
+        for (const refKey of refs) {
+            expect(isAllowedPersonDrawerFieldRefKey(refKey), refKey).toBe(true);
         }
     });
 

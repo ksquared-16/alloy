@@ -113,7 +113,8 @@ describe("childcare starter field catalog manifest", () => {
         expect(isChildcareHiddenRefKey("person.person_number")).toBe(true);
         expect(isChildcareHiddenRefKey("child_inquiry.program")).toBe(true);
         expect(isChildcareHiddenRefKey("person.relationship_to_child")).toBe(true);
-        expect(isChildcareHiddenRefKey("person.address_line1")).toBe(true);
+        expect(isChildcareCatalogRefKey("person.address_line1", "person")).toBe(true);
+        expect(isChildcareCatalogRefKey("person.address_line1", "opportunities")).toBe(false);
         expect(isChildcareCatalogRefKey("person.secondary_phone", "opportunities")).toBe(false);
         expect(isChildcareHiddenRefKey("inquiry_child.location_id")).toBe(false);
         expect(isChildcareCatalogRefKey("inquiry_child.location_id")).toBe(true);
@@ -211,9 +212,19 @@ describe("childcare picker output", () => {
         }
     });
 
-    it("does not offer parent address or relationship_to_child", () => {
+    it("offers person address on person anchor only, not as generic lead contact field", () => {
+        const leadRefs = groupsFlatRefKeys(leadPickerFromCuratedFallback());
+        expect(leadRefs).not.toContain("person.address_line1");
+        expect(leadRefs).not.toContain("location.address1");
+
+        const personGroups = organizeChildcarePickerGroups([], "person");
+        const personRefs = personGroups.flatMap((g) => g.fields.map((f) => f.refKey));
+        expect(personRefs).toContain("person.address_line1");
+        expect(personRefs).toContain("person.city");
+    });
+
+    it("does not offer relationship_to_child or legacy secondary phone", () => {
         const refKeys = groupsFlatRefKeys(leadPickerFromCuratedFallback());
-        expect(refKeys).not.toContain("person.address_line1");
         expect(refKeys).not.toContain("person.relationship_to_child");
         expect(refKeys).not.toContain("person.secondary_phone");
     });

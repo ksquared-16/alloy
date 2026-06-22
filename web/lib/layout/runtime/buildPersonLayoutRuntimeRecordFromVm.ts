@@ -6,6 +6,7 @@ import type { PersonEnrollmentMirrorRow, PersonHouseholdChildLinkRow, PersonHous
 import { mergeCanonicalOpportunityLayoutRuntimeChildRows } from "./mergeCanonicalOpportunityLayoutRuntimeChildRows";
 import { isOpaqueIdValue, pickEntityId, type ProofRuntimeRecord } from "./proofRecordContext";
 import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
+import { resolvePersonAddressFieldValues } from "./resolvePersonAddressFieldValues";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -177,8 +178,9 @@ export function buildPersonLayoutRuntimeRecordFromVm(input: {
     const phone = pickDisplay(vmRecord.phone, vmRecord["person.primary_phone"], vmRecord._primary_phone) ?? "";
     const email = pickDisplay(vmRecord.email, vmRecord["person.primary_email"], vmRecord._primary_email) ?? "";
     const relationship = resolvePersonRelationship(vmRecord, personId) ?? "";
-    const addressFields = resolveHouseholdAddressFieldValues(vmRecord);
-    const address = addressFields["location.household_address"] ?? "";
+    const householdAddressFields = resolveHouseholdAddressFieldValues(vmRecord);
+    const personAddressFields = resolvePersonAddressFieldValues(vmRecord);
+    const address = householdAddressFields["location.household_address"] ?? "";
     const childRows = resolvePersonLayoutRuntimeChildRows(vmRecord);
 
     const overviewData: Record<string, unknown> = {
@@ -210,7 +212,8 @@ export function buildPersonLayoutRuntimeRecordFromVm(input: {
         _household_name: householdName,
         household_name: householdName,
         "location.household_address": address,
-        ...addressFields,
+        ...householdAddressFields,
+        ...personAddressFields,
         _overview_data: overviewData,
         ...(vmRecord._inquiry_summary_tasks ? { _inquiry_summary_tasks: vmRecord._inquiry_summary_tasks } : {}),
     };

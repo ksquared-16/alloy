@@ -25,9 +25,13 @@ import {
 import { HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS } from "@/lib/layout/runtime/resolveHouseholdAddressFieldValues";
 import type { LayoutPickerAnchorEntity } from "@/lib/layout/platformFieldResolutionManifest";
 import {
-    LAYOUT_EDITOR_CONTACT_ROLES,
     contactRoleFieldRefs,
+    LAYOUT_EDITOR_CONTACT_ROLES,
 } from "@/lib/layout/layoutEditorContactRoles";
+import {
+    PERSON_ADDRESS_LAYOUT_REF_KEYS,
+    CONTACT_ROLE_ADDRESS_LAYOUT_REF_KEYS,
+} from "@/lib/layout/personDrawerAddressLayoutRefs";
 import {
     LAYOUT_ITEM_KINDS,
     type LayoutDoc,
@@ -230,10 +234,19 @@ export const OPPORTUNITY_DRAWER_CONTACT_REPEATER_FIELD_REFS = [
     "person.secondary_email",
 ] as const;
 
-/** Contact block role cards — all role-specific name/email/phone refs (Phase 5.15 certification). */
+/** Contact block role cards — all role-specific name/email/phone/address refs (Phase 5.15 certification). */
 export const OPPORTUNITY_DRAWER_CONTACT_BLOCK_FIELD_REFS = LAYOUT_EDITOR_CONTACT_ROLES.flatMap((role) => {
     const refs = contactRoleFieldRefs(role);
-    return [refs.name, refs.email, refs.phone];
+    return [
+        refs.name,
+        refs.email,
+        refs.phone,
+        refs.addressLine1,
+        refs.addressLine2,
+        refs.city,
+        refs.state,
+        refs.postalCode,
+    ];
 });
 
 /** Related-list / structural item refKeys allowed outside field catalog. */
@@ -311,6 +324,8 @@ function buildOpportunityDrawerAllowedFieldRefKeys(): readonly string[] {
         ...baseline,
         ...catalog,
         ...HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS,
+        ...PERSON_ADDRESS_LAYOUT_REF_KEYS,
+        ...CONTACT_ROLE_ADDRESS_LAYOUT_REF_KEYS,
         ...OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS,
         ...OPPORTUNITY_DRAWER_CONTACT_REPEATER_FIELD_REFS,
         ...OPPORTUNITY_DRAWER_CONTACT_BLOCK_FIELD_REFS,
@@ -327,8 +342,9 @@ function buildPersonDrawerAllowedFieldRefKeys(): readonly string[] {
         ...baseline,
         ...catalog,
         ...HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS,
-        ...PERSON_DRAWER_STRUCTURAL_REF_KEYS,
+        ...PERSON_ADDRESS_LAYOUT_REF_KEYS,
         ...OPPORTUNITY_DRAWER_CONTACT_BLOCK_FIELD_REFS,
+        ...PERSON_DRAWER_STRUCTURAL_REF_KEYS,
     ]);
     return [...merged].sort();
 }

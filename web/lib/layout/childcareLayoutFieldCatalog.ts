@@ -175,6 +175,7 @@ function parent(
     sortOrder: number,
     defFieldKey: string,
     anchors: LayoutPickerAnchorEntity[] = ["opportunities", "person", "child"],
+    opts?: { storageColumn?: string; storageTable?: string },
 ): ChildcareCatalogFieldEntry {
     return {
         refKey,
@@ -184,8 +185,8 @@ function parent(
         sortOrder,
         defEntityType: "person",
         defFieldKey,
-        storageTable: "persons",
-        storageColumn: defFieldKey,
+        storageTable: opts?.storageTable ?? "persons",
+        storageColumn: opts?.storageColumn ?? defFieldKey,
         layoutAnchors: anchors,
     };
 }
@@ -355,15 +356,35 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     parentPrimaryContactProjection("person.primary_contact_name", "Primary contact name", "text", 5, "display_name"),
     parentPrimaryContactProjection("person.primary_email", "Primary contact email", "text", 6, "email"),
     parentPrimaryContactProjection("person.primary_phone", "Primary contact phone", "phone", 7, "phone"),
+    parentPrimaryContactProjection("person.primary_address_line1", "Primary contact address line 1", "text", 7.1, "field_values.address_line1"),
+    parentPrimaryContactProjection("person.primary_address_line2", "Primary contact address line 2", "text", 7.2, "field_values.address_line2"),
+    parentPrimaryContactProjection("person.primary_address_city", "Primary contact city", "text", 7.3, "field_values.city"),
+    parentPrimaryContactProjection("person.primary_address_state", "Primary contact state", "text", 7.4, "field_values.state"),
+    parentPrimaryContactProjection("person.primary_address_postal_code", "Primary contact ZIP code", "text", 7.5, "field_values.postal_code"),
     parentRoleContactProjection("secondary", "person.secondary_contact_name", "Secondary contact name", "text", 8, "display_name"),
     parentRoleContactProjection("secondary", "person.secondary_email", "Secondary contact email", "text", 9, "email"),
     parentRoleContactProjection("secondary", "person.secondary_phone", "Secondary contact phone", "phone", 10, "phone"),
+    parentRoleContactProjection("secondary", "person.secondary_address_line1", "Secondary contact address line 1", "text", 10.1, "field_values.address_line1"),
+    parentRoleContactProjection("secondary", "person.secondary_address_line2", "Secondary contact address line 2", "text", 10.2, "field_values.address_line2"),
+    parentRoleContactProjection("secondary", "person.secondary_address_city", "Secondary contact city", "text", 10.3, "field_values.city"),
+    parentRoleContactProjection("secondary", "person.secondary_address_state", "Secondary contact state", "text", 10.4, "field_values.state"),
+    parentRoleContactProjection("secondary", "person.secondary_address_postal_code", "Secondary contact ZIP code", "text", 10.5, "field_values.postal_code"),
     parentRoleContactProjection("emergency", "person.emergency_contact_name", "Emergency contact name", "text", 11, "display_name"),
     parentRoleContactProjection("emergency", "person.emergency_contact_email", "Emergency contact email", "text", 12, "email"),
     parentRoleContactProjection("emergency", "person.emergency_contact_phone", "Emergency contact phone", "phone", 13, "phone"),
+    parentRoleContactProjection("emergency", "person.emergency_address_line1", "Emergency contact address line 1", "text", 13.1, "field_values.address_line1"),
+    parentRoleContactProjection("emergency", "person.emergency_address_line2", "Emergency contact address line 2", "text", 13.2, "field_values.address_line2"),
+    parentRoleContactProjection("emergency", "person.emergency_address_city", "Emergency contact city", "text", 13.3, "field_values.city"),
+    parentRoleContactProjection("emergency", "person.emergency_address_state", "Emergency contact state", "text", 13.4, "field_values.state"),
+    parentRoleContactProjection("emergency", "person.emergency_address_postal_code", "Emergency contact ZIP code", "text", 13.5, "field_values.postal_code"),
     parentRoleContactProjection("billing", "person.billing_contact_name", "Billing contact name", "text", 14, "display_name"),
     parentRoleContactProjection("billing", "person.billing_contact_email", "Billing contact email", "text", 15, "email"),
     parentRoleContactProjection("billing", "person.billing_contact_phone", "Billing contact phone", "phone", 16, "phone"),
+    parentRoleContactProjection("billing", "person.billing_address_line1", "Billing contact address line 1", "text", 16.1, "field_values.address_line1"),
+    parentRoleContactProjection("billing", "person.billing_address_line2", "Billing contact address line 2", "text", 16.2, "field_values.address_line2"),
+    parentRoleContactProjection("billing", "person.billing_address_city", "Billing contact city", "text", 16.3, "field_values.city"),
+    parentRoleContactProjection("billing", "person.billing_address_state", "Billing contact state", "text", 16.4, "field_values.state"),
+    parentRoleContactProjection("billing", "person.billing_address_postal_code", "Billing contact ZIP code", "text", 16.5, "field_values.postal_code"),
 
     // Parent / Contact — persons native + config
     parent("person.first_name", "First name", "text", 10, "first_name"),
@@ -377,6 +398,26 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     parent("person.email_opt_in", "Email opt-in", "boolean", 100, "email_opt_in"),
     parent("person.employer", "Employer", "text", 110, "employer"),
     parent("person.contact_notes", "Notes", "text", 120, "contact_notes"),
+    parent("person.address_line1", "Address line 1", "text", 130, "address_line1", ["person"], {
+        storageTable: "field_values",
+        storageColumn: "address_line1",
+    }),
+    parent("person.address_line2", "Address line 2", "text", 131, "address_line2", ["person"], {
+        storageTable: "field_values",
+        storageColumn: "address_line2",
+    }),
+    parent("person.city", "City", "text", 132, "city", ["person"], {
+        storageTable: "field_values",
+        storageColumn: "city",
+    }),
+    parent("person.state", "State", "text", 133, "state", ["person"], {
+        storageTable: "field_values",
+        storageColumn: "state",
+    }),
+    parent("person.postal_code", "ZIP code", "text", 134, "postal_code", ["person"], {
+        storageTable: "field_values",
+        storageColumn: "postal_code",
+    }),
 
     // Household — customers native + config (no relationship duplicates)
     household("customer.name", "Household name", "text", 10, "name"),
@@ -386,28 +427,28 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     household("location.household_address", "Household address", "text", 80, "formatted_address", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_line1", "Address line 1", "text", 81, "address_line1", {
+    household("location.household_address_line1", "Household address line 1", "text", 81, "address_line1", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_line2", "Address line 2", "text", 82, "address_line2", {
+    household("location.household_address_line2", "Household address line 2", "text", 82, "address_line2", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_city", "City", "text", 83, "city", {
+    household("location.household_address_city", "Household city", "text", 83, "city", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_state", "State", "text", 84, "state", {
+    household("location.household_address_state", "Household state", "text", 84, "state", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_postal_code", "ZIP code", "text", 85, "postal_code", {
+    household("location.household_address_postal_code", "Household ZIP code", "text", 85, "postal_code", {
         anchors: ["opportunities", "person", "child"],
     }),
 
-    // Location — native columns + metadata config (20260529160000)
-    locationField("location.label", "Location name", "text", 10, { storageColumn: "label" }),
-    locationField("location.address1", "Address line 1", "text", 20, { storageColumn: "address1" }),
-    locationField("location.city", "City", "text", 25, { storageColumn: "city" }),
-    locationField("location.state", "State", "text", 28, { storageColumn: "state" }),
-    locationField("location.postal_code", "ZIP code", "text", 30, { storageColumn: "postal_code" }),
+    // Site / campus — native location columns (not contact or household address)
+    locationField("location.label", "Site name", "text", 10, { storageColumn: "label" }),
+    locationField("location.address1", "Site address line 1", "text", 20, { storageColumn: "address1" }),
+    locationField("location.city", "Site city", "text", 25, { storageColumn: "city" }),
+    locationField("location.state", "Site state", "text", 28, { storageColumn: "state" }),
+    locationField("location.postal_code", "Site ZIP code", "text", 30, { storageColumn: "postal_code" }),
     locationField("location.site_phone", "Phone", "phone", 40, { defFieldKey: "site_phone", storageColumn: "site_phone" }),
     locationField("location.director_name", "Director", "text", 50, { defFieldKey: "director_name", storageColumn: "director_name" }),
     locationField("location.capacity", "Capacity", "number", 60, { defFieldKey: "capacity", storageColumn: "capacity" }),
@@ -417,7 +458,6 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
 
 /** RefKeys removed from picker — wrong storage, legacy person-bridge, or deferred to FC-3. */
 export const CHILDCARE_REMOVED_FROM_PICKER_REF_KEYS = [
-    "person.address_line1",
     "person.relationship_to_child",
     "person.secondary_phone",
     "person.special_instructions",
