@@ -50,7 +50,7 @@ export function useLayoutRuntimeBlockEdit(): LayoutRuntimeBlockEditContextValue 
 }
 
 export function layoutRuntimeBlockAllowsFieldEdit(ctx: LayoutRuntimeBlockEditContextValue | null): boolean {
-    if (!ctx) return true;
+    if (!ctx) return false;
     if (ctx.editMode === "display_only") return false;
     return ctx.blockEditing;
 }

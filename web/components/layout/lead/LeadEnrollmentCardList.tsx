@@ -2,7 +2,6 @@
 
 import { useCallback, useState } from "react";
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
-import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import DrawerHouseholdChildLinkAvatar from "@/components/layout/DrawerHouseholdChildLinkAvatar";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
@@ -22,9 +21,8 @@ import {
     readLayoutEditorDisplayConfig,
     resolveLayoutCollectionColumnLinkAdornment,
 } from "@/lib/layout/layoutEditorDisplayConfig";
-import { layoutRuntimeFieldIsEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import { layoutRuntimeCollectionColumnIsInlineEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
-    enrollmentGridColumnIsEditable,
     readEnrollmentGridCellRole,
 } from "@/lib/layout/runtime/enrollmentGridPresentation";
 import { layoutRuntimeEnrollmentPlacementDependentValueReader } from "@/lib/layout/runtime/resolveLayoutRuntimeEnrollmentPlacementContext";
@@ -64,6 +62,8 @@ export default function LeadEnrollmentCardList({
     const edit = useLayoutRuntimeDrawerEdit();
     const blockEdit = useLayoutRuntimeBlockEdit();
     const blockEditingActive = Boolean(blockEdit && layoutRuntimeBlockAllowsFieldEdit(blockEdit));
+    const useBlockHeaderEdit =
+        blockEdit?.editMode === "edit_button" || blockEdit?.editMode === "inline_editable";
     const readFirst = !blockEditingActive;
     const showAvatar = rowTemplate?.showAvatar !== false;
     const showStatusPill = rowTemplate?.showStatusPill !== false;
@@ -90,15 +90,7 @@ export default function LeadEnrollmentCardList({
 
     const rowCanEdit = (rowKey: string, row: ProofRuntimeRecord, index: number) => {
         if (canMutate === false || !edit) return false;
-        return columns.some((col) => {
-            const editableRefKey = normalizeRefKeyOnRead(col.refKey);
-            return (
-                layoutRuntimeFieldIsEditable(
-                    { refKey: editableRefKey, editable: col.editable ?? true },
-                    "production",
-                ) && enrollmentGridColumnIsEditable(col)
-            );
-        });
+        return columns.some((col) => layoutRuntimeCollectionColumnIsInlineEditable(col, "production"));
     };
 
     const configuredRowLayout = resolveChildRowTemplateRowLayout(item);
@@ -163,7 +155,7 @@ export default function LeadEnrollmentCardList({
                         const isEditing =
                             blockEditingActive
                             || (readFirst && editingRowKeys.has(rowKey));
-                        const showEdit = !blockEditingActive && readFirst && rowCanEdit(rowKey, row, index);
+                        const showEdit = !useBlockHeaderEdit && !blockEditingActive && readFirst && rowCanEdit(rowKey, row, index);
                         const nameCol = nameColumn!;
                         const nameLinkAdornment = resolveLayoutCollectionColumnLinkAdornment(nameCol);
                         const nameSynthetic: LayoutItem = {
@@ -234,7 +226,7 @@ export default function LeadEnrollmentCardList({
                                     </div>
                                     {isEditing && edit ?
                                         <div className="adminv2-drawer-enrollment-field-grid mt-2 border-t border-alloy-stone/8 pt-2">
-                                            {columns.filter((col) => enrollmentGridColumnIsEditable(col)).map((col) => (
+                                            {columns.filter((col) => layoutRuntimeCollectionColumnIsInlineEditable(col, "production")).map((col) => (
                                                 <label key={col.refKey} className="flex min-w-0 flex-col gap-0.5">
                                                     <span className={PRESENTATION_LABEL}>{col.label}</span>
                                                     <LayoutRuntimeFieldInput
@@ -328,7 +320,7 @@ export default function LeadEnrollmentCardList({
                                 {isEditing && edit ?
                                     <div className="adminv2-drawer-enrollment-field-grid mt-2 border-t border-alloy-stone/8 pt-2">
                                         {columns
-                                            .filter((col) => col !== nameColumn && enrollmentGridColumnIsEditable(col))
+                                            .filter((col) => col !== nameColumn && layoutRuntimeCollectionColumnIsInlineEditable(col, "production"))
                                             .map((col) => (
                                                 <label key={col.refKey} className="flex min-w-0 flex-col gap-0.5">
                                                     <span className={PRESENTATION_LABEL}>

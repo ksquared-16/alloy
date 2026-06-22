@@ -5,6 +5,10 @@
 
 import type { LayoutCollectionColumn, LayoutCondition, LayoutItem } from "@/lib/layout/layoutV2";
 import {
+    isLayoutRuntimeEditableRefKeySupported,
+    resolveLayoutRuntimeEditableRefKey,
+} from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import {
     LAYOUT_EDITOR_CONTACT_ROLE_METADATA_KEY,
     readLayoutEditorContactRole,
     type LayoutEditorContactRole,
@@ -107,14 +111,24 @@ function isBlockVisibilityRule(v: string): v is LayoutEditorBlockVisibilityRule 
     return (LAYOUT_EDITOR_BLOCK_VISIBILITY_RULES as readonly string[]).includes(v);
 }
 
-function relatedListColumnIsEditable(col: LayoutCollectionColumn): boolean {
-    return col.editable === true;
+function layoutFieldHasRuntimeInlineEdit(item: Pick<LayoutItem, "kind" | "editable" | "refKey">): boolean {
+    if (item.kind !== "field" || item.editable !== true) return false;
+    const refKey = item.refKey?.trim() ?? "";
+    if (!refKey) return false;
+    return isLayoutRuntimeEditableRefKeySupported(resolveLayoutRuntimeEditableRefKey(refKey));
+}
+
+function relatedListColumnHasRuntimeInlineEdit(col: LayoutCollectionColumn): boolean {
+    if (col.editable !== true) return false;
+    const refKey = col.refKey?.trim() ?? "";
+    if (!refKey) return false;
+    return isLayoutRuntimeEditableRefKeySupported(resolveLayoutRuntimeEditableRefKey(refKey));
 }
 
 function layoutItemHasEditableDescendants(item: LayoutItem): boolean {
-    if (item.kind === "field") return item.editable === true;
+    if (item.kind === "field") return layoutFieldHasRuntimeInlineEdit(item);
     if (item.kind === "related_list") {
-        return (item.columns ?? []).some(relatedListColumnIsEditable);
+        return (item.columns ?? []).some(relatedListColumnHasRuntimeInlineEdit);
     }
     if (item.kind === "field_group") {
         for (const row of item.rows ?? []) {
@@ -131,13 +145,17 @@ function layoutItemHasEditableDescendants(item: LayoutItem): boolean {
     return false;
 }
 
-/** Runtime edit affordance — default edit_button when block contains editable fields. */
+/** Runtime edit affordance — inline-editable descendants win over default display_only block metadata. */
 export function resolveLayoutRuntimeBlockEditMode(
     item: LayoutItem,
     blockConfig: LayoutEditorBlockConfig,
 ): LayoutEditorBlockEditMode {
-    if (blockConfig.editMode) return blockConfig.editMode;
-    return layoutItemHasEditableDescendants(item) ? "edit_button" : "display_only";
+    const hasEditableDescendants = layoutItemHasEditableDescendants(item);
+    if (!hasEditableDescendants) return "display_only";
+    if (blockConfig.editMode === "inline_editable" || blockConfig.editMode === "edit_button") {
+        return blockConfig.editMode;
+    }
+    return "edit_button";
 }
 
 export function readLayoutEditorBlockConfig(metadata: Record<string, unknown> | undefined): LayoutEditorBlockConfig {

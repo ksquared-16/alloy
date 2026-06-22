@@ -2,7 +2,8 @@
  * Generic layout-runtime field editability gate.
  */
 
-import type { LayoutItem } from "@/lib/layout/layoutV2";
+import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
+import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import { isLayoutRuntimeChildEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeChildFieldEdit";
 import { isLayoutRuntimeOpportunityNativeRefKey } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
@@ -46,14 +47,15 @@ export function resolveLayoutRuntimeEditableFieldFallback(
     }
 
     if (editableRefKey === LAYOUT_RUNTIME_OPPORTUNITY_LOCATION_EDIT_REF) {
-        return (
+        const stored =
             String(
                 record[LAYOUT_RUNTIME_OPPORTUNITY_LOCATION_EDIT_REF]
                 ?? record.location_id
                 ?? record._location_id
                 ?? "",
-            ).trim() || displayFallback
-        );
+            ).trim();
+        if (stored && isUuidLike(stored)) return stored;
+        return "";
     }
 
     const control = resolveLayoutRuntimeFieldControl(editableRefKey);
@@ -74,5 +76,14 @@ export function layoutRuntimeFieldIsEditable(
     if (item.editable !== true) return false;
     const refKey = item.refKey?.trim() ?? "";
     if (!refKey) return false;
-    return isLayoutRuntimeEditableRefKeySupported(refKey);
+    return isLayoutRuntimeEditableRefKeySupported(resolveLayoutRuntimeEditableRefKey(refKey));
+}
+
+/** Whether a related-list column is configured inline-editable with a supported save adapter. */
+export function layoutRuntimeCollectionColumnIsInlineEditable(
+    col: Pick<LayoutCollectionColumn, "editable" | "refKey">,
+    variant: LayoutRuntimeSurfaceVariant,
+): boolean {
+    if (col.editable !== true) return false;
+    return layoutRuntimeFieldIsEditable({ editable: true, refKey: col.refKey }, variant);
 }

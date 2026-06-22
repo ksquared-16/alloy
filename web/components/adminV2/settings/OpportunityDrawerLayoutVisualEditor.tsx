@@ -278,6 +278,13 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         }
     }, [record, dirty, workingName, workingDoc, onLayoutIdChange]);
 
+    const layoutVersionHint = useMemo(() => {
+        if (!record) return "";
+        return record.status === "published" ?
+                formatLayoutPublishedTitleWithVersion(workingName, record.version)
+            :   formatLayoutDraftTitleWithVersion(workingName, record.version);
+    }, [record, workingName]);
+
     if (forceAdvanced) {
         return (
             <div className="space-y-3" data-testid="opportunity-drawer-visual-editor-fallback">
@@ -307,13 +314,6 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             </div>
         );
     }
-
-    const layoutVersionHint = useMemo(() => {
-        if (!record) return "";
-        return record.status === "published" ?
-                formatLayoutPublishedTitleWithVersion(workingName, record.version)
-            :   formatLayoutDraftTitleWithVersion(workingName, record.version);
-    }, [record, workingName]);
 
     const isBuild = editorMode === "build";
 

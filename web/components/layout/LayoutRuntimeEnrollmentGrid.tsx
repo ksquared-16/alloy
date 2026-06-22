@@ -2,7 +2,6 @@
 
 import { useCallback, useMemo, useState } from "react";
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
-import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import {
@@ -14,9 +13,8 @@ import LayoutRuntimeFieldInput, {
 } from "@/components/layout/LayoutRuntimeFieldInput";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import { useLayoutRuntimeCompositionHints } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
-import { layoutRuntimeFieldIsEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import { layoutRuntimeCollectionColumnIsInlineEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
-    enrollmentGridColumnIsEditable,
     enrollmentRosterReadFirstActive,
     readEnrollmentGridCellRole,
     type EnrollmentGridCellRole,
@@ -72,6 +70,7 @@ function EnrollmentGridCell({
     onAdornmentAction?: AdornmentActionHandler;
 }) {
     const edit = useLayoutRuntimeDrawerEdit();
+    const blockEdit = useLayoutRuntimeBlockEdit();
     const synthetic: LayoutItem = {
         id: col.refKey,
         kind: "field",
@@ -84,16 +83,15 @@ function EnrollmentGridCell({
         renderHint: col.renderHint,
         template: col.template,
     });
-    const editableRefKey = normalizeRefKeyOnRead(col.refKey);
     const fieldEditable =
         canMutate !== false
-        && layoutRuntimeFieldIsEditable(
-            { ...synthetic, refKey: editableRefKey, editable: col.editable ?? enrollmentGridColumnIsEditable(col) },
-            "production",
-        )
-        && Boolean(edit)
-        && enrollmentGridColumnIsEditable(col);
-    const showInlineEdit = isRowEditing && fieldEditable;
+        && layoutRuntimeCollectionColumnIsInlineEditable(col, "production")
+        && Boolean(edit);
+    const showInlineEdit =
+        fieldEditable
+        && (blockEdit && layoutRuntimeBlockAllowsFieldEdit(blockEdit) ?
+            true
+        :   isRowEditing);
     const editValue =
         showInlineEdit && edit ?
             edit.getFieldValue(col.refKey, resolved.display ?? "", rowKey)
@@ -151,7 +149,7 @@ function EnrollmentGridCell({
 
 function rowHasEditableFields(columns: LayoutCollectionColumn[], canMutate?: boolean): boolean {
     if (canMutate === false) return false;
-    return columns.some((col) => enrollmentGridColumnIsEditable(col));
+    return columns.some((col) => layoutRuntimeCollectionColumnIsInlineEditable(col, "production"));
 }
 
 /**
@@ -169,10 +167,12 @@ export default function LayoutRuntimeEnrollmentGrid({
     const composition = useLayoutRuntimeCompositionHints();
     const blockEdit = useLayoutRuntimeBlockEdit();
     const blockEditingActive = Boolean(blockEdit && layoutRuntimeBlockAllowsFieldEdit(blockEdit));
+    const useBlockHeaderEdit =
+        blockEdit?.editMode === "edit_button" || blockEdit?.editMode === "inline_editable";
     const readFirst =
         !blockEditingActive && enrollmentRosterReadFirstActive(item, composition.enrollmentRosterReadFirst);
     const [editingRowKeys, setEditingRowKeys] = useState<Set<string>>(() => new Set());
-    const showRowActions = readFirst && rowHasEditableFields(columns, canMutate);
+    const showRowActions = !useBlockHeaderEdit && readFirst && rowHasEditableFields(columns, canMutate);
 
     const gridTemplateColumns = useMemo(() => {
         if (columns.length === 0) return "1fr";

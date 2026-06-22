@@ -33,6 +33,7 @@ import { applyStageTransitionReconciliation } from "@/lib/lifecycle/applyStageTr
 import { preflightStageTransitionReconciliation } from "@/lib/lifecycle/preflightStageTransitionReconciliation";
 import { STAGE_TRANSITION_RECONCILIATION_REQUIRED_ERROR } from "@/lib/lifecycle/stageTransitionReconciliationTypes";
 import { validateStageTransitionReconciliationPayload } from "@/lib/lifecycle/validateStageTransitionReconciliationPayload";
+import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 
 /**
  * PATCH allowlist intentionally excludes identity FKs (`primary_contact_id`, `primary_person_id`).
@@ -70,6 +71,13 @@ const PIPELINE_ONLY_KEYS = new Set([
     "clear_quote_override",
     "quote_discount_selection",
 ]);
+
+function logOpportunityPatchRejected(
+    reason: string,
+    detail: Record<string, unknown>,
+): void {
+    console.warn("[ADMIN_PATCH_OPPORTUNITY] rejected", { reason, ...detail });
+}
 
 export async function PATCH(
     request: NextRequest,
@@ -146,6 +154,11 @@ export async function PATCH(
             layoutConfig: opportunityLayoutConfig,
         });
         if (!policyCheck.ok) {
+            logOpportunityPatchRejected("field_policy", {
+                opportunity_id: id,
+                body_keys: Object.keys(body),
+                violations: policyCheck.violations,
+            });
             return NextResponse.json(fieldPolicyValidationResponse(policyCheck.violations), { status: 400 });
         }
 
@@ -325,10 +338,44 @@ export async function PATCH(
             }
         }
 
+        if (updates.location_id != null && updates.location_id !== "") {
+            const locationId = String(updates.location_id).trim();
+            if (!isUuidLike(locationId)) {
+                logOpportunityPatchRejected("invalid_location_id_format", {
+                    opportunity_id: id,
+                    body_keys: Object.keys(body),
+                    location_id: locationId,
+                    update_keys: Object.keys(updates),
+                });
+                return NextResponse.json({ error: "Invalid location_id" }, { status: 400 });
+            }
+            const { data: locationRow } = await supabase
+                .from("locations")
+                .select("id")
+                .eq("id", locationId)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            if (!locationRow?.id) {
+                logOpportunityPatchRejected("location_not_in_org", {
+                    opportunity_id: id,
+                    body_keys: Object.keys(body),
+                    location_id: locationId,
+                });
+                return NextResponse.json({ error: "Location not found" }, { status: 400 });
+            }
+            updates.location_id = locationId;
+        }
+
         const hasNativeUpdates = Object.keys(updates).length > 0;
         const hasCustomFieldUpdates = opportunityBodyHasCustomFieldUpdates(body, PIPELINE_ONLY_KEYS);
 
         if (!hasNativeUpdates && !hasCustomFieldUpdates) {
+            logOpportunityPatchRejected("no_allowed_fields", {
+                opportunity_id: id,
+                body_keys: Object.keys(body),
+                allowed_keys: [...ALLOWED_KEYS],
+                update_keys: Object.keys(updates),
+            });
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
 
@@ -345,7 +392,15 @@ export async function PATCH(
                 .select()
                 .single();
 
-            if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+            if (error) {
+                logOpportunityPatchRejected("supabase_update", {
+                    opportunity_id: id,
+                    body_keys: Object.keys(body),
+                    update_keys: Object.keys(updates),
+                    error: error.message,
+                });
+                return NextResponse.json({ error: error.message }, { status: 400 });
+            }
             data = updated as Record<string, unknown>;
         } else {
             const { data: existingRowOut, error: readErr } = await supabase

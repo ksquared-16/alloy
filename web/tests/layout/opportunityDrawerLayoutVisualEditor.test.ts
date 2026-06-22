@@ -239,8 +239,8 @@ describe("layouts settings visual editor wiring", () => {
             "utf8",
         );
         expect(editor).toContain('data-testid="opportunity-drawer-visual-editor"');
-        expect(previewFrame).toContain('slot="header"');
-        expect(previewFrame).toContain("visual-editor-locked-shell-");
+        expect(previewFrame).toContain('data-testid="layout-builder-preview-drawer-frame"');
+        expect(previewFrame).toContain("visual-editor-preview-shell");
         expect(canvas).toContain("visual-editor-zone-summary_strip");
         expect(canvas).toContain("visual-editor-zone-right_rail");
         expect(editor).toContain("visual-editor-advanced-builder-link");
@@ -250,5 +250,17 @@ describe("layouts settings visual editor wiring", () => {
         expect(editor).toContain("LayoutBuilderInspectorPanel");
         expect(canvas).toContain("LayoutBuilderPreviewDrawerFrame");
         expect(canvas).toContain('data-visual-editor-editable="true"');
+    });
+
+    it("declares layoutVersionHint useMemo before conditional returns", () => {
+        const editor = readFileSync(
+            resolve(root, "components/adminV2/settings/OpportunityDrawerLayoutVisualEditor.tsx"),
+            "utf8",
+        );
+        const hookIdx = editor.indexOf("const layoutVersionHint = useMemo");
+        const earlyReturnIdx = editor.indexOf("if (forceAdvanced)");
+        expect(hookIdx).toBeGreaterThan(-1);
+        expect(earlyReturnIdx).toBeGreaterThan(-1);
+        expect(hookIdx).toBeLessThan(earlyReturnIdx);
     });
 });

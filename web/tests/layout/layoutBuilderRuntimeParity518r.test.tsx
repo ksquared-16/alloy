@@ -60,8 +60,8 @@ describe("layoutBuilderRuntimeParity 5.18R", () => {
             displayMode: "table",
             columns: [
                 {
-                    refKey: "inquiry_child.first_name",
-                    label: "First name",
+                    refKey: "inquiry_child.location_id",
+                    label: "School",
                     editable: true,
                 },
             ],
