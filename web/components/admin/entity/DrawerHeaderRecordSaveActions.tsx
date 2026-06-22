@@ -26,7 +26,8 @@ export default function DrawerHeaderRecordSaveActions({
     revertDataAttr?: string;
     tone?: "default" | "footer";
 }) {
-    if (!canMutate || !isDirty) return null;
+    if (!canMutate) return null;
+    if (!isDirty && !saveSuccess) return null;
 
     const unsavedTone =
         tone === "footer" ?
@@ -37,6 +38,18 @@ export default function DrawerHeaderRecordSaveActions({
         "rounded-md border border-alloy-midnight/12 bg-white px-2.5 py-1 text-[11px] font-medium text-alloy-midnight/75 hover:bg-alloy-stone/70";
     const footerSaveBtn =
         "rounded-md border border-alloy-juniper/40 bg-alloy-juniper px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-juniper/90";
+
+    if (!isDirty && saveSuccess) {
+        return (
+            <span
+                className="text-[11px] font-semibold text-alloy-juniper"
+                data-opportunity-drawer-save-success="true"
+                aria-live="polite"
+            >
+                Saved
+            </span>
+        );
+    }
 
     return (
         <>
@@ -55,7 +68,7 @@ export default function DrawerHeaderRecordSaveActions({
                 Unsaved
             </span>
             {saveSuccess ?
-                <span className="text-sm font-medium text-alloy-juniper">Saved</span>
+                <span className="text-[11px] font-semibold text-alloy-juniper">Saved</span>
             :   null}
             <RecordDrawerHeaderActionButton
                 label="Cancel"

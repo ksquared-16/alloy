@@ -13,6 +13,7 @@ import {
     LAYOUT_TYPOGRAPHY_INTENTS_EDITOR,
     type LayoutEditorDisplayConfig,
 } from "@/lib/layout/layoutEditorDisplayConfig";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
     LAYOUT_EDITOR_VISIBILITY_PRESETS,
     type LayoutEditorVisibilityRule,
@@ -56,7 +57,7 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                 <input
                     type="text"
                     value={node.title}
-                    onKeyDown={(e) => e.stopPropagation()}
+                    {...layoutBuilderEditableInputProps}
                     onChange={(e) => onChange({ label: e.target.value })}
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                     data-testid="visual-editor-field-label"

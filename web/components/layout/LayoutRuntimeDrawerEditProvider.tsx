@@ -200,12 +200,12 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
         setDraft({ ...baselineRef.current });
     }, []);
 
-    const savePersonContact = useCallback(async () => {
+    const savePersonContact = useCallback(async (patchBaseline: Record<string, string>) => {
         const personBaseline: Record<string, string> = {};
         const personDraft: Record<string, string> = {};
-        for (const refKey of Object.keys(baselineRef.current)) {
+        for (const refKey of Object.keys(patchBaseline)) {
             if (!isLayoutRuntimePersonContactRefKey(refKey)) continue;
-            personBaseline[refKey] = baselineRef.current[refKey] ?? "";
+            personBaseline[refKey] = patchBaseline[refKey] ?? "";
             personDraft[refKey] = draft[refKey] ?? "";
         }
         const result = await saveLayoutRuntimePersonContactEdits({
@@ -216,22 +216,22 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
         if (!result.ok) throw new Error(result.error);
     }, [draft, record]);
 
-    const saveOpportunityNative = useCallback(async () => {
+    const saveOpportunityNative = useCallback(async (patchBaseline: Record<string, string>) => {
         const result = await saveLayoutRuntimeOpportunityNativeEdits({
             record,
-            baseline: baselineRef.current,
+            baseline: patchBaseline,
             draft,
         });
         if (!result.ok) throw new Error(result.error);
     }, [draft, record]);
 
-    const saveChildRepeater = useCallback(async () => {
+    const saveChildRepeater = useCallback(async (patchBaseline: Record<string, string>) => {
         const { rows, rowKeys } = repeaterRef.current;
         const result = await saveLayoutRuntimeChildRepeaterEdits({
             record,
             rows,
             rowKeys,
-            baseline: baselineRef.current,
+            baseline: patchBaseline,
             draft,
         });
         if (!result.ok) throw new Error(result.error);
@@ -262,7 +262,6 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
     const applyOptimistic = useCallback(() => {
         if (!isDirty()) return;
         optimisticSnapshotRef.current = { ...baselineRef.current };
-        baselineRef.current = { ...draft };
         patchOptimisticRecord(draft);
     }, [draft, isDirty, patchOptimisticRecord]);
 
@@ -288,15 +287,24 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
 
     const save = useCallback(
         async (options?: DrawerOperatingSaveSectionOptions) => {
+            const patchBaseline =
+                options?.confirmOnly ?
+                    (optimisticSnapshotRef.current ?? baselineRef.current)
+                :   baselineRef.current;
+
             if (!options?.confirmOnly) {
-                await savePersonContact();
-                await saveOpportunityNative();
-                await saveChildRepeater();
-                baselineRef.current = { ...draft };
-                patchOptimisticRecord(draft);
+                await savePersonContact(patchBaseline);
+                await saveOpportunityNative(patchBaseline);
+                await saveChildRepeater(patchBaseline);
             } else {
-                await Promise.all([savePersonContact(), saveOpportunityNative(), saveChildRepeater()]);
+                await Promise.all([
+                    savePersonContact(patchBaseline),
+                    saveOpportunityNative(patchBaseline),
+                    saveChildRepeater(patchBaseline),
+                ]);
             }
+            baselineRef.current = { ...draft };
+            patchOptimisticRecord(draft);
             const opportunityId = String(record.id ?? "").trim();
             if (opportunityId) {
                 dispatchOpportunityQueueUpdated(opportunityId, "layout_runtime_child_save");

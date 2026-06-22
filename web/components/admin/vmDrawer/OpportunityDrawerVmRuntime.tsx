@@ -620,10 +620,12 @@ export default function OpportunityDrawerVmRuntime() {
         !isOpportunityDrawerOpening &&
         !drawerOpen;
 
+    const headerRecord = mergedOverviewLayoutRecord ?? record;
+
     const locationLabel = useMemo(() => {
-        if (!record) return null;
-        return opportunityDisplayLocationLabel(record);
-    }, [record]);
+        if (!headerRecord) return null;
+        return opportunityDisplayLocationLabel(headerRecord);
+    }, [headerRecord]);
 
     const drawerSubjectShellAttrs = useMemo(
         () => drawerSubjectContextDiagnosticAttrs(drawer.drawerSubjectContext),
@@ -631,13 +633,13 @@ export default function OpportunityDrawerVmRuntime() {
     );
 
     const composedProofHeader = useMemo(() => {
-        if (!layoutCutoverHeader || !committedVisible || !drawer.id || !displayVm || !record) return undefined;
+        if (!layoutCutoverHeader || !committedVisible || !drawer.id || !displayVm || !headerRecord) return undefined;
         return (
             <OpportunityDrawerProofLayoutHeader
                 title={drawerTitle}
                 locationLabel={locationLabel}
                 opportunityId={drawer.id}
-                record={record}
+                record={headerRecord}
                 displayVm={displayVm}
                 queuePreviewSeed={drawer.opportunityQueuePreviewSeed}
                 opportunitySingular={opportunitySingular}
@@ -668,7 +670,7 @@ export default function OpportunityDrawerVmRuntime() {
         drawer.id,
         drawer.opportunityQueuePreviewSeed,
         displayVm,
-        record,
+        headerRecord,
         drawerTitle,
         locationLabel,
         opportunitySingular,

@@ -8,6 +8,7 @@ import OpportunityDrawerLayoutSectionCompositionDiagnostics from "@/components/a
 import OpportunityDrawerLayoutFieldSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettings";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
     LAYOUT_EDITOR_ACTION_KEY_LABELS,
     LAYOUT_EDITOR_ACTION_STYLE_INTENTS,
@@ -504,7 +505,7 @@ function SectionItemRow({
                     <input
                         type="text"
                         value={entry.item.label ?? entry.title}
-                        onKeyDown={(e) => e.stopPropagation()}
+                        {...layoutBuilderEditableInputProps}
                         onChange={(e) =>
                             applyDoc(patchSectionItem(doc, sectionKey, entry.itemId, { label: e.target.value }))
                         }
@@ -711,7 +712,7 @@ export function LayoutBuilderItemInspector({
                     <input
                         type="text"
                         value={entry.item.label ?? entry.title}
-                        onKeyDown={(e) => e.stopPropagation()}
+                        {...layoutBuilderEditableInputProps}
                         onChange={(e) =>
                             applyDoc(patchSectionItem(doc, sectionKey, entry.itemId, { label: e.target.value }))
                         }
@@ -724,7 +725,7 @@ export function LayoutBuilderItemInspector({
                     <input
                         type="text"
                         value={style.subtitle ?? ""}
-                        onKeyDown={(e) => e.stopPropagation()}
+                        {...layoutBuilderEditableInputProps}
                         onChange={(e) =>
                             applyDoc(
                                 patchSectionItem(doc, sectionKey, entry.itemId, {

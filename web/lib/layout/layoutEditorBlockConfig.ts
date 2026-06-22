@@ -3,7 +3,7 @@
  * Registry constrains allowed values; operators compose blocks from approved primitives.
  */
 
-import type { LayoutCondition } from "@/lib/layout/layoutV2";
+import type { LayoutCollectionColumn, LayoutCondition, LayoutItem } from "@/lib/layout/layoutV2";
 import {
     LAYOUT_EDITOR_CONTACT_ROLE_METADATA_KEY,
     readLayoutEditorContactRole,
@@ -105,6 +105,39 @@ function isEditMode(v: string): v is LayoutEditorBlockEditMode {
 
 function isBlockVisibilityRule(v: string): v is LayoutEditorBlockVisibilityRule {
     return (LAYOUT_EDITOR_BLOCK_VISIBILITY_RULES as readonly string[]).includes(v);
+}
+
+function relatedListColumnIsEditable(col: LayoutCollectionColumn): boolean {
+    return col.editable === true;
+}
+
+function layoutItemHasEditableDescendants(item: LayoutItem): boolean {
+    if (item.kind === "field") return item.editable === true;
+    if (item.kind === "related_list") {
+        return (item.columns ?? []).some(relatedListColumnIsEditable);
+    }
+    if (item.kind === "field_group") {
+        for (const row of item.rows ?? []) {
+            for (const col of row.columns) {
+                for (const child of col.items) {
+                    if (layoutItemHasEditableDescendants(child)) return true;
+                }
+            }
+        }
+        for (const child of item.items ?? []) {
+            if (layoutItemHasEditableDescendants(child)) return true;
+        }
+    }
+    return false;
+}
+
+/** Runtime edit affordance — default edit_button when block contains editable fields. */
+export function resolveLayoutRuntimeBlockEditMode(
+    item: LayoutItem,
+    blockConfig: LayoutEditorBlockConfig,
+): LayoutEditorBlockEditMode {
+    if (blockConfig.editMode) return blockConfig.editMode;
+    return layoutItemHasEditableDescendants(item) ? "edit_button" : "display_only";
 }
 
 export function readLayoutEditorBlockConfig(metadata: Record<string, unknown> | undefined): LayoutEditorBlockConfig {

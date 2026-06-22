@@ -41,9 +41,10 @@ export default function LayoutRuntimeTonedPanelShell({
     const surfaceClass = embedded ?
         "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/10 bg-white"
     :   `flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/12 border-l-[3px] ${rail} bg-white shadow-[0_1px_4px_rgba(24,39,58,0.04)]`;
+    const hoverGroupClass = headerActions ? "group/block" : "";
 
     return (
-        <div className={surfaceClass} data-layout-runtime-widget-tone={tone}>
+        <div className={`${surfaceClass} ${hoverGroupClass}`.trim()} data-layout-runtime-widget-tone={tone}>
             {title || headerActions ?
                 <header className={`flex items-center justify-between gap-2 border-b border-alloy-stone/8 px-2.5 py-1.5 ${headerWash}`}>
                     <div className="flex min-w-0 flex-1 items-center gap-2">

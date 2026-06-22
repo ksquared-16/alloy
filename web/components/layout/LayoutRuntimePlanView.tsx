@@ -30,7 +30,7 @@ import {
     resolveLayoutCollectionColumnShowIcon,
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
-import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfig";
+import { readLayoutEditorBlockConfig, resolveLayoutRuntimeBlockEditMode } from "@/lib/layout/layoutEditorBlockConfig";
 import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
     overlayLayoutEditorContactBlockRecord,
@@ -563,7 +563,7 @@ function wrapLayoutRuntimeCompositionWidget(
 
 function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const blockConfig = readLayoutEditorBlockConfig(item.metadata);
-    const editMode = blockConfig.editMode ?? "display_only";
+    const editMode = resolveLayoutRuntimeBlockEditMode(item, blockConfig);
     const isContactBlock = item.kind === "field_group" && item.refKey === "contact_block";
     const renderedContacts = useContext(LayoutRuntimeRenderedContactIdsContext);
 
@@ -603,8 +603,9 @@ function GroupCellContent({
     const hasSubgrid = Array.isArray(item.rows) && item.rows.length > 0;
     const showTitle = blockConfig.showTitle !== false;
     const title = showTitle ? operatorLabel(item, variant) : "";
+    const resolvedEditMode = blockEdit?.editMode ?? "display_only";
     const showEditButton =
-        (blockConfig.editMode === "edit_button" || blockConfig.editMode === "inline_editable") && Boolean(drawerEdit);
+        (resolvedEditMode === "edit_button" || resolvedEditMode === "inline_editable") && Boolean(drawerEdit);
     const blockTone = resolveLayoutItemWidgetTone(item);
     const shellTitle = blockTone && operatorSurfaces ? title || undefined : undefined;
     const blockEditToggle =
@@ -816,7 +817,7 @@ function renderRelatedListPanelShell(input: {
         );
     }
     return (
-        <div className={surfaceClassName ?? LAYOUT_RUNTIME_PANEL_SURFACE}>
+        <div className={`group/block ${surfaceClassName ?? LAYOUT_RUNTIME_PANEL_SURFACE}`}>
             {headerExtra}
             {!suppressHeader ?
                 <div className={`${LAYOUT_RUNTIME_PANEL_HEADER} justify-between`}>
@@ -833,8 +834,9 @@ function renderRelatedListPanelShell(input: {
 
 function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const blockConfig = readLayoutEditorBlockConfig(item.metadata);
+    const editMode = resolveLayoutRuntimeBlockEditMode(item, blockConfig);
     return (
-        <LayoutRuntimeBlockEditProvider editMode={blockConfig.editMode ?? "display_only"}>
+        <LayoutRuntimeBlockEditProvider editMode={editMode}>
             <RelatedCellInner record={record} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
         </LayoutRuntimeBlockEditProvider>
     );
@@ -858,8 +860,9 @@ function RelatedCellInner({
     const onAdornmentAction = useContext(AdornmentActionContext);
     const drawerEdit = useLayoutRuntimeDrawerEdit();
     const blockEdit = useLayoutRuntimeBlockEdit();
+    const resolvedEditMode = blockEdit?.editMode ?? "display_only";
     const showBlockEditButton =
-        (blockConfig.editMode === "edit_button" || blockConfig.editMode === "inline_editable") && Boolean(drawerEdit);
+        (resolvedEditMode === "edit_button" || resolvedEditMode === "inline_editable") && Boolean(drawerEdit);
     const blockEditToggle =
         showBlockEditButton && blockEdit ?
             <LayoutRuntimeBlockEditToggle itemId={item.id} blockEdit={blockEdit} />
@@ -1306,17 +1309,26 @@ function RelatedCellInner({
         : legacyTableMarkup;
 
     if (useEnrollmentReadTable || usePersonConnectedChildrenTable || useChildFamilyPresentation) {
-        return (
-            <>
-                {isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null}
-                {showChildrenEmpty ?
+        const compositionTitle =
+            useEnrollmentReadTable ? title || "Children"
+            : usePersonConnectedChildrenTable ? title || "Connected children"
+            : title || "Family";
+        return renderRelatedListPanelShell({
+            tone: listTone,
+            operatorSurfaces: Boolean(operatorSurfaces),
+            title: compositionTitle,
+            suppressHeader: suppressRelatedListHeader,
+            surfaceClassName: `${LAYOUT_RUNTIME_PANEL_SURFACE} ${isChildrenRepeater ? LAYOUT_RUNTIME_WORK_RAIL : ""}`,
+            headerExtra: isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null,
+            headerActions: blockEditToggle,
+            children:
+                showChildrenEmpty ?
                     <LayoutRuntimeChildrenEmptyState
                         opportunityId={host.entityId ?? ""}
                         canMutate={host.canMutate}
                     />
-                :   collectionMarkup}
-            </>
-        );
+                :   collectionMarkup,
+        });
     }
 
     return (

@@ -15,6 +15,7 @@ import {
     reorderSectionInZone,
     setSectionEditorHidden,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
     applySectionRowLayout,
     LAYOUT_EDITOR_SECTION_TYPES,
@@ -266,7 +267,7 @@ export default function LayoutBuilderInspectorPanel({
                             <input
                                 type="text"
                                 value={section.title}
-                                onKeyDown={(e) => e.stopPropagation()}
+                                {...layoutBuilderEditableInputProps}
                                 onChange={(e) => applyDoc(renameSectionTitle(doc, section.key, e.target.value))}
                                 className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
                                 data-testid="visual-editor-section-title"

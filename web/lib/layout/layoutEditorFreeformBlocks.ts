@@ -200,7 +200,7 @@ export function patchCustomBlockConfig(
     const item = next.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
     if (!item) return doc;
 
-    if (patch.title !== undefined) item.label = patch.title.replace(/^\s+|\s+$/g, "") || item.label;
+    if (patch.title !== undefined) item.label = patch.title;
     if (patch.contactRole && item.refKey === "contact_block") {
         item.metadata = { ...(item.metadata ?? {}), [LAYOUT_EDITOR_CONTACT_ROLE_METADATA_KEY]: patch.contactRole };
         item.rows = buildContactRoleRows(patch.contactRole);

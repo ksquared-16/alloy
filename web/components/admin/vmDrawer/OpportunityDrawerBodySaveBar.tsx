@@ -13,6 +13,7 @@ type Props = {
  */
 export default function OpportunityDrawerBodySaveBar({ canMutate }: Props) {
     const [coordDirty, setCoordDirty] = useState(false);
+    const [saveSuccessVisible, setSaveSuccessVisible] = useState(false);
 
     const syncDirty = useCallback(() => {
         setCoordDirty(drawerOperatingIsDirty());
@@ -24,7 +25,7 @@ export default function OpportunityDrawerBodySaveBar({ canMutate }: Props) {
         return () => window.clearInterval(id);
     }, [syncDirty]);
 
-    if (!canMutate || !coordDirty) return null;
+    if (!canMutate || (!coordDirty && !saveSuccessVisible)) return null;
 
     return (
         <div
@@ -38,6 +39,10 @@ export default function OpportunityDrawerBodySaveBar({ canMutate }: Props) {
                 onCancelForm={() => undefined}
                 formSaving={false}
                 tone="footer"
+                onCoordinatorSaveComplete={() => {
+                    setSaveSuccessVisible(true);
+                    window.setTimeout(() => setSaveSuccessVisible(false), 3000);
+                }}
             />
         </div>
     );

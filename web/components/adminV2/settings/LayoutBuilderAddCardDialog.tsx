@@ -17,6 +17,7 @@ import {
     type ExperienceBuilderPlacementIntent,
 } from "@/lib/layout/layoutBuilderPlacement";
 import { LAYOUT_BUILDER_WIDGET_OPTIONS } from "@/lib/layout/layoutBuilderPaletteModel";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 
 export type LayoutBuilderAddCardDialogSubmit = {
     title: string;
@@ -134,7 +135,7 @@ export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: 
                             type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
-                            onKeyDown={(e) => e.stopPropagation()}
+                            {...layoutBuilderEditableInputProps}
                             placeholder={
                                 blockType === "widget" ? "e.g. Open Tasks"
                                 : blockType === "fields" ? "e.g. Enrollment Details"
