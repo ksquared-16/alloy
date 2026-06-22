@@ -23,9 +23,12 @@ describe("enrollmentGridPresentation", () => {
         expect(readEnrollmentGridCellRole(item as LayoutItem, nameCol as LayoutCollectionColumn)).toBe("primary_link");
     });
 
-    it("treats aliased enrollment columns as editable when save adapter exists", () => {
-        expect(enrollmentGridColumnIsEditable({ refKey: "child.program", label: "Program" })).toBe(true);
-        expect(enrollmentGridColumnIsEditable({ refKey: "child.desired_start_date", label: "Start" })).toBe(true);
+    it("requires builder editable flag for aliased enrollment columns", () => {
+        expect(enrollmentGridColumnIsEditable({ refKey: "child.program", label: "Program" })).toBe(false);
+        expect(
+            enrollmentGridColumnIsEditable({ refKey: "child.program", label: "Program", editable: true }),
+        ).toBe(true);
+        expect(enrollmentGridColumnIsEditable({ refKey: "child.desired_start_date", label: "Start" })).toBe(false);
     });
 
     it("defaults roster to read-first under composition hint", () => {

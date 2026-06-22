@@ -38,7 +38,7 @@ describe("mergeOpportunityLayoutRuntimeWidgetRecord", () => {
 });
 
 describe("enrichLayoutDocPersonContactEditable", () => {
-    it("marks person-contact fields editable when omitted from published doc", () => {
+    it("does not auto-mark person-contact fields editable when omitted from published doc", () => {
         const doc: LayoutDoc = {
             formatVersion: 1,
             surface: "drawer",
@@ -68,6 +68,6 @@ describe("enrichLayoutDocPersonContactEditable", () => {
             ],
         };
         const enriched = enrichLayoutDocPersonContactEditable(doc);
-        expect(countPersonContactEditableFields(enriched)).toBe(1);
+        expect(countPersonContactEditableFields(enriched)).toBe(0);
     });
 });

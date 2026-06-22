@@ -6,7 +6,6 @@
 
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
-import { isLayoutRuntimeChildEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeChildFieldEdit";
 import { isLayoutRuntimeEditableRefKeySupported } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 
 /** Item metadata map: refKey → cell role for operational enrollment grid. */
@@ -39,11 +38,12 @@ export function readEnrollmentGridCellRole(item: LayoutItem, col: LayoutCollecti
     return "text";
 }
 
-/** Whether the column has a registered save adapter (layout refKey, including aliases). */
+/** Whether the column has a registered save adapter and is configured inline-editable. */
 export function enrollmentGridColumnIsEditable(col: LayoutCollectionColumn): boolean {
-    return isLayoutRuntimeEditableRefKeySupported(normalizeRefKeyOnRead(col.refKey))
-        || isLayoutRuntimeEditableRefKeySupported(col.refKey)
-        || (col.editable === true && isLayoutRuntimeChildEditableRefKey(normalizeRefKeyOnRead(col.refKey)));
+    if (col.editable !== true) return false;
+    const refKey = col.refKey?.trim() ?? "";
+    if (!refKey) return false;
+    return isLayoutRuntimeEditableRefKeySupported(refKey);
 }
 
 /** Default cell roles for lead_drawer_v2 enrollment table — written to layout item metadata at seed. */

@@ -154,8 +154,8 @@ export function resolveOpportunityLeadLocationFields(record: Record<string, unkn
     return { locationId, locationLabel };
 }
 
-/** Primary operator-facing label for opportunity location surfaces (header, overview). */
-export function opportunityDisplayLocationLabel(record: Record<string, unknown>): string {
+/** Operator-facing location label for opportunity drawer surfaces (header + layout fields). */
+export function resolveOpportunityDrawerLocationLabel(record: Record<string, unknown>): string {
     const lead = resolveOpportunityLeadLocationFields(record);
     if (lead.locationLabel) return lead.locationLabel;
 
@@ -163,4 +163,9 @@ export function opportunityDisplayLocationLabel(record: Record<string, unknown>)
     if (resolved.kind === "single") return resolved.label;
     if (resolved.kind === "multiple") return resolved.label;
     return OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL;
+}
+
+/** Primary operator-facing label for opportunity location surfaces (header, overview). */
+export function opportunityDisplayLocationLabel(record: Record<string, unknown>): string {
+    return resolveOpportunityDrawerLocationLabel(record);
 }

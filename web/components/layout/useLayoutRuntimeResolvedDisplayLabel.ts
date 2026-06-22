@@ -46,6 +46,7 @@ export function useLayoutRuntimeResolvedDisplayLabel(input: {
     rawValue: string;
     record?: ProofRuntimeRecord;
     row?: ProofRuntimeRecord;
+    anchorRecord?: ProofRuntimeRecord;
     renderHint?: string | null;
 }): string {
     const control = resolveLayoutRuntimeFieldControl(input.refKey);
@@ -59,6 +60,7 @@ export function useLayoutRuntimeResolvedDisplayLabel(input: {
             rawValue: input.rawValue,
             record: input.record,
             row: input.row,
+            anchorRecord: input.anchorRecord,
             renderHint: input.renderHint,
         });
         if (base !== input.rawValue.trim()) return base;
@@ -82,6 +84,7 @@ export function useLayoutRuntimeResolvedDisplayLabel(input: {
         input.renderHint,
         optionSetOptions,
         placementData,
+        input.anchorRecord,
         sourceRecord,
     ]);
 }

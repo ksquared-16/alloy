@@ -46,6 +46,15 @@ describe("layoutRuntimeFieldEditability", () => {
         ).toBe(true);
     });
 
+    it("blocks editable fields when builder editable flag is false", () => {
+        expect(
+            layoutRuntimeFieldIsEditable({ editable: false, refKey: "opportunity.location_id" }, "production"),
+        ).toBe(false);
+        expect(
+            layoutRuntimeFieldIsEditable({ editable: false, refKey: "child.program" }, "production"),
+        ).toBe(false);
+    });
+
     it("blocks editable fields in preview mode", () => {
         expect(
             layoutRuntimeFieldIsEditable(

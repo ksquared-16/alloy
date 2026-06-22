@@ -4,6 +4,7 @@
 
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
+import { resolveOpportunityLeadLocationFields } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import { resolveLayoutRuntimeFieldControl } from "@/lib/layout/runtime/resolveLayoutRuntimeFieldControl";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -44,19 +45,64 @@ function readRecordLabel(record: ProofRuntimeRecord | undefined, key: string): s
     return text;
 }
 
+function resolveOpportunityLocationDisplayLabel(record: ProofRuntimeRecord | undefined): string | null {
+    if (!record) return null;
+    return (
+        readRecordLabel(record, "opportunity.location")
+        ?? readRecordLabel(record, "_location_label")
+        ?? readRecordLabel(record, "_location_name")
+        ?? (() => {
+            const lead = resolveOpportunityLeadLocationFields(record);
+            return lead.locationLabel.trim() ? lead.locationLabel : null;
+        })()
+    );
+}
+
+function resolveChildLocationDisplayLabel(
+    row: ProofRuntimeRecord | undefined,
+    anchorRecord: ProofRuntimeRecord | undefined,
+): string | null {
+    const fromRow =
+        readRecordLabel(row, "child.location")
+        ?? readRecordLabel(row, "inquiry_child.location_id");
+    if (fromRow) return fromRow;
+    return resolveOpportunityLocationDisplayLabel(anchorRecord ?? row);
+}
+
 /** Resolve display text for one field value — prefer labels over raw ids/keys. */
 export function resolveLayoutRuntimeFieldDisplayLabel(input: {
     refKey: string;
     rawValue: string;
     record?: ProofRuntimeRecord;
     row?: ProofRuntimeRecord;
+    anchorRecord?: ProofRuntimeRecord;
     renderHint?: string | null;
 }): string {
     const trimmed = input.rawValue.trim();
-    if (!trimmed || trimmed === "—") return input.rawValue;
-
     const record = input.row ?? input.record;
     const normalized = normalizeRefKeyOnRead(input.refKey.trim());
+
+    if (normalized === "opportunity.location_id" || normalized === "opportunity.location") {
+        const fromOpp = resolveOpportunityLocationDisplayLabel(record);
+        if (fromOpp) return fromOpp;
+    }
+
+    if (normalized === "inquiry_child.location_id" || input.refKey.trim() === "child.location") {
+        const fromChild = resolveChildLocationDisplayLabel(record, input.anchorRecord ?? input.record);
+        if (fromChild) return fromChild;
+    }
+
+    if (!trimmed || trimmed === "—") {
+        if (normalized === "opportunity.location_id" || normalized === "opportunity.location") {
+            const fromOpp = resolveOpportunityLocationDisplayLabel(record);
+            if (fromOpp) return fromOpp;
+        }
+        if (normalized === "inquiry_child.location_id" || input.refKey.trim() === "child.location") {
+            const fromChild = resolveChildLocationDisplayLabel(record, input.anchorRecord ?? input.record);
+            if (fromChild) return fromChild;
+        }
+        return input.rawValue;
+    }
 
     const statusLabel = formatLayoutRuntimeStatusLabel(trimmed, {
         refKey: normalized,
@@ -71,11 +117,13 @@ export function resolveLayoutRuntimeFieldDisplayLabel(input: {
     }
 
     if (normalized === "opportunity.location_id" || normalized === "opportunity.location") {
-        const fromOpp =
-            readRecordLabel(record, "opportunity.location")
-            ?? readRecordLabel(record, "_location_label")
-            ?? readRecordLabel(record, "_location_name");
+        const fromOpp = resolveOpportunityLocationDisplayLabel(record);
         if (fromOpp) return fromOpp;
+    }
+
+    if (normalized === "inquiry_child.location_id" || input.refKey.trim() === "child.location") {
+        const fromChild = resolveChildLocationDisplayLabel(record, input.anchorRecord ?? input.record);
+        if (fromChild) return fromChild;
     }
 
     const control = resolveLayoutRuntimeFieldControl(normalized);

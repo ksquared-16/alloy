@@ -11,18 +11,32 @@ import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext
 export function formatLayoutRuntimeRepeaterColumnDisplay(
     row: ProofRuntimeRecord,
     col: LayoutCollectionColumn,
+    options?: { anchorRecord?: ProofRuntimeRecord },
 ): string {
     const r = resolveLayoutRuntimeRepeaterFieldValue(row, col.refKey, {
         renderHint: col.renderHint,
         template: col.template,
     });
-    if (r.isPlaceholder) return "—";
+    if (r.isPlaceholder) {
+        const fallback = resolveLayoutRuntimeFieldDisplayLabel({
+            refKey: col.refKey,
+            rawValue: "—",
+            row,
+            anchorRecord: options?.anchorRecord,
+            renderHint: col.renderHint,
+        });
+        if (fallback && fallback !== "—") {
+            return formatLayoutRuntimeOperatorDateIfRefKey(col.refKey, fallback, col.renderHint);
+        }
+        return "—";
+    }
     let raw = r.display ?? "—";
     if (raw !== "—") {
         raw = resolveLayoutRuntimeFieldDisplayLabel({
             refKey: col.refKey,
             rawValue: raw,
             row,
+            anchorRecord: options?.anchorRecord,
             renderHint: col.renderHint,
         });
         const statusLabel = formatLayoutRuntimeStatusLabel(raw, { refKey: col.refKey, renderHint: col.renderHint });

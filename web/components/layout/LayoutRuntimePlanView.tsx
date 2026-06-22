@@ -716,6 +716,7 @@ function RepeaterCellContent({
         refKey: col.refKey,
         rawValue: formattedDisplay ?? "",
         row,
+        anchorRecord,
         renderHint: col.renderHint,
     });
     const statusClass = layoutEditorStatusFormatClass(displayConfig, col.renderHint);

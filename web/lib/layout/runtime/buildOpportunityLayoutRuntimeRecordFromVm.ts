@@ -279,6 +279,10 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
     );
 
     const layoutChildren = resolveOpportunityLayoutRuntimeChildrenRows(vmRecord);
+    const hydratedChildren = applyOpportunityLocationFallbackToChildRows(layoutChildren, {
+        locationId: opportunityLocationId,
+        locationLabel: leadLocationLabel || siteLabel || "",
+    });
 
     const taskPayload =
         summaries?.tasks ??
@@ -343,8 +347,8 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),
         ...(workIntentRuntime ? { _work_intent_runtime: workIntentRuntime } : {}),
         ...(stageWorkRuntime ? { _stage_work_runtime: stageWorkRuntime } : {}),
-        enrollment_children: layoutChildren,
-        children: layoutChildren,
+        enrollment_children: hydratedChildren,
+        children: hydratedChildren,
         tasks: Array.isArray(vmRecord._tasks_preview) ? vmRecord._tasks_preview : [],
         reminders: summaries?.reminders?.scheduled_sends ?? [],
         _relations: {
@@ -396,5 +400,28 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         }
     }
 
-    return overlayPrimaryChildScalarsOnRecord(record, layoutChildren);
+    return overlayPrimaryChildScalarsOnRecord(record, hydratedChildren);
+}
+
+function applyOpportunityLocationFallbackToChildRows(
+    rows: ProofRuntimeRecord[],
+    opportunityLocation: { locationId: string; locationLabel: string },
+): ProofRuntimeRecord[] {
+    if (!opportunityLocation.locationId && !opportunityLocation.locationLabel) return rows;
+    return rows.map((row) => {
+        const hasChildLocation =
+            pickDisplay(row["child.location"])
+            || pickDisplay(row["inquiry_child.location_id"], row.location_id);
+        if (hasChildLocation) return row;
+        return {
+            ...row,
+            ...(opportunityLocation.locationLabel ? { "child.location": opportunityLocation.locationLabel } : {}),
+            ...(opportunityLocation.locationId ?
+                {
+                    "inquiry_child.location_id": opportunityLocation.locationId,
+                    location_id: opportunityLocation.locationId,
+                }
+            :   {}),
+        };
+    });
 }

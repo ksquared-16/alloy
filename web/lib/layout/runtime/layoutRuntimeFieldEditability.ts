@@ -16,7 +16,7 @@ export type LayoutRuntimeSurfaceVariant = "proof" | "production" | "preview";
 export const LAYOUT_RUNTIME_OPPORTUNITY_LOCATION_DISPLAY_REF = "opportunity.location";
 export const LAYOUT_RUNTIME_OPPORTUNITY_LOCATION_EDIT_REF = "opportunity.location_id";
 
-/** Map display-only location label ref to native editable location_id. */
+/** Map display-only refKeys to editable storage refKeys (includes alias-on-read). */
 export function resolveLayoutRuntimeEditableRefKey(refKey: string): string {
     const normalized = normalizeRefKeyOnRead(refKey.trim());
     if (normalized === LAYOUT_RUNTIME_OPPORTUNITY_LOCATION_DISPLAY_REF) {
@@ -25,7 +25,7 @@ export function resolveLayoutRuntimeEditableRefKey(refKey: string): string {
     return normalized;
 }
 
-/** RefKeys with a registered layout-runtime save adapter. */
+/** Whether a layout refKey has a supported runtime save adapter (ignores builder editable flag). */
 export function isLayoutRuntimeEditableRefKeySupported(refKey: string): boolean {
     const resolved = resolveLayoutRuntimeEditableRefKey(refKey);
     if (isLayoutRuntimePersonContactRefKey(resolved)) return true;
@@ -76,7 +76,7 @@ export function layoutRuntimeFieldIsEditable(
     if (item.editable !== true) return false;
     const refKey = item.refKey?.trim() ?? "";
     if (!refKey) return false;
-    return isLayoutRuntimeEditableRefKeySupported(resolveLayoutRuntimeEditableRefKey(refKey));
+    return isLayoutRuntimeEditableRefKeySupported(refKey);
 }
 
 /** Whether a related-list column is configured inline-editable with a supported save adapter. */

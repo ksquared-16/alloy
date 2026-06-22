@@ -96,7 +96,7 @@ export default function LeadEnrollmentCardList({
     const configuredRowLayout = resolveChildRowTemplateRowLayout(item);
 
     const renderConfiguredFieldValue = (row: ProofRuntimeRecord, col: LayoutCollectionColumn) => {
-        const display = formatLayoutRuntimeRepeaterColumnDisplay(row, col);
+        const display = formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord });
         const key = col.refKey.toLowerCase();
         if (key.includes("status") || col.renderHint === "status") {
             return (
@@ -166,8 +166,8 @@ export default function LeadEnrollmentCardList({
                             metadata: nameCol.metadata,
                         };
                         const statusDisplay =
-                            statusColumn ? formatLayoutRuntimeRepeaterColumnDisplay(row, statusColumn) : null;
-                        const childDisplayName = formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol);
+                            statusColumn ? formatLayoutRuntimeRepeaterColumnDisplay(row, statusColumn, { anchorRecord }) : null;
+                        const childDisplayName = formatLayoutRuntimeRepeaterColumnDisplay(row, nameCol, { anchorRecord });
                         const childId = String(row["child.id"] ?? row.id ?? "").trim();
                         const childPhotoUrl = String(row["child.photo_url"] ?? row.photo_url ?? row.image_url ?? "").trim() || null;
 
@@ -233,7 +233,7 @@ export default function LeadEnrollmentCardList({
                                                         refKey={col.refKey}
                                                         value={edit.getFieldValue(
                                                             col.refKey,
-                                                            formatLayoutRuntimeRepeaterColumnDisplay(row, col),
+                                                            formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord }),
                                                             rowKey,
                                                         )}
                                                         rowKey={rowKey}
@@ -330,7 +330,7 @@ export default function LeadEnrollmentCardList({
                                                         refKey={col.refKey}
                                                         value={edit.getFieldValue(
                                                             col.refKey,
-                                                            formatLayoutRuntimeRepeaterColumnDisplay(row, col),
+                                                            formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord }),
                                                             rowKey,
                                                         )}
                                                         rowKey={rowKey}
