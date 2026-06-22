@@ -102,7 +102,10 @@ function buildContactRoleRows(role: LayoutEditorContactRole): LayoutRow[] {
 export function buildCustomLayoutBlock(input: CreateCustomBlockInput): LayoutItem {
     const role = input.contactRole ?? "primary";
     const blockType = input.blockType;
-    const refKey = blockType === "contact_card" ? blockRefKeyForType(blockType) : makeCustomBlockRefKey();
+    const refKey =
+        blockType === "contact_card" || blockType === "child_row_template" || blockType === "custom_layout_block" || blockType === "card" ?
+            blockRefKeyForType(blockType)
+        :   makeCustomBlockRefKey();
     const visibilityRule = defaultBlockVisibilityRule(blockType === "contact_card" ? "contact_card" : blockType, role);
     const metadata = writeCustomLayoutEditorMetadata(
         {

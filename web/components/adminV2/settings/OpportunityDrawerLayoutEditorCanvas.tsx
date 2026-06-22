@@ -11,11 +11,12 @@ import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import {
     buildSingleSectionPreviewDoc,
     isSectionEditorHidden,
-    partitionOpportunityDrawerSectionsByZone,
     renameSectionTitle,
     reorderSectionInZone,
-    resolveOpportunityDrawerSectionZone,
-} from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+    resolveCompositionGridLayout,
+    resolveDrawerSectionZone,
+} from "@/lib/layout/drawerLayoutEditorModel";
+import { getDrawerLayoutEditorSurfaceConfig, type DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import { readSectionType } from "@/lib/layout/layoutEditorSectionLayout";
 import { listSectionLayoutBlocks } from "@/lib/layout/layoutEditorCompositionModel";
 import { buildLayoutEditorItemIdPathIndex } from "@/lib/layout/layoutEditorInspectModel";
@@ -30,9 +31,8 @@ import {
     DRAWER_OVERVIEW_SHELL_GRID_CLASS,
     DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
-import { leadOverviewVisualEditorCompositionHints, partitionLeadOverviewBodySections } from "@/lib/layout/runtime/leadOverviewComposition";
-import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import { LAYOUT_DRAWER_PREVIEW_RECORD } from "@/lib/layout/runtime/layoutDrawerPreviewRecord";
+import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import { repackPeerCardsAfterZoneReorder } from "@/lib/layout/layoutBuilderPeerCardRows";
 import { readCardWidthFraction } from "@/lib/layout/layoutBuilderCardWidth";
@@ -47,6 +47,7 @@ const LayoutBuilderPreviewRecordContext = createContext<ProofRuntimeRecord>(LAYO
 
 type Props = {
     doc: LayoutDoc;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
     editorMode: LayoutBuilderEditorMode;
     selectedSectionId: string | null;
     selectedFieldPath: string | null;
@@ -61,6 +62,7 @@ type Props = {
 function SectionPreviewBody({
     doc,
     sectionKey,
+    surfaceKey,
     hidden,
     traceEnabled,
     selectedFieldPath,
@@ -70,6 +72,7 @@ function SectionPreviewBody({
 }: {
     doc: LayoutDoc;
     sectionKey: string;
+    surfaceKey: DrawerLayoutEditorSurfaceKey;
     hidden: boolean;
     traceEnabled: boolean;
     selectedFieldPath: string | null;
@@ -78,6 +81,7 @@ function SectionPreviewBody({
     editorMode?: LayoutBuilderEditorMode;
 }) {
     const previewRecord = useContext(LayoutBuilderPreviewRecordContext);
+    const surfaceConfig = getDrawerLayoutEditorSurfaceConfig(surfaceKey);
     const sectionDoc = useMemo(() => buildSingleSectionPreviewDoc(doc, sectionKey), [doc, sectionKey]);
     const traceValue = useMemo(() => {
         const blocks = listSectionLayoutBlocks(doc, sectionKey);
@@ -99,14 +103,14 @@ function SectionPreviewBody({
     const widgetColumnCount = useMemo(() => widgetStripColumnCount(doc, sectionKey), [doc, sectionKey]);
     const section = useMemo(() => doc.sections.find((s) => s.key === sectionKey) ?? null, [doc, sectionKey]);
     const sectionPresentation =
-        section && (sectionIsKpiTile(section) || resolveOpportunityDrawerSectionZone(section) === "summary_strip") ?
+        section && (sectionIsKpiTile(section) || resolveDrawerSectionZone(section, surfaceKey) === "summary_strip") ?
             "summary_strip" as const
         :   "default" as const;
     const previewCompositionHints = useMemo(() => {
         const cardWidth = section ? readCardWidthFraction(section) : "full";
         const narrowCard = cardWidth === "quarter";
         const suppressRuntimeCardChrome = editorMode === "build" && sectionPresentation === "default";
-        return leadOverviewVisualEditorCompositionHints({
+        return surfaceConfig.visualEditorCompositionHints({
             ...(section && sectionIsKpiTile(section) ? { summaryStripCompactRow: false } : {}),
             ...(suppressRuntimeCardChrome ?
                 {
@@ -118,7 +122,7 @@ function SectionPreviewBody({
                     stackFieldColumns: narrowCard,
                 }),
         });
-    }, [editorMode, section, sectionPresentation]);
+    }, [editorMode, section, sectionPresentation, surfaceConfig]);
 
     if (!sectionDoc || hidden) {
         return (
@@ -132,7 +136,7 @@ function SectionPreviewBody({
         <LayoutEditorRuntimeTraceProvider value={traceValue}>
             <LayoutRuntimeCompositionProvider value={previewCompositionHints}>
                 <div
-                    className={`relative ${sectionKey === "lead_summary" ? DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS : ""}`}
+                    className={`relative ${sectionKey.endsWith("_summary") ? DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS : ""}`}
                 >
                     <LayoutRuntimePlanView
                         doc={sectionDoc}
@@ -181,20 +185,20 @@ function SectionPreviewBody({
 function KpiTileSectionFrame({
     doc,
     section,
+    surfaceKey,
     editorMode,
     selectedSectionId,
     selectedFieldPath,
-    hasItemSelected,
     onSelectSection,
     onSelectFieldPath,
     applyDoc,
 }: {
     doc: LayoutDoc;
     section: LayoutSection;
+    surfaceKey: DrawerLayoutEditorSurfaceKey;
     editorMode: LayoutBuilderEditorMode;
     selectedSectionId: string | null;
     selectedFieldPath: string | null;
-    hasItemSelected: boolean;
     onSelectSection: (sectionKey: string | null) => void;
     onSelectFieldPath: (path: string | null) => void;
     applyDoc: (next: LayoutDoc) => void;
@@ -210,7 +214,7 @@ function KpiTileSectionFrame({
     const railClass = resolveLayoutEditorWidgetToneRailClass(tone);
 
     const applyKpiReorder = (direction: -1 | 1) => {
-        let next = reorderSectionInZone(doc, section.key, direction);
+        let next = reorderSectionInZone(doc, section.key, direction, surfaceKey);
         next = repackPeerCardsAfterZoneReorder(next, section.key);
         applyDoc(next);
     };
@@ -221,6 +225,7 @@ function KpiTileSectionFrame({
                 <SectionPreviewBody
                     doc={doc}
                     sectionKey={section.key}
+                    surfaceKey={surfaceKey}
                     hidden={hidden}
                     traceEnabled={false}
                     selectedFieldPath={null}
@@ -290,6 +295,7 @@ function KpiTileSectionFrame({
                 <SectionPreviewBody
                     doc={doc}
                     sectionKey={section.key}
+                    surfaceKey={surfaceKey}
                     hidden={hidden}
                     traceEnabled={false}
                     selectedFieldPath={selectedFieldPath}
@@ -308,10 +314,10 @@ function KpiTileSectionFrame({
 function WidgetStripSectionFrame({
     doc,
     section,
+    surfaceKey,
     editorMode,
     selectedSectionId,
     selectedFieldPath,
-    hasItemSelected,
     onSelectSection,
     onSelectFieldPath,
     onSelectBlockId,
@@ -319,10 +325,10 @@ function WidgetStripSectionFrame({
 }: {
     doc: LayoutDoc;
     section: LayoutSection;
+    surfaceKey: DrawerLayoutEditorSurfaceKey;
     editorMode: LayoutBuilderEditorMode;
     selectedSectionId: string | null;
     selectedFieldPath: string | null;
-    hasItemSelected: boolean;
     onSelectSection: (sectionKey: string | null) => void;
     onSelectFieldPath: (path: string | null) => void;
     onSelectBlockId: (blockId: string | null) => void;
@@ -339,6 +345,7 @@ function WidgetStripSectionFrame({
                 <SectionPreviewBody
                     doc={doc}
                     sectionKey={section.key}
+                    surfaceKey={surfaceKey}
                     hidden={hidden}
                     traceEnabled={false}
                     selectedFieldPath={null}
@@ -375,14 +382,14 @@ function WidgetStripSectionFrame({
                     <button
                         type="button"
                         className="rounded-md px-2 py-0.5 font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
-                        onClick={() => applyDoc(reorderSectionInZone(doc, section.key, -1))}
+                        onClick={() => applyDoc(reorderSectionInZone(doc, section.key, -1, surfaceKey))}
                     >
                         Move ↑
                     </button>
                     <button
                         type="button"
                         className="rounded-md px-2 py-0.5 font-medium text-alloy-midnight/60 hover:bg-alloy-stone/30"
-                        onClick={() => applyDoc(reorderSectionInZone(doc, section.key, 1))}
+                        onClick={() => applyDoc(reorderSectionInZone(doc, section.key, 1, surfaceKey))}
                     >
                         Move ↓
                     </button>
@@ -402,6 +409,7 @@ function WidgetStripSectionFrame({
                 <SectionPreviewBody
                     doc={doc}
                     sectionKey={section.key}
+                    surfaceKey={surfaceKey}
                     hidden={hidden}
                     traceEnabled={isBuild}
                     selectedFieldPath={selectedFieldPath}
@@ -420,10 +428,10 @@ function WidgetStripSectionFrame({
 function EditableSectionFrame({
     doc,
     section,
+    surfaceKey,
     editorMode,
     selectedSectionId,
     selectedFieldPath,
-    hasItemSelected,
     onSelectSection,
     onSelectFieldPath,
     onSelectBlockId,
@@ -431,10 +439,10 @@ function EditableSectionFrame({
 }: {
     doc: LayoutDoc;
     section: LayoutSection;
+    surfaceKey: DrawerLayoutEditorSurfaceKey;
     editorMode: LayoutBuilderEditorMode;
     selectedSectionId: string | null;
     selectedFieldPath: string | null;
-    hasItemSelected: boolean;
     onSelectSection: (sectionKey: string | null) => void;
     onSelectFieldPath: (path: string | null) => void;
     onSelectBlockId: (blockId: string | null) => void;
@@ -446,7 +454,7 @@ function EditableSectionFrame({
     const sectionType = readSectionType(section);
 
     const applySectionReorder = (direction: -1 | 1) => {
-        let next = reorderSectionInZone(doc, section.key, direction);
+        let next = reorderSectionInZone(doc, section.key, direction, surfaceKey);
         next = repackPeerCardsAfterZoneReorder(next, section.key);
         applyDoc(next);
     };
@@ -457,6 +465,7 @@ function EditableSectionFrame({
                 <SectionPreviewBody
                     doc={doc}
                     sectionKey={section.key}
+                    surfaceKey={surfaceKey}
                     hidden={hidden}
                     traceEnabled={false}
                     selectedFieldPath={null}
@@ -535,6 +544,7 @@ function EditableSectionFrame({
                     <SectionPreviewBody
                         doc={doc}
                         sectionKey={section.key}
+                        surfaceKey={surfaceKey}
                         hidden={hidden}
                         traceEnabled={isBuild}
                         selectedFieldPath={selectedFieldPath}
@@ -552,6 +562,7 @@ function EditableSectionFrame({
 
 function CompositionGrid({
     doc,
+    surfaceKey,
     editorMode,
     selectedSectionId,
     selectedFieldPath,
@@ -559,10 +570,8 @@ function CompositionGrid({
     onSelectFieldPath,
     onSelectBlockId,
     applyDoc,
-}: Omit<Props, "onQuickStart">) {
-    const slots = partitionLeadOverviewBodySections(doc);
-    const zones = partitionOpportunityDrawerSectionsByZone(doc);
-    const summarySections = zones.summary_strip;
+}: Omit<Props, "onQuickStart" | "previewRecord"> & { surfaceKey: DrawerLayoutEditorSurfaceKey }) {
+    const gridLayout = useMemo(() => resolveCompositionGridLayout(doc, surfaceKey), [doc, surfaceKey]);
     const hasItemSelected = Boolean(selectedFieldPath);
 
     const renderSection = (section: LayoutSection | null) => {
@@ -573,10 +582,10 @@ function CompositionGrid({
                     key={section.key}
                     doc={doc}
                     section={section}
+                    surfaceKey={surfaceKey}
                     editorMode={editorMode}
                     selectedSectionId={selectedSectionId}
                     selectedFieldPath={selectedFieldPath}
-                    hasItemSelected={hasItemSelected}
                     onSelectSection={onSelectSection}
                     onSelectFieldPath={onSelectFieldPath}
                     applyDoc={applyDoc}
@@ -589,10 +598,10 @@ function CompositionGrid({
                     key={section.key}
                     doc={doc}
                     section={section}
+                    surfaceKey={surfaceKey}
                     editorMode={editorMode}
                     selectedSectionId={selectedSectionId}
                     selectedFieldPath={selectedFieldPath}
-                    hasItemSelected={hasItemSelected}
                     onSelectSection={onSelectSection}
                     onSelectFieldPath={onSelectFieldPath}
                     onSelectBlockId={onSelectBlockId}
@@ -605,10 +614,10 @@ function CompositionGrid({
                 key={section.key}
                 doc={doc}
                 section={section}
+                surfaceKey={surfaceKey}
                 editorMode={editorMode}
                 selectedSectionId={selectedSectionId}
                 selectedFieldPath={selectedFieldPath}
-                hasItemSelected={hasItemSelected}
                 onSelectSection={onSelectSection}
                 onSelectFieldPath={onSelectFieldPath}
                 onSelectBlockId={onSelectBlockId}
@@ -617,32 +626,19 @@ function CompositionGrid({
         );
     };
 
-    const overflowSections = (() => {
-        const renderedInZones = new Set([
-            ...summarySections.map((section) => section.key),
-            ...zones.right_rail.map((section) => section.key),
-            ...zones.footer_actions.map((section) => section.key),
-        ]);
-        return [
-            ...(slots.notes ? [slots.notes] : []),
-            ...(slots.activity ? [slots.activity] : []),
-            ...slots.overflow.filter((section) => !renderedInZones.has(section.key)),
-        ];
-    })();
-
     return (
         <div
             className={`${DRAWER_OVERVIEW_CANVAS_CLASS} ${editorMode === "build" ? "rounded-xl bg-[#F6F8FC]/80 p-2" : "p-1"}`}
             data-testid="visual-editor-main-composition-grid"
         >
-            {summarySections.length > 0 ?
+            {gridLayout.summarySections.length > 0 ?
                 <div
                     data-visual-editor-zone="summary_strip"
                     data-testid="visual-editor-zone-summary_strip"
                     className={DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS}
                 >
                     <LayoutEditorSectionFlowView
-                        sections={summarySections}
+                        sections={gridLayout.summarySections}
                         renderSection={renderSection}
                         stackClassName="min-w-0"
                         rowClassName="min-w-0 w-full"
@@ -652,11 +648,11 @@ function CompositionGrid({
             :   null}
 
             <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
-                <div className={DRAWER_OVERVIEW_LEFT_COLUMN_CLASS}>{renderSection(slots.household)}</div>
-                <div className={DRAWER_OVERVIEW_MAIN_COLUMN_CLASS}>{renderSection(slots.enrollment)}</div>
+                <div className={DRAWER_OVERVIEW_LEFT_COLUMN_CLASS}>{renderSection(gridLayout.leftColumn)}</div>
+                <div className={DRAWER_OVERVIEW_MAIN_COLUMN_CLASS}>{renderSection(gridLayout.mainColumn)}</div>
                 <div className={DRAWER_OVERVIEW_RIGHT_RAIL_CLASS} data-testid="visual-editor-zone-right_rail">
                     <LayoutEditorSectionFlowView
-                        sections={zones.right_rail}
+                        sections={gridLayout.rightRailSections}
                         renderSection={renderSection}
                         stackClassName="space-y-2"
                         rowClassName="min-w-0"
@@ -665,14 +661,14 @@ function CompositionGrid({
                 </div>
             </div>
 
-            {slots.leadSource ?
-                <div className={DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS}>{renderSection(slots.leadSource)}</div>
+            {gridLayout.fullWidthRow ?
+                <div className={DRAWER_OVERVIEW_LEAD_SOURCE_GRID_CLASS}>{renderSection(gridLayout.fullWidthRow)}</div>
             :   null}
 
-            {overflowSections.length > 0 ?
+            {gridLayout.overflowSections.length > 0 ?
                 <div className={DRAWER_OVERVIEW_OVERFLOW_STACK_CLASS}>
                     <LayoutEditorSectionFlowView
-                        sections={overflowSections}
+                        sections={gridLayout.overflowSections}
                         renderSection={renderSection}
                         stackClassName=""
                         rowClassName="min-w-0"
@@ -686,6 +682,7 @@ function CompositionGrid({
 
 export default function OpportunityDrawerLayoutEditorCanvas({
     doc,
+    surfaceKey = "opportunity_drawer",
     editorMode,
     selectedSectionId,
     selectedFieldPath,
@@ -696,35 +693,34 @@ export default function OpportunityDrawerLayoutEditorCanvas({
     previewRecord = LAYOUT_DRAWER_PREVIEW_RECORD,
 }: Props) {
     const isPreview = editorMode === "preview";
+    const resolvedPreviewRecord = previewRecord ?? getDrawerLayoutEditorSurfaceConfig(surfaceKey).previewRecord;
+
+    const canvasBody = (
+        <CompositionGrid
+            doc={doc}
+            surfaceKey={surfaceKey}
+            editorMode={editorMode}
+            selectedSectionId={selectedSectionId}
+            selectedFieldPath={selectedFieldPath}
+            onSelectSection={onSelectSection}
+            onSelectFieldPath={onSelectFieldPath}
+            onSelectBlockId={onSelectBlockId}
+            applyDoc={applyDoc}
+        />
+    );
 
     return (
-        <LayoutBuilderPreviewRecordContext.Provider value={previewRecord}>
-            <div className="relative" data-testid="visual-editor-drawer-frame">
+        <LayoutBuilderPreviewRecordContext.Provider value={resolvedPreviewRecord}>
+            <div
+                className="relative"
+                data-testid="visual-editor-drawer-frame"
+                data-visual-editor-surface={surfaceKey}
+            >
             {isPreview ?
-                <LayoutBuilderPreviewDrawerFrame record={previewRecord}>
-                    <CompositionGrid
-                        doc={doc}
-                        editorMode={editorMode}
-                        selectedSectionId={selectedSectionId}
-                        selectedFieldPath={selectedFieldPath}
-                        onSelectSection={onSelectSection}
-                        onSelectFieldPath={onSelectFieldPath}
-                        onSelectBlockId={onSelectBlockId}
-                        applyDoc={applyDoc}
-                    />
-                </LayoutBuilderPreviewDrawerFrame>
-            :   <CompositionGrid
-                    doc={doc}
-                    editorMode={editorMode}
-                    selectedSectionId={selectedSectionId}
-                    selectedFieldPath={selectedFieldPath}
-                    onSelectSection={onSelectSection}
-                    onSelectFieldPath={onSelectFieldPath}
-                    onSelectBlockId={onSelectBlockId}
-                    applyDoc={applyDoc}
-                />
+                <LayoutBuilderPreviewDrawerFrame record={resolvedPreviewRecord}>{canvasBody}</LayoutBuilderPreviewDrawerFrame>
+            :   canvasBody
             }
-        </div>
+            </div>
         </LayoutBuilderPreviewRecordContext.Provider>
     );
 }

@@ -19,6 +19,8 @@ import {
     isLayoutRuntimeLegacyEmergencyFallbackEnabledClient,
     isLayoutRuntimePersonDrawerBodyEnabledClient,
 } from "@/lib/layout/featureFlag";
+import { mergePersonLayoutRuntimeWidgetRecord } from "@/lib/layout/runtime/mergePersonLayoutRuntimeWidgetRecord";
+import { mergeChildLayoutRuntimeWidgetRecord } from "@/lib/layout/runtime/mergeChildLayoutRuntimeWidgetRecord";
 import { logChildLinkStep, logPersonLinkStep } from "@/lib/layout/runtime/childLinkBrowserTrace";
 import { reportLayoutRuntimeLinkRenderedDebug } from "@/lib/layout/runtime/reportLayoutRuntimeLinkDispatchDebug";
 import { handlePersonDrawerLayoutRuntimeAdornmentOpenDrawer } from "@/lib/layout/runtime/resolveLayoutAdornmentOpenDrawer";
@@ -76,8 +78,23 @@ export default function PersonDrawerOverviewBody({
         layoutBodyProp ??
         (isChildSurface ? childLayoutBodyInternal : personLayoutBodyInternal);
 
+    const vmWidgetRecord = useMemo(() => {
+        if (!record) return null;
+        return record as Record<string, unknown>;
+    }, [record]);
+
+    const mergedLayoutBody = useMemo(() => {
+        if (!layoutBody.record) return layoutBody;
+        const mergedRecord =
+            isChildSurface ?
+                mergeChildLayoutRuntimeWidgetRecord(layoutBody.record, vmWidgetRecord)
+            :   mergePersonLayoutRuntimeWidgetRecord(layoutBody.record, vmWidgetRecord);
+        if (mergedRecord === layoutBody.record) return layoutBody;
+        return { ...layoutBody, record: mergedRecord };
+    }, [layoutBody, vmWidgetRecord, isChildSurface]);
+
     useEffect(() => {
-        if (!layoutBody.record || layoutBody.phase !== "ready") return;
+        if (!mergedLayoutBody.record || mergedLayoutBody.phase !== "ready") return;
         if (isChildSurface) {
             logChildLinkStep("rendered", {
                 surface: "queue",
@@ -101,15 +118,15 @@ export default function PersonDrawerOverviewBody({
             });
             reportLayoutRuntimeLinkRenderedDebug("person", personId);
         }
-    }, [isChildSurface, layoutBody.phase, layoutBody.record, personId]);
+    }, [isChildSurface, mergedLayoutBody.phase, mergedLayoutBody.record, personId]);
 
     const onAdornmentAction = useCallback<AdornmentActionHandler>(
         (item, adornment, rowRecord) => {
-            if (!layoutBody.record) return;
+            if (!mergedLayoutBody.record) return;
             handlePersonDrawerLayoutRuntimeAdornmentOpenDrawer({
                 item,
                 adornment,
-                record: layoutBody.record,
+                record: mergedLayoutBody.record,
                 rowRecord,
                 personRecord: record,
                 openDrawer,
@@ -119,7 +136,7 @@ export default function PersonDrawerOverviewBody({
             });
         },
         [
-            layoutBody.record,
+            mergedLayoutBody.record,
             record,
             openDrawer,
             drawer.personDrawerOpenSeed?.opportunity_id,
@@ -157,10 +174,11 @@ export default function PersonDrawerOverviewBody({
     return (
         <div data-drawer-vm-runtime-overview="true" data-person-drawer-layout-runtime-overview="true">
             <DrawerLayoutRuntimeOverviewBody
-                layoutBody={layoutBody}
+                layoutBody={mergedLayoutBody}
                 vmFallback={vmFallback}
                 entityId={personId}
                 surface={isChildSurface ? "child_drawer_overview" : "person_drawer_overview"}
+                canMutate={canMutate}
                 onAdornmentAction={onAdornmentAction}
                 layoutDocOverride={layoutDocOverride}
             />

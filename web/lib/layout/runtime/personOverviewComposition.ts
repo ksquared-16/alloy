@@ -108,7 +108,9 @@ export function partitionPersonOverviewBodySections(doc: LayoutDoc): PersonOverv
     };
 }
 
-export function personOverviewCompositionHints(): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
+export function personOverviewCompositionHints(
+    overrides: Partial<import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints> = {},
+): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
     return {
         personOverviewComposition: true,
         connectedChildrenSummaryOnly: true,
@@ -119,7 +121,15 @@ export function personOverviewCompositionHints(): import("@/lib/layout/runtime/l
         personOperatingSummaryCards: true,
         personConnectedChildrenCardList: true,
         personConnectedChildrenReadFirst: true,
+        ...overrides,
     };
+}
+
+/** Visual editor preview — match published LayoutDoc block rendering. */
+export function personOverviewVisualEditorCompositionHints(
+    overrides: Partial<import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints> = {},
+): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
+    return personOverviewCompositionHints({ honorLayoutDocBlocks: true, ...overrides });
 }
 
 export function summarizePersonDrawerChildrenStrip(record: ProofRuntimeRecord): {

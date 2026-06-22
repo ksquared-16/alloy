@@ -4,6 +4,8 @@
 
 import { describe, expect, it } from "vitest";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import { buildPersonDrawerDefaultDoc } from "@/lib/layout/defaultPersonLayouts";
+import { buildChildDrawerDefaultDoc } from "@/lib/layout/defaultChildLayouts";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
@@ -15,13 +17,15 @@ import {
 import { validateLayoutDocForSurface } from "@/lib/layout/validateLayoutDocForSurface";
 
 describe("surface layout registry", () => {
-    it("returns opportunity_drawer as enabled and lists coming-soon surfaces", () => {
+    it("returns opportunity, person, and child drawers as enabled", () => {
         const payload = buildSurfaceLayoutRegistryResponse();
         expect(payload.contract_version).toBe(1);
-        expect(payload.enabled.map((s) => s.surface_key)).toEqual(["opportunity_drawer"]);
-        expect(payload.coming_soon.map((s) => s.surface_key)).toEqual([
+        expect(payload.enabled.map((s) => s.surface_key)).toEqual([
+            "opportunity_drawer",
             "person_drawer",
             "child_drawer",
+        ]);
+        expect(payload.coming_soon.map((s) => s.surface_key)).toEqual([
             "queue_record",
             "communications_command_center",
             "pos_workspace",
@@ -34,6 +38,11 @@ describe("surface layout registry", () => {
     it("resolves opportunity_drawer from opportunities drawer LayoutDoc", () => {
         const doc = buildLeadDrawerDefaultDoc();
         expect(resolveSurfaceLayoutKeyFromDoc(doc)).toBe("opportunity_drawer");
+    });
+
+    it("resolves person_drawer and child_drawer from default LayoutDocs", () => {
+        expect(resolveSurfaceLayoutKeyFromDoc(buildPersonDrawerDefaultDoc())).toBe("person_drawer");
+        expect(resolveSurfaceLayoutKeyFromDoc(buildChildDrawerDefaultDoc())).toBe("child_drawer");
     });
 });
 
@@ -180,5 +189,21 @@ describe("opportunity_drawer surface validation", () => {
         const res = parseLayoutDoc(customersDoc);
         expect(res.ok, res.errors.join("; ")).toBe(true);
         expect(res.surfaceKey).toBeUndefined();
+    });
+});
+
+describe("person_drawer surface validation", () => {
+    it("accepts the curated default person drawer preset", () => {
+        const doc = buildPersonDrawerDefaultDoc();
+        const res = validateLayoutDocForSurface(doc, "person_drawer");
+        expect(res.ok, res.errors.join("; ")).toBe(true);
+    });
+});
+
+describe("child_drawer surface validation", () => {
+    it("accepts the curated default child drawer preset", () => {
+        const doc = buildChildDrawerDefaultDoc();
+        const res = validateLayoutDocForSurface(doc, "child_drawer");
+        expect(res.ok, res.errors.join("; ")).toBe(true);
     });
 });

@@ -1,7 +1,11 @@
 "use client";
 
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
-import LayoutRuntimeRelatedListCell from "@/components/layout/LayoutRuntimeRelatedListCell";
+import LeadEnrollmentRepeaterFieldCell from "@/components/layout/lead/LeadEnrollmentRepeaterFieldCell";
+import {
+    layoutRuntimeBlockAllowsFieldEdit,
+    useLayoutRuntimeBlockEdit,
+} from "@/components/layout/LayoutRuntimeBlockEditContext";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import { resolveChildRowTemplateRowLayout } from "@/lib/layout/runtime/resolveChildRowTemplateRowLayout";
@@ -32,6 +36,8 @@ export default function LayoutRuntimeRelatedListCompactRows({
     emptyMessage = "No records yet.",
 }: Props) {
     const rowLayout = resolveChildRowTemplateRowLayout(item);
+    const blockEdit = useLayoutRuntimeBlockEdit();
+    const isEditing = Boolean(blockEdit && layoutRuntimeBlockAllowsFieldEdit(blockEdit));
 
     return (
         <ul className="divide-y divide-alloy-stone/10" data-layout-runtime-related-list-compact="true">
@@ -52,13 +58,15 @@ export default function LayoutRuntimeRelatedListCompactRows({
                                 >
                                     {layoutRow.slots.map((col, slotIndex) =>
                                         col ?
-                                            <LayoutRuntimeRelatedListCell
+                                            <LeadEnrollmentRepeaterFieldCell
                                                 key={`${col.refKey}-${slotIndex}`}
+                                                item={item}
                                                 row={row}
                                                 col={col}
                                                 rowKey={rowKey}
-                                                anchorRecord={anchorRecord}
-                                                onAction={onAdornmentAction}
+                                                anchorRecord={anchorRecord ?? {}}
+                                                isEditing={isEditing}
+                                                onAdornmentAction={onAdornmentAction}
                                             />
                                         :   null,
                                     )}
@@ -87,13 +95,15 @@ export default function LayoutRuntimeRelatedListCompactRows({
                         >
                             <div className={TIER_LINE_CLASS[0]}>
                                 {columns.map((col) => (
-                                    <LayoutRuntimeRelatedListCell
+                                    <LeadEnrollmentRepeaterFieldCell
                                         key={col.refKey}
+                                        item={item}
                                         row={row}
                                         col={col}
                                         rowKey={rowKey}
-                                        anchorRecord={anchorRecord}
-                                        onAction={onAdornmentAction}
+                                        anchorRecord={anchorRecord ?? {}}
+                                        isEditing={isEditing}
+                                        onAdornmentAction={onAdornmentAction}
                                     />
                                 ))}
                             </div>

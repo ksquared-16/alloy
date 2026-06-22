@@ -113,12 +113,18 @@ export function buildChildLayoutRuntimeRecordFromVm(input: {
     const record: ProofRuntimeRecord = {
         ...vmRecord,
         id: personId,
+        person_id: personId,
         display_name: childName ?? "—",
         "child.id": personId,
         "child.name": childName ?? "—",
+        "child.first_name": pickDisplay(vmRecord.first_name, vmRecord["child.first_name"]) ?? "",
+        "child.last_name": pickDisplay(vmRecord.last_name, vmRecord["child.last_name"]) ?? "",
         "child.date_of_birth": pickDisplay(vmRecord.date_of_birth, vmRecord["child.date_of_birth"]) ?? "",
         "child.age_band": pickDisplay(vmRecord.age_band, vmRecord.age, vmRecord["child.age_band"]) ?? "",
         "child.status": pickDisplay(vmRecord._status_display, vmRecord.status_key, vmRecord["child.status"]) ?? "",
+        customer_member_id: pickEntityId(mirror?.customer_member_id, vmRecord.customer_member_id) ?? "",
+        "child.customer_member_id": pickEntityId(mirror?.customer_member_id, vmRecord.customer_member_id) ?? "",
+        ocm_id: pickEntityId(mirror?.id, vmRecord.ocm_id) ?? "",
         "inquiry_child.desired_program_type": pickDisplay(
             vmRecord.desired_program_type,
             vmRecord.program_type,

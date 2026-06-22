@@ -20,12 +20,17 @@ import {
     registerDrawerOperatingEditSection,
     type DrawerOperatingSaveSectionOptions,
 } from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
-import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
+import {
+    dispatchDrawerLayoutRuntimeBodyRecordPatch,
+    type DrawerLayoutRuntimeBodyRecordPatchDetail,
+} from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { applyLayoutRuntimeDraftToRecord } from "@/lib/layout/runtime/applyLayoutRuntimeDraftToRecord";
 import { isLayoutRuntimeEditableRefKeySupported, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
     collectLayoutRuntimeChildRepeaterBaselines,
+    collectLayoutRuntimeChildStandaloneBaselines,
     saveLayoutRuntimeChildRepeaterEdits,
+    saveLayoutRuntimeChildStandaloneEdits,
 } from "@/lib/layout/runtime/layoutRuntimeChildFieldEdit";
 import {
     collectLayoutRuntimeOpportunityNativeBaseline,
@@ -127,13 +132,16 @@ function collectRepeaterRows(record: ProofRuntimeRecord): { rows: ProofRuntimeRe
     return { rows, rowKeys };
 }
 
-function collectEditableBaseline(record: ProofRuntimeRecord): Record<string, string> {
+type DrawerEditEntityType = DrawerLayoutRuntimeBodyRecordPatchDetail["entityType"];
+
+function collectEditableBaseline(record: ProofRuntimeRecord, entityType: DrawerEditEntityType): Record<string, string> {
     const { rows, rowKeys } = collectRepeaterRows(record);
     return {
         ...collectPersonContactBaseline(record),
         ...collectDisplayCompanionBaseline(record),
         ...collectLayoutRuntimeOpportunityNativeBaseline(record),
         ...collectLayoutRuntimeChildRepeaterBaselines(record, rowKeys, rows),
+        ...(entityType === "child" ? collectLayoutRuntimeChildStandaloneBaselines(record) : {}),
         ...collectChildDisplayCompanionBaselines(rows, rowKeys),
     };
 }
@@ -170,10 +178,17 @@ type Props = {
     record: ProofRuntimeRecord;
     children: ReactNode;
     onSaved?: () => void;
+    /** Defaults to opportunities when omitted (legacy opportunity drawer host). */
+    entityType?: DrawerEditEntityType;
 };
 
-export default function LayoutRuntimeDrawerEditProvider({ record, children, onSaved }: Props) {
-    const baselineRef = useRef<Record<string, string>>(collectEditableBaseline(record));
+export default function LayoutRuntimeDrawerEditProvider({
+    record,
+    children,
+    onSaved,
+    entityType = "opportunities",
+}: Props) {
+    const baselineRef = useRef<Record<string, string>>(collectEditableBaseline(record, entityType));
     const [draft, setDraft] = useState<Record<string, string>>(() => ({ ...baselineRef.current }));
     const repeaterRef = useRef(collectRepeaterRows(record));
     const optimisticSnapshotRef = useRef<Record<string, string> | null>(null);
@@ -184,14 +199,14 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
     }, []);
 
     useEffect(() => {
-        const nextBaseline = collectEditableBaseline(record);
+        const nextBaseline = collectEditableBaseline(record, entityType);
         repeaterRef.current = collectRepeaterRows(record);
         setDraft((prev) => {
             const merged = mergeEditableBaselineFromRecord(baselineRef.current, prev, nextBaseline);
             baselineRef.current = merged.baseline;
             return merged.draft;
         });
-    }, [record]);
+    }, [entityType, record]);
 
     const isDirty = useCallback(() => {
         for (const refKey of Object.keys(baselineRef.current)) {
@@ -242,10 +257,20 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
         if (!result.ok) throw new Error(result.error);
     }, [draft, record]);
 
+    const saveChildStandalone = useCallback(async (patchBaseline: Record<string, string>) => {
+        if (entityType !== "child") return;
+        const result = await saveLayoutRuntimeChildStandaloneEdits({
+            record,
+            baseline: patchBaseline,
+            draft,
+        });
+        if (!result.ok) throw new Error(result.error);
+    }, [draft, entityType, record]);
+
     const patchOptimisticRecord = useCallback(
         (nextDraft: Record<string, string>) => {
-            const opportunityId = String(record.id ?? "").trim();
-            if (!opportunityId) return;
+            const entityId = String(record.id ?? "").trim();
+            if (!entityId) return;
             const nextRecord = applyLayoutRuntimeDraftToRecord({
                 record,
                 baseline: baselineRef.current,
@@ -254,14 +279,16 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
                 rows: repeaterRef.current.rows,
             });
             optimisticRecordRef.current = nextRecord;
-            dispatchOpportunityDrawerRecordPatch(opportunityId, nextRecord);
+            if (entityType === "opportunities") {
+                dispatchOpportunityDrawerRecordPatch(entityId, nextRecord);
+            }
             dispatchDrawerLayoutRuntimeBodyRecordPatch({
-                entityType: "opportunities",
-                entityId: opportunityId,
+                entityType,
+                entityId,
                 record: nextRecord,
             });
         },
-        [record],
+        [entityType, record],
     );
 
     const applyOptimistic = useCallback(() => {
@@ -277,18 +304,20 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
         setDraft({ ...snapshot });
         optimisticSnapshotRef.current = null;
         if (optimisticRecordRef.current) {
-            const opportunityId = String(record.id ?? "").trim();
-            if (opportunityId) {
-                dispatchOpportunityDrawerRecordPatch(opportunityId, record);
+            const entityId = String(record.id ?? "").trim();
+            if (entityId) {
+                if (entityType === "opportunities") {
+                    dispatchOpportunityDrawerRecordPatch(entityId, record);
+                }
                 dispatchDrawerLayoutRuntimeBodyRecordPatch({
-                    entityType: "opportunities",
-                    entityId: opportunityId,
+                    entityType,
+                    entityId,
                     record,
                 });
             }
         }
         optimisticRecordRef.current = null;
-    }, [record]);
+    }, [entityType, record]);
 
     const save = useCallback(
         async (options?: DrawerOperatingSaveSectionOptions) => {
@@ -301,25 +330,39 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
                 await savePersonContact(patchBaseline);
                 await saveOpportunityNative(patchBaseline);
                 await saveChildRepeater(patchBaseline);
+                await saveChildStandalone(patchBaseline);
             } else {
                 await Promise.all([
                     savePersonContact(patchBaseline),
                     saveOpportunityNative(patchBaseline),
                     saveChildRepeater(patchBaseline),
+                    saveChildStandalone(patchBaseline),
                 ]);
             }
             baselineRef.current = { ...draft };
             patchOptimisticRecord(draft);
-            const opportunityId = String(record.id ?? "").trim();
-            if (opportunityId) {
-                dispatchOpportunityQueueUpdated(opportunityId, "layout_runtime_child_save");
+            if (entityType === "opportunities") {
+                const opportunityId = String(record.id ?? "").trim();
+                if (opportunityId) {
+                    dispatchOpportunityQueueUpdated(opportunityId, "layout_runtime_child_save");
+                }
             }
             optimisticSnapshotRef.current = null;
             optimisticRecordRef.current = null;
             dispatchLayoutRuntimeDrawerSaved();
             onSaved?.();
         },
-        [draft, onSaved, patchOptimisticRecord, record.id, saveChildRepeater, saveOpportunityNative, savePersonContact],
+        [
+            draft,
+            entityType,
+            onSaved,
+            patchOptimisticRecord,
+            record.id,
+            saveChildRepeater,
+            saveChildStandalone,
+            saveOpportunityNative,
+            savePersonContact,
+        ],
     );
 
     useEffect(() => {

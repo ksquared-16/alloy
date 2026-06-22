@@ -54,6 +54,7 @@ function fieldItem(
     label: string,
     renderHint: LayoutRenderHint = "text",
     adornment?: LayoutFieldAdornment,
+    editable = true,
 ): LayoutItem {
     return {
         id: id(base, "f", refKey.replace(/\./g, "_")),
@@ -61,7 +62,7 @@ function fieldItem(
         refKey,
         label,
         renderHint,
-        editable: true,
+        editable,
         sourceEntity: parseRefKey(refKey).entityKey,
         ...(adornment ? { adornment } : {}),
     };
@@ -135,11 +136,11 @@ export function buildPersonDrawerDefaultDoc(): LayoutDoc {
         [
             row(id(hhBase, "r0"), [
                 col(id(hhBase, "r0"), 0, HALF, [
-                    fieldItem(hhBase, "customer.household_name", "Household", "text", HOME_ICON),
-                    fieldItem(hhBase, "person.relationship", "Role / relationship", "text"),
+                    fieldItem(hhBase, "customer.household_name", "Household", "text", HOME_ICON, false),
+                    fieldItem(hhBase, "person.relationship", "Role / relationship", "text", undefined, false),
                 ]),
                 col(id(hhBase, "r0"), 1, HALF, [
-                    fieldItem(hhBase, "location.household_address", "Household address", "text", HOME_ICON),
+                    fieldItem(hhBase, "location.household_address", "Household address", "text", HOME_ICON, false),
                 ]),
             ]),
             row(id(hhBase, "r1"), [
@@ -196,7 +197,7 @@ export function buildPersonDrawerDefaultDoc(): LayoutDoc {
         [
             row(id(ciBase, "r0"), [
                 col(id(ciBase, "r0"), 0, HALF, [
-                    fieldItem(ciBase, "person.primary_contact_name", "Full name", "text", PERSON_LINK),
+                    fieldItem(ciBase, "person.primary_contact_name", "Full name", "text", PERSON_LINK, false),
                     fieldItem(ciBase, "person.primary_phone", "Phone", "phone", PHONE_ICON),
                 ]),
                 col(id(ciBase, "r0"), 1, HALF, [

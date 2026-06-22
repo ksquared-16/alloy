@@ -31,7 +31,7 @@ import {
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
 import { readLayoutEditorBlockConfig, resolveLayoutRuntimeSectionEditMode } from "@/lib/layout/layoutEditorBlockConfig";
-import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
+import { readLayoutEditorContactRole, normalizeLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
     overlayLayoutEditorContactBlockRecord,
     resolveLayoutEditorContactBlockPerson,
@@ -1865,9 +1865,18 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
         );
 }
 
+function evaluateLayoutItemVisibility(record: ProofRuntimeRecord, item: LayoutItem): boolean {
+    if (evaluateLayoutCondition(record, item.visibleWhen)) return true;
+    if (item.kind !== "field_group" || item.refKey !== "contact_block") return false;
+    const role = normalizeLayoutEditorContactRole(readLayoutEditorContactRole(item.metadata));
+    if (role === "primary") return false;
+    const person = resolveLayoutEditorContactBlockPerson(record, readLayoutEditorContactRole(item.metadata));
+    return Boolean(person?.displayName?.trim());
+}
+
 function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const variant = useContext(LayoutRuntimeVariantContext);
-    if (!evaluateLayoutCondition(record, item.visibleWhen)) return null;
+    if (!evaluateLayoutItemVisibility(record, item)) return null;
     if (variant === "production" && !isLayoutItemSupportedForProduction(item)) return null;
     if (variant === "preview" && !isLayoutItemSupportedForProduction(item)) return null;
     if (!shouldRenderProofItem(item)) return null;

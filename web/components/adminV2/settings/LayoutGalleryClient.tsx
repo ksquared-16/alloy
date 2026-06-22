@@ -278,111 +278,135 @@ export default function LayoutGalleryClient({
     const orgId = useMemo(() => records.find((r) => r.orgId)?.orgId ?? "", [records]);
 
     const opportunityEntry = registry?.enabled.find((e) => e.surface_key === "opportunity_drawer") ?? null;
+    const personEntry = registry?.enabled.find((e) => e.surface_key === "person_drawer") ?? null;
+    const childEntry = registry?.enabled.find((e) => e.surface_key === "child_drawer") ?? null;
+
     const opportunitySummary = useMemo(() => {
         if (!opportunityEntry?.identity || !orgId) return null;
         return summarizeSurfaceLayoutRecords(records, orgId, opportunityEntry.identity);
     }, [opportunityEntry, orgId, records]);
 
-    const createFromDefault = useCallback(async (identity: NonNullable<SurfaceRegistryApiEntry["identity"]>) => {
-        const res = await fetch("/api/admin/entity-layouts", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                entity_type: identity.entityType,
-                surface: identity.surface,
-                layout_key: identity.layoutKey,
-                from_registry: true,
-                seed: "lead_default",
-            }),
-        });
-        if (res.status === 401 || res.status === 403) {
-            setForbidden(true);
-            throw new Error("Admin access is required.");
-        }
-        const json = (await res.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
-        if (!res.ok) throw new Error(json.error ?? "Could not create layout");
-        return json;
-    }, []);
+    const personSummary = useMemo(() => {
+        if (!personEntry?.identity || !orgId) return null;
+        return summarizeSurfaceLayoutRecords(records, orgId, personEntry.identity);
+    }, [personEntry, orgId, records]);
 
-    const handleOpenOpportunity = useCallback(async () => {
-        if (!canMutate || !opportunityEntry?.identity) return;
-        setBusy("open");
-        try {
-            let summary = opportunitySummary;
-            if (!summary) {
-                const created = await createFromDefault(opportunityEntry.identity);
-                await load();
-                summary = summarizeSurfaceLayoutRecords(
-                    [...records, created],
-                    orgId || created.orgId || "",
-                    opportunityEntry.identity,
-                );
-            }
+    const childSummary = useMemo(() => {
+        if (!childEntry?.identity || !orgId) return null;
+        return summarizeSurfaceLayoutRecords(records, orgId, childEntry.identity);
+    }, [childEntry, orgId, records]);
 
-            const action = summary ? resolveGalleryEditLayoutAction(summary) : null;
-            if (!action) {
-                const created = await createFromDefault(opportunityEntry.identity);
-                await load();
-                onOpenEditor(created.id);
-                return;
-            }
-
-            if (action.mode === "open") {
-                onOpenEditor(action.layoutId);
-                return;
-            }
-
-            const dupRes = await fetch(`/api/admin/entity-layouts/${encodeURIComponent(action.sourceLayoutId)}/duplicate`, {
+    const createFromDefault = useCallback(
+        async (
+            identity: NonNullable<SurfaceRegistryApiEntry["identity"]>,
+            seed: "lead_default" | "person_default" | "child_default",
+        ) => {
+            const res = await fetch("/api/admin/entity-layouts", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({}),
+                body: JSON.stringify({
+                    entity_type: identity.entityType,
+                    surface: identity.surface,
+                    layout_key: identity.layoutKey,
+                    from_registry: true,
+                    seed,
+                }),
             });
-            const dupJson = (await dupRes.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
-            if (!dupRes.ok) throw new Error(dupJson.error ?? "Could not create draft from published layout");
-            await load();
-            onOpenEditor(dupJson.id);
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setBusy(null);
-        }
-    }, [
-        canMutate,
-        opportunityEntry,
-        opportunitySummary,
-        createFromDefault,
-        load,
-        onOpenEditor,
-        orgId,
-        records,
-    ]);
-
-    const handleDuplicateOpportunity = useCallback(async () => {
-        if (!canMutate || !opportunityEntry?.identity) return;
-        setBusy("duplicate");
-        try {
-            let sourceId = opportunitySummary?.duplicateSourceId ?? null;
-            if (!sourceId) {
-                const created = await createFromDefault(opportunityEntry.identity);
-                onOpenEditor(created.id);
-                await load();
-                return;
+            if (res.status === 401 || res.status === 403) {
+                setForbidden(true);
+                throw new Error("Admin access is required.");
             }
-            const res = await fetch(`/api/admin/entity-layouts/${sourceId}/duplicate`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({}),
-            });
             const json = (await res.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
-            if (!res.ok) throw new Error(json.error ?? "Duplicate failed");
-            await load();
-            onOpenEditor(json.id);
-        } catch (e) {
-            setError((e as Error).message);
-        } finally {
-            setBusy(null);
-        }
-    }, [canMutate, opportunityEntry, opportunitySummary, createFromDefault, load, onOpenEditor]);
+            if (!res.ok) throw new Error(json.error ?? "Could not create layout");
+            return json;
+        },
+        [],
+    );
+
+    const openSurfaceEditor = useCallback(
+        async (
+            entry: SurfaceRegistryApiEntry,
+            summary: ReturnType<typeof summarizeSurfaceLayoutRecords> | null,
+            seed: "lead_default" | "person_default" | "child_default",
+        ) => {
+            if (!canMutate || !entry.identity) return;
+            setBusy(`open-${entry.surface_key}`);
+            try {
+                let activeSummary = summary;
+                if (!activeSummary) {
+                    const created = await createFromDefault(entry.identity, seed);
+                    await load();
+                    activeSummary = summarizeSurfaceLayoutRecords(
+                        [...records, created],
+                        orgId || created.orgId || "",
+                        entry.identity,
+                    );
+                }
+
+                const action = activeSummary ? resolveGalleryEditLayoutAction(activeSummary) : null;
+                if (!action) {
+                    const created = await createFromDefault(entry.identity, seed);
+                    await load();
+                    onOpenEditor(created.id);
+                    return;
+                }
+
+                if (action.mode === "open") {
+                    onOpenEditor(action.layoutId);
+                    return;
+                }
+
+                const dupRes = await fetch(`/api/admin/entity-layouts/${encodeURIComponent(action.sourceLayoutId)}/duplicate`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                });
+                const dupJson = (await dupRes.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
+                if (!dupRes.ok) throw new Error(dupJson.error ?? "Could not create draft from published layout");
+                await load();
+                onOpenEditor(dupJson.id);
+            } catch (e) {
+                setError((e as Error).message);
+            } finally {
+                setBusy(null);
+            }
+        },
+        [canMutate, createFromDefault, load, onOpenEditor, orgId, records],
+    );
+
+    const duplicateSurfaceDefault = useCallback(
+        async (
+            entry: SurfaceRegistryApiEntry,
+            summary: ReturnType<typeof summarizeSurfaceLayoutRecords> | null,
+            seed: "lead_default" | "person_default" | "child_default",
+        ) => {
+            if (!canMutate || !entry.identity) return;
+            setBusy(`duplicate-${entry.surface_key}`);
+            try {
+                let sourceId = summary?.duplicateSourceId ?? null;
+                if (!sourceId) {
+                    const created = await createFromDefault(entry.identity, seed);
+                    onOpenEditor(created.id);
+                    await load();
+                    return;
+                }
+                const res = await fetch(`/api/admin/entity-layouts/${encodeURIComponent(sourceId)}/duplicate`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({}),
+                });
+                const json = (await res.json().catch(() => ({}))) as EntityLayoutRecord & { error?: string };
+                if (!res.ok) throw new Error(json.error ?? "Duplicate failed");
+                await load();
+                onOpenEditor(json.id);
+            } catch (e) {
+                setError((e as Error).message);
+            } finally {
+                setBusy(null);
+            }
+        },
+        [canMutate, createFromDefault, load, onOpenEditor],
+    );
 
     const handleRollback = useCallback(
         async (versionId: string) => {
@@ -435,25 +459,36 @@ export default function LayoutGalleryClient({
                     </p>
                 </div>
                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-                    {(registry?.enabled ?? []).map((entry) => (
-                        <SurfaceGalleryCard
-                            key={entry.surface_key}
-                            entry={entry}
-                            summary={entry.surface_key === "opportunity_drawer" ? opportunitySummary : null}
-                            canMutate={canMutate}
-                            busy={busy}
-                            onOpenEdit={() => void handleOpenOpportunity()}
-                            onDuplicateDefault={() => void handleDuplicateOpportunity()}
-                            onRollback={(id) => void handleRollback(id)}
-                            showVersions={versionsOpen[entry.surface_key] === true}
-                            onToggleVersions={() =>
-                                setVersionsOpen((prev) => ({
-                                    ...prev,
-                                    [entry.surface_key]: !prev[entry.surface_key],
-                                }))
-                            }
-                        />
-                    ))}
+                    {(registry?.enabled ?? []).map((entry) => {
+                        const summary =
+                            entry.surface_key === "opportunity_drawer" ? opportunitySummary
+                            : entry.surface_key === "person_drawer" ? personSummary
+                            : entry.surface_key === "child_drawer" ? childSummary
+                            : null;
+                        const seed =
+                            entry.surface_key === "person_drawer" ? "person_default"
+                            : entry.surface_key === "child_drawer" ? "child_default"
+                            : "lead_default";
+                        return (
+                            <SurfaceGalleryCard
+                                key={entry.surface_key}
+                                entry={entry}
+                                summary={summary}
+                                canMutate={canMutate}
+                                busy={busy}
+                                onOpenEdit={() => void openSurfaceEditor(entry, summary, seed)}
+                                onDuplicateDefault={() => void duplicateSurfaceDefault(entry, summary, seed)}
+                                onRollback={(id) => void handleRollback(id)}
+                                showVersions={versionsOpen[entry.surface_key] === true}
+                                onToggleVersions={() =>
+                                    setVersionsOpen((prev) => ({
+                                        ...prev,
+                                        [entry.surface_key]: !prev[entry.surface_key],
+                                    }))
+                                }
+                            />
+                        );
+                    })}
                 </div>
             </section>
 

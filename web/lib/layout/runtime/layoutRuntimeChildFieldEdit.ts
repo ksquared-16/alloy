@@ -254,3 +254,146 @@ export function collectLayoutRuntimeChildRepeaterBaselines(
     void record;
     return out;
 }
+
+function readStandaloneChildFieldRaw(record: ProofRuntimeRecord, refKey: string): string {
+    const raw = record[refKey];
+    if (raw != null && String(raw).trim()) return String(raw).trim();
+    const repeaterRaw = readLayoutRuntimeRepeaterFieldRaw(record, refKey);
+    return repeaterRaw == null ? "" : String(repeaterRaw);
+}
+
+export function collectLayoutRuntimeChildStandaloneBaselines(record: ProofRuntimeRecord): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const refKey of LAYOUT_RUNTIME_CHILD_EDITABLE_REF_KEYS) {
+        const raw = readStandaloneChildFieldRaw(record, refKey);
+        out[refKey] = raw == null ? "" : String(raw);
+    }
+    return out;
+}
+
+function standaloneChildDraftHasChanges(
+    baseline: Record<string, string>,
+    draft: Record<string, string>,
+): boolean {
+    for (const refKey of LAYOUT_RUNTIME_CHILD_EDITABLE_REF_KEYS) {
+        if ((draft[refKey] ?? "") !== (baseline[refKey] ?? "")) return true;
+    }
+    return false;
+}
+
+function standaloneIdentityPatchFromDraft(
+    baseline: Record<string, string>,
+    draft: Record<string, string>,
+): InquiryChildIdentityPatch {
+    const read = (refKey: LayoutRuntimeChildIdentityFieldKey) => draft[refKey] ?? baseline[refKey] ?? "";
+    return {
+        first_name: read("child.first_name"),
+        last_name: read("child.last_name"),
+        dob: read("child.date_of_birth").slice(0, 10),
+    };
+}
+
+function standaloneIdentityBaselineFromDraftKeys(baseline: Record<string, string>): InquiryChildIdentityPatch {
+    const read = (refKey: LayoutRuntimeChildIdentityFieldKey) => baseline[refKey] ?? "";
+    return {
+        first_name: read("child.first_name"),
+        last_name: read("child.last_name"),
+        dob: read("child.date_of_birth").slice(0, 10),
+    };
+}
+
+function standaloneOcmPatchFromDraft(
+    record: ProofRuntimeRecord,
+    baseline: Record<string, string>,
+    draft: Record<string, string>,
+): InquiryChildOcmPatch {
+    const local = {
+        location_id: draft["inquiry_child.location_id"] ?? baseline["inquiry_child.location_id"] ?? "",
+        program_room_cohort_key:
+            draft["inquiry_child.program_room_cohort_key"]
+            ?? baseline["inquiry_child.program_room_cohort_key"]
+            ?? "",
+        desired_program_type:
+            draft["inquiry_child.desired_program_type"]
+            ?? baseline["inquiry_child.desired_program_type"]
+            ?? "",
+        desired_schedule_type:
+            draft["inquiry_child.desired_schedule_type"]
+            ?? baseline["inquiry_child.desired_schedule_type"]
+            ?? "",
+        outcome_status_key:
+            draft["inquiry_child.outcome_status_key"]
+            ?? baseline["inquiry_child.outcome_status_key"]
+            ?? "",
+        notes: draft["inquiry_child.notes"] ?? baseline["inquiry_child.notes"] ?? "",
+        desired_start_edit:
+            draft["inquiry_child.desired_start_date"]
+            ?? baseline["inquiry_child.desired_start_date"]
+            ?? "",
+        custom: {},
+    };
+    const rowBaseline = {
+        location_id: baseline["inquiry_child.location_id"] ?? readStandaloneChildFieldRaw(record, "inquiry_child.location_id"),
+        program_room_cohort_key:
+            baseline["inquiry_child.program_room_cohort_key"]
+            ?? readStandaloneChildFieldRaw(record, "inquiry_child.program_room_cohort_key"),
+        desired_program_type:
+            baseline["inquiry_child.desired_program_type"]
+            ?? readStandaloneChildFieldRaw(record, "inquiry_child.desired_program_type"),
+        desired_schedule_type:
+            baseline["inquiry_child.desired_schedule_type"]
+            ?? readStandaloneChildFieldRaw(record, "inquiry_child.desired_schedule_type"),
+        outcome_status_key:
+            baseline["inquiry_child.outcome_status_key"]
+            ?? readStandaloneChildFieldRaw(record, "inquiry_child.outcome_status_key"),
+        notes: baseline["inquiry_child.notes"] ?? readStandaloneChildFieldRaw(record, "inquiry_child.notes"),
+        desired_start_date:
+            baseline["inquiry_child.desired_start_date"]
+            ?? readStandaloneChildFieldRaw(record, "inquiry_child.desired_start_date"),
+        custom_fields: {},
+    };
+    return buildInquiryChildOcmPatchFromEditorLocal({
+        row: rowBaseline as Parameters<typeof buildInquiryChildOcmPatchFromEditorLocal>[0]["row"],
+        local,
+    });
+}
+
+/** Child drawer field-group edits (single record — not opportunity repeater rows). */
+export async function saveLayoutRuntimeChildStandaloneEdits(input: {
+    record: ProofRuntimeRecord;
+    baseline: Record<string, string>;
+    draft: Record<string, string>;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+    if (!standaloneChildDraftHasChanges(input.baseline, input.draft)) return { ok: true };
+
+    const ctx = layoutRuntimeChildRowSaveContext(input.record);
+    if (!ctx) {
+        return { ok: false, error: "Child record is missing customer member identity." };
+    }
+
+    const identityDraft = standaloneIdentityPatchFromDraft(input.baseline, input.draft);
+    const identityBaseline = standaloneIdentityBaselineFromDraftKeys(input.baseline);
+    try {
+        await patchInquiryChildIdentityFromDrawer({
+            row: { customer_member_id: ctx.customerMemberId, person_id: ctx.personId },
+            draft: identityDraft,
+            baseline: identityBaseline,
+        });
+    } catch (err) {
+        return { ok: false, error: err instanceof Error ? err.message : "Child identity save failed" };
+    }
+
+    const ocmPatch = standaloneOcmPatchFromDraft(input.record, input.baseline, input.draft);
+    if (Object.keys(ocmPatch).length > 0) {
+        if (!ctx.ocmId) {
+            return { ok: false, error: "Enrollment participation row is not linked for OCM field save." };
+        }
+        try {
+            await patchOpportunityCustomerMemberFromInquiryChild(ctx.ocmId, ocmPatch);
+        } catch (err) {
+            return { ok: false, error: err instanceof Error ? err.message : "Enrollment field save failed" };
+        }
+    }
+
+    return { ok: true };
+}

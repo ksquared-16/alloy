@@ -98,7 +98,9 @@ export function partitionChildOverviewBodySections(doc: LayoutDoc): ChildOvervie
     };
 }
 
-export function childOverviewCompositionHints(): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
+export function childOverviewCompositionHints(
+    overrides: Partial<import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints> = {},
+): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
     return {
         childOverviewComposition: true,
         familySummaryOnly: true,
@@ -108,7 +110,15 @@ export function childOverviewCompositionHints(): import("@/lib/layout/runtime/la
         summaryStripCompactRow: true,
         childOperatingSummaryCards: true,
         childFamilyCardList: true,
+        ...overrides,
     };
+}
+
+/** Visual editor preview — match published LayoutDoc block rendering. */
+export function childOverviewVisualEditorCompositionHints(
+    overrides: Partial<import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints> = {},
+): import("@/lib/layout/runtime/layoutRuntimeCompositionContext").LayoutRuntimeCompositionHints {
+    return childOverviewCompositionHints({ honorLayoutDocBlocks: true, ...overrides });
 }
 
 export function summarizeChildDrawerFamilyStrip(record: ProofRuntimeRecord): {

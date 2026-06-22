@@ -39,6 +39,8 @@ import { handlePersonDrawerLayoutRuntimeAdornmentOpenDrawer } from "@/lib/layout
 import { shouldUsePersonOverviewComposition } from "@/lib/layout/runtime/personOverviewComposition";
 import { shouldUseChildOverviewComposition } from "@/lib/layout/runtime/childOverviewComposition";
 import { splitDrawerLayoutDocShellZones } from "@/lib/layout/runtime/splitDrawerLayoutDocShellZones";
+import { mergePersonLayoutRuntimeWidgetRecord } from "@/lib/layout/runtime/mergePersonLayoutRuntimeWidgetRecord";
+import { mergeChildLayoutRuntimeWidgetRecord } from "@/lib/layout/runtime/mergeChildLayoutRuntimeWidgetRecord";
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import { useBosPersonDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
@@ -177,6 +179,18 @@ export default function PersonsDrawerVmRuntime() {
 
     const activeOverviewLayoutBody = isChildSurface ? childOverviewLayoutBody : personOverviewLayoutBody;
 
+    const overviewWidgetRecord = useMemo(() => {
+        if (!record) return null;
+        return record as Record<string, unknown>;
+    }, [record]);
+
+    const mergedOverviewLayoutRecord = useMemo(() => {
+        if (!activeOverviewLayoutBody.record) return null;
+        return isChildSurface ?
+                mergeChildLayoutRuntimeWidgetRecord(activeOverviewLayoutBody.record, overviewWidgetRecord)
+            :   mergePersonLayoutRuntimeWidgetRecord(activeOverviewLayoutBody.record, overviewWidgetRecord);
+    }, [activeOverviewLayoutBody.record, overviewWidgetRecord, isChildSurface]);
+
     const summaryStripBoundaryEnabled = isDrawerSummaryStripBoundaryEnabledClient();
 
     const personCompositionActive = useMemo(
@@ -215,11 +229,11 @@ export default function PersonsDrawerVmRuntime() {
 
     const layoutAdornmentAction = useCallback<AdornmentActionHandler>(
         (item, adornment, rowRecord) => {
-            if (!activeOverviewLayoutBody.record || !personId || !record) return;
+            if (!mergedOverviewLayoutRecord || !personId || !record) return;
             handlePersonDrawerLayoutRuntimeAdornmentOpenDrawer({
                 item,
                 adornment,
-                record: activeOverviewLayoutBody.record,
+                record: mergedOverviewLayoutRecord,
                 rowRecord,
                 personRecord: record,
                 openDrawer,
@@ -229,7 +243,7 @@ export default function PersonsDrawerVmRuntime() {
             });
         },
         [
-            activeOverviewLayoutBody.record,
+            mergedOverviewLayoutRecord,
             personId,
             record,
             openDrawer,
@@ -240,14 +254,14 @@ export default function PersonsDrawerVmRuntime() {
     );
 
     const drawerSummaryStrip = useMemo(() => {
-        if (!layoutShellZones?.summarySectionKeys.length || !activeOverviewLayoutBody.record || !personId) {
+        if (!layoutShellZones?.summarySectionKeys.length || !mergedOverviewLayoutRecord || !personId) {
             return null;
         }
         return (
             <DrawerLayoutRuntimeShellZoneView
                 zone="summary_strip"
                 doc={layoutShellZones.summaryDoc}
-                record={activeOverviewLayoutBody.record}
+                record={mergedOverviewLayoutRecord}
                 entityId={personId}
                 canMutate={!!canMutate}
                 onAdornmentAction={layoutAdornmentAction}
@@ -255,7 +269,7 @@ export default function PersonsDrawerVmRuntime() {
         );
     }, [
         layoutShellZones,
-        activeOverviewLayoutBody.record,
+        mergedOverviewLayoutRecord,
         personId,
         canMutate,
         layoutAdornmentAction,

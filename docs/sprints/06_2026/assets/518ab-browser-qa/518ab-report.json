@@ -1,0 +1,22 @@
+{
+  "recordUrl": "/adminV2/workspace/work-unit/new-leads",
+  "openedFrom": "Wright Family queue row",
+  "compactVisible": true,
+  "probeBeforeEdit": {
+    "compactPresent": true,
+    "rowLines": 6,
+    "inlineFields": 16,
+    "stackedGridPresent": false,
+    "additionalContactHint": null
+  },
+  "editProbe": {
+    "compactPresent": true,
+    "rowLines": 6,
+    "inlineEditing": 0,
+    "inlineCellInputs": 0,
+    "fullWidthInputs": 0,
+    "stackedGridPresent": false,
+    "additionalContactVisible": true
+  },
+  "screenshotPath": "/Users/Kelly/Alloy/docs/sprints/06_2026/assets/518ab-browser-qa/518ab-1782161641242.png"
+}

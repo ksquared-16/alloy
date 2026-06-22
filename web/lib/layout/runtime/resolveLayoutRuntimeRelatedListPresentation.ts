@@ -30,10 +30,17 @@ export function readLayoutEditorRelatedListConfigFromItem(item: LayoutItem): Lay
         return normalized.length > 0 ? { fields: normalized } : undefined;
     };
 
-    const presentationMode =
+    const explicitMode =
         typeof bag.presentationMode === "string" && isPresentationMode(bag.presentationMode) ?
             bag.presentationMode
-        :   "table";
+        :   null;
+    const derivedFromDisplay =
+        item.displayMode === "rows" ? "cards"
+        : item.displayMode === "list" ? "compact"
+        : null;
+    const presentationMode =
+        derivedFromDisplay && explicitMode === "table" ? derivedFromDisplay
+        : explicitMode ?? derivedFromDisplay ?? "table";
 
     return {
         entityType: entityType as LayoutEditorRelatedListConfig["entityType"],
@@ -51,7 +58,11 @@ export function hasEditorRelatedListConfig(item: LayoutItem): boolean {
 export function resolveRelatedListPresentationMode(
     item: LayoutItem,
 ): LayoutEditorRelatedListPresentationMode {
-    return readLayoutEditorRelatedListConfigFromItem(item)?.presentationMode ?? "table";
+    if (item.displayMode === "rows") return "cards";
+    if (item.displayMode === "list") return "compact";
+    const fromConfig = readLayoutEditorRelatedListConfigFromItem(item)?.presentationMode;
+    if (fromConfig) return fromConfig;
+    return "table";
 }
 
 export function relatedListPresentationToDisplayMode(

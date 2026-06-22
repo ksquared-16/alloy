@@ -66,21 +66,23 @@ describe("layoutGalleryModel", () => {
 });
 
 describe("layouts settings gallery wiring", () => {
-    it("registry payload includes enabled opportunity drawer and coming-soon surfaces", () => {
+    it("registry payload includes enabled drawer surfaces and coming-soon surfaces", () => {
         const payload = buildSurfaceLayoutRegistryResponse();
-        expect(payload.enabled.map((s) => s.surface_key)).toEqual(["opportunity_drawer"]);
-        expect(payload.coming_soon.map((s) => s.surface_key)).toEqual([
+        expect(payload.enabled.map((s) => s.surface_key)).toEqual([
+            "opportunity_drawer",
             "person_drawer",
             "child_drawer",
+        ]);
+        expect(payload.coming_soon.map((s) => s.surface_key)).toEqual([
             "queue_record",
             "communications_command_center",
             "pos_workspace",
         ]);
     });
 
-    it("layouts page mounts gallery client as primary UX", () => {
+    it("layouts page mounts gallery shell as primary UX", () => {
         const page = readFileSync(resolve(root, "app/adminV2/settings/layouts/page.tsx"), "utf8");
-        expect(page).toContain("LayoutsSettingsPageClient");
+        expect(page).toContain("LayoutsSettingsPageShell");
         expect(page).not.toContain("<LayoutConfigClient");
     });
 

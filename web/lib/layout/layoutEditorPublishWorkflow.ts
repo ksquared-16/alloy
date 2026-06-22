@@ -7,8 +7,6 @@ import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import { duplicateEntityLayoutDraft } from "@/lib/layout/opportunityDrawerLayoutEditorApi";
 import { invalidateDrawerLayoutRuntimeBodyCacheForApiPath } from "@/lib/layout/runtime/drawerLayoutRuntimeBodySessionCache";
 
-const OPPORTUNITY_DRAWER_BODY_API = "/api/admin/layout-runtime/opportunity-drawer-body";
-
 /** Fork a published layout row into a new editable draft. */
 export async function forkPublishedLayoutToDraft(source: EntityLayoutRecord): Promise<EntityLayoutRecord> {
     if (source.status !== "published") return source;
@@ -17,8 +15,20 @@ export async function forkPublishedLayoutToDraft(source: EntityLayoutRecord): Pr
 
 /** Notify live drawer runtimes that org layout changed — bust session cache + queue listeners. */
 export function dispatchOpportunityDrawerLayoutPublished(doc: LayoutDoc): void {
+    dispatchDrawerLayoutPublished(doc, "/api/admin/layout-runtime/opportunity-drawer-body");
+}
+
+export function dispatchPersonDrawerLayoutPublished(doc: LayoutDoc): void {
+    dispatchDrawerLayoutPublished(doc, "/api/admin/layout-runtime/person-drawer-body");
+}
+
+export function dispatchChildDrawerLayoutPublished(doc: LayoutDoc): void {
+    dispatchDrawerLayoutPublished(doc, "/api/admin/layout-runtime/child-drawer-body");
+}
+
+function dispatchDrawerLayoutPublished(doc: LayoutDoc, apiPath: string): void {
     if (typeof window === "undefined") return;
-    invalidateDrawerLayoutRuntimeBodyCacheForApiPath(OPPORTUNITY_DRAWER_BODY_API);
+    invalidateDrawerLayoutRuntimeBodyCacheForApiPath(apiPath);
     window.dispatchEvent(
         new CustomEvent("adminv2:entity-layout-published", {
             detail: { entityType: doc.entityType, surface: doc.surface },

@@ -58,7 +58,14 @@ export default function DrawerLayoutRuntimeShellZoneView({
             data-drawer-layout-runtime-shell-zone={zone}
             data-drawer-layout-runtime-shell-zone-sections={doc.sections.map((s) => s.key).join(",")}
         >
-            <LayoutRuntimeDrawerEditProvider record={record}>
+            <LayoutRuntimeDrawerEditProvider
+                record={record}
+                entityType={
+                    doc.entityType === "person" ? "persons"
+                    : doc.entityType === "child" ? "child"
+                    :   "opportunities"
+                }
+            >
                 <LayoutRuntimeSectionFlowView
                     doc={doc}
                     sections={doc.sections}

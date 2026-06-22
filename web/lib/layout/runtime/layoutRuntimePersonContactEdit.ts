@@ -24,15 +24,32 @@ export function isLayoutRuntimePersonContactRefKey(refKey: string): boolean {
     return refKey in PERSON_FIELD_BY_REF_KEY;
 }
 
+function trimPersonId(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s || null;
+}
+
 export function resolveLayoutRuntimePersonId(record: Record<string, unknown>): string | null {
-    const fromRecord = primaryPersonIdFromOpportunityRecord(record);
-    if (fromRecord) return fromRecord;
+    const fromOpportunityHost = primaryPersonIdFromOpportunityRecord(record);
+    if (fromOpportunityHost) return fromOpportunityHost;
+
+    const fromPersonDrawer =
+        trimPersonId(record["person.id"])
+        ?? trimPersonId(record.id);
+    if (fromPersonDrawer) return fromPersonDrawer;
+
     const overview = record._overview_data;
     if (overview && typeof overview === "object") {
-        return primaryPersonIdFromOpportunityRecord(overview as Record<string, unknown>);
+        const fromOverview = primaryPersonIdFromOpportunityRecord(overview as Record<string, unknown>);
+        if (fromOverview) return fromOverview;
+        const overviewPersonId =
+            trimPersonId((overview as Record<string, unknown>)["person.id"])
+            ?? trimPersonId((overview as Record<string, unknown>).id);
+        if (overviewPersonId) return overviewPersonId;
     }
-    const layoutPersonId = record["opportunity.primary_person_id"];
-    return typeof layoutPersonId === "string" && layoutPersonId.trim() ? layoutPersonId.trim() : null;
+
+    return trimPersonId(record["opportunity.primary_person_id"]);
 }
 
 export function buildLayoutRuntimePersonContactPatch(

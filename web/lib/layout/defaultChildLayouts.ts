@@ -54,6 +54,7 @@ function fieldItem(
     label: string,
     renderHint: LayoutRenderHint = "text",
     adornment?: LayoutFieldAdornment,
+    editable = true,
 ): LayoutItem {
     return {
         id: id(base, "f", refKey.replace(/\./g, "_")),
@@ -61,7 +62,7 @@ function fieldItem(
         refKey,
         label,
         renderHint,
-        editable: true,
+        editable,
         sourceEntity: parseRefKey(refKey).entityKey,
         ...(adornment ? { adornment } : {}),
     };
@@ -133,9 +134,19 @@ export function buildChildDrawerDefaultDoc(): LayoutDoc {
         "program_enrollment",
         "Program & Enrollment",
         [
+            row(id(peBase, "identity"), [
+                col(id(peBase, "identity"), 0, HALF, [
+                    fieldItem(peBase, "child.first_name", "First name", "text", CHILD_LINK),
+                    fieldItem(peBase, "child.last_name", "Last name", "text"),
+                    fieldItem(peBase, "child.date_of_birth", "Date of birth", "date", CALENDAR_ICON),
+                ]),
+                col(id(peBase, "identity"), 1, HALF, [
+                    fieldItem(peBase, "child.age_band", "Age", "text", undefined, false),
+                ]),
+            ]),
             row(id(peBase, "r0"), [
                 col(id(peBase, "r0"), 0, HALF, [
-                    fieldItem(peBase, "inquiry_child.program", "Program", "text"),
+                    fieldItem(peBase, "inquiry_child.program", "Program", "text", undefined, false),
                     fieldItem(peBase, "inquiry_child.desired_program_type", "Program type", "text"),
                     fieldItem(peBase, "inquiry_child.program_room_cohort_key", "Classroom / cohort", "text"),
                 ]),
@@ -143,7 +154,7 @@ export function buildChildDrawerDefaultDoc(): LayoutDoc {
                     fieldItem(peBase, "inquiry_child.desired_start_date", "Desired start", "date", CALENDAR_ICON),
                     fieldItem(peBase, "inquiry_child.desired_schedule_type", "Schedule", "text"),
                     fieldItem(peBase, "inquiry_child.outcome_status_key", "Enrollment status", "status"),
-                    fieldItem(peBase, "child.status", "Child status", "status"),
+                    fieldItem(peBase, "child.status", "Child status", "status", undefined, false),
                 ]),
             ]),
             row(id(peBase, "r1"), [
@@ -189,7 +200,7 @@ export function buildChildDrawerDefaultDoc(): LayoutDoc {
         [
             row(id(frBase, "r0"), [
                 col(id(frBase, "r0"), 0, HALF, [
-                    fieldItem(frBase, "customer.household_name", "Household", "text", HOME_ICON),
+                    fieldItem(frBase, "customer.household_name", "Household", "text", HOME_ICON, false),
                 ]),
             ]),
             row(id(frBase, "r1"), [col(id(frBase, "r1"), 0, LAYOUT_GRID_COLUMNS, [familyTable])]),

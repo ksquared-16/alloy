@@ -51,6 +51,14 @@ function shouldShowStagingDiagnostic(): boolean {
     return process.env.NEXT_PUBLIC_LAYOUT_RUNTIME_STAGING_DEBUG === "1";
 }
 
+function drawerEditEntityTypeForSurface(
+    surface: LayoutRuntimeDrawerSurface,
+): import("@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch").DrawerLayoutRuntimeBodyRecordPatchDetail["entityType"] {
+    if (surface === "person_drawer_overview") return "persons";
+    if (surface === "child_drawer_overview") return "child";
+    return "opportunities";
+}
+
 export default function DrawerLayoutRuntimeOverviewBody({
     layoutBody,
     vmFallback,
@@ -172,7 +180,11 @@ export default function DrawerLayoutRuntimeOverviewBody({
                             Layout configured but no items rendered. Enable staging diagnostic for item evidence.
                         </div>
                     :   null}
-                    <LayoutRuntimeDrawerEditProvider record={layoutBody.record} onSaved={onLayoutRuntimeSaved}>
+                    <LayoutRuntimeDrawerEditProvider
+                        record={layoutBody.record}
+                        entityType={drawerEditEntityTypeForSurface(surface)}
+                        onSaved={onLayoutRuntimeSaved}
+                    >
                         {useLeadComposition ?
                             <LeadOverviewRuntimeComposition
                                 doc={effectiveDoc}

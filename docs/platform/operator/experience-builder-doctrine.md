@@ -35,8 +35,8 @@ Lead/Opportunity drawer is the **reference implementation**. Person, Child, and 
 | Surface | Editor entry | Default doc |
 |---------|--------------|-------------|
 | Opportunity drawer | `/settings/layouts` → Opportunity drawer | `buildLeadDrawerDefaultDoc()` |
-| Person drawer | Planned — same builder shell | `buildPersonDrawerDefaultDoc()` |
-| Child drawer | Planned | `buildChildDrawerDefaultDoc()` |
+| Person drawer | `/settings/layouts` → Person drawer | `buildPersonDrawerDefaultDoc()` |
+| Child drawer | `/settings/layouts` → Child drawer | `buildChildDrawerDefaultDoc()` |
 | Queue record row | Queue layout editor (v3 metadata) | org / queue presets |
 
 ---
@@ -129,6 +129,25 @@ Stored on `LayoutItem.metadata` / column metadata:
 - `LAYOUT_RUNTIME_DRAWER_SAVED_EVENT` / `REVERTED` exit section edit mode.
 
 Supported adapters: `layoutRuntimeFieldIsEditable` + `resolveLayoutRuntimeFieldControl` registry (location, program, room, enrollment status, DOB, opportunity fields, etc.).
+
+### Person / Child drawer — read-only fields (June 2026)
+
+These fields remain **display-only** in default LayoutDocs because there is no reliable layout-runtime write path. Do not invent PATCH routes from the builder.
+
+| Field / refKey | Surface | Reason |
+|----------------|---------|--------|
+| `customer.household_name` | Person, Child | Customer record name — no registered person/child drawer PATCH adapter; household identity is relationship-scoped, not person-scalar. |
+| `person.relationship` | Person | Role on `customer_persons` — requires customer membership mutation, not covered by person contact PATCH. |
+| `location.household_address` | Person, Child | Address lives on customer/location tables — no layout-runtime address save adapter. |
+| `child.age_band` | Child | Computed from DOB via `formatLayoutRuntimeAgeDisplay` — not stored. |
+| `child.status` (mirror) | Child | Authoritative status on enrollment mirror — edit via `inquiry_child.outcome_status_key` / placement adapters when OCM context exists. |
+| `inquiry_child.program` (label) | Child | Program label is derived from placement mirror — editable program type/room/cohort fields use placement save when `ocm_id` present. |
+
+**Supported Person drawer saves:** person contact scalars (`person.first_name`, `person.last_name`, `person.email`, `person.phone`) via `saveLayoutRuntimePersonContactEdits` → `/api/admin/persons/:id`.
+
+**Supported Child drawer saves:** standalone child identity + inquiry_child placement fields via `saveLayoutRuntimeChildStandaloneEdits` when `customer_member_id` / `ocm_id` resolve from VM mirror.
+
+**Widget merge:** Person and Child summary strips overlay VM widget payloads via `mergePersonLayoutRuntimeWidgetRecord` / `mergeChildLayoutRuntimeWidgetRecord` (same pattern as opportunity `_operational_*` widgets).
 
 ---
 

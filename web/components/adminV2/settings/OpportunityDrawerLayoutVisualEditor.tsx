@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Visual layout editor — Opportunity Drawer.
+ * Visual layout editor — drawer surfaces (opportunity, person, child).
  * Phase 5.16 — POS-builder-style studio shell (palette · canvas · inspector).
  */
 
@@ -24,11 +24,20 @@ import {
     publishEntityLayoutDraft,
 } from "@/lib/layout/opportunityDrawerLayoutEditorApi";
 import {
+    dispatchChildDrawerLayoutPublished,
     dispatchOpportunityDrawerLayoutPublished,
+    dispatchPersonDrawerLayoutPublished,
     forkPublishedLayoutToDraft,
     parseLayoutDocFromRecord,
 } from "@/lib/layout/layoutEditorPublishWorkflow";
-import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
+import {
+    getDrawerLayoutEditorSurfaceConfig,
+    type DrawerLayoutEditorSurfaceKey,
+} from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import {
+    prepareDrawerLayoutDocForEditor,
+    validateDrawerLayoutDoc,
+} from "@/lib/layout/drawerLayoutEditorModel";
 import {
     applyOpportunityDrawerStarterTemplate,
     type OpportunityDrawerStarterTemplateKey,
@@ -37,12 +46,9 @@ import { diffNewSectionKeys } from "@/lib/layout/layoutBuilderStudioUx";
 import {
     ensureOpportunityDrawerLayoutDocSaveReady,
     formatLayoutValidationErrors,
-    isOpportunityDrawerLayoutDoc,
     layoutDocHasRepairableGeneratedKeys,
-    prepareOpportunityDrawerLayoutDocForEditor,
     repairOpportunityDrawerLayoutGeneratedKeys,
     resolveVisualEditorActionState,
-    validateOpportunityDrawerLayoutDoc,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { opCaseFileCanvas } from "@/lib/operational/ui/operationalVisualTokens";
 import { useLayoutBuilderPreviewRecord } from "@/lib/layout/layoutBuilderPreviewRecordState";
@@ -69,6 +75,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const [error, setError] = useState<string | null>(null);
     const [record, setRecord] = useState<EntityLayoutRecord | null>(null);
     const [workingDoc, setWorkingDoc] = useState<LayoutDoc | null>(null);
+    const [surfaceKey, setSurfaceKey] = useState<DrawerLayoutEditorSurfaceKey>("opportunity_drawer");
     const [workingName, setWorkingName] = useState("");
     const [dirty, setDirty] = useState(false);
     const [busy, setBusy] = useState<"save" | "publish" | null>(null);
@@ -88,9 +95,11 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
 
     const advancedHref = `${basePath}?editor=1&layout=${encodeURIComponent(layoutId)}&advanced=1`;
 
+    const surfaceConfig = useMemo(() => getDrawerLayoutEditorSurfaceConfig(surfaceKey), [surfaceKey]);
+
     const validation = useMemo(
-        () => (workingDoc ? validateOpportunityDrawerLayoutDoc(workingDoc) : { ok: true, errors: [], warnings: [] }),
-        [workingDoc],
+        () => (workingDoc ? validateDrawerLayoutDoc(workingDoc, surfaceKey) : { ok: true, errors: [], warnings: [] }),
+        [workingDoc, surfaceKey],
     );
 
     const repairableKeys = useMemo(
@@ -117,7 +126,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         [record, dirty, validation.ok, busy],
     );
 
-    const fieldPickerGroups = useMemo(() => buildOpportunityDrawerEditorFieldPickerGroups(), []);
+    const fieldPickerGroups = useMemo(() => surfaceConfig.buildFieldPickerGroups(), [surfaceConfig]);
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -125,13 +134,12 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         setAutoRepairNotice(null);
         try {
             const rec = await fetchEntityLayoutRecord(layoutId);
-            const prepared = prepareOpportunityDrawerLayoutDocForEditor(rec.doc);
+            const prepared = prepareDrawerLayoutDocForEditor(rec.doc);
             if (!prepared.ok) {
                 throw new Error(formatLayoutValidationErrors(prepared.errors).join("; ") || "Invalid layout document");
             }
-            if (!isOpportunityDrawerLayoutDoc(prepared.doc)) {
-                setForceAdvanced(true);
-            }
+            setSurfaceKey(prepared.surfaceKey);
+            setForceAdvanced(false);
             setRecord(rec);
             setWorkingDoc(prepared.doc);
             setWorkingName(resolveLayoutStableTitle(rec.name));
@@ -173,7 +181,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
 
     const handleQuickStart = useCallback(
         (action: LayoutBuilderQuickStartAction) => {
-            if (!workingDoc) return;
+            if (!workingDoc || surfaceKey !== "opportunity_drawer") return;
             const templateKey: OpportunityDrawerStarterTemplateKey =
                 action === "template" ? "minimal_lead_overview"
                 : action === "kpi_strip" ? "kpi_strip"
@@ -196,8 +204,13 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             }
             setStudioNotice({ tone: "success", message: "Added starter content — customize it in Properties." });
         },
-        [workingDoc, applyDoc, scrollToSection],
+        [workingDoc, applyDoc, scrollToSection, surfaceKey],
     );
+
+    const canvasPreviewRecord = useMemo(() => {
+        if (surfaceKey === "opportunity_drawer") return previewRecordState.record;
+        return surfaceConfig.previewRecord;
+    }, [surfaceKey, previewRecordState.record, surfaceConfig.previewRecord]);
 
     const clearItemSelection = useCallback(() => {
         setSelectedFieldPath(null);
@@ -213,7 +226,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         if (!workingDoc || !record) return;
         const ready = ensureOpportunityDrawerLayoutDocSaveReady(workingDoc);
         const docToSave = ready.doc;
-        const validationForSave = validateOpportunityDrawerLayoutDoc(docToSave);
+        const validationForSave = validateDrawerLayoutDoc(docToSave, surfaceKey);
         if (!validationForSave.ok) return;
         if (ready.repaired) {
             setWorkingDoc(docToSave);
@@ -246,7 +259,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         if (!record || !workingDoc) return;
         const ready = ensureOpportunityDrawerLayoutDocSaveReady(workingDoc);
         const docToPublish = ready.doc;
-        const validationForPublish = validateOpportunityDrawerLayoutDoc(docToPublish);
+        const validationForPublish = validateDrawerLayoutDoc(docToPublish, surfaceKey);
         if (!validationForPublish.ok) return;
         if (ready.repaired) {
             setWorkingDoc(docToPublish);
@@ -264,7 +277,13 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                 target = await patchEntityLayoutDraft(target.id, workingName, docToPublish);
             }
             const published = await publishEntityLayoutDraft(target.id);
-            dispatchOpportunityDrawerLayoutPublished(published.doc);
+            if (surfaceKey === "person_drawer") {
+                dispatchPersonDrawerLayoutPublished(published.doc);
+            } else if (surfaceKey === "child_drawer") {
+                dispatchChildDrawerLayoutPublished(published.doc);
+            } else {
+                dispatchOpportunityDrawerLayoutPublished(published.doc);
+            }
             const nextDraft = await forkPublishedLayoutToDraft(published);
             onLayoutIdChange?.(nextDraft.id);
             setRecord(nextDraft);
@@ -276,7 +295,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         } finally {
             setBusy(null);
         }
-    }, [record, dirty, workingName, workingDoc, onLayoutIdChange]);
+    }, [record, dirty, workingName, workingDoc, onLayoutIdChange, surfaceKey]);
 
     const layoutVersionHint = useMemo(() => {
         if (!record) return "";
@@ -289,7 +308,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         return (
             <div className="space-y-3" data-testid="opportunity-drawer-visual-editor-fallback">
                 <p className="text-xs text-alloy-midnight/55">
-                    Visual editor supports the opportunity drawer only. Using advanced builder.
+                    Visual editor could not load this layout document. Using advanced builder.
                 </p>
                 <LayoutConfigClient adminV2Chrome hideLayoutCatalog initialSelectedId={layoutId} />
             </div>
@@ -334,7 +353,9 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                             ← Gallery
                         </button>
                         <span className="text-alloy-midnight/25">·</span>
-                        <h2 className="text-sm font-semibold text-alloy-midnight">Experience Builder</h2>
+                        <h2 className="text-sm font-semibold text-alloy-midnight">
+                            Experience Builder · {surfaceConfig.label}
+                        </h2>
                     </div>
                     <input
                         type="text"
@@ -510,6 +531,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                 <div className={`relative min-h-0 min-w-0 overflow-y-auto rounded-xl ${opCaseFileCanvas}`} data-testid="layout-builder-canvas-host">
                     <OpportunityDrawerLayoutEditorCanvas
                         doc={workingDoc}
+                        surfaceKey={surfaceKey}
                         editorMode={editorMode}
                         selectedSectionId={selectedSectionId}
                         selectedFieldPath={selectedFieldPath}
@@ -517,8 +539,8 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         onSelectFieldPath={setSelectedFieldPath}
                         onSelectBlockId={setSelectedBlockId}
                         applyDoc={applyDoc}
-                        onQuickStart={handleQuickStart}
-                        previewRecord={previewRecordState.record}
+                        onQuickStart={surfaceKey === "opportunity_drawer" ? handleQuickStart : undefined}
+                        previewRecord={canvasPreviewRecord}
                     />
                 </div>
 
