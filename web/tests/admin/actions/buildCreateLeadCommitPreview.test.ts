@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
-import { buildCreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
+import { buildCreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import {
     __resetHouseholdCandidateCounterForTests,
     groupFactsIntoHouseholdCandidates,

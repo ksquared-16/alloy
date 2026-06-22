@@ -3,7 +3,7 @@ import {
     serializeCreateLeadCommitSelection,
     syncCreateLeadValuesFromCommitSelection,
     type CreateLeadCommitSelection,
-} from "@/lib/intake/commit/createLeadCommitSelection";
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 
 export const CREATE_LEAD_HOUSEHOLD_COMMIT_PAYLOAD_KEY = "household_commit_v1";
 

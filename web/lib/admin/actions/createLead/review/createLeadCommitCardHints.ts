@@ -1,20 +1,5 @@
-import type { CreateLeadCommitRecord } from "@/lib/intake/commit/createLeadCommitSelection";
+import type { CreateLeadCommitRecord } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
-import type { IntakeReviewWarning, IntakeReviewWarningCode } from "@/lib/intake/review/intakeReviewWarnings";
-
-const GLOBAL_WARNING_CODES = new Set<IntakeReviewWarningCode>([
-    "location_ambiguous",
-    "location_unmatched",
-]);
-
-const RECORD_WARNING_CODES = new Set<IntakeReviewWarningCode>([
-    "extra_parents_commit_limited",
-    "extra_children_commit_limited",
-    "parent_last_name_inferred",
-    "child_last_name_inferred",
-    "child_last_name_needs_review",
-    "address_no_action_field",
-]);
 
 function personFromHousehold(
     household: IntakeHouseholdCandidate,
@@ -24,28 +9,7 @@ function personFromHousehold(
     return pool.find((p) => p.candidate_id === record.candidate_id);
 }
 
-/** Split household review warnings into global banner vs record/section scoped. */
-export function partitionIntakeReviewWarnings(warnings: readonly IntakeReviewWarning[]): {
-    globalWarnings: IntakeReviewWarning[];
-    addressWarnings: IntakeReviewWarning[];
-} {
-    const globalWarnings: IntakeReviewWarning[] = [];
-    const addressWarnings: IntakeReviewWarning[] = [];
-    for (const warning of warnings) {
-        if (GLOBAL_WARNING_CODES.has(warning.code)) {
-            globalWarnings.push(warning);
-        } else if (warning.code === "address_no_action_field") {
-            addressWarnings.push(warning);
-        } else if (RECORD_WARNING_CODES.has(warning.code)) {
-            continue;
-        } else {
-            globalWarnings.push(warning);
-        }
-    }
-    return { globalWarnings, addressWarnings };
-}
-
-/** Operator-facing hints rendered on household commit cards. */
+/** Operator-facing hints rendered on Create Lead household commit cards. */
 export function buildCreateLeadRecordCardHints(input: {
     record: CreateLeadCommitRecord;
     household: IntakeHouseholdCandidate;
@@ -83,7 +47,7 @@ const GLOBAL_VALIDATION_PATTERNS = [
     /^Location is required/i,
 ];
 
-/** Lead-level validation issues suitable for the global blocker banner. */
+/** Lead-level validation issues suitable for the global blocker banner in Create Lead review. */
 export function filterGlobalCreateLeadValidationIssues(issues: readonly string[]): string[] {
     return issues.filter((issue) => GLOBAL_VALIDATION_PATTERNS.some((pattern) => pattern.test(issue)));
 }

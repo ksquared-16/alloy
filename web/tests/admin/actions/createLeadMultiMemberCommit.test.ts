@@ -3,7 +3,7 @@ import { executeCreateLeadAction } from "@/lib/admin/actions/entryLifecycleActio
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { applyCreateLeadHouseholdMemberCommit } from "@/lib/admin/actions/executeCreateLeadHouseholdCommit";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
-import { buildCreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
+import { buildCreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { mapCreateLeadCommitSelectionToExecutePayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import {
     __resetExtractFactCounterForTests,

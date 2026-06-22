@@ -19,6 +19,8 @@ export type CreateLeadCommitRecord = {
     age_display: string | null;
     program_interest: string | null;
     desired_start_date: string | null;
+    program_room_cohort_key: string | null;
+    desired_schedule_type: string | null;
     include_in_commit: boolean;
     primary: boolean;
     validation_state: "valid" | "invalid" | "ambiguous" | "unknown";
@@ -39,7 +41,21 @@ export type CreateLeadCommitSelection = {
 };
 
 export type CreateLeadCommitSelectionPatch = Partial<
-    Pick<CreateLeadCommitRecord, "first_name" | "last_name" | "email" | "phone" | "dob" | "include_in_commit" | "primary">
+    Pick<
+        CreateLeadCommitRecord,
+        | "first_name"
+        | "last_name"
+        | "email"
+        | "phone"
+        | "role"
+        | "dob"
+        | "program_interest"
+        | "desired_start_date"
+        | "program_room_cohort_key"
+        | "desired_schedule_type"
+        | "include_in_commit"
+        | "primary"
+    >
 >;
 
 function trim(v: unknown): string {
@@ -73,7 +89,7 @@ function childBlockers(record: Pick<CreateLeadCommitRecord, "first_name" | "last
     if (!trim(record.first_name)) blockers.push("First name is required.");
     if (!trim(record.last_name)) blockers.push("Last name is required.");
     const dob = trim(record.dob);
-    if (dob && !isoDateOnly(dob)) blockers.push("Date of birth must be YYYY-MM-DD.");
+    if (dob && !isoDateOnly(dob)) blockers.push("Date of birth is invalid.");
     return blockers;
 }
 
@@ -115,6 +131,8 @@ function parentRecordFromCandidate(
         age_display: personAgeDisplay(person),
         program_interest: person.program_interest,
         desired_start_date: null,
+        program_room_cohort_key: null,
+        desired_schedule_type: null,
         include_in_commit: false,
         primary: index === 0,
         validation_state: "unknown",
@@ -147,6 +165,8 @@ function childRecordFromCandidate(
         age_display: personAgeDisplay(person),
         program_interest: person.program_interest ?? household.program_interest,
         desired_start_date: household.desired_start_date,
+        program_room_cohort_key: null,
+        desired_schedule_type: null,
         include_in_commit: false,
         primary: index === 0,
         validation_state: "unknown",
@@ -293,6 +313,8 @@ export function syncCreateLeadValuesFromCommitSelection(
     next.child_date_of_birth = child?.dob ?? "";
     if (child?.program_interest) next.child_program = child.program_interest;
     if (child?.desired_start_date) next.child_desired_start_date = child.desired_start_date;
+    if (child?.program_room_cohort_key) next.child_program_room_cohort_key = child.program_room_cohort_key;
+    if (child?.desired_schedule_type) next.child_desired_schedule_type = child.desired_schedule_type;
 
     return next;
 }

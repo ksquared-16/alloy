@@ -1,20 +1,27 @@
 "use client";
 
 import { ChevronDown, ChevronRight, Pencil } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     patchCreateLeadCommitRecord,
     toggleCreateLeadCommitInclusion,
     type CreateLeadCommitRecord,
     type CreateLeadCommitSelection,
     type CreateLeadCommitSelectionPatch,
-} from "@/lib/intake/commit/createLeadCommitSelection";
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import {
     buildIntakeReviewPresentation,
     formatDobForDisplay,
 } from "@/lib/intake/review/buildIntakeReviewPresentation";
-import { buildCreateLeadRecordCardHints } from "@/lib/intake/review/classifyIntakeReviewWarnings";
-import { calculateAgeFromDob } from "@/lib/intake/normalize/calculateAgeFromDob";
+import { buildCreateLeadRecordCardHints } from "@/lib/admin/actions/createLead/review/createLeadCommitCardHints";
+import {
+    commitRecordToDraftValues,
+    draftValuesToCommitPatch,
+    type CommitRecordFieldKey,
+} from "@/lib/admin/actions/createLead/household/commitRecordFieldMapping";
+import { resolveCreateLeadHouseholdCardEditFields } from "@/lib/admin/actions/createLead/household/resolveCreateLeadHouseholdCardEditFields";
+import { CreateLeadHouseholdCardEditFields } from "@/components/admin/intake/CreateLeadHouseholdCardEditFields";
+import type { ActionWorkspaceGatherField } from "@/lib/admin/actions/actionWorkspaceTypes";
 import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
@@ -24,6 +31,9 @@ type Props = {
     onSelectionChange: (next: CreateLeadCommitSelection) => void;
     className?: string;
     addressWarnings?: readonly IntakeReviewWarning[];
+    gatherFields?: readonly ActionWorkspaceGatherField[];
+    requiredPayloadKeys?: readonly string[];
+    contextValues?: Record<string, string>;
 };
 
 function EditablePersonCard({
@@ -31,6 +41,8 @@ function EditablePersonCard({
     entityLabel,
     recordHints,
     allowPrimaryControls,
+    editFields,
+    contextValues,
     onPatch,
     onToggleInclude,
     onSetPrimary,
@@ -39,36 +51,31 @@ function EditablePersonCard({
     entityLabel: string;
     recordHints: string[];
     allowPrimaryControls: boolean;
+    editFields: ReturnType<typeof resolveCreateLeadHouseholdCardEditFields>;
+    contextValues: Record<string, string>;
     onPatch: (patch: CreateLeadCommitSelectionPatch) => void;
     onToggleInclude: (include: boolean) => void;
     onSetPrimary?: () => void;
 }) {
     const [editing, setEditing] = useState(false);
-    const [draft, setDraft] = useState({
-        first_name: record.first_name,
-        last_name: record.last_name,
-        email: record.email,
-        phone: record.phone,
-        dob: record.dob ?? "",
-    });
+    const [draft, setDraft] = useState<Record<CommitRecordFieldKey, string>>(() => commitRecordToDraftValues(record));
+
+    useEffect(() => {
+        if (!editing) {
+            setDraft(commitRecordToDraftValues(record));
+        }
+    }, [editing, record]);
 
     const displayName = [record.first_name, record.last_name].filter(Boolean).join(" ") || entityLabel;
     const canInclude = record.validation_state === "valid";
-    const draftAgeDisplay = useMemo(() => {
-        if (record.entity_type !== "child") return null;
-        const dob = draft.dob.trim();
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) return null;
-        return calculateAgeFromDob(dob)?.display ?? null;
-    }, [draft.dob, record.entity_type]);
 
     const saveEdit = () => {
-        onPatch({
-            first_name: draft.first_name,
-            last_name: draft.last_name,
-            email: record.entity_type === "parent" ? draft.email : undefined,
-            phone: record.entity_type === "parent" ? draft.phone : undefined,
-            dob: record.entity_type === "child" ? draft.dob || null : undefined,
-        });
+        onPatch(draftValuesToCommitPatch(record.entity_type, draft));
+        setEditing(false);
+    };
+
+    const cancelEdit = () => {
+        setDraft(commitRecordToDraftValues(record));
         setEditing(false);
     };
 
@@ -121,13 +128,7 @@ function EditablePersonCard({
                                 <button
                                     type="button"
                                     onClick={() => {
-                                        setDraft({
-                                            first_name: record.first_name,
-                                            last_name: record.last_name,
-                                            email: record.email,
-                                            phone: record.phone,
-                                            dob: record.dob ?? "",
-                                        });
+                                        setDraft(commitRecordToDraftValues(record));
                                         setEditing(true);
                                     }}
                                     className="rounded-md p-1 text-alloy-midnight/55 hover:bg-alloy-stone/8"
@@ -147,7 +148,7 @@ function EditablePersonCard({
                                     {[record.email, record.phone].filter(Boolean).join(" · ")}
                                 </p>
                             :   null}
-                            {record.entity_type === "child" && (record.dob || record.age_display) ?
+                            {record.entity_type === "child" && (record.dob || record.age_display || record.program_interest) ?
                                 <p
                                     className="mt-1 text-[11px] text-alloy-midnight/55"
                                     data-testid={`commit-age-display-${record.candidate_id}`}
@@ -155,13 +156,19 @@ function EditablePersonCard({
                                     {[
                                         record.dob ? `DOB ${formatDobForDisplay(record.dob)}` : null,
                                         record.age_display ? `Age ${record.age_display}` : null,
+                                        record.program_interest ? `Program ${record.program_interest}` : null,
                                     ]
                                         .filter(Boolean)
                                         .join(" — ")}
                                 </p>
                             :   null}
                             {record.commit_blockers.length ?
-                                <p className="mt-1 text-[11px] text-amber-900">{record.commit_blockers.join(" ")}</p>
+                                <p
+                                    className="mt-1 text-[11px] text-amber-900"
+                                    data-testid={`commit-record-blockers-${record.candidate_id}`}
+                                >
+                                    {record.commit_blockers.join(" ")}
+                                </p>
                             :   null}
                             {recordHints.length ?
                                 <ul
@@ -181,55 +188,15 @@ function EditablePersonCard({
                             :   null}
                         </>
                     :   <div className="mt-2 space-y-1.5" data-testid={`commit-edit-form-${record.candidate_id}`}>
-                            <input
-                                value={draft.first_name}
-                                onChange={(e) => setDraft((d) => ({ ...d, first_name: e.target.value }))}
-                                placeholder="First name"
-                                className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
-                                data-testid={`commit-edit-first-name-${record.candidate_id}`}
+                            <CreateLeadHouseholdCardEditFields
+                                entityType={record.entity_type}
+                                record={record}
+                                fields={editFields}
+                                draft={draft}
+                                onDraftChange={setDraft}
+                                contextValues={contextValues}
+                                dataTestIdPrefix={`commit-edit-${record.candidate_id}`}
                             />
-                            <input
-                                value={draft.last_name}
-                                onChange={(e) => setDraft((d) => ({ ...d, last_name: e.target.value }))}
-                                placeholder="Last name"
-                                className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
-                                data-testid={`commit-edit-last-name-${record.candidate_id}`}
-                            />
-                            {record.entity_type === "parent" ?
-                                <>
-                                    <input
-                                        value={draft.email}
-                                        onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
-                                        placeholder="Email"
-                                        className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
-                                        data-testid={`commit-edit-email-${record.candidate_id}`}
-                                    />
-                                    <input
-                                        value={draft.phone}
-                                        onChange={(e) => setDraft((d) => ({ ...d, phone: e.target.value }))}
-                                        placeholder="Phone"
-                                        className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
-                                        data-testid={`commit-edit-phone-${record.candidate_id}`}
-                                    />
-                                </>
-                            :   <>
-                                    <input
-                                        value={draft.dob}
-                                        onChange={(e) => setDraft((d) => ({ ...d, dob: e.target.value }))}
-                                        placeholder="YYYY-MM-DD"
-                                        className="w-full rounded-md border border-alloy-stone/12 px-2 py-1 text-[12px]"
-                                        data-testid={`commit-edit-dob-${record.candidate_id}`}
-                                    />
-                                    {draftAgeDisplay ?
-                                        <p
-                                            className="text-[11px] text-alloy-midnight/55"
-                                            data-testid={`commit-edit-age-preview-${record.candidate_id}`}
-                                        >
-                                            Age {draftAgeDisplay}
-                                        </p>
-                                    :   null}
-                                </>
-                            }
                             <div className="flex gap-2 pt-1">
                                 <button
                                     type="button"
@@ -241,7 +208,7 @@ function EditablePersonCard({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setEditing(false)}
+                                    onClick={cancelEdit}
                                     className="rounded-md px-2 py-1 text-[11px] text-alloy-midnight/50"
                                 >
                                     Cancel
@@ -293,8 +260,30 @@ export function IntakeHouseholdCommitReviewPanel({
     onSelectionChange,
     className = "",
     addressWarnings = [],
+    gatherFields,
+    requiredPayloadKeys = [],
+    contextValues = {},
 }: Props) {
     const review = buildIntakeReviewPresentation(household);
+    const parentEditFields = useMemo(
+        () =>
+            resolveCreateLeadHouseholdCardEditFields({
+                entityType: "parent",
+                gatherFields,
+                requiredPayloadKeys,
+            }),
+        [gatherFields, requiredPayloadKeys],
+    );
+    const childEditFields = useMemo(
+        () =>
+            resolveCreateLeadHouseholdCardEditFields({
+                entityType: "child",
+                gatherFields,
+                requiredPayloadKeys,
+            }),
+        [gatherFields, requiredPayloadKeys],
+    );
+
     if (!review) return null;
 
     const patchRecord = (candidateId: string, patch: CreateLeadCommitSelectionPatch) => {
@@ -325,6 +314,8 @@ export function IntakeHouseholdCommitReviewPanel({
                                 record={record}
                                 entityLabel={record.role}
                                 allowPrimaryControls
+                                editFields={parentEditFields}
+                                contextValues={contextValues}
                                 recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
                                 onToggleInclude={(include) => toggleInclude(record.candidate_id, include)}
@@ -342,6 +333,8 @@ export function IntakeHouseholdCommitReviewPanel({
                                 record={record}
                                 entityLabel="child"
                                 allowPrimaryControls={false}
+                                editFields={childEditFields}
+                                contextValues={contextValues}
                                 recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
                                 onToggleInclude={(include) => toggleInclude(record.candidate_id, include)}

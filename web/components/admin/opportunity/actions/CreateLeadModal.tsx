@@ -44,8 +44,9 @@ import {
     buildCreateLeadCommitSelection,
     syncCreateLeadValuesFromCommitSelection,
     type CreateLeadCommitSelection,
-} from "@/lib/intake/commit/createLeadCommitSelection";
-import { validateCreateLeadCommitSelection } from "@/lib/intake/commit/validateCreateLeadCommitSelection";
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { validateCreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/validateCreateLeadCommitSelection";
+import { isCreateLeadLocationRequired } from "@/lib/admin/actions/createLead/resolveCreateLeadLocationPolicy";
 import { mapCreateLeadCommitSelectionToExecutePayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import { fetchActionIntakeSpec } from "@/lib/lifecycle/fetchActionIntakeSpec";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
@@ -121,6 +122,10 @@ export function CreateLeadModal(props: {
     );
     const requiredPayloadKeys = intakeBundle?.requiredPayloadKeys ?? CREATE_LEAD_PLATFORM_REQUIRED_KEYS;
     const intakeSpec = intakeBundle?.spec ?? null;
+    const locationRequired = useMemo(
+        () => isCreateLeadLocationRequired({ intakeSpec, requiredPayloadKeys }),
+        [intakeSpec, requiredPayloadKeys],
+    );
 
     const handoffToCreatedLead = useCallback(
         async (opportunityId: string) => {
@@ -138,19 +143,20 @@ export function CreateLeadModal(props: {
             return validateCreateLeadCommitSelection({
                 selection: commitSelection,
                 values,
-                requireLocation: requiredPayloadKeys.includes("location_id"),
+                requireLocation: locationRequired,
             });
         }
         if (intakeSpec) return validateCreateLeadFromIntakeSpec(intakeSpec, values);
         return validateCreateLeadPlatformMinimum(values);
-    }, [commitSelection, intakeSpec, values, requiredPayloadKeys]);
+    }, [commitSelection, intakeSpec, values, locationRequired]);
     const householdLabel = useMemo(() => formatCreateLeadHouseholdLabel(values), [values]);
     const bosRecommendations = useMemo(
         () =>
             resolveCreateLeadPostCreateRecommendations(values, {
                 availableActionKeys: postCreateActionKeys,
+                intakeSpec,
             }),
-        [values, postCreateActionKeys],
+        [values, postCreateActionKeys, intakeSpec],
     );
     const successActions = useMemo(
         () =>
@@ -408,7 +414,7 @@ export function CreateLeadModal(props: {
             validateCreateLeadCommitSelection({
                 selection: commitSelection,
                 values,
-                requireLocation: requiredPayloadKeys.includes("location_id"),
+                requireLocation: locationRequired,
             })
         : intakeSpec ?
             validateCreateLeadFromIntakeSpec(intakeSpec, values)
@@ -448,7 +454,7 @@ export function CreateLeadModal(props: {
             setGatherPhase("details");
             setError(e instanceof Error ? e.message : "Create lead failed");
         }
-    }, [commitSelection, departmentId, intakeSpec, onSubmit, requiredPayloadKeys, values]);
+    }, [commitSelection, departmentId, intakeSpec, locationRequired, onSubmit, values]);
 
     const footer =
         step === "gather" ?

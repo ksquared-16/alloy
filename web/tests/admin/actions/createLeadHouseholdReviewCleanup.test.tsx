@@ -6,12 +6,12 @@ import {
     buildCreateLeadCommitSelection,
     patchCreateLeadCommitRecord,
     syncCreateLeadValuesFromCommitSelection,
-} from "@/lib/intake/commit/createLeadCommitSelection";
-import { validateCreateLeadCommitSelection } from "@/lib/intake/commit/validateCreateLeadCommitSelection";
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { validateCreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/validateCreateLeadCommitSelection";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
 import { mapCreateLeadCommitSelectionToExecutePayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
-import { resolveCreateLeadRequiredChecklist } from "@/lib/admin/actions/resolveCreateLeadRequiredChecklist";
-import { filterGlobalCreateLeadValidationIssues } from "@/lib/intake/review/classifyIntakeReviewWarnings";
+import { resolveCreateLeadRequiredChecklist } from "@/lib/admin/actions/createLead/resolveCreateLeadRequiredChecklist";
+import { filterGlobalCreateLeadValidationIssues } from "@/lib/admin/actions/createLead/review/createLeadCommitCardHints";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 const HOUSEHOLD: IntakeHouseholdCandidate = {
@@ -164,7 +164,7 @@ describe("CreateLead household review cleanup", () => {
         const missing = resolveCreateLeadRequiredChecklist({
             selection,
             values: { location_id: "" },
-            requireLocation: true,
+            requiredPayloadKeys: ["location_id"],
             reviewWarnings: HOUSEHOLD.review_warnings,
             household: HOUSEHOLD,
         });
@@ -173,7 +173,7 @@ describe("CreateLead household review cleanup", () => {
         const resolved = resolveCreateLeadRequiredChecklist({
             selection,
             values: { location_id: "site-1" },
-            requireLocation: true,
+            requiredPayloadKeys: ["location_id"],
             reviewWarnings: HOUSEHOLD.review_warnings,
             household: HOUSEHOLD,
         });

@@ -5,15 +5,15 @@ import { CreateLeadRequiredChecklistRow } from "@/components/admin/actions/Creat
 import { IntakeHouseholdCommitReviewPanel } from "@/components/admin/intake/IntakeHouseholdCommitReviewPanel";
 import { IntakeReviewWarningsBanner } from "@/components/admin/intake/IntakeReviewWarningsBanner";
 import { ActionWorkspaceSuccessState } from "@/components/admin/actions/ActionWorkspaceSuccessState";
-import { buildCreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
-import { resolveCreateLeadRequiredChecklist } from "@/lib/admin/actions/resolveCreateLeadRequiredChecklist";
+import { buildCreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { resolveCreateLeadRequiredChecklist } from "@/lib/admin/actions/createLead/resolveCreateLeadRequiredChecklist";
 import { resolveCreateLeadPostCreateRecommendations } from "@/lib/admin/actions/resolveCreateLeadPostCreateRecommendations";
 import { mapBosRecommendationsToSuccessActions } from "@/lib/admin/actions/mapBosRecommendationsToSuccessActions";
 import {
     buildCreateLeadRecordCardHints,
     filterGlobalCreateLeadValidationIssues,
-    partitionIntakeReviewWarnings,
-} from "@/lib/intake/review/classifyIntakeReviewWarnings";
+} from "@/lib/admin/actions/createLead/review/createLeadCommitCardHints";
+import { partitionIntakeReviewWarnings } from "@/lib/intake/review/partitionIntakeReviewWarnings";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 const HOUSEHOLD: IntakeHouseholdCandidate = {
@@ -159,7 +159,7 @@ describe("CreateLeadRequiredChecklistRow", () => {
         const items = resolveCreateLeadRequiredChecklist({
             selection,
             values: { location_id: "site-1" },
-            requireLocation: true,
+            requiredPayloadKeys: ["location_id"],
             reviewWarnings: HOUSEHOLD.review_warnings,
             household: HOUSEHOLD,
         });

@@ -3,8 +3,8 @@ import {
     applyCreateLeadChildParticipationFromIdentity,
     type CreateLeadChildOcmFields,
 } from "@/lib/admin/actions/createLeadChildOcmPersistence";
-import type { CreateLeadCommitRecord, CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
-import { includedCommitRecords } from "@/lib/intake/commit/createLeadCommitSelection";
+import type { CreateLeadCommitRecord, CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { includedCommitRecords } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import {
     ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
     enrollmentIntakePersonStatusFields,

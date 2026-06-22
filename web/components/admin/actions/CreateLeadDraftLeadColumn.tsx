@@ -21,13 +21,13 @@ import { IntakeReviewWarningsBanner } from "@/components/admin/intake/IntakeRevi
 import { CreateLeadCommitPreviewPanel } from "@/components/admin/actions/CreateLeadCommitPreviewPanel";
 import { CreateLeadRequiredChecklistRow } from "@/components/admin/actions/CreateLeadRequiredChecklistRow";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
-import { resolveCreateLeadRequiredChecklist } from "@/lib/admin/actions/resolveCreateLeadRequiredChecklist";
+import { resolveCreateLeadRequiredChecklist } from "@/lib/admin/actions/createLead/resolveCreateLeadRequiredChecklist";
 import { useInquiryChildPlacementCascade } from "@/lib/admin/hooks/useInquiryChildPlacementCascade";
 import {
     filterGlobalCreateLeadValidationIssues,
-    partitionIntakeReviewWarnings,
-} from "@/lib/intake/review/classifyIntakeReviewWarnings";
-import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
+} from "@/lib/admin/actions/createLead/review/createLeadCommitCardHints";
+import { partitionIntakeReviewWarnings } from "@/lib/intake/review/partitionIntakeReviewWarnings";
+import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 type Props = {
@@ -200,8 +200,8 @@ export function CreateLeadDraftLeadColumn({
             resolveCreateLeadRequiredChecklist({
                 selection: commitSelection,
                 values,
-                requireLocation: true,
                 intakeSpec,
+                requiredPayloadKeys,
                 reviewWarnings: household?.review_warnings,
                 household,
             })
@@ -236,6 +236,9 @@ export function CreateLeadDraftLeadColumn({
                     selection={commitSelection}
                     onSelectionChange={onCommitSelectionChange}
                     addressWarnings={addressWarnings}
+                    gatherFields={sections.flatMap((section) => section.fields)}
+                    requiredPayloadKeys={requiredPayloadKeys}
+                    contextValues={values}
                     className={className}
                 />
             );

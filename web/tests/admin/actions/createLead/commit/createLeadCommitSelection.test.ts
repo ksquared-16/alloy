@@ -4,8 +4,8 @@ import {
     patchCreateLeadCommitRecord,
     toggleCreateLeadCommitInclusion,
     syncCreateLeadValuesFromCommitSelection,
-} from "@/lib/intake/commit/createLeadCommitSelection";
-import { validateCreateLeadCommitSelection } from "@/lib/intake/commit/validateCreateLeadCommitSelection";
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { validateCreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/validateCreateLeadCommitSelection";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
 import {
     __resetExtractFactCounterForTests,

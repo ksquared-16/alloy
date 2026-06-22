@@ -2,8 +2,9 @@ import {
     isValidCreateLeadEmail,
     isValidCreateLeadPhone,
 } from "@/lib/admin/actions/createLeadIntakeValidation";
-import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
-import { includedCommitRecords, primaryIncludedParent } from "@/lib/intake/commit/createLeadCommitSelection";
+import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { includedCommitRecords, primaryIncludedParent } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { isCreateLeadLocationRequired } from "@/lib/admin/actions/createLead/resolveCreateLeadLocationPolicy";
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 import type { IntakeReviewWarning } from "@/lib/intake/review/intakeReviewWarnings";
@@ -23,6 +24,18 @@ function childRequiredBySpec(spec: ActionIntakeSpec | null | undefined): boolean
     return spec.required.some((field) => field.entity === "child" || field.payload_key.startsWith("child_"));
 }
 
+function contactRequiredBySpec(spec: ActionIntakeSpec | null | undefined): boolean {
+    if (!spec) return true;
+    const emailRequired = spec.required.some((field) => field.payload_key === "email");
+    const phoneRequired = spec.required.some((field) => field.payload_key === "phone");
+    if (emailRequired || phoneRequired) return true;
+    return spec.constraints.some(
+        (constraint) =>
+            constraint.kind === "at_least_one" &&
+            constraint.rule_ids.some((ruleId) => ruleId === "person:email" || ruleId === "person:phone"),
+    );
+}
+
 function resolveLocationStatus(input: {
     values: Record<string, string>;
     reviewWarnings?: readonly IntakeReviewWarning[];
@@ -38,8 +51,8 @@ function resolveLocationStatus(input: {
 export function resolveCreateLeadRequiredChecklist(input: {
     selection: CreateLeadCommitSelection;
     values: Record<string, string>;
-    requireLocation?: boolean;
     intakeSpec?: ActionIntakeSpec | null;
+    requiredPayloadKeys?: readonly string[];
     reviewWarnings?: readonly IntakeReviewWarning[];
     household?: IntakeHouseholdCandidate | null;
 }): CreateLeadRequiredChecklistItem[] {
@@ -61,14 +74,22 @@ export function resolveCreateLeadRequiredChecklist(input: {
             label: "Primary guardian",
             status: primary && primary.commit_blockers.length === 0 ? "ok" : "missing",
         },
-        {
+    ];
+
+    if (contactRequiredBySpec(input.intakeSpec)) {
+        items.push({
             key: "valid-contact",
             label: "Valid contact",
             status: hasValidContact ? "ok" : "missing",
-        },
-    ];
+        });
+    }
 
-    if (input.requireLocation !== false) {
+    if (
+        isCreateLeadLocationRequired({
+            intakeSpec: input.intakeSpec,
+            requiredPayloadKeys: input.requiredPayloadKeys,
+        })
+    ) {
         items.push({
             key: "location",
             label: "Location",
@@ -79,13 +100,17 @@ export function resolveCreateLeadRequiredChecklist(input: {
         });
     }
 
-    const showChildRequirement =
-        childRequiredBySpec(input.intakeSpec) || (input.household?.children.length ?? 0) > 0;
-    if (showChildRequirement) {
+    if (childRequiredBySpec(input.intakeSpec)) {
         items.push({
             key: "included-children",
             label: "Included children",
             status: children.length > 0 ? "ok" : "missing",
+        });
+    } else if ((input.household?.children.length ?? 0) > 0) {
+        items.push({
+            key: "included-children",
+            label: "Included children",
+            status: children.length > 0 ? "ok" : "na",
         });
     }
 

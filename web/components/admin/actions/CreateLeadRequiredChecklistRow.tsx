@@ -2,7 +2,7 @@
 
 import { Check } from "lucide-react";
 import SelectFieldControl from "@/components/admin/fields/SelectFieldControl";
-import type { CreateLeadRequiredChecklistItem } from "@/lib/admin/actions/resolveCreateLeadRequiredChecklist";
+import type { CreateLeadRequiredChecklistItem } from "@/lib/admin/actions/createLead/resolveCreateLeadRequiredChecklist";
 
 type LocationPickerProps = {
     value: string;

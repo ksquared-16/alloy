@@ -1,6 +1,6 @@
 import type { ActionIntakeSpec } from "@/lib/lifecycle/actionIntakeSpecTypes";
 import { buildCreateLeadCommitPreview } from "@/lib/admin/actions/buildCreateLeadCommitPreview";
-import { buildCreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
+import { buildCreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { extractFactsFromText } from "@/lib/intake/extract/extractFactsFromText";
 import { groupFactsIntoHouseholdCandidates } from "@/lib/intake/group/groupFactsIntoHouseholdCandidates";
 import { mapFactsToActionIntake } from "@/lib/intake/map/mapFactsToActionIntake";

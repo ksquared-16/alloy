@@ -2,8 +2,8 @@ import {
     isValidCreateLeadEmail,
     isValidCreateLeadPhone,
 } from "@/lib/admin/actions/createLeadIntakeValidation";
-import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
-import { includedCommitRecords, primaryIncludedParent } from "@/lib/intake/commit/createLeadCommitSelection";
+import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { includedCommitRecords, primaryIncludedParent } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 
 function trim(v: unknown): string {
     return v != null ? String(v).trim() : "";

@@ -1,9 +1,9 @@
-import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
+import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import {
     includedCommitRecords,
     primaryIncludedChild,
     primaryIncludedParent,
-} from "@/lib/intake/commit/createLeadCommitSelection";
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
 
 export type CreateLeadCommitPreviewItem = {

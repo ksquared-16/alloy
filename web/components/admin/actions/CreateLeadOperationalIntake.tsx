@@ -11,7 +11,7 @@ import {
 import type { BosFieldConfidenceDisplayLevel } from "@/lib/admin/actions/actionWorkspaceBosTheme";
 import { CreateLeadDraftLeadColumn } from "@/components/admin/actions/CreateLeadDraftLeadColumn";
 import { CreateLeadMaterialStackColumn } from "@/components/admin/actions/CreateLeadMaterialStackColumn";
-import type { CreateLeadCommitSelection } from "@/lib/intake/commit/createLeadCommitSelection";
+import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
 
 type Props = {
