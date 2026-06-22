@@ -1,7 +1,19 @@
+/**
+ * Lead drawer command header metadata — primary contact, contact details, child count, location.
+ */
+
 function trimOrNull(value: unknown): string | null {
     if (value == null) return null;
     const text = String(value).trim();
     return text.length > 0 ? text : null;
+}
+
+function countLinkedChildren(record: Record<string, unknown>): number {
+    for (const key of ["children", "enrollment_children"] as const) {
+        const raw = record[key];
+        if (Array.isArray(raw) && raw.length > 0) return raw.length;
+    }
+    return 0;
 }
 
 export type LeadDrawerHeaderContext = {
@@ -46,7 +58,7 @@ function normalizeHeaderLabel(value: string | null | undefined): string {
     return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
-/** Command-center meta row: primary contact · campus. Stage/status live in lifecycle + status control. */
+/** Command-center meta row: primary contact, email, phone, child count, location. */
 export function resolveLeadDrawerCommandHeaderMeta(
     record: Record<string, unknown>,
     options?: {
@@ -63,21 +75,21 @@ export function resolveLeadDrawerCommandHeaderMeta(
     const householdNorm = normalizeHeaderLabel(ctx.householdLabel);
     const includeHousehold = Boolean(ctx.householdLabel) && householdNorm !== titleNorm;
 
-    const primaryMetaParts = [ctx.primaryContactLabel].filter(Boolean);
-    if (includeHousehold && ctx.householdLabel) primaryMetaParts.push(ctx.householdLabel);
+    const email = trimOrNull(record["person.primary_email"]);
+    const phone = trimOrNull(record["person.primary_phone"]);
+    const childCount = countLinkedChildren(record);
 
-    const contactMetaParts: string[] = [];
-    if (ctx.primaryContactLabel) {
-        const contactDetails = [ctx.contactLine].filter(Boolean).join(" · ");
-        contactMetaParts.push(
-            contactDetails ? `${ctx.primaryContactLabel} · ${contactDetails}` : ctx.primaryContactLabel,
-        );
-    } else if (ctx.contactLine) {
-        contactMetaParts.push(ctx.contactLine);
+    const metaParts: string[] = [];
+    if (ctx.primaryContactLabel) metaParts.push(ctx.primaryContactLabel);
+    if (email) metaParts.push(email);
+    if (phone) metaParts.push(phone);
+    if (childCount > 0) {
+        metaParts.push(childCount === 1 ? "1 child" : `${childCount} children`);
     }
+    if (includeHousehold && ctx.householdLabel) metaParts.push(ctx.householdLabel);
 
     const location = options?.locationLabel?.trim() || null;
-    const metaParts = [...contactMetaParts, location].filter(Boolean);
+    if (location) metaParts.push(location);
 
     return {
         metaRow: metaParts.length > 0 ? metaParts.join(" · ") : null,

@@ -71,6 +71,13 @@ function resolveSelectOptions(
             placeholder: disabled ? "Select a school first" : "Select a room",
         };
     }
+    if (optionSource === "enrollment_child_status") {
+        return {
+            options: placementData?.enrollmentChildStatusOptions ?? [],
+            disabled: false,
+            placeholder: "Select status",
+        };
+    }
     if (optionSource === "option_set" && optionSetKey) {
         return {
             options: optionSetOptions,

@@ -20,6 +20,18 @@ export function writeLayoutRuntimeRepeaterFieldRaw(
         if (field === "date_of_birth") {
             next.dob = value;
         }
+        if (ns === "inquiry_child" && field === "location_id") {
+            next.location_id = value;
+        }
+        if (ns === "inquiry_child" && field === "desired_program_type") {
+            next.desired_program_type = value;
+        }
+        if (ns === "inquiry_child" && field === "program_room_cohort_key") {
+            next.program_room_cohort_key = value;
+        }
+        if (ns === "inquiry_child" && field === "outcome_status_key") {
+            next.outcome_status_key = value;
+        }
     }
     return next;
 }

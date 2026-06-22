@@ -69,6 +69,10 @@ import {
     layoutRuntimeBlockAllowsFieldEdit,
     useLayoutRuntimeBlockEdit,
 } from "@/components/layout/LayoutRuntimeBlockEditContext";
+import {
+    layoutRuntimeOnPickOptionCompanion,
+    useLayoutRuntimeResolvedDisplayLabel,
+} from "@/components/layout/useLayoutRuntimeResolvedDisplayLabel";
 import { layoutEditorTraceProps, useLayoutEditorRuntimeTrace } from "@/lib/layout/layoutEditorRuntimeTraceContext";
 import { classifyLayoutItemBinding } from "@/lib/layout/runtime/classifyLayoutItemBinding";
 import {
@@ -384,8 +388,14 @@ function ValueCell({
         display && (variant === "production" || variant === "preview") ?
             formatLayoutEditorFieldDateValue(item.refKey ?? "", display, item.renderHint, displayConfig.dateFormat)
         :   display;
-    const emptyDisplay = displayConfig.emptyState?.trim() || "—";
     const refKey = item.refKey ?? "";
+    const resolvedDisplay = useLayoutRuntimeResolvedDisplayLabel({
+        refKey,
+        rawValue: formattedDisplay ?? "",
+        record,
+        renderHint: item.renderHint,
+    });
+    const emptyDisplay = displayConfig.emptyState?.trim() || "—";
     const editableRefKey = resolveLayoutRuntimeEditableRefKey(refKey);
     const canEdit =
         layoutRuntimeFieldIsEditable(item, variant) &&
@@ -401,7 +411,7 @@ function ValueCell({
     const actionButton = item.refKey === "_action_button" ? readLayoutEditorActionButtonConfig(item.metadata) : null;
 
     const valueBody = (() => {
-        if (!formattedDisplay) {
+        if (!resolvedDisplay) {
             return (
                 <span title={variant === "proof" ? (r.reason ?? "Value unavailable") : undefined}>{emptyDisplay}</span>
             );
@@ -409,7 +419,7 @@ function ValueCell({
         if (r.renderHint === "status" || displayConfig.displayType === "badge" || displayConfig.displayType === "pill") {
             return (
                 <span className={layoutEditorStatusFormatClass(displayConfig, item.renderHint) || undefined}>
-                    {formattedDisplay}
+                    {resolvedDisplay}
                 </span>
             );
         }
@@ -417,16 +427,16 @@ function ValueCell({
         const linkClass = "min-w-0 break-words text-alloy-pine hover:underline";
         if (linkBehavior === "mailto") {
             return (
-                <a href={`mailto:${formattedDisplay}`} className={linkClass} title={formattedDisplay}>
-                    {formattedDisplay}
+                <a href={`mailto:${resolvedDisplay}`} className={linkClass} title={resolvedDisplay}>
+                    {resolvedDisplay}
                 </a>
             );
         }
         if (linkBehavior === "tel") {
-            const dial = formattedDisplay.replace(/[^\d+]/g, "");
+            const dial = resolvedDisplay.replace(/[^\d+]/g, "");
             return (
-                <a href={`tel:${dial}`} className={linkClass} title={formattedDisplay}>
-                    {formattedDisplay}
+                <a href={`tel:${dial}`} className={linkClass} title={resolvedDisplay}>
+                    {resolvedDisplay}
                 </a>
             );
         }
@@ -439,7 +449,7 @@ function ValueCell({
                 <button
                     type="button"
                     className={`${linkClass} text-left`}
-                    title={formattedDisplay}
+                    title={resolvedDisplay}
                     onClick={(e) => {
                         if (trace?.inspectMode) {
                             e.stopPropagation();
@@ -448,13 +458,13 @@ function ValueCell({
                         onAdornmentAction(item, item.adornment!, undefined);
                     }}
                 >
-                    {formattedDisplay}
+                    {resolvedDisplay}
                 </button>
             );
         }
         return (
-            <span className="min-w-0 break-words" title={formattedDisplay}>
-                {formattedDisplay}
+            <span className="min-w-0 break-words" title={resolvedDisplay}>
+                {resolvedDisplay}
             </span>
         );
     })();
@@ -496,10 +506,8 @@ function ValueCell({
                         refKey={editableRefKey}
                         value={editValue}
                         onChange={(v) => edit.setFieldValue(editableRefKey, v)}
-                        onPickOption={(value, label) => {
-                            if (editableRefKey === "opportunity.location_id" && label) {
-                                edit.setFieldValue("opportunity.location", label);
-                            }
+                        onPickOption={(_value, label) => {
+                            layoutRuntimeOnPickOptionCompanion(editableRefKey, label, edit.setFieldValue);
                         }}
                         getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue)}
                     />
@@ -511,7 +519,7 @@ function ValueCell({
                     >
                         {actionButton.label ?? item.label ?? "Action"}
                     </button>
-                :   <span className={!formattedDisplay ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>{valueBody}</span>
+                :   <span className={!resolvedDisplay ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>{valueBody}</span>
                 }
                 {showIcon && item.adornment && item.adornment.position === "right" ? <Adorn item={item} /> : null}
             </div>
@@ -564,11 +572,12 @@ function GroupCellContent({
     const hasSubgrid = Array.isArray(item.rows) && item.rows.length > 0;
     const showTitle = blockConfig.showTitle !== false;
     const title = showTitle ? operatorLabel(item, variant) : "";
-    const showEditButton = blockConfig.editMode === "edit_button" && Boolean(drawerEdit);
+    const showEditButton =
+        (blockConfig.editMode === "edit_button" || blockConfig.editMode === "inline_editable") && Boolean(drawerEdit);
     const blockTone = resolveLayoutItemWidgetTone(item);
     const shellTitle = blockTone && operatorSurfaces ? title || undefined : undefined;
     const body = (
-        <>
+        <div className="group/block">
             {!shellTitle && (title || showEditButton) ?
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                     {title ?
@@ -582,7 +591,7 @@ function GroupCellContent({
                     {showEditButton && blockEdit ?
                         <button
                             type="button"
-                            className="rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-pine hover:border-alloy-pine/30"
+                            className="rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-[10px] font-medium text-alloy-pine opacity-0 transition-opacity hover:border-alloy-pine/30 group-hover/block:opacity-100 focus:opacity-100"
                             onClick={() => blockEdit.setBlockEditing(!blockEdit.blockEditing)}
                             data-testid={`layout-runtime-block-edit-${item.id}`}
                         >
@@ -603,7 +612,7 @@ function GroupCellContent({
                     ))}
                 </div>
             }
-        </>
+        </div>
     );
 
     if (blockTone && operatorSurfaces) {
@@ -634,6 +643,7 @@ function RepeaterCellContent({
 }) {
     const variant = useContext(LayoutRuntimeVariantContext);
     const edit = useLayoutRuntimeDrawerEdit();
+    const blockEdit = useLayoutRuntimeBlockEdit();
     const onAction = useContext(AdornmentActionContext);
     const displayConfig = readLayoutEditorDisplayConfig(col);
     const columnAdornment = resolveLayoutCollectionColumnLinkAdornment(col);
@@ -654,7 +664,10 @@ function RepeaterCellContent({
     const trace = useLayoutEditorRuntimeTrace();
     const traceProps = layoutEditorTraceProps(trace, { refKey: col.refKey });
     const editableRefKey = resolveLayoutRuntimeEditableRefKey(col.refKey);
-    const canEdit = layoutRuntimeFieldIsEditable(synthetic, variant) && Boolean(edit);
+    const canEdit =
+        layoutRuntimeFieldIsEditable(synthetic, variant)
+        && Boolean(edit)
+        && layoutRuntimeBlockAllowsFieldEdit(blockEdit);
     const editValue =
         canEdit && edit ?
             edit.getFieldValue(
@@ -667,6 +680,12 @@ function RepeaterCellContent({
         !r.isPlaceholder && r.display ?
             formatLayoutEditorFieldDateValue(col.refKey, r.display, col.renderHint, displayConfig.dateFormat)
         :   r.display;
+    const resolvedDisplay = useLayoutRuntimeResolvedDisplayLabel({
+        refKey: col.refKey,
+        rawValue: formattedDisplay ?? "",
+        row,
+        renderHint: col.renderHint,
+    });
     const statusClass = layoutEditorStatusFormatClass(displayConfig, col.renderHint);
     const typographyClass = typographyIntentClass(displayConfig.typographyIntent);
     const showLabel = shouldShowLayoutEditorFieldLabel(displayConfig);
@@ -720,15 +739,18 @@ function RepeaterCellContent({
                     value={editValue}
                     rowKey={rowKey}
                     onChange={(v) => edit.setFieldValue(editableRefKey, v, rowKey)}
+                    onPickOption={(_value, label) => {
+                        layoutRuntimeOnPickOptionCompanion(editableRefKey, label, edit.setFieldValue, rowKey);
+                    }}
                     getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
                 />
             :   <span className={`${r.isPlaceholder ? PRESENTATION_VALUE_PLACEHOLDER : ""} ${statusClass}`.trim()}>
                     {r.isPlaceholder ? "—"
                     : col.renderHint === "status" || displayConfig.displayType === "badge" || displayConfig.displayType === "pill" ?
                         <span className={statusClass || "inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90"}>
-                            {formattedDisplay}
+                            {resolvedDisplay}
                         </span>
-                    :   formattedDisplay}
+                    :   resolvedDisplay}
                 </span>
             }
             {showColumnIcon && synthetic.adornment && synthetic.adornment.position === "right" ?
@@ -772,6 +794,25 @@ function renderRelatedListPanelShell(input: {
 }
 
 function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
+    const blockConfig = readLayoutEditorBlockConfig(item.metadata);
+    return (
+        <LayoutRuntimeBlockEditProvider editMode={blockConfig.editMode ?? "display_only"}>
+            <RelatedCellInner record={record} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
+        </LayoutRuntimeBlockEditProvider>
+    );
+}
+
+function RelatedCellInner({
+    record,
+    item,
+    anchorEntity,
+    blockConfig,
+}: {
+    record: ProofRuntimeRecord;
+    item: LayoutItem;
+    anchorEntity: string;
+    blockConfig: ReturnType<typeof readLayoutEditorBlockConfig>;
+}) {
     const variant = useContext(LayoutRuntimeVariantContext);
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const { sectionKey } = useContext(LayoutRuntimeSectionContext);

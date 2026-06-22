@@ -3,6 +3,14 @@
 import { useContext } from "react";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import LayoutRuntimeFieldInput, { layoutRuntimeDependentValueReader } from "@/components/layout/LayoutRuntimeFieldInput";
+import {
+    layoutRuntimeBlockAllowsFieldEdit,
+    useLayoutRuntimeBlockEdit,
+} from "@/components/layout/LayoutRuntimeBlockEditContext";
+import {
+    layoutRuntimeOnPickOptionCompanion,
+    useLayoutRuntimeResolvedDisplayLabel,
+} from "@/components/layout/useLayoutRuntimeResolvedDisplayLabel";
 import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import {
     AdornmentActionContext,
@@ -48,6 +56,7 @@ type Props = {
 export default function LayoutRuntimeRelatedListCell({ row, col, rowKey, anchorRecord, onAction: onActionProp }: Props) {
     const variant = useContext(LayoutRuntimeVariantContext);
     const edit = useLayoutRuntimeDrawerEdit();
+    const blockEdit = useLayoutRuntimeBlockEdit();
     const onActionFromContext = useContext(AdornmentActionContext);
     const onAction = onActionProp ?? onActionFromContext;
     const displayConfig = readLayoutEditorDisplayConfig(col);
@@ -69,7 +78,10 @@ export default function LayoutRuntimeRelatedListCell({ row, col, rowKey, anchorR
     const trace = useLayoutEditorRuntimeTrace();
     const traceProps = layoutEditorTraceProps(trace, { refKey: col.refKey });
     const editableRefKey = resolveLayoutRuntimeEditableRefKey(col.refKey);
-    const canEdit = layoutRuntimeFieldIsEditable(synthetic, variant) && Boolean(edit);
+    const canEdit =
+        layoutRuntimeFieldIsEditable(synthetic, variant)
+        && Boolean(edit)
+        && layoutRuntimeBlockAllowsFieldEdit(blockEdit);
     const editValue =
         canEdit && edit ?
             edit.getFieldValue(
@@ -82,6 +94,12 @@ export default function LayoutRuntimeRelatedListCell({ row, col, rowKey, anchorR
         !r.isPlaceholder && r.display ?
             formatLayoutEditorFieldDateValue(col.refKey, r.display, col.renderHint, displayConfig.dateFormat)
         :   r.display;
+    const resolvedDisplay = useLayoutRuntimeResolvedDisplayLabel({
+        refKey: col.refKey,
+        rawValue: formattedDisplay ?? "",
+        row,
+        renderHint: col.renderHint,
+    });
     const statusClass = layoutEditorStatusFormatClass(displayConfig, col.renderHint);
     const typographyClass = typographyIntentClass(displayConfig.typographyIntent);
     const showLabel = shouldShowLayoutEditorFieldLabel(displayConfig);
@@ -142,15 +160,18 @@ export default function LayoutRuntimeRelatedListCell({ row, col, rowKey, anchorR
                     value={editValue}
                     rowKey={rowKey}
                     onChange={(v) => edit.setFieldValue(editableRefKey, v, rowKey)}
+                    onPickOption={(_value, label) => {
+                        layoutRuntimeOnPickOptionCompanion(editableRefKey, label, edit.setFieldValue, rowKey);
+                    }}
                     getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
                 />
             :   <span className={`${r.isPlaceholder ? PRESENTATION_VALUE_PLACEHOLDER : ""} ${statusClass}`.trim()}>
                     {r.isPlaceholder ? "—"
                     : col.renderHint === "status" || displayConfig.displayType === "badge" || displayConfig.displayType === "pill" ?
                         <span className={statusClass || "inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90"}>
-                            {formattedDisplay}
+                            {resolvedDisplay}
                         </span>
-                    :   formattedDisplay}
+                    :   resolvedDisplay}
                 </span>
             }
             {showColumnIcon && synthetic.adornment && synthetic.adornment.position === "right" ?

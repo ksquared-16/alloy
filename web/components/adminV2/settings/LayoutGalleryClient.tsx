@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
+import { formatLayoutTitleWithVersion } from "@/lib/layout/layoutVersionNaming";
 import {
     rollbackCandidateVersions,
     resolveGalleryEditLayoutAction,
@@ -120,7 +121,7 @@ function SurfaceGalleryCard({
                                 <>
                                     {statusBadge("published")}
                                     <span>
-                                        v{published.version} · {published.name}
+                                        {formatLayoutTitleWithVersion(published.name, published.version)}
                                     </span>
                                     <span className="text-alloy-midnight/45">· {formatWhen(published.publishedAt)}</span>
                                 </>
@@ -131,7 +132,7 @@ function SurfaceGalleryCard({
                                 <span className="font-medium text-alloy-midnight/80">Draft</span>
                                 {statusBadge("draft")}
                                 <span>
-                                    v{latestDraft.version} · {latestDraft.name}
+                                    {formatLayoutTitleWithVersion(latestDraft.name, latestDraft.version)}
                                 </span>
                                 <span className="text-alloy-midnight/45">· updated {formatWhen(latestDraft.updatedAt ?? latestDraft.createdAt)}</span>
                             </div>
@@ -199,7 +200,9 @@ function SurfaceGalleryCard({
                                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                                             {statusBadge(row.status)}
                                             <span className="font-medium text-alloy-midnight">v{row.version}</span>
-                                            <span className="truncate text-alloy-midnight/60">{row.name}</span>
+                                            <span className="truncate text-alloy-midnight/60">
+                                                {formatLayoutTitleWithVersion(row.name, row.version)}
+                                            </span>
                                             <span className="text-alloy-midnight/40">
                                                 {row.status === "published" ?
                                                     formatWhen(row.publishedAt)

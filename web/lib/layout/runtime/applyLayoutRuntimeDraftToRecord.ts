@@ -15,6 +15,7 @@ import {
     LAYOUT_RUNTIME_OPPORTUNITY_NATIVE_EDITABLE_REF_KEYS,
 } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import { writeLayoutRuntimeRepeaterFieldRaw } from "@/lib/layout/runtime/writeLayoutRuntimeRepeaterFieldRaw";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 function composeDraftKey(refKey: string, rowKey?: string): string {
@@ -76,6 +77,13 @@ function applyChildRepeaterDraft(
 ): ProofRuntimeRecord {
     const next: ProofRuntimeRecord = { ...record };
     const sources = ["children", "enrollment_children"] as const;
+    const displayCompanions = [
+        "child.location",
+        "child.program",
+        "child.room",
+        "child.schedule",
+        "child.status",
+    ] as const;
 
     for (const source of sources) {
         const raw = record[source];
@@ -89,6 +97,20 @@ function applyChildRepeaterDraft(
                 const key = composeDraftKey(refKey, rowKey);
                 if ((draft[key] ?? "") === (baseline[key] ?? "")) continue;
                 rowNext = writeLayoutRuntimeRepeaterFieldRaw(rowNext, refKey, draft[key] ?? "");
+            }
+            for (const companion of displayCompanions) {
+                const key = composeDraftKey(companion, rowKey);
+                if ((draft[key] ?? "") === (baseline[key] ?? "")) continue;
+                const label = (draft[key] ?? "").trim();
+                if (label) rowNext[companion] = label;
+            }
+            const statusKey = String(rowNext["inquiry_child.outcome_status_key"] ?? rowNext.outcome_status_key ?? "").trim();
+            if (statusKey && !String(rowNext["child.status"] ?? "").trim()) {
+                const statusLabel = formatLayoutRuntimeStatusLabel(statusKey, {
+                    refKey: "inquiry_child.outcome_status_key",
+                    renderHint: "status",
+                });
+                if (statusLabel) rowNext["child.status"] = statusLabel;
             }
             if (isLayoutRuntimeChildIdentityRefKey("child.first_name")) {
                 const first = String(rowNext["child.first_name"] ?? rowNext.first_name ?? "").trim();

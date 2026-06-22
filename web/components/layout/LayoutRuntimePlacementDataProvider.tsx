@@ -23,6 +23,7 @@ import {
     type InquiryChildProgramOptionSetItem,
 } from "@/lib/admin/location/inquiryChildPlacementOptions";
 import { resolveProgramKeyForRoomCascade } from "@/lib/admin/location/inquiryChildLocationMismatch";
+import { ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY } from "@/lib/lifecycle/enrollmentProcessStatusVocabulary";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { WORKSPACE_INQUIRY_CHILD_LOCATIONS_URL } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -36,6 +37,7 @@ type LayoutRuntimePlacementDataContextValue = {
     roomOptionsForSiteAndProgram: (siteId: string, programKey: string) => LayoutRuntimeSelectOption[];
     resolveRoomProgramFilterKey: (programCategoryId: string, programType: string) => string;
     scheduleOptions: LayoutRuntimeSelectOption[];
+    enrollmentChildStatusOptions: LayoutRuntimeSelectOption[];
     optionSetOptions: (setKey: string) => LayoutRuntimeSelectOption[];
 };
 
@@ -93,6 +95,15 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
         }));
     }, [siteFilter?.bootstrap?.sites, hierarchy]);
 
+    const enrollmentChildStatusOptions = useMemo(
+        (): LayoutRuntimeSelectOption[] =>
+            ENROLLMENT_CHILD_TRACK_STATUS_VOCABULARY.map((row) => ({
+                value: row.status_key,
+                label: row.status_label,
+            })),
+        [],
+    );
+
     const value = useMemo(
         (): LayoutRuntimePlacementDataContextValue => ({
             loading,
@@ -108,6 +119,7 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
                     categories: locationCategories,
                 }) ?? "",
             scheduleOptions,
+            enrollmentChildStatusOptions,
             optionSetOptions: (setKey: string) => {
                 const k = setKey.trim();
                 if (!k) return [];
@@ -115,7 +127,7 @@ export default function LayoutRuntimePlacementDataProvider({ children }: { child
                 return [];
             },
         }),
-        [hierarchy, loading, programItems, locationCategories, scheduleOptions, siteOptions],
+        [enrollmentChildStatusOptions, hierarchy, loading, programItems, locationCategories, scheduleOptions, siteOptions],
     );
 
     return (

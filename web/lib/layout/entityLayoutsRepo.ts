@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EntityLayoutRecord, LayoutDoc, LayoutStatus, LayoutSurface } from "./layoutV2";
+import { buildDuplicatedLayoutName } from "./layoutVersionNaming";
 
 const TABLE = "entity_layouts";
 
@@ -206,7 +207,7 @@ export async function duplicateLayoutAsDraft(
         entityType: source.entityType,
         surface: source.surface,
         layoutKey: source.layoutKey,
-        name: name?.trim() || `${source.name} (copy)`,
+        name: buildDuplicatedLayoutName(source.name, name),
         doc: source.doc,
         createdBy,
         metadata: {

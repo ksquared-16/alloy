@@ -18,7 +18,6 @@ import {
 } from "@/lib/admin/drawer/drawerOperatingSaveCoordinator";
 import { dispatchDrawerLayoutRuntimeBodyRecordPatch } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { applyLayoutRuntimeDraftToRecord } from "@/lib/layout/runtime/applyLayoutRuntimeDraftToRecord";
-import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import { isLayoutRuntimeEditableRefKeySupported, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
     collectLayoutRuntimeChildRepeaterBaselines,
@@ -44,6 +43,15 @@ import {
     applyInquiryChildPlacementFieldChange,
     isInquiryChildPlacementFieldKey,
 } from "@/lib/admin/location/inquiryChildPlacementFieldKeys";
+
+const LAYOUT_RUNTIME_DISPLAY_COMPANION_REF_KEYS = new Set([
+    "child.location",
+    "child.program",
+    "child.room",
+    "child.schedule",
+    "child.status",
+    "opportunity.location",
+]);
 
 type LayoutRuntimeDrawerEditContextValue = {
     getFieldValue: (refKey: string, fallback: string, rowKey?: string) => string;
@@ -75,6 +83,30 @@ function collectPersonContactBaseline(record: ProofRuntimeRecord): Record<string
     return baseline;
 }
 
+function collectDisplayCompanionBaseline(record: ProofRuntimeRecord): Record<string, string> {
+    return {
+        "opportunity.location":
+            String(record["opportunity.location"] ?? record._location_label ?? record._location_name ?? "").trim(),
+    };
+}
+
+function collectChildDisplayCompanionBaselines(
+    rows: ProofRuntimeRecord[],
+    rowKeys: string[],
+): Record<string, string> {
+    const out: Record<string, string> = {};
+    const companions = ["child.location", "child.program", "child.room", "child.schedule", "child.status"] as const;
+    rows.forEach((row, index) => {
+        const rowKey = rowKeys[index];
+        if (!rowKey) return;
+        for (const companion of companions) {
+            const raw = row[companion];
+            out[`${rowKey}::${companion}`] = raw == null ? "" : String(raw).trim();
+        }
+    });
+    return out;
+}
+
 function collectRepeaterRows(record: ProofRuntimeRecord): { rows: ProofRuntimeRecord[]; rowKeys: string[] } {
     const rows: ProofRuntimeRecord[] = [];
     const rowKeys: string[] = [];
@@ -95,8 +127,10 @@ function collectEditableBaseline(record: ProofRuntimeRecord): Record<string, str
     const { rows, rowKeys } = collectRepeaterRows(record);
     return {
         ...collectPersonContactBaseline(record),
+        ...collectDisplayCompanionBaseline(record),
         ...collectLayoutRuntimeOpportunityNativeBaseline(record),
         ...collectLayoutRuntimeChildRepeaterBaselines(record, rowKeys, rows),
+        ...collectChildDisplayCompanionBaselines(rows, rowKeys),
     };
 }
 
@@ -257,9 +291,20 @@ export default function LayoutRuntimeDrawerEditProvider({ record, children, onSa
 
     const value = useMemo(
         (): LayoutRuntimeDrawerEditContextValue => ({
-            getFieldValue: (refKey, fallback, rowKey) =>
-                draft[composeDraftKey(resolveEditableRefKey(refKey), rowKey)] ?? fallback,
+            getFieldValue: (refKey, fallback, rowKey) => {
+                const trimmedRef = refKey.trim();
+                if (LAYOUT_RUNTIME_DISPLAY_COMPANION_REF_KEYS.has(trimmedRef)) {
+                    return draft[composeDraftKey(trimmedRef, rowKey)] ?? fallback;
+                }
+                return draft[composeDraftKey(resolveEditableRefKey(refKey), rowKey)] ?? fallback;
+            },
             setFieldValue: (refKey, value, rowKey) => {
+                const trimmedRef = refKey.trim();
+                if (LAYOUT_RUNTIME_DISPLAY_COMPANION_REF_KEYS.has(trimmedRef)) {
+                    const key = composeDraftKey(trimmedRef, rowKey);
+                    setDraft((prev) => ({ ...prev, [key]: value }));
+                    return;
+                }
                 const resolved = resolveEditableRefKey(refKey);
                 if (!isLayoutRuntimeEditableRefKeySupported(resolved)) return;
                 const ocmKey = inquiryChildOcmFieldKeyFromLayoutRefKey(resolved);

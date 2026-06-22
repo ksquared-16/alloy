@@ -50,6 +50,11 @@ import {
     LAYOUT_BUILDER_INSPECTOR_RAIL_DEFAULT_PX,
     readLayoutBuilderInspectorRailWidth,
 } from "@/lib/layout/layoutBuilderInspectorRailWidth";
+import {
+    formatLayoutDraftTitleWithVersion,
+    formatLayoutPublishedTitleWithVersion,
+    resolveLayoutStableTitle,
+} from "@/lib/layout/layoutVersionNaming";
 import Link from "next/link";
 
 type Props = {
@@ -129,7 +134,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             }
             setRecord(rec);
             setWorkingDoc(prepared.doc);
-            setWorkingName(rec.name);
+            setWorkingName(resolveLayoutStableTitle(rec.name));
             setDirty(prepared.autoRepaired);
             if (prepared.autoRepaired) {
                 setAutoRepairNotice(
@@ -303,6 +308,13 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         );
     }
 
+    const layoutVersionHint = useMemo(() => {
+        if (!record) return "";
+        return record.status === "published" ?
+                formatLayoutPublishedTitleWithVersion(workingName, record.version)
+            :   formatLayoutDraftTitleWithVersion(workingName, record.version);
+    }, [record, workingName]);
+
     const isBuild = editorMode === "build";
 
     return (
@@ -344,7 +356,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         }`}
                         data-testid="visual-editor-action-state"
                     >
-                        {record.status} · v{record.version}
+                        {layoutVersionHint}
                         {actionState.statusLabel ? ` · ${actionState.statusLabel}` : ""}
                     </p>
                 </div>

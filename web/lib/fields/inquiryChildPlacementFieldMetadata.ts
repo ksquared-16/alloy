@@ -12,7 +12,8 @@ export type PlacementOptionSource =
     | "locations"
     | "programs_for_location"
     | "rooms_for_location_program"
-    | "option_set";
+    | "option_set"
+    | "enrollment_child_status";
 
 export type InquiryChildPlacementFieldMetadata = {
     ocm_field_key: InquiryChildNativeOcmFieldKey;
@@ -62,7 +63,12 @@ export const INQUIRY_CHILD_PLACEMENT_FIELD_METADATA: Record<
         entity_scope: "inquiry_child",
     },
     desired_start_date: undefined,
-    outcome_status_key: undefined,
+    outcome_status_key: {
+        ocm_field_key: "outcome_status_key",
+        control_type: "select",
+        option_source: "enrollment_child_status",
+        entity_scope: "inquiry_child",
+    },
     notes: undefined,
 };
 

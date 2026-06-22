@@ -8,6 +8,7 @@
 
 import { parseRefKey } from "../fieldCatalog";
 import { normalizeRefKeyOnRead } from "../layoutRefKeyAliases";
+import { LAYOUT_RUNTIME_DISPLAY_PREFERRED_REF_KEYS } from "@/lib/layout/runtime/resolveLayoutRuntimeFieldDisplayLabel";
 import type { LayoutItem } from "../layoutV2";
 import { resolveItemValue, type ResolvedValue } from "../resolveItemValue";
 
@@ -56,6 +57,11 @@ export function readLayoutRuntimeRepeaterFieldRaw(
     row: Record<string, unknown>,
     refKey: string,
 ): unknown {
+    const trimmedRef = refKey.trim();
+    if (LAYOUT_RUNTIME_DISPLAY_PREFERRED_REF_KEYS.has(trimmedRef) && hasValue(row[trimmedRef])) {
+        return row[trimmedRef];
+    }
+
     if (hasValue(row[refKey])) return row[refKey];
 
     const aliased = normalizeRefKeyOnRead(refKey);

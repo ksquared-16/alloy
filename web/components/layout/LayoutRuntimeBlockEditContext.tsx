@@ -18,7 +18,7 @@ export function LayoutRuntimeBlockEditProvider({
     editMode: LayoutEditorBlockEditMode;
     children: ReactNode;
 }) {
-    const [blockEditing, setBlockEditing] = useState(editMode === "inline_editable");
+    const [blockEditing, setBlockEditing] = useState(false);
     const value = useMemo(
         (): LayoutRuntimeBlockEditContextValue => ({
             editMode,
@@ -37,6 +37,5 @@ export function useLayoutRuntimeBlockEdit(): LayoutRuntimeBlockEditContextValue 
 export function layoutRuntimeBlockAllowsFieldEdit(ctx: LayoutRuntimeBlockEditContextValue | null): boolean {
     if (!ctx) return true;
     if (ctx.editMode === "display_only") return false;
-    if (ctx.editMode === "inline_editable") return true;
     return ctx.blockEditing;
 }

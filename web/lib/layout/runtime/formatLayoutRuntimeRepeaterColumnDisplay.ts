@@ -2,7 +2,9 @@ import type { LayoutCollectionColumn } from "@/lib/layout/layoutV2";
 import {
     formatLayoutRuntimeOperatorDateIfRefKey,
 } from "@/lib/layout/runtime/formatLayoutRuntimeOperatorDate";
+import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import { resolveLayoutRuntimeRepeaterFieldValue } from "@/lib/layout/runtime/resolveLayoutRuntimeRepeaterFieldValue";
+import { resolveLayoutRuntimeFieldDisplayLabel } from "@/lib/layout/runtime/resolveLayoutRuntimeFieldDisplayLabel";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
 /** Resolve one enrollment/related-list cell with operator date formatting. */
@@ -15,7 +17,17 @@ export function formatLayoutRuntimeRepeaterColumnDisplay(
         template: col.template,
     });
     if (r.isPlaceholder) return "—";
-    const raw = r.display ?? "—";
+    let raw = r.display ?? "—";
+    if (raw !== "—") {
+        raw = resolveLayoutRuntimeFieldDisplayLabel({
+            refKey: col.refKey,
+            rawValue: raw,
+            row,
+            renderHint: col.renderHint,
+        });
+        const statusLabel = formatLayoutRuntimeStatusLabel(raw, { refKey: col.refKey, renderHint: col.renderHint });
+        if (statusLabel) raw = statusLabel;
+    }
     if (raw === "—") return raw;
     return formatLayoutRuntimeOperatorDateIfRefKey(col.refKey, raw, col.renderHint);
 }

@@ -418,7 +418,7 @@ export function resolveVisualEditorActionState(input: {
             return {
                 canSave: input.validationOk && !input.busy,
                 canPublish: false,
-                statusLabel: "Published — save creates a new draft with your changes",
+                statusLabel: "Unsaved changes",
                 statusTone: input.validationOk ? "warning" : "error",
                 publishBlockedReason: "Save as draft first, then publish the new draft.",
             };
@@ -426,7 +426,7 @@ export function resolveVisualEditorActionState(input: {
         return {
             canSave: false,
             canPublish: false,
-            statusLabel: "Published — edit to start a new draft",
+            statusLabel: "Published",
             statusTone: "success",
             publishBlockedReason: "This version is already published.",
         };

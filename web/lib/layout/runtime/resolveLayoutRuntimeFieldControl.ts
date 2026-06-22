@@ -59,12 +59,20 @@ export function resolveLayoutRuntimeFieldControl(
         || (catalogCascade?.depends_on_field_key as InquiryChildNativeOcmFieldKey | "")
         || childPlacement?.depends_on_field_key;
 
-    if (optionSource && optionSource !== "option_set") {
+    if (optionSource && optionSource !== "option_set" && optionSource !== "enrollment_child_status") {
         return {
             controlType: "select",
             placement: childPlacement ?? undefined,
             option_source: optionSource,
             depends_on_field_key: dependsOn || childPlacement?.depends_on_field_key,
+        };
+    }
+
+    if (optionSource === "enrollment_child_status") {
+        return {
+            controlType: "select",
+            placement: childPlacement ?? undefined,
+            option_source: "enrollment_child_status",
         };
     }
 

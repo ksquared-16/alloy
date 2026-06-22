@@ -799,7 +799,7 @@ export default function OpportunityDrawerVmRuntime() {
                                     layoutRuntimeShadow={layoutRuntimeShadow}
                                     layoutBody={overviewLayoutBody}
                                     layoutDocBodyOverride={overviewLayoutDocBodyOverride}
-                                    onLayoutRuntimeSaved={reloadOpportunityDisplayVm}
+                                    onLayoutRuntimeSaved={undefined}
                                 />
                                 : <OpportunityDrawerVmTabPanes
                                     drawerId={String(displayVm.entity.id)}
