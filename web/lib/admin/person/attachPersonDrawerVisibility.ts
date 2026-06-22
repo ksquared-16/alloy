@@ -9,6 +9,7 @@ import {
     resolvePersonDrawerChildDateOfBirth,
 } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { filterPersonDrawerHouseholdVisibilityBySiteScope } from "@/lib/admin/person/personDrawerHouseholdSiteScope";
+import { fetchChildScopedContactLinksForMembers } from "@/lib/admin/person/fetchChildScopedContactLinks";
 import { viewingPersonHouseholdDisplayName } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
 import type {
     PersonEnrollmentMirrorRow,
@@ -593,6 +594,34 @@ export async function attachPersonDrawerVisibility(
     out._household_child_links = householdChildLinks;
     out._enrollment_mirror = enrollmentMirror;
     out._opportunity_person_roles = enrollmentPersonRoles;
+
+    if (householdCustomerIds.length > 0) {
+        const childMemberRowsForScopedContacts = [
+            ...memberRows.map((m) => ({ id: m.id, person_id: m.person_id ?? null })),
+            ...householdChildLinks.map((link) => ({
+                id: link.customer_member_id,
+                person_id: link.person_id,
+            })),
+            ...siblingLinks.map((link) => ({
+                id: link.customer_member_id,
+                person_id: link.person_id,
+            })),
+        ];
+        const dedupedMemberRows = [
+            ...new Map(childMemberRowsForScopedContacts.map((row) => [row.id, row])).values(),
+        ];
+        if (dedupedMemberRows.length > 0) {
+            out._child_scoped_contact_links = await fetchChildScopedContactLinksForMembers(
+                supabase,
+                orgId,
+                dedupedMemberRows,
+            );
+        } else {
+            out._child_scoped_contact_links = [];
+        }
+    } else {
+        out._child_scoped_contact_links = [];
+    }
 
     filterPersonDrawerHouseholdVisibilityBySiteScope(out, options?.siteScope ?? null);
 }

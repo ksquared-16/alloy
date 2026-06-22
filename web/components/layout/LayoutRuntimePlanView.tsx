@@ -88,6 +88,7 @@ import {
     resolveLayoutRuntimeActiveRecordContext,
 } from "@/lib/layout/runtime/layoutRuntimeRelatedListActiveRecord";
 import { readLayoutRuntimeSectionCollapseConfig } from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
+import { isRelationshipWidgetKey } from "@/lib/layout/runtime/layoutRuntimeScopedRelationshipContacts";
 import { logLayoutRuntimeChildrenRenderDebug } from "@/lib/layout/runtime/logLayoutRuntimeChildrenRenderDebug";
 import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveLayoutRuntimeRepeaterFieldValue } from "@/lib/layout/runtime/resolveLayoutRuntimeRepeaterFieldValue";
@@ -127,6 +128,7 @@ import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptySta
 import { isLayoutRuntimeContactRepeater } from "@/lib/layout/runtime/mapLayoutRuntimeContactRepeaterRows";
 import PersonConnectedChildrenCardList from "@/components/layout/person/PersonConnectedChildrenCardList";
 import PersonRelatedPeopleGroupsWidget from "@/components/layout/person/PersonRelatedPeopleGroupsWidget";
+import LayoutRuntimeRelationshipContactsWidget from "@/components/layout/LayoutRuntimeRelationshipContactsWidget";
 import LeadHouseholdContactsWidget from "@/components/layout/lead/LeadHouseholdContactsWidget";
 import LeadLastTouchSummaryCard from "@/components/layout/lead/LeadLastTouchSummaryCard";
 import LeadOperatingAttentionSummaryCard from "@/components/layout/lead/LeadOperatingAttentionSummaryCard";
@@ -1653,6 +1655,17 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
     if (widgetKey === "related_people" && composition.personOverviewComposition) {
         return (
             <PersonRelatedPeopleGroupsWidget record={record} onAdornmentAction={onAdornmentAction} />
+        );
+    }
+
+    if (isRelationshipWidgetKey(widgetKey)) {
+        return (
+            <LayoutRuntimeRelationshipContactsWidget
+                record={record}
+                item={item}
+                widgetKey={widgetKey}
+                onAdornmentAction={onAdornmentAction}
+            />
         );
     }
 

@@ -11,6 +11,10 @@ import type {
 import { isOpaqueIdValue, pickEntityId, type ProofRuntimeRecord } from "./proofRecordContext";
 import { stampLayoutRuntimeActiveRecordContext } from "./layoutRuntimeRelatedListActiveRecord";
 import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
+import {
+    resolveLayoutRuntimeScopedRelationshipContacts,
+    scopedRelationshipContactsToRepeaterRows,
+} from "./layoutRuntimeScopedRelationshipContacts";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -52,7 +56,16 @@ function mapFamilyAdultRow(link: PersonHouseholdAdultLinkRow, index: number): Pr
     };
 }
 
-function resolveFamilyAdultRows(vmRecord: Record<string, unknown>): ProofRuntimeRecord[] {
+function resolveFamilyAdultRows(vmRecord: Record<string, unknown>, personId: string): ProofRuntimeRecord[] {
+    const stamped = stampLayoutRuntimeActiveRecordContext(
+        { ...vmRecord, id: personId },
+        { anchorEntity: "child", entityId: personId },
+    );
+    const scoped = resolveLayoutRuntimeScopedRelationshipContacts(stamped, "guardians_for_child");
+    if (scoped.length > 0) {
+        return scopedRelationshipContactsToRepeaterRows(scoped);
+    }
+
     const links = (vmRecord._household_adult_links as PersonHouseholdAdultLinkRow[] | undefined) ?? [];
     if (links.length > 0) {
         return links.map((link, index) => mapFamilyAdultRow(link, index));
@@ -89,7 +102,7 @@ export function buildChildLayoutRuntimeRecordFromVm(input: {
     const householdName = resolveHouseholdName(vmRecord) ?? "";
     const addressFields = resolveHouseholdAddressFieldValues(vmRecord);
     const address = addressFields["location.household_address"] ?? "";
-    const familyRows = resolveFamilyAdultRows(vmRecord);
+    const familyRows = resolveFamilyAdultRows(vmRecord, personId);
 
     const overviewData: Record<string, unknown> = {
         ...vmRecord,
@@ -159,6 +172,10 @@ export function buildChildLayoutRuntimeRecordFromVm(input: {
 
     if (familyRows.length > 0) {
         record.family_adults = familyRows;
+    }
+
+    if (Array.isArray(vmRecord._child_scoped_contact_links)) {
+        record._child_scoped_contact_links = vmRecord._child_scoped_contact_links;
     }
 
     if (householdName || address) {

@@ -45,6 +45,7 @@ import { listSectionCompositionRows, removeSectionItem } from "@/lib/layout/layo
 import { addSectionFieldItem, addSectionRow } from "@/lib/layout/layoutEditorSectionComposition";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
 import { sectionZoneLabel } from "@/lib/layout/layoutBuilderStudioUx";
+import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
     applyPeerCardWidth,
     packPeerCardsInZone,

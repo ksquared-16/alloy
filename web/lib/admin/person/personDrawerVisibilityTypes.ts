@@ -108,3 +108,18 @@ export type PersonHouseholdCustomerAddressRow = {
     postal_code: string | null;
     label: string | null;
 };
+
+/** Child-scoped contact link from `customer_member_contacts` (+ resolved person when available). */
+export type ChildScopedContactLinkRow = {
+    customer_member_id: string;
+    child_person_id: string | null;
+    person_id: string | null;
+    contact_id: string | null;
+    display_name: string;
+    role_type: string;
+    role_label: string | null;
+    is_primary: boolean;
+    phone: string | null;
+    email: string | null;
+    sort_order: number | null;
+};

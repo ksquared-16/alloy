@@ -64,6 +64,25 @@ Items below extend the drawer Experience Builder framework. They do **not** appl
 
 ---
 
+## EB-FW-04 — Child-scoped relationship contacts ✅ (implemented)
+
+**Goal:** Relationship/contact widgets resolve child-scoped roles first; household fallback only when configured.
+
+**Implemented:**
+- `layoutRuntimeScopedRelationshipContacts.ts` — scoped resolver, widget defaults, opportunity/person grouping
+- `fetchChildScopedContactLinks.ts` + `attachPersonDrawerVisibility` — hydrates `_child_scoped_contact_links`
+- `LayoutRuntimeRelationshipContactsWidget.tsx` — runtime renderer for relationship widget keys
+- Widget keys: `guardians_for_child`, `emergency_contacts_for_child`, `authorized_pickup_for_child`, `billing_contacts_for_child`, `household_members`, `related_children_for_person`
+- `layoutEditorRelationshipWidgetConfig.ts` — builder metadata (`scope`, `roleTypes`, `includeHouseholdFallback`, etc.)
+- Child `family_adults` repeater uses child-scoped guardians via `buildChildLayoutRuntimeRecordFromVm`
+
+**Default behavior:**
+- Child drawer: child-scoped first, household fallback when configured
+- Person drawer: `related_children_for_person` groups by linked child
+- Opportunity drawer: per-child groups (no flat merge when multiple children)
+
+---
+
 ## Related
 
 - [Experience Builder doctrine](../platform/operator/experience-builder-doctrine.md)

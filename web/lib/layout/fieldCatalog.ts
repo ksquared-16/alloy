@@ -55,7 +55,7 @@ export interface LayoutCatalogGroup {
     fields: LayoutCatalogField[];
 }
 
-export const WIDGET_CATEGORIES = ["Work", "Communication", "Enrollment", "Waitlist", "System"] as const;
+export const WIDGET_CATEGORIES = ["Work", "Communication", "Enrollment", "Relationships", "Waitlist", "System"] as const;
 export type WidgetCategory = (typeof WIDGET_CATEGORIES)[number];
 
 export interface LayoutCatalogWidget {
@@ -182,6 +182,55 @@ export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
         description: "Configurable event timeline for this record (and optional related records)",
         relevantSurfaces: ["drawer", "queue"],
         defaultDisplayMode: "vertical_timeline",
+    },
+    // Relationships (child-scoped contacts)
+    {
+        widgetKey: "guardians_for_child",
+        label: "Guardians (child-scoped)",
+        category: "Relationships",
+        description: "Parents and guardians linked to the viewing child",
+        relevantSurfaces: ["drawer"],
+        defaultDisplayMode: "cards",
+    },
+    {
+        widgetKey: "emergency_contacts_for_child",
+        label: "Emergency contacts (child-scoped)",
+        category: "Relationships",
+        description: "Emergency contacts for the viewing child",
+        relevantSurfaces: ["drawer"],
+        defaultDisplayMode: "cards",
+    },
+    {
+        widgetKey: "authorized_pickup_for_child",
+        label: "Authorized pickup (child-scoped)",
+        category: "Relationships",
+        description: "Pickup-authorized contacts for the viewing child",
+        relevantSurfaces: ["drawer"],
+        defaultDisplayMode: "cards",
+    },
+    {
+        widgetKey: "billing_contacts_for_child",
+        label: "Billing contacts (child-scoped)",
+        category: "Relationships",
+        description: "Billing / payer contacts for the viewing child",
+        relevantSurfaces: ["drawer"],
+        defaultDisplayMode: "cards",
+    },
+    {
+        widgetKey: "household_members",
+        label: "Household members",
+        category: "Relationships",
+        description: "All household adults (household scope)",
+        relevantSurfaces: ["drawer"],
+        defaultDisplayMode: "list",
+    },
+    {
+        widgetKey: "related_children_for_person",
+        label: "Related children (per-child roles)",
+        category: "Relationships",
+        description: "Children linked to this person with per-child contact roles",
+        relevantSurfaces: ["drawer"],
+        defaultDisplayMode: "grouped_by_child",
     },
     // Waitlist (queue-meaningful; shown disabled on drawer surfaces)
     { widgetKey: "waitlist_position", label: "Waitlist Position", category: "Waitlist", description: "Computed waitlist position", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },

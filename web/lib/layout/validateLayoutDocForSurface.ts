@@ -54,6 +54,7 @@ import {
     validateLayoutEditorActivityTimelineMetadata,
     type ActivityTimelineSurfaceKey,
 } from "@/lib/layout/layoutEditorActivityTimelineConfig";
+import { LAYOUT_EDITOR_RELATIONSHIP_WIDGET_CONFIG_METADATA_KEY } from "@/lib/layout/runtime/layoutRuntimeScopedRelationshipContacts";
 
 export type LayoutSurfaceValidationResult = {
     ok: boolean;
@@ -106,6 +107,7 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "layoutEditorActionButton",
     "layoutEditorWidgetStyle",
     LAYOUT_EDITOR_ACTIVITY_TIMELINE_CONFIG_METADATA_KEY,
+    LAYOUT_EDITOR_RELATIONSHIP_WIDGET_CONFIG_METADATA_KEY,
     "layoutEditorRelatedListConfig",
     "enrollmentRosterReadFirst",
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,

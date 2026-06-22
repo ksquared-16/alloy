@@ -45,6 +45,11 @@ import {
     defaultActivityTimelineConfigForSurface,
     writeLayoutEditorActivityTimelineConfig,
 } from "@/lib/layout/layoutEditorActivityTimelineConfig";
+import {
+    defaultRelationshipWidgetConfigForSurface,
+    writeLayoutEditorRelationshipWidgetConfig,
+} from "@/lib/layout/layoutEditorRelationshipWidgetConfig";
+import { isRelationshipWidgetKey } from "@/lib/layout/runtime/layoutRuntimeScopedRelationshipContacts";
 import { makeEmptyCustomLayoutBlockItem } from "@/lib/layout/layoutEditorGeneratedKeys";
 
 export type SectionColumnCount = 1 | 2 | 3;
@@ -337,6 +342,12 @@ export function addSectionWidgetItem(
         item.metadata = writeLayoutEditorActivityTimelineConfig(
             item.metadata,
             defaultActivityTimelineConfigForSurface(surfaceKey),
+        );
+    }
+    if (isRelationshipWidgetKey(widgetKey)) {
+        item.metadata = writeLayoutEditorRelationshipWidgetConfig(
+            item.metadata,
+            defaultRelationshipWidgetConfigForSurface(widgetKey, surfaceKey),
         );
     }
     return { ok: true, doc: addItem(doc, sIdx, rowIndex, colIndex, item), itemId: item.id };
