@@ -5,6 +5,9 @@ import type { LayoutSection } from "@/lib/layout/layoutV2";
 import {
     segmentSectionsForRowLayout,
     sectionRowGroupGridStyle,
+    sectionStackedRowCellStyle,
+    sectionStackedRowGroupGridStyle,
+    sectionStackedRowPrimaryStyle,
 } from "@/lib/layout/layoutEditorSectionLayout";
 import { cardWidthStackStyle } from "@/lib/layout/layoutBuilderCardWidth";
 
@@ -43,25 +46,62 @@ export default function LayoutEditorSectionFlowView({
                         </div>
                     );
                 }
-                return (
-                    <div
-                        key={segment.groupId}
-                        className={`${rowClassName} items-stretch`}
-                        style={sectionRowGroupGridStyle(segment.spans)}
-                        data-layout-section-row-group={segment.groupId}
-                        data-layout-section-segment="row"
-                    >
-                        {segment.sections.map((section) => (
+                if (segment.kind === "stacked_row") {
+                    const gridStyle = sectionStackedRowGroupGridStyle(segment.layout);
+                    const primaryStyle = sectionStackedRowPrimaryStyle(segment.layout);
+                    return (
+                        <div
+                            key={segment.groupId}
+                            className={`${rowClassName} items-stretch`}
+                            style={gridStyle}
+                            data-layout-section-row-group={segment.groupId}
+                            data-layout-section-segment="stacked_row"
+                            data-layout-section-stack-layout={segment.layout}
+                        >
                             <div
-                                key={section.key}
                                 className={`${rowCellClassName} flex h-full min-h-0 flex-col`}
+                                style={primaryStyle}
                                 data-layout-runtime-peer-row-card="true"
+                                data-layout-runtime-stack-role="primary"
                             >
-                                {renderSection(section)}
+                                {renderSection(segment.primary)}
                             </div>
-                        ))}
-                    </div>
-                );
+                            {segment.stacked.map((section, index) => (
+                                <div
+                                    key={section.key}
+                                    className={`${rowCellClassName} flex h-full min-h-0 flex-col`}
+                                    style={sectionStackedRowCellStyle(segment.layout, index as 0 | 1)}
+                                    data-layout-runtime-peer-row-card="true"
+                                    data-layout-runtime-stack-role="stack"
+                                >
+                                    {renderSection(section)}
+                                </div>
+                            ))}
+                        </div>
+                    );
+                }
+                if (segment.kind === "row") {
+                    return (
+                        <div
+                            key={segment.groupId}
+                            className={`${rowClassName} items-stretch`}
+                            style={sectionRowGroupGridStyle(segment.spans)}
+                            data-layout-section-row-group={segment.groupId}
+                            data-layout-section-segment="row"
+                        >
+                            {segment.sections.map((section) => (
+                                <div
+                                    key={section.key}
+                                    className={`${rowCellClassName} flex h-full min-h-0 flex-col`}
+                                    data-layout-runtime-peer-row-card="true"
+                                >
+                                    {renderSection(section)}
+                                </div>
+                            ))}
+                        </div>
+                    );
+                }
+                return null;
             })}
         </>
     );

@@ -16,7 +16,10 @@ import {
     reorderSectionInZone,
     setSectionEditorHidden,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
-import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
+import {
+    patchLayoutDocSectionCollapse,
+    readLayoutRuntimeSectionCollapseConfig,
+} from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
 import {
     applySectionRowLayout,
     LAYOUT_EDITOR_SECTION_TYPES,
@@ -291,6 +294,94 @@ export default function LayoutBuilderInspectorPanel({
                                 data-testid="visual-editor-section-title"
                             />
                         </InspectorField>
+
+                        {section ?
+                            <>
+                                <label className="flex items-start gap-2.5 rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5 text-xs text-alloy-midnight/70">
+                                    <input
+                                        type="checkbox"
+                                        checked={readLayoutRuntimeSectionCollapseConfig(section).collapsible}
+                                        onChange={(e) =>
+                                            applyDoc(
+                                                patchLayoutDocSectionCollapse(doc, section.key, {
+                                                    collapsible: e.target.checked,
+                                                }),
+                                            )
+                                        }
+                                        data-testid="visual-editor-section-collapsible"
+                                        className="mt-0.5"
+                                    />
+                                    <span>
+                                        <span className="font-medium text-alloy-midnight/80">Collapsible section</span>
+                                        <span className="mt-0.5 block text-[10px] text-alloy-midnight/45">
+                                            Operators can expand or collapse this card in the drawer.
+                                        </span>
+                                    </span>
+                                </label>
+
+                                {readLayoutRuntimeSectionCollapseConfig(section).collapsible ?
+                                    <>
+                                        <label className="flex items-start gap-2.5 rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5 text-xs text-alloy-midnight/70">
+                                            <input
+                                                type="checkbox"
+                                                checked={readLayoutRuntimeSectionCollapseConfig(section).defaultExpanded}
+                                                onChange={(e) =>
+                                                    applyDoc(
+                                                        patchLayoutDocSectionCollapse(doc, section.key, {
+                                                            defaultExpanded: e.target.checked,
+                                                        }),
+                                                    )
+                                                }
+                                                data-testid="visual-editor-section-default-expanded"
+                                                className="mt-0.5"
+                                            />
+                                            <span>
+                                                <span className="font-medium text-alloy-midnight/80">Expanded by default</span>
+                                            </span>
+                                        </label>
+
+                                        <label className="flex items-start gap-2.5 rounded-lg border border-alloy-forge/10 bg-white px-3 py-2.5 text-xs text-alloy-midnight/70">
+                                            <input
+                                                type="checkbox"
+                                                checked={readLayoutRuntimeSectionCollapseConfig(section).persistCollapseState}
+                                                onChange={(e) =>
+                                                    applyDoc(
+                                                        patchLayoutDocSectionCollapse(doc, section.key, {
+                                                            persistCollapseState: e.target.checked,
+                                                        }),
+                                                    )
+                                                }
+                                                data-testid="visual-editor-section-persist-collapse"
+                                                className="mt-0.5"
+                                            />
+                                            <span>
+                                                <span className="font-medium text-alloy-midnight/80">Remember collapse state</span>
+                                                <span className="mt-0.5 block text-[10px] text-alloy-midnight/45">
+                                                    Session-only; does not change the published layout.
+                                                </span>
+                                            </span>
+                                        </label>
+
+                                        <InspectorField label="Collapsed summary" helper="Optional hint shown when the section is collapsed.">
+                                            <input
+                                                type="text"
+                                                value={readLayoutRuntimeSectionCollapseConfig(section).collapsedSummary ?? ""}
+                                                onChange={(e) =>
+                                                    applyDoc(
+                                                        patchLayoutDocSectionCollapse(doc, section.key, {
+                                                            collapsedSummary: e.target.value,
+                                                        }),
+                                                    )
+                                                }
+                                                className="w-full rounded-lg border border-alloy-forge/15 px-2.5 py-1.5 text-sm"
+                                                data-testid="visual-editor-section-collapsed-summary"
+                                                placeholder="e.g. 3 documents attached"
+                                            />
+                                        </InspectorField>
+                                    </>
+                                :   null}
+                            </>
+                        :   null}
 
                         {sectionType === "content" && !inspectorItem ?
                             <div className="space-y-2" data-testid="layout-builder-inspector-add-field">

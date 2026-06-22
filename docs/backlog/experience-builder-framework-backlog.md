@@ -20,37 +20,28 @@ Items below extend the drawer Experience Builder framework. They do **not** appl
 
 ---
 
-## EB-FW-01 — Collapsible sections (drawer surfaces)
+## EB-FW-01 — Collapsible sections (drawer surfaces) ✅ (implemented)
 
 **Goal:** Section-level collapse for Activity, Documents, Relationship Contacts, and large Person/Child sections.
 
-**Config (section-level):**
-- `collapsible`
-- `defaultCollapsed` (maps to existing `defaultExpanded`)
-- `persistCollapseState` (session/localStorage; never mutates published LayoutDoc)
-- `collapsedSummary` (static string or summary ref)
+**Implemented:**
+- `layoutRuntimeSectionCollapse.ts` — collapse config, session persistence helpers, doc patchers
+- `LayoutRuntimeCollapsibleSectionShell.tsx` — runtime collapse chrome for default drawer sections
+- `DrawerOverviewPanelShell` — collapse on composition-surface sections
+- `LayoutRuntimePlanView` — wires collapse from LayoutSection + host context
+- `LayoutBuilderInspectorPanel` — collapsible, default expanded, persist, collapsed summary controls
 
-**Surfaces:** Opportunity, Person, Child drawers only.
-
-**Depends on:** Shared `LayoutRuntimeCollapsibleSectionShell` in `LayoutRuntimePlanView` + builder inspector controls + parity tests.
-
-**See also:** Partial schema exists (`LayoutSection.collapsible`, `defaultExpanded`); runtime drawer path does not render collapse UI yet.
+**Config:** `collapsible`, `defaultExpanded`, metadata `persistCollapseState`, `collapsedSummary`.
 
 ---
 
-## EB-FW-02 — Stacked section composition presets (drawer surfaces)
+## EB-FW-02 — Stacked section composition presets (drawer surfaces) ✅ (implemented)
 
 **Goal:** Rich drawer body layouts beyond flat full/half peer rows.
 
-**Target presets:**
-- `full`, `half_half`, `third_two_thirds`, `two_thirds_third`
-- `stacked_right_2x2`, `stacked_left_2x2`
+**Implemented presets:** `full`, `half_half`, `third_two_thirds`, `two_thirds_third`, `stacked_right_2x2`, `stacked_left_2x2` (+ legacy alias keys).
 
-**Model:** Composition zone + slot assignment metadata on flat `sections[]` (same pattern as today's `layoutEditorSectionRowGroup`).
-
-**Depends on:** EB-FW-01 optional; extends `LayoutEditorSectionFlowView` / `LayoutRuntimeSectionFlowView`.
-
-**Out of scope:** Queue v3 columns — use column widths + block layout instead.
+**Model:** `layoutEditorSectionRowStackRole` metadata on grouped sections; `stacked_row` segment in `segmentSectionsForRowLayout` + `LayoutEditorSectionFlowView`.
 
 ---
 

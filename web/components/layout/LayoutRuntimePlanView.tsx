@@ -87,6 +87,7 @@ import {
     layoutRuntimeRelatedListEmptyMessage,
     resolveLayoutRuntimeActiveRecordContext,
 } from "@/lib/layout/runtime/layoutRuntimeRelatedListActiveRecord";
+import { readLayoutRuntimeSectionCollapseConfig } from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
 import { logLayoutRuntimeChildrenRenderDebug } from "@/lib/layout/runtime/logLayoutRuntimeChildrenRenderDebug";
 import { isOpaqueIdValue } from "@/lib/layout/runtime/proofRecordContext";
 import { resolveLayoutRuntimeRepeaterFieldValue } from "@/lib/layout/runtime/resolveLayoutRuntimeRepeaterFieldValue";
@@ -148,6 +149,7 @@ import LayoutRuntimeNotesCommunicationWidget, {
 } from "@/components/layout/LayoutRuntimeNotesCommunicationWidget";
 import LayoutRuntimeDocumentsOverviewWidget from "@/components/layout/LayoutRuntimeDocumentsOverviewWidget";
 import DrawerOverviewPanelShell from "@/components/layout/DrawerOverviewPanelShell";
+import LayoutRuntimeCollapsibleSectionShell from "@/components/layout/LayoutRuntimeCollapsibleSectionShell";
 import LayoutRuntimeTonedPanelShell from "@/components/layout/LayoutRuntimeTonedPanelShell";
 import DrawerHouseholdProfileSection from "@/components/layout/DrawerHouseholdProfileSection";
 import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
@@ -2139,6 +2141,10 @@ function SectionView({
     const useLayoutDocInlineEdit = !useHouseholdProfile;
     const sectionEditMode = resolveLayoutRuntimeSectionEditMode(section);
     const sectionHeaderEdit = useLayoutDocInlineEdit ? <SectionHeaderEditAction sectionKey={section.key} /> : null;
+    const sectionCollapse =
+        effectiveSectionPresentation === "summary_strip" ? null : readLayoutRuntimeSectionCollapseConfig(section);
+    const collapseAnchorEntity = host.anchorEntity ?? anchorEntity;
+    const collapseEntityId = host.entityId ?? String(record.id ?? "");
 
     function wrapSectionInlineEdit(node: ReactNode): ReactNode {
         if (!useLayoutDocInlineEdit) return node;
@@ -2198,6 +2204,9 @@ function SectionView({
                     tone={resolveLayoutSectionWidgetTone(section)}
                     bodyClassName={bodyClassName}
                     headerActions={sectionHeaderEdit}
+                    collapse={sectionCollapse ?? undefined}
+                    anchorEntity={collapseAnchorEntity}
+                    entityId={collapseEntityId}
                 >
                     {body}
                 </DrawerOverviewPanelShell>
@@ -2216,6 +2225,28 @@ function SectionView({
         headerClass =
             isPrimaryWorkspace ? LAYOUT_RUNTIME_PRIMARY_WORKSPACE_HEADER : LAYOUT_RUNTIME_BODY_SECTION_HEADER;
         bodyPadding = isPrimaryWorkspace ? "" : "gap-2.5 p-3 sm:p-3.5";
+    }
+
+    if (sectionCollapse?.collapsible) {
+        return wrapSectionInlineEdit(
+            <LayoutRuntimeCollapsibleSectionShell
+                sectionKey={section.key}
+                title={section.title}
+                anchorEntity={collapseAnchorEntity}
+                entityId={collapseEntityId}
+                collapse={sectionCollapse}
+                surfaceClassName={`${surfaceClass} group/section`}
+                headerClassName={headerClass}
+                bodyClassName={`flex flex-col ${bodyPadding}`}
+                headerActions={sectionHeaderEdit}
+                data-layout-runtime-section-key={section.key}
+                {...(isEnrollmentSection ?
+                    { "data-layout-runtime-primary-workspace-section": "true" }
+                :   {})}
+            >
+                {body}
+            </LayoutRuntimeCollapsibleSectionShell>,
+        );
     }
 
     return wrapSectionInlineEdit(

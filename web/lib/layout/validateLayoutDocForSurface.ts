@@ -79,6 +79,7 @@ const ALLOWED_SECTION_METADATA_KEYS = new Set([
     "layoutEditorHidden",
     "layoutEditorSectionRowGroup",
     "layoutEditorSectionRowSpan",
+    "layoutEditorSectionRowStackRole",
     "layoutEditorSectionType",
     "layoutEditorRelatedListConfig",
     LAYOUT_EDITOR_KPI_TILE_METADATA_KEY,
