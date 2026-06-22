@@ -30,7 +30,7 @@ import {
     resolveLayoutCollectionColumnShowIcon,
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
-import { readLayoutEditorBlockConfig, resolveLayoutRuntimeBlockEditMode, resolveLayoutRuntimeItemsEditMode } from "@/lib/layout/layoutEditorBlockConfig";
+import { readLayoutEditorBlockConfig, resolveLayoutRuntimeSectionEditMode } from "@/lib/layout/layoutEditorBlockConfig";
 import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
     overlayLayoutEditorContactBlockRecord,
@@ -554,6 +554,15 @@ function LayoutRuntimeBlockEditToggle({
     );
 }
 
+/** Single section-level Edit control — nested blocks/columns do not render their own. */
+function SectionHeaderEditAction({ sectionKey }: { sectionKey: string }) {
+    const drawerEdit = useLayoutRuntimeDrawerEdit();
+    const blockEdit = useLayoutRuntimeBlockEdit();
+    if (!drawerEdit || !blockEdit) return null;
+    if (blockEdit.editMode !== "edit_button" && blockEdit.editMode !== "inline_editable") return null;
+    return <LayoutRuntimeBlockEditToggle itemId={sectionKey} blockEdit={blockEdit} />;
+}
+
 function wrapLayoutRuntimeCompositionWidget(
     title: string,
     tone: LayoutEditorWidgetRuntimeTone | undefined,
@@ -568,7 +577,6 @@ function wrapLayoutRuntimeCompositionWidget(
 
 function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const blockConfig = readLayoutEditorBlockConfig(item.metadata);
-    const editMode = resolveLayoutRuntimeBlockEditMode(item, blockConfig);
     const isContactBlock = item.kind === "field_group" && item.refKey === "contact_block";
     const renderedContacts = useContext(LayoutRuntimeRenderedContactIdsContext);
 
@@ -584,9 +592,7 @@ function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord;
     }
 
     return (
-        <LayoutRuntimeBlockEditProvider editMode={editMode}>
-            <GroupCellContent record={contactRecord} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
-        </LayoutRuntimeBlockEditProvider>
+        <GroupCellContent record={contactRecord} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
     );
 }
 
@@ -603,33 +609,21 @@ function GroupCellContent({
 }) {
     const variant = useContext(LayoutRuntimeVariantContext);
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
-    const blockEdit = useLayoutRuntimeBlockEdit();
-    const drawerEdit = useLayoutRuntimeDrawerEdit();
     const hasSubgrid = Array.isArray(item.rows) && item.rows.length > 0;
     const showTitle = blockConfig.showTitle !== false;
     const title = showTitle ? operatorLabel(item, variant) : "";
-    const resolvedEditMode = blockEdit?.editMode ?? "display_only";
-    const showEditButton =
-        (resolvedEditMode === "edit_button" || resolvedEditMode === "inline_editable") && Boolean(drawerEdit);
     const blockTone = resolveLayoutItemWidgetTone(item);
     const shellTitle = blockTone && operatorSurfaces ? title || undefined : undefined;
-    const blockEditToggle =
-        showEditButton && blockEdit ?
-            <LayoutRuntimeBlockEditToggle itemId={item.id} blockEdit={blockEdit} />
-        :   null;
     const body = (
         <div className="group/block">
-            {!shellTitle && (title || showEditButton) ?
+            {!shellTitle && title ?
                 <div className="mb-1.5 flex items-center justify-between gap-2">
-                    {title ?
-                        <div
-                            className={`${operatorSurfaces ? "text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/50" : "text-[11px] font-semibold uppercase tracking-wide"}`}
-                            style={operatorSurfaces ? undefined : { color: MUTED }}
-                        >
-                            {title}
-                        </div>
-                    :   <span />}
-                    {blockEditToggle}
+                    <div
+                        className={`${operatorSurfaces ? "text-[10px] uppercase tracking-[0.08em] text-alloy-midnight/50" : "text-[11px] font-semibold uppercase tracking-wide"}`}
+                        style={operatorSurfaces ? undefined : { color: MUTED }}
+                    >
+                        {title}
+                    </div>
                 </div>
             :   null}
             {hasSubgrid ?
@@ -652,7 +646,6 @@ function GroupCellContent({
             <LayoutRuntimeTonedPanelShell
                 title={shellTitle}
                 tone={blockTone}
-                headerActions={blockEditToggle}
                 bodyClassName="px-2.5 py-2"
             >
                 {body}
@@ -840,12 +833,7 @@ function renderRelatedListPanelShell(input: {
 
 function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; item: LayoutItem; anchorEntity: string }) {
     const blockConfig = readLayoutEditorBlockConfig(item.metadata);
-    const editMode = resolveLayoutRuntimeBlockEditMode(item, blockConfig);
-    return (
-        <LayoutRuntimeBlockEditProvider editMode={editMode}>
-            <RelatedCellInner record={record} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
-        </LayoutRuntimeBlockEditProvider>
-    );
+    return <RelatedCellInner record={record} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />;
 }
 
 function RelatedCellInner({
@@ -864,15 +852,6 @@ function RelatedCellInner({
     const { sectionKey } = useContext(LayoutRuntimeSectionContext);
     const host = useContext(LayoutRuntimeHostContext);
     const onAdornmentAction = useContext(AdornmentActionContext);
-    const drawerEdit = useLayoutRuntimeDrawerEdit();
-    const blockEdit = useLayoutRuntimeBlockEdit();
-    const resolvedEditMode = blockEdit?.editMode ?? "display_only";
-    const showBlockEditButton =
-        (resolvedEditMode === "edit_button" || resolvedEditMode === "inline_editable") && Boolean(drawerEdit);
-    const blockEditToggle =
-        showBlockEditButton && blockEdit ?
-            <LayoutRuntimeBlockEditToggle itemId={item.id} blockEdit={blockEdit} />
-        :   null;
     const [enrollmentExpanded, setEnrollmentExpanded] = useState(false);
     // A configured collection (any displayMode — table/rows/list) renders its rows
     // whenever it has columns. This matches isLayoutItemSupportedForProduction
@@ -1076,7 +1055,6 @@ function RelatedCellInner({
             suppressHeader: suppressRelatedListHeader,
             surfaceClassName: `${LAYOUT_RUNTIME_PANEL_SURFACE} ${LAYOUT_RUNTIME_WORK_RAIL}`,
             headerExtra: <LayoutRuntimeLinkDebugModeBanner />,
-            headerActions: blockEditToggle,
             children:
                 showChildrenEmpty ?
                     <LayoutRuntimeChildrenEmptyState
@@ -1326,7 +1304,6 @@ function RelatedCellInner({
             suppressHeader: suppressRelatedListHeader,
             surfaceClassName: `${LAYOUT_RUNTIME_PANEL_SURFACE} ${isChildrenRepeater ? LAYOUT_RUNTIME_WORK_RAIL : ""}`,
             headerExtra: isChildrenRepeater ? <LayoutRuntimeLinkDebugModeBanner /> : null,
-            headerActions: blockEditToggle,
             children:
                 showChildrenEmpty ?
                     <LayoutRuntimeChildrenEmptyState
@@ -1345,15 +1322,12 @@ function RelatedCellInner({
                     <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
                         {title || "Related records"}
                     </span>
-                    <div className="flex items-center gap-2">
-                        {blockEditToggle}
-                        {variant === "proof" ?
-                            <span className="text-[10px]" style={{ color: MUTED }}>
-                                {rows.length} row{rows.length === 1 ? "" : "s"}
-                                {binding.relationKey === "enrollment_children" ? " · enrollment context" : ""}
-                            </span>
-                        :   null}
-                    </div>
+                    {variant === "proof" ?
+                        <span className="text-[10px]" style={{ color: MUTED }}>
+                            {rows.length} row{rows.length === 1 ? "" : "s"}
+                            {binding.relationKey === "enrollment_children" ? " · enrollment context" : ""}
+                        </span>
+                    :   null}
                 </div>
             :   null}
             {showChildrenEmpty ?
@@ -1904,57 +1878,17 @@ function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; 
     }
 }
 
-function columnStandaloneFieldItems(items: LayoutItem[]): LayoutItem[] {
-    return items.filter((item) => item.kind === "field" && item.refKey !== "_template");
-}
-
-function ColumnEditShell({ columnId, children }: { columnId: string; children: ReactNode }) {
-    const drawerEdit = useLayoutRuntimeDrawerEdit();
-    const blockEdit = useLayoutRuntimeBlockEdit();
-    const showEditButton =
-        Boolean(drawerEdit) &&
-        blockEdit &&
-        (blockEdit.editMode === "edit_button" || blockEdit.editMode === "inline_editable");
-    const blockEditToggle =
-        showEditButton && blockEdit ?
-            <LayoutRuntimeBlockEditToggle itemId={columnId} blockEdit={blockEdit} />
-        :   null;
-
-    return (
-        <div className="group/block flex min-w-0 flex-col gap-1">
-            {blockEditToggle ?
-                <div className="flex justify-end">{blockEditToggle}</div>
-            :   null}
-            {children}
-        </div>
-    );
-}
-
 function ColumnView({ record, column, anchorEntity }: { record: ProofRuntimeRecord; column: LayoutColumn; anchorEntity: string }) {
     const summaryCompact = useLayoutRuntimeSummaryStrip() && useLayoutRuntimeCompositionHints().summaryStripCompactRow;
     const span = summaryCompact ? 1 : Math.max(1, Math.min(LAYOUT_GRID_COLUMNS, column.width));
-    const standaloneFields = columnStandaloneFieldItems(column.items);
-    const editMode = resolveLayoutRuntimeItemsEditMode(standaloneFields);
-    const drawerEdit = useLayoutRuntimeDrawerEdit();
-    const needsEditShell = editMode === "edit_button" && standaloneFields.length > 0 && Boolean(drawerEdit);
-
-    const itemCells = column.items.map((item) => (
-        <ItemCell key={item.id} record={record} item={item} anchorEntity={anchorEntity} />
-    ));
-
-    const columnBody =
-        needsEditShell ?
-            <LayoutRuntimeBlockEditProvider editMode={editMode}>
-                <ColumnEditShell columnId={column.id}>{itemCells}</ColumnEditShell>
-            </LayoutRuntimeBlockEditProvider>
-        :   itemCells;
-
     return (
         <div
             style={summaryCompact ? undefined : { gridColumn: `span ${span} / span ${span}` }}
             className="flex min-w-0 flex-col gap-1"
         >
-            {columnBody}
+            {column.items.map((item) => (
+                <ItemCell key={item.id} record={record} item={item} anchorEntity={anchorEntity} />
+            ))}
         </div>
     );
 }
@@ -2097,15 +2031,24 @@ function SectionView({
             </LayoutRuntimeRenderedContactIdsProvider>
         );
 
+    const useLayoutDocInlineEdit = !useHouseholdProfile;
+    const sectionEditMode = resolveLayoutRuntimeSectionEditMode(section);
+    const sectionHeaderEdit = useLayoutDocInlineEdit ? <SectionHeaderEditAction sectionKey={section.key} /> : null;
+
+    function wrapSectionInlineEdit(node: ReactNode): ReactNode {
+        if (!useLayoutDocInlineEdit) return node;
+        return <LayoutRuntimeBlockEditProvider editMode={sectionEditMode}>{node}</LayoutRuntimeBlockEditProvider>;
+    }
+
     if (effectiveSectionPresentation === "summary_strip") {
-        return (
+        return wrapSectionInlineEdit(
             <div
                 className={isKpiTile ? "min-w-0" : "flex flex-col gap-2"}
                 data-layout-runtime-section-presentation="summary_strip"
                 {...(isKpiTile ? { "data-layout-runtime-kpi-tile": "true" } : {})}
             >
                 {body}
-            </div>
+            </div>,
         );
     }
 
@@ -2129,18 +2072,18 @@ function SectionView({
             :   DRAWER_OVERVIEW_PANEL_BODY_CLASS;
 
         if (composition.suppressDrawerOverviewSectionHeader) {
-            return (
+            return wrapSectionInlineEdit(
                 <div
                     className={bodyClassName}
                     data-layout-runtime-section-key={section.key}
                     data-layout-runtime-section-presentation="composition_body_only"
                 >
                     {body}
-                </div>
+                </div>,
             );
         }
 
-        return (
+        return wrapSectionInlineEdit(
             <div className="flex h-full min-h-0 flex-col" data-layout-runtime-section-shell="true">
                 <DrawerOverviewPanelShell
                     sectionKey={section.key}
@@ -2149,10 +2092,11 @@ function SectionView({
                     variant={drawerOverviewSectionIsCenterpiece(section.key) ? "centerpiece" : "default"}
                     tone={resolveLayoutSectionWidgetTone(section)}
                     bodyClassName={bodyClassName}
+                    headerActions={sectionHeaderEdit}
                 >
                     {body}
                 </DrawerOverviewPanelShell>
-            </div>
+            </div>,
         );
     }
 
@@ -2169,7 +2113,7 @@ function SectionView({
         bodyPadding = isPrimaryWorkspace ? "" : "gap-2.5 p-3 sm:p-3.5";
     }
 
-    return (
+    return wrapSectionInlineEdit(
         <div
             className={surfaceClass}
             data-layout-runtime-section-key={section.key}
@@ -2178,10 +2122,13 @@ function SectionView({
             :   {})}
         >
             <div className={headerClass}>
-                <div className="text-inherit">{section.title}</div>
+                <div className="flex items-center justify-between gap-2 text-inherit">
+                    <div>{section.title}</div>
+                    {sectionHeaderEdit}
+                </div>
             </div>
             <div className={`flex flex-col ${bodyPadding}`}>{body}</div>
-        </div>
+        </div>,
     );
 }
 

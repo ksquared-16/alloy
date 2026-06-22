@@ -2,12 +2,11 @@
 
 import { useMemo, useState } from "react";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
-import OpportunityDrawerLayoutFieldSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettings";
+import OpportunityDrawerLayoutFieldSettingsModal from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettingsModal";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc, LayoutItem } from "@/lib/layout/layoutV2";
 import {
-    patchLayoutEditorFieldDisplay,
-    patchLayoutEditorFieldVisibility,
+    applyLayoutEditorFieldSettingsPatch,
     type LayoutEditorFieldNode,
 } from "@/lib/layout/layoutEditorCompositionModel";
 import { readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
@@ -92,6 +91,7 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
                         },
                 displayConfig: readLayoutEditorDisplayConfig(selectedField.item),
                 visibilityRule: resolveVisibilityRuleKey(selectedField.item.visibleWhen, selectedField.item.refKey),
+                editable: selectedField.item.editable === true,
             }
         :   null;
 
@@ -171,6 +171,11 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
                                                 >
                                                     {resolveLayoutEditorItemDisplayLabel(item)}
                                                 </button>
+                                                {item.editable === true ?
+                                                    <span className="shrink-0 rounded bg-alloy-pine/10 px-1.5 py-0.5 text-[9px] font-medium text-alloy-pine">
+                                                        Editable
+                                                    </span>
+                                                :   null}
                                                 <span className="flex shrink-0 gap-0.5">
                                                     {col.colIndex > 0 ?
                                                         <button
@@ -366,29 +371,18 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
             ))}
 
             {selectedFieldNode ?
-                <OpportunityDrawerLayoutFieldSettings
-                    inline
+                <OpportunityDrawerLayoutFieldSettingsModal
                     node={selectedFieldNode}
                     onClose={() => setSelectedFieldId(null)}
                     onChange={(patch) => {
-                        let next = doc;
-                        if (patch.label !== undefined || patch.display) {
-                            next = patchLayoutEditorFieldDisplay(
-                                next,
+                        applyDoc(
+                            applyLayoutEditorFieldSettingsPatch(
+                                doc,
                                 selectedFieldNode.path,
-                                patch.display ?? {},
-                                patch.label,
-                            );
-                        }
-                        if (patch.visibility) {
-                            next = patchLayoutEditorFieldVisibility(
-                                next,
-                                selectedFieldNode.path,
-                                patch.visibility,
+                                patch,
                                 selectedFieldNode.refKey,
-                            );
-                        }
-                        applyDoc(next);
+                            ),
+                        );
                     }}
                 />
             :   null}

@@ -1,11 +1,9 @@
 "use client";
 
-import OpportunityDrawerLayoutFieldSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettings";
+import OpportunityDrawerLayoutFieldSettingsModal from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettingsModal";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
-    patchLayoutEditorFieldDisplay,
-    patchLayoutEditorFieldEditable,
-    patchLayoutEditorFieldVisibility,
+    applyLayoutEditorFieldSettingsPatch,
     type LayoutEditorFieldNode,
 } from "@/lib/layout/layoutEditorCompositionModel";
 import { readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
@@ -26,7 +24,6 @@ import {
 } from "@/lib/layout/layoutEditorRelatedListConfig";
 import { buildRelatedListFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import { useEffect, useMemo, useState } from "react";
-import { createPortal } from "react-dom";
 
 type Props = {
     doc: LayoutDoc;
@@ -56,6 +53,7 @@ function RelatedListRowEditor({
     rowKeyName,
     row,
     fieldGroups,
+    columnEditableByRefKey,
     onPatch,
     selectedRefKey,
     onSelectRefKey,
@@ -64,6 +62,7 @@ function RelatedListRowEditor({
     rowKeyName: "primaryRow" | "secondaryRow" | "tertiaryRow";
     row?: LayoutEditorRelatedListRowTemplate;
     fieldGroups: ReturnType<typeof buildRelatedListFieldPickerGroups>;
+    columnEditableByRefKey: Record<string, boolean>;
     onPatch: (patch: Partial<{ primaryRow: LayoutEditorRelatedListRowTemplate; secondaryRow: LayoutEditorRelatedListRowTemplate; tertiaryRow: LayoutEditorRelatedListRowTemplate }>) => void;
     selectedRefKey: string | null;
     onSelectRefKey: (refKey: string | null) => void;
@@ -144,6 +143,11 @@ function RelatedListRowEditor({
                                         <span className="min-w-0 flex-1 truncate text-xs font-medium text-alloy-midnight">
                                             {fieldLabel(fieldGroups, refKey)}
                                         </span>
+                                        {columnEditableByRefKey[refKey] ?
+                                            <span className="shrink-0 rounded bg-alloy-pine/10 px-1.5 py-0.5 text-[9px] font-medium text-alloy-pine">
+                                                Editable
+                                            </span>
+                                        :   null}
                                     </button>
                                 :   <select
                                         value=""
@@ -232,6 +236,14 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
         [config.entityType, showAllFields],
     );
 
+    const columnEditableByRefKey = useMemo(() => {
+        const map: Record<string, boolean> = {};
+        for (const col of relatedListItem?.columns ?? []) {
+            if (col.editable === true) map[col.refKey] = true;
+        }
+        return map;
+    }, [relatedListItem?.columns]);
+
     const rows = [config.primaryRow, config.secondaryRow, config.tertiaryRow];
     const presentationMode = config.presentationMode ?? "table";
 
@@ -299,54 +311,29 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
                     rowKeyName={rowKey(index)}
                     row={rows[index]}
                     fieldGroups={fieldGroups}
+                    columnEditableByRefKey={columnEditableByRefKey}
                     onPatch={patchRow}
                     selectedRefKey={selectedRefKey}
                     onSelectRefKey={setSelectedRefKey}
                 />
             ))}
 
-            {selectedFieldNode && typeof document !== "undefined" ?
-                createPortal(
-                    <div
-                        className="fixed inset-0 z-[200] flex items-center justify-center bg-alloy-midnight/40 p-4"
-                        data-testid="visual-editor-related-list-field-modal"
-                        onClick={() => setSelectedRefKey(null)}
-                    >
-                        <div
-                            className="max-h-[min(90vh,40rem)] w-full max-w-lg overflow-y-auto rounded-xl border border-alloy-stone/15 bg-white p-4 shadow-xl"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <OpportunityDrawerLayoutFieldSettings
-                                node={selectedFieldNode}
-                                onClose={() => setSelectedRefKey(null)}
-                                onChange={(patch) => {
-                                    let next = doc;
-                                    if (patch.label !== undefined || patch.display) {
-                                        next = patchLayoutEditorFieldDisplay(
-                                            next,
-                                            selectedFieldNode.path,
-                                            patch.display ?? {},
-                                            patch.label,
-                                        );
-                                    }
-                                    if (patch.visibility) {
-                                        next = patchLayoutEditorFieldVisibility(
-                                            next,
-                                            selectedFieldNode.path,
-                                            patch.visibility,
-                                            selectedFieldNode.refKey,
-                                        );
-                                    }
-                                    if (patch.editable !== undefined) {
-                                        next = patchLayoutEditorFieldEditable(next, selectedFieldNode.path, patch.editable);
-                                    }
-                                    applyDoc(next);
-                                }}
-                            />
-                        </div>
-                    </div>,
-                    document.body,
-                )
+            {selectedFieldNode ?
+                <OpportunityDrawerLayoutFieldSettingsModal
+                    node={selectedFieldNode}
+                    testId="visual-editor-related-list-field-modal"
+                    onClose={() => setSelectedRefKey(null)}
+                    onChange={(patch) => {
+                        applyDoc(
+                            applyLayoutEditorFieldSettingsPatch(
+                                doc,
+                                selectedFieldNode.path,
+                                patch,
+                                selectedFieldNode.refKey,
+                            ),
+                        );
+                    }}
+                />
             :   null}
         </div>
     );

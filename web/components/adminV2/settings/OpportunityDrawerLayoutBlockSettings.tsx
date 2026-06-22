@@ -301,7 +301,10 @@ export default function OpportunityDrawerLayoutBlockSettings({
                     </label>
 
                     <fieldset>
-                        <legend className="text-[11px] font-medium text-alloy-midnight/60">Actions</legend>
+                        <legend className="text-[11px] font-medium text-alloy-midnight/60">Row actions</legend>
+                        <p className="mt-0.5 text-[10px] leading-relaxed text-alloy-midnight/45">
+                            Per-row drawer actions — not field inline edit. Use field settings for editable columns.
+                        </p>
                         <div className="mt-1 space-y-1">
                             {LAYOUT_EDITOR_ROW_ACTIONS.map((action) => {
                                 const unsupported = unsupportedRowActions.includes(action);

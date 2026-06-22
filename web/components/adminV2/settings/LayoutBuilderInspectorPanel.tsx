@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import OpportunityDrawerLayoutFieldSettingsModal from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettingsModal";
 import OpportunityDrawerLayoutRelatedListSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutRelatedListSettings";
 import OpportunityDrawerLayoutSectionRowEditor, {
     LayoutBuilderItemInspector,
@@ -33,6 +34,10 @@ import {
     type CardWidthFractionKey,
 } from "@/lib/layout/layoutBuilderCardWidth";
 import { EXPERIENCE_BUILDER_PEER_BLOCK_LABELS } from "@/lib/layout/layoutBuilderCardAuthoring";
+import {
+    applyLayoutEditorFieldSettingsPatch,
+    resolveLayoutEditorFieldNodeFromSerializedPath,
+} from "@/lib/layout/layoutEditorCompositionModel";
 import { listSectionCompositionRows, removeSectionItem } from "@/lib/layout/layoutEditorSectionComposition";
 import { addSectionFieldItem, addSectionRow } from "@/lib/layout/layoutEditorSectionComposition";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
@@ -144,6 +149,15 @@ export default function LayoutBuilderInspectorPanel({
     }, [doc, selectedSectionId, selectedItemId]);
 
     const inspectorItem = selectedItem ?? kpiWidgetItem;
+
+    const canvasTraceFieldNode = useMemo(() => {
+        if (!selectedSectionId || !selectedFieldPath) return null;
+        if (selectedFieldPath.startsWith("field:")) return null;
+        if (selectedFieldPath.startsWith("column:") || selectedFieldPath.startsWith("group:")) {
+            return resolveLayoutEditorFieldNodeFromSerializedPath(doc, selectedFieldPath);
+        }
+        return null;
+    }, [doc, selectedFieldPath, selectedSectionId]);
 
     const deleteGate = section ? canDeleteOpportunityDrawerSection(section) : { ok: false, reason: "" };
 
@@ -493,6 +507,22 @@ export default function LayoutBuilderInspectorPanel({
                     </div>
                 }
             </div>
+            {canvasTraceFieldNode ?
+                <OpportunityDrawerLayoutFieldSettingsModal
+                    node={canvasTraceFieldNode}
+                    onClose={onClearItemSelection}
+                    onChange={(patch) => {
+                        applyDoc(
+                            applyLayoutEditorFieldSettingsPatch(
+                                doc,
+                                canvasTraceFieldNode.path,
+                                patch,
+                                canvasTraceFieldNode.refKey,
+                            ),
+                        );
+                    }}
+                />
+            :   null}
         </aside>
     );
 }

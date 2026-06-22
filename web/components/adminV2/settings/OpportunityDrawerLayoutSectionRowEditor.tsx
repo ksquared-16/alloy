@@ -5,7 +5,7 @@ import OpportunityDrawerLayoutBlockSettings from "@/components/adminV2/settings/
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
 import OpportunityDrawerLayoutWidgetPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutWidgetPicker";
 import OpportunityDrawerLayoutSectionCompositionDiagnostics from "@/components/adminV2/settings/OpportunityDrawerLayoutSectionCompositionDiagnostics";
-import OpportunityDrawerLayoutFieldSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettings";
+import OpportunityDrawerLayoutFieldSettingsModal from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettingsModal";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
@@ -21,9 +21,7 @@ import { buildBlockContextFieldPickerGroups } from "@/lib/layout/layoutEditorBlo
 import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfig";
 import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
-    patchLayoutEditorFieldDisplay,
-    patchLayoutEditorFieldEditable,
-    patchLayoutEditorFieldVisibility,
+    applyLayoutEditorFieldSettingsPatch,
     type LayoutEditorFieldNode,
 } from "@/lib/layout/layoutEditorCompositionModel";
 import { readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
@@ -833,22 +831,11 @@ export function LayoutBuilderItemInspector({
     };
 
     return (
-        <OpportunityDrawerLayoutFieldSettings
-            inline
+        <OpportunityDrawerLayoutFieldSettingsModal
             node={fieldNode}
             onClose={onClose}
             onChange={(patch) => {
-                let next = doc;
-                if (patch.label !== undefined || patch.display) {
-                    next = patchLayoutEditorFieldDisplay(next, fieldNode.path, patch.display ?? {}, patch.label);
-                }
-                if (patch.visibility) {
-                    next = patchLayoutEditorFieldVisibility(next, fieldNode.path, patch.visibility, fieldNode.refKey);
-                }
-                if (patch.editable !== undefined) {
-                    next = patchLayoutEditorFieldEditable(next, fieldNode.path, patch.editable);
-                }
-                applyDoc(next);
+                applyDoc(applyLayoutEditorFieldSettingsPatch(doc, fieldNode.path, patch, fieldNode.refKey));
             }}
         />
     );

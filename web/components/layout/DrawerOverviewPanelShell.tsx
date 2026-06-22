@@ -28,6 +28,7 @@ type Props = {
     variant?: DrawerOverviewPanelVariant;
     tone?: LayoutEditorWidgetRuntimeTone;
     bodyClassName?: string;
+    headerActions?: ReactNode;
     children: ReactNode;
 };
 
@@ -57,6 +58,7 @@ export default function DrawerOverviewPanelShell({
     variant = "default",
     tone,
     bodyClassName = "px-3 pb-3 pt-2",
+    headerActions,
     children,
 }: Props) {
     const Icon = resolveDrawerOverviewSectionIcon(sectionKey);
@@ -90,6 +92,9 @@ export default function DrawerOverviewPanelShell({
                         :   null}
                         <h3 className={`truncate ${PRESENTATION_SECTION_HEADER} ${tone ? resolveLayoutEditorWidgetToneTitleClass(tone) : ""}`}>{title}</h3>
                     </div>
+                    {headerActions ?
+                        <div className="flex shrink-0 items-center gap-2">{headerActions}</div>
+                    :   null}
                 </div>
             </header>
             <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${bodyClassName}`}>{children}</div>

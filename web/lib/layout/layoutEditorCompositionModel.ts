@@ -234,6 +234,75 @@ export function listSectionLayoutBlocks(doc: LayoutDoc, sectionKey: string): Lay
     return blocks;
 }
 
+/** Resolve a canvas trace path to the canonical field settings node. */
+export function resolveLayoutEditorFieldNodeFromSerializedPath(
+    doc: LayoutDoc,
+    serializedPath: string,
+): LayoutEditorFieldNode | null {
+    const fieldMatch = serializedPath.match(/^field:([^:]+):(.+)$/);
+    if (fieldMatch) {
+        const sectionKey = fieldMatch[1]!;
+        const itemId = fieldMatch[2]!;
+        const loc = findLayoutItemLocation(doc, itemId);
+        if (!loc || loc.item.kind !== "field") return null;
+        return fieldNodeFromItem(sectionKey, loc.item, { kind: "field", sectionKey, itemId });
+    }
+
+    const groupMatch = serializedPath.match(/^group:([^:]+):([^:]+):(\d+):(\d+):(.+)$/);
+    if (groupMatch) {
+        const sectionKey = groupMatch[1]!;
+        const blockItemId = groupMatch[2]!;
+        const gr = Number(groupMatch[3]);
+        const gc = Number(groupMatch[4]!);
+        const fieldId = groupMatch[5]!;
+        const loc = groupLoc(doc, sectionKey, blockItemId);
+        if (!loc) return null;
+        const group = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+        const field = group?.rows?.[gr]?.columns[gc]?.items.find((it) => it.id === fieldId);
+        if (!field) return null;
+        return fieldNodeFromItem(sectionKey, field, { kind: "group_field", sectionKey, blockItemId, gr, gc, fieldId });
+    }
+
+    const columnMatch = serializedPath.match(/^column:([^:]+):([^:]+):(\d+)$/);
+    if (columnMatch) {
+        const sectionKey = columnMatch[1]!;
+        const blockItemId = columnMatch[2]!;
+        const colIdx = Number(columnMatch[3]!);
+        const loc = groupLoc(doc, sectionKey, blockItemId);
+        if (!loc) return null;
+        const list = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+        const col = list?.columns?.[colIdx];
+        if (!list || !col) return null;
+        return columnNode(sectionKey, blockItemId, col, colIdx);
+    }
+
+    return null;
+}
+
+export function applyLayoutEditorFieldSettingsPatch(
+    doc: LayoutDoc,
+    path: LayoutEditorNodePath,
+    patch: {
+        label?: string;
+        display?: LayoutEditorDisplayConfig;
+        visibility?: LayoutEditorVisibilityRule;
+        editable?: boolean;
+    },
+    boundRefKey?: string,
+): LayoutDoc {
+    let next = doc;
+    if (patch.label !== undefined || patch.display) {
+        next = patchLayoutEditorFieldDisplay(next, path, patch.display ?? {}, patch.label);
+    }
+    if (patch.visibility) {
+        next = patchLayoutEditorFieldVisibility(next, path, patch.visibility, boundRefKey);
+    }
+    if (patch.editable !== undefined) {
+        next = patchLayoutEditorFieldEditable(next, path, patch.editable);
+    }
+    return next;
+}
+
 function groupLoc(doc: LayoutDoc, sectionKey: string, blockItemId: string): GroupLoc | null {
     const loc = findLayoutItemLocation(doc, blockItemId);
     if (!loc || loc.item.id !== blockItemId) return null;

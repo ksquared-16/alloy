@@ -3,7 +3,7 @@
  * Registry constrains allowed values; operators compose blocks from approved primitives.
  */
 
-import type { LayoutCollectionColumn, LayoutCondition, LayoutItem } from "@/lib/layout/layoutV2";
+import type { LayoutCollectionColumn, LayoutCondition, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import {
     isLayoutRuntimeEditableRefKeySupported,
     resolveLayoutRuntimeEditableRefKey,
@@ -159,6 +159,22 @@ export function resolveLayoutRuntimeItemsEditMode(items: LayoutItem[]): LayoutEd
         if (layoutItemHasEditableDescendants(item)) return "edit_button";
     }
     return "display_only";
+}
+
+/** Top-level section items (one related_list item includes all column editability). */
+export function collectLayoutSectionTopLevelItems(section: LayoutSection): LayoutItem[] {
+    const items: LayoutItem[] = [];
+    for (const row of section.rows) {
+        for (const col of row.columns) {
+            items.push(...col.items);
+        }
+    }
+    return items;
+}
+
+/** Section/card header Edit — any descendant field/column with editable: true + save adapter. */
+export function resolveLayoutRuntimeSectionEditMode(section: LayoutSection): LayoutEditorBlockEditMode {
+    return resolveLayoutRuntimeItemsEditMode(collectLayoutSectionTopLevelItems(section));
 }
 
 export function readLayoutEditorBlockConfig(metadata: Record<string, unknown> | undefined): LayoutEditorBlockConfig {
