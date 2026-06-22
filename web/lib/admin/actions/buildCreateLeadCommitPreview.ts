@@ -106,6 +106,47 @@ function buildLegacyPreview(input: {
     return { will_create, not_created };
 }
 
+function recordCommitPreviewLabel(
+    record: { first_name: string; last_name: string; entity_type: string; primary?: boolean; resolution?: { action?: string; match_display_name?: string; state?: string } },
+): { label: string; detail?: string } {
+    const name = recordDisplayName(record);
+    const role =
+        record.entity_type === "parent" ?
+            record.primary ? "Parent (primary)"
+            :   "Parent"
+        :   "Child";
+
+    if (!record.resolution) {
+        return {
+            label: role,
+            detail: name || undefined,
+        };
+    }
+
+    if (record.resolution.action === "link_existing" && record.resolution.match_display_name) {
+        return {
+            label: `Link existing ${role.toLowerCase().replace("(primary)", "").trim()}`,
+            detail: record.resolution.match_display_name,
+        };
+    }
+    if (record.resolution.action === "review_required") {
+        return {
+            label: `${role} — review required`,
+            detail: name || record.resolution.match_display_name || undefined,
+        };
+    }
+    if (record.resolution.state === "conflict") {
+        return {
+            label: `${role} — conflict`,
+            detail: name || undefined,
+        };
+    }
+    return {
+        label: `Create new ${role.toLowerCase().replace("(primary)", "").trim()}`,
+        detail: name || undefined,
+    };
+}
+
 function buildSelectionPreview(input: {
     selection: CreateLeadCommitSelection;
     household?: IntakeHouseholdCandidate | null;
@@ -118,24 +159,34 @@ function buildSelectionPreview(input: {
     const primaryParent = primaryIncludedParent(selection);
 
     for (const parent of parents) {
-        const name = recordDisplayName(parent);
+        const preview = recordCommitPreviewLabel(parent);
+        will_create.push({ label: preview.label, detail: preview.detail });
+    }
+
+    const householdResolution = selection.household_resolution;
+    if (householdResolution?.action === "link_existing" && householdResolution.match_display_name) {
         will_create.push({
-            label: parent.primary ? "Parent (primary)" : "Parent",
-            detail: name || undefined,
+            label: "Link existing household",
+            detail: householdResolution.match_display_name,
+        });
+    } else {
+        will_create.push({
+            label: "Household (customer)",
+            detail: primaryParent ? `${recordDisplayName(primaryParent)} household` : undefined,
         });
     }
 
-    will_create.push({
-        label: "Household (customer)",
-        detail: primaryParent ? `${recordDisplayName(primaryParent)} household` : undefined,
-    });
+    if (selection.lead_resolution?.linked_opportunity_id) {
+        not_created.push({
+            label: "Existing open lead detected",
+            detail: selection.lead_resolution.reasons[0] ?? undefined,
+        });
+    }
     will_create.push({ label: "Lead (opportunity)" });
 
     for (const child of children) {
-        will_create.push({
-            label: "Child",
-            detail: recordDisplayName(child) || undefined,
-        });
+        const preview = recordCommitPreviewLabel(child);
+        will_create.push({ label: preview.label, detail: preview.detail });
     }
 
     for (const parent of selection.parents.filter((p) => !p.include_in_commit)) {

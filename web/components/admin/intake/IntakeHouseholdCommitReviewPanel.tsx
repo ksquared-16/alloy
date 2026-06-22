@@ -9,6 +9,12 @@ import {
     type CreateLeadCommitSelection,
     type CreateLeadCommitSelectionPatch,
 } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { patchCreateLeadCommitResolution } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
+import {
+    resolutionStateBadgeClass,
+    resolutionStateLabel,
+} from "@/lib/intake/resolve/presentation";
+import type { IntakeRecordResolutionResult } from "@/lib/intake/resolve/types";
 import {
     buildIntakeReviewPresentation,
     formatDobForDisplay,
@@ -35,6 +41,7 @@ type Props = {
     addressWarnings?: readonly IntakeReviewWarning[];
     intakeSpec?: ActionIntakeSpec | null;
     contextValues?: Record<string, string>;
+    resolutionResult?: IntakeRecordResolutionResult | null;
 };
 
 function EditablePersonCard({
@@ -47,6 +54,7 @@ function EditablePersonCard({
     onPatch,
     onToggleInclude,
     onSetPrimary,
+    onResolutionAction,
 }: {
     record: CreateLeadCommitRecord;
     entityLabel: string;
@@ -57,6 +65,7 @@ function EditablePersonCard({
     onPatch: (patch: CreateLeadCommitSelectionPatch) => void;
     onToggleInclude: (include: boolean) => void;
     onSetPrimary?: () => void;
+    onResolutionAction?: (action: "link_existing" | "create_new", selectedMatchId?: string) => void;
 }) {
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState<Record<string, string>>(() =>
@@ -108,6 +117,14 @@ function EditablePersonCard({
                             <p className="text-[10px] uppercase tracking-wide text-alloy-midnight/40">{entityLabel}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-1.5">
+                            {record.resolution ?
+                                <span
+                                    className={`rounded-full px-1.5 py-0.5 text-[9px] font-semibold ${resolutionStateBadgeClass(record.resolution.state)}`}
+                                    data-testid={`commit-resolution-badge-${record.candidate_id}`}
+                                >
+                                    {resolutionStateLabel(record.resolution.state)}
+                                </span>
+                            :   null}
                             {allowPrimaryControls ?
                                 record.primary ?
                                     <span
@@ -189,6 +206,32 @@ function EditablePersonCard({
                                     ))}
                                 </ul>
                             :   null}
+                            {record.resolution?.state === "possible_match" && onResolutionAction ?
+                                <div className="mt-2 flex flex-wrap gap-1.5" data-testid={`commit-resolution-actions-${record.candidate_id}`}>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            onResolutionAction(
+                                                "link_existing",
+                                                record.resolution?.candidate_match_id ??
+                                                    record.resolution?.candidates?.[0]?.candidate_id,
+                                            )
+                                        }
+                                        className="rounded-md border border-[#00A283]/25 bg-[#00A283]/10 px-2 py-0.5 text-[10px] font-semibold text-[#007A63]"
+                                        data-testid={`commit-resolution-link-${record.candidate_id}`}
+                                    >
+                                        Link existing
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => onResolutionAction("create_new")}
+                                        className="rounded-md border border-alloy-stone/15 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/60"
+                                        data-testid={`commit-resolution-create-${record.candidate_id}`}
+                                    >
+                                        Create new
+                                    </button>
+                                </div>
+                            :   null}
                         </>
                     :   <div className="mt-2 space-y-1.5" data-testid={`commit-edit-form-${record.candidate_id}`}>
                             <CreateLeadHouseholdCardEditFields
@@ -266,6 +309,7 @@ export function IntakeHouseholdCommitReviewPanel({
     addressWarnings = [],
     intakeSpec = null,
     contextValues = {},
+    resolutionResult = null,
 }: Props) {
     const review = buildIntakeReviewPresentation(household);
     const parentEditFieldGroups = useMemo(
@@ -295,6 +339,12 @@ export function IntakeHouseholdCommitReviewPanel({
         onSelectionChange(toggleCreateLeadCommitInclusion(selection, candidateId, include));
     };
 
+    const patchResolution = (candidateId: string, action: "link_existing" | "create_new", selectedMatchId?: string) => {
+        onSelectionChange(
+            patchCreateLeadCommitResolution(selection, candidateId, { action, selected_match_id: selectedMatchId }, resolutionResult),
+        );
+    };
+
     return (
         <section
             className={`rounded-xl border border-alloy-stone/10 bg-[#FAFBFC] p-2.5 ${className}`}
@@ -321,6 +371,9 @@ export function IntakeHouseholdCommitReviewPanel({
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
                                 onToggleInclude={(include) => toggleInclude(record.candidate_id, include)}
                                 onSetPrimary={() => patchRecord(record.candidate_id, { primary: true })}
+                                onResolutionAction={(action, selectedMatchId) =>
+                                    patchResolution(record.candidate_id, action, selectedMatchId)
+                                }
                             />
                         ))}
                     </ReviewSection>
@@ -339,6 +392,9 @@ export function IntakeHouseholdCommitReviewPanel({
                                 recordHints={buildCreateLeadRecordCardHints({ record, household })}
                                 onPatch={(patch) => patchRecord(record.candidate_id, patch)}
                                 onToggleInclude={(include) => toggleInclude(record.candidate_id, include)}
+                                onResolutionAction={(action, selectedMatchId) =>
+                                    patchResolution(record.candidate_id, action, selectedMatchId)
+                                }
                             />
                         ))}
                     </ReviewSection>

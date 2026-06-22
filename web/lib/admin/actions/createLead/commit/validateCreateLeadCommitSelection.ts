@@ -4,6 +4,7 @@ import {
 } from "@/lib/admin/actions/createLeadIntakeValidation";
 import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { includedCommitRecords, primaryIncludedParent } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { commitBlockedByResolution, linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
 
 function trim(v: unknown): string {
     return v != null ? String(v).trim() : "";
@@ -54,6 +55,10 @@ export function validateCreateLeadCommitSelection(input: {
         if (child.include_in_commit && child.commit_blockers.length > 0) {
             issues.push(`${child.first_name || "Child"}: ${child.commit_blockers.join(" ")}`);
         }
+    }
+
+    for (const issue of commitBlockedByResolution(input.selection)) {
+        if (!issues.includes(issue)) issues.push(issue);
     }
 
     return issues.length ? { ok: false, issues } : { ok: true };

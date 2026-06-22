@@ -3,9 +3,16 @@ import {
     isValidCreateLeadPhone,
 } from "@/lib/admin/actions/createLeadIntakeValidation";
 import { calculateAgeFromDob } from "@/lib/intake/normalize/calculateAgeFromDob";
+import type {
+    CreateLeadCommitResolution,
+    CreateLeadHouseholdResolution,
+    CreateLeadLeadResolution,
+} from "@/lib/intake/resolve/commitOverlayTypes";
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
 
 export type CreateLeadCommitEntityType = "parent" | "child";
+
+export type { CreateLeadCommitResolution, CreateLeadHouseholdResolution, CreateLeadLeadResolution };
 
 export type CreateLeadCommitRecord = {
     candidate_id: string;
@@ -27,6 +34,8 @@ export type CreateLeadCommitRecord = {
     validation_state: "valid" | "invalid" | "ambiguous" | "unknown";
     commit_blockers: string[];
     source_fact_ids: string[];
+    /** Canonical record resolution overlay when resolver has run. */
+    resolution?: CreateLeadCommitResolution;
 };
 
 export type CreateLeadCommitSelection = {
@@ -39,6 +48,8 @@ export type CreateLeadCommitSelection = {
         invalid_phone: boolean;
     };
     address_review_only: boolean;
+    household_resolution?: CreateLeadHouseholdResolution;
+    lead_resolution?: CreateLeadLeadResolution;
 };
 
 export type CreateLeadCommitSelectionPatch = Partial<

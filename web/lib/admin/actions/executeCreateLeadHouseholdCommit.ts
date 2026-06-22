@@ -5,6 +5,7 @@ import {
 } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import type { CreateLeadCommitRecord, CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import { includedCommitRecords } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
 import {
     ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
     enrollmentIntakePersonStatusFields,
@@ -157,14 +158,24 @@ export async function applyCreateLeadHouseholdMemberCommit(
     const additionalParents = parents.filter((p) => !p.primary);
 
     for (const parent of additionalParents) {
-        const personId = await findOrCreateGuardianPersonInOrg(supabase, {
-            orgId: input.orgId,
-            firstName: parent.first_name,
-            lastName: parent.last_name,
-            email: trim(parent.email) || null,
-            phone: trim(parent.phone) || null,
-            customerId: input.customerId,
-        });
+        if (
+            parent.resolution?.state === "conflict" ||
+            parent.resolution?.action === "reject" ||
+            parent.resolution?.action === "review_required"
+        ) {
+            continue;
+        }
+        const linkedPersonId = linkedPersonIdFromCommitRecord(parent);
+        const personId =
+            linkedPersonId ??
+            (await findOrCreateGuardianPersonInOrg(supabase, {
+                orgId: input.orgId,
+                firstName: parent.first_name,
+                lastName: parent.last_name,
+                email: trim(parent.email) || null,
+                phone: trim(parent.phone) || null,
+                customerId: input.customerId,
+            }));
         if (!personId || personId === input.primaryPersonId) continue;
         await linkGuardianToHouseholdAndOpportunity(supabase, {
             orgId: input.orgId,
@@ -177,6 +188,13 @@ export async function applyCreateLeadHouseholdMemberCommit(
 
     const childRecords = children.filter((c) => !c.primary);
     for (const child of childRecords) {
+        if (
+            child.resolution?.state === "conflict" ||
+            child.resolution?.action === "reject" ||
+            child.resolution?.action === "review_required"
+        ) {
+            continue;
+        }
         await applyCreateLeadChildParticipationFromIdentity(supabase, {
             orgId: input.orgId,
             opportunityId: input.opportunityId,
@@ -188,6 +206,7 @@ export async function applyCreateLeadHouseholdMemberCommit(
                 display_name: [child.first_name, child.last_name].filter(Boolean).join(" ").trim(),
             },
             ocm: childOcmFromRecord(child, input.merged),
+            existingPersonId: linkedPersonIdFromCommitRecord(child),
         });
     }
 }

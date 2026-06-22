@@ -29,6 +29,7 @@ import {
 import { partitionIntakeReviewWarnings } from "@/lib/intake/review/partitionIntakeReviewWarnings";
 import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
+import type { IntakeRecordResolutionResult } from "@/lib/intake/resolve/types";
 
 type Props = {
     findings: CreateLeadLiveFinding[];
@@ -51,6 +52,7 @@ type Props = {
     household?: IntakeHouseholdCandidate | null;
     commitSelection?: CreateLeadCommitSelection | null;
     onCommitSelectionChange?: (next: CreateLeadCommitSelection) => void;
+    resolutionResult?: IntakeRecordResolutionResult | null;
 };
 
 function DraftFieldCard({
@@ -187,6 +189,7 @@ export function CreateLeadDraftLeadColumn({
     household,
     commitSelection,
     onCommitSelectionChange,
+    resolutionResult,
 }: Props) {
     const showDraftForm = manualMode || draftEditMode;
     const householdCommitMode = Boolean(household && commitSelection && onCommitSelectionChange);
@@ -238,6 +241,7 @@ export function CreateLeadDraftLeadColumn({
                     addressWarnings={addressWarnings}
                     intakeSpec={intakeSpec}
                     contextValues={values}
+                    resolutionResult={resolutionResult}
                     className={className}
                 />
             );

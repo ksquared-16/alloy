@@ -1,5 +1,6 @@
 import type { CreateLeadCommitRecord } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
+import { resolutionSummaryLine } from "@/lib/intake/resolve/presentation";
 
 function personFromHousehold(
     household: IntakeHouseholdCandidate,
@@ -20,6 +21,22 @@ export function buildCreateLeadRecordCardHints(input: {
 
     if (record.include_in_commit) {
         hints.push("Included in commit");
+    }
+
+    if (record.resolution) {
+        const summary = resolutionSummaryLine({
+            state: record.resolution.state,
+            matchDisplayName: record.resolution.match_display_name,
+            entityLabel: record.entity_type === "parent" ? "parent" : "child",
+        });
+        if (summary) hints.push(summary);
+        if (record.resolution.action === "link_existing") {
+            hints.push("Default: link existing record");
+        } else if (record.resolution.action === "create_new") {
+            hints.push("Default: create new record");
+        } else if (record.resolution.action === "review_required") {
+            hints.push("Review match before commit");
+        }
     }
 
     if (record.entity_type === "parent" && !record.primary && input.household.parents.length > 1) {

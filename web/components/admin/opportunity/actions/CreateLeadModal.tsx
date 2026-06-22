@@ -48,6 +48,9 @@ import {
 import { validateCreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/validateCreateLeadCommitSelection";
 import { isCreateLeadLocationRequired } from "@/lib/admin/actions/createLead/resolveCreateLeadLocationPolicy";
 import { mapCreateLeadCommitSelectionToExecutePayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
+import { applyResolutionToCommitSelection } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
+import { fetchIntakeRecordResolution } from "@/lib/intake/resolve/fetchIntakeRecordResolution";
+import type { IntakeRecordResolutionResult } from "@/lib/intake/resolve/types";
 import { fetchActionIntakeSpec } from "@/lib/lifecycle/fetchActionIntakeSpec";
 import { ActionWorkspaceBosShell } from "@/components/admin/actions/ActionWorkspaceBosShell";
 import { CreateLeadOperationalIntake } from "@/components/admin/actions/CreateLeadOperationalIntake";
@@ -106,6 +109,7 @@ export function CreateLeadModal(props: {
     const [fieldConfidence, setFieldConfidence] = useState<Record<string, CreateLeadFieldConfidenceState>>({});
     const [lastExtraction, setLastExtraction] = useState<ActionIntakePasteExtractionResult | null>(null);
     const [commitSelection, setCommitSelection] = useState<CreateLeadCommitSelection | null>(null);
+    const [resolutionResult, setResolutionResult] = useState<IntakeRecordResolutionResult | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
     const [analyzeError, setAnalyzeError] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -187,6 +191,7 @@ export function CreateLeadModal(props: {
         setFieldConfidence({});
         setLastExtraction(null);
         setCommitSelection(null);
+        setResolutionResult(null);
         setAnalyzing(false);
         setAnalyzeError(null);
         setError(null);
@@ -300,6 +305,7 @@ export function CreateLeadModal(props: {
         setFieldConfidence({});
         setLastExtraction(null);
         setCommitSelection(null);
+        setResolutionResult(null);
         setAnalyzeError(null);
         setGatherPhase("paste");
     }, []);
@@ -347,6 +353,7 @@ export function CreateLeadModal(props: {
                     if (extraction.household) {
                         const selection = buildCreateLeadCommitSelection(extraction.household);
                         setCommitSelection(selection);
+                        setResolutionResult(null);
                         const synced = syncCreateLeadValuesFromCommitSelection(nextValues, selection);
                         setFieldConfidence(
                             buildCreateLeadFieldConfidenceMap({
@@ -356,9 +363,27 @@ export function CreateLeadModal(props: {
                                 materialAnalyzed: true,
                             }),
                         );
+                        void fetchIntakeRecordResolution({
+                            household: extraction.household,
+                            source_kind: "create_lead",
+                            location_id: synced.location_id ?? prev.location_id,
+                        }).then((result) => {
+                            if (!result) return;
+                            setResolutionResult(result);
+                            const resolvedSelection = applyResolutionToCommitSelection(
+                                selection,
+                                result,
+                                extraction.household!.household_id,
+                            );
+                            setCommitSelection(resolvedSelection);
+                            setValues((current) =>
+                                syncCreateLeadValuesFromCommitSelection(current, resolvedSelection),
+                            );
+                        });
                         return synced;
                     }
                     setCommitSelection(null);
+                    setResolutionResult(null);
                     setFieldConfidence(
                         buildCreateLeadFieldConfidenceMap({
                             extraction,
@@ -567,6 +592,7 @@ export function CreateLeadModal(props: {
                         household={lastExtraction?.household ?? null}
                         commitSelection={commitSelection}
                         onCommitSelectionChange={handleCommitSelectionChange}
+                        resolutionResult={resolutionResult}
                     />
                 </div>
             </ActionWorkspaceStepContent>

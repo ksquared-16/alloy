@@ -133,25 +133,31 @@ export async function applyCreateLeadChildParticipationFromIdentity(
         customerId: string;
         identity: CreateLeadChildIdentity;
         ocm: CreateLeadChildOcmFields;
+        /** When set, skip find-or-create and use this durable child person row. */
+        existingPersonId?: string | null;
     },
 ): Promise<ApplyCreateLeadChildParticipationResult> {
     const firstName = params.identity.first_name ?? "";
     const lastName = params.identity.last_name ?? "";
-    const childPerson = await findOrCreateChildPersonInOrg(supabase, {
-        orgId: params.orgId,
-        customerId: params.customerId,
-        firstName,
-        lastName,
-        dob: params.identity.dob,
-    });
-    if (!childPerson?.person_id) {
-        throw new Error("Could not create or resolve child person identity for lead.");
+    let childPersonId = trimText(params.existingPersonId);
+    if (!childPersonId) {
+        const childPerson = await findOrCreateChildPersonInOrg(supabase, {
+            orgId: params.orgId,
+            customerId: params.customerId,
+            firstName,
+            lastName,
+            dob: params.identity.dob,
+        });
+        if (!childPerson?.person_id) {
+            throw new Error("Could not create or resolve child person identity for lead.");
+        }
+        childPersonId = childPerson.person_id;
     }
 
     const cmPayload: Record<string, unknown> = {
         org_id: params.orgId,
         customer_id: params.customerId,
-        person_id: childPerson.person_id,
+        person_id: childPersonId,
         display_name: params.identity.display_name,
         first_name: params.identity.first_name,
         last_name: params.identity.last_name,
@@ -210,6 +216,7 @@ export async function applyCreateLeadChildParticipation(
         opportunityId: string;
         customerId: string;
         merged: Record<string, unknown>;
+        existingPersonId?: string | null;
     }
 ): Promise<ApplyCreateLeadChildParticipationResult | null> {
     const parsed = parseCreateLeadChildParticipationPayload(params.merged);
@@ -221,5 +228,6 @@ export async function applyCreateLeadChildParticipation(
         customerId: params.customerId,
         identity: parsed.identity,
         ocm: parsed.ocm,
+        existingPersonId: params.existingPersonId,
     });
 }

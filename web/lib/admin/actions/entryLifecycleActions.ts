@@ -11,6 +11,11 @@ import { ENROLLMENT_INTAKE_PERSON_STATUS_KEY } from "@/lib/admin/person/enrollme
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { applyCreateLeadHouseholdMemberCommit } from "@/lib/admin/actions/executeCreateLeadHouseholdCommit";
 import { readCreateLeadCommitSelectionFromPayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
+import {
+    primaryIncludedParent,
+    primaryIncludedChild,
+} from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
+import { linkedPersonIdFromCommitRecord } from "@/lib/intake/resolve/applyResolutionToCommitSelection";
 import { resolveLifecycleCreateLeadBinding } from "@/lib/lifecycle/lifecycleRuntimeBinding";
 import { QUALIFICATION_STATUS_KEY } from "@/lib/admin/actions/universalActionConstants";
 import type { ExecuteAdminActionCtx } from "@/lib/admin/actions/executeAdminAction";
@@ -88,17 +93,47 @@ export async function executeCreateLeadAction(
     }
     const locationId = trim(input.merged.location_id) || null;
 
-    const person = await findOrCreatePersonInOrgWithMeta(supabase, {
-        org_id: ctx.orgId,
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phone,
-        default_status_key_on_create: ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
-    });
-    const personId = person?.id?.trim() || null;
+    const householdCommit = readCreateLeadCommitSelectionFromPayload(input.merged);
+    const primaryParentRecord = householdCommit ? primaryIncludedParent(householdCommit) : null;
+    const linkedPrimaryPersonId = linkedPersonIdFromCommitRecord(primaryParentRecord);
+    if (
+        primaryParentRecord?.include_in_commit &&
+        (primaryParentRecord.resolution?.state === "conflict" || primaryParentRecord.resolution?.action === "reject")
+    ) {
+        return {
+            ok: false,
+            error: primaryParentRecord.resolution?.reasons[0] ?? "Primary parent record resolution conflict.",
+            status: 400,
+        };
+    }
+
+    let personId = linkedPrimaryPersonId;
+    if (!personId) {
+        const person = await findOrCreatePersonInOrgWithMeta(supabase, {
+            org_id: ctx.orgId,
+            first_name: firstName,
+            last_name: lastName,
+            email,
+            phone,
+            default_status_key_on_create: ENROLLMENT_INTAKE_PERSON_STATUS_KEY,
+        });
+        personId = person?.id?.trim() || null;
+    }
     if (!personId) {
         return { ok: false, error: "Could not create or resolve person.", status: 400 };
+    }
+
+    // Never silently create a duplicate when resolver found an exact match but operator did not confirm link.
+    if (
+        !linkedPrimaryPersonId &&
+        primaryParentRecord?.resolution?.confidence === "exact_match" &&
+        primaryParentRecord.resolution.action === "review_required"
+    ) {
+        return {
+            ok: false,
+            error: "Exact parent match requires linking the existing record before commit.",
+            status: 400,
+        };
     }
 
     const householdDisplayName = buildHouseholdLeadDisplayName({
@@ -160,18 +195,30 @@ export async function executeCreateLeadAction(
     }
 
     try {
+        const primaryChildRecord = householdCommit ? primaryIncludedChild(householdCommit) : null;
+        const linkedChildPersonId = linkedPersonIdFromCommitRecord(primaryChildRecord);
+        if (
+            primaryChildRecord?.include_in_commit &&
+            (primaryChildRecord.resolution?.state === "conflict" || primaryChildRecord.resolution?.action === "reject")
+        ) {
+            return {
+                ok: false,
+                error: primaryChildRecord.resolution?.reasons[0] ?? "Child record resolution conflict.",
+                status: 400,
+            };
+        }
         await applyCreateLeadChildParticipation(supabase, {
             orgId: ctx.orgId,
             opportunityId,
             customerId,
             merged: input.merged,
+            existingPersonId: linkedChildPersonId,
         });
     } catch (e) {
         const message = e instanceof Error ? e.message : "Failed to persist child enrollment fields.";
         return { ok: false, error: message, status: 400 };
     }
 
-    const householdCommit = readCreateLeadCommitSelectionFromPayload(input.merged);
     if (householdCommit) {
         try {
             await applyCreateLeadHouseholdMemberCommit(supabase, {

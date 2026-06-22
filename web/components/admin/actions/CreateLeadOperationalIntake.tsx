@@ -13,6 +13,7 @@ import { CreateLeadDraftLeadColumn } from "@/components/admin/actions/CreateLead
 import { CreateLeadMaterialStackColumn } from "@/components/admin/actions/CreateLeadMaterialStackColumn";
 import type { CreateLeadCommitSelection } from "@/lib/admin/actions/createLead/commit/createLeadCommitSelection";
 import type { IntakeHouseholdCandidate } from "@/lib/intake/types";
+import type { IntakeRecordResolutionResult } from "@/lib/intake/resolve/types";
 
 type Props = {
     pasteText: string;
@@ -41,6 +42,7 @@ type Props = {
     household?: IntakeHouseholdCandidate | null;
     commitSelection?: CreateLeadCommitSelection | null;
     onCommitSelectionChange?: (next: CreateLeadCommitSelection) => void;
+    resolutionResult?: IntakeRecordResolutionResult | null;
 };
 
 export function CreateLeadOperationalIntake({
@@ -70,6 +72,7 @@ export function CreateLeadOperationalIntake({
     household,
     commitSelection,
     onCommitSelectionChange,
+    resolutionResult,
 }: Props) {
     const [composerOpen, setComposerOpen] = useState(false);
 
@@ -147,6 +150,7 @@ export function CreateLeadOperationalIntake({
                 household={household}
                 commitSelection={commitSelection}
                 onCommitSelectionChange={onCommitSelectionChange}
+                resolutionResult={resolutionResult}
             />
         </div>
     );
