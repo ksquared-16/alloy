@@ -103,6 +103,7 @@ export function buildFormDraftFromAcroForm(input: BuildAcroFormDraftInput): Stor
             section_count: sections.length,
             field_count: fields.length,
         },
+        ...(input.acroform.pages && input.acroform.pages.length > 0 ? { pdf_pages: input.acroform.pages } : {}),
         generator_version: ACROFORM_FORM_DRAFT_VERSION,
         generated_at: "",
     };

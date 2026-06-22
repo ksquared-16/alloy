@@ -27,7 +27,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Pencil, Trash2, Plus, Download } from "lucide-react";
 import type { PosCaseState } from "./usePosCase";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
-import { computePageMaps, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
+import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import PosPdfFieldMap from "./PosPdfFieldMap";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 
@@ -42,6 +42,8 @@ function sourceReason(evidence?: string): string {
     switch (evidence) {
         case "pdf_field":
             return "from PDF field";
+        case "manual_pdf_mapping":
+            return "mapped manually to PDF";
         case "operator":
             return "added manually";
         case "known field label":
@@ -133,6 +135,7 @@ export default function PosTemplateSetupColumn({
     const [leftView, setLeftView] = useState<"highlights" | "pdf">("highlights");
     const [fullText, setFullText] = useState<string | null>(null);
     const [textQuery, setTextQuery] = useState("");
+    const [mappingFieldId, setMappingFieldId] = useState<string | null>(null);
 
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
@@ -187,7 +190,10 @@ export default function PosTemplateSetupColumn({
         };
     }, [tab, fullText, docId, draft?.diagnostics.extracted_text_preview]);
 
-    const pageMaps = useMemo(() => computePageMaps(reviewFields as FieldWithRegion[]), [reviewFields]);
+    const pageMaps = useMemo(
+        () => computePageMaps(reviewFields as FieldWithRegion[], draft?.pdf_pages),
+        [reviewFields, draft?.pdf_pages]
+    );
 
     if (!detail) return null;
 
@@ -222,6 +228,22 @@ export default function PosTemplateSetupColumn({
         setReviewFields((fs) => [...fs, { id, label: "", type: "text", section, evidence: "operator", confidence: "high" }]);
         setSelectedFieldId(id);
         setEditingFieldId(id);
+    };
+
+    // Manual mapping: a rectangle drawn on the page schematic → a real PDF bbox for the field.
+    const startMapping = (id: string) => {
+        setMappingFieldId(id);
+        setSelectedFieldId(id);
+        setLeftView("highlights");
+    };
+    const handleDrawRect = (page: number, rect: { x: number; y: number; w: number; h: number }) => {
+        if (!mappingFieldId) return;
+        const pm = pageMaps.find((p) => p.page === page);
+        if (!pm) return;
+        const bbox = svgRectToPdfBbox(rect, pm);
+        updateField(mappingFieldId, { page, bbox, evidence: "manual_pdf_mapping" });
+        setSelectedFieldId(mappingFieldId);
+        setMappingFieldId(null);
     };
 
     // ---- endpoints ----
@@ -271,6 +293,7 @@ export default function PosTemplateSetupColumn({
                         pdf_field_name: f.pdf_field_name,
                         page: f.page,
                         bbox: f.bbox,
+                        evidence: f.evidence,
                     })),
                 }),
             });
@@ -384,7 +407,21 @@ export default function PosTemplateSetupColumn({
                         {leftView === "highlights" ? (
                             hasRegions ? (
                                 <>
-                                    <PosPdfFieldMap pages={pageMaps} selectedId={selectedFieldId} onSelect={setSelectedFieldId} />
+                                    {mappingFieldId ? (
+                                        <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/30 bg-emerald-50/70 px-2 py-1 text-[11px] text-emerald-800">
+                                            <span>Drag a rectangle on the page to map this field.</span>
+                                            <button type="button" onClick={() => setMappingFieldId(null)} className="font-medium text-stone-500 hover:underline">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : null}
+                                    <PosPdfFieldMap
+                                        pages={pageMaps}
+                                        selectedId={selectedFieldId}
+                                        onSelect={setSelectedFieldId}
+                                        mapping={!!mappingFieldId}
+                                        onDrawRect={handleDrawRect}
+                                    />
                                     <div className="mt-2 flex items-center gap-3 text-[10px] text-stone-500">
                                         <span className="flex items-center gap-1">
                                             <span className="inline-block h-2.5 w-3 rounded-sm border border-[#9bbcb3] bg-[#00A283]/15" /> Detected field
@@ -478,6 +515,18 @@ export default function PosTemplateSetupColumn({
                                                         <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${CONF_PILL[f.confidence] ?? "bg-stone-100 text-stone-500"}`}>
                                                             {f.confidence === "high" ? "High" : f.confidence === "medium" ? "Med" : "Low"}
                                                         </span>
+                                                    ) : null}
+                                                    {!mapped && pageMaps.length > 0 && !created ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => startMapping(f.id)}
+                                                            title="Map this field to an area on the PDF"
+                                                            className={`shrink-0 rounded border px-1 py-0.5 text-[9px] font-medium ${
+                                                                mappingFieldId === f.id ? "border-alloy-juniper text-alloy-juniper" : "border-stone-200 text-stone-500 hover:border-alloy-juniper hover:text-alloy-juniper"
+                                                            }`}
+                                                        >
+                                                            {mappingFieldId === f.id ? "Mapping…" : "Map"}
+                                                        </button>
                                                     ) : null}
                                                     <button
                                                         type="button"

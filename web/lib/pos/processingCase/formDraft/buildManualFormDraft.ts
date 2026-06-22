@@ -21,10 +21,12 @@ export interface ManualFieldInput {
     type?: string;
     required?: boolean;
     section?: string;
-    /** PDF provenance preserved from AcroForm detection (kept through review → create). */
+    /** PDF provenance preserved from AcroForm detection or manual mapping (kept through create). */
     pdf_field_name?: string;
     page?: number;
     bbox?: [number, number, number, number];
+    /** Provenance tag, e.g. "pdf_field" | "manual_pdf_mapping" | "operator". */
+    evidence?: string;
 }
 
 export interface BuildManualDraftInput {
@@ -56,13 +58,14 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
             order.push(sectionTitle);
         }
         const hasRegion = !!f.pdf_field_name || typeof f.page === "number" || Array.isArray(f.bbox);
+        const evidence = f.evidence && typeof f.evidence === "string" ? f.evidence : hasRegion ? "pdf_field" : "operator";
         bySection.get(sectionTitle)!.push({
             id: `field_${counter}`,
             label,
             type: coerceType(f.type),
             required: Boolean(f.required),
             confidence: "high",
-            evidence: hasRegion ? "pdf_field" : "operator",
+            evidence,
             ...(f.pdf_field_name ? { pdf_field_name: f.pdf_field_name } : {}),
             ...(typeof f.page === "number" ? { page: f.page } : {}),
             ...(Array.isArray(f.bbox) && f.bbox.length >= 4

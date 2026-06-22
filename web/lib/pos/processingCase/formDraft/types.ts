@@ -62,6 +62,8 @@ export interface StoredFormDraftPreview {
     fields: DraftFormField[];
     warnings: string[];
     diagnostics: FormDraftDiagnostics;
+    /** PDF page dimensions + text context for the review schematic (AcroForm drafts only). */
+    pdf_pages?: import("../structure/pdfAcroForm").PdfPageContext[];
     generated_at: string;
     generator_version: string;
 }

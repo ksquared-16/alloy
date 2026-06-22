@@ -65,6 +65,7 @@ export function parseStoredFormDraftPreview(metadata: unknown): StoredFormDraftP
             section_count: typeof diag.section_count === "number" ? diag.section_count : sections.length,
             field_count: typeof diag.field_count === "number" ? diag.field_count : fields.length,
         },
+        ...(Array.isArray(d.pdf_pages) ? { pdf_pages: d.pdf_pages as StoredFormDraftPreview["pdf_pages"] } : {}),
         generated_at: typeof d.generated_at === "string" ? d.generated_at : "",
         generator_version: typeof d.generator_version === "string" ? d.generator_version : "unknown",
     };

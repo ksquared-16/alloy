@@ -44,10 +44,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 type: typeof f.type === "string" ? f.type : undefined,
                 required: f.required === true,
                 section: typeof f.section === "string" ? f.section : undefined,
-                // Preserve PDF provenance when the reviewed field came from AcroForm detection.
+                // Preserve PDF provenance when the reviewed field came from AcroForm detection
+                // or manual mapping.
                 pdf_field_name: typeof f.pdf_field_name === "string" ? f.pdf_field_name : undefined,
                 page: typeof f.page === "number" ? f.page : undefined,
                 bbox,
+                evidence: typeof f.evidence === "string" ? f.evidence : undefined,
             };
         })
         .filter((f) => f.label.trim().length > 0);

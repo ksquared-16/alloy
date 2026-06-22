@@ -43,12 +43,31 @@ export interface PdfFieldRegion {
     bbox: [number, number, number, number] | null;
 }
 
+/** A text run from the page content stream (for drawing form CONTEXT behind highlights). */
+export interface PdfPageText {
+    x: number;
+    y: number;
+    str: string;
+}
+
+/** Page dimensions + a sample of text runs, in PDF points (bottom-left origin). */
+export interface PdfPageContext {
+    page: number;
+    width: number;
+    height: number;
+    texts?: PdfPageText[];
+}
+
 export interface PdfAcroFormResult {
     /** True when the PDF carried real form fields. */
     has_acroform: boolean;
     fields: PdfFieldRegion[];
     page_count: number;
+    /** Optional per-page dimensions + text context (when extraction could read them). */
+    pages?: PdfPageContext[];
 }
+
+const MAX_CONTEXT_TEXTS_PER_PAGE = 200;
 
 /** Hungarian / widget prefixes some forms put on field names (txtName, chkAgree). */
 const NAME_PREFIX_RE = /^(txt|fld|chk|cb|rb|btn|sig|dt|dte|num)(?=[A-Z_])/;
@@ -123,6 +142,7 @@ export async function extractPdfAcroFormFields(bytes: Uint8Array): Promise<PdfAc
         const { getDocumentProxy } = await import("unpdf");
         const pdf = await getDocumentProxy(bytes);
         const raw: PdfAcroFieldRaw[] = [];
+        const pages: PdfPageContext[] = [];
         for (let p = 1; p <= pdf.numPages; p++) {
             const page = await pdf.getPage(p);
             const annots = (await page.getAnnotations()) as Array<Record<string, unknown>>;
@@ -139,8 +159,27 @@ export async function extractPdfAcroFormFields(bytes: Uint8Array): Promise<PdfAc
                     combo: an.combo === true,
                 });
             }
+            // Best-effort page context: dimensions + a sample of text runs (form labels/headers).
+            try {
+                const view = (page as { view?: number[] }).view;
+                const width = Array.isArray(view) && view.length >= 4 ? view[2] - view[0] : 0;
+                const height = Array.isArray(view) && view.length >= 4 ? view[3] - view[1] : 0;
+                const content = (await (page as { getTextContent: () => Promise<{ items: Array<Record<string, unknown>> }> }).getTextContent());
+                const texts: PdfPageText[] = [];
+                for (const it of content.items ?? []) {
+                    const str = typeof it.str === "string" ? it.str.trim() : "";
+                    const tr = Array.isArray(it.transform) ? (it.transform as number[]) : null;
+                    if (!str || !tr || tr.length < 6) continue;
+                    texts.push({ x: tr[4], y: tr[5], str });
+                    if (texts.length >= MAX_CONTEXT_TEXTS_PER_PAGE) break;
+                }
+                if (width > 0 && height > 0) pages.push({ page: p, width, height, texts });
+            } catch {
+                /* context is optional; ignore */
+            }
         }
-        return mapAcroFormFields(raw, pdf.numPages);
+        const result = mapAcroFormFields(raw, pdf.numPages);
+        return { ...result, pages: pages.length > 0 ? pages : undefined };
     } catch (e) {
         console.warn("[extractPdfAcroFormFields]", e instanceof Error ? e.message : e);
         return { has_acroform: false, fields: [], page_count: 0 };
