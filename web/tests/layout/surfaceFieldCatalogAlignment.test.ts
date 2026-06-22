@@ -79,8 +79,11 @@ describe("drawer surface field picker / validator alignment", () => {
     it("person address saves on person drawer; contact role address stays read-only on opportunity", () => {
         expect(isLayoutRuntimeEditableRefKeySupported("person.address_line1")).toBe(true);
         expect(isLayoutRuntimeEditableRefKeySupported("person.primary_address_line1")).toBe(false);
+        expect(isLayoutRuntimeEditableRefKeySupported("person.secondary_phone")).toBe(true);
+        expect(isLayoutRuntimeEditableRefKeySupported("person.emergency_contact_email")).toBe(true);
         expect(layoutRuntimeFieldReadOnlyReason("person.primary_address_line1")).toContain("read-only");
         expect(layoutRuntimeFieldReadOnlyReason("location.household_address")).toContain("Household address");
+        expect(layoutRuntimeFieldReadOnlyReason("person.secondary_contact_name")).toContain("derived");
     });
 
     it("every person picker ref passes surface validator", () => {

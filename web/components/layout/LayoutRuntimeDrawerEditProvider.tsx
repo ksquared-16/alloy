@@ -26,6 +26,12 @@ import {
 } from "@/lib/layout/runtime/drawerLayoutRuntimeBodyRecordPatch";
 import { applyLayoutRuntimeDraftToRecord } from "@/lib/layout/runtime/applyLayoutRuntimeDraftToRecord";
 import { isLayoutRuntimeEditableRefKeySupported, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import type { LayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
+import {
+    contactRoleFieldCapabilityReadOnlyReasonForRecord,
+    isLayoutRuntimeRoleContactEditableRefKey,
+    layoutRuntimeContactFieldHasSaveTarget,
+} from "@/lib/layout/runtime/layoutRuntimeContactRoleFieldCapability";
 import {
     collectLayoutRuntimeChildRepeaterBaselines,
     collectLayoutRuntimeChildStandaloneBaselines,
@@ -38,7 +44,7 @@ import {
 } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import {
-    isLayoutRuntimePersonContactRefKey,
+    isLayoutRuntimePersonFieldRefKey,
     saveLayoutRuntimePersonContactEdits,
 } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
 import { prefetchWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
@@ -64,8 +70,11 @@ const LAYOUT_RUNTIME_DISPLAY_COMPANION_REF_KEYS = new Set([
 
 type LayoutRuntimeDrawerEditContextValue = {
     getFieldValue: (refKey: string, fallback: string, rowKey?: string) => string;
-    setFieldValue: (refKey: string, value: string, rowKey?: string) => void;
+    setFieldValue: (refKey: string, value: string, rowKey?: string, layoutContactRole?: LayoutEditorContactRole) => void;
     isEditableRefKey: (refKey: string) => boolean;
+    canEditContactRefKey: (refKey: string, layoutContactRole?: LayoutEditorContactRole) => boolean;
+    contactRefReadOnlyReason: (refKey: string, layoutContactRole?: LayoutEditorContactRole) => string | null;
+    registerContactRefPersonIds: (bindings: Record<string, string>) => void;
 };
 
 const LayoutRuntimeDrawerEditContext = createContext<LayoutRuntimeDrawerEditContextValue | null>(null);
@@ -85,7 +94,7 @@ function resolveEditableRefKey(refKey: string): string {
 function collectPersonContactBaseline(record: ProofRuntimeRecord): Record<string, string> {
     const baseline: Record<string, string> = {};
     for (const key of Object.keys(record)) {
-        if (!isLayoutRuntimePersonContactRefKey(key)) continue;
+        if (!isLayoutRuntimePersonFieldRefKey(key)) continue;
         const v = record[key];
         baseline[key] = v == null ? "" : String(v);
     }
@@ -193,6 +202,8 @@ export default function LayoutRuntimeDrawerEditProvider({
     const repeaterRef = useRef(collectRepeaterRows(record));
     const optimisticSnapshotRef = useRef<Record<string, string> | null>(null);
     const optimisticRecordRef = useRef<ProofRuntimeRecord | null>(null);
+    const contactRefPersonIdsRef = useRef<Record<string, string>>({});
+    const contactRefEditRoleRef = useRef<Partial<Record<string, LayoutEditorContactRole>>>({});
 
     useEffect(() => {
         void prefetchWorkspaceChildcareInquiryOptionSets();
@@ -220,11 +231,18 @@ export default function LayoutRuntimeDrawerEditProvider({
         dispatchLayoutRuntimeDrawerReverted();
     }, []);
 
+    const registerContactRefPersonIds = useCallback((bindings: Record<string, string>) => {
+        contactRefPersonIdsRef.current = {
+            ...contactRefPersonIdsRef.current,
+            ...bindings,
+        };
+    }, []);
+
     const savePersonContact = useCallback(async (patchBaseline: Record<string, string>) => {
         const personBaseline: Record<string, string> = {};
         const personDraft: Record<string, string> = {};
         for (const refKey of Object.keys(patchBaseline)) {
-            if (!isLayoutRuntimePersonContactRefKey(refKey)) continue;
+            if (!isLayoutRuntimePersonFieldRefKey(refKey)) continue;
             personBaseline[refKey] = patchBaseline[refKey] ?? "";
             personDraft[refKey] = draft[refKey] ?? "";
         }
@@ -232,6 +250,8 @@ export default function LayoutRuntimeDrawerEditProvider({
             record: record as Record<string, unknown>,
             baseline: personBaseline,
             draft: personDraft,
+            contactRefPersonIdOverrides: contactRefPersonIdsRef.current,
+            contactRefRoleOverrides: contactRefEditRoleRef.current,
         });
         if (!result.ok) throw new Error(result.error);
     }, [draft, record]);
@@ -377,6 +397,29 @@ export default function LayoutRuntimeDrawerEditProvider({
         return () => registerDrawerOperatingEditSection("layout_runtime_person_contact", null);
     }, [applyOptimistic, isDirty, revert, rollbackOptimistic, save]);
 
+    const canEditContactRefKey = useCallback((refKey: string, layoutContactRole?: LayoutEditorContactRole) => {
+        const resolved = resolveLayoutRuntimeEditableRefKey(refKey);
+        if (!isLayoutRuntimeRoleContactEditableRefKey(resolved)) {
+            return isLayoutRuntimeEditableRefKeySupported(resolved);
+        }
+        return layoutRuntimeContactFieldHasSaveTarget({
+            record: record as Record<string, unknown>,
+            refKey: resolved,
+            overrides: contactRefPersonIdsRef.current,
+            layoutContactRole,
+        });
+    }, [record]);
+
+    const contactRefReadOnlyReason = useCallback((refKey: string, layoutContactRole?: LayoutEditorContactRole) => {
+        const resolved = resolveLayoutRuntimeEditableRefKey(refKey);
+        return contactRoleFieldCapabilityReadOnlyReasonForRecord(
+            resolved,
+            record as Record<string, unknown>,
+            contactRefPersonIdsRef.current,
+            layoutContactRole,
+        );
+    }, [record]);
+
     const value = useMemo(
         (): LayoutRuntimeDrawerEditContextValue => ({
             getFieldValue: (refKey, fallback, rowKey) => {
@@ -386,7 +429,7 @@ export default function LayoutRuntimeDrawerEditProvider({
                 }
                 return draft[composeDraftKey(resolveEditableRefKey(refKey), rowKey)] ?? fallback;
             },
-            setFieldValue: (refKey, value, rowKey) => {
+            setFieldValue: (refKey, value, rowKey, layoutContactRole) => {
                 const trimmedRef = refKey.trim();
                 if (LAYOUT_RUNTIME_DISPLAY_COMPANION_REF_KEYS.has(trimmedRef)) {
                     const key = composeDraftKey(trimmedRef, rowKey);
@@ -394,7 +437,10 @@ export default function LayoutRuntimeDrawerEditProvider({
                     return;
                 }
                 const resolved = resolveEditableRefKey(refKey);
-                if (!isLayoutRuntimeEditableRefKeySupported(resolved)) return;
+                if (!canEditContactRefKey(resolved, layoutContactRole)) return;
+                if (layoutContactRole && isLayoutRuntimeRoleContactEditableRefKey(resolved)) {
+                    contactRefEditRoleRef.current[resolved] = layoutContactRole;
+                }
                 const ocmKey = inquiryChildOcmFieldKeyFromLayoutRefKey(resolved);
                 if (ocmKey && isInquiryChildPlacementFieldKey(ocmKey) && rowKey) {
                     const current: Record<string, string> = {};
@@ -418,8 +464,11 @@ export default function LayoutRuntimeDrawerEditProvider({
             },
             isEditableRefKey: (refKey) =>
                 isLayoutRuntimeEditableRefKeySupported(resolveEditableRefKey(refKey)),
+            canEditContactRefKey,
+            contactRefReadOnlyReason,
+            registerContactRefPersonIds,
         }),
-        [draft],
+        [canEditContactRefKey, contactRefReadOnlyReason, draft, registerContactRefPersonIds],
     );
 
     return (

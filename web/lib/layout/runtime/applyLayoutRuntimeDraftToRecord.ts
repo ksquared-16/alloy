@@ -2,10 +2,10 @@
  * Merge layout-runtime edit draft onto a proof record for optimistic Save All.
  */
 
-import { applyPersonPatchToOpportunityHydration } from "@/lib/admin/drawer/linkedRecordFieldEditing";
 import {
-    isLayoutRuntimePersonContactRefKey,
+    applyRoleContactPersonPatchToOpportunityRecord,
     buildLayoutRuntimePersonContactPatch,
+    isLayoutRuntimePersonFieldRefKey,
 } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
 import {
     LAYOUT_RUNTIME_CHILD_EDITABLE_REF_KEYS,
@@ -27,17 +27,22 @@ function applyPersonContactDraft(
     baseline: Record<string, string>,
     draft: Record<string, string>,
 ): ProofRuntimeRecord {
-    const personPatch = buildLayoutRuntimePersonContactPatch(baseline, draft);
-    if (Object.keys(personPatch).length === 0) return record;
+    const refKeys = new Set([...Object.keys(baseline), ...Object.keys(draft)]);
+    let next: ProofRuntimeRecord = { ...record };
+    let changed = false;
 
-    const next: ProofRuntimeRecord = { ...record };
-    applyPersonPatchToOpportunityHydration(next, personPatch);
-    for (const refKey of Object.keys(baseline)) {
-        if (!isLayoutRuntimePersonContactRefKey(refKey)) continue;
+    for (const refKey of refKeys) {
+        if (!isLayoutRuntimePersonFieldRefKey(refKey)) continue;
+        const base = (baseline[refKey] ?? "").trim();
         const value = (draft[refKey] ?? "").trim();
+        if (base === value) continue;
+        changed = true;
+        const patch = buildLayoutRuntimePersonContactPatch({ [refKey]: base }, { [refKey]: value });
+        applyRoleContactPersonPatchToOpportunityRecord(next, refKey, patch);
         if (value) next[refKey] = value;
     }
-    return next;
+
+    return changed ? next : record;
 }
 
 function applyOpportunityNativeDraft(

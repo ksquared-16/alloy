@@ -1,17 +1,24 @@
 "use client";
 
 import { GLOBAL_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
-import { isAllowedOpportunityDrawerWidgetKey } from "@/lib/layout/surfaceLayoutRegistry";
+import { layoutBuilderWidgetOptionsForSurface } from "@/lib/layout/layoutBuilderPaletteModel";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 
 type Props = {
     disabled?: boolean;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
     onPickWidget: (widgetKey: string) => void;
 };
 
-export default function OpportunityDrawerLayoutWidgetPicker({ disabled = false, onPickWidget }: Props) {
+export default function OpportunityDrawerLayoutWidgetPicker({
+    disabled = false,
+    surfaceKey = "opportunity_drawer",
+    onPickWidget,
+}: Props) {
+    const allowedKeys = new Set(layoutBuilderWidgetOptionsForSurface(surfaceKey).map((w) => w.key));
     const widgets = GLOBAL_WIDGET_CATALOG.filter(
         (w) =>
-            isAllowedOpportunityDrawerWidgetKey(w.widgetKey)
+            allowedKeys.has(w.widgetKey)
             && (!w.relevantSurfaces?.length || w.relevantSurfaces.includes("drawer")),
     );
 

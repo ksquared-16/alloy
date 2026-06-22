@@ -4,7 +4,7 @@
 
 import type { LayoutDoc, LayoutItem } from "@/lib/layout/layoutV2";
 import { collectLayoutItems } from "@/lib/layout/runtime/classifyLayoutItemBinding";
-import { isLayoutRuntimePersonContactRefKey } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
+import { isLayoutRuntimePersonFieldRefKey } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
 
 /** Passthrough — do not auto-mark person-contact fields editable at runtime. */
 export function enrichLayoutDocPersonContactEditable(doc: LayoutDoc): LayoutDoc {
@@ -15,7 +15,7 @@ export function enrichLayoutDocPersonContactEditable(doc: LayoutDoc): LayoutDoc 
 export function countPersonContactEditableFields(doc: LayoutDoc): number {
     let n = 0;
     for (const item of collectLayoutItems(doc)) {
-        if (item.kind === "field" && item.editable === true && isLayoutRuntimePersonContactRefKey(item.refKey ?? "")) {
+        if (item.kind === "field" && item.editable === true && isLayoutRuntimePersonFieldRefKey(item.refKey ?? "")) {
             n += 1;
         }
     }

@@ -525,6 +525,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         }}
                         onStudioNotice={setStudioNotice}
                         onScrollToSection={scrollToSection}
+                        surfaceKey={surfaceKey}
                     />
                 :   null}
 
@@ -570,6 +571,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                         }}
                         layoutRecordId={record.id}
                         layoutVersion={record.version}
+                        surfaceKey={surfaceKey}
                     />
                     </div>
                 :   null}

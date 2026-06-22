@@ -49,6 +49,11 @@ import {
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
 } from "@/lib/layout/layoutEditorGeneratedKeys";
 import { LAYOUT_EDITOR_KPI_TILE_METADATA_KEY } from "@/lib/layout/layoutBuilderKpiTileRows";
+import {
+    LAYOUT_EDITOR_ACTIVITY_TIMELINE_CONFIG_METADATA_KEY,
+    validateLayoutEditorActivityTimelineMetadata,
+    type ActivityTimelineSurfaceKey,
+} from "@/lib/layout/layoutEditorActivityTimelineConfig";
 
 export type LayoutSurfaceValidationResult = {
     ok: boolean;
@@ -99,6 +104,7 @@ const ALLOWED_ITEM_METADATA_KEYS = new Set([
     "layoutEditorBlockConfig",
     "layoutEditorActionButton",
     "layoutEditorWidgetStyle",
+    LAYOUT_EDITOR_ACTIVITY_TIMELINE_CONFIG_METADATA_KEY,
     "layoutEditorRelatedListConfig",
     "enrollmentRosterReadFirst",
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
@@ -216,6 +222,22 @@ function walkItem(
         const widgetKey = item.refKey?.includes(".") ? item.refKey.split(".").pop()! : item.refKey;
         if (widgetKey && !ctx.allowedWidgetKeys.has(widgetKey)) {
             ctx.errors.push(`${path}: unknown widget key "${widgetKey}"`);
+        }
+        if (widgetKey === "activity_timeline" && isObject(item.metadata)) {
+            const surfaceKey = ctx.surfaceKey as ActivityTimelineSurfaceKey;
+            if (
+                surfaceKey === "opportunity_drawer"
+                || surfaceKey === "person_drawer"
+                || surfaceKey === "child_drawer"
+            ) {
+                ctx.errors.push(
+                    ...validateLayoutEditorActivityTimelineMetadata(
+                        item.metadata,
+                        surfaceKey,
+                        `${path}.metadata.${LAYOUT_EDITOR_ACTIVITY_TIMELINE_CONFIG_METADATA_KEY}`,
+                    ),
+                );
+            }
         }
     }
 

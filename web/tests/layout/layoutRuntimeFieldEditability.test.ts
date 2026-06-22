@@ -9,6 +9,21 @@ import {
 } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 
 describe("layoutRuntimeFieldEditability", () => {
+    it("allows role-scoped contact phone/email when editable and production", () => {
+        expect(
+            layoutRuntimeFieldIsEditable(
+                { editable: true, refKey: "person.secondary_phone" },
+                "production",
+            ),
+        ).toBe(true);
+        expect(
+            layoutRuntimeFieldIsEditable(
+                { editable: true, refKey: "person.emergency_contact_email" },
+                "production",
+            ),
+        ).toBe(true);
+    });
+
     it("allows person contact fields when editable and production", () => {
         expect(
             layoutRuntimeFieldIsEditable(

@@ -14,6 +14,13 @@ import { normalizeRefKeyOnRead } from "../layoutRefKeyAliases";
 import { OPPORTUNITY_COMPUTE_KEYS } from "./opportunityRelationRegistry";
 import { isOpaqueIdValue, type ProofRuntimeRecord } from "./proofRecordContext";
 import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFieldValues";
+import {
+    buildLayoutContactPersonIds,
+    buildLayoutContactRefPersonIdMap,
+    LAYOUT_CONTACT_PERSON_IDS_KEY,
+    LAYOUT_CONTACT_REF_PERSON_ID_KEY,
+    resolveAnyContactPersonId,
+} from "./layoutRuntimeContactRoleFieldCapability";
 import { resolveContactRolePersonAddressFieldValues } from "./resolvePersonAddressFieldValues";
 import { resolveOpportunityLayoutRuntimeChildrenRows } from "./mapLayoutRuntimeChildrenRows";
 import { overlayPrimaryChildScalarsOnRecord } from "./overlayPrimaryChildScalarsOnRecord";
@@ -221,6 +228,14 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         emergencyPersonId: emergencyContact.personId,
         billingPersonId: billingContact.personId,
     });
+    const layoutContactPersonIds = buildLayoutContactPersonIds({
+        primaryPersonId: primaryContact.personId,
+        secondaryPersonId: secondaryContact.personId,
+        billingPersonId: billingContact.personId,
+        emergencyPersonId: emergencyContact.personId,
+        anyPersonId: resolveAnyContactPersonId(vmRecord),
+    });
+    const layoutContactRefPersonIds = buildLayoutContactRefPersonIdMap(layoutContactPersonIds);
 
     const firstName = pickDisplay(
         vmRecord["person.first_name"],
@@ -355,6 +370,8 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         "opportunity.primary_person_id": primaryPersonId ?? "",
         ...householdAddressFields,
         ...contactRoleAddressFields,
+        [LAYOUT_CONTACT_PERSON_IDS_KEY]: layoutContactPersonIds,
+        [LAYOUT_CONTACT_REF_PERSON_ID_KEY]: layoutContactRefPersonIds,
         _overview_data: overviewData,
         _attention: attention ?? "",
         ...(taskPayload ? { _inquiry_summary_tasks: taskPayload } : {}),

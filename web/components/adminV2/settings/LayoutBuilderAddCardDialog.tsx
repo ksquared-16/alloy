@@ -16,7 +16,8 @@ import {
     EXPERIENCE_BUILDER_PLACEMENT_LABELS,
     type ExperienceBuilderPlacementIntent,
 } from "@/lib/layout/layoutBuilderPlacement";
-import { LAYOUT_BUILDER_WIDGET_OPTIONS } from "@/lib/layout/layoutBuilderPaletteModel";
+import { layoutBuilderWidgetOptionsForSurface } from "@/lib/layout/layoutBuilderPaletteModel";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 
 export type LayoutBuilderAddCardDialogSubmit = {
@@ -31,6 +32,7 @@ type Props = {
     open: boolean;
     onClose: () => void;
     onSubmit: (input: LayoutBuilderAddCardDialogSubmit) => void;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
 };
 
 const BLOCK_TYPE_HINTS: Record<ExperienceBuilderPeerBlockType, string> = {
@@ -57,11 +59,17 @@ function defaultTitleForType(blockType: ExperienceBuilderPeerBlockType): string 
     }
 }
 
-export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: Props) {
+export default function LayoutBuilderAddCardDialog({
+    open,
+    onClose,
+    onSubmit,
+    surfaceKey = "opportunity_drawer",
+}: Props) {
+    const widgetOptions = layoutBuilderWidgetOptionsForSurface(surfaceKey);
     const [blockType, setBlockType] = useState<ExperienceBuilderPeerBlockType>("fields");
     const [title, setTitle] = useState("");
     const [widthKey, setWidthKey] = useState<CardWidthFractionKey>("full");
-    const [widgetKey, setWidgetKey] = useState(LAYOUT_BUILDER_WIDGET_OPTIONS[0]?.key ?? "tasks");
+    const [widgetKey, setWidgetKey] = useState(widgetOptions[0]?.key ?? "tasks");
     const [placementIntent, setPlacementIntent] = useState<ExperienceBuilderPlacementIntent>("after_selected");
 
     useEffect(() => {
@@ -69,9 +77,15 @@ export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: 
         setBlockType("fields");
         setTitle("");
         setWidthKey("full");
-        setWidgetKey(LAYOUT_BUILDER_WIDGET_OPTIONS[0]?.key ?? "tasks");
+        setWidgetKey(widgetOptions[0]?.key ?? "tasks");
         setPlacementIntent("after_selected");
-    }, [open]);
+    }, [open, widgetOptions]);
+
+    useEffect(() => {
+        if (widgetKey === "activity_timeline" && blockType === "widget") {
+            setWidthKey("full");
+        }
+    }, [blockType, widgetKey]);
 
     useEffect(() => {
         setWidthKey(defaultWidthForType(blockType));
@@ -201,7 +215,7 @@ export default function LayoutBuilderAddCardDialog({ open, onClose, onSubmit }: 
                                 className="mt-1.5 w-full rounded-lg border border-alloy-forge/15 px-3 py-2 text-sm"
                                 data-testid="layout-builder-add-card-widget"
                             >
-                                {LAYOUT_BUILDER_WIDGET_OPTIONS.map((widget) => (
+                                {widgetOptions.map((widget) => (
                                     <option key={widget.key} value={widget.key}>
                                         {widget.label}
                                     </option>

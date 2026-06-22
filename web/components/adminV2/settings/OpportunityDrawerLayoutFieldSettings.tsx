@@ -22,6 +22,12 @@ import {
     type LayoutEditorVisibilityRule,
 } from "@/lib/layout/layoutEditorVisibilityRules";
 import type { LayoutEditorFieldNode } from "@/lib/layout/layoutEditorCompositionModel";
+import { isLayoutRuntimeEditableRefKeySupported } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import {
+    layoutRuntimeContactFieldBuilderReadOnlyReason,
+    layoutRuntimeContactRoleFieldInlineEditable,
+} from "@/lib/layout/runtime/layoutRuntimeContactRoleFieldCapability";
+import { layoutRuntimeFieldReadOnlyReason } from "@/lib/layout/runtime/layoutRuntimeFieldReadOnlyReason";
 
 type Props = {
     node: LayoutEditorFieldNode;
@@ -37,6 +43,12 @@ type Props = {
 
 export default function OpportunityDrawerLayoutFieldSettings({ node, inline = false, onChange, onClose }: Props) {
     const display = node.displayConfig;
+    const inlineEditableSupported =
+        layoutRuntimeContactRoleFieldInlineEditable(node.refKey, node.contactRole)
+        || isLayoutRuntimeEditableRefKeySupported(node.refKey);
+    const inlineEditableReason =
+        layoutRuntimeContactFieldBuilderReadOnlyReason(node.refKey, node.contactRole)
+        ?? layoutRuntimeFieldReadOnlyReason(node.refKey);
     const visibilityPresets =
         node.contactRole ?
             layoutEditorContactFieldVisibilityPresets(node.contactRole)
@@ -314,11 +326,17 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                 <input
                     type="checkbox"
                     checked={node.editable === true}
+                    disabled={!inlineEditableSupported}
                     onChange={(e) => onChange({ editable: e.target.checked })}
                     data-testid="visual-editor-field-inline-editable"
                 />
                 Inline editable in live drawer
             </label>
+            {!inlineEditableSupported && inlineEditableReason ?
+                <p className="mt-1 text-[10px] text-alloy-midnight/45" data-testid="visual-editor-field-inline-editable-reason">
+                    {inlineEditableReason}
+                </p>
+            :   null}
 
             <p className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Visibility</p>
 

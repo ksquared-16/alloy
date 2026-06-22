@@ -7,7 +7,8 @@ import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { normalizeRefKeyOnRead } from "@/lib/layout/layoutRefKeyAliases";
 import { isLayoutRuntimeChildEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeChildFieldEdit";
 import { isLayoutRuntimeOpportunityNativeRefKey } from "@/lib/layout/runtime/layoutRuntimeOpportunityFieldEdit";
-import { isLayoutRuntimePersonFieldRefKey } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
+import { isLayoutRuntimePersonAddressRefKey } from "@/lib/layout/runtime/layoutRuntimePersonContactEdit";
+import { isLayoutRuntimeRoleContactEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeContactRoleFieldCapability";
 import { resolveLayoutRuntimeFieldControl } from "@/lib/layout/runtime/resolveLayoutRuntimeFieldControl";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -28,7 +29,8 @@ export function resolveLayoutRuntimeEditableRefKey(refKey: string): string {
 /** Whether a layout refKey has a supported runtime save adapter (ignores builder editable flag). */
 export function isLayoutRuntimeEditableRefKeySupported(refKey: string): boolean {
     const resolved = resolveLayoutRuntimeEditableRefKey(refKey);
-    if (isLayoutRuntimePersonFieldRefKey(resolved)) return true;
+    if (isLayoutRuntimeRoleContactEditableRefKey(resolved)) return true;
+    if (isLayoutRuntimePersonAddressRefKey(resolved)) return true;
     if (isLayoutRuntimeOpportunityNativeRefKey(resolved)) return true;
     return isLayoutRuntimeChildEditableRefKey(resolved);
 }

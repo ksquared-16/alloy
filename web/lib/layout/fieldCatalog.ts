@@ -174,7 +174,14 @@ export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
     // Enrollment
     { widgetKey: "tour_summary", label: "Tour Summary", category: "Enrollment", description: "Tour date & follow-up", defaultDisplayMode: "summary" },
     { widgetKey: "children_list", label: "Children List", category: "Enrollment", description: "Children on this lead", defaultDisplayMode: "list" },
-    { widgetKey: "activity", label: "Activity", category: "Communication", description: "Recent record activity", defaultDisplayMode: "feed" },
+    { widgetKey: "activity", label: "Activity", category: "Communication", description: "Recent record activity preview", defaultDisplayMode: "feed" },
+    {
+        widgetKey: "activity_timeline",
+        label: "Activity Timeline",
+        category: "Communication",
+        description: "Configurable event timeline for this record (and optional related records)",
+        defaultDisplayMode: "vertical_timeline",
+    },
     // Waitlist (queue-meaningful; shown disabled on drawer surfaces)
     { widgetKey: "waitlist_position", label: "Waitlist Position", category: "Waitlist", description: "Computed waitlist position", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },
     { widgetKey: "waitlist_tier", label: "Waitlist Tier", category: "Waitlist", description: "Priority tier / bucket", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },

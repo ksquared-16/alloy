@@ -6,9 +6,10 @@ import LayoutBuilderAddCardDialog, {
 } from "@/components/adminV2/settings/LayoutBuilderAddCardDialog";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
 import {
-    LAYOUT_BUILDER_WIDGET_OPTIONS,
+    layoutBuilderWidgetOptionsForSurface,
 } from "@/lib/layout/layoutBuilderPaletteModel";
 import { createExperienceBuilderCard } from "@/lib/layout/layoutBuilderCardAuthoring";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
@@ -42,6 +43,7 @@ type Props = {
     onSelectItem: (sectionKey: string, itemId: string) => void;
     onStudioNotice: (notice: LayoutBuilderStudioNotice | null) => void;
     onScrollToSection: (sectionKey: string) => void;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
 };
 
 function NoticeBanner({ notice }: { notice: LayoutBuilderStudioNotice }) {
@@ -67,6 +69,7 @@ export default function LayoutBuilderPalettePanel({
     onSelectItem,
     onStudioNotice,
     onScrollToSection,
+    surfaceKey = "opportunity_drawer",
 }: Props) {
     const [addCardOpen, setAddCardOpen] = useState(false);
     const [showMore, setShowMore] = useState(false);
@@ -123,6 +126,34 @@ export default function LayoutBuilderPalettePanel({
         options?: { widgetKey?: string; forceNewCard?: boolean },
     ) => {
         if (itemKind === "widget" && options?.forceNewCard) {
+            if (options.widgetKey === "activity_timeline") {
+                const result = createExperienceBuilderCard(doc, {
+                    title: itemLabel,
+                    widthKey: "full",
+                    cardType: "fields",
+                    placementIntent: "after_selected",
+                    afterSectionKey: selectedSectionId,
+                });
+                const added = addSectionWidgetItem(
+                    result.doc,
+                    result.sectionKey,
+                    0,
+                    0,
+                    "activity_timeline",
+                    surfaceKey,
+                );
+                if (!added.ok) {
+                    onStudioNotice({ tone: "error", message: added.error ?? `Unable to add ${itemLabel}.` });
+                    return;
+                }
+                focusCreatedCard(
+                    added.doc ?? result.doc,
+                    result.sectionKey,
+                    added.itemId,
+                    `Added full-width "${itemLabel}".`,
+                );
+                return;
+            }
             const result = createExperienceBuilderCard(doc, {
                 title: itemLabel,
                 widthKey: "third",
@@ -190,8 +221,8 @@ export default function LayoutBuilderPalettePanel({
     };
 
     const quickWidgets = useMemo(
-        () => LAYOUT_BUILDER_WIDGET_OPTIONS.slice(0, 6),
-        [],
+        () => layoutBuilderWidgetOptionsForSurface(surfaceKey).slice(0, 6),
+        [surfaceKey],
     );
 
     return (
@@ -261,7 +292,7 @@ export default function LayoutBuilderPalettePanel({
                                     onClick={() =>
                                         addItemToTarget(
                                             "widget",
-                                            (d, sk, ri, ci) => addSectionWidgetItem(d, sk, ri, ci, widget.key),
+                                            (d, sk, ri, ci) => addSectionWidgetItem(d, sk, ri, ci, widget.key, surfaceKey),
                                             widget.label,
                                             { widgetKey: widget.key, forceNewCard: true },
                                         )
@@ -303,6 +334,7 @@ export default function LayoutBuilderPalettePanel({
                 open={addCardOpen}
                 onClose={() => setAddCardOpen(false)}
                 onSubmit={handleAddCard}
+                surfaceKey={surfaceKey}
             />
         </div>
     );

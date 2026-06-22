@@ -374,6 +374,7 @@ export const PERSON_DRAWER_COMPOSITION_WIDGET_KEYS = [
     "notes",
     "recent_communication",
     "activity",
+    "activity_timeline",
     "documents",
 ] as const;
 
@@ -387,6 +388,7 @@ export const CHILD_DRAWER_COMPOSITION_WIDGET_KEYS = [
     "notes",
     "recent_communication",
     "activity",
+    "activity_timeline",
     "documents",
 ] as const;
 

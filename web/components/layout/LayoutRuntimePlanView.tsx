@@ -31,7 +31,7 @@ import {
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
 import { readLayoutEditorBlockConfig, resolveLayoutRuntimeSectionEditMode } from "@/lib/layout/layoutEditorBlockConfig";
-import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
+import { readLayoutEditorContactRole, contactRoleFieldRefs, type LayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
     overlayLayoutEditorContactBlockRecord,
     resolveLayoutEditorContactBlockResolution,
@@ -105,7 +105,15 @@ import LayoutRuntimeInlineEditFieldControl from "@/components/layout/LayoutRunti
 import { layoutRuntimeFieldIsEditable, resolveLayoutRuntimeEditableFieldFallback, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import LayoutRuntimeAdornmentButton from "@/components/layout/LayoutRuntimeAdornmentButton";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
+import LayoutRuntimeActivityTimelineWidget from "@/components/layout/LayoutRuntimeActivityTimelineWidget";
 import LayoutRuntimeEnrollmentGrid from "@/components/layout/LayoutRuntimeEnrollmentGrid";
+import {
+    readLayoutEditorActivityTimelineConfig,
+} from "@/lib/layout/layoutEditorActivityTimelineConfig";
+import {
+    resolveActivityTimelineSurfaceKeyFromRecord,
+    resolveLayoutRuntimeActivityTimeline,
+} from "@/lib/layout/runtime/resolveLayoutRuntimeActivityTimeline";
 import LeadEnrollmentHealthSummaryCard from "@/components/layout/lead/LeadEnrollmentHealthSummaryCard";
 import LeadEnrollmentCardList from "@/components/layout/lead/LeadEnrollmentCardList";
 import LeadContactRepeaterCardList from "@/components/layout/lead/LeadContactRepeaterCardList";
@@ -276,6 +284,8 @@ const LayoutRuntimeRenderedContactIdsContext = createContext<LayoutRuntimeRender
     registerPersonId: () => undefined,
 });
 
+const LayoutRuntimeContactBlockRoleContext = createContext<LayoutEditorContactRole | undefined>(undefined);
+
 function LayoutRuntimeRenderedContactIdsProvider({ children }: { children: ReactNode }) {
     const [renderedPersonIds] = useState(() => new Set<string>());
     const value = useMemo(
@@ -372,6 +382,7 @@ function ValueCell({
     const operatorSurfaces = useLayoutRuntimeOperatorSurfaces();
     const edit = useLayoutRuntimeDrawerEdit();
     const blockEdit = useLayoutRuntimeBlockEdit();
+    const layoutContactRole = useContext(LayoutRuntimeContactBlockRoleContext);
     const onAdornmentAction = useContext(AdornmentActionContext);
     const binding = classifyLayoutItemBinding(item, anchorEntity);
     const r = resolveProofBindingValue(record, item, anchorEntity, binding);
@@ -407,7 +418,8 @@ function ValueCell({
     const canEdit =
         layoutRuntimeFieldIsEditable(item, variant) &&
         Boolean(edit) &&
-        layoutRuntimeBlockAllowsFieldEdit(blockEdit);
+        layoutRuntimeBlockAllowsFieldEdit(blockEdit) &&
+        (edit?.canEditContactRefKey(editableRefKey, layoutContactRole) ?? false);
     const editValue =
         canEdit && edit ?
             edit.getFieldValue(
@@ -512,7 +524,7 @@ function ValueCell({
                     <LayoutRuntimeInlineEditFieldControl
                         refKey={editableRefKey}
                         value={editValue}
-                        onChange={(v) => edit.setFieldValue(editableRefKey, v)}
+                        onChange={(v) => edit.setFieldValue(editableRefKey, v, undefined, layoutContactRole)}
                         onPickOption={(_value, label) => {
                             layoutRuntimeOnPickOptionCompanion(editableRefKey, label, edit.setFieldValue);
                         }}
@@ -587,21 +599,47 @@ function GroupCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord;
     const blockConfig = readLayoutEditorBlockConfig(item.metadata);
     const isContactBlock = item.kind === "field_group" && item.refKey === "contact_block";
     const renderedContacts = useContext(LayoutRuntimeRenderedContactIdsContext);
+    const drawerEdit = useLayoutRuntimeDrawerEdit();
 
+    let contactRole: LayoutEditorContactRole | undefined;
     let contactRecord = record;
     if (isContactBlock) {
-        const contactRole = readLayoutEditorContactRole(item.metadata);
+        contactRole = readLayoutEditorContactRole(item.metadata);
         const resolution = resolveLayoutEditorContactBlockResolution(record, contactRole, {
             excludedPersonIds: renderedContacts.renderedPersonIds,
         });
         if (shouldHideEmptyLayoutEditorContactBlock(contactRole, resolution.person)) return null;
-        if (resolution.person?.personId) renderedContacts.registerPersonId(resolution.person.personId);
+        if (resolution.person?.personId) {
+            renderedContacts.registerPersonId(resolution.person.personId);
+            const refs = contactRoleFieldRefs(contactRole);
+            const personId = resolution.person.personId;
+            drawerEdit?.registerContactRefPersonIds({
+                [refs.name]: personId,
+                [refs.email]: personId,
+                [refs.phone]: personId,
+                [refs.addressLine1]: personId,
+                [refs.addressLine2]: personId,
+                [refs.city]: personId,
+                [refs.state]: personId,
+                [refs.postalCode]: personId,
+            });
+        }
         contactRecord = overlayLayoutEditorContactBlockRecord(record, contactRole, resolution);
     }
 
-    return (
+    const content = (
         <GroupCellContent record={contactRecord} item={item} anchorEntity={anchorEntity} blockConfig={blockConfig} />
     );
+
+    if (contactRole) {
+        return (
+            <LayoutRuntimeContactBlockRoleContext.Provider value={contactRole}>
+                {content}
+            </LayoutRuntimeContactBlockRoleContext.Provider>
+        );
+    }
+
+    return content;
 }
 
 function GroupCellContent({
@@ -1798,6 +1836,47 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             return wrapLayoutRuntimeCompositionWidget(title || "Activity", configuredTone, activityMarkup);
         }
         return <WidgetChrome title={title} tone={configuredTone}>{activityMarkup}</WidgetChrome>;
+    }
+
+    if (widgetKey === "activity_timeline") {
+        const surfaceKey =
+            composition.childOverviewComposition ? "child_drawer"
+            : composition.personOverviewComposition ? "person_drawer"
+            : resolveActivityTimelineSurfaceKeyFromRecord(record, "opportunity_drawer");
+        const timelineConfig = readLayoutEditorActivityTimelineConfig(item.metadata, surfaceKey);
+        const entries = resolveLayoutRuntimeActivityTimeline({
+            record,
+            surfaceKey,
+            config: timelineConfig,
+            itemMetadata: item.metadata,
+        });
+        const viewAll =
+            onSelectDrawerTab && activityTabKey ?
+                () => onSelectDrawerTab(activityTabKey)
+            :   undefined;
+        const timelineMarkup = (
+            <LayoutRuntimeActivityTimelineWidget
+                entries={entries}
+                displayMode={timelineConfig.displayMode}
+                onViewAll={viewAll}
+            />
+        );
+        if (operatingCard || kpiTile) {
+            return (
+                <LeadOperatingSummaryCard
+                    title={title || "Activity Timeline"}
+                    icon={<Activity className="h-3.5 w-3.5" aria-hidden />}
+                    accent={configuredLeadAccent ?? "blue"}
+                    widgetKey="activity_timeline"
+                >
+                    {timelineMarkup}
+                </LeadOperatingSummaryCard>
+            );
+        }
+        if (composition.compositionSectionSurface) {
+            return wrapLayoutRuntimeCompositionWidget(title || "Activity Timeline", configuredTone, timelineMarkup);
+        }
+        return <WidgetChrome title={title || "Activity Timeline"} tone={configuredTone}>{timelineMarkup}</WidgetChrome>;
     }
 
     if (widgetKey === "documents") {

@@ -15,6 +15,8 @@ const WIDGET_OVERLAY_KEYS = [
     "_operational_recommendation",
     "_operational_summary",
     "_attention",
+    "_activity_timeline_events",
+    "_related_activity_timeline_events",
     "follow_up_notes",
 ] as const;
 

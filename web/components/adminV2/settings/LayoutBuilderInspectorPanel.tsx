@@ -52,6 +52,7 @@ import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDra
 import { listSectionWidgetItems, sectionIsKpiTile, sectionIsWidgetStrip, WIDGET_STRIP_WIDTH_PRESETS } from "@/lib/layout/layoutBuilderWidgetStrip";
 import { setRowColumnCount } from "@/lib/layout/builderOps";
 import { opSectionSupport, opSectionTitle } from "@/lib/operational/ui/operationalVisualTokens";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 
 type Props = {
     doc: LayoutDoc;
@@ -67,6 +68,7 @@ type Props = {
     onSelectItem: (itemId: string | null) => void;
     layoutRecordId?: string | null;
     layoutVersion?: number | null;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
 };
 
 function resolveSelectedItemId(
@@ -128,6 +130,7 @@ export default function LayoutBuilderInspectorPanel({
     onSelectItem,
     layoutRecordId,
     layoutVersion,
+    surfaceKey = "opportunity_drawer",
 }: Props) {
     const [showStructure, setShowStructure] = useState(false);
     const [showAddField, setShowAddField] = useState(true);
@@ -255,6 +258,7 @@ export default function LayoutBuilderInspectorPanel({
                             applyDoc={applyDoc}
                             onFieldAddError={onFieldAddError}
                             onClose={onClearItemSelection}
+                            surfaceKey={surfaceKey}
                         />
                         <button
                             type="button"
@@ -500,6 +504,7 @@ export default function LayoutBuilderInspectorPanel({
                                         hideInlineItemSettings
                                         hideDiagnostics
                                         friendlyLabels
+                                        surfaceKey={surfaceKey}
                                     />
                                 </div>
                             :   null}

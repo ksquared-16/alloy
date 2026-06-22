@@ -33,11 +33,18 @@ import {
     type LayoutEditorActionButtonConfig,
 } from "@/lib/layout/layoutEditorActionButton";
 import {
+    isAllowedChildDrawerWidgetKey,
     isAllowedOpportunityDrawerFieldRefKey,
     isAllowedOpportunityDrawerWidgetKey,
+    isAllowedPersonDrawerWidgetKey,
     OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS,
 } from "@/lib/layout/surfaceLayoutRegistry";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import { GLOBAL_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
+import {
+    defaultActivityTimelineConfigForSurface,
+    writeLayoutEditorActivityTimelineConfig,
+} from "@/lib/layout/layoutEditorActivityTimelineConfig";
 import { makeEmptyCustomLayoutBlockItem } from "@/lib/layout/layoutEditorGeneratedKeys";
 
 export type SectionColumnCount = 1 | 2 | 3;
@@ -291,19 +298,26 @@ export function addSectionActionButtonItem(
 
 const SINGLETON_SECTION_WIDGET_KEYS = new Set(["attention", "tasks", "current_work"]);
 
+function isWidgetAllowedOnDrawerSurface(widgetKey: string, surfaceKey: DrawerLayoutEditorSurfaceKey): boolean {
+    if (surfaceKey === "person_drawer") return isAllowedPersonDrawerWidgetKey(widgetKey);
+    if (surfaceKey === "child_drawer") return isAllowedChildDrawerWidgetKey(widgetKey);
+    return isAllowedOpportunityDrawerWidgetKey(widgetKey);
+}
+
 export function addSectionWidgetItem(
     doc: LayoutDoc,
     sectionKey: string,
     rowIndex: number,
     colIndex: number,
     widgetKey: string,
+    surfaceKey: DrawerLayoutEditorSurfaceKey = "opportunity_drawer",
 ): AddSectionItemResult {
-    if (!isAllowedOpportunityDrawerWidgetKey(widgetKey)) {
-        return { ok: false, error: `"${widgetKey}" is not allowed on the opportunity drawer.` };
+    if (!isWidgetAllowedOnDrawerSurface(widgetKey, surfaceKey)) {
+        return { ok: false, error: `"${widgetKey}" is not allowed on the ${surfaceKey.replace(/_/g, " ")}.` };
     }
     const catalog = GLOBAL_WIDGET_CATALOG.find((w) => w.widgetKey === widgetKey);
     if (catalog?.relevantSurfaces?.length && !catalog.relevantSurfaces.includes("drawer")) {
-        return { ok: false, error: `"${catalog.label}" is not supported on the opportunity drawer.` };
+        return { ok: false, error: `"${catalog.label}" is not supported on drawer surfaces.` };
     }
     const sIdx = sectionIndex(doc, sectionKey);
     if (sIdx < 0) return { ok: false, error: "Section not found." };
@@ -319,6 +333,12 @@ export function addSectionWidgetItem(
         }
     }
     const item = makeWidgetItem(widgetKey, catalog?.label ?? widgetKey, catalog?.defaultDisplayMode);
+    if (widgetKey === "activity_timeline") {
+        item.metadata = writeLayoutEditorActivityTimelineConfig(
+            item.metadata,
+            defaultActivityTimelineConfigForSurface(surfaceKey),
+        );
+    }
     return { ok: true, doc: addItem(doc, sIdx, rowIndex, colIndex, item), itemId: item.id };
 }
 

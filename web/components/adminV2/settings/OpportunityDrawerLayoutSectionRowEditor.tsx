@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import OpportunityDrawerLayoutActivityTimelineSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutActivityTimelineSettings";
 import OpportunityDrawerLayoutBlockSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutBlockSettings";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
 import OpportunityDrawerLayoutWidgetPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutWidgetPicker";
@@ -61,6 +62,8 @@ import {
     writeLayoutEditorWidgetStyle,
     type LayoutEditorWidgetTone,
 } from "@/lib/layout/layoutEditorWidgetStyle";
+import { resolveLayoutRuntimeWidgetKey } from "@/lib/layout/runtime/resolveLayoutRuntimeWidgetKey";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import { summarizeSectionCompositionDiagnostic } from "@/lib/layout/layoutEditorSectionCompositionDiagnostics";
 import { resolveVisibilityRuleKey } from "@/lib/layout/layoutEditorVisibilityRules";
 
@@ -81,6 +84,7 @@ type Props = {
     hideDiagnostics?: boolean;
     /** Business-friendly row/column labels for operator-facing inspector. */
     friendlyLabels?: boolean;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
 };
 
 const ITEM_KIND_LABELS: Record<SectionCompositionItem["kind"], string> = {
@@ -106,6 +110,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
     hideInlineItemSettings = false,
     hideDiagnostics = false,
     friendlyLabels = false,
+    surfaceKey = "opportunity_drawer",
 }: Props) {
     const rows = useMemo(() => listSectionCompositionRows(doc, sectionKey), [doc, sectionKey]);
     const [pickerTarget, setPickerTarget] = useState<{ rowIndex: number; colIndex: number; kind: "field" | "widget" } | null>(null);
@@ -274,6 +279,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                 {pickerTarget?.rowIndex === row.rowIndex && pickerTarget.colIndex === col.colIndex && pickerTarget.kind === "widget" ?
                                     <div className="mt-2">
                                         <OpportunityDrawerLayoutWidgetPicker
+                                            surfaceKey={surfaceKey}
                                             disabled={!validationOk}
                                             onPickWidget={(widgetKey) => {
                                                 const result = addSectionWidgetItem(
@@ -282,6 +288,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                                     row.rowIndex,
                                                     col.colIndex,
                                                     widgetKey,
+                                                    surfaceKey,
                                                 );
                                                 if (!result.ok) {
                                                     onFieldAddError(result.error);
@@ -381,6 +388,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                 applyDoc={applyDoc}
                                 onFieldAddError={onFieldAddError}
                                 onClose={() => onSelectItemId(null)}
+                                surfaceKey={surfaceKey}
                             />
                         </div>
                     :   null}
@@ -525,6 +533,7 @@ export function LayoutBuilderItemInspector({
     applyDoc,
     onFieldAddError,
     onClose,
+    surfaceKey = "opportunity_drawer",
 }: {
     doc: LayoutDoc;
     sectionKey: string;
@@ -534,6 +543,7 @@ export function LayoutBuilderItemInspector({
     applyDoc: (next: LayoutDoc) => void;
     onFieldAddError: (message: string | null) => void;
     onClose: () => void;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
 }) {
     if (entry.kind === "text") {
         return (
@@ -702,9 +712,19 @@ export function LayoutBuilderItemInspector({
 
     if (entry.kind === "widget") {
         const style = readLayoutEditorWidgetStyle(entry.item.metadata);
+        const widgetKey = resolveLayoutRuntimeWidgetKey(entry.item);
         return (
             <div className="space-y-3">
                 <SettingsHeader title="Tile properties" onClose={onClose} />
+                {widgetKey === "activity_timeline" ?
+                    <OpportunityDrawerLayoutActivityTimelineSettings
+                        metadata={entry.item.metadata}
+                        surfaceKey={surfaceKey}
+                        onChange={(metadata) =>
+                            applyDoc(patchSectionItem(doc, sectionKey, entry.itemId, { metadata }))
+                        }
+                    />
+                :   null}
                 <label className="block text-[11px] text-alloy-midnight/60">
                     Title
                     <input
