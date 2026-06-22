@@ -17,7 +17,7 @@ export function expandSharedSurnameNames(raw: string): string[] {
     if (!trimmed) return [];
 
     const chunks = trimmed
-        .split(/\s+and\s+|,/i)
+        .split(/\s+and\s+|\s*&\s*|,/i)
         .map((c) => cleanNameToken(c))
         .filter(Boolean);
     if (chunks.length === 0) return [];

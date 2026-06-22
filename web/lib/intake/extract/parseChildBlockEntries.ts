@@ -1,4 +1,4 @@
-import { parseFlexibleDate } from "@/lib/intake/normalize/date";
+import { findDateInText, INTAKE_US_DATE_RE, parseFlexibleDate } from "@/lib/intake/normalize/date";
 import { splitPersonName } from "@/lib/intake/normalize/personName";
 
 export type ParsedChildBlockEntry = {
@@ -11,7 +11,18 @@ export type ParsedChildBlockEntry = {
 const CHILD_BLOCK_HEADER_RE =
     /^(?:child|children|kid|kids|dependent|dependents|student|students)\s*[:\-]\s*(.+)$/i;
 
-const CHILD_ENTRY_SPLIT_RE = /\s+and\s+(?=[A-Za-z])/i;
+const CHILD_ENTRY_AND_SPLIT_RE = /\s+and\s+(?=[A-Za-z])/i;
+const CHILD_ENTRY_COMMA_SPLIT_RE = /[;,](?=\s*[A-Za-z])/;
+
+function splitChildSegments(body: string): string[] {
+    const byAnd = body.split(CHILD_ENTRY_AND_SPLIT_RE).map((f) => f.trim()).filter(Boolean);
+    const segments: string[] = [];
+    for (const part of byAnd) {
+        const byComma = part.split(CHILD_ENTRY_COMMA_SPLIT_RE).map((f) => f.trim()).filter(Boolean);
+        segments.push(...byComma);
+    }
+    return segments;
+}
 
 function parseDobFromFragment(fragment: string): string | null {
     const parenDateDob = fragment.match(/\(([^)]+?)\s*DOB\s*\)/i);
@@ -26,7 +37,7 @@ function parseDobFromFragment(fragment: string): string | null {
         if (parsed) return parsed;
     }
 
-    const inlineDob = fragment.match(/\bDOB\s+(.+?)(?:\s*$|\s+and\b|\))/i);
+    const inlineDob = fragment.match(/\bDOB\s+(.+?)(?:\s*$|\s+and\b|[;,)]|\))/i);
     if (inlineDob?.[1]) {
         const parsed = parseFlexibleDate(inlineDob[1].trim());
         if (parsed) return parsed;
@@ -38,22 +49,36 @@ function parseDobFromFragment(fragment: string): string | null {
         if (parsed) return parsed;
     }
 
+    const trailingNumeric = fragment.trim().match(/\b(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\s*$/);
+    if (trailingNumeric?.[1]) {
+        const parsed = parseFlexibleDate(trailingNumeric[1]);
+        if (parsed) return parsed;
+    }
+
+    const inlineDate = findDateInText(fragment);
+    if (inlineDate?.normalized) return inlineDate.normalized;
+
     return null;
+}
+
+function stripDateTokensFromFragment(fragment: string): string {
+    return fragment
+        .replace(/\(\s*DOB\s+[^)]+\)/gi, "")
+        .replace(/\([^)]*\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s*DOB\s*\)/gi, "")
+        .replace(/\(\s*\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}\s*\)/g, "")
+        .replace(/\bDOB\s+[\d/A-Za-z.,\-\s]+/gi, "")
+        .replace(INTAKE_US_DATE_RE, " ")
+        .replace(/\(\s*[A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?[^)]*\)/gi, " ")
+        .replace(/\s+/g, " ")
+        .trim();
 }
 
 function parseNameFromFragment(fragment: string): { first_name: string; last_name: string | null; raw_name: string } | null {
     const trimmed = fragment.trim();
     if (!trimmed) return null;
 
-    const withoutParens = trimmed
-        .replace(/\(\s*DOB\s+[^)]+\)/gi, "")
-        .replace(/\(\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*DOB\s*\)/gi, "")
-        .replace(/\(\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*\)/g, "")
-        .replace(/\bDOB\s+\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/gi, "")
-        .replace(/\s+/g, " ")
-        .trim();
-
-    const split = splitPersonName(withoutParens);
+    const withoutDates = stripDateTokensFromFragment(trimmed);
+    const split = splitPersonName(withoutDates);
     if (split) {
         return {
             first_name: split.first,
@@ -62,7 +87,7 @@ function parseNameFromFragment(fragment: string): { first_name: string; last_nam
         };
     }
 
-    const firstOnly = withoutParens.match(/^([A-Za-z][\w'\-]+)/);
+    const firstOnly = withoutDates.match(/^([A-Za-z][\w'\-]+)/);
     if (firstOnly?.[1]) {
         return {
             first_name: firstOnly[1],
@@ -80,7 +105,7 @@ export function parseChildBlockEntries(line: string): ParsedChildBlockEntry[] {
     const body = header?.[1]?.trim() ?? line.trim();
     if (!body) return [];
 
-    const fragments = body.split(CHILD_ENTRY_SPLIT_RE).map((f) => f.trim()).filter(Boolean);
+    const fragments = splitChildSegments(body);
     const entries: ParsedChildBlockEntry[] = [];
 
     for (const fragment of fragments) {

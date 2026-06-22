@@ -13,6 +13,7 @@ import {
 import { normalizeIntakeText } from "@/lib/intake/normalize/text";
 import { expandSharedSurnameNames } from "@/lib/intake/normalize/sharedSurnameNames";
 import { isChildBlockLine, parseChildBlockEntries } from "@/lib/intake/extract/parseChildBlockEntries";
+import { looksLikeContactBlockLine, parseContactBlock } from "@/lib/intake/extract/parseContactBlock";
 
 const PARENTS_MULTI_RE = /^parents?\s*[:\-]\s*(.+)$/i;
 const GUARDIANS_MULTI_RE = /^guardians?\s*[:\-]\s*(.+)$/i;
@@ -164,7 +165,7 @@ function pushMultiParentNames(
     const names = expandSharedSurnameNames(raw);
     if (names.length === 0) {
         const chunks = raw
-            .split(/\s+and\s+|,/i)
+            .split(/\s+and\s+|\s*&\s+|,/i)
             .map((c) => c.trim())
             .filter(Boolean);
         for (const chunk of chunks) {
@@ -195,6 +196,7 @@ function pushMultiParentNames(
 function extractMultiAdultNamesFromLine(line: string): string[] {
     const t = line.trim();
     if (!t || isContactOnlyLine(t) || isChildContextLine(t) || isChildBlockLine(t)) return [];
+    if (looksLikeContactBlockLine(t)) return [];
     if (looksLikeAddressLine(t)) return [];
     if (/^(?:child|children|kid|kids|dependent|dependents|student|students)\s*[:\-]/i.test(t)) return [];
     if (/\(\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*DOB\s*\)/i.test(t)) return [];
@@ -202,7 +204,7 @@ function extractMultiAdultNamesFromLine(line: string): string[] {
         return [];
     }
     if (PARENT_LABEL_RE.test(t) || PARENTS_MULTI_RE.test(t) || GUARDIANS_MULTI_RE.test(t)) return [];
-    if (!/\band\b|,/.test(t)) return [];
+    if (!/\band\b|&|,|\//.test(t)) return [];
 
     const sharedSurnameNames = expandSharedSurnameNames(t);
     if (sharedSurnameNames.length >= 2) return sharedSurnameNames;
@@ -392,6 +394,46 @@ export function extractFactsFromText(input: {
 
         if (isChildBlockLine(line) && pushChildBlockEntries(facts, seen, line, lineNum)) {
             inChildSection = true;
+            continue;
+        }
+
+        const contactBlock = parseContactBlock(line);
+        if (contactBlock && contactBlock.adult_names.length > 0) {
+            for (const emailRaw of contactBlock.emails) {
+                const classified = classifyEmail(emailRaw);
+                pushFact(facts, seen, {
+                    fact_type: "email",
+                    raw_value: emailRaw,
+                    normalized_value: classified.value,
+                    confidence: classified.validation_state === "valid" ? "high" : "low",
+                    validation_state: classified.validation_state,
+                    source_line: lineNum,
+                    evidence: "Email from compact contact block",
+                });
+            }
+            for (const phoneRaw of contactBlock.phones) {
+                const classified = classifyPhone(phoneRaw);
+                pushFact(facts, seen, {
+                    fact_type: "phone",
+                    raw_value: phoneRaw,
+                    normalized_value: classified.value,
+                    confidence: classified.validation_state === "valid" ? "high" : "low",
+                    validation_state: classified.validation_state,
+                    source_line: lineNum,
+                    evidence: "Phone from compact contact block",
+                });
+            }
+            for (const name of contactBlock.adult_names) {
+                pushPersonNameFact(facts, seen, {
+                    raw: name,
+                    role_hint: "parent",
+                    confidence: "high",
+                    source_line: lineNum,
+                    evidence: "Adult name from compact contact block",
+                });
+            }
+            adultNameClaimed = true;
+            inChildSection = false;
             continue;
         }
 
