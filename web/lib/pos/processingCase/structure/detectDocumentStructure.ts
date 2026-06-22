@@ -524,18 +524,24 @@ export function detectDocumentStructure(text: string | null): DocumentStructureC
     const allFields = nonEmpty.flatMap((s) => s.fields);
     const totalFields = allFields.length;
 
+    // Quality verdict gates the Template Setup UX. "strong" requires enough good fields AND
+    // that the text actually had line structure — a recovered blob is honestly "weak".
+    const goodPre = allFields.filter((f) => f.confidence !== "low").length;
+    const quality: StructureQuality =
+        totalFields === 0 ? "failed" : totalFields >= 4 && goodPre >= 3 && lines.length >= 6 ? "strong" : "weak";
+
+    // A sparse / blob-derived draft must NOT advertise high confidence (requirement): when
+    // the draft isn't "strong", cap every field to at most medium.
+    if (quality !== "strong") {
+        for (const f of allFields) if (f.confidence === "high") f.confidence = "medium";
+    }
+
     const confidence_summary = { high: 0, medium: 0, low: 0 };
     for (const f of allFields) {
         if (f.confidence === "high") confidence_summary.high += 1;
         else if (f.confidence === "medium") confidence_summary.medium += 1;
         else if (f.confidence === "low") confidence_summary.low += 1;
     }
-
-    // Quality verdict gates the Template Setup UX. "strong" requires enough good fields AND
-    // that the text actually had line structure — a recovered blob is honestly "weak".
-    const medGood = confidence_summary.high + confidence_summary.medium;
-    const quality: StructureQuality =
-        totalFields === 0 ? "failed" : totalFields >= 4 && medGood >= 3 && lines.length >= 6 ? "strong" : "weak";
 
     const diagnostics: StructureDiagnostics = {
         text_length: raw.length,

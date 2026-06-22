@@ -70,6 +70,20 @@ const CONF_PILL: Record<string, string> = {
     low: "bg-stone-100 text-stone-500",
 };
 
+interface EditorRow {
+    label: string;
+    type: string;
+    section: string;
+}
+const DRAFT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
+    { value: "text", label: "Text" },
+    { value: "date", label: "Date" },
+    { value: "number", label: "Number" },
+    { value: "boolean", label: "Checkbox" },
+    { value: "signature", label: "Signature" },
+    { value: "file_ref", label: "File" },
+];
+
 export default function PosTemplateSetupColumn({ state }: { state: PosCaseState }) {
     const { detail, reload } = state;
     const caseId = detail?.id ?? null;
@@ -82,6 +96,9 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
     const [showPdf, setShowPdf] = useState(true);
     const [pdfUrl, setPdfUrl] = useState<string | null>(null);
     const [pdfErr, setPdfErr] = useState<string | null>(null);
+    const [editing, setEditing] = useState(false);
+    const [rows, setRows] = useState<EditorRow[]>([]);
+    const [savingManual, setSavingManual] = useState(false);
 
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
@@ -198,6 +215,51 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
         }
     };
 
+    // --- manual field editor: set up against the PDF when text detection is weak ---
+    const openEditor = () => {
+        const seeded: EditorRow[] = [];
+        for (const s of draft?.sections ?? []) {
+            for (const fid of s.field_ids) {
+                const f = fields.find((x) => x.id === fid);
+                if (f) seeded.push({ label: f.label, type: f.type, section: s.title });
+            }
+        }
+        setRows(seeded.length ? seeded : [{ label: "", type: "text", section: "Form fields" }]);
+        setEditing(true);
+        setErr(null);
+    };
+    const updateRow = (i: number, patch: Partial<EditorRow>) =>
+        setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
+    const addRow = () => setRows((rs) => [...rs, { label: "", type: "text", section: rs[rs.length - 1]?.section ?? "Form fields" }]);
+    const removeRow = (i: number) => setRows((rs) => rs.filter((_, idx) => idx !== i));
+
+    // Persist the reviewed list, then create the editable form from it.
+    const handleSaveAndCreate = async () => {
+        const clean = rows.filter((r) => r.label.trim().length > 0);
+        if (clean.length === 0) {
+            setErr("Add at least one field with a label.");
+            return;
+        }
+        setSavingManual(true);
+        setErr(null);
+        try {
+            const res = await fetch(`/api/admin/processing/cases/${caseId}/form-draft/save`, {
+                method: "POST",
+                credentials: "same-origin",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ title: draft?.title || docTitle, fields: clean }),
+            });
+            const body = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) throw new Error(body.error || `Couldn’t save fields (${res.status})`);
+            await create(); // existing path: builds the form, opens builder in a new tab, reloads
+            setEditing(false);
+        } catch (e) {
+            setErr(e instanceof Error ? e.message : "Couldn’t save fields");
+        } finally {
+            setSavingManual(false);
+        }
+    };
+
     const fieldById = (id: string) => fields.find((f) => f.id === id);
 
     return (
@@ -297,19 +359,86 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
                 </PosPanel>
 
                 {/* Quality messaging — explicit and honest */}
-                {!created && quality === "weak" ? (
+                {!created && !editing && (quality === "weak" || zeroFields) ? (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800">
-                        Only {fields.length} {goodFields >= 3 ? "" : "low-confidence "}field
-                        {fields.length === 1 ? "" : "s"} {fields.length === 1 ? "was" : "were"} detected from the text. This is a
-                        text-assisted draft, not exact PDF mapping — use the PDF preview above to review and add missing fields in
-                        the Forms builder before relying on it.
+                        <div className="font-medium">PDF preview available. Text extraction is weak. Add fields from the PDF.</div>
+                        <p className="mt-1 text-[11.5px]">
+                            {zeroFields
+                                ? "No fields were detected from the text. "
+                                : `Only ${fields.length} ${goodFields >= 3 ? "" : "low-confidence "}field${fields.length === 1 ? "" : "s"} ${fields.length === 1 ? "was" : "were"} detected. `}
+                            This is a text-assisted draft, not exact PDF mapping — review against the PDF above and build the field
+                            list yourself, then create the template.
+                        </p>
+                        <button type="button" onClick={openEditor} className={`${WS_ACTION_PRIMARY} mt-2`}>
+                            Add / review fields from the PDF
+                        </button>
                     </div>
                 ) : null}
-                {!created && zeroFields ? (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12px] text-amber-800">
-                        Text was extracted, but no fields were detected. Start with a blank editable form using this document as
-                        the source, then add fields against the PDF preview in the Forms builder.
-                    </div>
+
+                {/* Manual field editor — operator builds the reviewed field list against the PDF */}
+                {editing ? (
+                    <PosPanel
+                        eyebrow="Review & edit fields"
+                        right={
+                            <button type="button" onClick={() => setEditing(false)} className="text-[10.5px] font-medium text-stone-500 hover:underline">
+                                Cancel
+                            </button>
+                        }
+                    >
+                        <div className="space-y-2">
+                            {rows.map((r, i) => (
+                                <div key={i} className="flex items-center gap-1.5">
+                                    <input
+                                        value={r.label}
+                                        onChange={(e) => updateRow(i, { label: e.target.value })}
+                                        placeholder="Field label (e.g. Child's Name)"
+                                        className="min-w-0 flex-1 rounded-md border border-stone-300 px-2 py-1 text-[12px] text-alloy-midnight focus:border-alloy-juniper focus:outline-none"
+                                    />
+                                    <select
+                                        value={r.type}
+                                        onChange={(e) => updateRow(i, { type: e.target.value })}
+                                        className="shrink-0 rounded-md border border-stone-300 px-1.5 py-1 text-[11.5px] text-stone-700"
+                                    >
+                                        {DRAFT_TYPE_OPTIONS.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <input
+                                        value={r.section}
+                                        onChange={(e) => updateRow(i, { section: e.target.value })}
+                                        placeholder="Section"
+                                        className="w-24 shrink-0 rounded-md border border-stone-300 px-2 py-1 text-[11.5px] text-stone-600 focus:border-alloy-juniper focus:outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() => removeRow(i)}
+                                        aria-label="Remove field"
+                                        className="shrink-0 rounded-md border border-stone-200 px-1.5 py-1 text-[11px] text-stone-400 hover:text-amber-700"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                            <button type="button" onClick={addRow} className={WS_ACTION_SECONDARY}>
+                                + Add field
+                            </button>
+                            <button
+                                type="button"
+                                disabled={savingManual || creating}
+                                onClick={() => void handleSaveAndCreate()}
+                                className={WS_ACTION_PRIMARY}
+                            >
+                                {savingManual || creating ? "Creating…" : "Create form from these fields"}
+                            </button>
+                        </div>
+                        <p className="mt-1.5 text-[10.5px] text-stone-400">
+                            Creates an unpublished draft form from exactly these fields — opens in a new tab, the case stays here.
+                        </p>
+                    </PosPanel>
                 ) : null}
 
                 {/* Detected fields — label / type / confidence / source reason */}
@@ -403,6 +532,11 @@ export default function PosTemplateSetupColumn({ state }: { state: PosCaseState 
                 )}
 
                 <div className="mt-2 grid grid-cols-2 gap-1.5">
+                    {!created && draft && !editing ? (
+                        <button type="button" disabled={busy || creating} onClick={openEditor} className={WS_ACTION_SECONDARY}>
+                            Edit fields
+                        </button>
+                    ) : null}
                     {!created && draft ? (
                         <button type="button" disabled={busy || creating} onClick={() => void handleDetect()} className={WS_ACTION_SECONDARY}>
                             {busy ? "Re-reading…" : "Re-detect fields"}
