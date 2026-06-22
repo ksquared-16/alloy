@@ -10,6 +10,7 @@ import { NEW_LEAD_STATUS_KEY, DEFAULT_LEAD_CASE_STATUS_KEY } from "@/lib/admin/a
 import { ENROLLMENT_INTAKE_PERSON_STATUS_KEY } from "@/lib/admin/person/enrollmentPersonDefaultStatus";
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { applyCreateLeadHouseholdMemberCommit } from "@/lib/admin/actions/executeCreateLeadHouseholdCommit";
+import { applyCreateLeadLayoutRuntimePersistence } from "@/lib/admin/actions/applyCreateLeadLayoutRuntimePersistence";
 import { readCreateLeadCommitSelectionFromPayload } from "@/lib/admin/actions/mapCreateLeadCommitSelectionToPayload";
 import {
     primaryIncludedParent,
@@ -233,6 +234,20 @@ export async function executeCreateLeadAction(
             const message = e instanceof Error ? e.message : "Failed to persist additional household members.";
             return { ok: false, error: message, status: 400 };
         }
+    }
+
+    try {
+        await applyCreateLeadLayoutRuntimePersistence(supabase, {
+            orgId: ctx.orgId,
+            customerId,
+            opportunityId,
+            primaryPersonId: personId,
+            merged: input.merged,
+            selection: householdCommit,
+        });
+    } catch (e) {
+        const message = e instanceof Error ? e.message : "Failed to persist layout runtime contact/address data.";
+        return { ok: false, error: message, status: 400 };
     }
 
     try {

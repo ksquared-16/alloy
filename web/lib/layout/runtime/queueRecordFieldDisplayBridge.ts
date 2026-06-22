@@ -14,6 +14,7 @@ export function inferQueueRecordFieldDisplayFromCatalog(f: LayoutCatalogField): 
     if (f.fieldType === "email") return "email";
 
     const rk = f.refKey.toLowerCase();
+    if (/waitlist\.(positionlabel|tierlabel|prioritylabel|priority)|overrides\.flags/.test(rk)) return "badge";
     if (/status/.test(rk) && !/tour_status/.test(rk)) return "pill";
     if (/email/.test(rk)) return "email";
     if (/phone/.test(rk)) return "phone";

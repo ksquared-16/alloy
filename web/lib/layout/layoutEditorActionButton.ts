@@ -24,6 +24,7 @@ export const LAYOUT_EDITOR_ACTION_KEY_LABELS: Record<LayoutEditorDrawerActionKey
     edit_enrollment: "Edit enrollment",
     open_schedule: "Open schedule",
     add_family_member: "Add family member",
+    make_primary_contact: "Make Primary Contact",
     open_drawer: "Open related drawer",
 };
 

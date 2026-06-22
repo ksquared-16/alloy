@@ -228,6 +228,7 @@ export const OPPORTUNITY_DRAWER_CONTACT_REPEATER_FIELD_REFS = [
     "person.role",
     "person.relationship",
     "person.is_primary",
+    "person.is_primary_contact",
     "person.display_name",
     "person.name",
     "person.contact_role",

@@ -23,6 +23,10 @@ import {
   type InquiryChildHydrateRow,
 } from "@/lib/admin/drawer/inquiryChildrenHydration";
 import { attachOpportunityChildLifecycleSummary } from "@/lib/opportunities/buildOpportunityChildLifecycleSummary";
+import {
+  attachChildScopedContactLinksToRecord,
+  memberRowsFromInquiryChildren,
+} from "@/lib/admin/person/fetchChildScopedContactLinks";
 import { resolveCustomerHouseholdPrimaryContactPersonId } from "@/lib/admin/person/householdPrimaryContact";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import {
@@ -662,6 +666,15 @@ export async function attachOpportunityInquiryChildrenShell(
   host._inquiry_children = inquiryChildrenOut;
   host._member_person_graph_pending = memList.some((m) => trimOrNull(m.person_id) != null);
   attachOpportunityChildLifecycleSummary(host);
+  {
+    const memberRows = memberRowsFromInquiryChildren(inquiryChildrenOut);
+    if (memberRows.length > 0) {
+      await attachChildScopedContactLinksToRecord(supabase, orgId, memberRows, host);
+    } else {
+      host._child_scoped_contact_links = [];
+      host._child_scoped_contact_links_query_failed = false;
+    }
+  }
 }
 
 type OppPersonShellRow = {
@@ -1021,7 +1034,7 @@ async function respondOpportunityRelationshipMemberOverlay(
   inquiryBlocks = await enrichInquiryChildrenWithPlacementOptionLabels(supabase, orgId, inquiryBlocks);
   inquiryBlocks = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryBlocks);
 
-  const payload = {
+  const overlayRecord: Record<string, unknown> = {
     id: opportunityId,
     org_id: orgId,
     _inquiry_children: inquiryBlocks,
@@ -1032,6 +1045,17 @@ async function respondOpportunityRelationshipMemberOverlay(
       telemetry: ocmStatusTelemetry,
     },
   };
+  {
+    const memberRows = memberRowsFromInquiryChildren(inquiryBlocks);
+    if (memberRows.length > 0) {
+      await attachChildScopedContactLinksToRecord(supabase, orgId, memberRows, overlayRecord);
+    } else {
+      overlayRecord._child_scoped_contact_links = [];
+      overlayRecord._child_scoped_contact_links_query_failed = false;
+    }
+  }
+
+  const payload = overlayRecord;
 
   if (process.env.NODE_ENV !== "production") {
     console.warn("[perf.drawer.member_person_graph_overlay]", payload);
@@ -2089,6 +2113,15 @@ export async function respondOpportunityEntityGet(
   inquiryChildrenOut = await attachInquiryChildRowCustomFields(supabase, orgId, inquiryChildrenOut);
   out._inquiry_children = inquiryChildrenOut;
   attachOpportunityChildLifecycleSummary(out);
+  {
+    const memberRows = memberRowsFromInquiryChildren(inquiryChildrenOut);
+    if (memberRows.length > 0) {
+      await attachChildScopedContactLinksToRecord(supabase, orgId, memberRows, out);
+    } else {
+      out._child_scoped_contact_links = [];
+      out._child_scoped_contact_links_query_failed = false;
+    }
+  }
   if (process.env.NODE_ENV !== "production") {
     out._debug_inquiry_children = {
       opportunity_id: id,

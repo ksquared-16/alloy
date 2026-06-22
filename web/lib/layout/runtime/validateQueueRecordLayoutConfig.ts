@@ -7,6 +7,8 @@ import { filterCatalogFieldForScope } from "@/lib/layout/queueRecordScopeCatalog
 import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 import { scopeAllowsFieldKey } from "@/lib/layout/runtime/queueRecordScopedResolve";
+import { isWaitlistOnlyFieldKey } from "@/lib/layout/runtime/queueWaitlistPlacementField";
+import { queueRecordActivityTimelineConfig } from "@/lib/layout/runtime/queueRecordWidgetConfig";
 
 export type QueueRecordLayoutValidationIssue = {
     path: string;
@@ -62,6 +64,21 @@ export function validateQueueRecordLayoutConfig(
                         message: `widget "${block.widgetKey}" is not allowed on ${isWaitlist ? "waitlist" : "pipeline"} queue rows`,
                     });
                 }
+                if (block.widgetKey === "activity_timeline") {
+                    const timeline = queueRecordActivityTimelineConfig(block.config);
+                    if (timeline.displayMode !== "compact_feed") {
+                        errors.push({
+                            path: `${blockPath}.config.displayMode`,
+                            message: 'activity_timeline on queue rows must use compact display',
+                        });
+                    }
+                    if (timeline.maxItems < 1 || timeline.maxItems > 10) {
+                        errors.push({
+                            path: `${blockPath}.config.maxItems`,
+                            message: "activity_timeline maxItems must be between 1 and 10 on queue rows",
+                        });
+                    }
+                }
                 return;
             }
 
@@ -72,6 +89,12 @@ export function validateQueueRecordLayoutConfig(
                     errors.push({
                         path: `${fieldPath}.fieldKey`,
                         message: `field "${field.fieldKey}" is not allowed for scope ${column.scope.type}`,
+                    });
+                }
+                if (!isWaitlist && isWaitlistOnlyFieldKey(field.fieldKey)) {
+                    errors.push({
+                        path: `${fieldPath}.fieldKey`,
+                        message: `field "${field.fieldKey}" is only allowed on waitlist queue rows`,
                     });
                 }
                 const catalogField = catalogFieldFromRefKey(field.fieldKey);

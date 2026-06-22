@@ -8,6 +8,7 @@
 
 import type { InquirySummaryTaskPreviewPayload } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
 import { parseInquirySummaryTaskPreview } from "@/lib/admin/drawer/opportunityInquirySummaryTaskPreview";
+import type { QueueActivityTimelineEventRow } from "@/lib/admin/fetchQueueActivityTimelineEvents";
 
 export type QueueRowLayoutRuntimeEnrichment = {
     customerName?: string | null;
@@ -37,6 +38,10 @@ export type QueueRowLayoutRuntimeEnrichment = {
     operationalRecommendationPreview?: unknown;
     attentionSuggestion?: unknown;
     attentionSuggestionPreview?: unknown;
+    /** Recent workflow_events for compact activity_timeline (QueueService batch hydrate). */
+    activityTimelineEvents?: QueueActivityTimelineEventRow[] | null;
+    lastActivityAt?: string | null;
+    lastActivitySummary?: string | null;
 };
 
 /** Build enrichment blob from a queue runtime row (server or work-unit page). */
@@ -74,5 +79,10 @@ export function buildQueueRowLayoutRuntimeEnrichment(row: Record<string, unknown
         operationalRecommendationPreview: row._operational_recommendation_preview,
         attentionSuggestion: row._attention_suggestion,
         attentionSuggestionPreview: row._attention_suggestion_preview,
+        activityTimelineEvents: Array.isArray(row._activity_timeline_events)
+            ? (row._activity_timeline_events as QueueActivityTimelineEventRow[])
+            : null,
+        lastActivityAt: str("last_activity_at"),
+        lastActivitySummary: str("last_activity_summary"),
     };
 }

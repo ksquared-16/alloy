@@ -8,7 +8,8 @@ import type {
     CreateLeadHouseholdResolution,
     CreateLeadLeadResolution,
 } from "@/lib/intake/resolve/commitOverlayTypes";
-import type { IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
+import type { IntakeAddressCandidate, IntakeHouseholdCandidate, IntakePersonCandidate } from "@/lib/intake/types";
+import { parseAddressLines } from "@/lib/admin/actions/createLeadAddressParse";
 
 export type CreateLeadCommitEntityType = "parent" | "child";
 
@@ -38,6 +39,15 @@ export type CreateLeadCommitRecord = {
     resolution?: CreateLeadCommitResolution;
 };
 
+export type CreateLeadCommitHouseholdAddress = {
+    lines: string[];
+    address_line1?: string | null;
+    address_line2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+};
+
 export type CreateLeadCommitSelection = {
     version: 1;
     parents: CreateLeadCommitRecord[];
@@ -47,6 +57,8 @@ export type CreateLeadCommitSelection = {
         phone: string | null;
         invalid_phone: boolean;
     };
+    /** Parsed household mailing address from intake (not site location). */
+    household_address?: CreateLeadCommitHouseholdAddress | null;
     address_review_only: boolean;
     household_resolution?: CreateLeadHouseholdResolution;
     lead_resolution?: CreateLeadLeadResolution;
@@ -194,6 +206,22 @@ function childRecordFromCandidate(
     return record;
 }
 
+function householdAddressFromIntake(address: IntakeAddressCandidate | null): CreateLeadCommitHouseholdAddress | null {
+    if (!address?.lines?.length) return null;
+    const lines = address.lines.map((line) => String(line).trim()).filter(Boolean);
+    if (!lines.length) return null;
+    const parsed = parseAddressLines(lines);
+    if (!parsed) return null;
+    return {
+        lines,
+        address_line1: parsed.address_line1,
+        address_line2: parsed.address_line2 ?? null,
+        city: parsed.city ?? null,
+        state: parsed.state ?? null,
+        postal_code: parsed.postal_code ?? null,
+    };
+}
+
 /** Build default commit selection from grouped household candidates. */
 export function buildCreateLeadCommitSelection(
     household: IntakeHouseholdCandidate,
@@ -202,6 +230,7 @@ export function buildCreateLeadCommitSelection(
     const guardians = household.parents_guardians?.length ? household.parents_guardians : household.parents;
     const parents = guardians.map((p, i) => parentRecordFromCandidate(p, i, contacts));
     const children = household.children.map((c, i) => childRecordFromCandidate(c, i, household));
+    const householdAddress = householdAddressFromIntake(household.address);
 
     if (parents[0] && !parents[0].include_in_commit && parents[0].validation_state === "valid") {
         parents[0].include_in_commit = true;
@@ -212,7 +241,8 @@ export function buildCreateLeadCommitSelection(
         parents,
         children,
         household_contacts: contacts,
-        address_review_only: Boolean(household.address?.lines?.length),
+        household_address: householdAddress,
+        address_review_only: Boolean(householdAddress?.lines?.length),
     };
 }
 

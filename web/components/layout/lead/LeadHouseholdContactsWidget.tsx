@@ -95,6 +95,10 @@ export default function LeadHouseholdContactsWidget({
             <LeadHouseholdPrimaryContactConfirmModal
                 isOpen={pending != null}
                 personName={pending?.display_name ?? "this person"}
+                currentPrimaryName={
+                    projection.contacts.find((row) => row.is_primary)?.display_name ?? null
+                }
+                scopeLabels={["Household account", "Open opportunities on this account"]}
                 isLoading={savingPersonId != null}
                 onClose={() => {
                     if (savingPersonId) return;

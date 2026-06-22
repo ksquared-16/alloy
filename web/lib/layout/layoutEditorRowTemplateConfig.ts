@@ -11,6 +11,7 @@ export const LAYOUT_EDITOR_ROW_ACTIONS = [
     "open_child_drawer",
     "edit_enrollment",
     "open_schedule",
+    "make_primary_contact",
 ] as const;
 export type LayoutEditorRowAction = (typeof LAYOUT_EDITOR_ROW_ACTIONS)[number];
 
@@ -34,6 +35,7 @@ export const LAYOUT_EDITOR_ROW_ACTION_LABELS: Record<LayoutEditorRowAction, stri
     open_child_drawer: "Open child drawer",
     edit_enrollment: "Show row action: Edit enrollment",
     open_schedule: "Open schedule (coming later)",
+    make_primary_contact: "Make Primary Contact",
 };
 
 export const DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG: LayoutEditorRowTemplateConfig = {

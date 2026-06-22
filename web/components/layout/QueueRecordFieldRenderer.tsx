@@ -31,6 +31,11 @@ import {
     resolveQueueRecordStatusPillTone,
     type QueueRecordStatusPillTone,
 } from "@/lib/layout/runtime/resolveQueueRecordStatusPillTone";
+import {
+    classifyWaitlistPlacementFieldKey,
+    resolveQueueWaitlistPlacementPresentation,
+    resolveWaitlistPinDisplay,
+} from "@/lib/layout/runtime/queueWaitlistPlacementField";
 
 export type QueueRecordFieldRendererProps = {
     resolved: QueueRecordResolvedField;
@@ -159,6 +164,56 @@ function usesInlineLabelPair(field: QueueRecordFieldConfig, showLabel: boolean):
     return /date_of_birth|\.dob$|tour_date/.test(key);
 }
 
+function QueueRecordWaitlistPlacementField({
+    field,
+    display,
+    anchorRecord,
+    onOpen,
+}: {
+    field: QueueRecordFieldConfig;
+    display: string;
+    anchorRecord: ProofRuntimeRecord;
+    onOpen?: () => void;
+}) {
+    const kind = classifyWaitlistPlacementFieldKey(field.fieldKey);
+    const presentation = resolveQueueWaitlistPlacementPresentation(field.fieldKey);
+    if (!kind || !presentation) return null;
+
+    const text =
+        kind === "override" && field.fieldKey === "waitlist.pin"
+            ? resolveWaitlistPinDisplay(anchorRecord) ?? display
+            : display;
+
+    if (!text.trim()) {
+        return <span className="queue-record-field queue-record-field--empty">—</span>;
+    }
+
+    if (presentation.surface === "muted") {
+        return (
+            <QueueRowOpenZone onOpen={onOpen} className="queue-record-field queue-record-field--muted-surface">
+                {presentation.prefix ?
+                    <>
+                        <span className="queue-record-field__inline-label">{presentation.prefix}</span>
+                        <span className="queue-record-field__inline-value">{text}</span>
+                    </>
+                :   <span className="queue-record-field__text">{text}</span>}
+            </QueueRowOpenZone>
+        );
+    }
+
+    const tone: QueueRecordStatusPillTone = presentation.tone;
+    return (
+        <QueueRowOpenZone
+            onOpen={onOpen}
+            className={`queue-record-field queue-record-field--badge queue-record-field--waitlist-${kind} ${queueRecordStatusPillToneClass(tone)}`}
+            data-queue-waitlist-field={kind}
+            data-queue-field-key={field.fieldKey}
+        >
+            <span className="queue-record-field__pill-label">{text}</span>
+        </QueueRowOpenZone>
+    );
+}
+
 /** Single config-driven field renderer for operational queue rows. */
 export default function QueueRecordFieldRenderer({
     resolved,
@@ -187,6 +242,17 @@ export default function QueueRecordFieldRenderer({
                 display={text}
                 drawerHandlers={drawerHandlers}
                 onOpenOpportunity={onOpen}
+            />
+        );
+    }
+
+    if (classifyWaitlistPlacementFieldKey(field.fieldKey)) {
+        return (
+            <QueueRecordWaitlistPlacementField
+                field={field}
+                display={text}
+                anchorRecord={anchorRecord}
+                onOpen={onOpen}
             />
         );
     }

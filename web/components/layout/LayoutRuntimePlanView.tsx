@@ -29,7 +29,9 @@ import {
     resolveLayoutCollectionColumnLinkAdornment,
     resolveLayoutCollectionColumnShowIcon,
 } from "@/lib/layout/layoutEditorDisplayConfig";
+import LayoutRuntimeMakePrimaryContactActionButton from "@/components/layout/LayoutRuntimeMakePrimaryContactActionButton";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
+import { isMakePrimaryContactActionKey } from "@/lib/admin/actions/makePrimaryContactAction";
 import { readLayoutEditorBlockConfig, resolveLayoutRuntimeSectionEditMode } from "@/lib/layout/layoutEditorBlockConfig";
 import { readLayoutEditorContactRole, contactRoleFieldRefs, type LayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
@@ -530,13 +532,20 @@ function ValueCell({
                         getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue)}
                     />
                 : actionButton ?
-                    <button
-                        type="button"
-                        className="inline-flex rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-xs font-medium text-alloy-pine"
-                        data-testid={`layout-runtime-action-button-${item.id}`}
-                    >
-                        {actionButton.label ?? item.label ?? "Action"}
-                    </button>
+                    isMakePrimaryContactActionKey(String(actionButton.actionKey ?? "")) ?
+                        <LayoutRuntimeMakePrimaryContactActionButton
+                            anchorRecord={record}
+                            layoutContactRole={layoutContactRole}
+                            label={actionButton.label ?? item.label ?? "Make Primary Contact"}
+                            testId={`layout-runtime-action-button-${item.id}`}
+                        />
+                    :   <button
+                            type="button"
+                            className="inline-flex rounded border border-alloy-forge/20 bg-white px-2 py-0.5 text-xs font-medium text-alloy-pine"
+                            data-testid={`layout-runtime-action-button-${item.id}`}
+                        >
+                            {actionButton.label ?? item.label ?? "Action"}
+                        </button>
                 :   <span className={!resolvedDisplay ? PRESENTATION_VALUE_PLACEHOLDER : undefined}>{valueBody}</span>
                 }
                 {showIcon && item.adornment && item.adornment.position === "right" ? <Adorn item={item} /> : null}
@@ -732,6 +741,22 @@ function RepeaterCellContent({
         editable: col.editable,
         metadata: col.metadata,
     };
+    const actionButton =
+        col.refKey === "_action_button" ? readLayoutEditorActionButtonConfig(col.metadata) : null;
+    if (
+        actionButton
+        && isMakePrimaryContactActionKey(String(actionButton.actionKey ?? ""))
+        && anchorRecord
+    ) {
+        return (
+            <LayoutRuntimeMakePrimaryContactActionButton
+                anchorRecord={anchorRecord}
+                rowRecord={row}
+                label={actionButton.label ?? col.label ?? "Make Primary Contact"}
+                testId={`layout-runtime-repeater-action-${col.refKey}`}
+            />
+        );
+    }
     const r = resolveLayoutRuntimeRepeaterFieldValue(row, col.refKey, {
         renderHint: col.renderHint,
         template: col.template,

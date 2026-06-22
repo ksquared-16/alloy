@@ -58,9 +58,21 @@ Items below extend the drawer Experience Builder framework. They do **not** appl
 - `surfaceLayoutRegistry` — `queue_record.allowedWidgetKeys`
 
 **Remaining queue-specific (intentional):**
-- Waitlist placement widgets (`waitlist_position`, etc.) remain **field keys** until dedicated row renderers ship
-- Full workflow history (`_activity_timeline_events`) not hydrated on queue rows yet — preview resolver fallback only
+- Waitlist placement **widgets** (`waitlist_position`, etc.) remain V2 card context keys — v3 queue rows use **field refKeys** with dedicated chip renderers
 - Queue row collapse / stacked layout — not applicable (row is atomic)
+
+---
+
+## EB-Q-02 — Queue activity hydration + waitlist v3 renderers ✅ (implemented)
+
+**Goal:** Finish queue product gaps after EB-Q-01 primitive bridge.
+
+**Implemented:**
+- `fetchQueueActivityTimelineEvents.ts` + `QueueService.enrichOpportunityRows` — batch `_activity_timeline_events` hydrate
+- `queueRowLayoutRuntimeEnrichment` + `buildOpportunityQueueRowRecordFromPreview` — passthrough live events + preview fallback fields
+- `queueWaitlistPlacementField.ts` + `QueueRecordFieldRenderer` — placement chips for position/tier/priority/override/pin
+- `validateQueueRecordLayoutConfig` — waitlist-only field guard, compact timeline config validation
+- `scopeAllowsFieldKey` — `waitlist.*` / `overrides.*` on lifecycle_context scope
 
 ---
 
@@ -80,6 +92,34 @@ Items below extend the drawer Experience Builder framework. They do **not** appl
 - Child drawer: child-scoped first, household fallback when configured
 - Person drawer: `related_children_for_person` groups by linked child
 - Opportunity drawer: per-child groups (no flat merge when multiple children)
+
+---
+
+## EB-FW-05 — Primary contact designation action (`make_primary_contact`) ✅ (implemented)
+
+**Goal:** Operators change household primary contact through a configurable relationship action — not inline scalar edit.
+
+**Doctrine:** Primary contact designation is a relationship action. One primary per household/opportunity scope. Old primary remains linked as additional contact.
+
+**Implemented:**
+- `makePrimaryContactAction.ts` — action key + event type constants
+- `layoutRuntimeMakePrimaryContactAction.ts` — context resolution + visibility (`show_when_not_primary` compatible)
+- `LayoutRuntimeMakePrimaryContactActionButton.tsx` — EB runtime button + confirmation modal
+- `LayoutRuntimePlanView` — wires `_action_button` with `make_primary_contact` on contact blocks and related-list columns
+- `LeadHouseholdPrimaryContactConfirmModal` — current primary, new primary, affected scope
+- `emitHouseholdPrimaryContactChangedEvent.ts` + PATCH `/api/admin/customers/[id]/household-primary-contact` — audit/workflow event
+- Reuses `setHouseholdPrimaryContactForCustomer` → `opportunities.primary_person_id`, `customer_persons.is_primary`, role demotion on `_opportunity_persons`
+- `person.is_primary_contact` read-only badge field in catalog; `person.is_primary` blocked from inline edit
+- Builder: `make_primary_contact` in `LAYOUT_EDITOR_DRAWER_ACTION_KEYS` and row template actions
+
+**Initial scope:** Opportunity / household primary contact only (not child-scoped guardian promotion).
+
+**Builder usage:**
+- Contact block: add action button item, action key `make_primary_contact`, visibility `show_when_not_primary`
+- Contact related list: add `_action_button` column with same action key
+- Optional display: `person.is_primary_contact` as read-only badge/chip
+
+**Later:** Child-scoped guardian primary when scope is child-specific; person drawer EB layouts.
 
 ---
 

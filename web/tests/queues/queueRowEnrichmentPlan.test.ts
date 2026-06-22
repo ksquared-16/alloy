@@ -115,6 +115,7 @@ describe("buildQueueRowEnrichmentPlan", () => {
             executableQueueKey: "lead",
         });
         expect(plan.batchFetch.openTasks).toBe(true);
+        expect(plan.batchFetch.activityTimelineEvents).toBe(true);
         expect(plan.relationFetch.customerMembers).toBe(true);
     });
 

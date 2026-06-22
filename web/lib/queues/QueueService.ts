@@ -36,6 +36,8 @@ import {
     type OpportunityQueueLaneRouting,
 } from "@/lib/queues/queueMembershipRuntimeResolver";
 import { perfQueue } from "@/lib/perf/perfNamespaceLog";
+import { fetchQueueActivityTimelineEventsByOpportunityId, type QueueActivityTimelineEventRow } from "@/lib/admin/fetchQueueActivityTimelineEvents";
+import { summarizeWorkflowEventForSignal } from "@/lib/admin/activitySignals";
 import {
     buildQueueRowEnrichmentPlan,
     enrichmentQueriesRunFromPlan,
@@ -1220,6 +1222,7 @@ async function enrichOpportunityRows(params: {
                 tourBookings: !skipOptionalEnrichmentFetches,
                 ocmDesiredStart: !skipOptionalEnrichmentFetches,
                 openTasks: enrichment === "full",
+                activityTimelineEvents: enrichment === "full",
             },
             attachCaseGrainRowContext: enrichment !== "queue_reveal",
             skippedEnrichment: [],
@@ -1405,6 +1408,19 @@ async function enrichOpportunityRows(params: {
     const taskPreviewByOppId = indexOpenTasksByOpportunityId(
         (openTasksTimed.v as { data?: unknown[] | null }).data ?? [],
     );
+
+    let activityTimelineByOppId = new Map<string, QueueActivityTimelineEventRow[]>();
+    if (batch.activityTimelineEvents && opportunityIds.length) {
+        try {
+            activityTimelineByOppId = await fetchQueueActivityTimelineEventsByOpportunityId(
+                supabase,
+                orgId,
+                opportunityIds,
+            );
+        } catch {
+            activityTimelineByOppId = new Map();
+        }
+    }
 
     const tourBookingByOppId = new Map<string, { start_at: string; timezone: string }>();
     for (const raw of (tourBookingsTimed.v as any).data ?? []) {
@@ -1779,6 +1795,26 @@ async function enrichOpportunityRows(params: {
                 taskPreviewByOppId.get(oppIdStr)
                 ?? ({ state: "loaded", open_tasks: [], open_count: 0 } satisfies InquirySummaryTaskPreviewPayload),
             _attention_reason_label: attentionReasonLabel,
+            ...(batch.activityTimelineEvents
+                ? (() => {
+                      const timelineEvents = activityTimelineByOppId.get(oppIdStr) ?? [];
+                      const latest = timelineEvents[0] ?? null;
+                      return {
+                          _activity_timeline_events: timelineEvents,
+                          ...(latest
+                              ? {
+                                    last_activity_at: latest.occurred_at,
+                                    last_activity_type: latest.event_type,
+                                    last_activity_summary: summarizeWorkflowEventForSignal({
+                                        occurred_at: latest.occurred_at ?? "",
+                                        event_type: latest.event_type,
+                                        payload: latest.payload ?? undefined,
+                                    }),
+                                }
+                              :   {}),
+                      };
+                  })()
+                :   {}),
             ...(opportunityAttentionResolution
                 ? {
                       _attention_reason: attentionReasonCode,

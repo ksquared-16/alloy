@@ -69,14 +69,21 @@ export function resolveLayoutRuntimeEditableFieldFallback(
     return displayFallback;
 }
 
+/** Layout-owned refKeys that must never render as inline editable controls. */
+const LAYOUT_RUNTIME_RELATIONSHIP_ACTION_REF_KEYS = new Set([
+    "person.is_primary",
+    "person.is_primary_contact",
+]);
+
 /** Whether one layout item should render an input in production runtime. */
 export function layoutRuntimeFieldIsEditable(
     item: Pick<LayoutItem, "editable" | "refKey">,
     variant: LayoutRuntimeSurfaceVariant,
 ): boolean {
     if (variant !== "production") return false;
-    if (item.editable !== true) return false;
     const refKey = item.refKey?.trim() ?? "";
+    if (LAYOUT_RUNTIME_RELATIONSHIP_ACTION_REF_KEYS.has(refKey)) return false;
+    if (item.editable !== true) return false;
     if (!refKey) return false;
     return isLayoutRuntimeEditableRefKeySupported(refKey);
 }

@@ -403,7 +403,9 @@ export const WAITLIST_CANDIDATE_CATALOG_GROUPS: LayoutCatalogGroup[] = [
         entityLabel: "Waitlist",
         fields: [
             wlField("wl_waitlist", "Waitlist", "waitlist.tierLabel", "Priority tier", "status"),
+            wlField("wl_waitlist", "Waitlist", "waitlist.priorityLabel", "Priority", "status"),
             wlField("wl_waitlist", "Waitlist", "waitlist.positionLabel", "Position", "text"),
+            wlField("wl_waitlist", "Waitlist", "waitlist.pin", "Pin override", "status"),
             wlField("wl_waitlist", "Waitlist", "waitlist.waitSince", "Waitlisted since", "text"),
             wlField("wl_waitlist", "Waitlist", "overrides.flags", "Override flags", "status"),
             wlField("wl_waitlist", "Waitlist", "overrides.reason", "Override reason", "text"),

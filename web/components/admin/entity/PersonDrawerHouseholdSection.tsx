@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import PersonDrawerIdentityAvatar from "@/components/admin/entity/PersonDrawerIdentityAvatar";
 import LeadHouseholdPrimaryContactConfirmModal from "@/components/layout/lead/LeadHouseholdPrimaryContactConfirmModal";
 import {
@@ -370,6 +370,14 @@ export default function PersonDrawerHouseholdSection({
     const [savingPersonId, setSavingPersonId] = useState<string | null>(null);
     const [primaryContactError, setPrimaryContactError] = useState<string | null>(null);
 
+    const currentPrimaryName = useMemo(() => {
+        for (const group of model.groups) {
+            const primary = group.guardians.find((row) => row.is_primary);
+            if (primary?.display_name) return primary.display_name;
+        }
+        return null;
+    }, [model.groups]);
+
     const requestMakePrimary = useCallback(
         (customerId: string, personId: string, displayName: string) => {
             if (!canMutate || savingPersonId) return;
@@ -571,6 +579,8 @@ export default function PersonDrawerHouseholdSection({
         <LeadHouseholdPrimaryContactConfirmModal
             isOpen={pendingPrimary != null}
             personName={pendingPrimary?.displayName ?? "this person"}
+            currentPrimaryName={currentPrimaryName}
+            scopeLabels={["Household account"]}
             isLoading={savingPersonId != null}
             onClose={() => {
                 if (savingPersonId) return;

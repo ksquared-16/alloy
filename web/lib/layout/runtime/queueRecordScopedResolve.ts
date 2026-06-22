@@ -286,6 +286,8 @@ export function scopeAllowsFieldKey(scope: QueueRecordScope, fieldKey: string): 
         return (
             /status|attention|next_step|stage|tour|lifecycle|work_unit|queue_row/.test(fieldKey)
             || fieldKey.startsWith("opportunity.")
+            || fieldKey.startsWith("waitlist.")
+            || fieldKey.startsWith("overrides.")
         );
     }
     if (scope.type === "main_record") {

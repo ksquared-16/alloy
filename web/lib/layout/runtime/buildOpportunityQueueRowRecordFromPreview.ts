@@ -20,6 +20,7 @@ import { splitQueuePreviewChildPrimaryLabel } from "./splitQueuePreviewChildPrim
 import type { QueueRowLayoutRuntimeEnrichment } from "./queueRowLayoutRuntimeEnrichment";
 import { resolveQueueRecordLayoutConfig } from "./resolveQueueRecordLayoutConfig";
 import type { OpportunityQueueRowWithContext } from "@/lib/workUnits/lifecycleSubjectContracts";
+import { formatWaitlistOverrideFlags } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -257,6 +258,22 @@ function ensureQueueDocRefKeys(record: ProofRuntimeRecord, doc?: LayoutDoc | nul
     return record;
 }
 
+function attachQueueActivityTimelineFields(
+    record: ProofRuntimeRecord,
+    enrichment: QueueRowLayoutRuntimeEnrichment | null,
+): ProofRuntimeRecord {
+    const events = enrichment?.activityTimelineEvents;
+    const out: ProofRuntimeRecord = { ...record };
+    if (events && events.length > 0) {
+        out._activity_timeline_events = events;
+    }
+    const lastAt = enrichment?.lastActivityAt;
+    const lastSummary = enrichment?.lastActivitySummary;
+    if (lastAt) out.last_activity_at = lastAt;
+    if (lastSummary) out.last_activity_summary = lastSummary;
+    return out;
+}
+
 /** Build layout runtime record for one queue preview row. */
 export function buildOpportunityQueueRowRecordFromPreview(
     item: QueuePreviewItemVm,
@@ -267,7 +284,8 @@ export function buildOpportunityQueueRowRecordFromPreview(
     const waitlist = item.placementWaitlistCandidate;
 
     if (waitlist) {
-        return ensureQueueDocRefKeys({
+        const overrideFlags = formatWaitlistOverrideFlags(waitlist);
+        const waitlistRecord = ensureQueueDocRefKeys({
             id: item.id,
             name: pickDisplay(waitlist.familyDisplayName, waitlist.childDisplayName, item.title) ?? "—",
             last_name: parseHouseholdLastName(waitlist.familyDisplayName, item.title),
@@ -279,17 +297,22 @@ export function buildOpportunityQueueRowRecordFromPreview(
             "child.room": "",
             "waitlist.positionLabel": pickDisplay(waitlist.runtimePositionLabel) ?? "",
             "waitlist.tierLabel": pickDisplay(waitlist.bucketLabel) ?? "",
+            "waitlist.priorityLabel": pickDisplay(waitlist.bucketLabel) ?? "",
             "waitlist.waitSince": pickDisplay(waitlist.waitSinceLabel) ?? "",
             "waitlist.siblingContext": pickDisplay(waitlist.siblingLabel, waitlist.siblingContextLines?.[0]) ?? "",
-            "overrides.flags": waitlist.hasActiveOverride ? "Override active" : "",
+            "overrides.flags": overrideFlags,
+            "overrides.reason": pickDisplay(waitlist.manualAdjustmentReason) ?? "",
+            _placement_waitlist_override_kinds: waitlist.activeOverrideKinds,
             status_key: pickDisplay(waitlist.bucketLabel) ?? "",
             _status_display: pickDisplay(waitlist.bucketLabel) ?? "",
             "opportunity.status_key": pickDisplay(waitlist.bucketLabel) ?? "",
             "opportunity.location": pickDisplay(waitlist.cohortSectionTitle, waitlist.cohortLabel) ?? "",
             "person.primary_contact_name": pickDisplay(waitlist.parentDisplayName, waitlist.familyDisplayName) ?? "",
+            "opportunity.id": waitlist.opportunityId,
             children: [],
             enrollment_children: [],
         }, doc);
+        return attachQueueActivityTimelineFields(waitlistRecord, enrichment);
     }
 
     const householdName = pickDisplay(enrichment?.customerName, crm?.primaryIdentity, item.title) ?? "—";
@@ -378,5 +401,5 @@ export function buildOpportunityQueueRowRecordFromPreview(
     const finalized = doc
         ? ensureQueueRecordLayoutFieldKeys(withContext, resolveQueueRecordLayoutConfig(doc))
         : withContext;
-    return suppressDuplicateQueueRowSubjectOnRecord(finalized);
+    return suppressDuplicateQueueRowSubjectOnRecord(attachQueueActivityTimelineFields(finalized, enrichment));
 }

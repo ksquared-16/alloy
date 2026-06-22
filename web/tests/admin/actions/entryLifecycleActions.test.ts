@@ -42,6 +42,14 @@ vi.mock("@/lib/admin/actions/createLeadChildOcmPersistence", () => ({
     applyCreateLeadChildParticipation: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("@/lib/admin/actions/applyCreateLeadLayoutRuntimePersistence", () => ({
+    applyCreateLeadLayoutRuntimePersistence: vi.fn().mockResolvedValue({
+        child_scoped_contacts: { links_written: 0, links_skipped_invalid_role: 0, assignment_count: 0 },
+        address: { household: { path: "none", location_id: null }, person: { path: "none", keys_written: [] } },
+        role_contacts: { customer_person_roles: [], opportunity_person_roles: [] },
+    }),
+}));
+
 import { applyCreateLeadChildParticipation } from "@/lib/admin/actions/createLeadChildOcmPersistence";
 import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
 

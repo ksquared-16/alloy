@@ -50,6 +50,14 @@ vi.mock("@/lib/admin/actions/executeCreateLeadHouseholdCommit", () => ({
     applyCreateLeadHouseholdMemberCommit: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/admin/actions/applyCreateLeadLayoutRuntimePersistence", () => ({
+    applyCreateLeadLayoutRuntimePersistence: vi.fn().mockResolvedValue({
+        child_scoped_contacts: { links_written: 0, links_skipped_invalid_role: 0, assignment_count: 0 },
+        address: { household: { path: "none", location_id: null }, person: { path: "none", keys_written: [] } },
+        role_contacts: { customer_person_roles: [], opportunity_person_roles: [] },
+    }),
+}));
+
 const MULTI_MEMBER_PASTE = [
     "Sarah & Rudy Emerson 1222344321 sarah@emerson.net",
     "Children: Jet DOB 2/4/2026 and Chet DOB 10/10/2023",

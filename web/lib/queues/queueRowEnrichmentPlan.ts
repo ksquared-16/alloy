@@ -14,6 +14,8 @@ export type QueueRowBatchFetchPlan = {
     tourBookings: boolean;
     ocmDesiredStart: boolean;
     openTasks: boolean;
+    /** Recent workflow_events for compact activity_timeline on layout-runtime queue rows. */
+    activityTimelineEvents: boolean;
 };
 
 export type QueueRowEnrichmentPlan = {
@@ -94,12 +96,14 @@ export function buildQueueRowEnrichmentPlan(input: BuildQueueRowEnrichmentPlanIn
             wantsHousehold ||
             (layoutRuntime && relationFetch.customerMembers),
         openTasks: wantsTasksBatch(input, fields),
+        activityTimelineEvents: layoutRuntime || input.enrichmentMode === "full",
     };
 
     if (!batchFetch.locations) skippedEnrichment.push("locations");
     if (!batchFetch.tourBookings) skippedEnrichment.push("tour_bookings");
     if (!batchFetch.ocmDesiredStart) skippedEnrichment.push("ocm_desired_start");
     if (!batchFetch.openTasks) skippedEnrichment.push("open_tasks");
+    if (!batchFetch.activityTimelineEvents) skippedEnrichment.push("activity_timeline_events");
 
     // Layout-runtime rows read queue_row.* from context; legacy CRM rows use flat fields only.
     const attachCaseGrainRowContext = input.enrichmentMode !== "queue_reveal" || layoutRuntime;
@@ -127,6 +131,7 @@ export function enrichmentQueriesRunFromPlan(plan: QueueRowEnrichmentPlan): stri
     if (plan.batchFetch.tourBookings) queries.push("tour_bookings");
     if (plan.batchFetch.ocmDesiredStart) queries.push("ocm_desired_start");
     if (plan.batchFetch.openTasks) queries.push("open_tasks");
+    if (plan.batchFetch.activityTimelineEvents) queries.push("activity_timeline_events");
     if (plan.attachCaseGrainRowContext) queries.push("queue_row_context");
     return queries;
 }

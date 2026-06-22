@@ -155,6 +155,7 @@ describe("lead primary contact reassignment", () => {
         );
         expect(widget).toContain("patchLeadHouseholdPrimaryContact");
         expect(widget).toContain("LeadHouseholdPrimaryContactConfirmModal");
+        expect(widget).toContain("currentPrimaryName");
 
         const cards = readFileSync(
             join(process.cwd(), "components/layout/DrawerHouseholdContactCardList.tsx"),
@@ -165,6 +166,12 @@ describe("lead primary contact reassignment", () => {
 
         const patch = readFileSync(join(process.cwd(), "lib/admin/person/patchHouseholdPrimaryContact.ts"), "utf8");
         expect(patch).toContain("/household-primary-contact");
+
+        const ebAction = readFileSync(
+            join(process.cwd(), "lib/admin/actions/makePrimaryContactAction.ts"),
+            "utf8"
+        );
+        expect(ebAction).toContain("make_primary_contact");
     });
 
     it("person drawer UI wires make-primary confirmation and existing PATCH route", () => {

@@ -3,15 +3,19 @@
 type Props = {
     isOpen: boolean;
     personName: string;
+    currentPrimaryName?: string | null;
+    scopeLabels?: string[];
     isLoading?: boolean;
     onClose: () => void;
     onConfirm: () => void | Promise<void>;
 };
 
-/** Lightweight confirmation before reassigning household primary contact on a lead. */
+/** Confirmation before reassigning household primary contact — shows current vs new and affected scope. */
 export default function LeadHouseholdPrimaryContactConfirmModal({
     isOpen,
     personName,
+    currentPrimaryName,
+    scopeLabels,
     isLoading = false,
     onClose,
     onConfirm,
@@ -21,6 +25,8 @@ export default function LeadHouseholdPrimaryContactConfirmModal({
     const handleConfirm = () => {
         void Promise.resolve(onConfirm()).catch(() => {});
     };
+
+    const scopes = (scopeLabels ?? []).filter(Boolean);
 
     return (
         <div
@@ -37,9 +43,31 @@ export default function LeadHouseholdPrimaryContactConfirmModal({
                 <h3 id="lead-primary-contact-modal-title" className="mb-2 text-base font-semibold text-alloy-midnight">
                     Change primary contact?
                 </h3>
-                <p className="mb-4 text-sm text-alloy-midnight/80">
-                    Make <strong>{personName || "this person"}</strong> the primary contact for this family?
-                </p>
+                <div className="mb-4 space-y-2 text-sm text-alloy-midnight/80">
+                    {currentPrimaryName ?
+                        <p>
+                            <span className="text-alloy-midnight/60">Current primary:</span>{" "}
+                            <strong>{currentPrimaryName}</strong>
+                        </p>
+                    :   null}
+                    <p>
+                        <span className="text-alloy-midnight/60">New primary:</span>{" "}
+                        <strong>{personName || "this person"}</strong>
+                    </p>
+                    {scopes.length > 0 ?
+                        <div>
+                            <p className="text-alloy-midnight/60">Affected scope:</p>
+                            <ul className="mt-1 list-inside list-disc">
+                                {scopes.map((scope) => (
+                                    <li key={scope}>{scope}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    :   null}
+                    <p className="text-alloy-midnight/70">
+                        The previous primary contact will remain linked as an additional household contact.
+                    </p>
+                </div>
                 <div className="flex justify-end gap-2">
                     <button
                         type="button"

@@ -76,7 +76,7 @@ export type ScopedRelationshipContactGroup = {
 const WIDGET_DEFAULTS: Record<RelationshipWidgetKey, LayoutRuntimeRelationshipWidgetConfig> = {
     guardians_for_child: {
         scope: "child",
-        roleTypes: ["parent", "guardian", "primary_contact", "primary"],
+        roleTypes: ["parent", "guardian", "primary_contact", "primary", "secondary_guardian", "secondary"],
         includeHouseholdFallback: true,
         excludeActiveRecord: true,
         maxItems: 12,
@@ -273,6 +273,15 @@ function readChildScopedLinks(record: ProofRuntimeRecord): ChildScopedContactLin
     return Array.isArray(raw) ? (raw as ChildScopedContactLinkRow[]) : [];
 }
 
+/** When true, household fallback must not mask a failed scoped-links query. */
+export function childScopedContactLinksQueryFailed(record: ProofRuntimeRecord): boolean {
+    return record._child_scoped_contact_links_query_failed === true;
+}
+
+function mayUseHouseholdFallback(record: ProofRuntimeRecord, config: LayoutRuntimeRelationshipWidgetConfig): boolean {
+    return config.includeHouseholdFallback && !childScopedContactLinksQueryFailed(record);
+}
+
 function readHouseholdAdultLinks(record: ProofRuntimeRecord): PersonHouseholdAdultLinkRow[] {
     const raw = record._household_adult_links;
     return Array.isArray(raw) ? (raw as PersonHouseholdAdultLinkRow[]) : [];
@@ -354,7 +363,7 @@ export function resolveLayoutRuntimeScopedRelationshipContacts(
     );
 
     let rows = scoped;
-    if (rows.length === 0 && config.includeHouseholdFallback) {
+    if (rows.length === 0 && mayUseHouseholdFallback(record, config)) {
         rows = householdFallbackContacts(record, widgetKey, config, viewingPersonId);
     }
 
@@ -475,7 +484,7 @@ export function resolveLayoutRuntimeOpportunityRelationshipContactGroups(
             }));
 
         let contacts: ScopedRelationshipContactRow[] = childScoped;
-        if (contacts.length === 0 && config.includeHouseholdFallback && children.length === 1) {
+        if (contacts.length === 0 && mayUseHouseholdFallback(record, config) && children.length === 1) {
             contacts = householdFallbackContacts(record, widgetKey, config, null).map((row) => ({
                 ...row,
                 child_display_name: child.display_name,

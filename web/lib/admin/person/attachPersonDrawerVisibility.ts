@@ -9,7 +9,9 @@ import {
     resolvePersonDrawerChildDateOfBirth,
 } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import { filterPersonDrawerHouseholdVisibilityBySiteScope } from "@/lib/admin/person/personDrawerHouseholdSiteScope";
-import { fetchChildScopedContactLinksForMembers } from "@/lib/admin/person/fetchChildScopedContactLinks";
+import {
+    attachChildScopedContactLinksToRecord,
+} from "@/lib/admin/person/fetchChildScopedContactLinks";
 import { viewingPersonHouseholdDisplayName } from "@/lib/admin/person/resolvePersonDrawerHouseholdModel";
 import type {
     PersonEnrollmentMirrorRow,
@@ -611,16 +613,14 @@ export async function attachPersonDrawerVisibility(
             ...new Map(childMemberRowsForScopedContacts.map((row) => [row.id, row])).values(),
         ];
         if (dedupedMemberRows.length > 0) {
-            out._child_scoped_contact_links = await fetchChildScopedContactLinksForMembers(
-                supabase,
-                orgId,
-                dedupedMemberRows,
-            );
+            await attachChildScopedContactLinksToRecord(supabase, orgId, dedupedMemberRows, out);
         } else {
             out._child_scoped_contact_links = [];
+            out._child_scoped_contact_links_query_failed = false;
         }
     } else {
         out._child_scoped_contact_links = [];
+        out._child_scoped_contact_links_query_failed = false;
     }
 
     filterPersonDrawerHouseholdVisibilityBySiteScope(out, options?.siteScope ?? null);

@@ -3,6 +3,8 @@ export const PERSON_DRAWER_HOUSEHOLD_PARENT_GUARDIAN_ROLES = new Set([
     "primary_contact",
     "primary",
     "guardian",
+    "secondary_guardian",
+    "secondary",
 ]);
 export const PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES = new Set(["emergency_contact", "emergency"]);
 export const PERSON_DRAWER_HOUSEHOLD_PICKUP_ROLES = new Set(["authorized_pickup", "pickup"]);
@@ -25,5 +27,6 @@ export function guardianRolePrecedence(roleType: string | null): number {
     if (role === "primary_contact" || role === "primary") return 0;
     if (role === "parent") return 1;
     if (role === "guardian") return 2;
-    return 3;
+    if (role === "secondary_guardian" || role === "secondary") return 3;
+    return 4;
 }
