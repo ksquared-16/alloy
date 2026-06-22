@@ -16,13 +16,11 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Archive, Link2, Copy, ExternalLink } from "lucide-react";
+import { Plus, Archive } from "lucide-react";
 import { safeParseFormSchema, type FormField, type FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer } from "@/components/forms/engine/FormEngineRenderer";
 import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeader";
-import type { RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
-import RecordLaunchPicker from "./RecordLaunchPicker";
 import PosPanel from "./PosPanel";
 
 interface FormRow {
@@ -69,13 +67,6 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
     const [mode, setMode] = useState<"build" | "preview">("build");
     const [archiving, setArchiving] = useState(false);
-    // Sprint 1 — Packet Runtime Foundation: turn this template into a parent packet + share link.
-    const [packetBusy, setPacketBusy] = useState(false);
-    const [packetResult, setPacketResult] = useState<{ url: string; alreadyPublished: boolean } | null>(null);
-    const [packetErr, setPacketErr] = useState<string | null>(null);
-    const [copied, setCopied] = useState(false);
-    // Launch from an existing record so the parent sees known info prefilled (optional).
-    const [launch, setLaunch] = useState<RecordPickerOption | null>(null);
 
     const loadForms = useCallback(async () => {
         setListErr(null);
@@ -100,10 +91,6 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
         setMode("build");
         setSchema(null);
         setSchemaState("loading");
-        setPacketResult(null);
-        setPacketErr(null);
-        setCopied(false);
-        setLaunch(null);
         try {
             const res = await fetch(`/api/admin/forms/${formId}`, { credentials: "same-origin" });
             if (!res.ok) throw new Error(`Request failed (${res.status})`);
@@ -167,41 +154,6 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
             }
         },
         [selectedFormId, loadForms]
-    );
-
-    // Sprint 1 — create a parent packet (single step) + share link from this template.
-    const createParentPacket = useCallback(
-        async (formId: string) => {
-            setPacketBusy(true);
-            setPacketErr(null);
-            setPacketResult(null);
-            setCopied(false);
-            try {
-                const res = await fetch("/api/admin/pos/packets/from-template", {
-                    method: "POST",
-                    credentials: "same-origin",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        form_definition_id: formId,
-                        ...(launch ? { launch_from_entity: { entity_type: launch.entity_type, entity_id: launch.entity_id } } : {}),
-                    }),
-                });
-                const b = (await res.json().catch(() => ({}))) as {
-                    data?: { public_link?: { url?: string }; already_published?: boolean };
-                    error?: string;
-                };
-                if (!res.ok) throw new Error(b.error || `Request failed (${res.status})`);
-                const url = b.data?.public_link?.url;
-                if (!url) throw new Error("Packet created but no share link was returned");
-                setPacketResult({ url, alreadyPublished: Boolean(b.data?.already_published) });
-                await loadForms();
-            } catch (e) {
-                setPacketErr(e instanceof Error ? e.message : "Failed to create parent packet");
-            } finally {
-                setPacketBusy(false);
-            }
-        },
-        [loadForms, launch]
     );
 
     const fieldById = useMemo(() => {
@@ -315,16 +267,6 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                                     </div>
                                     <button
                                         type="button"
-                                        disabled={packetBusy}
-                                        onClick={() => void createParentPacket(selectedForm.id)}
-                                        title="Create a parent packet (single step) and a shareable parent link from this template"
-                                        className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50/60 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 disabled:opacity-50"
-                                    >
-                                        <Link2 className="h-3.5 w-3.5" aria-hidden />
-                                        {packetBusy ? "Creating…" : "Create parent packet"}
-                                    </button>
-                                    <button
-                                        type="button"
                                         disabled={archiving}
                                         onClick={() => void archiveForm(selectedForm.id)}
                                         title={selectedForm.has_published_version ? "Archive — deactivates share links" : "Archive this draft form"}
@@ -335,47 +277,6 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                                     </button>
                                 </div>
                             </div>
-                            <RecordLaunchPicker value={launch} onChange={setLaunch} />
-                            {packetErr ? (
-                                <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">{packetErr}</div>
-                            ) : packetResult ? (
-                                <div className="shrink-0 border-b border-emerald-200 bg-emerald-50/70 px-3 py-2">
-                                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800">
-                                        <Link2 className="h-3.5 w-3.5" aria-hidden /> Parent packet ready
-                                        {!packetResult.alreadyPublished ? (
-                                            <span className="rounded bg-emerald-100 px-1 text-[9px] font-medium text-emerald-700">Form published</span>
-                                        ) : null}
-                                    </div>
-                                    <div className="mt-1 flex items-center gap-2">
-                                        <input
-                                            readOnly
-                                            value={packetResult.url}
-                                            onFocus={(e) => e.currentTarget.select()}
-                                            className="min-w-0 flex-1 truncate rounded border border-emerald-200 bg-white px-2 py-1 font-mono text-[10.5px] text-stone-700"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                void navigator.clipboard?.writeText(packetResult.url).then(
-                                                    () => setCopied(true),
-                                                    () => setCopied(false)
-                                                );
-                                            }}
-                                            className="inline-flex shrink-0 items-center gap-1 rounded border border-emerald-200 bg-white px-2 py-1 text-[10.5px] font-medium text-emerald-700 hover:bg-emerald-50"
-                                        >
-                                            <Copy className="h-3 w-3" aria-hidden /> {copied ? "Copied" : "Copy"}
-                                        </button>
-                                        <a
-                                            href={packetResult.url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex shrink-0 items-center gap-1 rounded border border-emerald-200 bg-white px-2 py-1 text-[10.5px] font-medium text-emerald-700 hover:bg-emerald-50"
-                                        >
-                                            <ExternalLink className="h-3 w-3" aria-hidden /> Open
-                                        </a>
-                                    </div>
-                                </div>
-                            ) : null}
                             <div className="min-h-0 flex-1 overflow-y-auto p-3">
                                 {schemaState === "loading" ? (
                                     <div className="space-y-2">
