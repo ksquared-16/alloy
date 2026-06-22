@@ -65,6 +65,7 @@ function fieldItem(
     renderHint: LayoutRenderHint = "text",
     visibleWhen?: LayoutCondition,
     adornment?: LayoutFieldAdornment,
+    editable?: boolean,
 ): LayoutItem {
     const item: LayoutItem = {
         id: id(base, "f", refKey.replace(/\./g, "_")),
@@ -72,8 +73,8 @@ function fieldItem(
         refKey,
         label,
         renderHint,
-        editable: true,
         sourceEntity: parseRefKey(refKey).entityKey,
+        ...(editable === true ? { editable: true } : {}),
     };
     if (visibleWhen) item.visibleWhen = visibleWhen;
     if (adornment) item.adornment = adornment;

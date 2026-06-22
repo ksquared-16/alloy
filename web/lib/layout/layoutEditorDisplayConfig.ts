@@ -56,6 +56,16 @@ export type LayoutLabelPosition = (typeof LAYOUT_LABEL_POSITIONS)[number];
 export const LAYOUT_ICON_POSITIONS = ["left", "right", "above"] as const;
 export type LayoutIconPosition = (typeof LAYOUT_ICON_POSITIONS)[number];
 
+export const LAYOUT_AGE_FORMATS = ["years", "years_months", "months", "full_text"] as const;
+export type LayoutAgeFormat = (typeof LAYOUT_AGE_FORMATS)[number];
+
+export const LAYOUT_AGE_FORMAT_LABELS: Record<LayoutAgeFormat, string> = {
+    years: "Years only (2y)",
+    years_months: "Years + months (2y 4m)",
+    months: "Months only (28m)",
+    full_text: "Full text (2 years 4 months)",
+};
+
 export const LAYOUT_DATE_FORMATS = ["short", "medium", "long", "relative"] as const;
 export type LayoutDateFormat = (typeof LAYOUT_DATE_FORMATS)[number];
 
@@ -95,6 +105,8 @@ export type LayoutEditorDisplayConfig = {
     dateFormat?: LayoutDateFormat;
     currencyFormat?: LayoutCurrencyFormat;
     statusFormat?: LayoutStatusFormat;
+    /** Computed age display when refKey is child.dob_age (derived from DOB at runtime). */
+    ageFormat?: LayoutAgeFormat;
 };
 
 const DISPLAY_TYPE_TO_RENDER_HINT: Partial<Record<LayoutEditorDisplayType, LayoutRenderHint>> = {
@@ -135,6 +147,7 @@ export function readLayoutEditorDisplayConfig(source: {
     if (typeof bag.dateFormat === "string" && isDateFormat(bag.dateFormat)) out.dateFormat = bag.dateFormat;
     if (typeof bag.currencyFormat === "string" && isCurrencyFormat(bag.currencyFormat)) out.currencyFormat = bag.currencyFormat;
     if (typeof bag.statusFormat === "string" && isStatusFormat(bag.statusFormat)) out.statusFormat = bag.statusFormat;
+    if (typeof bag.ageFormat === "string" && isAgeFormat(bag.ageFormat)) out.ageFormat = bag.ageFormat;
     return out;
 }
 
@@ -160,6 +173,7 @@ export function writeLayoutEditorDisplayConfig(
     if (merged.dateFormat) cleaned.dateFormat = merged.dateFormat;
     if (merged.currencyFormat) cleaned.currencyFormat = merged.currencyFormat;
     if (merged.statusFormat) cleaned.statusFormat = merged.statusFormat;
+    if (merged.ageFormat) cleaned.ageFormat = merged.ageFormat;
     if (Object.keys(cleaned).length === 0) {
         delete next[LAYOUT_EDITOR_DISPLAY_METADATA_KEY];
     } else {
@@ -442,6 +456,10 @@ function isCurrencyFormat(v: string): v is LayoutCurrencyFormat {
 
 function isStatusFormat(v: string): v is LayoutStatusFormat {
     return (LAYOUT_STATUS_FORMATS as readonly string[]).includes(v);
+}
+
+function isAgeFormat(v: string): v is LayoutAgeFormat {
+    return (LAYOUT_AGE_FORMATS as readonly string[]).includes(v);
 }
 
 export function isLayoutRenderHintValue(v: unknown): boolean {

@@ -5,11 +5,12 @@
 import { addItem, makeId, patchSection } from "@/lib/layout/builderOps";
 import {
     LAYOUT_EDITOR_BLOCK_CONFIG_METADATA_KEY,
+    readLayoutEditorBlockConfig,
     writeLayoutEditorBlockConfig,
     type LayoutEditorChildRowGroup,
 } from "@/lib/layout/layoutEditorBlockConfig";
 import { LAYOUT_EDITOR_BLOCK_TEMPLATE_METADATA_KEY } from "@/lib/layout/layoutEditorBlockRegistry";
-import { writeLayoutEditorRowTemplateConfig, DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG } from "@/lib/layout/layoutEditorRowTemplateConfig";
+import { readLayoutEditorRowTemplateConfig, writeLayoutEditorRowTemplateConfig } from "@/lib/layout/layoutEditorRowTemplateConfig";
 import type { LayoutCollectionColumn, LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { relatedListPresentationToDisplayMode } from "@/lib/layout/runtime/resolveLayoutRuntimeRelatedListPresentation";
 import { isAllowedOpportunityDrawerFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
@@ -241,7 +242,10 @@ function writeRelatedListConfigOnItem(
     config: LayoutEditorRelatedListConfig,
     childRowGroups: LayoutEditorChildRowGroup[],
     dataContext: "child" | "contact" | "lead",
+    existingMetadata?: Record<string, unknown>,
 ): Record<string, unknown> {
+    const rowTemplate = readLayoutEditorRowTemplateConfig(existingMetadata);
+    const prevBlock = readLayoutEditorBlockConfig(existingMetadata);
     return {
         [LAYOUT_EDITOR_BLOCK_TEMPLATE_METADATA_KEY]: "child_row_template",
         [LAYOUT_EDITOR_RELATED_LIST_CONFIG_METADATA_KEY]: {
@@ -251,8 +255,9 @@ function writeRelatedListConfigOnItem(
             ...(config.secondaryRow ? { secondaryRow: config.secondaryRow } : {}),
             ...(config.tertiaryRow ? { tertiaryRow: config.tertiaryRow } : {}),
         },
-        ...writeLayoutEditorRowTemplateConfig(undefined, DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG),
-        ...writeLayoutEditorBlockConfig(undefined, {
+        ...writeLayoutEditorRowTemplateConfig(existingMetadata, rowTemplate),
+        ...writeLayoutEditorBlockConfig(existingMetadata, {
+            ...prevBlock,
             blockType: "child_row_template",
             dataContext,
             childRowGroups,
@@ -325,7 +330,7 @@ export function syncRelatedListSectionToItem(doc: LayoutDoc, sectionKey: string)
         config.entityType === "children" ? "child"
         : config.entityType === "contacts" || config.entityType === "household_members" ? "contact"
         :   "lead";
-    item.metadata = writeRelatedListConfigOnItem(config, childRowGroups, dataContext);
+    item.metadata = writeRelatedListConfigOnItem(config, childRowGroups, dataContext, existing.item.metadata);
 
     const row = nextSection.rows[existing.rIdx]!;
     const col = row.columns[existing.cIdx]!;

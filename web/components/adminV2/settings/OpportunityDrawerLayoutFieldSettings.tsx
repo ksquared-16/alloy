@@ -3,6 +3,8 @@
 import { LAYOUT_ADORNMENT_ICONS } from "@/lib/layout/layoutV2";
 import {
     LAYOUT_EDITOR_DISPLAY_TYPES,
+    LAYOUT_AGE_FORMATS,
+    LAYOUT_AGE_FORMAT_LABELS,
     LAYOUT_DATE_FORMATS,
     LAYOUT_ICON_POSITIONS,
     LAYOUT_LABEL_POSITIONS,
@@ -129,6 +131,26 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                         {LAYOUT_DATE_FORMATS.map((format) => (
                             <option key={format} value={format}>
                                 {format}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            :   null}
+
+            {node.refKey === "child.dob_age" || node.refKey.endsWith(".dob_age") ?
+                <label className="mt-2 block text-[11px] text-alloy-midnight/60">
+                    Age format
+                    <select
+                        value={display.ageFormat ?? "years_months"}
+                        onChange={(e) =>
+                            onChange({ display: { ageFormat: e.target.value as LayoutEditorDisplayConfig["ageFormat"] } })
+                        }
+                        className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                        data-testid="visual-editor-field-age-format"
+                    >
+                        {LAYOUT_AGE_FORMATS.map((format) => (
+                            <option key={format} value={format}>
+                                {LAYOUT_AGE_FORMAT_LABELS[format]}
                             </option>
                         ))}
                     </select>

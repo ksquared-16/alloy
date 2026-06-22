@@ -11,6 +11,31 @@ function parseIsoDateOnly(value: string): { year: number; month: number; day: nu
     return { year, month, day };
 }
 
+export function formatAgePartsDisplay(
+    years: number,
+    months: number,
+    format: "years" | "years_months" | "months" | "full_text" = "years_months",
+): string {
+    const totalMonths = years * 12 + months;
+    switch (format) {
+        case "years":
+            return years < 1 ? `${totalMonths}m` : `${years}y`;
+        case "months":
+            return `${totalMonths}m`;
+        case "full_text":
+            if (years < 1) return months === 1 ? "1 month" : `${months} months`;
+            {
+                const yPart = years === 1 ? "1 year" : `${years} years`;
+                const mPart = months === 1 ? "1 month" : months > 0 ? `${months} months` : "";
+                return mPart ? `${yPart} ${mPart}` : yPart;
+            }
+        case "years_months":
+        default:
+            if (years < 1) return `${totalMonths}m`;
+            return months > 0 ? `${years}y ${months}m` : `${years}y`;
+    }
+}
+
 function formatAgeYearsMonthsDisplay(years: number, months: number): string {
     if (years < 1) {
         return months === 1 ? "1 mo" : `${months} mos`;
@@ -59,6 +84,17 @@ export function deriveAgeFromDateOfBirth(
         display: formatAgeYearsMonthsDisplay(value.years, value.months),
         source_value: trimmed,
     };
+}
+
+/** Format age from ISO date-of-birth using operator layout age format. */
+export function formatAgeFromDateOfBirthIso(
+    dobIso: string,
+    format: "years" | "years_months" | "months" | "full_text" = "years_months",
+    asOfDate: Date = new Date(),
+): string | null {
+    const derived = deriveAgeFromDateOfBirth(dobIso, asOfDate);
+    if (!derived?.value) return null;
+    return formatAgePartsDisplay(derived.value.years, derived.value.months, format);
 }
 
 /** @deprecated Prefer deriveAgeFromDateOfBirth — intake alias retained for transitional imports. */

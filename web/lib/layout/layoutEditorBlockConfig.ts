@@ -145,17 +145,20 @@ function layoutItemHasEditableDescendants(item: LayoutItem): boolean {
     return false;
 }
 
-/** Runtime edit affordance — inline-editable descendants win over default display_only block metadata. */
+/** Runtime edit affordance — derived only from field/column editable: true descendants. */
 export function resolveLayoutRuntimeBlockEditMode(
     item: LayoutItem,
-    blockConfig: LayoutEditorBlockConfig,
+    _blockConfig: LayoutEditorBlockConfig,
 ): LayoutEditorBlockEditMode {
-    const hasEditableDescendants = layoutItemHasEditableDescendants(item);
-    if (!hasEditableDescendants) return "display_only";
-    if (blockConfig.editMode === "inline_editable" || blockConfig.editMode === "edit_button") {
-        return blockConfig.editMode;
+    return layoutItemHasEditableDescendants(item) ? "edit_button" : "display_only";
+}
+
+/** Whether a flat list of layout items contains at least one inline-editable field/column. */
+export function resolveLayoutRuntimeItemsEditMode(items: LayoutItem[]): LayoutEditorBlockEditMode {
+    for (const item of items) {
+        if (layoutItemHasEditableDescendants(item)) return "edit_button";
     }
-    return "edit_button";
+    return "display_only";
 }
 
 export function readLayoutEditorBlockConfig(metadata: Record<string, unknown> | undefined): LayoutEditorBlockConfig {

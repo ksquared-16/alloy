@@ -30,7 +30,7 @@ import {
     resolveLayoutCollectionColumnShowIcon,
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
-import { readLayoutEditorBlockConfig, resolveLayoutRuntimeBlockEditMode } from "@/lib/layout/layoutEditorBlockConfig";
+import { readLayoutEditorBlockConfig, resolveLayoutRuntimeBlockEditMode, resolveLayoutRuntimeItemsEditMode } from "@/lib/layout/layoutEditorBlockConfig";
 import { readLayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
     overlayLayoutEditorContactBlockRecord,
@@ -53,13 +53,13 @@ import {
     type LayoutEditorWidgetRuntimeTone,
     type LeadOperatingCardAccentInput,
 } from "@/lib/layout/layoutEditorWidgetStyle";
-import {
-    formatLayoutEditorFieldDateValue,
+import { formatLayoutEditorFieldDateValue,
     isLayoutEditorInlineFieldLabel,
     layoutEditorStatusFormatClass,
     shouldShowLayoutEditorFieldIcon,
     shouldShowLayoutEditorFieldLabel,
 } from "@/lib/layout/runtime/applyLayoutEditorFieldDisplay";
+import { formatLayoutRuntimeAgeRefKeyDisplay } from "@/lib/layout/runtime/formatLayoutRuntimeAgeDisplay";
 import { readCardWidthFraction } from "@/lib/layout/layoutBuilderCardWidth";
 import { sectionIsKpiTile } from "@/lib/layout/runtime/layoutRuntimeKpiTilePresentation";
 import { readLayoutEditorRelatedListConfigFromItem } from "@/lib/layout/runtime/resolveLayoutRuntimeRelatedListPresentation";
@@ -389,9 +389,14 @@ function ValueCell({
             formatLayoutEditorFieldDateValue(item.refKey ?? "", display, item.renderHint, displayConfig.dateFormat)
         :   display;
     const refKey = item.refKey ?? "";
+    const ageDisplay =
+        (variant === "production" || variant === "preview") ?
+            formatLayoutRuntimeAgeRefKeyDisplay(refKey, record, item)
+        :   null;
+    const resolvedRawDisplay = ageDisplay ?? formattedDisplay;
     const resolvedDisplay = useLayoutRuntimeResolvedDisplayLabel({
         refKey,
-        rawValue: formattedDisplay ?? "",
+        rawValue: resolvedRawDisplay ?? "",
         record,
         renderHint: item.renderHint,
     });
@@ -1899,17 +1904,57 @@ function ItemCell({ record, item, anchorEntity }: { record: ProofRuntimeRecord; 
     }
 }
 
+function columnStandaloneFieldItems(items: LayoutItem[]): LayoutItem[] {
+    return items.filter((item) => item.kind === "field" && item.refKey !== "_template");
+}
+
+function ColumnEditShell({ columnId, children }: { columnId: string; children: ReactNode }) {
+    const drawerEdit = useLayoutRuntimeDrawerEdit();
+    const blockEdit = useLayoutRuntimeBlockEdit();
+    const showEditButton =
+        Boolean(drawerEdit) &&
+        blockEdit &&
+        (blockEdit.editMode === "edit_button" || blockEdit.editMode === "inline_editable");
+    const blockEditToggle =
+        showEditButton && blockEdit ?
+            <LayoutRuntimeBlockEditToggle itemId={columnId} blockEdit={blockEdit} />
+        :   null;
+
+    return (
+        <div className="group/block flex min-w-0 flex-col gap-1">
+            {blockEditToggle ?
+                <div className="flex justify-end">{blockEditToggle}</div>
+            :   null}
+            {children}
+        </div>
+    );
+}
+
 function ColumnView({ record, column, anchorEntity }: { record: ProofRuntimeRecord; column: LayoutColumn; anchorEntity: string }) {
     const summaryCompact = useLayoutRuntimeSummaryStrip() && useLayoutRuntimeCompositionHints().summaryStripCompactRow;
     const span = summaryCompact ? 1 : Math.max(1, Math.min(LAYOUT_GRID_COLUMNS, column.width));
+    const standaloneFields = columnStandaloneFieldItems(column.items);
+    const editMode = resolveLayoutRuntimeItemsEditMode(standaloneFields);
+    const drawerEdit = useLayoutRuntimeDrawerEdit();
+    const needsEditShell = editMode === "edit_button" && standaloneFields.length > 0 && Boolean(drawerEdit);
+
+    const itemCells = column.items.map((item) => (
+        <ItemCell key={item.id} record={record} item={item} anchorEntity={anchorEntity} />
+    ));
+
+    const columnBody =
+        needsEditShell ?
+            <LayoutRuntimeBlockEditProvider editMode={editMode}>
+                <ColumnEditShell columnId={column.id}>{itemCells}</ColumnEditShell>
+            </LayoutRuntimeBlockEditProvider>
+        :   itemCells;
+
     return (
         <div
             style={summaryCompact ? undefined : { gridColumn: `span ${span} / span ${span}` }}
             className="flex min-w-0 flex-col gap-1"
         >
-            {column.items.map((item) => (
-                <ItemCell key={item.id} record={record} item={item} anchorEntity={anchorEntity} />
-            ))}
+            {columnBody}
         </div>
     );
 }

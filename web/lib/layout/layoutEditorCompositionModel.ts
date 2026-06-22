@@ -116,7 +116,7 @@ function columnNode(
         title: col.label || resolveLayoutEditorItemDisplayLabel({ id: col.refKey, kind: "field", refKey: col.refKey }),
         refKey: col.refKey,
         path: { kind: "column", sectionKey, blockItemId, colIdx },
-        displayConfig: readLayoutEditorDisplayConfig({ metadata: undefined, renderHint: col.renderHint, adornment: col.adornment }),
+        displayConfig: readLayoutEditorDisplayConfig(col),
         visibilityRule: resolveVisibilityRuleKey(col.visibleWhen, col.refKey),
         editable: col.editable === true,
     };

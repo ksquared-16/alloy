@@ -31,9 +31,9 @@ export const LAYOUT_EDITOR_ROW_LAYOUT_MODE_LABELS: Record<LayoutEditorRowLayoutM
 };
 
 export const LAYOUT_EDITOR_ROW_ACTION_LABELS: Record<LayoutEditorRowAction, string> = {
-    open_child_drawer: "Open Child Drawer",
-    edit_enrollment: "Edit Enrollment",
-    open_schedule: "Open Schedule",
+    open_child_drawer: "Open child drawer",
+    edit_enrollment: "Show row action: Edit enrollment",
+    open_schedule: "Open schedule (coming later)",
 };
 
 export const DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG: LayoutEditorRowTemplateConfig = {

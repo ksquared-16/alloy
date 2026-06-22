@@ -3,8 +3,6 @@
 import { useState } from "react";
 import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
-    LAYOUT_EDITOR_BLOCK_EDIT_MODES,
-    LAYOUT_EDITOR_BLOCK_EDIT_MODE_LABELS,
     LAYOUT_EDITOR_BLOCK_TYPES,
     LAYOUT_EDITOR_BLOCK_TYPE_LABELS,
     LAYOUT_EDITOR_BLOCK_VISIBILITY_LABELS,
@@ -163,25 +161,13 @@ export default function OpportunityDrawerLayoutBlockSettings({
                         </select>
                     </label>
 
-                    <label className="block text-[11px] text-alloy-midnight/60">
-                        Edit behavior
-                        <select
-                            value={blockConfig.editMode ?? "display_only"}
-                            onChange={(e) =>
-                                onBlockConfigChange({
-                                    editMode: e.target.value as LayoutEditorBlockEditMode,
-                                })
-                            }
-                            className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
-                            data-testid="visual-editor-block-edit-mode"
-                        >
-                            {LAYOUT_EDITOR_BLOCK_EDIT_MODES.map((mode) => (
-                                <option key={mode} value={mode}>
-                                    {LAYOUT_EDITOR_BLOCK_EDIT_MODE_LABELS[mode]}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
+                    <p
+                        className="text-[11px] leading-relaxed text-alloy-midnight/60"
+                        data-testid="visual-editor-block-edit-hint"
+                    >
+                        Inline edit is configured per field. Open a field in this block and enable &quot;Inline editable in
+                        live drawer&quot; — the Edit button appears only when at least one field supports saving.
+                    </p>
                 </div>
             :   null}
 
@@ -477,21 +463,6 @@ export function OpportunityDrawerLayoutCreateBlockForm({
                     data-testid="visual-editor-create-block-show-title"
                 />
                 Show block title
-            </label>
-            <label className="block text-[11px] text-alloy-midnight/60">
-                Edit behavior
-                <select
-                    value={editMode}
-                    onChange={(e) => setEditMode(e.target.value as LayoutEditorBlockEditMode)}
-                    className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
-                    data-testid="visual-editor-create-block-edit-mode"
-                >
-                    {LAYOUT_EDITOR_BLOCK_EDIT_MODES.map((mode) => (
-                        <option key={mode} value={mode}>
-                            {LAYOUT_EDITOR_BLOCK_EDIT_MODE_LABELS[mode]}
-                        </option>
-                    ))}
-                </select>
             </label>
             <div className="flex gap-2 pt-1">
                 <button

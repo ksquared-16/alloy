@@ -1,7 +1,7 @@
 import type { LayoutCollectionColumn } from "@/lib/layout/layoutV2";
-import {
-    formatLayoutRuntimeOperatorDateIfRefKey,
+import { formatLayoutRuntimeOperatorDateIfRefKey,
 } from "@/lib/layout/runtime/formatLayoutRuntimeOperatorDate";
+import { formatLayoutRuntimeAgeRefKeyDisplay } from "@/lib/layout/runtime/formatLayoutRuntimeAgeDisplay";
 import { formatLayoutRuntimeStatusLabel } from "@/lib/layout/runtime/formatLayoutRuntimeStatusLabel";
 import { resolveLayoutRuntimeRepeaterFieldValue } from "@/lib/layout/runtime/resolveLayoutRuntimeRepeaterFieldValue";
 import { resolveLayoutRuntimeFieldDisplayLabel } from "@/lib/layout/runtime/resolveLayoutRuntimeFieldDisplayLabel";
@@ -18,6 +18,8 @@ export function formatLayoutRuntimeRepeaterColumnDisplay(
         template: col.template,
     });
     if (r.isPlaceholder) {
+        const ageOnly = formatLayoutRuntimeAgeRefKeyDisplay(col.refKey, row, col);
+        if (ageOnly) return ageOnly;
         const fallback = resolveLayoutRuntimeFieldDisplayLabel({
             refKey: col.refKey,
             rawValue: "—",
@@ -31,6 +33,8 @@ export function formatLayoutRuntimeRepeaterColumnDisplay(
         return "—";
     }
     let raw = r.display ?? "—";
+    const ageDisplay = formatLayoutRuntimeAgeRefKeyDisplay(col.refKey, row, col);
+    if (ageDisplay) return ageDisplay;
     if (raw !== "—") {
         raw = resolveLayoutRuntimeFieldDisplayLabel({
             refKey: col.refKey,
