@@ -52,7 +52,7 @@ import { scheduleDeferredCommunicationsDrawerPrefetch } from "@/lib/admin/commun
 import { prefetchLinkedPersonsFromOpportunityRecord } from "@/lib/admin/drawer/prefetchLinkedPersonsFromOpportunityRecord";
 import { scheduleOpportunityDrawerTabPrefetch } from "@/lib/admin/opportunityDrawerTabPrefetch";
 import { scheduleAdminV2BackgroundWork } from "@/lib/workspace/adminV2DeferBackgroundWork";
-import { opportunityDisplayLocationFromRecord } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
+import { opportunityDisplayLocationLabel } from "@/lib/opportunities/resolveOpportunityDisplayLocation";
 import { drawerSubjectContextDiagnosticAttrs } from "@/lib/workUnits/buildDrawerSubjectContextFromQueueRowContext";
 import { useBosOpportunityDrawerContextSeed } from "@/lib/adminV2/bos/useBosDrawerOperationalContextSeed";
 import { DrawerCommandRailActionsRegistrar } from "@/app/adminV2/components/workspace/DrawerCommandRailActionsRegistrar";
@@ -622,9 +622,7 @@ export default function OpportunityDrawerVmRuntime() {
 
     const locationLabel = useMemo(() => {
         if (!record) return null;
-        const location = opportunityDisplayLocationFromRecord(record);
-        if (location.kind === "single" || location.kind === "multiple") return location.label;
-        return null;
+        return opportunityDisplayLocationLabel(record);
     }, [record]);
 
     const drawerSubjectShellAttrs = useMemo(

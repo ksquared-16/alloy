@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
     resolveLayoutEditorWidgetToneIconClass,
     resolveLayoutEditorWidgetToneRailClass,
+    resolveLayoutEditorWidgetToneTitleClass,
     type LayoutEditorWidgetRuntimeTone,
 } from "@/lib/layout/layoutEditorWidgetStyle";
 import {
@@ -87,7 +88,7 @@ export default function DrawerOverviewPanelShell({
                         {eyebrow ?
                             <p className={PRESENTATION_SECTION_EYEBROW}>{eyebrow}</p>
                         :   null}
-                        <h3 className={`truncate ${PRESENTATION_SECTION_HEADER}`}>{title}</h3>
+                        <h3 className={`truncate ${PRESENTATION_SECTION_HEADER} ${tone ? resolveLayoutEditorWidgetToneTitleClass(tone) : ""}`}>{title}</h3>
                     </div>
                 </div>
             </header>

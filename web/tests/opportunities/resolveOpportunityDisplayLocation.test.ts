@@ -98,7 +98,7 @@ describe("resolveOpportunityDisplayLocation", () => {
         });
         expect(resolved.kind).toBe("multiple");
         if (resolved.kind !== "multiple") return;
-        expect(resolved.label).toBe(OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL);
+        expect(resolved.label).toBe("2 locations");
         expect(resolved.locations).toHaveLength(2);
     });
 
@@ -118,7 +118,7 @@ describe("resolveOpportunityDisplayLocation", () => {
 });
 
 describe("opportunityDisplayLocationFromRecord", () => {
-    it("prefers inquiry child locations over opportunity location_id", () => {
+    it("prefers native opportunity location over inquiry child aggregate for header label", () => {
         const label = opportunityDisplayLocationLabel({
             location_id: "site-opp",
             _location_label: "Opportunity Site",
@@ -127,11 +127,11 @@ describe("opportunityDisplayLocationFromRecord", () => {
                 { location_id: "site-b", location_label: "South" },
             ],
         });
-        expect(label).toBe(OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL);
+        expect(label).toBe("Opportunity Site");
     });
 
-    it("returns null when record has no resolvable location", () => {
-        expect(opportunityDisplayLocationLabel({ _inquiry_children: [] })).toBeNull();
+    it("returns No location when record has no resolvable location", () => {
+        expect(opportunityDisplayLocationLabel({ _inquiry_children: [] })).toBe("No location");
     });
 
     it("resolves single child location from inquiry children array", () => {

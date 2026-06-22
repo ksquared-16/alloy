@@ -85,6 +85,19 @@ function mapFieldRefKeyValue(refKey: string, vmRecord: Record<string, unknown>, 
         if (label) return label;
     }
 
+    if (refKey === "customer.name" || refKey === "customer.household_name") {
+        const label = pickDisplay(
+            record[refKey],
+            record._customer_name,
+            record.name,
+            record.title,
+            vmRecord._customer_name,
+            vmRecord.name,
+            vmRecord.title,
+        );
+        if (label) return label;
+    }
+
     const direct = asDisplayValue(vmRecord[refKey]);
     if (direct != null) return direct;
 
@@ -134,6 +147,25 @@ export function buildLayoutRuntimeRecordBindingEvidence(
     };
 }
 
+function resolveHouseholdNameFromVm(vmRecord: Record<string, unknown>): string | null {
+    const ident = vmRecord._identity as Record<string, unknown> | null | undefined;
+    const householdFromIdentity =
+        ident?.household && typeof ident.household === "object"
+            ? pickDisplay((ident.household as { label?: unknown }).label)
+            : null;
+    return pickDisplay(
+        vmRecord.name,
+        vmRecord.title,
+        vmRecord._customer_name,
+        householdFromIdentity,
+        vmRecord["customer.name"],
+        vmRecord["customer.household_name"],
+        vmRecord.customer_name,
+        vmRecord.household_name,
+        vmRecord._household_name,
+    );
+}
+
 function parseHouseholdLastName(name: string | null | undefined): string {
     const source = (name ?? "").trim();
     if (!source) return "";
@@ -164,7 +196,7 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
 ): ProofRuntimeRecord {
     const { vmRecord, opportunityId, statusDisplay, summaries, doc } = input;
 
-    const householdName = pickDisplay(vmRecord.name, vmRecord.title, vmRecord._customer_name);
+    const householdName = resolveHouseholdNameFromVm(vmRecord);
     const lastName = parseHouseholdLastName(householdName);
 
     const primaryContact = resolveOpportunityPrimaryContactPerson(vmRecord);
@@ -273,6 +305,9 @@ export function buildOpportunityLayoutRuntimeRecordFromVm(
         id: opportunityId,
         name: householdName ?? "Opportunity",
         last_name: lastName,
+        _customer_name: householdName ?? "",
+        "customer.name": householdName ?? "",
+        "customer.household_name": householdName ?? "",
         status_key: statusKey ?? "",
         _status_display: statusLabel ?? statusKey ?? "",
         "opportunity.status_key": statusKey ?? "",

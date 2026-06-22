@@ -1,7 +1,8 @@
 "use client";
 
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
-import { formatLayoutRuntimeCompactRowLine } from "@/lib/layout/runtime/formatLayoutRuntimeCompactRowLine";
+import LayoutRuntimeRelatedListCell from "@/components/layout/LayoutRuntimeRelatedListCell";
+import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import { resolveChildRowTemplateRowLayout } from "@/lib/layout/runtime/resolveChildRowTemplateRowLayout";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
@@ -10,40 +11,24 @@ type Props = {
     item: LayoutItem;
     columns: LayoutCollectionColumn[];
     rows: ProofRuntimeRecord[];
+    anchorRecord?: ProofRuntimeRecord;
+    onAdornmentAction?: AdornmentActionHandler;
     emptyMessage?: string;
 };
 
-function CompactRowLine({
-    row,
-    slots,
-    rowIndex,
-}: {
-    row: ProofRuntimeRecord;
-    slots: Array<LayoutCollectionColumn | undefined>;
-    rowIndex: number;
-}) {
-    const { segments, lineClassName, labelClassName } = formatLayoutRuntimeCompactRowLine(row, slots, rowIndex);
-    if (segments.length === 0) return null;
-
-    return (
-        <div className={lineClassName} data-layout-runtime-compact-row-line={rowIndex}>
-            {segments.map((segment, index) => (
-                <span key={index} className="inline-flex min-w-0 items-baseline gap-1.5">
-                    {segment.label ?
-                        <span className={`shrink-0 ${labelClassName}`}>{segment.label}</span>
-                    :   null}
-                    <span className={`min-w-0 break-words ${segment.valueClassName}`}>{segment.value}</span>
-                </span>
-            ))}
-        </div>
-    );
-}
+const TIER_LINE_CLASS = [
+    "flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm text-alloy-midnight",
+    "flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-alloy-midnight/70",
+    "flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[11px] text-alloy-midnight/50",
+] as const;
 
 /** Configured-row related-list compact presentation — one record per block, stacked row lines. */
 export default function LayoutRuntimeRelatedListCompactRows({
     item,
     columns,
     rows,
+    anchorRecord,
+    onAdornmentAction,
     emptyMessage = "No records yet.",
 }: Props) {
     const rowLayout = resolveChildRowTemplateRowLayout(item);
@@ -56,16 +41,30 @@ export default function LayoutRuntimeRelatedListCompactRows({
                     const rowKey = layoutRuntimeRepeaterRowReactKey(row, index, item.source ?? item.refKey);
 
                     if (rowLayout && rowLayout.length > 0) {
-                        const lines = rowLayout
-                            .map((layoutRow, rowIndex) => (
-                                <CompactRowLine
+                        const lines = rowLayout.map((layoutRow, rowIndex) => {
+                            const slots = layoutRow.slots.filter((col): col is LayoutCollectionColumn => Boolean(col));
+                            if (slots.length === 0) return null;
+                            return (
+                                <div
                                     key={rowIndex}
-                                    row={row}
-                                    slots={layoutRow.slots}
-                                    rowIndex={rowIndex}
-                                />
-                            ))
-                            .filter(Boolean);
+                                    className={TIER_LINE_CLASS[Math.min(rowIndex, 2)]}
+                                    data-layout-runtime-compact-row-line={rowIndex}
+                                >
+                                    {layoutRow.slots.map((col, slotIndex) =>
+                                        col ?
+                                            <LayoutRuntimeRelatedListCell
+                                                key={`${col.refKey}-${slotIndex}`}
+                                                row={row}
+                                                col={col}
+                                                rowKey={rowKey}
+                                                anchorRecord={anchorRecord}
+                                                onAction={onAdornmentAction}
+                                            />
+                                        :   null,
+                                    )}
+                                </div>
+                            );
+                        }).filter(Boolean);
 
                         return (
                             <li
@@ -80,28 +79,24 @@ export default function LayoutRuntimeRelatedListCompactRows({
                         );
                     }
 
-                    const primaryColumn = columns[0];
-                    const detailColumns = columns.slice(1);
-                    const primary =
-                        primaryColumn ?
-                            formatLayoutRuntimeCompactRowLine(row, [primaryColumn], 0).segments
-                                .map((s) => s.value)
-                                .join(" · ")
-                        :   "—";
-                    const details = detailColumns
-                        .map((col) => formatLayoutRuntimeCompactRowLine(row, [col], 1).segments[0]?.value)
-                        .filter((value) => value && value !== "—");
-
                     return (
                         <li
                             key={rowKey}
                             className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5"
                             data-layout-runtime-related-list-compact-row="true"
                         >
-                            <span className="min-w-0 truncate text-xs font-medium text-alloy-midnight">{primary}</span>
-                            {details.length > 0 ?
-                                <span className="min-w-0 truncate text-xs text-alloy-midnight/55">{details.join(" · ")}</span>
-                            :   null}
+                            <div className={TIER_LINE_CLASS[0]}>
+                                {columns.map((col) => (
+                                    <LayoutRuntimeRelatedListCell
+                                        key={col.refKey}
+                                        row={row}
+                                        col={col}
+                                        rowKey={rowKey}
+                                        anchorRecord={anchorRecord}
+                                        onAction={onAdornmentAction}
+                                    />
+                                ))}
+                            </div>
                         </li>
                     );
                 })

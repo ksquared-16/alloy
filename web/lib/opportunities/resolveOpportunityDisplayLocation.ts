@@ -6,6 +6,12 @@ import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
  */
 
 export const OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL = "Multiple locations";
+export const OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL = "No location";
+
+export function formatOpportunityDisplayMultipleLocationsLabel(count: number): string {
+    if (count <= 1) return OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL;
+    return `${count} locations`;
+}
 
 export type OpportunityDisplayLocationChildInput = {
     locationId?: string | null;
@@ -32,7 +38,7 @@ export type OpportunityDisplayLocationResolved =
       }
     | {
           kind: "multiple";
-          label: typeof OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL;
+          label: string;
           locations: Array<{ id: string | null; name: string }>;
       };
 
@@ -90,7 +96,7 @@ export function resolveOpportunityDisplayLocation(
     if (childResolved.length > 1) {
         return {
             kind: "multiple",
-            label: OPPORTUNITY_DISPLAY_MULTIPLE_LOCATIONS_LABEL,
+            label: formatOpportunityDisplayMultipleLocationsLabel(childResolved.length),
             locations: childResolved,
         };
     }
@@ -149,8 +155,12 @@ export function resolveOpportunityLeadLocationFields(record: Record<string, unkn
 }
 
 /** Primary operator-facing label for opportunity location surfaces (header, overview). */
-export function opportunityDisplayLocationLabel(record: Record<string, unknown>): string | null {
+export function opportunityDisplayLocationLabel(record: Record<string, unknown>): string {
+    const lead = resolveOpportunityLeadLocationFields(record);
+    if (lead.locationLabel) return lead.locationLabel;
+
     const resolved = opportunityDisplayLocationFromRecord(record);
-    if (resolved.kind === "none") return null;
-    return resolved.label;
+    if (resolved.kind === "single") return resolved.label;
+    if (resolved.kind === "multiple") return resolved.label;
+    return OPPORTUNITY_DISPLAY_NO_LOCATION_LABEL;
 }

@@ -2,7 +2,7 @@
  * Layout editor widget presentation metadata (Phase 5.14B + Experience Builder 5.17).
  */
 
-import type { LayoutSection } from "@/lib/layout/layoutV2";
+import type { LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 
 export const LAYOUT_EDITOR_WIDGET_STYLE_METADATA_KEY = "layoutEditorWidgetStyle" as const;
 
@@ -250,14 +250,23 @@ export function resolveLayoutEditorWidgetToneRailClass(tone: LayoutEditorWidgetT
     }
 }
 
-/** Read configured widget tone from the first widget item in a section. */
+/** Read configured widget tone from any layout item metadata. */
+export function resolveLayoutItemWidgetTone(
+    item: Pick<LayoutItem, "metadata"> | undefined,
+): LayoutEditorWidgetRuntimeTone | undefined {
+    if (!item) return undefined;
+    const style = readLayoutEditorWidgetStyle(item.metadata);
+    if (!style.tone) return undefined;
+    return resolveLayoutEditorWidgetRuntimeTone(style);
+}
+
+/** Read configured widget tone from the first toned item in a section. */
 export function resolveLayoutSectionWidgetTone(section: LayoutSection): LayoutEditorWidgetRuntimeTone | undefined {
     for (const row of section.rows) {
         for (const col of row.columns) {
             for (const item of col.items) {
-                if (item.kind !== "widget_placeholder") continue;
-                const style = readLayoutEditorWidgetStyle(item.metadata);
-                if (style.tone) return resolveLayoutEditorWidgetRuntimeTone(style);
+                const tone = resolveLayoutItemWidgetTone(item);
+                if (tone) return tone;
             }
         }
     }

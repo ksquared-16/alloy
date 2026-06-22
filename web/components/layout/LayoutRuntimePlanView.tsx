@@ -9,7 +9,7 @@
  */
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { AlertTriangle, CheckSquare2, HeartPulse, MessageSquare } from "lucide-react";
+import { Activity, AlertTriangle, Calendar, CheckSquare2, Heart, HeartPulse, MessageSquare, Users } from "lucide-react";
 import {
     LAYOUT_GRID_COLUMNS,
     type LayoutCollectionColumn,
@@ -26,6 +26,7 @@ import {
     readLayoutEditorDisplayConfig,
     typographyIntentClass,
     resolveLayoutCollectionColumnAdornment,
+    resolveLayoutCollectionColumnLinkAdornment,
     resolveLayoutCollectionColumnShowIcon,
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
@@ -42,10 +43,12 @@ import {
     resolveLayoutEditorWidgetLeadCardAccent,
     resolveLayoutEditorWidgetRuntimeTone,
     resolveLayoutEditorWidgetToneDotClass,
+    resolveLayoutEditorWidgetToneHeaderWashClass,
     resolveLayoutEditorWidgetToneIconClass,
     resolveLayoutEditorWidgetToneRailClass,
     resolveLayoutEditorWidgetToneTitleClass,
     resolveLayoutSectionWidgetTone,
+    resolveLayoutItemWidgetTone,
     resolveLeadOperatingCardAccent,
     type LayoutEditorWidgetRuntimeTone,
     type LeadOperatingCardAccentInput,
@@ -94,7 +97,7 @@ import { useLayoutRuntimeDrawerEdit } from "@/components/layout/LayoutRuntimeDra
 import LayoutRuntimeFieldInput, {
     layoutRuntimeDependentValueReader,
 } from "@/components/layout/LayoutRuntimeFieldInput";
-import { layoutRuntimeFieldIsEditable, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
+import { layoutRuntimeFieldIsEditable, resolveLayoutRuntimeEditableFieldFallback, resolveLayoutRuntimeEditableRefKey } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import LayoutRuntimeAdornmentButton from "@/components/layout/LayoutRuntimeAdornmentButton";
 import LayoutRuntimeChildLinkSurface from "@/components/layout/LayoutRuntimeChildLinkSurface";
 import LayoutRuntimeEnrollmentGrid from "@/components/layout/LayoutRuntimeEnrollmentGrid";
@@ -127,6 +130,7 @@ import LayoutRuntimeNotesCommunicationWidget, {
 } from "@/components/layout/LayoutRuntimeNotesCommunicationWidget";
 import LayoutRuntimeDocumentsOverviewWidget from "@/components/layout/LayoutRuntimeDocumentsOverviewWidget";
 import DrawerOverviewPanelShell from "@/components/layout/DrawerOverviewPanelShell";
+import LayoutRuntimeTonedPanelShell from "@/components/layout/LayoutRuntimeTonedPanelShell";
 import DrawerHouseholdProfileSection from "@/components/layout/DrawerHouseholdProfileSection";
 import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
 import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
@@ -240,8 +244,8 @@ export type AdornmentActionHandler = (
     adornment: LayoutFieldAdornment,
     rowRecord?: ProofRuntimeRecord,
 ) => void;
-const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
-const LayoutRuntimeVariantContext = createContext<"proof" | "production" | "preview">("proof");
+export const LayoutRuntimeVariantContext = createContext<"proof" | "production" | "preview">("proof");
+export const AdornmentActionContext = createContext<AdornmentActionHandler | undefined>(undefined);
 
 type LayoutRuntimeSectionContextValue = {
     sectionPresentation: LayoutRuntimeSectionPresentation;
@@ -387,7 +391,13 @@ function ValueCell({
         layoutRuntimeFieldIsEditable(item, variant) &&
         Boolean(edit) &&
         layoutRuntimeBlockAllowsFieldEdit(blockEdit);
-    const editValue = canEdit && edit ? edit.getFieldValue(editableRefKey, display ?? "") : display ?? "";
+    const editValue =
+        canEdit && edit ?
+            edit.getFieldValue(
+                editableRefKey,
+                resolveLayoutRuntimeEditableFieldFallback(record, editableRefKey, display ?? ""),
+            )
+        :   display ?? "";
     const actionButton = item.refKey === "_action_button" ? readLayoutEditorActionButtonConfig(item.metadata) : null;
 
     const valueBody = (() => {
@@ -555,9 +565,11 @@ function GroupCellContent({
     const showTitle = blockConfig.showTitle !== false;
     const title = showTitle ? operatorLabel(item, variant) : "";
     const showEditButton = blockConfig.editMode === "edit_button" && Boolean(drawerEdit);
-    return (
-        <div className={operatorSurfaces ? LAYOUT_RUNTIME_GROUP_READ_SURFACE : LAYOUT_RUNTIME_GROUP_SURFACE}>
-            {title || showEditButton ?
+    const blockTone = resolveLayoutItemWidgetTone(item);
+    const shellTitle = blockTone && operatorSurfaces ? title || undefined : undefined;
+    const body = (
+        <>
+            {!shellTitle && (title || showEditButton) ?
                 <div className="mb-1.5 flex items-center justify-between gap-2">
                     {title ?
                         <div
@@ -579,19 +591,32 @@ function GroupCellContent({
                     :   null}
                 </div>
             :   null}
-            {hasSubgrid ? (
+            {hasSubgrid ?
                 <div className="flex flex-col gap-2">
                     {item.rows!.map((row) => (
                         <RowView key={row.id} record={record} row={row} anchorEntity={anchorEntity} />
                     ))}
                 </div>
-            ) : (
-                <div className="grid grid-cols-2 gap-2">
+            :   <div className="grid grid-cols-2 gap-2">
                     {(item.items ?? []).map((child) => (
                         <ValueCell key={child.id} record={record} item={child} anchorEntity={anchorEntity} />
                     ))}
                 </div>
-            )}
+            }
+        </>
+    );
+
+    if (blockTone && operatorSurfaces) {
+        return (
+            <LayoutRuntimeTonedPanelShell title={shellTitle} tone={blockTone} bodyClassName="px-2.5 py-2">
+                {body}
+            </LayoutRuntimeTonedPanelShell>
+        );
+    }
+
+    return (
+        <div className={operatorSurfaces ? LAYOUT_RUNTIME_GROUP_READ_SURFACE : LAYOUT_RUNTIME_GROUP_SURFACE}>
+            {body}
         </div>
     );
 }
@@ -611,7 +636,7 @@ function RepeaterCellContent({
     const edit = useLayoutRuntimeDrawerEdit();
     const onAction = useContext(AdornmentActionContext);
     const displayConfig = readLayoutEditorDisplayConfig(col);
-    const columnAdornment = resolveLayoutCollectionColumnAdornment(col);
+    const columnAdornment = resolveLayoutCollectionColumnLinkAdornment(col);
     const showColumnIcon = resolveLayoutCollectionColumnShowIcon(col);
     const synthetic: LayoutItem = {
         id: col.refKey,
@@ -628,9 +653,16 @@ function RepeaterCellContent({
     });
     const trace = useLayoutEditorRuntimeTrace();
     const traceProps = layoutEditorTraceProps(trace, { refKey: col.refKey });
+    const editableRefKey = resolveLayoutRuntimeEditableRefKey(col.refKey);
     const canEdit = layoutRuntimeFieldIsEditable(synthetic, variant) && Boolean(edit);
     const editValue =
-        canEdit && edit ? edit.getFieldValue(col.refKey, r.display ?? "", rowKey) : r.display ?? "";
+        canEdit && edit ?
+            edit.getFieldValue(
+                editableRefKey,
+                resolveLayoutRuntimeEditableFieldFallback(row, editableRefKey, r.display ?? ""),
+                rowKey,
+            )
+        :   r.display ?? "";
     const formattedDisplay =
         !r.isPlaceholder && r.display ?
             formatLayoutEditorFieldDateValue(col.refKey, r.display, col.renderHint, displayConfig.dateFormat)
@@ -639,7 +671,14 @@ function RepeaterCellContent({
     const typographyClass = typographyIntentClass(displayConfig.typographyIntent);
     const showLabel = shouldShowLayoutEditorFieldLabel(displayConfig);
     const columnLabel = showLabel ? col.label?.trim() : "";
-    if (isLayoutRuntimeChildLinkColumn(col.refKey) && !canEdit) {
+    const useLinkSurface =
+        !canEdit
+        && (
+            isLayoutRuntimeChildLinkColumn(col.refKey)
+            || displayConfig.linkBehavior === "open_drawer"
+            || displayConfig.linkBehavior === "open_record"
+        );
+    if (useLinkSurface) {
         return (
             <LayoutRuntimeChildLinkSurface
                 componentName="LayoutRuntimePlanView/RepeaterCellContent"
@@ -647,7 +686,7 @@ function RepeaterCellContent({
                 item={synthetic}
                 rowRecord={row}
                 anchorRecord={anchorRecord}
-                adornment={col.adornment}
+                adornment={columnAdornment ?? col.adornment}
                 display={
                     r.isPlaceholder ? "—"
                     : col.renderHint === "status" ?
@@ -655,7 +694,7 @@ function RepeaterCellContent({
                     :   r.display
                 }
                 onAction={onAction}
-                className="inline-flex min-w-0 items-center gap-1.5 rounded px-0.5 text-sm leading-snug text-left hover:bg-[#eef3fb]"
+                className="inline-flex min-w-0 items-center gap-1.5 rounded px-0.5 text-sm leading-snug text-left text-alloy-pine hover:bg-[#eef3fb] hover:underline"
             />
         );
     }
@@ -677,10 +716,10 @@ function RepeaterCellContent({
             :   null}
             {canEdit && edit ?
                 <LayoutRuntimeFieldInput
-                    refKey={col.refKey}
+                    refKey={editableRefKey}
                     value={editValue}
                     rowKey={rowKey}
-                    onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
+                    onChange={(v) => edit.setFieldValue(editableRefKey, v, rowKey)}
                     getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
                 />
             :   <span className={`${r.isPlaceholder ? PRESENTATION_VALUE_PLACEHOLDER : ""} ${statusClass}`.trim()}>
@@ -696,6 +735,39 @@ function RepeaterCellContent({
                 <Adorn item={synthetic} rowRecord={row} />
             :   null}
         </span>
+    );
+}
+
+function renderRelatedListPanelShell(input: {
+    tone?: LayoutEditorWidgetRuntimeTone;
+    operatorSurfaces: boolean;
+    title: string;
+    suppressHeader: boolean;
+    surfaceClassName?: string;
+    headerExtra?: ReactNode;
+    children: ReactNode;
+}) {
+    const { tone, operatorSurfaces, title, suppressHeader, surfaceClassName, headerExtra, children } = input;
+    if (tone && operatorSurfaces) {
+        return (
+            <LayoutRuntimeTonedPanelShell title={suppressHeader ? undefined : title} tone={tone} bodyClassName="p-0">
+                {headerExtra}
+                {children}
+            </LayoutRuntimeTonedPanelShell>
+        );
+    }
+    return (
+        <div className={surfaceClassName ?? LAYOUT_RUNTIME_PANEL_SURFACE}>
+            {headerExtra}
+            {!suppressHeader ?
+                <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
+                        {title}
+                    </span>
+                </div>
+            :   null}
+            {children}
+        </div>
     );
 }
 
@@ -730,6 +802,7 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
     const isContactRepeater = isLayoutRuntimeContactRepeater(item);
     const editorRelatedList = readLayoutEditorRelatedListConfigFromItem(item);
     const editorPresentation = editorRelatedList?.presentationMode ?? "table";
+    const listTone = resolveLayoutItemWidgetTone(item);
     const maxEnrollmentRows =
         composition.enrollmentMaxVisibleRows != null && composition.enrollmentMaxVisibleRows > 0 ?
             composition.enrollmentMaxVisibleRows
@@ -835,6 +908,8 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
                         item={item}
                         columns={columns}
                         rows={allRows}
+                        anchorRecord={record}
+                        onAdornmentAction={onAdornmentAction}
                         emptyMessage={`No ${entityLabel} on this record yet.`}
                     />
                 : presentation === "table" ?
@@ -898,17 +973,15 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
             </div>
         );
 
-        return (
-            <div className={`${LAYOUT_RUNTIME_PANEL_SURFACE} ${LAYOUT_RUNTIME_WORK_RAIL}`}>
-                <LayoutRuntimeLinkDebugModeBanner />
-                {suppressRelatedListHeader ? null : (
-                    <div className={LAYOUT_RUNTIME_PANEL_HEADER}>
-                        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: MUTED }}>
-                            {title || "Related records"}
-                        </span>
-                    </div>
-                )}
-                {showChildrenEmpty ?
+        return renderRelatedListPanelShell({
+            tone: listTone,
+            operatorSurfaces: Boolean(operatorSurfaces),
+            title: title || "Related records",
+            suppressHeader: suppressRelatedListHeader,
+            surfaceClassName: `${LAYOUT_RUNTIME_PANEL_SURFACE} ${LAYOUT_RUNTIME_WORK_RAIL}`,
+            headerExtra: <LayoutRuntimeLinkDebugModeBanner />,
+            children:
+                showChildrenEmpty ?
                     <LayoutRuntimeChildrenEmptyState
                         opportunityId={host.entityId ?? ""}
                         canMutate={host.canMutate}
@@ -927,11 +1000,12 @@ function RelatedCell({ record, item, anchorEntity }: { record: ProofRuntimeRecor
                         item={item}
                         columns={columns}
                         rows={allRows}
+                        anchorRecord={record}
+                        onAdornmentAction={onAdornmentAction}
                         emptyMessage="No children linked yet."
                     />
-                :   childTableMarkup}
-            </div>
-        );
+                :   childTableMarkup,
+        });
     }
 
     const useEnrollmentReadTable =
@@ -1256,12 +1330,13 @@ function WidgetChrome({
         : "border-l-alloy-juniper/70";
     const iconBadgeClass = resolvedTone ? resolveLayoutEditorWidgetToneIconClass(resolvedTone) : "";
     const titleClass = resolvedTone ? resolveLayoutEditorWidgetToneTitleClass(resolvedTone) : "";
+    const headerWash = resolvedTone ? resolveLayoutEditorWidgetToneHeaderWashClass(resolvedTone) : "bg-gradient-to-r from-emerald-50/60 via-white to-white";
     return (
         <div
             className={`${LAYOUT_RUNTIME_PANEL_SURFACE} border-l-[3px] ${rail} shadow-[0_1px_5px_rgba(24,39,58,0.06)]`}
             {...(resolvedTone ? { "data-layout-runtime-widget-tone": resolvedTone } : {})}
         >
-            <div className={`${LAYOUT_RUNTIME_PANEL_HEADER} gap-2 bg-gradient-to-r from-emerald-50/60 via-white to-white`}>
+            <div className={`${LAYOUT_RUNTIME_PANEL_HEADER} gap-2 ${headerWash}`}>
                 {resolvedTone ?
                     <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${iconBadgeClass}`} aria-hidden>
                         <span className={`h-1.5 w-1.5 rounded-full ${resolveLayoutEditorWidgetToneDotClass(resolvedTone)}`} />
@@ -1528,7 +1603,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             return (
                 <LeadOperatingSummaryCard
                     title={cardTitle}
-                    icon={<MessageSquare className="h-3.5 w-3.5" aria-hidden />}
+                    icon={<Calendar className="h-3.5 w-3.5" aria-hidden />}
                     accent={widgetStyle.tone ? configuredLeadAccent : hasContent ? "neutral" : "green"}
                     widgetKey="last_touch"
                 >
@@ -1556,7 +1631,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             return (
                 <LeadOperatingSummaryCard
                     title={cardTitle}
-                    icon={<HeartPulse className="h-3.5 w-3.5" aria-hidden />}
+                    icon={<Heart className="h-3.5 w-3.5" aria-hidden />}
                     accent={leadWidgetAccent("green")}
                     widgetKey="enrollment_health"
                 >
@@ -1606,7 +1681,7 @@ function WidgetCell({ record, item }: { record: ProofRuntimeRecord; item: Layout
             return (
                 <LeadOperatingSummaryCard
                     title={title || "Activity"}
-                    icon={<MessageSquare className="h-3.5 w-3.5" aria-hidden />}
+                    icon={<Activity className="h-3.5 w-3.5" aria-hidden />}
                     accent={configuredLeadAccent ?? "blue"}
                     widgetKey="activity"
                 >

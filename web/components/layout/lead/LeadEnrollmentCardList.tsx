@@ -14,6 +14,10 @@ import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptySta
 import {
     formatLayoutRuntimeRepeaterColumnDisplay,
 } from "@/lib/layout/runtime/formatLayoutRuntimeRepeaterColumnDisplay";
+import {
+    readLayoutEditorDisplayConfig,
+    resolveLayoutCollectionColumnLinkAdornment,
+} from "@/lib/layout/layoutEditorDisplayConfig";
 import { layoutRuntimeFieldIsEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
     enrollmentGridColumnIsEditable,
@@ -105,11 +109,13 @@ export default function LeadEnrollmentCardList({
         }
         if (readEnrollmentGridCellRole(item, col) === "primary_link") {
             const childId = String(row["child.id"] ?? row.id ?? "").trim();
+            const linkAdornment = resolveLayoutCollectionColumnLinkAdornment(col);
             const synthetic: LayoutItem = {
                 id: col.refKey,
                 kind: "field",
                 refKey: col.refKey,
-                adornment: col.adornment,
+                adornment: linkAdornment ?? col.adornment,
+                metadata: col.metadata,
             };
             if (childId && allowChildDrawer) {
                 return (
@@ -119,7 +125,7 @@ export default function LeadEnrollmentCardList({
                         item={synthetic}
                         rowRecord={row}
                         anchorRecord={anchorRecord}
-                        adornment={null}
+                        adornment={linkAdornment ?? col.adornment}
                         display={display}
                         onAction={onAdornmentAction}
                         className={`block min-w-0 truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
@@ -151,11 +157,13 @@ export default function LeadEnrollmentCardList({
                         const isEditing = readFirst ? editingRowKeys.has(rowKey) : false;
                         const showEdit = readFirst && rowCanEdit(rowKey, row, index);
                         const nameCol = nameColumn!;
+                        const nameLinkAdornment = resolveLayoutCollectionColumnLinkAdornment(nameCol);
                         const nameSynthetic: LayoutItem = {
                             id: nameCol.refKey,
                             kind: "field",
                             refKey: nameCol.refKey,
-                            adornment: nameCol.adornment,
+                            adornment: nameLinkAdornment ?? nameCol.adornment,
+                            metadata: nameCol.metadata,
                         };
                         const statusDisplay =
                             statusColumn ? formatLayoutRuntimeRepeaterColumnDisplay(row, statusColumn) : null;
@@ -276,7 +284,7 @@ export default function LeadEnrollmentCardList({
                                                         item={nameSynthetic}
                                                         rowRecord={row}
                                                         anchorRecord={anchorRecord}
-                                                        adornment={null}
+                                                        adornment={nameLinkAdornment ?? nameCol.adornment}
                                                         display={childDisplayName}
                                                         onAction={onAdornmentAction}
                                                         className={`block min-w-0 truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}

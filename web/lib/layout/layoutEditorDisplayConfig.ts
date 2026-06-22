@@ -253,11 +253,38 @@ export function resolveLayoutCollectionColumnAdornment(
         config.iconPosition === "right" ? "right"
         : config.iconPosition === "above" ? "left"
         : col.adornment?.position ?? "left";
+    const action =
+        col.adornment?.action
+        ?? ((config.linkBehavior === "open_drawer" || config.linkBehavior === "open_record") ?
+            resolveOpenDrawerActionForRefKey(col.refKey)
+        :   undefined);
     return {
         position,
         icon,
-        ...(col.adornment?.action ? { action: col.adornment.action } : {}),
+        ...(action ? { action } : {}),
     };
+}
+
+/** Full column adornment including linkBehavior-driven open_drawer action (runtime parity). */
+export function resolveLayoutCollectionColumnLinkAdornment(
+    col: Pick<LayoutCollectionColumn, "refKey" | "adornment" | "metadata">,
+): LayoutItem["adornment"] | undefined {
+    const config = readLayoutEditorDisplayConfig(col);
+    const linkBehavior = config.linkBehavior;
+    if (linkBehavior === "open_drawer" || linkBehavior === "open_record") {
+        const action = resolveOpenDrawerActionForRefKey(col.refKey) ?? col.adornment?.action;
+        if (!action) return resolveLayoutCollectionColumnAdornment(col);
+        const icon =
+            config.icon
+            ?? col.adornment?.icon
+            ?? defaultAdornmentIconForRefKey(col.refKey, linkBehavior);
+        const position =
+            config.iconPosition === "right" ? "right"
+            : config.iconPosition === "above" ? "left"
+            : col.adornment?.position ?? "left";
+        return { position, icon, action };
+    }
+    return resolveLayoutCollectionColumnAdornment(col);
 }
 
 function resolveOpenDrawerActionForRefKey(

@@ -13,7 +13,11 @@ export type ChildRowTemplateRowLayout = {
 };
 
 function childRowGroupColumnCount(group: LayoutEditorChildRowGroup): number {
-    return Math.max(1, group.columnCount ?? (group.columnIndices.length || 1));
+    const validIndices = group.columnIndices.filter((index) => index >= 0);
+    const fromIndices = validIndices.length;
+    if (fromIndices === 0) return Math.max(1, group.columnCount ?? 1);
+    // Honor every configured column index — stale columnCount must not drop fields.
+    return Math.max(fromIndices, Math.min(3, group.columnCount ?? fromIndices));
 }
 
 export function resolveChildRowTemplateRowLayout(item: LayoutItem): ChildRowTemplateRowLayout[] | null {

@@ -54,7 +54,7 @@ export default function LeadDrawerCommandHeader({
     actionsControl,
     closeButton,
 }: LeadDrawerCommandHeaderProps) {
-    const meta = resolveLeadDrawerCommandHeaderMeta(record, { locationLabel });
+    const meta = resolveLeadDrawerCommandHeaderMeta(record, { locationLabel, title: typeof title === "string" ? title : null });
     const ctx = meta.metaRow ? meta.metaRow.split(" · ") : [];
 
     return (
