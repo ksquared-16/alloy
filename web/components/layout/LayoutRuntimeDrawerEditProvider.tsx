@@ -15,6 +15,7 @@ import {
     dispatchLayoutRuntimeDrawerSaved,
 } from "@/lib/layout/runtime/layoutRuntimeDrawerBlockEditEvents";
 import { dispatchOpportunityDrawerRecordPatch } from "@/lib/admin/opportunityDrawerTargetedRefresh";
+import { dispatchOpportunityQueueUpdated } from "@/lib/admin/opportunityQueueRefreshEvent";
 import {
     registerDrawerOperatingEditSection,
     type DrawerOperatingSaveSectionOptions,
