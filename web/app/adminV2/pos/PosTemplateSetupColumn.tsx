@@ -19,11 +19,13 @@
  * Detection is text-assisted only — there is no PDF coordinate mapping yet (see warnings).
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { PosCaseState } from "./usePosCase";
 import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/types";
+import { computePageMaps, hasFieldRegions, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import { POS_SOURCE_KIND_LABELS } from "./posSections";
 import PosPanel from "./PosPanel";
+import PosPdfFieldMap from "./PosPdfFieldMap";
 import WorkspaceActionBar from "@/components/workspace/WorkspaceActionBar";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
 
@@ -78,6 +80,10 @@ interface EditorRow {
     label: string;
     type: string;
     section: string;
+    /** PDF provenance preserved from detection (kept through review → create). */
+    pdf_field_name?: string;
+    page?: number;
+    bbox?: [number, number, number, number];
 }
 const DRAFT_TYPE_OPTIONS: Array<{ value: string; label: string }> = [
     { value: "text", label: "Text" },
@@ -109,6 +115,7 @@ export default function PosTemplateSetupColumn({
     const [editing, setEditing] = useState(false);
     const [rows, setRows] = useState<EditorRow[]>([]);
     const [savingManual, setSavingManual] = useState(false);
+    const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 
     const primary = detail?.sources.find((s) => s.role === "primary") ?? detail?.sources[0] ?? null;
     const docId = draft?.source_document_id ?? (primary?.kind === "document" ? (primary?.id ?? null) : null);
@@ -141,6 +148,12 @@ export default function PosTemplateSetupColumn({
             cancelled = true;
         };
     }, [docId]);
+
+    // Detected PDF field regions → drawable schematic (page-grouped). Memo before any return.
+    const pageMaps = useMemo(
+        () => computePageMaps((draft?.fields ?? []) as FieldWithRegion[]),
+        [draft?.fields]
+    );
 
     if (!detail) return null;
 
@@ -230,7 +243,15 @@ export default function PosTemplateSetupColumn({
         for (const s of draft?.sections ?? []) {
             for (const fid of s.field_ids) {
                 const f = fields.find((x) => x.id === fid);
-                if (f) seeded.push({ label: f.label, type: f.type, section: s.title });
+                if (f)
+                    seeded.push({
+                        label: f.label,
+                        type: f.type,
+                        section: s.title,
+                        pdf_field_name: f.pdf_field_name,
+                        page: f.page,
+                        bbox: f.bbox,
+                    });
             }
         }
         setRows(seeded.length ? seeded : [{ label: "", type: "text", section: "Form fields" }]);
@@ -450,9 +471,20 @@ export default function PosTemplateSetupColumn({
                     </PosPanel>
                 ) : null}
 
-                {/* Detected fields — label / type / confidence / source reason */}
+                {/* Review detected fields — PDF-anchored map + synced field list */}
                 {draft && draft.sections.length > 0 ? (
-                    <PosPanel eyebrow="Detected fields">
+                    <PosPanel eyebrow="Review detected fields">
+                        {pageMaps.some((p) => p.rects.length > 0) ? (
+                            <div className="mb-2.5">
+                                <p className="mb-1.5 text-[11px] text-stone-500">
+                                    Highlighted fields were detected from the source PDF. Click a highlight or a row to match them
+                                    up; add any missing fields before creating the form.
+                                </p>
+                                <PosPdfFieldMap pages={pageMaps} selectedId={selectedFieldId} onSelect={setSelectedFieldId} />
+                            </div>
+                        ) : (
+                            <p className="mb-2 text-[11px] text-stone-500">Add any missing fields before creating the form.</p>
+                        )}
                         <div className="space-y-2.5">
                             {draft.sections.map((s) => (
                                 <div key={s.id} className="rounded-md border border-stone-200 p-2.5">
@@ -461,20 +493,30 @@ export default function PosTemplateSetupColumn({
                                         {s.field_ids.map((fid) => {
                                             const f = fieldById(fid);
                                             if (!f) return null;
+                                            const sel = selectedFieldId === f.id;
+                                            const mapped = typeof f.page === "number" && Array.isArray(f.bbox);
                                             return (
-                                                <li key={fid} className="text-[12px] text-stone-600">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="min-w-0 flex-1 truncate text-alloy-midnight">{f.label}</span>
-                                                        {f.required ? <span className="text-[10px] text-amber-700">required</span> : null}
-                                                        <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px] text-stone-500">{f.type}</span>
-                                                        <span className={`rounded px-1 py-0.5 text-[9.5px] ${CONF_PILL[f.confidence] ?? "bg-stone-100 text-stone-500"}`}>
-                                                            {f.confidence}
-                                                        </span>
-                                                    </div>
-                                                    <div className="text-[10px] text-stone-400">
-                                                        detected from {sourceReason(f.evidence)}
-                                                        {f.page ? ` · page ${f.page}` : ""}
-                                                    </div>
+                                                <li key={fid}>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedFieldId(sel ? null : f.id)}
+                                                        className={`w-full rounded-md border px-2 py-1 text-left text-[12px] ${
+                                                            sel ? "border-alloy-juniper bg-emerald-50/70" : "border-transparent hover:bg-stone-50"
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="min-w-0 flex-1 truncate text-alloy-midnight">{f.label}</span>
+                                                            {f.required ? <span className="text-[10px] text-amber-700">required</span> : null}
+                                                            <span className="rounded bg-stone-100 px-1 py-0.5 text-[9.5px] text-stone-500">{f.type}</span>
+                                                            <span className={`rounded px-1 py-0.5 text-[9.5px] ${CONF_PILL[f.confidence] ?? "bg-stone-100 text-stone-500"}`}>
+                                                                {f.confidence}
+                                                            </span>
+                                                        </div>
+                                                        <div className="text-[10px] text-stone-400">
+                                                            detected from {sourceReason(f.evidence)}
+                                                            {mapped ? ` · page ${f.page} · mapped to PDF` : " · not yet mapped to the PDF"}
+                                                        </div>
+                                                    </button>
                                                 </li>
                                             );
                                         })}
@@ -482,6 +524,9 @@ export default function PosTemplateSetupColumn({
                                 </div>
                             ))}
                         </div>
+                        <p className="mt-2 text-[10.5px] text-stone-400">
+                            Fields without a highlighted area can still be captured, but won’t yet map back to the official PDF.
+                        </p>
                         {draft.warnings.filter((w) => !w.startsWith("text_unavailable:")).length > 0 ? (
                             <ul className="mt-2 list-inside list-disc text-[11px] text-stone-500">
                                 {draft.warnings
@@ -490,6 +535,13 @@ export default function PosTemplateSetupColumn({
                                         <li key={i}>{w}</li>
                                     ))}
                             </ul>
+                        ) : null}
+                        {!editing ? (
+                            <div className="mt-2">
+                                <button type="button" onClick={openEditor} className={WS_ACTION_SECONDARY}>
+                                    Add / edit fields before create
+                                </button>
+                            </div>
                         ) : null}
                     </PosPanel>
                 ) : null}

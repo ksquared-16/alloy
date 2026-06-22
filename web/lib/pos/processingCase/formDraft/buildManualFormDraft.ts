@@ -21,6 +21,10 @@ export interface ManualFieldInput {
     type?: string;
     required?: boolean;
     section?: string;
+    /** PDF provenance preserved from AcroForm detection (kept through review → create). */
+    pdf_field_name?: string;
+    page?: number;
+    bbox?: [number, number, number, number];
 }
 
 export interface BuildManualDraftInput {
@@ -51,13 +55,19 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
             bySection.set(sectionTitle, []);
             order.push(sectionTitle);
         }
+        const hasRegion = !!f.pdf_field_name || typeof f.page === "number" || Array.isArray(f.bbox);
         bySection.get(sectionTitle)!.push({
             id: `field_${counter}`,
             label,
             type: coerceType(f.type),
             required: Boolean(f.required),
             confidence: "high",
-            evidence: "operator",
+            evidence: hasRegion ? "pdf_field" : "operator",
+            ...(f.pdf_field_name ? { pdf_field_name: f.pdf_field_name } : {}),
+            ...(typeof f.page === "number" ? { page: f.page } : {}),
+            ...(Array.isArray(f.bbox) && f.bbox.length >= 4
+                ? { bbox: [f.bbox[0], f.bbox[1], f.bbox[2], f.bbox[3]] as [number, number, number, number] }
+                : {}),
         });
     }
 

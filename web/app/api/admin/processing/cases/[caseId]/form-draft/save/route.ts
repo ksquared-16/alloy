@@ -34,12 +34,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const rawFields = Array.isArray(body.fields) ? body.fields : [];
     const fields: ManualFieldInput[] = rawFields
         .filter((f): f is Record<string, unknown> => !!f && typeof f === "object")
-        .map((f) => ({
-            label: typeof f.label === "string" ? f.label : "",
-            type: typeof f.type === "string" ? f.type : undefined,
-            required: f.required === true,
-            section: typeof f.section === "string" ? f.section : undefined,
-        }))
+        .map((f) => {
+            const bbox =
+                Array.isArray(f.bbox) && f.bbox.length >= 4 && f.bbox.every((n) => typeof n === "number")
+                    ? ([f.bbox[0], f.bbox[1], f.bbox[2], f.bbox[3]] as [number, number, number, number])
+                    : undefined;
+            return {
+                label: typeof f.label === "string" ? f.label : "",
+                type: typeof f.type === "string" ? f.type : undefined,
+                required: f.required === true,
+                section: typeof f.section === "string" ? f.section : undefined,
+                // Preserve PDF provenance when the reviewed field came from AcroForm detection.
+                pdf_field_name: typeof f.pdf_field_name === "string" ? f.pdf_field_name : undefined,
+                page: typeof f.page === "number" ? f.page : undefined,
+                bbox,
+            };
+        })
         .filter((f) => f.label.trim().length > 0);
 
     if (fields.length === 0) {
