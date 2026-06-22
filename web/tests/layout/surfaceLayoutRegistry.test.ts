@@ -3,9 +3,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import { buildLeadDrawerDefaultDoc, buildLeadQueueDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildPersonDrawerDefaultDoc } from "@/lib/layout/defaultPersonLayouts";
 import { buildChildDrawerDefaultDoc } from "@/lib/layout/defaultChildLayouts";
+import { buildWaitlistCandidateCardDefaultDoc } from "@/lib/layout/defaultWaitlistLayouts";
 import { parseLayoutDoc } from "@/lib/layout/layoutV2Schema";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
@@ -17,16 +18,17 @@ import {
 import { validateLayoutDocForSurface } from "@/lib/layout/validateLayoutDocForSurface";
 
 describe("surface layout registry", () => {
-    it("returns opportunity, person, and child drawers as enabled", () => {
+    it("returns opportunity, person, child drawers and queue rows as enabled", () => {
         const payload = buildSurfaceLayoutRegistryResponse();
         expect(payload.contract_version).toBe(1);
         expect(payload.enabled.map((s) => s.surface_key)).toEqual([
             "opportunity_drawer",
             "person_drawer",
             "child_drawer",
+            "queue_record",
+            "waitlist_queue_record",
         ]);
         expect(payload.coming_soon.map((s) => s.surface_key)).toEqual([
-            "queue_record",
             "communications_command_center",
             "pos_workspace",
         ]);
@@ -43,6 +45,11 @@ describe("surface layout registry", () => {
     it("resolves person_drawer and child_drawer from default LayoutDocs", () => {
         expect(resolveSurfaceLayoutKeyFromDoc(buildPersonDrawerDefaultDoc())).toBe("person_drawer");
         expect(resolveSurfaceLayoutKeyFromDoc(buildChildDrawerDefaultDoc())).toBe("child_drawer");
+    });
+
+    it("resolves queue_record and waitlist_queue_record from default queue LayoutDocs", () => {
+        expect(resolveSurfaceLayoutKeyFromDoc(buildLeadQueueDefaultDoc())).toBe("queue_record");
+        expect(resolveSurfaceLayoutKeyFromDoc(buildWaitlistCandidateCardDefaultDoc())).toBe("waitlist_queue_record");
     });
 });
 

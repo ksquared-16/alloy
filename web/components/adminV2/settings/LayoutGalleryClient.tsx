@@ -280,6 +280,8 @@ export default function LayoutGalleryClient({
     const opportunityEntry = registry?.enabled.find((e) => e.surface_key === "opportunity_drawer") ?? null;
     const personEntry = registry?.enabled.find((e) => e.surface_key === "person_drawer") ?? null;
     const childEntry = registry?.enabled.find((e) => e.surface_key === "child_drawer") ?? null;
+    const pipelineQueueEntry = registry?.enabled.find((e) => e.surface_key === "queue_record") ?? null;
+    const waitlistQueueEntry = registry?.enabled.find((e) => e.surface_key === "waitlist_queue_record") ?? null;
 
     const opportunitySummary = useMemo(() => {
         if (!opportunityEntry?.identity || !orgId) return null;
@@ -295,6 +297,16 @@ export default function LayoutGalleryClient({
         if (!childEntry?.identity || !orgId) return null;
         return summarizeSurfaceLayoutRecords(records, orgId, childEntry.identity);
     }, [childEntry, orgId, records]);
+
+    const pipelineQueueSummary = useMemo(() => {
+        if (!pipelineQueueEntry?.identity || !orgId) return null;
+        return summarizeSurfaceLayoutRecords(records, orgId, pipelineQueueEntry.identity);
+    }, [pipelineQueueEntry, orgId, records]);
+
+    const waitlistQueueSummary = useMemo(() => {
+        if (!waitlistQueueEntry?.identity || !orgId) return null;
+        return summarizeSurfaceLayoutRecords(records, orgId, waitlistQueueEntry.identity);
+    }, [waitlistQueueEntry, orgId, records]);
 
     const createFromDefault = useCallback(
         async (
@@ -464,6 +476,8 @@ export default function LayoutGalleryClient({
                             entry.surface_key === "opportunity_drawer" ? opportunitySummary
                             : entry.surface_key === "person_drawer" ? personSummary
                             : entry.surface_key === "child_drawer" ? childSummary
+                            : entry.surface_key === "queue_record" ? pipelineQueueSummary
+                            : entry.surface_key === "waitlist_queue_record" ? waitlistQueueSummary
                             : null;
                         const seed =
                             entry.surface_key === "person_drawer" ? "person_default"

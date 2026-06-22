@@ -22,6 +22,8 @@ import {
     type LayoutRenderHint,
     type LayoutSurface,
 } from "./layoutV2";
+import { ENROLLMENT_WAITLIST_CANDIDATE_QUEUE_CONTEXT } from "./defaultQueueLayoutVariants";
+import { defaultWaitlistQueueLayoutV3 } from "./queueRecordLayoutV3";
 import {
     WAITLIST_CANDIDATE_CARD_LAYOUT_KEY,
     WAITLIST_CANDIDATE_ENTITY_TYPE,
@@ -132,6 +134,8 @@ export function buildWaitlistCandidateCardDefaultDoc(): LayoutDoc {
             template: "waitlist_candidate_card_v1",
             renderAs: WAITLIST_CARD_RENDER_AS,
             layoutKey: WAITLIST_CANDIDATE_CARD_LAYOUT_KEY,
+            queue_record_layout: defaultWaitlistQueueLayoutV3(),
+            queue_context: ENROLLMENT_WAITLIST_CANDIDATE_QUEUE_CONTEXT,
             // Display-only group config (Goal 6). Runtime owns ranking/grouping/
             // ordering/cohort membership; Layout V2 only styles the group header.
             group: {

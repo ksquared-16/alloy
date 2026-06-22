@@ -66,15 +66,16 @@ describe("layoutGalleryModel", () => {
 });
 
 describe("layouts settings gallery wiring", () => {
-    it("registry payload includes enabled drawer surfaces and coming-soon surfaces", () => {
+    it("registry payload includes enabled drawer and queue surfaces", () => {
         const payload = buildSurfaceLayoutRegistryResponse();
         expect(payload.enabled.map((s) => s.surface_key)).toEqual([
             "opportunity_drawer",
             "person_drawer",
             "child_drawer",
+            "queue_record",
+            "waitlist_queue_record",
         ]);
         expect(payload.coming_soon.map((s) => s.surface_key)).toEqual([
-            "queue_record",
             "communications_command_center",
             "pos_workspace",
         ]);
@@ -93,5 +94,14 @@ describe("layouts settings gallery wiring", () => {
         expect(gallery).toContain("/duplicate");
         expect(gallery).toContain("/rollback");
         expect(gallery).toContain('data-testid="layout-gallery"');
+        expect(gallery).toContain("queue_record");
+        expect(gallery).toContain("waitlist_queue_record");
+    });
+
+    it("layouts page routes queue layouts through visual editor router", () => {
+        const page = readFileSync(resolve(root, "app/adminV2/settings/layouts/LayoutsSettingsPageClient.tsx"), "utf8");
+        expect(page).toContain("LayoutVisualEditorRouter");
+        const router = readFileSync(resolve(root, "components/adminV2/settings/LayoutVisualEditorRouter.tsx"), "utf8");
+        expect(router).toContain("QueueRecordLayoutVisualEditor");
     });
 });

@@ -10,10 +10,15 @@
 
 import type { EntityDrawerShellSlot } from "@/lib/admin/drawer/entityDrawerOperatingModel";
 import type { ActionSurface } from "@/lib/admin/actions/types";
-import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import { buildLeadDrawerDefaultDoc, buildLeadQueueDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildPersonDrawerDefaultDoc } from "@/lib/layout/defaultPersonLayouts";
 import { buildChildDrawerDefaultDoc } from "@/lib/layout/defaultChildLayouts";
-import { QUEUE_RECORD_WAITLIST_WIDGET_KEYS } from "@/lib/layout/queueRecordLayoutAllowList";
+import { buildWaitlistCandidateCardDefaultDoc } from "@/lib/layout/defaultWaitlistLayouts";
+import {
+    QUEUE_RECORD_PIPELINE_WIDGET_KEYS,
+    QUEUE_RECORD_WAITLIST_WIDGET_KEYS,
+} from "@/lib/layout/queueRecordLayoutAllowList";
+import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 import { GLOBAL_WIDGET_CATALOG, type LayoutCatalogGroup, type LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
 import {
     collectRefKeysFromLayoutDoc,
@@ -46,6 +51,7 @@ export const SURFACE_LAYOUT_KEYS = [
     "person_drawer",
     "child_drawer",
     "queue_record",
+    "waitlist_queue_record",
     "communications_command_center",
     "pos_workspace",
 ] as const;
@@ -366,6 +372,31 @@ function buildChildDrawerAllowedFieldRefKeys(): readonly string[] {
 const PERSON_DRAWER_FIELD_REFS = buildPersonDrawerAllowedFieldRefKeys();
 const CHILD_DRAWER_FIELD_REFS = buildChildDrawerAllowedFieldRefKeys();
 
+function buildPipelineQueueRecordAllowedFieldRefKeys(): readonly string[] {
+    const baseline = collectRefKeysFromLayoutDoc(buildLeadQueueDefaultDoc());
+    const merged = new Set<string>([...baseline, ...OPPORTUNITY_DRAWER_CONTACT_REPEATER_FIELD_REFS]);
+    return [...merged].sort();
+}
+
+function buildWaitlistQueueRecordAllowedFieldRefKeys(): readonly string[] {
+    const baseline = collectRefKeysFromLayoutDoc(buildWaitlistCandidateCardDefaultDoc());
+    const merged = new Set<string>([...baseline, ...WAITLIST_PLACEMENT_FIELD_KEYS, "overrides.reason"]);
+    return [...merged].sort();
+}
+
+const PIPELINE_QUEUE_RECORD_FIELD_REFS = buildPipelineQueueRecordAllowedFieldRefKeys();
+const WAITLIST_QUEUE_RECORD_FIELD_REFS = buildWaitlistQueueRecordAllowedFieldRefKeys();
+
+/** Queue row layout zones (v3 column scopes — editor hint). */
+export const QUEUE_RECORD_LAYOUT_ZONES = [
+    "household",
+    "children",
+    "status",
+    "attention",
+    "date_event",
+    "actions",
+] as const;
+
 /** Person drawer composition widget keys (summary strip + rail — not in global catalog). */
 export const PERSON_DRAWER_COMPOSITION_WIDGET_KEYS = [
     "household_summary",
@@ -468,20 +499,43 @@ export const OPPORTUNITY_DRAWER_SURFACE: SurfaceLayoutRegistryEntry = {
     allowedActionPlacements: OPPORTUNITY_DRAWER_ACTION_PLACEMENTS,
 };
 
-const COMING_SOON_SURFACES: Omit<SurfaceLayoutRegistryEntry, "allowedFieldRefKeys" | "allowedWidgetKeys">[] = [
-    {
-        surfaceKey: "queue_record",
-        availability: "coming_soon",
-        label: "Queue Record",
-        description: "Work-unit queue row / card layout.",
-        identity: { entityType: "opportunities", surface: "queue", layoutKey: "default" },
-        layoutZones: [],
-        platformShellSlots: [],
-        allowedSectionKeys: [],
-        allowedSectionComponentTypes: LAYOUT_ITEM_KINDS,
-        allowedFieldSources: ["opportunity", "person", "child", "inquiry_child"],
-        allowedActionPlacements: ["queue_row", "right_rail"],
+export const PIPELINE_QUEUE_RECORD_SURFACE: SurfaceLayoutRegistryEntry = {
+    surfaceKey: "queue_record",
+    availability: "enabled",
+    label: "Pipeline Queue Row",
+    description: "Work-unit pipeline queue operational row — household, children, status, attention, and dates.",
+    identity: { entityType: "opportunities", surface: "queue", layoutKey: "default" },
+    layoutZones: QUEUE_RECORD_LAYOUT_ZONES,
+    platformShellSlots: [],
+    allowedSectionKeys: [],
+    allowedSectionComponentTypes: LAYOUT_ITEM_KINDS,
+    allowedFieldSources: ["opportunity", "person", "child", "inquiry_child", "customer"],
+    allowedFieldRefKeys: PIPELINE_QUEUE_RECORD_FIELD_REFS,
+    allowedWidgetKeys: [...QUEUE_RECORD_PIPELINE_WIDGET_KEYS],
+    allowedActionPlacements: ["queue_row"],
+};
+
+export const WAITLIST_QUEUE_RECORD_SURFACE: SurfaceLayoutRegistryEntry = {
+    surfaceKey: "waitlist_queue_record",
+    availability: "enabled",
+    label: "Waitlist Queue Row",
+    description: "Waitlist candidate queue row — placement position, tier, priority, overrides, and sibling context.",
+    identity: {
+        entityType: "placement_candidate",
+        surface: "queue",
+        layoutKey: "waitlist_candidate_card",
     },
+    layoutZones: QUEUE_RECORD_LAYOUT_ZONES,
+    platformShellSlots: [],
+    allowedSectionKeys: [],
+    allowedSectionComponentTypes: LAYOUT_ITEM_KINDS,
+    allowedFieldSources: ["placement_candidate", "child", "person", "opportunity"],
+    allowedFieldRefKeys: WAITLIST_QUEUE_RECORD_FIELD_REFS,
+    allowedWidgetKeys: [...QUEUE_RECORD_WAITLIST_WIDGET_KEYS],
+    allowedActionPlacements: ["queue_row"],
+};
+
+const COMING_SOON_SURFACES: Omit<SurfaceLayoutRegistryEntry, "allowedFieldRefKeys" | "allowedWidgetKeys">[] = [
     {
         surfaceKey: "communications_command_center",
         availability: "coming_soon",
@@ -513,16 +567,15 @@ const COMING_SOON_SURFACES: Omit<SurfaceLayoutRegistryEntry, "allowedFieldRefKey
 const COMING_SOON_ENTRIES: SurfaceLayoutRegistryEntry[] = COMING_SOON_SURFACES.map((s) => ({
     ...s,
     allowedFieldRefKeys: [],
-    allowedWidgetKeys:
-        s.surfaceKey === "queue_record" ? [...QUEUE_RECORD_WAITLIST_WIDGET_KEYS]
-        :   [],
+    allowedWidgetKeys: [],
 }));
 
 export const SURFACE_LAYOUT_REGISTRY: Readonly<Record<SurfaceLayoutKey, SurfaceLayoutRegistryEntry>> = {
     opportunity_drawer: OPPORTUNITY_DRAWER_SURFACE,
     person_drawer: PERSON_DRAWER_SURFACE,
     child_drawer: CHILD_DRAWER_SURFACE,
-    queue_record: COMING_SOON_ENTRIES.find((e) => e.surfaceKey === "queue_record")!,
+    queue_record: PIPELINE_QUEUE_RECORD_SURFACE,
+    waitlist_queue_record: WAITLIST_QUEUE_RECORD_SURFACE,
     communications_command_center: COMING_SOON_ENTRIES.find((e) => e.surfaceKey === "communications_command_center")!,
     pos_workspace: COMING_SOON_ENTRIES.find((e) => e.surfaceKey === "pos_workspace")!,
 };
@@ -537,6 +590,7 @@ export function resolveSurfaceLayoutKeyFromDoc(doc: Pick<LayoutDoc, "entityType"
     if (doc.entityType === "person" && doc.surface === "drawer") return "person_drawer";
     if (doc.entityType === "child" && doc.surface === "drawer") return "child_drawer";
     if (doc.entityType === "opportunities" && doc.surface === "queue") return "queue_record";
+    if (doc.entityType === "placement_candidate" && doc.surface === "queue") return "waitlist_queue_record";
     return null;
 }
 

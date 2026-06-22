@@ -4,7 +4,7 @@ import { Suspense, useCallback, useMemo } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import LayoutGalleryClient from "@/components/adminV2/settings/LayoutGalleryClient";
-import OpportunityDrawerLayoutVisualEditor from "@/components/adminV2/settings/OpportunityDrawerLayoutVisualEditor";
+import LayoutVisualEditorRouter from "@/components/adminV2/settings/LayoutVisualEditorRouter";
 import LayoutConfigClient from "@/components/layout/LayoutConfigClient";
 
 function layoutsBasePath(pathname: string): string {
@@ -79,7 +79,7 @@ function LayoutsSettingsPageClientInner() {
 
         return (
             <div className="flex h-full min-h-0 flex-1 flex-col" data-testid="layouts-editor-shell-visual">
-                <OpportunityDrawerLayoutVisualEditor
+                <LayoutVisualEditorRouter
                     layoutId={layoutId}
                     basePath={base}
                     onBack={backToGallery}

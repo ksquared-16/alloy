@@ -26,6 +26,16 @@ export function dispatchChildDrawerLayoutPublished(doc: LayoutDoc): void {
     dispatchDrawerLayoutPublished(doc, "/api/admin/layout-runtime/child-drawer-body");
 }
 
+/** Notify work-unit queue runtimes after queue row layout publish. */
+export function dispatchOpportunityQueueLayoutPublished(doc: LayoutDoc): void {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(
+        new CustomEvent("adminv2:entity-layout-published", {
+            detail: { entityType: doc.entityType, surface: doc.surface },
+        }),
+    );
+}
+
 function dispatchDrawerLayoutPublished(doc: LayoutDoc, apiPath: string): void {
     if (typeof window === "undefined") return;
     invalidateDrawerLayoutRuntimeBodyCacheForApiPath(apiPath);
