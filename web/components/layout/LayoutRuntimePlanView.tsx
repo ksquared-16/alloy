@@ -781,6 +781,7 @@ function RepeaterCellContent({
                         layoutRuntimeOnPickOptionCompanion(editableRefKey, label, edit.setFieldValue, rowKey);
                     }}
                     getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
+                    variant="inline-cell"
                 />
             :   <span className={`${r.isPlaceholder ? PRESENTATION_VALUE_PLACEHOLDER : ""} ${statusClass}`.trim()}>
                     {r.isPlaceholder ? "—"

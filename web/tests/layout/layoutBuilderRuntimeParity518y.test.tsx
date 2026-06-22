@@ -53,7 +53,7 @@ describe("layoutBuilderRuntimeParity 5.18Y", () => {
         );
         expect(source).not.toContain("adminv2-drawer-enrollment-field-grid");
         expect(source).toContain("data-child-row-template-row=");
-        expect(source).toContain("renderEnrollmentColumnCell");
+        expect(source).toContain("LeadEnrollmentRepeaterFieldCell");
     });
 
     it("editable cells render in configured row slots during section edit", () => {

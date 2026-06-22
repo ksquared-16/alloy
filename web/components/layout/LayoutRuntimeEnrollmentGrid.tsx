@@ -127,6 +127,7 @@ function EnrollmentGridCell({
                     rowKey={rowKey}
                     onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
                     getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue, rowKey)}
+                    variant="inline-cell"
                 />
             </div>
         );

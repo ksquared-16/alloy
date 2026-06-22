@@ -28,8 +28,8 @@ type Props = {
     disabled?: boolean;
     /** @deprecated Prefer `variant="compact"`. */
     compact?: boolean;
-    /** Control density — inline is for drawer row/card in-place edit. */
-    variant?: "default" | "compact" | "inline";
+    /** Control density — inline is for drawer row/card in-place edit; inline-cell keeps label+control on one line. */
+    variant?: "default" | "compact" | "inline" | "inline-cell";
     "data-layout-runtime-editable"?: string;
     "data-layout-runtime-ref-key"?: string;
     "data-layout-runtime-row-key"?: string;
@@ -46,6 +46,12 @@ const INLINE_INPUT_CLASS =
 
 const INLINE_SELECT_CLASS =
     "h-6 min-w-0 w-full max-w-full rounded border border-alloy-stone/12 bg-white/80 px-1 py-0 text-[11px] leading-tight text-alloy-midnight outline-none transition-[border-color,box-shadow] hover:border-alloy-stone/25 focus:border-alloy-juniper/40 focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,162,131,0.08)]";
+
+const INLINE_CELL_INPUT_CLASS =
+    "inline-block h-6 w-auto min-w-[4.5rem] max-w-[10rem] rounded border border-alloy-stone/12 bg-white/80 px-1.5 py-0 text-[11px] leading-tight text-alloy-midnight align-baseline outline-none transition-[border-color,box-shadow] hover:border-alloy-stone/25 focus:border-alloy-juniper/40 focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,162,131,0.08)] [color-scheme:light]";
+
+const INLINE_CELL_SELECT_CLASS =
+    "inline-block h-6 w-auto min-w-[4.5rem] max-w-[10rem] rounded border border-alloy-stone/12 bg-white/80 px-1 py-0 text-[11px] leading-tight text-alloy-midnight align-baseline outline-none transition-[border-color,box-shadow] hover:border-alloy-stone/25 focus:border-alloy-juniper/40 focus:bg-white focus:shadow-[0_0_0_1px_rgba(0,162,131,0.08)]";
 
 function resolveSelectOptions(
     placement: InquiryChildPlacementFieldMetadata | undefined,
@@ -116,11 +122,13 @@ export default function LayoutRuntimeFieldInput({
     const optionSetOptions = useLayoutRuntimeOptionSetLoader(control.option_set_key);
     const variant = variantProp ?? (compact ? "compact" : "default");
     const inputClass =
-        variant === "inline" ? INLINE_INPUT_CLASS
+        variant === "inline-cell" ? INLINE_CELL_INPUT_CLASS
+        : variant === "inline" ? INLINE_INPUT_CLASS
         : variant === "compact" ? COMPACT_INPUT_CLASS
         : INPUT_CLASS;
     const selectClass =
-        variant === "inline" ? INLINE_SELECT_CLASS
+        variant === "inline-cell" ? INLINE_CELL_SELECT_CLASS
+        : variant === "inline" ? INLINE_SELECT_CLASS
         : variant === "compact" ? COMPACT_SELECT_CLASS
         : SELECT_CLASS;
 

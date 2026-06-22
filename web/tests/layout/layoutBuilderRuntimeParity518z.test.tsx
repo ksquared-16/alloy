@@ -61,13 +61,17 @@ describe("layoutBuilderRuntimeParity 5.18Z", () => {
     });
 
     it("configured related-list rows preserve template grid during edit — no form grid", () => {
-        const source = readFileSync(
+        const listSource = readFileSync(
             resolve(__dirname, "../../components/layout/lead/LeadEnrollmentCardList.tsx"),
             "utf8",
         );
-        expect(source).not.toContain("adminv2-drawer-enrollment-field-grid");
-        expect(source).toContain("data-enrollment-field-cell");
-        expect(source).toContain("LayoutRuntimeInlineEditFieldControl");
+        const cellSource = readFileSync(
+            resolve(__dirname, "../../components/layout/lead/LeadEnrollmentRepeaterFieldCell.tsx"),
+            "utf8",
+        );
+        expect(listSource).not.toContain("adminv2-drawer-enrollment-field-grid");
+        expect(listSource).toContain("LeadEnrollmentRepeaterFieldCell");
+        expect(cellSource).toContain("data-enrollment-inline-field");
     });
 
     it("editable cells use inline label+control layout in configured rows", () => {
@@ -90,7 +94,7 @@ describe("layoutBuilderRuntimeParity 5.18Z", () => {
                 />
             </LayoutRuntimeBlockEditProvider>,
         );
-        expect(html).toContain('data-enrollment-field-cell="true"');
+        expect(html).toContain('data-enrollment-inline-field="true"');
         expect(html).toContain('data-child-row-template-row="0"');
         expect(html).toContain('data-child-row-template-row="1"');
     });

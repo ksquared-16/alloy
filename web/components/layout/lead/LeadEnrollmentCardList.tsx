@@ -10,31 +10,23 @@ import {
     layoutRuntimeBlockAllowsFieldEdit,
     useLayoutRuntimeBlockEdit,
 } from "@/components/layout/LayoutRuntimeBlockEditContext";
-import LayoutRuntimeInlineEditFieldControl from "@/components/layout/LayoutRuntimeInlineEditFieldControl";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import LeadEnrollmentCardMetaLines from "@/components/layout/lead/LeadEnrollmentCardMetaLines";
+import LeadEnrollmentRepeaterFieldCell from "@/components/layout/lead/LeadEnrollmentRepeaterFieldCell";
 import DrawerOverviewEmptyState from "@/components/layout/DrawerOverviewEmptyState";
 import {
     formatLayoutRuntimeRepeaterColumnDisplay,
 } from "@/lib/layout/runtime/formatLayoutRuntimeRepeaterColumnDisplay";
-import {
-    readLayoutEditorDisplayConfig,
-    resolveLayoutCollectionColumnLinkAdornment,
-} from "@/lib/layout/layoutEditorDisplayConfig";
+import { resolveLayoutCollectionColumnLinkAdornment } from "@/lib/layout/layoutEditorDisplayConfig";
 import { layoutRuntimeCollectionColumnIsInlineEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import {
     readEnrollmentGridCellRole,
 } from "@/lib/layout/runtime/enrollmentGridPresentation";
-import { layoutRuntimeEnrollmentPlacementDependentValueReader } from "@/lib/layout/runtime/resolveLayoutRuntimeEnrollmentPlacementContext";
 import { layoutRuntimeRepeaterRowReactKey } from "@/lib/layout/runtime/layoutRuntimeRepeaterRowKey";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import type { LeadEnrollmentRowTemplatePresentation } from "@/lib/layout/runtime/resolveLeadEnrollmentRowTemplatePresentation";
 import { resolveChildRowTemplateRowLayout } from "@/lib/layout/runtime/resolveChildRowTemplateRowLayout";
-import {
-    PRESENTATION_DATA_VALUE_COMPACT,
-    PRESENTATION_LABEL,
-    PRESENTATION_LABEL_INLINE,
-} from "@/lib/presentation/presentationTypography";
+import { PRESENTATION_DATA_VALUE_COMPACT } from "@/lib/presentation/presentationTypography";
 
 type Props = {
     item: LayoutItem;
@@ -96,78 +88,6 @@ export default function LeadEnrollmentCardList({
 
     const configuredRowLayout = resolveChildRowTemplateRowLayout(item);
 
-    const renderEnrollmentColumnCell = (
-        row: ProofRuntimeRecord,
-        col: LayoutCollectionColumn,
-        rowKey: string,
-        isEditing: boolean,
-    ) => {
-        const inlineEditable = layoutRuntimeCollectionColumnIsInlineEditable(col, "production");
-        const showInlineEdit = isEditing && inlineEditable && Boolean(edit);
-
-        if (showInlineEdit && edit) {
-            return (
-                <LayoutRuntimeInlineEditFieldControl
-                    refKey={col.refKey}
-                    value={edit.getFieldValue(
-                        col.refKey,
-                        formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord }),
-                        rowKey,
-                    )}
-                    rowKey={rowKey}
-                    onChange={(v) => edit.setFieldValue(col.refKey, v, rowKey)}
-                    getDependentValue={layoutRuntimeEnrollmentPlacementDependentValueReader(
-                        row,
-                        anchorRecord,
-                        edit.getFieldValue,
-                        rowKey,
-                    )}
-                />
-            );
-        }
-
-        return renderConfiguredFieldValue(row, col);
-    };
-
-    const renderConfiguredFieldValue = (row: ProofRuntimeRecord, col: LayoutCollectionColumn) => {
-        const display = formatLayoutRuntimeRepeaterColumnDisplay(row, col, { anchorRecord });
-        const key = col.refKey.toLowerCase();
-        if (key.includes("status") || col.renderHint === "status") {
-            return (
-                <span className="inline-block rounded-full border border-alloy-juniper/20 bg-alloy-juniper/8 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/90">
-                    {display}
-                </span>
-            );
-        }
-        if (readEnrollmentGridCellRole(item, col) === "primary_link") {
-            const childId = String(row["child.id"] ?? row.id ?? "").trim();
-            const linkAdornment = resolveLayoutCollectionColumnLinkAdornment(col);
-            const synthetic: LayoutItem = {
-                id: col.refKey,
-                kind: "field",
-                refKey: col.refKey,
-                adornment: linkAdornment ?? col.adornment,
-                metadata: col.metadata,
-            };
-            if (childId && allowChildDrawer) {
-                return (
-                    <LayoutRuntimeChildLinkSurface
-                        componentName="LeadEnrollmentCardList"
-                        surface="drawer"
-                        item={synthetic}
-                        rowRecord={row}
-                        anchorRecord={anchorRecord}
-                        adornment={linkAdornment ?? col.adornment}
-                        display={display}
-                        onAction={onAdornmentAction}
-                        className={`block min-w-0 truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}
-                    />
-                );
-            }
-        }
-        return <span className={PRESENTATION_DATA_VALUE_COMPACT}>{display}</span>;
-    };
-
     return (
         <div
             className="min-w-0"
@@ -205,6 +125,16 @@ export default function LeadEnrollmentCardList({
                         const childId = String(row["child.id"] ?? row.id ?? "").trim();
                         const childPhotoUrl = String(row["child.photo_url"] ?? row.photo_url ?? row.image_url ?? "").trim() || null;
 
+                        const repeaterCellProps = {
+                            item,
+                            row,
+                            rowKey,
+                            anchorRecord,
+                            isEditing,
+                            allowChildDrawer,
+                            onAdornmentAction,
+                        };
+
                         if (configuredRowLayout) {
                             return (
                                 <li
@@ -216,50 +146,21 @@ export default function LeadEnrollmentCardList({
                                     data-enrollment-row-editing={isEditing ? "true" : "false"}
                                 >
                                     <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0 flex-1 space-y-2">
+                                        <div className="min-w-0 flex-1 space-y-1">
                                             {configuredRowLayout.map((layoutRow) => (
                                                 <div
                                                     key={layoutRow.rowIndex}
-                                                    className={`grid ${isEditing ? "gap-x-3 gap-y-1" : "gap-2"}`}
-                                                    style={{
-                                                        gridTemplateColumns: `repeat(${Math.max(1, layoutRow.columnCount)}, minmax(0, 1fr))`,
-                                                    }}
+                                                    className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1"
                                                     data-child-row-template-row={layoutRow.rowIndex}
                                                 >
                                                     {layoutRow.slots.map((col, slot) => {
-                                                        if (!col) {
-                                                            return (
-                                                                <div
-                                                                    key={`empty-${layoutRow.rowIndex}-${slot}`}
-                                                                    className="min-w-0"
-                                                                />
-                                                            );
-                                                        }
-                                                        const inlineEditable =
-                                                            isEditing
-                                                            && layoutRuntimeCollectionColumnIsInlineEditable(col, "production");
+                                                        if (!col) return null;
                                                         return (
-                                                            <div
-                                                                key={col.refKey}
-                                                                className="min-w-0"
-                                                                data-enrollment-field-cell="true"
-                                                                data-enrollment-field-editing={inlineEditable ? "true" : "false"}
-                                                            >
-                                                                {inlineEditable ?
-                                                                    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                                                                        <span className={`shrink-0 ${PRESENTATION_LABEL_INLINE}`}>
-                                                                            {col.label}
-                                                                        </span>
-                                                                        <span className="min-w-0 flex-1">
-                                                                            {renderEnrollmentColumnCell(row, col, rowKey, isEditing)}
-                                                                        </span>
-                                                                    </div>
-                                                                :   <div className="flex flex-col gap-0.5">
-                                                                        <span className={PRESENTATION_LABEL}>{col.label}</span>
-                                                                        {renderEnrollmentColumnCell(row, col, rowKey, isEditing)}
-                                                                    </div>
-                                                                }
-                                                            </div>
+                                                            <LeadEnrollmentRepeaterFieldCell
+                                                                key={`${layoutRow.rowIndex}-${col.refKey}-${slot}`}
+                                                                col={col}
+                                                                {...repeaterCellProps}
+                                                            />
                                                         );
                                                     })}
                                                 </div>
@@ -292,7 +193,7 @@ export default function LeadEnrollmentCardList({
                             >
                                 <div className="flex items-start justify-between gap-2">
                                     <div className="flex min-w-0 flex-1 items-start gap-2.5">
-                                        {!isEditing && showAvatar ?
+                                        {showAvatar ?
                                             <DrawerHouseholdChildLinkAvatar
                                                 childId={childId}
                                                 displayName={childDisplayName}
@@ -327,15 +228,16 @@ export default function LeadEnrollmentCardList({
                                                 </span>
                                             :   null}
                                         </div>
-                                        {!isEditing && showSecondaryMetadata && metaColumns.length > 0 ?
-                                            <LeadEnrollmentCardMetaLines row={row} metaColumns={metaColumns} />
-                                        : isEditing && showSecondaryMetadata && metaColumns.length > 0 ?
+                                        {showSecondaryMetadata && metaColumns.length > 0 ?
                                             <LeadEnrollmentCardMetaLines
+                                                item={item}
                                                 row={row}
                                                 metaColumns={metaColumns}
-                                                editing
                                                 rowKey={rowKey}
                                                 anchorRecord={anchorRecord}
+                                                isEditing={isEditing}
+                                                allowChildDrawer={allowChildDrawer}
+                                                onAdornmentAction={onAdornmentAction}
                                             />
                                         :   null}
                                         </div>

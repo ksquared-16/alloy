@@ -105,10 +105,11 @@ Stored on `LayoutItem.metadata` / column metadata:
 - Editable fields/columns with save adapters become inputs.
 - Non-editable fields remain display text.
 
-### Presentation (518Y/518Z)
+### Presentation (518Y–518AA)
 
-- **Same row grouping** — configured `childRowGroups` preserved; no stacked form grid.
-- **In-place controls** — `LayoutRuntimeInlineEditFieldControl` (`variant="inline"`) in row/card cells; see `web/components/layout/LayoutRuntimeInlineEditFieldControl.tsx`.
+- **Same row template in display and edit** — `LeadEnrollmentRepeaterFieldCell` renders inline `Label Value` in both modes; configured `childRowGroups` use flex-wrap lines, not stacked form labels.
+- **In-place controls** — `LayoutRuntimeInlineEditFieldControl` with `variant="inline-cell"` keeps label and control on one baseline (`w-auto`, no full-width line break).
+- **No separate edit layout** — related-list card list and meta lines must not branch to a form/grid edit renderer.
 - **Compact density** — 11px type, 24px control height, labels stay in configured positions.
 - **Persistence** — drawer-level **Save Changes** via `LayoutRuntimeDrawerEditProvider`; section **Done** exits edit mode only.
 
