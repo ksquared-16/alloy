@@ -38,10 +38,32 @@ export interface DocumentStructureSection {
     fields: DocumentStructureField[];
 }
 
+/** A line the detector considered a possible field but rejected, with a machine reason. */
+export interface RejectedLabelExample {
+    text: string;
+    reason: string;
+}
+
+/** Deterministic detection diagnostics — explains WHY a document did/didn't yield fields. */
+export interface StructureDiagnostics {
+    text_length: number;
+    line_count: number;
+    /** Total field candidates proposed (across all sections). */
+    candidate_labels: number;
+    /** Section headers the detector recognized (titles). */
+    section_headers: string[];
+    /** Sample of label-ish lines that were NOT turned into fields, with reasons (capped). */
+    rejected_examples: RejectedLabelExample[];
+    /** Field-candidate confidence breakdown. */
+    confidence_summary: { high: number; medium: number; low: number };
+}
+
 /** The deterministic detector's output. Never fabricated — empty when no text. */
 export interface DocumentStructureCandidate {
     sections: DocumentStructureSection[];
     warnings: string[];
+    /** Detection diagnostics (always present from the detector; optional for back-compat). */
+    diagnostics?: StructureDiagnostics;
 }
 
 /** What lands in `processing_cases.metadata.document_form_preview`. Preview only — no form created. */
