@@ -21,7 +21,15 @@ import { safeParseFormSchema, type FormField, type FormSchemaV1 } from "@/lib/fo
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer } from "@/components/forms/engine/FormEngineRenderer";
 import WorkspaceSectionHeader from "@/components/workspace/WorkspaceSectionHeader";
+import { parseLaunchFromEntityInput, LAUNCH_ENTITY_TYPES } from "@/lib/pos/packet/launchFromEntity";
 import PosPanel from "./PosPanel";
+
+const LAUNCH_TYPE_LABELS: Record<(typeof LAUNCH_ENTITY_TYPES)[number], string> = {
+    opportunity: "Lead / opportunity",
+    customer: "Household / customer",
+    person: "Parent / person",
+    customer_member: "Child",
+};
 
 interface FormRow {
     id: string;
@@ -72,6 +80,9 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
     const [packetResult, setPacketResult] = useState<{ url: string; alreadyPublished: boolean } | null>(null);
     const [packetErr, setPacketErr] = useState<string | null>(null);
     const [copied, setCopied] = useState(false);
+    // Launch from an existing record so the parent sees known info prefilled (optional).
+    const [launchType, setLaunchType] = useState<string>("");
+    const [launchId, setLaunchId] = useState<string>("");
 
     const loadForms = useCallback(async () => {
         setListErr(null);
@@ -99,6 +110,8 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
         setPacketResult(null);
         setPacketErr(null);
         setCopied(false);
+        setLaunchType("");
+        setLaunchId("");
         try {
             const res = await fetch(`/api/admin/forms/${formId}`, { credentials: "same-origin" });
             if (!res.ok) throw new Error(`Request failed (${res.status})`);
@@ -167,6 +180,11 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
     // Sprint 1 — create a parent packet (single step) + share link from this template.
     const createParentPacket = useCallback(
         async (formId: string) => {
+            const launch = parseLaunchFromEntityInput({ entityType: launchType, entityId: launchId });
+            if (!launch.ok) {
+                setPacketErr(launch.error);
+                return;
+            }
             setPacketBusy(true);
             setPacketErr(null);
             setPacketResult(null);
@@ -176,7 +194,10 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                     method: "POST",
                     credentials: "same-origin",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ form_definition_id: formId }),
+                    body: JSON.stringify({
+                        form_definition_id: formId,
+                        ...(launch.value ? { launch_from_entity: launch.value } : {}),
+                    }),
                 });
                 const b = (await res.json().catch(() => ({}))) as {
                     data?: { public_link?: { url?: string }; already_published?: boolean };
@@ -193,7 +214,7 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                 setPacketBusy(false);
             }
         },
-        [loadForms]
+        [loadForms, launchType, launchId]
     );
 
     const fieldById = useMemo(() => {
@@ -326,6 +347,29 @@ export default function PosFormsWorkspace({ focusFormId = null }: { focusFormId?
                                         {archiving ? "Archiving…" : "Archive"}
                                     </button>
                                 </div>
+                            </div>
+                            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-alloy-stone/12 bg-stone-50/60 px-3 py-1.5">
+                                <span className="text-[10.5px] font-medium text-stone-500">Launch from a record (optional — prefills known info):</span>
+                                <select
+                                    value={launchType}
+                                    onChange={(e) => setLaunchType(e.target.value)}
+                                    className="rounded border border-stone-200 bg-white px-1.5 py-0.5 text-[11px] text-stone-700"
+                                >
+                                    <option value="">None</option>
+                                    {LAUNCH_ENTITY_TYPES.map((t) => (
+                                        <option key={t} value={t}>
+                                            {LAUNCH_TYPE_LABELS[t]}
+                                        </option>
+                                    ))}
+                                </select>
+                                <input
+                                    type="text"
+                                    value={launchId}
+                                    onChange={(e) => setLaunchId(e.target.value)}
+                                    placeholder="record id (UUID)"
+                                    disabled={!launchType}
+                                    className="min-w-0 flex-1 rounded border border-stone-200 bg-white px-2 py-0.5 font-mono text-[10.5px] text-stone-700 disabled:bg-stone-100"
+                                />
                             </div>
                             {packetErr ? (
                                 <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">{packetErr}</div>

@@ -5,8 +5,8 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 import {
     createParentPacketFromTemplate,
     makeParentPacketTemplateDeps,
-    type ParentPacketLaunchFromEntity,
 } from "@/lib/pos/packet/createParentPacketFromTemplate";
+import { parseLaunchFromEntityBody } from "@/lib/pos/packet/launchFromEntity";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +17,6 @@ function deriveEmbedBaseUrl(request: NextRequest): string | null {
     const proto = (request.headers.get("x-forwarded-proto") ?? "https").split(",")[0]?.trim() || "https";
     return `${proto}://${host.trim()}`;
 }
-
-const LAUNCH_ENTITY_TYPES = new Set(["person", "customer", "customer_member", "opportunity"]);
 
 /**
  * POST /api/admin/pos/packets/from-template — Sprint 1 Packet Runtime Foundation.
@@ -49,19 +47,9 @@ export async function POST(request: NextRequest) {
     const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : undefined;
     const autopublish = typeof body.autopublish === "boolean" ? body.autopublish : undefined;
 
-    let launchFromEntity: ParentPacketLaunchFromEntity | undefined;
-    if (body.launch_from_entity && typeof body.launch_from_entity === "object" && !Array.isArray(body.launch_from_entity)) {
-        const lfe = body.launch_from_entity as Record<string, unknown>;
-        if (typeof lfe.entity_type === "string" && LAUNCH_ENTITY_TYPES.has(lfe.entity_type) && typeof lfe.entity_id === "string") {
-            const entityId = parseUuidParam(lfe.entity_id, "launch_from_entity.entity_id");
-            if (entityId instanceof NextResponse) return entityId;
-            launchFromEntity = {
-                entity_type: lfe.entity_type as ParentPacketLaunchFromEntity["entity_type"],
-                entity_id: entityId,
-                ...(typeof lfe.prefill_enabled === "boolean" ? { prefill_enabled: lfe.prefill_enabled } : {}),
-            };
-        }
-    }
+    const launchParsed = parseLaunchFromEntityBody(body.launch_from_entity);
+    if (!launchParsed.ok) return jsonError(launchParsed.error, 400);
+    const launchFromEntity = launchParsed.value ?? undefined;
 
     const supabase = createAdminClient();
 
