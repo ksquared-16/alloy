@@ -42,6 +42,12 @@ describe("workspaceModalCoordinator", () => {
         expect(getAdminV2WorkspaceModal()).toBe("inbox");
     });
 
+    it("opening analytics closes other shell modals", () => {
+        openWorkspaceModal("inbox");
+        openWorkspaceModal("analytics");
+        expect(getAdminV2WorkspaceModal()).toBe("analytics");
+    });
+
     it("opening a shell modal suppresses BOS action workspace", () => {
         openWorkspaceModal("inbox");
         expect(setActionWorkspaceOpenDocumentFlag).toHaveBeenCalledWith(false);

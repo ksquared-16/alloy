@@ -1,7 +1,7 @@
 import { setActionWorkspaceOpenDocumentFlag } from "@/lib/bos/bosRailPresentationFlags";
 
 /** Shell-level modals owned by AdminV2 workspace chrome (mutually exclusive). */
-export type AdminV2WorkspaceModalKey = "inbox" | "tasks" | "quick_message";
+export type AdminV2WorkspaceModalKey = "inbox" | "tasks" | "quick_message" | "analytics";
 
 export type AdminV2WorkspaceModalSnapshot = {
     active: AdminV2WorkspaceModalKey | null;

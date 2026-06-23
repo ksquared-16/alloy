@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import { WorkspaceRootLifecycleGrid } from "@/components/admin/workspace/WorkspaceRootLifecycleGrid";
+import { WorkspaceKpiOrientationCrossfade } from "@/components/admin/workspace/WorkspaceKpiOrientationCrossfade";
 import type { OperatorLifecycleLandingCard } from "@/lib/admin/buildOperatorLifecycleLanding";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 import { WorkspaceRootActionsRail } from "@/app/adminV2/components/workspace/WorkspaceRootActionsRail";
@@ -66,6 +67,8 @@ type Props = {
  */
 export function WorkspaceRootShell({
   orgName,
+  workspaceKpiStrip,
+  kpiStripPlaceholder = false,
   workspaceRollupRefined = false,
   lifecycleCards = [],
   lifecycleCardsPending = false,
@@ -101,6 +104,19 @@ export function WorkspaceRootShell({
               </div>
             </div>
           </div>
+
+          {workspaceKpiStrip?.length ?
+            <div
+              className={`adminv2-ws-root-kpi-zone px-0 ${workspaceRollupRefined ? "adminv2-ws-deferred-surface--refined" : "adminv2-ws-deferred-surface--coarse"}`}
+              data-workspace-zone="kpi-orientation"
+            >
+              <WorkspaceKpiOrientationCrossfade
+                kpis={workspaceKpiStrip}
+                placeholderPending={kpiStripPlaceholder}
+                maxVisible={5}
+              />
+            </div>
+          :   null}
 
           <section
             className={`adminv2-ws-root-departments-zone ${workspaceRollupRefined ? "adminv2-ws-deferred-surface--refined" : "adminv2-ws-deferred-surface--coarse"}`}

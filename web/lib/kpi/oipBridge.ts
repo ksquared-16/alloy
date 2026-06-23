@@ -1,11 +1,15 @@
 import type { MetricKey, WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import type { OipMetricKey } from "@/lib/metrics/types";
+import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
+import { fetchResolvedMetrics } from "@/lib/metrics/fetchResolvedMetrics";
+import { resolvedMetricsToStripValues } from "@/lib/kpi/workspaceOipExposure";
 
 /** Workspace strip key → OIP MetricEngine key. */
 export const OIP_STRIP_KEY_TO_METRIC: Record<string, OipMetricKey> = {
     "oip.enrollment.tour_conversion_rate": "enrollment.tour_conversion_rate",
     "oip.enrollment.time_to_schedule_tour": "enrollment.time_to_schedule_tour",
     "oip.ops.work_overdue_count": "ops.work_overdue_count",
+    "oip.forms.completion_rate": "forms.completion_rate",
 };
 
 export function isOipStripMetricKey(key: string): key is MetricKey {
@@ -32,28 +36,31 @@ export type OipMetricStripValues = Record<OipMetricKey, string>;
 export async function fetchOipMetricStripValues(params: {
     keys: OipMetricKey[];
     siteId?: string | null;
+    workUnitId?: string | null;
     window?: string;
 }): Promise<OipMetricStripValues> {
-    const out = {} as OipMetricStripValues;
-    if (!params.keys.length) return out;
+    const resolved = await fetchResolvedMetrics({
+        keys: params.keys,
+        siteId: params.siteId,
+        workUnitId: params.workUnitId,
+        window: (params.window as "rolling_30d" | undefined) ?? "rolling_30d",
+    });
+    return resolvedMetricsToStripValues(resolved);
+}
 
-    const qs = new URLSearchParams();
-    qs.set("keys", params.keys.join(","));
-    if (params.window) qs.set("window", params.window);
-    if (params.siteId) qs.set("site_id", params.siteId);
-
-    const res = await fetch(`/api/admin/metrics/resolve?${qs.toString()}`, { credentials: "include" });
-    if (!res.ok) return out;
-
-    const body = (await res.json()) as {
-        metrics?: Array<{ metric_key: string; formatted_value: string }>;
-    };
-    for (const m of body.metrics ?? []) {
-        if (params.keys.includes(m.metric_key as OipMetricKey)) {
-            out[m.metric_key as OipMetricKey] = m.formatted_value;
-        }
-    }
-    return out;
+/** Full MetricEngine resolve payload for analytics cards. */
+export async function fetchOipMetricsResolved(params: {
+    keys: OipMetricKey[];
+    siteId?: string | null;
+    workUnitId?: string | null;
+    window?: string;
+}): Promise<ResolvedMetricMap> {
+    return fetchResolvedMetrics({
+        keys: params.keys,
+        siteId: params.siteId,
+        workUnitId: params.workUnitId,
+        window: (params.window as "rolling_30d" | undefined) ?? "rolling_30d",
+    });
 }
 
 export function resolveOipStripValue(

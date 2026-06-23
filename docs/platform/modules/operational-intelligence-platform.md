@@ -98,11 +98,40 @@ Table: `metric_snapshots` (migration `20260623120000_metric_snapshots.sql`).
 | `value_numeric`, `value_json` | Scalar + auxiliary meta |
 | `computed_at` | When the snapshot was taken |
 
-**Live MetricEngine remains source of truth.** Snapshots are written explicitly via `writeMetricSnapshot()` (cron/job in Phase 2). Reads use `readMetricSnapshot()` when API `mode=snapshot`.
+**Live MetricEngine remains source of truth.** Snapshots are written explicitly — not on every resolve.
+
+| Write path | Auth | Scope |
+|------------|------|-------|
+| `POST /api/admin/metrics/snapshots/write` | `x-cron-token` (`INTERNAL_CRON_TOKEN`) | All orgs or optional `org_id` in body |
+| Same route | Admin/ops session | Single org only |
+
+Writer: `web/lib/metrics/snapshots/writeOrgMetricSnapshots.ts` — resolves **live** metrics for all registered keys, windows `rolling_7d` + `rolling_30d`, org scope + active sites, then appends rows via `writeMetricSnapshot()`.
+
+**Scheduling:** No platform cron scheduler yet. Wire external cron (Render/Vercel cron) to POST with `x-cron-token` daily. Manual backfill: same route as admin/ops.
+
+**Trend reads:** `GET /api/admin/metrics/trends` — batch snapshot series, server-computed delta/direction/label + normalized sparkline Y (0–1). Analytics cards show **live** values with **snapshot-based** trend text.
+
+**Limitations:** Trends require ≥2 snapshots for the same metric/window/scope. Single snapshot → “No trend yet”. Sparkline is indicative only — not a report chart.
+
+Reads on resolve API: `mode=snapshot` uses `readLatestMetricSnapshot()` (24h max age); falls back to live.
 
 Indexes: `(org_id, metric_key, computed_at)`, `(org_id, metric_key, scope_type, scope_id)`, `(org_id, computed_at)`.
 
 RLS: org-scoped SELECT for authenticated; service_role for writes.
+
+---
+
+## Site filter
+
+All OIP client surfaces pass the workspace **site filter** (`WorkspaceSiteFilterContext`) as `site_id` on resolve/trends APIs:
+
+- Analytics modal
+- `/workspace` OIP KPI strip + lifecycle performance metrics
+- Work-unit OIP strip (existing)
+
+Server enforces access via `assertMetricSiteAccess()` → `locationAllowedUnderSiteScope()`. Out-of-scope `site_id` → **403**.
+
+`null` site = org-wide aggregate (all allowed sites).
 
 ---
 
@@ -169,6 +198,8 @@ Packs are assigned via industry bootstrap + future Settings → Analytics.
 
 Query: `keys`, `window` (`rolling_24h` | `rolling_7d` | `rolling_30d`), optional `site_id`, `work_unit_id`, `mode` (`live` | `snapshot`), optional `status_key` / `lifecycle_stage` dimensions.
 
+**`GET /api/admin/metrics/trends`** — batch snapshot trend (delta, direction, sparkline Y). Query: `keys`, `window`, optional `site_id`, `points` (2–24).
+
 Returns deterministic, BOS-ready payloads with `sources`, `source_metadata`, `meta`, `resolve_mode`, and optional `kpi` health.
 
 Unknown keys return **400** with `unknown_keys`, `available_keys`, and `packs`.
@@ -196,9 +227,10 @@ See `docs/platform/modules/ai-platform.md` and BOS GATE 0 doctrine.
 | Phase | Deliverable | Status |
 |-------|-------------|--------|
 | 0 + MVP | Metric registry, 3 metrics, 1 KPI, admin API, tests | **Done** |
-| 1 | 11 metrics, snapshots, KPI expansion, API hardening, O-family workspace bridge | **Current** |
-| 2 | Snapshot cron, `kpi_targets` table, Settings UI | Planned |
-| 3 | Analytics workspace UI | Planned |
+| 1 | 11 metrics, snapshots, KPI expansion, API hardening, O-family workspace bridge | **Done** |
+| 2A | Analytics modal, KPI packs, workspace OIP exposure | **Done** |
+| 2B | Snapshot writer route, trend API, sparklines, site filter passthrough | **Current** |
+| 3 | Settings targets UI, scheduled snapshot cron infra | Planned |
 | 4 | BOS aggregate queries | Planned |
 | 5 | Report exports | Planned |
 

@@ -14,6 +14,7 @@ describe("sidebar modal navigation", () => {
         const items = read("app/adminV2/components/SidebarModalNavItems.tsx");
         expect(items).toContain("SidebarTasksNavItem");
         expect(items).toContain("SidebarInboxNavItem");
+        expect(items).toContain("SidebarAnalyticsNavItem");
         expect(items).toContain("SidebarFormsNavItem");
         expect(items).not.toContain("SidebarNotificationsNavItem");
         expect(items).toContain("dispatchAdminV2OpenTasksPanel");

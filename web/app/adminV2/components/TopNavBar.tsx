@@ -18,6 +18,7 @@ import TopNavNotificationsLink from "@/app/adminV2/components/TopNavNotification
 import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import InboxModal from "@/app/adminV2/components/InboxModal";
+import AnalyticsModal from "@/app/adminV2/components/AnalyticsModal";
 import { warmCommandCenterModal } from "@/lib/communications/v2/commandCenterPrefetchCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
@@ -118,6 +119,7 @@ export default function TopNavBar() {
   const tasksModalOpen = activeWorkspaceModal === "tasks";
   const inboxModalOpen = activeWorkspaceModal === "inbox";
   const quickMessageOpen = activeWorkspaceModal === "quick_message";
+  const analyticsModalOpen = activeWorkspaceModal === "analytics";
 
   useEffect(() => {
     const onLaunch = (ev: Event) => {
@@ -153,11 +155,16 @@ export default function TopNavBar() {
       }
       openWorkspaceModal("inbox");
     };
+    const onOpenAnalytics = () => {
+      openWorkspaceModal("analytics");
+    };
     window.addEventListener("adminv2:open-tasks-panel", onOpenTasks);
     window.addEventListener("adminv2:open-inbox-modal", onOpenInbox);
+    window.addEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
     return () => {
       window.removeEventListener("adminv2:open-tasks-panel", onOpenTasks);
       window.removeEventListener("adminv2:open-inbox-modal", onOpenInbox);
+      window.removeEventListener("adminv2:open-analytics-modal", onOpenAnalytics);
     };
   }, []);
 
@@ -201,6 +208,7 @@ export default function TopNavBar() {
       />
       <MyTasksModal open={tasksModalOpen} onClose={() => closeWorkspaceModal("tasks")} />
       <InboxModal open={inboxModalOpen} onClose={() => closeWorkspaceModal("inbox")} />
+      <AnalyticsModal open={analyticsModalOpen} onClose={() => closeWorkspaceModal("analytics")} />
     </header>
   );
 }

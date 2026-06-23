@@ -185,6 +185,14 @@ const DEFINITIONS: Record<MetricKey, MetricDefinition> = {
         defaultLane: "business",
         defaultFormat: "count",
     },
+    "oip.forms.completion_rate": {
+        key: "oip.forms.completion_rate",
+        family: "O",
+        allowedSurfaces: ["workspace", "work_unit"],
+        defaultLabel: "Forms completion",
+        defaultLane: "business",
+        defaultFormat: "percent",
+    },
 };
 
 const KEYS = new Set<string>(Object.keys(DEFINITIONS));

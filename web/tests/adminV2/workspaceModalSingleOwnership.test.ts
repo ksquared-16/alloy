@@ -8,6 +8,7 @@ describe("workspace modal single ownership", () => {
         expect(topNav).toContain("subscribeAdminV2WorkspaceModal");
         expect(topNav).toContain('activeWorkspaceModal === "tasks"');
         expect(topNav).toContain('activeWorkspaceModal === "inbox"');
+        expect(topNav).toContain('activeWorkspaceModal === "analytics"');
         expect(topNav).toContain("openWorkspaceModal");
         expect(topNav).toContain("closeWorkspaceModal");
         expect(topNav).not.toContain("setTasksModalOpen(true)");

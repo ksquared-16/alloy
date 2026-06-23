@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { adminContextFailureResponse } from "@/lib/admin/getAdminContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { assertMetricSiteAccess } from "@/lib/metrics/resolveMetricSiteAccess";
 import {
     parseOipMetricKeys,
     listMetricDefinitions,
@@ -166,6 +167,14 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminClient();
     const orgId = access.orgId;
 
+    const scope = scopeDimensionsFromAccess(access);
+    if (siteId) {
+        const siteAllowed = await assertMetricSiteAccess({ supabase, orgId, scope, siteId });
+        if (!siteAllowed) {
+            return NextResponse.json({ error: "Site not in access scope" }, { status: 403 });
+        }
+    }
+
     const { data: orgSettings } = await supabase
         .from("org_settings")
         .select("metadata")
@@ -173,7 +182,6 @@ export async function GET(request: NextRequest) {
         .maybeSingle();
     const orgMetadata = (orgSettings as { metadata?: unknown } | null)?.metadata ?? null;
 
-    const scope = scopeDimensionsFromAccess(access);
     const window: MetricTimeWindowKey = parsedWindow ?? "rolling_30d";
 
     const resolved = await resolveMetrics({

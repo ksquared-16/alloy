@@ -142,6 +142,20 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                                         </div>
                                     </div>
                                 </div>
+
+                                {lifecycle.performanceMetrics?.length ?
+                                    <div
+                                        className="adminv2-ws-lifecycle-command-metrics mt-4 grid grid-cols-2 gap-3 border-t border-alloy-forge/10 pt-4"
+                                        data-ws-lifecycle-oip-metrics="true"
+                                    >
+                                        {lifecycle.performanceMetrics.map((m) => (
+                                            <div key={m.label} className="adminv2-ws-lifecycle-command-metric">
+                                                <div className="adminv2-ws-lifecycle-command-metric-label">{m.label}</div>
+                                                <div className="adminv2-ws-lifecycle-command-metric-value">{m.value}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                :   null}
                             </div>
 
                             <div className="adminv2-ws-lifecycle-command-footer flex items-center justify-end border-t border-alloy-forge/10 bg-white/45 px-6 py-4 backdrop-blur-[2px]">

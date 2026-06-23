@@ -28,6 +28,7 @@ import { warmOperatorWorkUnitEntryFromHref } from "@/lib/admin/operatorWorkUnitE
 import { workUnitRouteSlugsEquivalent } from "@/lib/admin/workUnitRouteSlug";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import {
+    SidebarAnalyticsNavItem,
     SidebarFormsNavItem,
     SidebarInboxNavItem,
     SidebarTasksNavItem,
@@ -139,6 +140,8 @@ function SidebarNav({
     const tasksLink = <SidebarTasksNavItem collapsed={collapsed} />;
 
     const inboxLink = <SidebarInboxNavItem collapsed={collapsed} />;
+
+    const analyticsLink = <SidebarAnalyticsNavItem collapsed={collapsed} />;
 
     const formsLink = <SidebarFormsNavItem collapsed={collapsed} />;
 
@@ -332,6 +335,7 @@ function SidebarNav({
                         {homeLink}
                         {tasksLink}
                         {inboxLink}
+                        {analyticsLink}
                         {formsLink}
                     </div>
                     <div className="min-h-0 flex-1" aria-hidden />
@@ -345,6 +349,7 @@ function SidebarNav({
                         {homeLink}
                         {tasksLink}
                         {inboxLink}
+                        {analyticsLink}
                         {formsLink}
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto">{lifecycleNavExpanded}</div>

@@ -1,14 +1,6 @@
 # Analytics Workspace — Implementation Plan (Phase 2–3)
 
-**Status:** Design only — no UI implementation in Phase 1.  
-**Parent:** `docs/platform/modules/operational-intelligence-platform.md`
-
----
-
-## Recommendation
-
-Ship **Phase 2** as API + snapshot job + Settings targets before building UI.  
-A **lightweight empty shell** is low-risk only if it is read-only with no metric computation — defer until Phase 3 unless product wants a nav placeholder.
+**Status:** Phase 2A modal shell shipped; Phase 2B trends + site filter shipped. Full route-first workspace deferred.
 
 ---
 

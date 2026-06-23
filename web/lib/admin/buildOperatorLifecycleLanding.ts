@@ -41,6 +41,8 @@ export type OperatorLifecycleLandingCard = {
     activeRecordCount: number | null;
     /** Populated when needs-attention lane summaries are available; otherwise null (UI shows —). */
     needsAttentionCount: number | null;
+    /** Optional OIP performance preview (max 2) — server-resolved formatted values only. */
+    performanceMetrics?: readonly { label: string; value: string }[];
 };
 
 export type OperatorLifecycleWorkUnitRow = {

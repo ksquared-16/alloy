@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { WorkspaceRootShell, type WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
 import {
     type WorkspaceRootDepartmentRow,
@@ -15,6 +16,16 @@ import {
     buildWorkspaceRootDepartmentTileRollupLine,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
+import { fetchOipMetricsResolved } from "@/lib/kpi/oipBridge";
+import type { OipMetricStripValues } from "@/lib/kpi/oipBridge";
+import {
+    appendWorkspaceOipKpis,
+    enrichLifecycleCardsWithOipMetrics,
+    resolveWorkspaceOipMetricKeys,
+    resolvedMetricsToStripValues,
+} from "@/lib/kpi/workspaceOipExposure";
+import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
+import type { WorkspaceGrowthDeptSnapshot } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import {
     bustWorkspaceDepartmentsFetchDedupe,
@@ -113,6 +124,8 @@ function buildWorkspaceQuickRollup(
  */
 export default function AdminV2WorkspaceIndexPage() {
     const { orgName: orgNameFromContext, orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
+    const siteFilter = useWorkspaceSiteFilter();
+    const selectedSiteId = siteFilter?.selectedSiteId ?? null;
     const hydratedCacheRef = useRef(false);
     const [workspaceCachePrimed, setWorkspaceCachePrimed] = useState(false);
     const [departments, setDepartments] = useState<WorkspaceRootDepartmentRow[]>([]);
@@ -123,6 +136,12 @@ export default function AdminV2WorkspaceIndexPage() {
     const [orgOpportunityKpis, setOrgOpportunityKpis] = useState<KPIVm[] | null>(null);
     const [workspaceKpiStrip, setWorkspaceKpiStrip] = useState<KPIVm[] | undefined>(undefined);
     const [workspaceKpiPlacementPending, setWorkspaceKpiPlacementPending] = useState(false);
+    const [workspacePlacementRows, setWorkspacePlacementRows] = useState<WorkspaceKpiPlacementRow[]>([]);
+    const [workspaceScopeHasPlacements, setWorkspaceScopeHasPlacements] = useState(false);
+    const [workspaceGrowthSnapshots, setWorkspaceGrowthSnapshots] = useState<WorkspaceGrowthDeptSnapshot[]>([]);
+    const [oipMetricValues, setOipMetricValues] = useState<OipMetricStripValues | undefined>(undefined);
+    const [oipResolved, setOipResolved] = useState<ResolvedMetricMap>({});
+    const [oipFetchPending, setOipFetchPending] = useState(false);
     const [workspaceRollupRefined, setWorkspaceRollupRefined] = useState(false);
     const [fetchSettledEmpty, setFetchSettledEmpty] = useState(false);
     const [deptRefreshNonce, setDeptRefreshNonce] = useState(0);
@@ -393,6 +412,7 @@ export default function AdminV2WorkspaceIndexPage() {
                                     setWorkspaceRollupRefined(true);
 
                                     const growthSnapshotsRef = growthSnapshots;
+                                    setWorkspaceGrowthSnapshots(growthSnapshotsRef);
                                     const metricsForPlacement: WorkspaceRootMetrics = {
                                         ...m,
                                         departments: active.length,
@@ -419,8 +439,11 @@ export default function AdminV2WorkspaceIndexPage() {
                                     try {
                                         if (placementRes?.ok) {
                                             const body = (await placementRes.json().catch(() => ({}))) as PlacementBody;
+                                            const placementRows = body.items ?? [];
+                                            setWorkspacePlacementRows(placementRows);
+                                            setWorkspaceScopeHasPlacements(body.scope_has_placements === true);
                                             placementStrip = resolveKpisForWorkspace({
-                                                placementRows: body.items ?? [],
+                                                placementRows,
                                                 scopeHasPlacementRows: body.scope_has_placements === true,
                                                 metrics: metricsForPlacement,
                                                 growthSnapshots: growthSnapshotsRef,
@@ -562,6 +585,57 @@ export default function AdminV2WorkspaceIndexPage() {
         };
     }, [metrics, departments.length]);
 
+    useEffect(() => {
+        if (!workspaceRollupRefined) return;
+        const keys = resolveWorkspaceOipMetricKeys(workspacePlacementRows, workspaceScopeHasPlacements);
+        if (!keys.length) {
+            setOipResolved({});
+            setOipMetricValues(undefined);
+            setOipFetchPending(false);
+            return;
+        }
+        let cancelled = false;
+        setOipFetchPending(true);
+        void fetchOipMetricsResolved({ keys, window: "rolling_30d", siteId: selectedSiteId })
+            .then((data) => {
+                if (!cancelled) {
+                    setOipResolved(data);
+                    setOipMetricValues(resolvedMetricsToStripValues(data));
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setOipFetchPending(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [workspaceRollupRefined, workspacePlacementRows, workspaceScopeHasPlacements, selectedSiteId]);
+
+    const workspaceKpiStripWithOip = useMemo(() => {
+        if (!workspaceRollupRefined) return undefined;
+        const base = resolveKpisForWorkspace({
+            placementRows: workspacePlacementRows,
+            scopeHasPlacementRows: workspaceScopeHasPlacements,
+            metrics: metricsResolved,
+            growthSnapshots: workspaceGrowthSnapshots,
+            oipMetricValues,
+        }).items;
+        return appendWorkspaceOipKpis(base, oipResolved);
+    }, [
+        workspaceRollupRefined,
+        workspacePlacementRows,
+        workspaceScopeHasPlacements,
+        metricsResolved,
+        workspaceGrowthSnapshots,
+        oipMetricValues,
+        oipResolved,
+    ]);
+
+    const lifecycleCardsWithOip = useMemo(
+        () => enrichLifecycleCardsWithOipMetrics(lifecycleCards, oipResolved),
+        [lifecycleCards, oipResolved]
+    );
+
     if (error && !loading && !workspaceCachePrimed) {
         return (
             <div className="max-w-3xl">
@@ -583,13 +657,13 @@ export default function AdminV2WorkspaceIndexPage() {
                 metrics={metricsResolved}
                 metricsLoading={false}
                 orgOpportunityKpis={orgOpportunityKpis}
-                workspaceKpiStrip={workspaceKpiStrip}
-                kpiStripPlaceholder={workspaceKpiPlacementPending}
+                workspaceKpiStrip={workspaceKpiStripWithOip}
+                kpiStripPlaceholder={workspaceKpiPlacementPending || oipFetchPending}
                 kpiQuietReserveOnly={workspaceKpiPlacementPending}
                 workspaceRollupRefined={workspaceRollupRefined}
                 departmentsPending={false}
                 deptTileStatsPending={false}
-                lifecycleCards={lifecycleCards}
+                lifecycleCards={lifecycleCardsWithOip}
                 lifecycleCardsPending={lifecycleCardsPending}
             />
             {isLifecycleDebugUiEnabled() ? (

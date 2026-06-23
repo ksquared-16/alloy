@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { ClipboardList, Inbox, ListChecks } from "lucide-react";
+import { ClipboardList, Inbox, ListChecks, BarChart3 } from "lucide-react";
 
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operationalTasksWorkspaceCache";
@@ -14,6 +14,7 @@ import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
     dispatchAdminV2OpenInboxModal,
     dispatchAdminV2OpenTasksPanel,
+    dispatchAdminV2OpenAnalyticsModal,
 } from "@/lib/adminV2/workspaceModalEvents";
 
 const EXPANDED_PRIMARY_LINK = "adminv2-sidebar-primary-link block w-full rounded-md px-2 py-1.5 font-medium";
@@ -191,6 +192,20 @@ function SidebarRouteNavItem({
                 </span>
             }
         </AdminV2NavLink>
+    );
+}
+
+export function SidebarAnalyticsNavItem({ collapsed }: { collapsed: boolean }) {
+    return (
+        <SidebarModalNavButton
+            collapsed={collapsed}
+            title="Analytics — operational intelligence metrics"
+            label="Analytics"
+            icon={<BarChart3 size={collapsed ? 20 : 16} strokeWidth={1.75} className="shrink-0" />}
+            badge={null}
+            dataAttr="analytics"
+            onClick={() => dispatchAdminV2OpenAnalyticsModal()}
+        />
     );
 }
 
