@@ -73,6 +73,61 @@ export function buildFamilyGuidedPlan(schema: FormSchemaV1, children: FamilyChil
     return { steps, scope };
 }
 
+/* ----------------------------- family context detect ----------------------------- */
+
+/**
+ * Detect the family-packet children from a session's launch_context (or link metadata):
+ * `selected_customer_member_ids[]` (+ optional `selected_customer_member_labels` map).
+ * Returns the ordered child refs (empty when not a family launch).
+ */
+export function detectFamilyChildren(launchContext: Record<string, unknown> | null | undefined): FamilyChildRef[] {
+    const ids = launchContext?.selected_customer_member_ids;
+    if (!Array.isArray(ids)) return [];
+    const rawLabels = launchContext?.selected_customer_member_labels;
+    const labels: Record<string, string> =
+        rawLabels && typeof rawLabels === "object" && !Array.isArray(rawLabels) ? (rawLabels as Record<string, string>) : {};
+    const seen = new Set<string>();
+    const out: FamilyChildRef[] = [];
+    for (const id of ids) {
+        if (typeof id !== "string" || !id || seen.has(id)) continue;
+        seen.add(id);
+        out.push({ customer_member_id: id, ...(typeof labels[id] === "string" ? { label: labels[id] } : {}) });
+    }
+    return out;
+}
+
+/** True when the launch is a multi-child family packet AND the form has child-scoped fields. */
+export function isFamilyIntake(children: FamilyChildRef[], childFieldIds: string[]): boolean {
+    return children.length > 1 && childFieldIds.length > 0;
+}
+
+/**
+ * Seed per-child value slices: the FIRST child inherits the form's prefilled child-field
+ * values (link prefill targets one child); siblings start empty.
+ */
+export function seedFamilyChildSlices(
+    children: FamilyChildRef[],
+    childFieldIds: string[],
+    initialValues: Record<string, unknown>
+): Record<string, Record<string, unknown>> {
+    const out: Record<string, Record<string, unknown>> = {};
+    const childSet = new Set(childFieldIds);
+    children.forEach((c, i) => {
+        const slice: Record<string, unknown> = {};
+        if (i === 0) for (const fid of childSet) if (fid in initialValues) slice[fid] = initialValues[fid];
+        out[c.customer_member_id] = slice;
+    });
+    return out;
+}
+
+/** Base (non-child) values = the payload values minus child-scoped fields. */
+export function omitChildFields(values: Record<string, unknown>, childFieldIds: string[]): Record<string, unknown> {
+    const childSet = new Set(childFieldIds);
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(values)) if (!childSet.has(k)) out[k] = v;
+    return out;
+}
+
 /* ------------------------------ payload assembly ------------------------------ */
 
 export interface FamilyChildAnswers {

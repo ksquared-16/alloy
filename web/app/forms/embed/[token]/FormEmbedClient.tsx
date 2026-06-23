@@ -12,6 +12,17 @@ import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/fo
 import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
 import { subSchemaForFieldsGrouped } from "@/lib/forms/guidedIntakePartition";
 import { buildGuidedQuestionPlan, mirrorCanonicalValues, type GuidedQuestionPlan } from "@/lib/forms/guidedQuestionPlan";
+import {
+    buildFamilyGuidedPlan,
+    detectFamilyChildren,
+    isFamilyIntake,
+    seedFamilyChildSlices,
+    omitChildFields,
+    assembleFamilySubmissionPayload,
+    type FamilyChildRef,
+    type FamilyGuidedPlan,
+} from "@/lib/forms/familyGuidedPlan";
+import { partitionFieldsByScope } from "@/lib/forms/fieldScope";
 
 type ResolvePacketMeta = {
     packet_session_id: string;
@@ -31,6 +42,7 @@ type ResolveOk = {
         packet?: ResolvePacketMeta | null;
         option_values_by_field_id?: Record<string, string[]>;
         option_choices_by_field_id?: Record<string, FormEngineOptionChoice[]>;
+        link?: { metadata?: Record<string, unknown> };
     };
 };
 
@@ -108,6 +120,10 @@ export function FormEmbedClient({
     // Guided intake shell (packets only): schema-generated steps, rendered by field type.
     const [guidedPlan, setGuidedPlan] = useState<GuidedQuestionPlan | null>(null);
     const [guidedStepIdx, setGuidedStepIdx] = useState(0);
+    // Family Packet intake (multi-child): per-child value slices + step index.
+    const [familyChildren, setFamilyChildren] = useState<FamilyChildRef[]>([]);
+    const [childSlices, setChildSlices] = useState<Record<string, Record<string, unknown>>>({});
+    const [familyStepIdx, setFamilyStepIdx] = useState(0);
     const draftPersistSeqRef = useRef(0);
     const submittedRef = useRef(false);
 
@@ -128,6 +144,9 @@ export function FormEmbedClient({
             setPacketProgress(null);
             setGuidedPlan(null);
             setGuidedStepIdx(0);
+            setFamilyChildren([]);
+            setChildSlices({});
+            setFamilyStepIdx(0);
             const res = await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" });
             const json = (await res.json()) as ResolveOk | ApiErr;
             if (!json.ok) {
@@ -162,6 +181,7 @@ export function FormEmbedClient({
             }
             setSchema(parsedSchema);
             setPacketProgress(json.data.packet ?? null);
+            setFamilyChildren(detectFamilyChildren(json.data.link?.metadata));
             setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));
             setOptionChoicesByFieldId(normalizeOptionChoices(json.data.option_choices_by_field_id));
 
@@ -276,12 +296,26 @@ export function FormEmbedClient({
         setSubmitting(true);
         setMessage(null);
         setValidationErrors(null);
+        // Family packets: assemble first child into canonical values, all children into meta.family.
+        const famChildFieldIds = schema && packetProgress && familyChildren.length > 1 ? partitionFieldsByScope(schema).child : [];
+        const submitPayload =
+            schema && isFamilyIntake(familyChildren, famChildFieldIds)
+                ? (() => {
+                      const a = assembleFamilySubmissionPayload({
+                          baseValues: omitChildFields((payload.values ?? {}) as Record<string, unknown>, famChildFieldIds),
+                          childAnswers: familyChildren.map((c) => ({ customer_member_id: c.customer_member_id, ...(c.label ? { label: c.label } : {}), values: childSlices[c.customer_member_id] ?? {} })),
+                          childFieldIds: famChildFieldIds,
+                          meta: (payload as { meta?: Record<string, unknown> }).meta ?? {},
+                      });
+                      return { ...payload, values: a.values, meta: a.meta };
+                  })()
+                : payload;
         try {
             const res = await fetch(`/api/public/forms/${encToken}/submissions/${submissionId}/submit`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    payload,
+                    payload: submitPayload,
                     option_values_by_field_id: optionValuesByFieldId,
                 }),
             });
@@ -322,7 +356,16 @@ export function FormEmbedClient({
         } finally {
             setSubmitting(false);
         }
-    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token]);
+    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token, schema, familyChildren, childSlices]);
+
+    // Seed per-child value slices once when a family intake starts (first child inherits prefill).
+    useEffect(() => {
+        if (phase !== "ready" || !schema || !packetProgress || familyChildren.length <= 1) return;
+        const childFieldIds = partitionFieldsByScope(schema).child;
+        if (!isFamilyIntake(familyChildren, childFieldIds)) return;
+        if (Object.keys(childSlices).length > 0) return;
+        setChildSlices(seedFamilyChildSlices(familyChildren, childFieldIds, (payload.values ?? {}) as Record<string, unknown>));
+    }, [phase, schema, packetProgress, familyChildren, childSlices, payload.values]);
 
     if (phase === "loading") {
         return (
@@ -428,6 +471,37 @@ export function FormEmbedClient({
         setPayload(mirrored);
         void persistDraft(mirrored);
     };
+    // Family Packet intake (multi-child): household once → child step per child → signatures.
+    const familyChildFieldIds = packetProgress != null && familyChildren.length > 1 ? partitionFieldsByScope(schema).child : [];
+    const familyMode = packetProgress != null && isFamilyIntake(familyChildren, familyChildFieldIds);
+    const familyPlan: FamilyGuidedPlan | null = familyMode ? buildFamilyGuidedPlan(schema, familyChildren) : null;
+    const familySteps = familyPlan?.steps ?? [];
+    const famIdx = familyMode ? Math.min(familyStepIdx, familySteps.length - 1) : 0;
+    const famStep = familyMode ? familySteps[famIdx] : null;
+    const famIsLast = familyMode ? famIdx >= familySteps.length - 1 : false;
+    const persistFamilyDraft = (baseValues: Record<string, unknown>, slices: Record<string, Record<string, unknown>>) => {
+        const a = assembleFamilySubmissionPayload({
+            baseValues: omitChildFields(baseValues, familyChildFieldIds),
+            childAnswers: familyChildren.map((c) => ({ customer_member_id: c.customer_member_id, ...(c.label ? { label: c.label } : {}), values: slices[c.customer_member_id] ?? {} })),
+            childFieldIds: familyChildFieldIds,
+            meta: (payload as { meta?: Record<string, unknown> }).meta ?? {},
+        });
+        void persistDraft({ ...payload, values: a.values, meta: a.meta } as FormPayload);
+    };
+    const onFamilyBaseChange = (next: FormPayload) => {
+        setValidationErrors(null);
+        setMessage(null);
+        setPayload(next);
+        persistFamilyDraft((next.values ?? {}) as Record<string, unknown>, childSlices);
+    };
+    const onFamilyChildChange = (childId: string, next: FormPayload) => {
+        setValidationErrors(null);
+        setMessage(null);
+        const slices = { ...childSlices, [childId]: (next.values ?? {}) as Record<string, unknown> };
+        setChildSlices(slices);
+        persistFamilyDraft((payload.values ?? {}) as Record<string, unknown>, slices);
+    };
+
     const summaries = packetProgress?.step_summaries ?? [];
     const currentStepNum = packetProgress ? packetProgress.current_sequence_index + 1 : 0;
     const remaining = packetProgress
@@ -465,7 +539,72 @@ export function FormEmbedClient({
                         )}
                     </div>
                 ) : null}
-                {packetProgress && !guidedPlan ? (
+                {familyMode && famStep ? (
+                    <div>
+                        <div className="mb-3 flex items-center justify-between text-xs text-neutral-500">
+                            <span className="font-medium text-neutral-700">
+                                {famStep.kind === "household" ? "Household" : famStep.kind === "signature" ? "Sign" : famStep.child?.label ?? "Child"}
+                            </span>
+                            <span className="flex items-center gap-2">
+                                <span>Step {famIdx + 1} of {familySteps.length}</span>
+                                <span className="flex gap-1.5">
+                                    {familySteps.map((s, i) => (
+                                        <span key={s.key} className={clsx("h-1.5 w-5 rounded-full", i <= famIdx ? "bg-neutral-800" : "bg-neutral-200")} />
+                                    ))}
+                                </span>
+                            </span>
+                        </div>
+                        <div className="mb-4">
+                            <h2 className="text-base font-semibold text-neutral-900">{famStep.title}</h2>
+                            {famStep.subtitle ? <p className="mt-1 text-sm text-neutral-600">{famStep.subtitle}</p> : null}
+                        </div>
+                        {famStep.kind === "child" && famStep.child ? (
+                            <FormEngineRenderer
+                                schema={subSchemaForFieldsGrouped(schema, famStep.fieldIds, famStep.title)}
+                                payload={{ values: childSlices[famStep.child.customer_member_id] ?? {}, groups: {}, signatures: {} } as FormPayload}
+                                onChange={(next) => onFamilyChildChange(famStep.child!.customer_member_id, next)}
+                                mode="edit"
+                                optionValuesByFieldId={optionValuesByFieldId}
+                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                variant="embed"
+                                validationErrors={validationErrors ?? undefined}
+                            />
+                        ) : (
+                            <FormEngineRenderer
+                                schema={subSchemaForFieldsGrouped(schema, famStep.fieldIds, famStep.title)}
+                                payload={payload}
+                                onChange={onFamilyBaseChange}
+                                mode="edit"
+                                optionValuesByFieldId={optionValuesByFieldId}
+                                optionChoicesByFieldId={optionChoicesByFieldId}
+                                variant="embed"
+                                validationErrors={validationErrors ?? undefined}
+                            />
+                        )}
+                        <div className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
+                            {errorLines.length ? (
+                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
+                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
+                                </ul>
+                            ) : null}
+                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
+                            <div className="flex items-center gap-3">
+                                {famIdx > 0 ? (
+                                    <button type="button" className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600" onClick={() => setFamilyStepIdx((i) => Math.max(0, i - 1))}>Back</button>
+                                ) : null}
+                                {famIsLast ? (
+                                    <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
+                                        {submitting ? "Submitting…" : "Confirm & submit"}
+                                    </button>
+                                ) : (
+                                    <button type="button" disabled={!submissionId} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => setFamilyStepIdx((i) => Math.min(familySteps.length - 1, i + 1))}>
+                                        Continue
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : packetProgress && !guidedPlan ? (
                     <div className="py-10 text-center text-sm text-neutral-500">Preparing your steps…</div>
                 ) : guided && guidedStep ? (
                     <div>

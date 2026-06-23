@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { buildFamilyGuidedPlan, assembleFamilySubmissionPayload } from "@/lib/forms/familyGuidedPlan";
+import {
+    buildFamilyGuidedPlan,
+    assembleFamilySubmissionPayload,
+    detectFamilyChildren,
+    isFamilyIntake,
+    seedFamilyChildSlices,
+    omitChildFields,
+} from "@/lib/forms/familyGuidedPlan";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 
 function f(id: string, type: FormField["type"], src?: { entity_type: string; field_key: string }): FormField {
@@ -38,6 +45,43 @@ describe("buildFamilyGuidedPlan", () => {
         const householdOnly: FormSchemaV1 = { ...schema, fields: schema.fields.filter((x) => x.id === "parent_email"), sections: [{ id: "s", field_ids: ["parent_email"] }] };
         const plan = buildFamilyGuidedPlan(householdOnly, [{ customer_member_id: "mck" }, { customer_member_id: "emy" }]);
         expect(plan.steps.map((s) => s.kind)).toEqual(["household"]);
+    });
+});
+
+describe("detectFamilyChildren / isFamilyIntake", () => {
+    it("reads selected_customer_member_ids (+ labels) from launch_context", () => {
+        const refs = detectFamilyChildren({
+            selected_customer_member_ids: ["mck", "emy", "mck"],
+            selected_customer_member_labels: { mck: "McKenzie", emy: "Emyrson" },
+        });
+        expect(refs).toEqual([
+            { customer_member_id: "mck", label: "McKenzie" },
+            { customer_member_id: "emy", label: "Emyrson" },
+        ]);
+    });
+    it("returns [] when not a family launch", () => {
+        expect(detectFamilyChildren({})).toEqual([]);
+        expect(detectFamilyChildren(null)).toEqual([]);
+    });
+    it("family intake requires >1 child AND child fields (preserves single-child behavior)", () => {
+        expect(isFamilyIntake([{ customer_member_id: "a" }, { customer_member_id: "b" }], ["child_name"])).toBe(true);
+        expect(isFamilyIntake([{ customer_member_id: "a" }], ["child_name"])).toBe(false); // single child → existing flow
+        expect(isFamilyIntake([{ customer_member_id: "a" }, { customer_member_id: "b" }], [])).toBe(false); // no child fields
+    });
+});
+
+describe("seedFamilyChildSlices / omitChildFields", () => {
+    it("seeds the FIRST child from prefilled child values; siblings empty", () => {
+        const slices = seedFamilyChildSlices(
+            [{ customer_member_id: "mck" }, { customer_member_id: "emy" }],
+            ["child_name", "dob"],
+            { child_name: "McKenzie", dob: "2018-01-01", parent_email: "p@x.com" }
+        );
+        expect(slices.mck).toEqual({ child_name: "McKenzie", dob: "2018-01-01" }); // prefill, child fields only
+        expect(slices.emy).toEqual({}); // sibling starts blank
+    });
+    it("base values exclude child-scoped fields", () => {
+        expect(omitChildFields({ parent_email: "p@x", child_name: "M", dob: "x" }, ["child_name", "dob"])).toEqual({ parent_email: "p@x" });
     });
 });
 
