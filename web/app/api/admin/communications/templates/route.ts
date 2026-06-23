@@ -2,51 +2,159 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
-import { TEMPLATE_CHANNELS } from "@/lib/communications/v2/templatesAnnouncements";
+import {
+    computeTemplateTokenPaths,
+    parseTemplateListFilters,
+    validateCreateTemplateInput,
+} from "@/lib/communications/v2/templateService";
 
-/** GET list / POST create communication templates. DARK behind comms_v2_templates. No send. (PKG-18D) */
-export async function GET() {
-    if (!isCommsV2FlagEnabled("comms_v2_templates")) return NextResponse.json({ error: "not_found" }, { status: 404 });
+/**
+ * Communications V2 — template list + create (Phase 1 / B2).
+ * Pattern: requireAdminOrOps -> getAdminContextCached -> createAdminClient.
+ * service_role writes; org_id enforced on every query. No UI/announcements/provider.
+ */
+
+const TEMPLATE_COLS =
+    "id, org_id, name, description, category, channel, status, current_version_id, created_by, updated_by, created_at, updated_at";
+const VERSION_COLS = "id, template_id, version_number, subject, body, token_paths, created_at";
+
+/** GET /api/admin/communications/templates — list org templates (optional category/channel/status filters). */
+export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const { searchParams } = new URL(request.url);
+    const parsed = parseTemplateListFilters({
+        category: searchParams.get("category"),
+        channel: searchParams.get("channel"),
+        status: searchParams.get("status"),
+    });
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+    const limit = Math.min(Math.max(Number(searchParams.get("limit")) || 100, 1), 200);
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+    const orgId = ctx.orgId;
+
+    let query = supabase
         .from("communication_templates")
-        .select("id,name,channel,category,approval_status,updated_at")
-        .eq("org_id", ctx.orgId)
+        .select(TEMPLATE_COLS)
+        .eq("org_id", orgId)
         .order("updated_at", { ascending: false })
-        .limit(500);
+        .limit(limit);
+
+    if (parsed.value.category) query = query.eq("category", parsed.value.category);
+    if (parsed.value.channel) query = query.eq("channel", parsed.value.channel);
+    if (parsed.value.status) query = query.eq("status", parsed.value.status);
+
+    const { data: templates, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ templates: data ?? [] });
+
+    const rows = templates ?? [];
+
+    // Attach current-version summary where available (org-scoped).
+    const versionIds = rows
+        .map((t) => (t as Record<string, unknown>).current_version_id)
+        .filter((v): v is string => typeof v === "string" && v.length > 0);
+
+    const versionById = new Map<string, Record<string, unknown>>();
+    if (versionIds.length > 0) {
+        const { data: versions, error: vErr } = await supabase
+            .from("communication_template_versions")
+            .select(VERSION_COLS)
+            .eq("org_id", orgId)
+            .in("id", versionIds);
+        if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
+        for (const v of versions ?? []) {
+            versionById.set(String((v as Record<string, unknown>).id), v as Record<string, unknown>);
+        }
+    }
+
+    const out = rows.map((t) => {
+        const rec = t as Record<string, unknown>;
+        const cvId = typeof rec.current_version_id === "string" ? rec.current_version_id : null;
+        return { ...rec, current_version: cvId ? versionById.get(cvId) ?? null : null };
+    });
+
+    return NextResponse.json({ templates: out });
 }
 
+/** POST /api/admin/communications/templates — create a template + its initial version. */
 export async function POST(request: NextRequest) {
-    if (!isCommsV2FlagEnabled("comms_v2_templates")) return NextResponse.json({ error: "not_found" }, { status: 404 });
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
+
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    let body: { name?: string; channel?: string; category?: string | null };
+
+    let body: unknown;
     try {
         body = await request.json();
     } catch {
-        return NextResponse.json({ error: "invalid json" }, { status: 400 });
+        return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
-    const name = String(body.name ?? "").trim();
-    const channel = String(body.channel ?? "");
-    if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
-    if (!(TEMPLATE_CHANNELS as readonly string[]).includes(channel)) {
-        return NextResponse.json({ error: "invalid channel" }, { status: 400 });
-    }
+
+    const parsed = validateCreateTemplateInput(body);
+    if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+    const input = parsed.value;
     const supabase = createAdminClient();
-    const { data, error } = await supabase
+    const orgId = ctx.orgId;
+    const userId = ctx.userId;
+
+    // 1) Insert the template container (current_version_id set after the version exists).
+    const { data: template, error: tErr } = await supabase
         .from("communication_templates")
-        .insert({ org_id: ctx.orgId, name, channel, category: body.category ?? null, approval_status: "draft", created_by_user_id: ctx.userId })
-        .select("id")
+        .insert({
+            org_id: orgId,
+            name: input.name,
+            description: input.description,
+            category: input.category,
+            channel: input.channel,
+            status: input.status,
+            created_by: userId,
+            updated_by: userId,
+        })
+        .select(TEMPLATE_COLS)
         .single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, id: data?.id });
+    if (tErr || !template) {
+        return NextResponse.json({ error: tErr?.message ?? "Failed to create template" }, { status: 500 });
+    }
+    const templateId = String((template as Record<string, unknown>).id);
+
+    // 2) Insert the initial version (version_number = 1).
+    const tokenPaths = computeTemplateTokenPaths(input.subject, input.body);
+    const { data: version, error: vErr } = await supabase
+        .from("communication_template_versions")
+        .insert({
+            org_id: orgId,
+            template_id: templateId,
+            version_number: 1,
+            subject: input.subject,
+            body: input.body,
+            token_paths: tokenPaths,
+            created_by: userId,
+        })
+        .select(VERSION_COLS)
+        .single();
+    if (vErr || !version) {
+        return NextResponse.json({ error: vErr?.message ?? "Failed to create initial version" }, { status: 500 });
+    }
+
+    // 3) Point the template at its current version.
+    const versionId = String((version as Record<string, unknown>).id);
+    const { data: updated, error: uErr } = await supabase
+        .from("communication_templates")
+        .update({ current_version_id: versionId })
+        .eq("id", templateId)
+        .eq("org_id", orgId)
+        .select(TEMPLATE_COLS)
+        .single();
+    if (uErr || !updated) {
+        return NextResponse.json({ error: uErr?.message ?? "Failed to link current version" }, { status: 500 });
+    }
+
+    return NextResponse.json({ template: { ...(updated as Record<string, unknown>), current_version: version } }, { status: 201 });
 }
