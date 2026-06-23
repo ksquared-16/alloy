@@ -12,7 +12,8 @@
  * No packet-runtime, resolver, or duplicate-detection logic lives here.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { LAUNCH_ENTITY_TYPES, parseLaunchFromEntityInput } from "@/lib/pos/packet/launchFromEntity";
 import { buildRecordPickerOptions, type RecordPickerOption } from "@/lib/pos/packet/recordPickerOptions";
 
@@ -43,6 +44,32 @@ export default function RecordLaunchPicker({
     const [manualId, setManualId] = useState("");
     const [manualErr, setManualErr] = useState<string | null>(null);
     const seq = useRef(0);
+    // Portal positioning so the results menu escapes the POS modal's overflow-hidden ancestors.
+    const inputWrapRef = useRef<HTMLDivElement | null>(null);
+    const [menuRect, setMenuRect] = useState<{ left: number; top: number; width: number } | null>(null);
+    const menuOpen = !manual && !value && query.trim().length >= 2;
+
+    const updateMenuRect = useCallback(() => {
+        const el = inputWrapRef.current;
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        setMenuRect({ left: r.left, top: r.bottom + 4, width: r.width });
+    }, []);
+
+    useLayoutEffect(() => {
+        if (!menuOpen) {
+            setMenuRect(null);
+            return;
+        }
+        updateMenuRect();
+        const onMove = () => updateMenuRect();
+        window.addEventListener("scroll", onMove, true);
+        window.addEventListener("resize", onMove);
+        return () => {
+            window.removeEventListener("scroll", onMove, true);
+            window.removeEventListener("resize", onMove);
+        };
+    }, [menuOpen, updateMenuRect, results]);
 
     // Debounced search against the existing global-search API.
     useEffect(() => {
@@ -156,7 +183,7 @@ export default function RecordLaunchPicker({
                     {manualErr ? <p className="mt-1 text-[10px] text-amber-700">{manualErr}</p> : null}
                 </div>
             ) : (
-                <div className="relative mt-1">
+                <div className="mt-1" ref={inputWrapRef}>
                     <input
                         type="text"
                         value={query}
@@ -164,31 +191,39 @@ export default function RecordLaunchPicker({
                         placeholder="Search a lead, parent, child, or household by name…"
                         className="w-full rounded border border-stone-200 bg-white px-2 py-1 text-[11.5px] text-stone-700"
                     />
-                    {query.trim().length >= 2 ? (
-                        <div className="absolute z-10 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-stone-200 bg-white shadow-lg">
-                            {searching && !results ? (
-                                <div className="px-3 py-2 text-[11px] text-stone-400">Searching…</div>
-                            ) : results && results.length === 0 ? (
-                                <div className="px-3 py-2 text-[11px] text-stone-400">No matching records.</div>
-                            ) : (
-                                (results ?? []).map((opt) => (
-                                    <button
-                                        key={`${opt.entity_type}:${opt.entity_id}`}
-                                        type="button"
-                                        onClick={() => {
-                                            onChange(opt);
-                                            setQuery("");
-                                            setResults(null);
-                                        }}
-                                        className="flex w-full flex-col items-start border-b border-stone-100 px-3 py-1.5 text-left last:border-b-0 hover:bg-emerald-50/60"
-                                    >
-                                        <span className="truncate text-[12px] font-medium text-alloy-midnight">{opt.label}</span>
-                                        {opt.sublabel ? <span className="truncate text-[10px] text-stone-400">{opt.sublabel}</span> : null}
-                                    </button>
-                                ))
-                            )}
-                        </div>
-                    ) : null}
+                    {menuOpen && menuRect && typeof document !== "undefined"
+                        ? createPortal(
+                              <div
+                                  style={{ position: "fixed", left: menuRect.left, top: menuRect.top, width: menuRect.width, zIndex: 90 }}
+                                  className="max-h-56 overflow-y-auto rounded-md border border-stone-200 bg-white shadow-xl"
+                              >
+                                  {searching && !results ? (
+                                      <div className="px-3 py-2 text-[11px] text-stone-400">Searching…</div>
+                                  ) : results && results.length === 0 ? (
+                                      <div className="px-3 py-2 text-[11px] text-stone-400">No matching records.</div>
+                                  ) : (
+                                      (results ?? []).map((opt) => (
+                                          <button
+                                              key={`${opt.entity_type}:${opt.entity_id}`}
+                                              type="button"
+                                              onMouseDown={(e) => {
+                                                  // mousedown (not click) so it fires before the input blurs/menu closes
+                                                  e.preventDefault();
+                                                  onChange(opt);
+                                                  setQuery("");
+                                                  setResults(null);
+                                              }}
+                                              className="flex w-full flex-col items-start border-b border-stone-100 px-3 py-1.5 text-left last:border-b-0 hover:bg-emerald-50/60"
+                                          >
+                                              <span className="truncate text-[12px] font-medium text-alloy-midnight">{opt.label}</span>
+                                              {opt.sublabel ? <span className="truncate text-[10px] text-stone-400">{opt.sublabel}</span> : null}
+                                          </button>
+                                      ))
+                                  )}
+                              </div>,
+                              document.body
+                          )
+                        : null}
                 </div>
             )}
         </div>

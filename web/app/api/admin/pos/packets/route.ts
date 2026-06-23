@@ -5,6 +5,7 @@ import { jsonData } from "@/lib/admin/forms/formsAdminResponses";
 import { FORM_PUBLIC_LINK_SAFE_SELECT } from "@/lib/admin/forms/formsAdminDb";
 import {
     buildPosPacketReadModel,
+    isPosCreatedPacket,
     type PosPacketDefinitionRow,
     type PosPacketItemRow,
     type PosPacketLinkRow,
@@ -32,12 +33,14 @@ export async function GET() {
         .from("form_packet_definitions")
         .select("id, key, name, is_active, metadata, created_at")
         .eq("org_id", ctx.orgId)
-        .filter("metadata->>created_via", "eq", "pos_packet_from_template")
+        .not("metadata->>created_via", "is", null)
         .order("created_at", { ascending: false })
-        .limit(200);
+        .limit(400);
     if (defErr) return NextResponse.json({ error: defErr.message }, { status: 500 });
 
-    const definitions = (defsRaw ?? []) as PosPacketDefinitionRow[];
+    // Include both POS packet flows (template + composer); filter in JS since the JSON key
+    // can't be matched against a set via `.in`.
+    const definitions = ((defsRaw ?? []) as PosPacketDefinitionRow[]).filter((d) => isPosCreatedPacket(d.metadata)).slice(0, 200);
     if (definitions.length === 0) return jsonData([]);
 
     const packetIds = definitions.map((d) => d.id);
@@ -56,7 +59,7 @@ export async function GET() {
             .order("created_at", { ascending: false }),
         supabase
             .from("form_packet_sessions")
-            .select("id, packet_definition_id, status, operator_review_status, created_at, completed_at")
+            .select("id, packet_definition_id, status, operator_review_status, created_at, completed_at, started_via_public_link_id")
             .eq("org_id", ctx.orgId)
             .in("packet_definition_id", packetIds),
     ]);
@@ -95,6 +98,42 @@ export async function GET() {
         forms = (formRows ?? []) as PosFormNameRow[];
     }
 
-    const summaries = buildPosPacketReadModel({ definitions, items, forms, links, sessions });
+    // Resolve child + recipient display names for share rows (from link metadata).
+    const childIds = new Set<string>();
+    const recipientIds = new Set<string>();
+    for (const l of links) {
+        const m = l.metadata ?? {};
+        const c = (m.composer_child_id ?? m.selected_customer_member_id) as unknown;
+        const r = (m.composer_recipient_id ?? m.recipient_person_id) as unknown;
+        if (typeof c === "string") childIds.add(c);
+        if (typeof r === "string") recipientIds.add(r);
+    }
+
+    const childLabels: Record<string, string> = {};
+    const recipientLabels: Record<string, string> = {};
+    const recipientContacts: Record<string, { email: string | null; phone: string | null }> = {};
+    if (childIds.size > 0) {
+        const { data: cm } = await supabase
+            .from("customer_members")
+            .select("id, display_name, first_name, last_name")
+            .eq("org_id", ctx.orgId)
+            .in("id", [...childIds]);
+        for (const m of (cm ?? []) as Array<{ id: string; display_name: string | null; first_name: string | null; last_name: string | null }>) {
+            childLabels[m.id] = (m.display_name ?? "").trim() || `${m.first_name ?? ""} ${m.last_name ?? ""}`.trim() || `${m.id.slice(0, 8)}…`;
+        }
+    }
+    if (recipientIds.size > 0) {
+        const { data: pp } = await supabase
+            .from("persons")
+            .select("id, full_name, first_name, last_name, email, phone")
+            .eq("org_id", ctx.orgId)
+            .in("id", [...recipientIds]);
+        for (const p of (pp ?? []) as Array<{ id: string; full_name: string | null; first_name: string | null; last_name: string | null; email: string | null; phone: string | null }>) {
+            recipientLabels[p.id] = (p.full_name ?? "").trim() || `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || (p.email ?? "").trim() || `${p.id.slice(0, 8)}…`;
+            recipientContacts[p.id] = { email: p.email ?? null, phone: p.phone ?? null };
+        }
+    }
+
+    const summaries = buildPosPacketReadModel({ definitions, items, forms, links, sessions, childLabels, recipientLabels, recipientContacts });
     return jsonData(summaries);
 }
