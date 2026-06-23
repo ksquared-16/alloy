@@ -35,13 +35,13 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
             onClose={onClose}
             dataModalAttr="adminv2-inbox-modal"
             ariaLabelledBy="adminv2-inbox-modal-title"
-            panelClassName="max-h-[min(88vh,42rem)]"
+            panelClassName="max-h-[min(88vh,44rem)]"
         >
             <div
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-white"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-[#f8f9fa]"
                 data-adminv2-inbox-modal="true"
             >
-                <div className="flex shrink-0 flex-col gap-2 border-b border-alloy-stone/15 bg-white px-3 py-2.5">
+                <div className="flex shrink-0 flex-col gap-3 border-b border-alloy-stone/15 bg-white px-4 py-3 shadow-sm">
                     <div className="flex items-center justify-between gap-2">
                         <div className="flex min-w-0 items-center gap-2">
                             <MessageSquare className="h-4 w-4 shrink-0 text-alloy-midnight/65" aria-hidden strokeWidth={2} />
@@ -79,7 +79,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                         />
                     :   null}
                 </div>
-                <div className="flex min-h-[min(22rem,65vh)] flex-1 flex-col overflow-hidden">
+                <div className="flex min-h-[min(22rem,65vh)] flex-1 flex-col overflow-hidden bg-[#f8f9fa] p-3">
                     {commandCenterEnabled ?
                         <CommunicationsModalTabPanel tab={tab} />
                     :   <InboxPanel

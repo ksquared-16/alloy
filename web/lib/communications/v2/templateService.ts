@@ -11,9 +11,9 @@
  */
 
 import {
-    isTemplateCategory,
     isTemplateChannel,
     isTemplateStatus,
+    normalizeTemplateCategory,
     templateChannelSupportsSubject,
     type TemplateCategory,
     type TemplateChannel,
@@ -74,8 +74,8 @@ export function validateCreateTemplateInput(body: unknown): ValidationResult<Cre
     const name = asTrimmedString(b.name);
     if (!name) return err("name is required");
 
-    const category = asTrimmedString(b.category);
-    if (!isTemplateCategory(category)) return err(`invalid category '${category}'`);
+    const category = normalizeTemplateCategory(b.category);
+    if (!category) return err("category is required");
 
     const channel = asTrimmedString(b.channel);
     if (!isTemplateChannel(channel)) return err(`invalid channel '${channel}'`);
@@ -149,8 +149,8 @@ export function validatePatchTemplateInput(
         meta.description = d.length > 0 ? d : null;
     }
     if (b.category !== undefined) {
-        const c = asTrimmedString(b.category);
-        if (!isTemplateCategory(c)) return err(`invalid category '${c}'`);
+        const c = normalizeTemplateCategory(b.category);
+        if (!c) return err("category cannot be empty");
         meta.category = c;
     }
     if (b.channel !== undefined) {
@@ -261,11 +261,8 @@ export function parseTemplateListFilters(raw: {
     status?: string | null;
 }): ValidationResult<{ category?: TemplateCategory; channel?: TemplateChannel; status?: TemplateStatus }> {
     const filters: { category?: TemplateCategory; channel?: TemplateChannel; status?: TemplateStatus } = {};
-    const category = asTrimmedString(raw.category);
-    if (category) {
-        if (!isTemplateCategory(category)) return err(`invalid category filter '${category}'`);
-        filters.category = category;
-    }
+    const category = normalizeTemplateCategory(raw.category);
+    if (category) filters.category = category;
     const channel = asTrimmedString(raw.channel);
     if (channel) {
         if (!isTemplateChannel(channel)) return err(`invalid channel filter '${channel}'`);

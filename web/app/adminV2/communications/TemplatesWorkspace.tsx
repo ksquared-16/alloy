@@ -9,11 +9,10 @@ import {
     validateCommunicationTokenPaths,
 } from "@/lib/communications/v2/templateTokens";
 import {
-    TEMPLATE_CATEGORIES,
+    TEMPLATE_CATEGORY_PLACEHOLDER,
     TEMPLATE_CHANNELS,
     TEMPLATE_STATUSES,
     templateChannelSupportsSubject,
-    type TemplateCategory,
     type TemplateChannel,
     type TemplateStatus,
 } from "@/lib/communications/v2/templateSchema";
@@ -43,7 +42,7 @@ type TemplateRow = {
     id: string;
     name: string;
     description: string | null;
-    category: TemplateCategory;
+    category: string;
     channel: TemplateChannel;
     status: TemplateStatus;
     current_version_id: string | null;
@@ -54,7 +53,7 @@ type TemplateRow = {
 type EditorDraft = {
     name: string;
     description: string;
-    category: TemplateCategory;
+    category: string;
     channel: TemplateChannel;
     status: TemplateStatus;
     subject: string;
@@ -64,7 +63,7 @@ type EditorDraft = {
 const EMPTY_DRAFT: EditorDraft = {
     name: "",
     description: "",
-    category: "general",
+    category: "",
     channel: "email",
     status: "draft",
     subject: "",
@@ -94,7 +93,7 @@ export default function TemplatesWorkspace() {
 
     // filters
     const [search, setSearch] = useState("");
-    const [categoryFilter, setCategoryFilter] = useState<TemplateCategory | "">("");
+    const [categoryFilter, setCategoryFilter] = useState("");
     const [channelFilter, setChannelFilter] = useState<TemplateChannel | "">("");
     const [statusFilter, setStatusFilter] = useState<TemplateStatus | "">("");
 
@@ -310,20 +309,15 @@ export default function TemplatesWorkspace() {
                         className="mt-2 w-full rounded-lg border border-alloy-stone/18 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 focus:border-[#00A283]/35 focus:outline-none focus:ring-1 focus:ring-[#00A283]/20"
                     />
                     <div className="mt-2 grid grid-cols-1 gap-1.5">
-                        <select
+                        <input
+                            type="search"
                             data-template-filter-category="true"
                             aria-label="Filter by category"
                             value={categoryFilter}
-                            onChange={(e) => setCategoryFilter(e.target.value as TemplateCategory | "")}
+                            onChange={(e) => setCategoryFilter(e.target.value)}
+                            placeholder="Filter category…"
                             className="w-full rounded-md border border-alloy-stone/18 bg-white px-2 py-1 text-[11px] text-alloy-midnight/80"
-                        >
-                            <option value="">All categories</option>
-                            {TEMPLATE_CATEGORIES.map((c) => (
-                                <option key={c} value={c}>
-                                    {c}
-                                </option>
-                            ))}
-                        </select>
+                        />
                         <select
                             data-template-filter-channel="true"
                             aria-label="Filter by channel"
@@ -426,18 +420,13 @@ export default function TemplatesWorkspace() {
                         <div className="grid grid-cols-3 gap-2">
                             <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
                                 Category
-                                <select
+                                <input
                                     data-template-category="true"
                                     value={draft.category}
-                                    onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value as TemplateCategory }))}
+                                    onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
+                                    placeholder={TEMPLATE_CATEGORY_PLACEHOLDER}
                                     className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                                >
-                                    {TEMPLATE_CATEGORIES.map((c) => (
-                                        <option key={c} value={c}>
-                                            {c}
-                                        </option>
-                                    ))}
-                                </select>
+                                />
                             </label>
                             <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
                                 Channel
@@ -512,7 +501,7 @@ export default function TemplatesWorkspace() {
                                 type="button"
                                 data-template-save="true"
                                 onClick={() => void save()}
-                                disabled={saving || draft.name.trim() === ""}
+                                disabled={saving || draft.name.trim() === "" || draft.category.trim() === ""}
                                 className="rounded-lg bg-[#00A283] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#00916f] disabled:opacity-50"
                             >
                                 {saving ? "Saving…" : creating ? "Create" : "Save"}

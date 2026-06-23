@@ -67,12 +67,16 @@ export const COMMUNICATION_TOKEN_CATALOG: readonly CommunicationTokenDef[] = [
     { path: "person.first_name", label: "Child first name", group: "child", sample: "Mateo" },
     { path: "person.name", label: "Child full name", group: "child", sample: "Mateo Rivera" },
     { path: "person.id", label: "Child ID", group: "child", sample: "per_5567" },
-    // contact
+    // contact / guardian (documented workflow merge paths)
+    { path: "contact.id", label: "Contact ID", group: "contact", sample: "con_8821" },
     { path: "contact.email", label: "Contact email", group: "contact", sample: "rivera@example.com" },
     { path: "contact.phone", label: "Contact phone", group: "contact", sample: "(555) 010-2048" },
+    { path: "person.email", label: "Person email", group: "contact", sample: "rivera@example.com" },
+    { path: "person.phone", label: "Person phone", group: "contact", sample: "(555) 010-2048" },
     // location
     { path: "location.name", label: "Location name", group: "location", sample: "North Campus" },
-    // program
+    // program / enrollment
+    { path: "opportunity.id", label: "Opportunity ID", group: "program", sample: "opp_3301" },
     { path: "opportunity.program", label: "Program", group: "program", sample: "Toddlers" },
     // tour
     {
@@ -86,6 +90,12 @@ export const COMMUNICATION_TOKEN_CATALOG: readonly CommunicationTokenDef[] = [
         label: "Tour time",
         group: "tour",
         sample: "10:00 AM",
+    },
+    {
+        path: "schedule.start_at",
+        label: "Scheduled start",
+        group: "tour",
+        sample: "July 14, 2026 at 10:00 AM",
     },
     // org
     { path: "org.name", label: "Organization name", group: "org", sample: "Bright Beginnings" },

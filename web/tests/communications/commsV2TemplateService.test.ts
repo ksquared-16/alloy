@@ -48,8 +48,11 @@ describe("validateCreateTemplateInput", () => {
     it("requires a name", () => {
         expect(validateCreateTemplateInput({ ...base, name: "  " }).ok).toBe(false);
     });
-    it("rejects an invalid category", () => {
-        expect(validateCreateTemplateInput({ ...base, category: "marketing" }).ok).toBe(false);
+    it("requires a non-empty category", () => {
+        expect(validateCreateTemplateInput({ ...base, category: "  " }).ok).toBe(false);
+    });
+    it("accepts a free-text category", () => {
+        expect(validateCreateTemplateInput({ ...base, category: "marketing" }).ok).toBe(true);
     });
     it("rejects an invalid channel", () => {
         expect(validateCreateTemplateInput({ ...base, channel: "fax" }).ok).toBe(false);
@@ -152,8 +155,14 @@ describe("parseTemplateListFilters", () => {
         const r = parseTemplateListFilters({ channel: "email", status: "active" });
         expect(r).toEqual({ ok: true, value: { channel: "email", status: "active" } });
     });
-    it("rejects an invalid filter value", () => {
-        expect(parseTemplateListFilters({ category: "nope" }).ok).toBe(false);
+    it("accepts a free-text category filter", () => {
+        expect(parseTemplateListFilters({ category: "enrollment reminders" })).toEqual({
+            ok: true,
+            value: { category: "enrollment reminders" },
+        });
+    });
+    it("rejects an invalid channel filter", () => {
+        expect(parseTemplateListFilters({ channel: "fax" }).ok).toBe(false);
     });
     it("ignores empty/absent filters", () => {
         expect(parseTemplateListFilters({})).toEqual({ ok: true, value: {} });

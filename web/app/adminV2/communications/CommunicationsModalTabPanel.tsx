@@ -15,7 +15,10 @@ export const COMMUNICATIONS_MODAL_TABS: { key: CommunicationsModalTab; label: st
 
 export default function CommunicationsModalTabPanel({ tab }: { tab: CommunicationsModalTab }) {
     return (
-        <div data-comms-modal-body="true" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div
+            data-comms-modal-body="true"
+            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-white shadow-sm"
+        >
             {tab === "inbox" ? <CommandCenterShell /> : null}
             {tab === "templates" ? <TemplatesWorkspace /> : null}
             {tab === "announcements" ? <AnnouncementsWorkspace /> : null}

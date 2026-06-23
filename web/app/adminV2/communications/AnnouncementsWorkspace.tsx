@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type HTMLAttributes, type ReactNode, type SetStateAction } from "react";
 
 import { segmentCommunicationTemplate } from "@/lib/communications/v2/templateTokens";
 import { ANNOUNCEMENT_CHANNELS, type AnnouncementChannel } from "@/lib/communications/v2/announcementSchema";
@@ -69,7 +69,31 @@ type Draft = {
 
 const EMPTY_DRAFT: Draft = { title: "", channels: [], template_id: null, subject: "", body: "" };
 
-const GRAIN_LABEL: Record<AudienceGrain, string> = { families: "Families", children: "Children" };
+const GRAIN_LABEL: Record<AudienceGrain, string> = { families: "Families", children: "Children (guardians)" };
+
+/** Bordered section card for editor / audience panels. */
+function SectionCard({
+    title,
+    helper,
+    children,
+    className,
+    ...rest
+}: {
+    title: string;
+    helper?: string;
+    children: ReactNode;
+    className?: string;
+} & HTMLAttributes<HTMLDivElement>) {
+    return (
+        <div {...rest} className={`rounded-xl border border-alloy-stone/20 bg-white p-3 shadow-sm ${className ?? ""}`}>
+            <div className="mb-2 border-b border-alloy-stone/10 pb-2">
+                <div className="text-[11px] font-semibold text-alloy-midnight/85">{title}</div>
+                {helper ? <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/50">{helper}</p> : null}
+            </div>
+            <div className="flex flex-col gap-2.5">{children}</div>
+        </div>
+    );
+}
 
 /** Toggleable option chips (OR within a filter). Renders an empty note when there are no options. */
 function Chips({
@@ -503,99 +527,101 @@ export default function AnnouncementsWorkspace() {
             </aside>
 
             {/* CENTER — draft editor */}
-            <section data-announcement-editor="true" className="flex min-h-0 flex-col overflow-y-auto rounded-xl border border-alloy-stone/20 bg-white p-3">
-                {error && <div className="mb-2 rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-700">{error}</div>}
+            <section data-announcement-editor="true" className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+                {error && <div className="rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-700">{error}</div>}
                 {!hasSelection ? (
-                    <div className="flex h-full items-center justify-center text-[12px] text-alloy-midnight/50">
+                    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-alloy-stone/25 bg-white p-6 text-[12px] text-alloy-midnight/50">
                         Select an announcement or create a new one.
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
+                    <>
+                        <div className="flex items-center justify-between px-1">
                             <span className="text-xs font-semibold text-alloy-midnight/80">{creating ? "New announcement" : "Edit announcement"}</span>
                             <span data-announcement-status="true" className="rounded bg-alloy-stone/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-alloy-midnight/55">
                                 {status}
                             </span>
                         </div>
 
-                        <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                            Title
-                            <input
-                                data-announcement-title="true"
-                                value={draft.title}
-                                onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                                className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                            />
-                        </label>
+                        <SectionCard title="Announcement details" data-announcement-details="true">
+                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
+                                Title
+                                <input
+                                    data-announcement-title="true"
+                                    value={draft.title}
+                                    onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
+                                />
+                            </label>
 
-                        {/* Channel selector */}
-                        <div data-announcement-channels="true" className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                            Channels
-                            <div className="flex flex-wrap gap-1.5">
-                                {ANNOUNCEMENT_CHANNELS.map((c) => {
-                                    const on = draft.channels.includes(c);
-                                    return (
-                                        <button
-                                            key={c}
-                                            type="button"
-                                            data-channel-option={c}
-                                            aria-pressed={on}
-                                            onClick={() => toggleChannel(c)}
-                                            className={`rounded-md border px-2 py-1 text-[11px] ${
-                                                on ? "border-[#00A283]/50 bg-[#00A283]/10 text-alloy-midnight/90" : "border-alloy-stone/20 text-alloy-midnight/65"
-                                            }`}
-                                        >
-                                            {c}
-                                        </button>
-                                    );
-                                })}
+                            <div data-announcement-channels="true" className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
+                                Channels
+                                <div className="flex flex-wrap gap-1.5">
+                                    {ANNOUNCEMENT_CHANNELS.map((c) => {
+                                        const on = draft.channels.includes(c);
+                                        return (
+                                            <button
+                                                key={c}
+                                                type="button"
+                                                data-channel-option={c}
+                                                aria-pressed={on}
+                                                onClick={() => toggleChannel(c)}
+                                                className={`rounded-md border px-2 py-1 text-[11px] ${
+                                                    on ? "border-[#00A283]/50 bg-[#00A283]/10 text-alloy-midnight/90" : "border-alloy-stone/20 text-alloy-midnight/65"
+                                                }`}
+                                            >
+                                                {c}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
-                        </div>
+                        </SectionCard>
 
-                        {/* Template selector */}
-                        <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                            Template
-                            <select
-                                data-announcement-template="true"
-                                value={draft.template_id ?? ""}
-                                onChange={(e) => {
-                                    const v = e.target.value || null;
-                                    setDraft((d) => ({ ...d, template_id: v }));
-                                    void loadTemplatePreview(v);
-                                }}
-                                className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                            >
-                                <option value="">No template</option>
-                                {templates.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                        {t.name} ({t.channel})
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
+                        <SectionCard title="Message content" helper="Optional template seeds subject and body; edit before sending." data-announcement-message="true">
+                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
+                                Template
+                                <select
+                                    data-announcement-template="true"
+                                    value={draft.template_id ?? ""}
+                                    onChange={(e) => {
+                                        const v = e.target.value || null;
+                                        setDraft((d) => ({ ...d, template_id: v }));
+                                        void loadTemplatePreview(v);
+                                    }}
+                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
+                                >
+                                    <option value="">No template</option>
+                                    {templates.map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                            {t.name} ({t.channel})
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
 
-                        <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                            Subject
-                            <input
-                                data-announcement-subject="true"
-                                value={draft.subject}
-                                onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
-                                className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                            />
-                        </label>
+                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
+                                Subject
+                                <input
+                                    data-announcement-subject="true"
+                                    value={draft.subject}
+                                    onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
+                                />
+                            </label>
 
-                        <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                            Body
-                            <textarea
-                                data-announcement-body="true"
-                                value={draft.body}
-                                onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
-                                rows={8}
-                                className="rounded-md border border-alloy-stone/18 px-2 py-1.5 font-mono text-[12px] text-alloy-midnight/85"
-                            />
-                        </label>
+                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
+                                Body
+                                <textarea
+                                    data-announcement-body="true"
+                                    value={draft.body}
+                                    onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+                                    rows={8}
+                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 font-mono text-[12px] text-alloy-midnight/85"
+                                />
+                            </label>
+                        </SectionCard>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 px-1">
                             <button
                                 type="button"
                                 data-announcement-save="true"
@@ -605,7 +631,6 @@ export default function AnnouncementsWorkspace() {
                             >
                                 {saving ? "Saving…" : creating ? "Create draft" : "Save draft"}
                             </button>
-                            {/* Schedule (draft) / Cancel schedule (scheduled). No send button — provider send is Phase 3. */}
                             {!creating && selectedId && status === "draft" && (
                                 <span data-announcement-schedule="true" className="flex items-center gap-1">
                                     <input
@@ -650,103 +675,115 @@ export default function AnnouncementsWorkspace() {
                             )}
                             {isArchived && <span className="text-[11px] text-alloy-midnight/45">Archived</span>}
                         </div>
-                    </div>
+                    </>
                 )}
             </section>
 
             {/* RIGHT — template preview + targets + recipient preview */}
             <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-                {/* Template / body preview */}
-                <div data-announcement-preview="true" className="rounded-xl border border-alloy-stone/20 bg-white p-2">
-                    <div className="mb-1 text-[11px] font-semibold text-alloy-midnight/80">Preview</div>
+                <SectionCard title="Preview" data-announcement-preview="true">
                     {templatePreview && (
-                        <div data-announcement-template-preview="true" className="mb-2 rounded-md bg-alloy-stone/5 px-2 py-1">
+                        <div data-announcement-template-preview="true" className="rounded-md border border-alloy-stone/12 bg-alloy-stone/5 px-2 py-1.5">
                             <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">From template</div>
                             {templatePreview.subject && <div className="text-[12px] font-medium text-alloy-midnight/85">{templatePreview.subject}</div>}
                             <div className="whitespace-pre-wrap text-[11px] text-alloy-midnight/70">{templatePreview.body}</div>
                         </div>
                     )}
-                    <div className="rounded-md bg-alloy-stone/5 px-2 py-1">
+                    <div className="rounded-md border border-alloy-stone/12 bg-alloy-stone/5 px-2 py-1.5">
                         <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">Body (sample-rendered)</div>
                         <div className="whitespace-pre-wrap text-[12px] text-alloy-midnight/85">{bodyPreview.plainText}</div>
                     </div>
-                </div>
+                </SectionCard>
 
-                {/* Audience Builder — grain + composable filters (saved as one custom rule.audience_spec) */}
-                <div data-announcement-targets="true" data-audience-builder="true" className="rounded-xl border border-alloy-stone/20 bg-white p-2">
-                    <div className="mb-1 text-[11px] font-semibold text-alloy-midnight/80">Audience</div>
-
-                    {/* Grain */}
-                    <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">Send to</div>
-                    <div data-audience-grain="true" className="mt-1 flex gap-1.5">
-                        {AUDIENCE_GRAINS.map((g) => (
-                            <button
-                                key={g}
-                                type="button"
-                                data-grain-option={g}
-                                aria-pressed={grain === g}
-                                onClick={() => setGrain(g)}
-                                className={`rounded-md border px-2 py-1 text-[11px] ${
-                                    grain === g ? "border-[#00A283]/50 bg-[#00A283]/10 text-alloy-midnight/90" : "border-alloy-stone/20 text-alloy-midnight/65"
-                                }`}
-                            >
-                                {GRAIN_LABEL[g]}
-                            </button>
-                        ))}
+                <SectionCard
+                    title="Audience builder"
+                    helper="Choose who to match, then narrow with filters. Messages go to guardians, not children directly."
+                    data-announcement-targets="true"
+                    data-audience-builder="true"
+                >
+                    <div>
+                        <div className="text-[10px] font-medium text-alloy-midnight/70">Match</div>
+                        <div data-audience-grain="true" className="mt-1 flex flex-wrap gap-1.5">
+                            {AUDIENCE_GRAINS.map((g) => (
+                                <button
+                                    key={g}
+                                    type="button"
+                                    data-grain-option={g}
+                                    aria-pressed={grain === g}
+                                    onClick={() => setGrain(g)}
+                                    className={`rounded-md border px-2 py-1 text-[11px] ${
+                                        grain === g ? "border-[#00A283]/50 bg-[#00A283]/10 text-alloy-midnight/90" : "border-alloy-stone/20 text-alloy-midnight/65"
+                                    }`}
+                                >
+                                    {GRAIN_LABEL[g]}
+                                </button>
+                            ))}
+                        </div>
+                        {grain === "children" ? (
+                            <p className="mt-1.5 text-[10px] text-alloy-midnight/50">Match children, send to guardians.</p>
+                        ) : null}
                     </div>
 
-                    <div className="mt-2 text-[9px] uppercase tracking-wide text-alloy-midnight/40">Family / case status</div>
-                    <div data-filter-family-status="true" className="mt-1 flex flex-wrap gap-1">
-                        <Chips
-                            options={familyStatusOptions.map((o) => ({ id: o.status_key, label: o.label }))}
-                            selected={familyStatusKeys}
-                            onToggle={(id) => toggleInList(setFamilyStatusKeys, id)}
-                            emptyNote="No configured family statuses"
-                        />
+                    <div>
+                        <div className="text-[10px] font-medium text-alloy-midnight/70">Family status</div>
+                        <div data-filter-family-status="true" className="mt-1 flex flex-wrap gap-1">
+                            <Chips
+                                options={familyStatusOptions.map((o) => ({ id: o.status_key, label: o.label }))}
+                                selected={familyStatusKeys}
+                                onToggle={(id) => toggleInList(setFamilyStatusKeys, id)}
+                                emptyNote="No configured family statuses"
+                            />
+                        </div>
                     </div>
 
-                    <div className="mt-2 text-[9px] uppercase tracking-wide text-alloy-midnight/40">Child enrollment status</div>
-                    <div data-filter-child-status="true" className="mt-1 flex flex-wrap gap-1">
-                        <Chips
-                            options={childStatusOptions.map((o) => ({ id: o.status_key, label: o.label }))}
-                            selected={childStatusKeys}
-                            onToggle={(id) => toggleInList(setChildStatusKeys, id)}
-                            emptyNote="No configured child statuses"
-                        />
+                    <div>
+                        <div className="text-[10px] font-medium text-alloy-midnight/70">Child status</div>
+                        <p className="text-[9px] text-alloy-midnight/45">Enrollment status</p>
+                        <div data-filter-child-status="true" className="mt-1 flex flex-wrap gap-1">
+                            <Chips
+                                options={childStatusOptions.map((o) => ({ id: o.status_key, label: o.label }))}
+                                selected={childStatusKeys}
+                                onToggle={(id) => toggleInList(setChildStatusKeys, id)}
+                                emptyNote="No configured child statuses"
+                            />
+                        </div>
                     </div>
 
-                    <div className="mt-2 text-[9px] uppercase tracking-wide text-alloy-midnight/40">Location</div>
-                    <div data-target-location="true" className="mt-1 flex flex-wrap gap-1">
-                        <Chips options={locationOptions} selected={locationIds} onToggle={(id) => toggleInList(setLocationIds, id)} emptyNote="No locations" />
+                    <div>
+                        <div className="text-[10px] font-medium text-alloy-midnight/70">Location</div>
+                        <div data-target-location="true" className="mt-1 flex flex-wrap gap-1">
+                            <Chips options={locationOptions} selected={locationIds} onToggle={(id) => toggleInList(setLocationIds, id)} emptyNote="No locations" />
+                        </div>
                     </div>
 
-                    <div className="mt-2 text-[9px] uppercase tracking-wide text-alloy-midnight/40">Program</div>
-                    <div data-target-program="true" className="mt-1 flex flex-wrap gap-1">
-                        <Chips options={programOptions} selected={programIds} onToggle={(id) => toggleInList(setProgramIds, id)} emptyNote="No programs" />
+                    <div>
+                        <div className="text-[10px] font-medium text-alloy-midnight/70">Program</div>
+                        <div data-target-program="true" className="mt-1 flex flex-wrap gap-1">
+                            <Chips options={programOptions} selected={programIds} onToggle={(id) => toggleInList(setProgramIds, id)} emptyNote="No programs" />
+                        </div>
                     </div>
 
-                    {/* Room/classroom — visible but disabled until a room option source exists. */}
-                    <div className="mt-2 text-[9px] uppercase tracking-wide text-alloy-midnight/40">Room/classroom</div>
-                    <button
-                        type="button"
-                        data-target-room="true"
-                        disabled
-                        aria-label="Room/classroom (unavailable)"
-                        title="Room targeting needs a room option source before counts can be resolved."
-                        className="mt-1 w-full cursor-not-allowed rounded-md border border-dashed border-alloy-stone/25 px-2 py-1 text-left text-[11px] text-alloy-midnight/35"
-                    >
-                        Room targeting needs a room option source before counts can be resolved.
-                    </button>
+                    <div>
+                        <div className="text-[10px] font-medium text-alloy-midnight/70">Room/classroom</div>
+                        <button
+                            type="button"
+                            data-target-room="true"
+                            disabled
+                            aria-label="Room/classroom (unavailable)"
+                            title="Room targeting needs a room option source before counts can be resolved."
+                            className="mt-1 w-full cursor-not-allowed rounded-md border border-dashed border-alloy-stone/25 px-2 py-1.5 text-left text-[11px] text-alloy-midnight/35"
+                        >
+                            Room targeting needs a room option source before counts can be resolved.
+                        </button>
+                    </div>
 
-                    <p className="mt-2 text-[9px] text-alloy-midnight/40">
+                    <p className="text-[9px] leading-snug text-alloy-midnight/45">
                         No filters = all families. Multiple values in a filter are OR; different filters are AND.
                     </p>
-                </div>
+                </SectionCard>
 
-                {/* Recipient preview — READ-ONLY count resolution (no send/queue) */}
-                <div data-recipient-preview="true" className="rounded-xl border border-alloy-stone/20 bg-white p-2">
-                    <div className="mb-1 flex items-center justify-between">
-                        <span className="text-[11px] font-semibold text-alloy-midnight/80">Recipient preview</span>
+                <SectionCard title="Recipient preview" helper="Read-only estimate from the current audience. Nothing is sent." data-recipient-preview="true">
+                    <div className="flex items-center justify-end">
                         <button
                             type="button"
                             data-recipient-preview-run="true"
@@ -761,19 +798,17 @@ export default function AnnouncementsWorkspace() {
 
                     {!recipientPreview ? (
                         <p className="text-[10px] text-alloy-midnight/45">
-                            {selectedId
-                                ? "Run a preview to estimate recipients from the current targets. Read-only — nothing is sent."
-                                : "Save the draft to preview recipients."}
+                            {selectedId ? "Run a preview to estimate recipients from the current audience." : "Save the draft to preview recipients."}
                         </p>
                     ) : (
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5 rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.03] p-2">
                             <div data-recipient-total="true" className="text-[12px] font-semibold text-alloy-midnight/90">
                                 {recipientPreview.matched_families} families
                                 {recipientPreview.grain === "children" && recipientPreview.matched_children != null
-                                    ? ` · ${recipientPreview.matched_children} children`
+                                    ? ` · ${recipientPreview.matched_children} children matched`
                                     : ""}
                                 {" · "}
-                                {recipientPreview.total_recipients} recipients
+                                {recipientPreview.total_recipients} recipients (guardians)
                             </div>
                             {recipientPreview.counts_by_channel && (
                                 <div data-recipient-channels="true" className="text-[10px] text-alloy-midnight/65">
@@ -816,7 +851,7 @@ export default function AnnouncementsWorkspace() {
                             {recipientPreview.capped && <div className="text-[9px] text-alloy-midnight/40">Counts capped for preview.</div>}
                         </div>
                     )}
-                </div>
+                </SectionCard>
             </aside>
         </div>
     );

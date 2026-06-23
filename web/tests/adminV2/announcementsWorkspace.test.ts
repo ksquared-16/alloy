@@ -77,6 +77,9 @@ describe("Announcements workspace", () => {
         expect(WS).toContain('data-filter-child-status="true"');
         expect(WS).toContain('data-target-location="true"');
         expect(WS).toContain('data-target-program="true"');
+        expect(WS).toContain("Family status");
+        expect(WS).toContain("Child status");
+        expect(WS).toContain("Match children, send to guardians.");
         // no fixed-bucket affordances any more
         expect(WS).not.toContain("data-target-group");
         expect(WS).not.toMatch(/type: "(all_families|active_families|waitlist)"/);
