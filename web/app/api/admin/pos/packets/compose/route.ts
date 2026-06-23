@@ -11,9 +11,11 @@ import {
 } from "@/lib/admin/forms/formsAdminDb";
 import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
 import { mintPacketPublicLinkForAdmin } from "@/lib/forms/packets/mintPacketPublicLinkForAdmin";
-import { buildPacketComposerItems, buildPacketLaunchPlan, type ComposerAnchor } from "@/lib/pos/packet/packetComposerPlan";
+import { buildPacketComposerItems, type ComposerAnchor } from "@/lib/pos/packet/packetComposerPlan";
+import { buildFamilyPacketInstancePlan } from "@/lib/pos/packet/familyPacketPlan";
 import { resolveAnchorContext } from "@/lib/pos/packet/posPacketRoster";
-import { isLaunchEntityType } from "@/lib/pos/packet/launchFromEntity";
+import { isLaunchEntityType, type LaunchEntityType } from "@/lib/pos/packet/launchFromEntity";
+import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 
@@ -157,36 +159,64 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: e instanceof Error ? e.message : "Failed to add packet steps" }, { status: 400 });
     }
 
-    // 4) Fan out one unique link per child-recipient pair.
-    const plan = buildPacketLaunchPlan(anchor, childIds, recipientIds);
+    // 4) Family Packet: ONE instance, one link per recipient — all sharing the same session.
+    const packetInstanceId = randomUUID();
+    const fam = buildFamilyPacketInstancePlan({
+        anchor,
+        children: childIds.map((id) => ({ customer_member_id: id })),
+        recipients: recipientIds.map((id) => ({ person_id: id })),
+        form_ids: itemsPlan.items.map((i) => i.form_definition_id),
+        instance_key: packetInstanceId,
+    });
+
+    // Household-level launch anchor (child prefill happens per child in the parent shell; a
+    // single selected child still prefills at link level to preserve prior behavior).
+    const singleChild = childIds.length === 1 ? childIds[0] : null;
+    const householdLaunch = (): { entity_type: LaunchEntityType; entity_id: string; prefill_enabled: true } => {
+        if (anchor.entity_type === "opportunity") return { entity_type: "opportunity", entity_id: anchor.entity_id, prefill_enabled: true };
+        if (anchor.opportunity_id) return { entity_type: "opportunity", entity_id: anchor.opportunity_id, prefill_enabled: true };
+        if (singleChild) return { entity_type: "customer_member", entity_id: singleChild, prefill_enabled: true };
+        if (anchor.entity_type === "customer") return { entity_type: "customer", entity_id: anchor.entity_id, prefill_enabled: true };
+        if (anchor.customer_id) return { entity_type: "customer", entity_id: anchor.customer_id, prefill_enabled: true };
+        return { entity_type: anchor.entity_type, entity_id: anchor.entity_id, prefill_enabled: true };
+    };
+
+    // One mint per recipient; when no recipients selected, a single anchor-only link.
+    const accesses = fam.recipient_access.length > 0
+        ? fam.recipient_access.map((a) => ({ recipient_person_id: a.recipient_person_id as string | null }))
+        : [{ recipient_person_id: null }];
+
     const embedBaseUrl = deriveEmbedBaseUrl(request);
     const shares: ShareResult[] = [];
 
-    for (const spec of plan.specs) {
+    for (const access of accesses) {
+        const enrollment: { customer_member_id?: string; recipient_person_id?: string } = {};
+        if (singleChild) enrollment.customer_member_id = singleChild;
+        if (access.recipient_person_id) enrollment.recipient_person_id = access.recipient_person_id;
+
         const mintBody: Record<string, unknown> = {
             packet_definition_id: packetDefinitionId,
-            launch_from_entity: spec.launch_from_entity,
+            launch_from_entity: householdLaunch(),
             label: baseName,
             metadata: {
                 created_via: "pos_packet_compose",
-                composer_child_id: spec.customer_member_id,
-                composer_recipient_id: spec.recipient_person_id,
+                packet_instance_id: packetInstanceId,
+                recipient_person_id: access.recipient_person_id,
+                selected_customer_member_ids: childIds,
+                // read-model display: single child shown directly; multi-child shown at instance level
+                composer_child_id: singleChild,
+                composer_recipient_id: access.recipient_person_id,
             },
+            ...(Object.keys(enrollment).length > 0 ? { enrollment_selection: enrollment } : {}),
         };
-        if (spec.enrollment_selection) mintBody.enrollment_selection = spec.enrollment_selection;
 
+        const pair_key = `${packetInstanceId}::${access.recipient_person_id ?? "-"}`;
         const res = await mintPacketPublicLinkForAdmin({ supabase, orgId: ctx.orgId, embedBaseUrl, body: mintBody });
         if (res.ok) {
             const url = (res.data.embed_url as string | null) ?? (res.data.embed_path as string);
-            shares.push({
-                pair_key: spec.pair_key,
-                customer_member_id: spec.customer_member_id,
-                recipient_person_id: spec.recipient_person_id,
-                url,
-                token_prefix: typeof res.data.token_prefix === "string" ? res.data.token_prefix : null,
-            });
+            shares.push({ pair_key, customer_member_id: singleChild, recipient_person_id: access.recipient_person_id, url, token_prefix: typeof res.data.token_prefix === "string" ? res.data.token_prefix : null });
         } else {
-            shares.push({ pair_key: spec.pair_key, customer_member_id: spec.customer_member_id, recipient_person_id: spec.recipient_person_id, url: null, token_prefix: null, error: res.message });
+            shares.push({ pair_key, customer_member_id: singleChild, recipient_person_id: access.recipient_person_id, url: null, token_prefix: null, error: res.message });
         }
     }
 
@@ -194,8 +224,10 @@ export async function POST(request: NextRequest) {
         {
             packet_definition_id: packetDefinitionId,
             name: baseName,
+            packet_instance_id: packetInstanceId,
             form_count: itemsPlan.items.length,
-            warnings: plan.warnings,
+            children: childIds,
+            warnings: fam.warnings,
             shares,
         },
         { status: 201 }
