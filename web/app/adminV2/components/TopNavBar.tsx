@@ -19,7 +19,7 @@ import GlobalSearchBox from "@/app/adminV2/components/GlobalSearchBox";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import InboxModal from "@/app/adminV2/components/InboxModal";
 import AnalyticsModal from "@/app/adminV2/components/AnalyticsModal";
-import { warmCommandCenterModal } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import QuickMessageModal, { type QuickMessageModalSeed } from "@/app/adminV2/components/QuickMessageModal";
 import {
@@ -151,7 +151,7 @@ export default function TopNavBar() {
     };
     const onOpenInbox = () => {
       if (isCommsV2FlagEnabled("comms_v2_command_center")) {
-        void warmCommandCenterModal();
+        void warmCommunicationsWorkspaceModal();
       }
       openWorkspaceModal("inbox");
     };

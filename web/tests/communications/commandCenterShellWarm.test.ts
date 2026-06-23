@@ -18,7 +18,9 @@ describe("CommandCenterShell warm hydration", () => {
         expect(shell).toContain("initialWorkspaceFromWarm");
         expect(shell).toContain("initialHydratingWorkspace");
         expect(shell).toContain("getCommandCenterWarmSelectedConversationId");
-        expect(shell).toContain("data-cc-loading-overlay");
+        expect(shell).toContain("CommsQueueListReserve");
+        expect(shell).toContain("CommsWorkspacePanelReserve");
+        expect(shell).not.toContain("data-cc-loading-overlay");
     });
 
     it("openConversation reuses warm workspace before network", () => {
@@ -27,8 +29,8 @@ describe("CommandCenterShell warm hydration", () => {
     });
 
     it("shell and sidebar schedule command center warm after primary surface", () => {
-        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toContain("scheduleCommandCenterPrefetch");
-        expect(read("app/adminV2/components/SidebarModalNavItems.tsx")).toContain("warmCommandCenterModal");
-        expect(read("app/adminV2/components/TopNavBar.tsx")).toContain("warmCommandCenterModal");
+        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toContain("scheduleCommunicationsWorkspaceWarm");
+        expect(read("app/adminV2/components/SidebarModalNavItems.tsx")).toContain("warmCommunicationsWorkspaceModal");
+        expect(read("app/adminV2/components/TopNavBar.tsx")).toContain("warmCommunicationsWorkspaceModal");
     });
 });

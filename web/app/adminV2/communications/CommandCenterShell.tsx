@@ -32,6 +32,7 @@ import { fetchCommandCenterThreadMessages, type CommandCenterTimelineMessage } f
 import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import FamilyCommunicationWorkspaceView, { type WorkspaceDetail } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
+import { CommsQueueListReserve, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import type { FamilyCommunicationWorkspaceVM, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
@@ -214,7 +215,9 @@ export default function CommandCenterShell() {
     const loadConversations = useCallback(async (opts?: { background?: boolean }) => {
         if (COMMS_FIXTURES_ENABLED) return;
         if (!opts?.background) {
-            setLoading(true);
+            if (!getCommandCenterCacheSnapshot()) {
+                setLoading(true);
+            }
             setError(null);
         }
         try {
@@ -620,27 +623,16 @@ export default function CommandCenterShell() {
         { label: NEEDS_REVIEW_STATUS_LABEL, value: metrics.unclassified, dot: "bg-alloy-stone/50", tone: "text-alloy-midnight", status: metrics.unclassified > 0 ? "not yet triaged" : "all triaged", statusTone: "text-alloy-midnight/45" },
     ];
 
-    const revealReady =
-        COMMS_FIXTURES_ENABLED ||
-        (!loading && !hydratingWorkspace && (filtered.length === 0 || selected != null));
+    const queueUnresolved = loading && conversations.length === 0;
+    const workspaceHydrating =
+        !COMMS_FIXTURES_ENABLED &&
+        filtered.length > 0 &&
+        (loading || hydratingWorkspace || !selectedId) &&
+        !selected;
 
     return (
         <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-2.5 bg-white p-2.5">
-            {!revealReady ? (
-                <div
-                    data-cc-loading-overlay
-                    className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 rounded-2xl bg-white/95 backdrop-blur-[1px]"
-                    aria-busy="true"
-                    aria-label="Loading Command Center"
-                >
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#00A283]/25 border-t-[#00A283]" />
-                    <div className="text-center">
-                        <p className="text-sm font-semibold text-alloy-midnight">Loading Command Center</p>
-                        <p className="mt-1 max-w-xs text-xs text-alloy-midnight/50">Preparing queue and first conversation…</p>
-                    </div>
-                </div>
-            ) : null}
-            {/* KPI strip — max 4, compact */}
+            {/* KPI strip — max 4, compact; migrates to workspace shell in Increment 2 */}
             <div data-cc-metrics className="flex flex-wrap gap-2">
                 {kpis.map((k) => (
                     <div key={k.label} className="flex min-w-[170px] items-center gap-3 rounded-xl border border-alloy-stone/12 bg-white px-3.5 py-2 shadow-[0_1px_2px_rgba(20,30,25,0.05)]">
@@ -690,7 +682,9 @@ export default function CommandCenterShell() {
                         </div>
                     </div>
                     <div className="min-h-0 flex-1 overflow-auto px-2.5 py-2.5">
-                        {queueSections.map((q) => {
+                        {queueUnresolved ?
+                            <CommsQueueListReserve />
+                        :   queueSections.map((q) => {
                             const items = q.items;
                             const acc = attnAccent(q.key);
                             return (
@@ -755,7 +749,9 @@ export default function CommandCenterShell() {
                                 </div>
                             );
                         })}
-                        {filtered.length === 0 ? <div className="p-3 text-xs text-alloy-midnight/50">No families in the queue.</div> : null}
+                        {!queueUnresolved && !loading && filtered.length === 0 ?
+                            <div className="p-3 text-xs text-alloy-midnight/50">No families in the queue.</div>
+                        :   null}
                     </div>
                 </aside>
 
@@ -819,12 +815,9 @@ export default function CommandCenterShell() {
                             onConfirmSend={() => void runFamilySend(true)}
                             onDismissSend={() => { setSendResult(null); setSendError(null); }}
                         />
-                    ) : filtered.length > 0 && (loading || hydratingWorkspace || !selectedId) ? (
-                        <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
-                            <p className="text-sm font-medium text-alloy-midnight/60">Loading first conversation…</p>
-                            <p className="max-w-sm text-xs text-alloy-midnight/45">Preparing the workspace for the most recent thread.</p>
-                        </div>
-                    ) : !loading ? (
+                    ) : workspaceHydrating ? (
+                        <CommsWorkspacePanelReserve label="Loading first conversation" />
+                    ) : !loading && filtered.length === 0 ? (
                         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
                             <p className="text-sm font-medium text-alloy-midnight/60">No conversations yet</p>
                             <p className="max-w-sm text-xs leading-relaxed text-alloy-midnight/45">

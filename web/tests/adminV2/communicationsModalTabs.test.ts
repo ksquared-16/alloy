@@ -13,6 +13,7 @@ function read(rel: string): string {
 }
 
 const MODAL = "app/adminV2/components/InboxModal.tsx";
+const SHELL = "app/adminV2/communications/CommunicationsWorkspaceShell.tsx";
 const PANEL = "app/adminV2/communications/CommunicationsModalTabPanel.tsx";
 const PAGE = "app/adminV2/communications/page.tsx";
 const WS = "app/adminV2/communications/TemplatesWorkspace.tsx";
@@ -20,19 +21,21 @@ const WS = "app/adminV2/communications/TemplatesWorkspace.tsx";
 describe("Communications modal tabs", () => {
     it("InboxModal exposes Inbox, Templates, and Announcements tabs when Command Center is enabled", () => {
         const src = read(MODAL);
+        const shell = read(SHELL);
         const panel = read(PANEL);
-        expect(src).toContain('data-comms-modal-version="polish-2"');
-        expect(src).toContain("CommsModalTabBar");
+        expect(src).toContain("CommunicationsWorkspaceShell");
+        expect(shell).toContain('data-comms-workspace-shell="true"');
+        expect(shell).toContain("CommsModalTabBar");
         expect(src).toContain("COMMUNICATIONS_MODAL_TABS");
         expect(src).not.toContain("SettingsEntityTabBar");
         expect(src).toContain("CommunicationsModalTabPanel");
         for (const label of ["Inbox", "Templates", "Announcements"]) {
             expect(panel).toContain(label);
         }
-        expect(src).toContain('data-inbox-compose-new="true"');
+        expect(shell).toContain('data-inbox-compose-new="true"');
         expect(src).toContain("QuickMessageModal");
-        expect(src).toContain('data-adminv2-inbox-modal="true"');
-        expect(src).toContain('data-comms-modal-version="polish-2"');
+        expect(shell).toContain('data-comms-workspace-shell="true"');
+        expect(shell).toContain('data-comms-modal-version="workspace-inc1"');
     });
 
     it("CommsModalTabBar uses Bend Pine (alloy-juniper), not alloy-blue active styling", () => {

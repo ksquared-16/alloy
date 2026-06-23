@@ -32,7 +32,8 @@ describe("command center live wiring", () => {
     it("auto-selects the first visible conversation on load", () => {
         expect(shellSrc).toMatch(/resolveCommandCenterSelection/);
         expect(shellSrc).toMatch(/flattenVisibleConversationIds/);
-        expect(shellSrc).toMatch(/data-cc-loading-overlay/);
+        expect(shellSrc).toMatch(/CommsQueueListReserve/);
+        expect(shellSrc).not.toMatch(/data-cc-loading-overlay/);
         expect(shellSrc).not.toMatch(/Select a family from the queue/);
     });
     it("loads thread-scoped timeline and hides assignment UI by default", () => {
@@ -78,8 +79,8 @@ describe("command center live wiring", () => {
         const shell = readFileSync(join(process.cwd(), "app", "adminV2", "components", "AdminV2Shell.tsx"), "utf8");
         const nav = readFileSync(join(process.cwd(), "app", "adminV2", "components", "TopNavBar.tsx"), "utf8");
         const cache = readFileSync(join(process.cwd(), "lib", "communications", "v2", "commandCenterPrefetchCache.ts"), "utf8");
-        expect(shell).toMatch(/scheduleCommandCenterPrefetch/);
-        expect(nav).toMatch(/warmCommandCenterModal/);
+        expect(shell).toMatch(/scheduleCommunicationsWorkspaceWarm/);
+        expect(nav).toMatch(/warmCommunicationsWorkspaceModal/);
         expect(shellSrc).toMatch(/commandCenterPrefetchCache/);
         expect(cache).toMatch(/warmFirstConversationWorkspace/);
         expect(cache).toMatch(/runWhenAdminV2PrimarySurfaceReady/);

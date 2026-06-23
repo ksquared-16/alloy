@@ -30,8 +30,13 @@ import {
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SECONDARY_BTN_CLASS,
     COMMS_SELECT_CLASS,
+    CommsLibraryListReserve,
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
+import {
+    getCommunicationsWarmTemplatesLibrary,
+    subscribeCommunicationsWorkspaceWarm,
+} from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 
 /**
  * Templates Workspace (Phase 1 / B3) — three-column template authoring.
@@ -86,6 +91,14 @@ const EMPTY_DRAFT: EditorDraft = {
     body: "",
 };
 
+function initialTemplatesFromWarm(): TemplateRow[] {
+    return (getCommunicationsWarmTemplatesLibrary() as TemplateRow[] | null) ?? [];
+}
+
+function initialTemplatesListResolved(): boolean {
+    return getCommunicationsWarmTemplatesLibrary() !== null;
+}
+
 /** Build a nested sample context from the catalog so the live preview reads naturally. */
 function buildSampleContext(): Record<string, unknown> {
     const ctx: Record<string, unknown> = {};
@@ -103,8 +116,9 @@ function buildSampleContext(): Record<string, unknown> {
 }
 
 export default function TemplatesWorkspace() {
-    const [templates, setTemplates] = useState<TemplateRow[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [templates, setTemplates] = useState<TemplateRow[]>(initialTemplatesFromWarm);
+    const [loading, setLoading] = useState(() => !initialTemplatesListResolved());
+    const [listResolved, setListResolved] = useState(initialTemplatesListResolved);
     const [error, setError] = useState<string | null>(null);
 
     // filters
@@ -136,14 +150,22 @@ export default function TemplatesWorkspace() {
     const bodyRef = useRef<HTMLTextAreaElement | null>(null);
     const subjectRef = useRef<HTMLInputElement | null>(null);
     const activeFieldRef = useRef<"body" | "subject">("body");
-    const didAutoOpenEditorRef = useRef(false);
 
     const isEmail = templateChannelSupportsSubject(draft.channel);
+    const filtersDefault = !categoryFilter && !channelFilter && !statusFilter;
 
     // ---- data ----
-    const loadList = useCallback(async () => {
-        setLoading(true);
-        setError(null);
+    const loadList = useCallback(async (opts?: { background?: boolean }) => {
+        if (!opts?.background) {
+            const warm = filtersDefault ? getCommunicationsWarmTemplatesLibrary() : null;
+            if (warm) {
+                setTemplates(warm as TemplateRow[]);
+                setListResolved(true);
+            } else {
+                setLoading(true);
+            }
+            setError(null);
+        }
         const params = new URLSearchParams();
         if (categoryFilter) params.set("category", categoryFilter);
         if (channelFilter) params.set("channel", channelFilter);
@@ -158,12 +180,25 @@ export default function TemplatesWorkspace() {
             setError(e instanceof Error ? e.message : "Failed to load templates");
         } finally {
             setLoading(false);
+            setListResolved(true);
         }
-    }, [categoryFilter, channelFilter, statusFilter]);
+    }, [categoryFilter, channelFilter, statusFilter, filtersDefault]);
 
     useEffect(() => {
-        void loadList();
-    }, [loadList]);
+        return subscribeCommunicationsWorkspaceWarm(() => {
+            if (!filtersDefault) return;
+            const warm = getCommunicationsWarmTemplatesLibrary();
+            if (!warm) return;
+            setTemplates(warm as TemplateRow[]);
+            setListResolved(true);
+            setLoading(false);
+        });
+    }, [filtersDefault]);
+
+    useEffect(() => {
+        const warm = filtersDefault ? getCommunicationsWarmTemplatesLibrary() : null;
+        void loadList({ background: warm !== null });
+    }, [loadList, filtersDefault]);
 
     const selectTemplate = useCallback(async (id: string) => {
         setCreating(false);
@@ -197,14 +232,6 @@ export default function TemplatesWorkspace() {
         setDraft(EMPTY_DRAFT);
         setVersionInfo({ current: null, count: 0 });
     }, []);
-
-    useEffect(() => {
-        if (loading || didAutoOpenEditorRef.current) return;
-        if (!selectedId && !creating) {
-            didAutoOpenEditorRef.current = true;
-            startCreate();
-        }
-    }, [loading, selectedId, creating, startCreate]);
 
     const save = useCallback(async () => {
         setSaving(true);
@@ -439,10 +466,12 @@ export default function TemplatesWorkspace() {
                     </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-2">
-                    {loading && <div className="p-3 text-[11px] text-alloy-midnight/50">Loading…</div>}
-                    {!loading && visibleTemplates.length === 0 && (
+                    {loading && !listResolved ?
+                        <CommsLibraryListReserve label="Loading templates" />
+                    :   null}
+                    {listResolved && !loading && visibleTemplates.length === 0 ?
                         <div className="p-3 text-[11px] text-alloy-midnight/50">No Templates</div>
-                    )}
+                    :   null}
                     {visibleTemplates.map((t) => (
                         <button
                             key={t.id}
@@ -471,11 +500,11 @@ export default function TemplatesWorkspace() {
                         {error}
                     </div>
                 )}
-                {!hasSelection ? (
-                    <div className={`${COMMS_CARD_CLASS} flex h-full items-center justify-center text-[12px] text-alloy-midnight/50`}>
-                        Select a template or create a new one.
+                {!hasSelection ?
+                    <div className={`${COMMS_CARD_CLASS} flex h-full items-center justify-center text-center text-[12px] text-alloy-midnight/50`}>
+                        Select a template from the library or click New to create one.
                     </div>
-                ) : (
+                :   (
                     <>
                         <div className="flex items-center justify-between px-1">
                             <span className="text-xs font-semibold text-alloy-midnight/80">

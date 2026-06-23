@@ -127,9 +127,10 @@ describe("Announcements workspace", () => {
         expect(WS).not.toMatch(/announcement_recipients/);
     });
 
-    it("opens New Announcement editor on initial load when nothing is selected", () => {
-        expect(WS).toContain("didAutoOpenEditorRef");
-        expect(WS).toMatch(/startCreate\(\)/);
+    it("shows announcement library first without auto-opening the editor", () => {
+        expect(WS).not.toContain("didAutoOpenEditorRef");
+        expect(WS).toContain("CommsLibraryListReserve");
+        expect(WS).toContain("Select an announcement from the library");
         expect(WS).toContain("New Announcement");
         expect(WS).toContain("All Announcements");
         expect(WS).toContain("No Announcements");

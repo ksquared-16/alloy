@@ -25,6 +25,7 @@ export default function CommunicationsModalTabPanel({ tab }: { tab: Communicatio
         <div
             data-comms-modal-body="true"
             className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
+            data-comms-workspace-execution-surface="true"
         >
             <div className={tabPanelClass(tab === "inbox")} data-comms-tab-panel="inbox" aria-hidden={tab !== "inbox"}>
                 <CommandCenterShell />

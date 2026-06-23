@@ -31,8 +31,15 @@ import {
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SECONDARY_BTN_CLASS,
     COMMS_SELECT_CLASS,
+    CommsLibraryListReserve,
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
+import {
+    getCommunicationsWarmActiveTemplates,
+    getCommunicationsWarmAnnouncements,
+    getCommunicationsWarmAudienceMetadata,
+    subscribeCommunicationsWorkspaceWarm,
+} from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 
 /**
  * Announcements Workspace (Phase 1 / B8E) — draft authoring + the Audience Builder.
@@ -102,13 +109,43 @@ const SAMPLE_CONTEXT: Record<string, unknown> = {
     org: { name: "Bright Beginnings" },
 };
 
+function initialAnnouncementsFromWarm(): AnnouncementRow[] {
+    return (getCommunicationsWarmAnnouncements() as AnnouncementRow[] | null) ?? [];
+}
+
+function initialAnnouncementsListResolved(): boolean {
+    return getCommunicationsWarmAnnouncements() !== null;
+}
+
+function hydrateAudienceMetadataFromWarm(): {
+    programOptions: ProgramOptionRow[];
+    locationHierarchy: InquiryChildPlacementHierarchyRow[];
+    familyStatusOptions: StatusOpt[];
+    childStatusOptions: StatusOpt[];
+} {
+    const meta = getCommunicationsWarmAudienceMetadata();
+    return {
+        locationHierarchy: meta?.locationHierarchy ?? [],
+        programOptions: meta?.programOptions ?? [],
+        familyStatusOptions: meta?.familyStatusOptions ?? [],
+        childStatusOptions: meta?.childStatusOptions ?? [],
+    };
+}
+
+function initialActiveTemplatesFromWarm(): TemplateOption[] {
+    const warm = getCommunicationsWarmActiveTemplates();
+    if (!warm) return [];
+    return warm.map((t) => ({ id: t.id, name: t.name, channel: t.channel }));
+}
+
 export default function AnnouncementsWorkspace() {
     const siteFilter = useWorkspaceSiteFilter();
     const headerSiteId = siteFilter?.selectedSiteId ?? null;
     const appliedHeaderSiteRef = useRef<string | null>(null);
 
-    const [list, setList] = useState<AnnouncementRow[]>([]);
-    const [loading, setLoading] = useState(false);
+    const [list, setList] = useState<AnnouncementRow[]>(initialAnnouncementsFromWarm);
+    const [loading, setLoading] = useState(() => !initialAnnouncementsListResolved());
+    const [listResolved, setListResolved] = useState(initialAnnouncementsListResolved);
     const [error, setError] = useState<string | null>(null);
 
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -117,13 +154,16 @@ export default function AnnouncementsWorkspace() {
     const [status, setStatus] = useState<string>("draft");
     const [saving, setSaving] = useState(false);
 
-    const [templates, setTemplates] = useState<TemplateOption[]>([]);
+    const [templates, setTemplates] = useState<TemplateOption[]>(initialActiveTemplatesFromWarm);
     const [templatePreview, setTemplatePreview] = useState<{ subject: string | null; body: string } | null>(null);
 
-    const [programOptions, setProgramOptions] = useState<ProgramOptionRow[]>([]);
-    const [locationHierarchy, setLocationHierarchy] = useState<InquiryChildPlacementHierarchyRow[]>([]);
-    const [familyStatusOptions, setFamilyStatusOptions] = useState<StatusOpt[]>([]);
-    const [childStatusOptions, setChildStatusOptions] = useState<StatusOpt[]>([]);
+    const warmAudienceSeed = hydrateAudienceMetadataFromWarm();
+    const [programOptions, setProgramOptions] = useState<ProgramOptionRow[]>(warmAudienceSeed.programOptions);
+    const [locationHierarchy, setLocationHierarchy] = useState<InquiryChildPlacementHierarchyRow[]>(
+        warmAudienceSeed.locationHierarchy
+    );
+    const [familyStatusOptions, setFamilyStatusOptions] = useState<StatusOpt[]>(warmAudienceSeed.familyStatusOptions);
+    const [childStatusOptions, setChildStatusOptions] = useState<StatusOpt[]>(warmAudienceSeed.childStatusOptions);
 
     // Audience Builder state (grain + composable filters).
     const [grain, setGrain] = useState<AudienceGrain>("families");
@@ -138,9 +178,15 @@ export default function AnnouncementsWorkspace() {
     const [scheduleAt, setScheduleAt] = useState("");
     const [scheduling, setScheduling] = useState(false);
     const bodyRef = useRef<HTMLTextAreaElement | null>(null);
-    const didAutoOpenEditorRef = useRef(false);
 
-    // Populate the builder from a saved/parsed audience spec (or reset when null).
+    const applyWarmAudienceMetadata = useCallback(() => {
+        const meta = getCommunicationsWarmAudienceMetadata();
+        if (!meta) return;
+        setLocationHierarchy(meta.locationHierarchy);
+        setProgramOptions(meta.programOptions);
+        setFamilyStatusOptions(meta.familyStatusOptions);
+        setChildStatusOptions(meta.childStatusOptions);
+    }, []);
     const applyAudienceSpec = useCallback((spec: AnnouncementAudienceSpec | null) => {
         setGrain(spec?.grain === "children" ? "children" : "families");
         const filters = spec?.filters ?? [];
@@ -211,9 +257,17 @@ export default function AnnouncementsWorkspace() {
     }, [roomBuilder.enabled, locationIds, programIds]);
 
     // ---- loaders ----
-    const loadList = useCallback(async () => {
-        setLoading(true);
-        setError(null);
+    const loadList = useCallback(async (opts?: { background?: boolean }) => {
+        if (!opts?.background) {
+            const warm = getCommunicationsWarmAnnouncements();
+            if (warm) {
+                setList(warm as AnnouncementRow[]);
+                setListResolved(true);
+            } else {
+                setLoading(true);
+            }
+            setError(null);
+        }
         try {
             const res = await fetch(ANNOUNCEMENTS_API, { credentials: "include" });
             const json = await res.json().catch(() => ({}));
@@ -223,10 +277,17 @@ export default function AnnouncementsWorkspace() {
             setError(e instanceof Error ? e.message : "Failed to load announcements");
         } finally {
             setLoading(false);
+            setListResolved(true);
         }
     }, []);
 
-    const loadTemplates = useCallback(async () => {
+    const loadTemplates = useCallback(async (opts?: { background?: boolean }) => {
+        if (!opts?.background) {
+            const warm = getCommunicationsWarmActiveTemplates();
+            if (warm) {
+                setTemplates(warm.map((t) => ({ id: t.id, name: t.name, channel: t.channel })));
+            }
+        }
         try {
             const res = await fetch(`${TEMPLATES_API}?status=active`, { credentials: "include" });
             const json = await res.json().catch(() => ({}));
@@ -244,7 +305,10 @@ export default function AnnouncementsWorkspace() {
         }
     }, []);
 
-    const loadAudienceOptions = useCallback(async () => {
+    const loadAudienceOptions = useCallback(async (opts?: { background?: boolean }) => {
+        if (!opts?.background) {
+            applyWarmAudienceMetadata();
+        }
         try {
             const [progRes, hierarchyRes] = await Promise.all([
                 fetch(PROGRAM_OPTIONS_API, { credentials: "include" }),
@@ -267,9 +331,12 @@ export default function AnnouncementsWorkspace() {
         } catch {
             /* options are best-effort */
         }
-    }, []);
+    }, [applyWarmAudienceMetadata]);
 
-    const loadStatusOptions = useCallback(async () => {
+    const loadStatusOptions = useCallback(async (opts?: { background?: boolean }) => {
+        if (!opts?.background) {
+            applyWarmAudienceMetadata();
+        }
         const fetchOpts = async (g: "family" | "child"): Promise<StatusOpt[]> => {
             try {
                 const res = await fetch(`${STATUS_OPTIONS_API}?grain=${g}`, { credentials: "include" });
@@ -283,13 +350,31 @@ export default function AnnouncementsWorkspace() {
         const [fam, child] = await Promise.all([fetchOpts("family"), fetchOpts("child")]);
         setFamilyStatusOptions(fam);
         setChildStatusOptions(child);
-    }, []);
+    }, [applyWarmAudienceMetadata]);
 
     useEffect(() => {
-        void loadList();
-        void loadTemplates();
-        void loadAudienceOptions();
-        void loadStatusOptions();
+        return subscribeCommunicationsWorkspaceWarm(() => {
+            const warmList = getCommunicationsWarmAnnouncements();
+            if (warmList) {
+                setList(warmList as AnnouncementRow[]);
+                setListResolved(true);
+                setLoading(false);
+            }
+            const warmTemplates = getCommunicationsWarmActiveTemplates();
+            if (warmTemplates) {
+                setTemplates(warmTemplates.map((t) => ({ id: t.id, name: t.name, channel: t.channel })));
+            }
+            applyWarmAudienceMetadata();
+        });
+    }, [applyWarmAudienceMetadata]);
+
+    useEffect(() => {
+        const warmList = getCommunicationsWarmAnnouncements();
+        const warmMeta = getCommunicationsWarmAudienceMetadata();
+        void loadList({ background: warmList !== null });
+        void loadTemplates({ background: getCommunicationsWarmActiveTemplates() !== null });
+        void loadAudienceOptions({ background: warmMeta !== null });
+        void loadStatusOptions({ background: warmMeta !== null });
     }, [loadList, loadTemplates, loadAudienceOptions, loadStatusOptions]);
 
     const loadTemplatePreview = useCallback(async (templateId: string | null, applyToDraft = false) => {
@@ -362,14 +447,6 @@ export default function AnnouncementsWorkspace() {
         setTemplatePreview(null);
         setRecipientPreview(null);
     }, [applyAudienceSpec]);
-
-    useEffect(() => {
-        if (loading || didAutoOpenEditorRef.current) return;
-        if (!selectedId && !creating) {
-            didAutoOpenEditorRef.current = true;
-            startCreate();
-        }
-    }, [loading, selectedId, creating, startCreate]);
 
     // ---- recipient preview (READ-ONLY; no send/queue/recipient writes) ----
     const previewRecipients = useCallback(async () => {
@@ -530,8 +607,12 @@ export default function AnnouncementsWorkspace() {
                     </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-2">
-                    {loading && <div className="p-3 text-[11px] text-alloy-midnight/50">Loading…</div>}
-                    {!loading && list.length === 0 && <div className="p-3 text-[11px] text-alloy-midnight/50">No Announcements</div>}
+                    {loading && !listResolved ?
+                        <CommsLibraryListReserve label="Loading announcements" />
+                    :   null}
+                    {listResolved && !loading && list.length === 0 ?
+                        <div className="p-3 text-[11px] text-alloy-midnight/50">No Announcements</div>
+                    :   null}
                     {list.map((a) => (
                         <button
                             key={a.id}
@@ -557,11 +638,11 @@ export default function AnnouncementsWorkspace() {
             {/* CENTER — draft editor */}
             <section data-announcement-editor="true" className="flex min-h-0 flex-col gap-3 overflow-y-auto">
                 {error && <div className="rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-700">{error}</div>}
-                {!hasSelection ? (
-                    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-alloy-stone/25 bg-white p-6 text-[12px] text-alloy-midnight/50">
-                        Select an announcement or create a new one.
+                {!hasSelection ?
+                    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-alloy-stone/25 bg-white p-6 text-center text-[12px] text-alloy-midnight/50">
+                        Select an announcement from the library or click New to create one.
                     </div>
-                ) : (
+                :   (
                     <>
                         <div className="flex items-center justify-between px-1">
                             <span className="text-xs font-semibold text-alloy-midnight/80">{creating ? "New Announcement" : "Edit announcement"}</span>

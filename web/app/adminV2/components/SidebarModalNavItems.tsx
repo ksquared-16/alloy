@@ -9,7 +9,7 @@ import { prefetchWorkspaceOperationalTasks } from "@/lib/agent/taskAssist/operat
 import { ADMIN_FORMS_HREF, isCanonicalFormsPath, normalizeToCanonicalAdminPath } from "@/lib/admin/canonicalAdminRoutes";
 import { useOperationalTasksNavCounts } from "@/lib/adminV2/useOperationalTasksNavCounts";
 import { useInboxUnreadNavCount } from "@/lib/adminV2/useInboxUnreadNavCount";
-import { warmCommandCenterModal } from "@/lib/communications/v2/commandCenterPrefetchCache";
+import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import {
     dispatchAdminV2OpenInboxModal,
@@ -137,17 +137,17 @@ export function SidebarInboxNavItem({ collapsed }: { collapsed: boolean }) {
             dataAttr="inbox"
             onMouseEnter={() => {
                 if (isCommsV2FlagEnabled("comms_v2_command_center")) {
-                    void warmCommandCenterModal();
+                    void warmCommunicationsWorkspaceModal();
                 }
             }}
             onFocus={() => {
                 if (isCommsV2FlagEnabled("comms_v2_command_center")) {
-                    void warmCommandCenterModal();
+                    void warmCommunicationsWorkspaceModal();
                 }
             }}
             onClick={() => {
                 if (isCommsV2FlagEnabled("comms_v2_command_center")) {
-                    void warmCommandCenterModal();
+                    void warmCommunicationsWorkspaceModal();
                 }
                 dispatchAdminV2OpenInboxModal();
             }}

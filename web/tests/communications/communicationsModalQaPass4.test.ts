@@ -9,10 +9,11 @@ function read(rel: string): string {
 }
 
 describe("Communications modal QA pass 4", () => {
-    it("Templates workspace opens New Template by default and uses title-case labels", () => {
+    it("Templates workspace is library-first and does not auto-open the editor", () => {
         const ws = read("app/adminV2/communications/TemplatesWorkspace.tsx");
-        expect(ws).toContain("didAutoOpenEditorRef");
-        expect(ws).toContain("New Template");
+        expect(ws).not.toContain("didAutoOpenEditorRef");
+        expect(ws).toContain("CommsLibraryListReserve");
+        expect(ws).toContain("Select a template from the library");
         expect(ws).toContain("Template Library");
         expect(ws).toContain("No Templates");
     });
