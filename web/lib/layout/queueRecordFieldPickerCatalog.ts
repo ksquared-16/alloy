@@ -9,7 +9,10 @@
  * Invariant: pickerVisibleRefs ⊆ validatorAllowedQueueRecordFieldRefKeys
  */
 
-import type { LayoutCatalogField, LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
+import type { LayoutCatalogField, LayoutCatalogGroup, LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
+import { GLOBAL_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
+import { buildQueueRecordWidgetPickerCatalog } from "@/lib/layout/queueRecordLayoutAllowList";
+import { assertChildScopedFieldKey } from "@/lib/layout/runtime/queueRecordScopedResolve";
 import { applyChildcareCatalogLabel } from "@/lib/layout/childcareLayoutFieldCatalog";
 import { contactRolePickerRefKeys } from "@/lib/layout/layoutEditorContactRoles";
 import { isWaitlistOnlyFieldKey } from "@/lib/layout/runtime/queueWaitlistPlacementField";
@@ -182,17 +185,55 @@ function catalogFieldForRefKey(refKey: string, labelByRef: Map<string, LayoutCat
     });
 }
 
+export type QueueRecordPickerBlockFilter = "field_group" | "repeated_record_block" | "widget";
+
+export type BuildQueueRecordPickerCatalogOptions = {
+    isWaitlist: boolean;
+    /** Label source only — field refs come from validator allow-list. */
+    labelCatalogGroups?: LayoutCatalogGroup[];
+    widgetCatalog?: readonly LayoutCatalogWidget[];
+    /** Only repeated child blocks narrow picker fields; column scope never does. */
+    blockFilter?: QueueRecordPickerBlockFilter;
+    relationshipKey?: string;
+};
+
+/** Build full queue row picker catalog — never filtered by column scope. */
+export function buildQueueRecordPickerCatalog(options: BuildQueueRecordPickerCatalogOptions): {
+    groups: LayoutCatalogGroup[];
+    widgets: LayoutCatalogWidget[];
+    fieldCount: number;
+    widgetCount: number;
+    layoutKindLabel: string;
+} {
+    const labelGroups = options.labelCatalogGroups ?? [];
+    const groups = buildQueueRecordFieldPickerGroups(labelGroups, options.isWaitlist, {
+        blockFilter: options.blockFilter,
+        relationshipKey: options.relationshipKey ?? "children",
+    });
+    const widgets = buildQueueRecordWidgetPickerCatalog(options.widgetCatalog ?? GLOBAL_WIDGET_CATALOG);
+    const fieldCount = groups.reduce((sum, g) => sum + g.fields.length, 0);
+    return {
+        groups,
+        widgets,
+        fieldCount,
+        widgetCount: widgets.length,
+        layoutKindLabel: options.isWaitlist ? "Waitlist queue row" : "Pipeline queue row",
+    };
+}
+
 /**
  * Build picker fields from validator allow-list + opportunities catalog labels.
- * Legacy placement_candidate / zone catalogs are label sources only when passed in
- * — v3 editor must pass opportunities catalog exclusively.
  */
 export function buildQueueRecordPickerFieldsFromAllowList(
     labelCatalogGroups: LayoutCatalogGroup[],
     isWaitlist: boolean,
+    options?: Pick<BuildQueueRecordPickerCatalogOptions, "blockFilter" | "relationshipKey">,
 ): LayoutCatalogField[] {
     const labelByRef = indexCatalogFieldsByRefKey(labelCatalogGroups);
+    const childBlockOnly = options?.blockFilter === "repeated_record_block";
+    const relationshipKey = options?.relationshipKey ?? "children";
     return validatorAllowedQueueRecordFieldRefKeys(isWaitlist).flatMap((refKey) => {
+        if (childBlockOnly && !assertChildScopedFieldKey(refKey, relationshipKey)) return [];
         const context = classifyQueueRecordFieldContext(refKey, isWaitlist);
         if (!context) return [];
         const field = catalogFieldForRefKey(refKey, labelByRef);
@@ -202,13 +243,14 @@ export function buildQueueRecordPickerFieldsFromAllowList(
 
 /**
  * Build context-first picker groups for queue row Add Field.
- * Independent of column scope — scope affects repeat/resolve only.
+ * Independent of column scope — only repeated_record_block narrows fields.
  */
 export function buildQueueRecordFieldPickerGroups(
     rawGroups: LayoutCatalogGroup[],
     isWaitlist: boolean,
+    options?: Pick<BuildQueueRecordPickerCatalogOptions, "blockFilter" | "relationshipKey">,
 ): LayoutCatalogGroup[] {
-    const fields = buildQueueRecordPickerFieldsFromAllowList(rawGroups, isWaitlist);
+    const fields = buildQueueRecordPickerFieldsFromAllowList(rawGroups, isWaitlist, options);
     const buckets = new Map<QueueRecordFieldContextKey, LayoutCatalogField[]>();
 
     for (const field of fields) {
@@ -248,6 +290,7 @@ export function flattenQueueRecordFieldPickerFields(groups: LayoutCatalogGroup[]
 export function queueRecordPickerVisibleRefKeys(
     labelCatalogGroups: LayoutCatalogGroup[],
     isWaitlist: boolean,
+    options?: Pick<BuildQueueRecordPickerCatalogOptions, "blockFilter" | "relationshipKey">,
 ): string[] {
-    return buildQueueRecordPickerFieldsFromAllowList(labelCatalogGroups, isWaitlist).map((f) => f.refKey);
+    return buildQueueRecordPickerFieldsFromAllowList(labelCatalogGroups, isWaitlist, options).map((f) => f.refKey);
 }

@@ -96,10 +96,12 @@ describe("context-first drawer field pickers", () => {
 });
 
 describe("queue row widget allow-list", () => {
-    it("includes current_work and keeps tasks for backward compatibility", () => {
+    it("includes current_work, follow_ups and keeps tasks for backward compatibility", () => {
         expect(QUEUE_RECORD_PIPELINE_WIDGET_KEYS).toContain("current_work");
+        expect(QUEUE_RECORD_PIPELINE_WIDGET_KEYS).toContain("follow_ups");
         expect(QUEUE_RECORD_PIPELINE_WIDGET_KEYS).toContain("tasks");
         expect(isAllowedQueueRecordWidgetKey("current_work")).toBe(true);
+        expect(isAllowedQueueRecordWidgetKey("follow_ups")).toBe(true);
     });
 
     it("default pipeline queue layout validates with current_work widget", () => {

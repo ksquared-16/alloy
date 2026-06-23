@@ -112,6 +112,12 @@ function fieldMatchesQueueRecordScope(
     return waitlistRefKeyMatchesQueueRecordScope(scope, field.refKey);
 }
 
+/**
+ * Map queue record column scope → layout field catalog entity groups.
+ *
+ * @deprecated v3 queue row Add Field / Add Widget pickers must NOT use scope filtering.
+ * Retained for legacy zone-section tooling and scope resolution tests only.
+ */
 export function filterCatalogGroupsForScope(
     groups: LayoutCatalogGroup[],
     scope: QueueRecordScope,

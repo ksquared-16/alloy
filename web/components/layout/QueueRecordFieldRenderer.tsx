@@ -348,8 +348,30 @@ export function QueueRecordWidgetRenderer({
     const nextStep = String(record["opportunity.next_step"] ?? record.next_step ?? "").trim();
     const widgetTitle = block.label?.trim() || undefined;
 
-    if (key === "tasks" || key.includes("task")) {
-        return <QueueRecordTasksWidget record={record} title={widgetTitle ?? "Tasks"} maxVisible={2} />;
+    if (key === "tasks" || key === "follow_ups" || key.includes("task")) {
+        return <QueueRecordTasksWidget record={record} title={widgetTitle ?? (key === "follow_ups" ? "Follow-ups" : "Tasks")} maxVisible={2} />;
+    }
+
+    if (key === "current_work") {
+        const workSummary = String(record["queue_row.work_summary"] ?? "").trim();
+        const nextAction = String(record["queue_row.next_best_action_label"] ?? "").trim();
+        const line = workSummary || nextAction;
+        if (!line) {
+            return (
+                <div className="queue-record-widget queue-record-widget--current-work queue-record-widget--empty" data-queue-row-interactive="true">
+                    <div className="queue-record-widget__label">{widgetTitle ?? "Current Work"}</div>
+                    <div className="queue-record-widget__body">
+                        <span className="queue-record-widget__empty">No open work</span>
+                    </div>
+                </div>
+            );
+        }
+        return (
+            <QueueRowOpenZone onOpen={onOpen} className="queue-record-field queue-record-field--current-work">
+                <span className="queue-record-field__prefix">{widgetTitle ?? "Work"}:</span>
+                <span className="queue-record-field__text">{line}</span>
+            </QueueRowOpenZone>
+        );
     }
 
     if (key === "attention" || key.includes("attention")) {

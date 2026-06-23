@@ -27,13 +27,28 @@ describe("validateQueueRecordLayoutConfig", () => {
             ...config,
             columns: config.columns.map((c) =>
                 c.id === col.id ?
-                    { ...c, blocks: [...c.blocks, createWidgetBlock("follow_ups", "Follow-ups")] }
+                    { ...c, blocks: [...c.blocks, createWidgetBlock("notes", "Notes")] }
                 :   c,
             ),
         };
         const result = validateQueueRecordLayoutConfig(next, { isWaitlist: false });
         expect(result.ok).toBe(false);
-        expect(result.errors.some((e) => e.path.includes("widgetKey") && e.message.includes("follow_ups"))).toBe(true);
+        expect(result.errors.some((e) => e.path.includes("widgetKey") && e.message.includes("notes"))).toBe(true);
+    });
+
+    it("accepts follow_ups widget block", () => {
+        const config = normalizeQueueRecordLayoutConfig(defaultLeadQueueLayoutV3());
+        const col = config.columns[3]!;
+        const next = {
+            ...config,
+            columns: config.columns.map((c) =>
+                c.id === col.id ?
+                    { ...c, blocks: [...c.blocks, createWidgetBlock("follow_ups", "Follow-ups")] }
+                :   c,
+            ),
+        };
+        const result = validateQueueRecordLayoutConfig(next, { isWaitlist: false });
+        expect(result.ok).toBe(true);
     });
 
     it("accepts mixed-context fields in a main_record column field group", () => {
@@ -103,8 +118,10 @@ describe("queue record widget allow-list", () => {
         expect(allowedQueueRecordWidgetKeys(false)).toEqual([...QUEUE_RECORD_PIPELINE_WIDGET_KEYS]);
         expect(isAllowedQueueRecordWidgetKey("activity_timeline", false)).toBe(true);
         expect(isAllowedQueueRecordWidgetKey("current_work", false)).toBe(true);
+        expect(isAllowedQueueRecordWidgetKey("follow_ups", false)).toBe(true);
         expect(isAllowedQueueRecordWidgetKey("tasks", true)).toBe(true);
         expect(isAllowedQueueRecordPickerWidgetKey("tasks")).toBe(false);
         expect(QUEUE_RECORD_PICKER_WIDGET_KEYS).not.toContain("tasks");
+        expect(QUEUE_RECORD_PICKER_WIDGET_KEYS).toContain("follow_ups");
     });
 });

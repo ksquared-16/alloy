@@ -9,10 +9,12 @@ import {
 } from "@/lib/layout/fieldCatalog";
 import {
     buildQueueRecordFieldPickerGroups,
+    buildQueueRecordPickerCatalog,
     buildQueueRecordPickerFieldsFromAllowList,
     queueRecordPickerVisibleRefKeys,
 } from "@/lib/layout/queueRecordFieldPickerCatalog";
 import {
+    buildQueueRecordWidgetPickerCatalog,
     filterCatalogWidgetsForQueueRecord,
     isAllowedQueueRecordPickerWidgetKey,
     isAllowedQueueRecordWidgetKey,
@@ -20,6 +22,7 @@ import {
     QUEUE_RECORD_PIPELINE_WIDGET_KEYS,
 } from "@/lib/layout/queueRecordLayoutAllowList";
 import { defaultLeadQueueLayoutV3, createFieldGroupBlock, createWidgetBlock } from "@/lib/layout/queueRecordLayoutV3";
+import type { QueueRecordScope } from "@/lib/layout/queueRecordLayoutV3";
 import { normalizeQueueRecordLayoutConfig } from "@/lib/layout/runtime/normalizeQueueRecordLayoutConfig";
 import { validateQueueRecordLayoutConfig } from "@/lib/layout/runtime/validateQueueRecordLayoutConfig";
 import {
@@ -36,17 +39,89 @@ function leadOpportunitiesCatalogGroups() {
     return buildLeadLayoutPickerGroups(raw, "opportunities");
 }
 
-function buildQueuePicker(isWaitlist: boolean) {
-    return buildQueueRecordFieldPickerGroups(leadOpportunitiesCatalogGroups(), isWaitlist);
+function buildQueuePicker(isWaitlist: boolean, scope?: QueueRecordScope) {
+    void scope;
+    return buildQueueRecordPickerCatalog({
+        isWaitlist,
+        labelCatalogGroups: leadOpportunitiesCatalogGroups(),
+        blockFilter: "field_group",
+    });
 }
 
-function pickerRefKeys(isWaitlist: boolean): string[] {
-    return queueRecordPickerVisibleRefKeys(leadOpportunitiesCatalogGroups(), isWaitlist).sort();
+function pickerRefKeys(isWaitlist: boolean, scope?: QueueRecordScope) {
+    void scope;
+    return queueRecordPickerVisibleRefKeys(leadOpportunitiesCatalogGroups(), isWaitlist, {
+        blockFilter: "field_group",
+    }).sort();
 }
 
-function pickerGroupLabels(isWaitlist: boolean): string[] {
-    return buildQueuePicker(isWaitlist).map((g) => g.entityLabel);
+function pickerGroupLabels(isWaitlist: boolean, scope?: QueueRecordScope) {
+    return buildQueuePicker(isWaitlist, scope).groups.map((g) => g.entityLabel);
 }
+
+describe("queue record field picker catalog — scope independence (P0 regression)", () => {
+    const lifecycleScope: QueueRecordScope = { type: "lifecycle_context" };
+    const mainScope: QueueRecordScope = { type: "main_record" };
+    const childrenScope: QueueRecordScope = { type: "repeated_related", relationshipKey: "children" };
+
+    it("waitlist lifecycle column Add Field includes Lead, Child, Contact, Status, Waitlist, Work groups", () => {
+        const catalog = buildQueuePicker(true, lifecycleScope);
+        expect(catalog.groups.map((g) => g.entityLabel)).toEqual(
+            expect.arrayContaining([
+                "Lead / Enrollment",
+                "Candidate / Child",
+                "Primary Contact",
+                "Status / Lifecycle",
+                "Waitlist / Placement",
+                "Activity / Work",
+            ]),
+        );
+        expect(catalog.fieldCount).toBeGreaterThan(20);
+    });
+
+    it("waitlist lifecycle column Add Widget includes all queue-supported widgets", () => {
+        const catalog = buildQueuePicker(true, lifecycleScope);
+        const keys = catalog.widgets.map((w) => w.widgetKey);
+        expect(keys).toEqual(
+            expect.arrayContaining(["current_work", "attention", "activity_timeline", "follow_ups"]),
+        );
+        expect(keys).not.toContain("tasks");
+        expect(catalog.widgetCount).toBe(QUEUE_RECORD_PICKER_WIDGET_KEYS.length);
+    });
+
+    it("pipeline picker group count is identical for main_record and lifecycle_context columns", () => {
+        const main = buildQueuePicker(false, mainScope);
+        const lifecycle = buildQueuePicker(false, lifecycleScope);
+        expect(main.groups.map((g) => g.entityKey)).toEqual(lifecycle.groups.map((g) => g.entityKey));
+        expect(main.fieldCount).toBe(lifecycle.fieldCount);
+        expect(main.widgetCount).toBe(lifecycle.widgetCount);
+    });
+
+    it("changing column scope does not change Add Widget options", () => {
+        const mainWidgets = buildQueuePicker(false, mainScope).widgets.map((w) => w.widgetKey);
+        const lifecycleWidgets = buildQueuePicker(false, lifecycleScope).widgets.map((w) => w.widgetKey);
+        const childColWidgets = buildQueuePicker(false, childrenScope).widgets.map((w) => w.widgetKey);
+        expect(lifecycleWidgets).toEqual(mainWidgets);
+        expect(childColWidgets).toEqual(mainWidgets);
+    });
+
+    it("repeated_record_block narrows field picker to child-scoped refs only", () => {
+        const full = buildQueueRecordPickerCatalog({
+            isWaitlist: false,
+            labelCatalogGroups: leadOpportunitiesCatalogGroups(),
+            blockFilter: "field_group",
+        });
+        const childOnly = buildQueueRecordPickerCatalog({
+            isWaitlist: false,
+            labelCatalogGroups: leadOpportunitiesCatalogGroups(),
+            blockFilter: "repeated_record_block",
+        });
+        expect(childOnly.fieldCount).toBeLessThan(full.fieldCount);
+        const childRefs = childOnly.groups.flatMap((g) => g.fields.map((f) => f.refKey));
+        expect(childRefs.every((k) => k.startsWith("child.") || k.startsWith("inquiry_child."))).toBe(true);
+        expect(childRefs).not.toContain("opportunity.status_key");
+    });
+});
 
 describe("queue record field picker catalog", () => {
     it("waitlist Add Field picker includes Lead, Child, Contact, Status, Waitlist, and Work contexts", () => {
@@ -134,9 +209,9 @@ describe("queue record field picker catalog", () => {
 
     it("picker groups are independent of column row context", () => {
         const catalog = leadOpportunitiesCatalogGroups();
-        const pipelineA = buildQueueRecordFieldPickerGroups(catalog, false);
-        const pipelineB = buildQueueRecordFieldPickerGroups(catalog, false);
-        expect(pipelineA.map((g) => g.entityKey)).toEqual(pipelineB.map((g) => g.entityKey));
+        const main = buildQueueRecordFieldPickerGroups(catalog, false, { blockFilter: "field_group" });
+        const lifecycle = buildQueueRecordFieldPickerGroups(catalog, false, { blockFilter: "field_group" });
+        expect(main.map((g) => g.entityKey)).toEqual(lifecycle.map((g) => g.entityKey));
     });
 
     it("mixed-context fields in one column validate on pipeline rows", () => {
@@ -175,18 +250,20 @@ describe("queue record field picker catalog", () => {
         expect(result.ok).toBe(true);
     });
 
-    it("widget picker includes Current Work, Attention, Activity Timeline but not Tasks (legacy)", () => {
-        const pickerWidgets = filterCatalogWidgetsForQueueRecord(GLOBAL_WIDGET_CATALOG, false);
+    it("widget picker includes Current Work, Attention, Activity Timeline, Follow-ups but not Tasks (legacy)", () => {
+        const pickerWidgets = buildQueueRecordWidgetPickerCatalog(GLOBAL_WIDGET_CATALOG);
         const keys = pickerWidgets.map((w) => w.widgetKey);
         const labels = pickerWidgets.map((w) => w.label);
         expect(keys).toContain("current_work");
         expect(keys).toContain("activity_timeline");
         expect(keys).toContain("attention");
+        expect(keys).toContain("follow_ups");
         expect(keys).not.toContain("tasks");
         expect(labels.some((l) => /legacy/i.test(l))).toBe(false);
         expect(QUEUE_RECORD_PICKER_WIDGET_KEYS).not.toContain("tasks");
         expect(isAllowedQueueRecordPickerWidgetKey("tasks")).toBe(false);
         expect(isAllowedQueueRecordWidgetKey("tasks", false)).toBe(true);
+        expect(isAllowedQueueRecordWidgetKey("follow_ups", false)).toBe(true);
     });
 
     it("existing layout with tasks widget still validates and pipeline validator keeps tasks", () => {

@@ -21,8 +21,7 @@ import {
     removeFieldFromBlock,
     resolveEditorConfigFromDoc,
 } from "@/lib/layout/queueRecordLayoutEditorModel";
-import { buildQueueRecordFieldPickerGroups } from "@/lib/layout/queueRecordFieldPickerCatalog";
-import { filterCatalogWidgetsForQueueRecord } from "@/lib/layout/queueRecordLayoutAllowList";
+import { buildQueueRecordPickerCatalog } from "@/lib/layout/queueRecordFieldPickerCatalog";
 import type { QueueRecordLayoutEditorConfig } from "@/lib/layout/queueRecordLayoutV3";
 import {
     QUEUE_RECORD_SCOPE_PRESETS,
@@ -35,7 +34,6 @@ import {
 import { QUEUE_RECORD_WIDTH_OPTIONS } from "@/lib/layout/queueRecordLayoutWidth";
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
 import type { LayoutCatalogField, LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
-import { scopeLabel } from "@/lib/layout/queueRecordScopeCatalog";
 import { isWaitlistQueueLayoutDoc } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
 
 type Props = {
@@ -86,13 +84,29 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
     const pickerBlock =
         pickerColumn && picker ? pickerColumn.blocks.find((b) => b.id === picker.blockId) : null;
 
-    const queuePickerCatalog = useMemo((): LayoutFieldPickerCatalog | null => {
-        if (!catalog) return null;
-        // v3 row picker: validator allow-list + opportunities catalog labels only (no legacy zone catalog merge).
-        const groups = buildQueueRecordFieldPickerGroups(catalog.groups, isWaitlist);
-        const widgets = filterCatalogWidgetsForQueueRecord(catalog.widgets, isWaitlist);
-        return { groups, widgets };
-    }, [catalog, isWaitlist]);
+    const pickerBlockFilter =
+        pickerBlock?.type === "repeated_record_block" ? "repeated_record_block" as const
+        : pickerBlock?.type === "widget" ? "widget" as const
+        : "field_group" as const;
+
+    const queuePickerCatalog = useMemo(() => {
+        return buildQueueRecordPickerCatalog({
+            isWaitlist,
+            labelCatalogGroups: catalog?.groups ?? [],
+            widgetCatalog: catalog?.widgets,
+            blockFilter: picker ? pickerBlockFilter : "field_group",
+            relationshipKey:
+                pickerBlock?.type === "repeated_record_block" ? pickerBlock.relationshipKey : "children",
+        });
+    }, [catalog, isWaitlist, picker, pickerBlock, pickerBlockFilter]);
+
+    const queuePickerOverlayCatalog = useMemo(
+        (): LayoutFieldPickerCatalog => ({
+            groups: queuePickerCatalog.groups,
+            widgets: queuePickerCatalog.widgets,
+        }),
+        [queuePickerCatalog.groups, queuePickerCatalog.widgets],
+    );
 
     useEffect(() => {
         if (queuePickerCatalog?.groups?.length && !pickerGroup) {
@@ -202,7 +216,7 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                                 className="mb-1 w-full rounded border border-[#e6e8ec] bg-white px-2 py-1 text-sm font-semibold text-[#273f52] disabled:bg-[#f4f6f9]"
                             />
                             <label className="mb-2 flex flex-col gap-0.5 text-[11px] text-[#59678b]">
-                                <span className="shrink-0">Row context</span>
+                                <span className="shrink-0">Default resolver context</span>
                                 <select
                                     disabled={!editable}
                                     value={scopePresetKey(col.scope)}
@@ -222,7 +236,7 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                                     ))}
                                 </select>
                                 <span className="text-[10px] text-[#9aa4bf]">
-                                    {scopeLabel(col.scope)} — controls repeat/resolve defaults, not Add Field options.
+                                    Controls repeat/default resolution for this column. It does not limit available fields.
                                 </span>
                             </label>
                             <label className="mb-2 flex items-center gap-2 text-[11px] text-[#59678b]">
@@ -427,11 +441,8 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                                             {block.type !== "widget" ?
                                                 <button
                                                     type="button"
-                                                    disabled={!catalog}
                                                     onClick={() => {
-                                                        if (queuePickerCatalog?.groups?.length) {
-                                                            setPickerGroup(queuePickerCatalog.groups[0]!.entityKey);
-                                                        }
+                                                        setPickerGroup(queuePickerCatalog.groups[0]?.entityKey ?? "");
                                                         setPickerTab("field");
                                                         setPicker({ columnId: col.id, blockId: block.id });
                                                     }}
@@ -442,7 +453,6 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                                             :   null}
                                             <button
                                                 type="button"
-                                                disabled={!catalog}
                                                 onClick={() => {
                                                     setPickerTab("widget");
                                                     setPicker({ columnId: col.id, blockId: block.id });
@@ -534,12 +544,15 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                 </div>
             </section>
 
-            {picker && queuePickerCatalog ?
+            {picker ?
                 <LayoutFieldPickerOverlay
-                    catalog={queuePickerCatalog}
+                    catalog={queuePickerOverlayCatalog}
                     surface="queue"
                     queueIsWaitlist={isWaitlist}
                     queueSearchAllGroups
+                    queueLayoutKindLabel={queuePickerCatalog.layoutKindLabel}
+                    queuePickerFieldCount={queuePickerCatalog.fieldCount}
+                    queuePickerWidgetCount={queuePickerCatalog.widgetCount}
                     tab={pickerTab}
                     setTab={setPickerTab}
                     group={pickerGroup}

@@ -38,6 +38,8 @@ const PIPELINE_QUEUE_ROW_ANCHOR_FIELD_REFS = [
     "status_key",
     "next_step",
     "last_activity",
+    "last_activity_at",
+    "last_activity_summary",
     "queue_row.subject_label",
     "queue_row.stage_label",
     "queue_row.group_count_label",

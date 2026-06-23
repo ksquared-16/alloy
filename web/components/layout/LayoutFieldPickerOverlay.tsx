@@ -46,6 +46,10 @@ type Props = {
     queueIsWaitlist?: boolean;
     /** Queue row picker searches across all context groups (not just active nav group). */
     queueSearchAllGroups?: boolean;
+    /** Queue row picker diagnostics — confirms catalog is not scope-narrowed. */
+    queueLayoutKindLabel?: string;
+    queuePickerFieldCount?: number;
+    queuePickerWidgetCount?: number;
 };
 
 function FieldPickerRow({
@@ -105,6 +109,9 @@ export default function LayoutFieldPickerOverlay({
     fieldsOnly = false,
     queueIsWaitlist = false,
     queueSearchAllGroups = false,
+    queueLayoutKindLabel,
+    queuePickerFieldCount,
+    queuePickerWidgetCount,
 }: Props) {
     const [searchQuery, setSearchQuery] = useState("");
     const [showUsedFields, setShowUsedFields] = useState(false);
@@ -132,6 +139,7 @@ export default function LayoutFieldPickerOverlay({
         () => partitionCatalogFieldsForPicker(searchFields, usedRefKeys, searchQuery),
         [searchFields, usedRefKeys, searchQuery],
     );
+    const hiddenUsedCount = used.length;
 
     const groupCounts = useMemo(
         () =>
@@ -165,7 +173,10 @@ export default function LayoutFieldPickerOverlay({
             `No queue row fields match “${searchQuery.trim()}”.`
         :   `No ${activeGroup?.entityLabel ?? "entity"} fields match “${searchQuery.trim()}”.`;
 
-    const hiddenUsedCount = used.length;
+    const widgetSections =
+        surface === "queue" ?
+            catalog.widgets.map((w) => ({ cat: w.category ?? "Work", widgets: [w] }))
+        :   byCategory;
     const noResults = available.length === 0 && (!showUsedFields || used.length === 0);
 
     return (
@@ -206,7 +217,20 @@ export default function LayoutFieldPickerOverlay({
                     </button>
                 </div>
 
-                {fieldsOnly || tab === "field" ? (
+                {surface === "queue" && queueLayoutKindLabel ?
+                    <div
+                        className="border-b border-[#e6e8ec] bg-[#f7f9fc] px-4 py-2 text-[11px] text-[#59678b]"
+                        data-testid="layout-field-picker-queue-diagnostics"
+                    >
+                        <div className="font-medium text-[#31394d]">{queueLayoutKindLabel}</div>
+                        <div className="mt-0.5">
+                            {queuePickerFieldCount ?? 0} fields · {queuePickerWidgetCount ?? 0} widgets available
+                            <span className="text-[#9aa4bf]"> — not limited by column scope</span>
+                        </div>
+                    </div>
+                :   null}
+
+                {fieldsOnly || tab === "field" ?
                     <div className="flex min-h-0 flex-1">
                         <nav
                             className="flex w-44 shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-[#e6e8ec] bg-[#fafbfc] p-2"
@@ -329,46 +353,68 @@ export default function LayoutFieldPickerOverlay({
                             </div>
                         </div>
                     </div>
-                ) : (
+                : (
                     <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                        <div className="flex flex-col gap-3">
-                            {byCategory.map(({ cat, widgets }) => (
-                                <div key={cat}>
-                                    <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#9aa4bf]">{cat}</div>
-                                    <div className="flex flex-col gap-1">
-                                        {widgets.map((w) => {
-                                            const relevant = widgetIsRelevant(w);
-                                            return (
-                                                <button
-                                                    key={w.widgetKey}
-                                                    type="button"
-                                                    disabled={!relevant}
-                                                    onClick={() => relevant && onPickWidget(w)}
-                                                    title={
-                                                        relevant
-                                                            ? w.description
-                                                            : `${w.description ?? ""} — available on ${(w.relevantSurfaces ?? []).join("/")} cards`
-                                                    }
-                                                    className={`flex items-start justify-between gap-2 rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm ${relevant ? "hover:bg-[#f5f8ff]" : "opacity-50"}`}
-                                                >
-                                                    <span className="min-w-0">
-                                                        <span className="font-medium text-[#31394d]">{w.label}</span>
-                                                        {w.description ? (
-                                                            <span className="block text-[11px] text-[#59678b]">{w.description}</span>
-                                                        ) : null}
-                                                    </span>
-                                                    {!relevant ? (
-                                                        <span className="shrink-0 rounded bg-[#f4f6f9] px-1.5 py-0.5 text-[10px] text-[#9aa4bf]">
-                                                            queue only
+                        {surface === "queue" && widgetSections.every((x) => x.widgets.length === 0) ?
+                            <p className="py-8 text-center text-sm text-[#9aa4bf]">No queue-supported widgets in catalog.</p>
+                        :   <div className="flex flex-col gap-3">
+                                {widgetSections.map(({ cat, widgets }) => (
+                                    <div key={cat}>
+                                        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-[#9aa4bf]">{cat}</div>
+                                        <div className="flex flex-col gap-1">
+                                            {widgets.map((w) => {
+                                                if (surface === "queue") {
+                                                    return (
+                                                        <button
+                                                            key={w.widgetKey}
+                                                            type="button"
+                                                            onClick={() => onPickWidget(w)}
+                                                            title={w.description}
+                                                            data-testid={`layout-widget-picker-option-${w.widgetKey}`}
+                                                            className="flex items-start justify-between gap-2 rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm hover:bg-[#f5f8ff]"
+                                                        >
+                                                            <span className="min-w-0">
+                                                                <span className="font-medium text-[#31394d]">{w.label}</span>
+                                                                {w.description ? (
+                                                                    <span className="block text-[11px] text-[#59678b]">{w.description}</span>
+                                                                ) : null}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                }
+                                                const relevant = widgetIsRelevant(w);
+                                                return (
+                                                    <button
+                                                        key={w.widgetKey}
+                                                        type="button"
+                                                        disabled={!relevant}
+                                                        onClick={() => relevant && onPickWidget(w)}
+                                                        title={
+                                                            relevant
+                                                                ? w.description
+                                                                : `${w.description ?? ""} — available on ${(w.relevantSurfaces ?? []).join("/")} cards`
+                                                        }
+                                                        className={`flex items-start justify-between gap-2 rounded border border-[#e6e8ec] px-2 py-1.5 text-left text-sm ${relevant ? "hover:bg-[#f5f8ff]" : "opacity-50"}`}
+                                                    >
+                                                        <span className="min-w-0">
+                                                            <span className="font-medium text-[#31394d]">{w.label}</span>
+                                                            {w.description ? (
+                                                                <span className="block text-[11px] text-[#59678b]">{w.description}</span>
+                                                            ) : null}
                                                         </span>
-                                                    ) : null}
-                                                </button>
-                                            );
-                                        })}
+                                                        {!relevant ? (
+                                                            <span className="shrink-0 rounded bg-[#f4f6f9] px-1.5 py-0.5 text-[10px] text-[#9aa4bf]">
+                                                                queue only
+                                                            </span>
+                                                        ) : null}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        }
                     </div>
                 )}
             </div>

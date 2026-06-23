@@ -121,12 +121,12 @@ export const QUEUE_RECORD_SCOPE_PRESETS: {
     {
         scope: { type: "main_record" },
         label: "Main record",
-        description: "Default row anchor — does not limit Add Field options",
+        description: "Default resolver context — does not limit Add Field or widget options",
     },
     {
         scope: { type: "primary_related", relationshipKey: "person" },
         label: "Primary contact",
-        description: "Repeat/resolve hint for primary contact — Add Field stays context-based",
+        description: "Default resolver context for primary contact — picker stays full catalog",
     },
     {
         scope: { type: "repeated_related", relationshipKey: "children" },
@@ -136,7 +136,7 @@ export const QUEUE_RECORD_SCOPE_PRESETS: {
     {
         scope: { type: "lifecycle_context" },
         label: "Lifecycle / status",
-        description: "Status and work context defaults — not a field picker filter",
+        description: "Default resolver context for status/work — picker stays full catalog",
     },
     { scope: { type: "system" }, label: "System", description: "Ids and timestamps — repeat/resolve hint only" },
 ];
