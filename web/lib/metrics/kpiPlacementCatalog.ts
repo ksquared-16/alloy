@@ -26,8 +26,20 @@ const SURFACE_LABELS: Record<KpiPlacementSurface, string> = {
     lifecycle_tile: "Lifecycle tile",
 };
 
+/** Operator-facing experience placement labels (Configuration → Experience Placement). */
+const SURFACE_OPERATOR_LABELS: Record<KpiPlacementSurface, string> = {
+    workspace_strip: "Organization Workspace",
+    work_unit_strip: "Work Unit",
+    analytics_modal: "Operational Intelligence Panel",
+    lifecycle_tile: "Business Process",
+};
+
 export function kpiPlacementSurfaceLabel(surface: KpiPlacementSurface): string {
     return SURFACE_LABELS[surface];
+}
+
+export function kpiPlacementSurfaceOperatorLabel(surface: KpiPlacementSurface): string {
+    return SURFACE_OPERATOR_LABELS[surface];
 }
 
 /** Code-owned default placement visibility (Phase 3 — read-only catalog). */

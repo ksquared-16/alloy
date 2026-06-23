@@ -282,10 +282,6 @@ export function OipKpiObjectFromVm({
     );
 }
 
-export const OIP_PERFORMANCE_STRIP_ORDER = OPERATIONAL_PULSE_STRIP_KEYS;
-
-export { sortPerformanceKpis };
-
 export function OipPerformanceKpiRow({
     kpis,
     oipResolved,
