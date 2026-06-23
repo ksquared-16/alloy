@@ -126,7 +126,8 @@ export function FormEmbedClient({
             const json = (await res.json()) as ResolveOk | ApiErr;
             if (!json.ok) {
                 setPhase("error");
-                setMessage(json.error ?? "Resolve failed");
+                const code = json.code ? ` [${json.code}]` : "";
+                setMessage(`${json.error ?? "Resolve failed"}${code}`);
                 return;
             }
 
@@ -322,6 +323,7 @@ export function FormEmbedClient({
         return (
             <div className="p-6 text-center text-sm text-red-700">
                 {message ?? "Unable to load this form."}
+                <div className="mt-1 text-[11px] text-neutral-400">link token length: {token.length}</div>
             </div>
         );
     }

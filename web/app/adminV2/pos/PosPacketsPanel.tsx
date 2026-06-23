@@ -45,6 +45,12 @@ function fmtDate(iso: string): string {
     return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+/** Ensure a copyable absolute URL — the mint may return a relative embed_path when no host header is present. */
+function absolutize(url: string): string {
+    if (typeof window === "undefined") return url;
+    return url.startsWith("/") ? `${window.location.origin}${url}` : url;
+}
+
 interface MintedLink {
     url: string;
 }
@@ -99,7 +105,7 @@ export default function PosPacketsPanel() {
                 if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
                 const url = body.data?.embed_url || body.data?.embed_path;
                 if (!url) throw new Error("Link created but no URL was returned");
-                setMinted((m) => ({ ...m, [packetDefinitionId]: { url } }));
+                setMinted((m) => ({ ...m, [packetDefinitionId]: { url: absolutize(url) } }));
                 await load();
             } catch (e) {
                 setErr(e instanceof Error ? e.message : "Failed to create share link");
@@ -155,7 +161,7 @@ export default function PosPacketsPanel() {
             if (!res.ok) throw new Error(b.error || `Request failed (${res.status})`);
             const url = b.data?.public_link?.url;
             if (!url) throw new Error("Packet created but no link was returned");
-            setCreatedLink(url);
+            setCreatedLink(absolutize(url));
             setCreateFormId("");
             setCreateLaunch(null);
             await load();
