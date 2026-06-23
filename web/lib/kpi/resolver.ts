@@ -24,6 +24,8 @@ import type { WorkUnitKpiContext } from "@/lib/kpi/surfaceContext";
 import { resolveQueueGrainPresentation, resolveQueueCountUnit } from "@/lib/ui-v2/queueGrainPresentation";
 import { getMetricDefinition, isKnownMetricKey, validateMetricForSurface } from "@/lib/kpi/registry";
 import type { MetricKey, ResolveKpisResult, WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
+import { resolveOipStripValue } from "@/lib/kpi/oipBridge";
+import type { OipMetricStripValues } from "@/lib/kpi/oipBridge";
 
 const FACET_MAX_WORK_UNITS = 12;
 
@@ -176,6 +178,8 @@ export function resolveKpisForWorkspace(params: {
     scopeHasPlacementRows: boolean;
     metrics: WorkspaceRootMetrics | null;
     growthSnapshots: WorkspaceGrowthDeptSnapshot[];
+    /** Server-resolved OIP metric formatted values (family O). */
+    oipMetricValues?: OipMetricStripValues;
 }): ResolveKpisResult {
     const warnings: string[] = [];
     const visible = params.placementRows.filter((r) => r.is_visible !== false);
@@ -199,6 +203,10 @@ export function resolveKpisForWorkspace(params: {
         }
         if (!validateMetricForSurface(mk, "workspace")) {
             warnings.push(`surface_mismatch:${mk}:workspace`);
+            continue;
+        }
+        if (getMetricDefinition(mk).family === "O") {
+            items.push(vmFromRow(mk, resolveOipStripValue(mk, params.oipMetricValues), row));
             continue;
         }
         switch (mk) {
@@ -349,6 +357,7 @@ export function resolveKpisForWorkUnit(params: {
     placementRows: WorkspaceKpiPlacementRow[];
     scopeHasPlacementRows: boolean;
     context: WorkUnitKpiContext;
+    oipMetricValues?: OipMetricStripValues;
 }): ResolveKpisResult {
     const warnings: string[] = [];
     const baseline = () => buildDefaultWorkUnitKpis(params.context);
@@ -372,6 +381,11 @@ export function resolveKpisForWorkUnit(params: {
         }
         if (!validateMetricForSurface(mk, "work_unit")) {
             warnings.push(`surface_mismatch:${mk}:work_unit`);
+            continue;
+        }
+
+        if (getMetricDefinition(mk).family === "O") {
+            items.push(vmFromRow(mk, resolveOipStripValue(mk, params.oipMetricValues), row));
             continue;
         }
 

@@ -10,6 +10,11 @@ import {
     type CanonicalActionDefinition,
     type CanonicalActionPlacement,
 } from "@/lib/admin/actions/canonicalActionRegistry";
+import {
+    isMakePrimaryContactActionKey,
+    isMakePrimaryContactAllowedCanonicalPlacement,
+    MAKE_PRIMARY_CONTACT_BUILDER_UNAVAILABLE_MESSAGE,
+} from "@/lib/admin/actions/makePrimaryContactAction";
 import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import type { LayoutEditorActionPickerContext } from "@/lib/layout/layoutEditorActionCatalog";
 
@@ -41,7 +46,6 @@ export const ENROLLMENT_STAGE_ACTION_KEYS: Record<string, readonly string[]> = {
         "add_parent_guardian",
         "add_family_member",
         "add_emergency_contact",
-        "make_primary_contact",
         "schedule_tour",
         "ask_bos",
         "quick_message",
@@ -52,7 +56,6 @@ export const ENROLLMENT_STAGE_ACTION_KEYS: Record<string, readonly string[]> = {
         "add_parent_guardian",
         "add_family_member",
         "add_emergency_contact",
-        "make_primary_contact",
         "schedule_tour",
     ],
     waitlist: [
@@ -121,6 +124,32 @@ function evaluateAvailability(input: {
             reason: "not_runtime_wired",
             unavailableMessage: "This action is preview-only until runtime wiring is complete.",
         };
+    }
+
+    if (isMakePrimaryContactActionKey(entry.actionKey)) {
+        if (input.layoutSurface && input.layoutContext) {
+            if (!layoutContextMatchesCanonicalAction(entry, {
+                surfaceKey: input.layoutSurface,
+                context: input.layoutContext,
+            })) {
+                return {
+                    ...base,
+                    reason: "hidden_context",
+                    unavailableMessage: MAKE_PRIMARY_CONTACT_BUILDER_UNAVAILABLE_MESSAGE,
+                };
+            }
+        } else if (input.placements.length > 0) {
+            const placementMatch = input.placements.some((p) =>
+                isMakePrimaryContactAllowedCanonicalPlacement(p),
+            );
+            if (!placementMatch) {
+                return {
+                    ...base,
+                    reason: "hidden_context",
+                    unavailableMessage: MAKE_PRIMARY_CONTACT_BUILDER_UNAVAILABLE_MESSAGE,
+                };
+            }
+        }
     }
 
     if (input.layoutSurface && input.layoutContext) {

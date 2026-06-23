@@ -15,10 +15,11 @@ describe("lifecycleRuntimeBinding", () => {
         expect(isLegacyDefaultPipelineDisplayName("New Leads")).toBe(false);
     });
 
-    it("lead stage queue sync includes platform create-lead status key", () => {
+    it("lead stage queue sync includes platform create-lead status key and legacy aliases", () => {
         const keys = statusKeysForOperatorStageQueueSync("lead", ["new_lead"]);
         expect(keys).toContain("new_lead");
         expect(keys).toContain(NEW_LEAD_STATUS_KEY);
+        expect(keys).toContain("open");
     });
 
     it("non-lead stages do not inject create-lead key", () => {

@@ -122,6 +122,7 @@ import {
 } from "@/lib/perf/workUnitCriticalPathTrace";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import { useWorkUnitRegistryModals } from "@/lib/adminV2/workUnit/useWorkUnitRegistryModals";
 import {
     formatLegacyRecordActionFailure,
     formatRegistryActionFailure,
@@ -169,6 +170,11 @@ import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enro
 import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
+import {
+    extractOipMetricKeysFromPlacements,
+    fetchOipMetricStripValues,
+    type OipMetricStripValues,
+} from "@/lib/kpi/oipBridge";
 import {
     applyLifecycleWorkUnitQueueUiOverlay,
     isLifecycleStageWorkUnitKey,
@@ -742,6 +748,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [wuPrimaryLaneTimedOut, setWuPrimaryLaneTimedOut] = useState(false);
     /** `undefined` = placement config not loaded → baseline strip; values are derived in `wuResolvedPlacementKpis`. */
     const [wuPlacementRows, setWuPlacementRows] = useState<WorkspaceKpiPlacementRow[] | undefined>(undefined);
+    const [oipMetricValues, setOipMetricValues] = useState<OipMetricStripValues | undefined>(undefined);
     const [wuScopeHasPlacements, setWuScopeHasPlacements] = useState(false);
     const queueItemsRequestSeq = useRef(0);
     const queueSummariesRequestSeq = useRef(0);
@@ -5435,8 +5442,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             placementRows: wuPlacementRows,
             scopeHasPlacementRows: wuScopeHasPlacements,
             context: workUnitKpiContext,
+            oipMetricValues,
         }).items;
-    }, [suppressWorkUnitKpiStrip, wuPlacementRows, wuScopeHasPlacements, workUnitKpiContext]);
+    }, [suppressWorkUnitKpiStrip, wuPlacementRows, wuScopeHasPlacements, workUnitKpiContext, oipMetricValues]);
 
     const enrollmentRightRailByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();
@@ -5471,6 +5479,31 @@ export default function AdminV2OpportunityWorkUnitPage() {
         [departmentId, workUnit?.id]
     );
     const oppDrawerExtra = opportunityWorkspaceContext ? { opportunityWorkspaceContext } : {};
+
+    const findQueueItemByOpportunityId = useCallback((opportunityId: string) => {
+        const id = opportunityId.trim();
+        if (!id) return null;
+        return (
+            findQueuePreviewItemById(queueDisplayItemsRef.current, id) ??
+            findQueuePreviewItemById(queueRowsBufferRef.current, id)
+        );
+    }, []);
+
+    const { modals: workUnitRegistryModals, openRelationshipAction, openEnrollmentStatus } =
+        useWorkUnitRegistryModals({
+            departmentId,
+            workUnitId: workUnit?.id ?? null,
+            workspaceContext: opportunityWorkspaceContext,
+            getSelectedOpportunityId: () => lastQueueOpportunityIdRef.current?.trim() || null,
+            findQueueItemByOpportunityId,
+            onEnrollmentStatusOpen: ({ opportunityId, initialScope }) => {
+                setUpdateStatusTargetId(opportunityId);
+                setUpdateStatusScope(initialScope ?? null);
+                setUpdateStatusFormOpen(true);
+            },
+            onInvalidate: invalidate,
+            onActionError: setActionSurfaceError,
+        });
 
     const buildWuOpportunityQueueNavigator = useCallback(() => {
         if (!workUnit?.id || !departmentId) return null;
@@ -5705,6 +5738,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     openDrawer,
                     openCreateLead: () => setCreateLeadOpen(true),
                     openScheduleTourRecordPicker: openScheduleTourRecordPicker,
+                    openRelationshipAction,
+                    openEnrollmentStatus,
                     openForm: ({ form_key }) => {
                         const formKey = form_key.trim();
                         if (formKey === "schedule_tour" || formKey === "reschedule_tour") {
@@ -5719,6 +5754,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     departmentId,
                     workUnitId: workUnit?.id ?? null,
                     entityId: railOpportunityId,
+                    enrollmentStatusScope: railOpportunityId
+                        ? enrollmentScopeFromQueuePreviewItem(
+                              findQueueItemByOpportunityId(railOpportunityId),
+                              railOpportunityId,
+                          )
+                        : undefined,
                     needsAttentionHref,
                     context: {
                         surface: "right_rail",
@@ -5841,14 +5882,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             queueItem ?? null,
                             action.itemId,
                         ),
-                        openEnrollmentStatus: ({ opportunityId, sourceSurface, initialScope }) => {
-                            setUpdateStatusTargetId(opportunityId);
-                            setUpdateStatusScope(
-                                initialScope ??
-                                    enrollmentScopeFromQueuePreviewItem(queueItem ?? null, opportunityId),
-                            );
-                            setUpdateStatusFormOpen(true);
-                        },
+                        openRelationshipAction,
+                        openEnrollmentStatus,
                         context: {
                             surface: "queue_row",
                             department_id: departmentId,
@@ -5913,14 +5948,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             queueItem ?? null,
                             action.itemId,
                         ),
-                        openEnrollmentStatus: ({ opportunityId, sourceSurface, initialScope }) => {
-                            setUpdateStatusTargetId(opportunityId);
-                            setUpdateStatusScope(
-                                initialScope ??
-                                    enrollmentScopeFromQueuePreviewItem(queueItem ?? null, opportunityId),
-                            );
-                            setUpdateStatusFormOpen(true);
-                        },
+                        openRelationshipAction,
+                        openEnrollmentStatus,
                         context: {
                             surface: "queue_row",
                             department_id: departmentId,
@@ -6743,6 +6772,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [wuPlacementRows, workUnitKpiMetricsPending, departmentId, workUnitId]);
 
     useEffect(() => {
+        if (!wuPlacementRows?.length) {
+            setOipMetricValues(undefined);
+            return;
+        }
+        const keys = extractOipMetricKeysFromPlacements(wuPlacementRows);
+        if (!keys.length) {
+            setOipMetricValues(undefined);
+            return;
+        }
+        let cancelled = false;
+        void fetchOipMetricStripValues({ keys, siteId: selectedSiteId, window: "rolling_30d" }).then((values) => {
+            if (!cancelled) setOipMetricValues(values);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [wuPlacementRows, selectedSiteId]);
+
+    useEffect(() => {
         if (workUnitAboveFold.queue_lane.state === "held") {
             markWorkUnitLaneQueueRowsPlaceholder();
         }
@@ -6846,6 +6894,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             />
                         }
                     />
+                    {workUnitRegistryModals}
                     <ChangeEnrollmentStatusModal
                         open={updateStatusFormOpen && Boolean(updateStatusTargetId)}
                         opportunityId={updateStatusTargetId ?? ""}

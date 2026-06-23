@@ -45,7 +45,7 @@ const ENROLLMENT_MEMBERSHIP_DEFAULTS: Record<string, EnrollmentMembershipSpec> =
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["new_inquiry", "needs_qualification"],
+        included_status_keys: ["new_inquiry", "open", "new", "needs_qualification"],
     },
     qualification: {
         subject_type: "case",
@@ -121,7 +121,7 @@ const ENROLLMENT_MEMBERSHIP_DEFAULTS: Record<string, EnrollmentMembershipSpec> =
         subject_type: "case",
         count_unit: "cases",
         included_disposition_keys: [],
-        included_status_keys: ["new_inquiry"],
+        included_status_keys: ["new_inquiry", "open", "new"],
     },
     contacting: {
         subject_type: "case",

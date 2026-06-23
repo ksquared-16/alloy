@@ -17,8 +17,9 @@ describe("normalizeIntakeOpportunityStatusKey", () => {
 });
 
 describe("enrollment pipeline new leads visibility", () => {
-    it("matches new_inquiry and legacy new status keys", () => {
+    it("matches new_inquiry, legacy open, and legacy new status keys", () => {
         expect(opportunityMatchesEnrollmentNewLeadsQueue("new_inquiry")).toBe(true);
+        expect(opportunityMatchesEnrollmentNewLeadsQueue("open")).toBe(true);
         expect(opportunityMatchesEnrollmentNewLeadsQueue("new")).toBe(true);
         expect(opportunityMatchesEnrollmentNewLeadsQueue("tour_scheduled")).toBe(false);
     });

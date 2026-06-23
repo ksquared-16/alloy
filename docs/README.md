@@ -51,6 +51,7 @@ Start here: **`platform/foundation/system-overview.md`**
 | Actions & workflows | `platform/modules/actions-and-workflows.md` |
 | Configuration | `platform/modules/configuration-platform.md` |
 | AI / BOS | `platform/modules/ai-platform.md` |
+| Operational intelligence | `platform/modules/operational-intelligence-platform.md` |
 
 ### 5. Governance & standards
 

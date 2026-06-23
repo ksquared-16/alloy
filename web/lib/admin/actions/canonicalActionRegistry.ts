@@ -84,6 +84,13 @@ const LAYOUT_SURFACE_ALL: readonly DrawerLayoutEditorSurfaceKey[] = [
 ];
 
 function layoutPlacementsFromRelationship(entry: RelationshipActionRegistryEntry): CanonicalActionPlacement[] {
+    if (entry.actionKey === "make_primary_contact") {
+        const placements: CanonicalActionPlacement[] = [];
+        if (entry.allowedContexts.includes("contact_block")) placements.push("drawer_contact_block");
+        if (entry.allowedContexts.includes("contact_related_list")) placements.push("drawer_related_list_row");
+        if (entry.allowedContexts.includes("contact_repeater_row")) placements.push("drawer_repeater_row");
+        return placements;
+    }
     const placements = new Set<CanonicalActionPlacement>(["bos_rail"]);
     if (entry.allowedContexts.includes("section_row")) placements.add("drawer_section");
     if (entry.allowedContexts.includes("contact_block")) placements.add("drawer_contact_block");

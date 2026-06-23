@@ -3,6 +3,7 @@ import type { ActionSurface, ResolvedActionForClient, ResolvedActionsBySlot } fr
 import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { enrichResolvedActionForClient } from "@/lib/admin/actions/enrichResolvedActionWithCanonical";
 import { filterOpportunityActionsForRuntimeGates } from "@/lib/admin/actions/filterOpportunityActionsForRuntimeGates";
+import { stripMakePrimaryContactFromResolvedActionsBySlot } from "@/lib/admin/actions/makePrimaryContactAction";
 import { lifecycleBuilderPlacementVisibleOnStage } from "@/lib/lifecycle/lifecycleBuilderActionVisibility";
 import { parseLifecycleActionDisplayOrder } from "@/lib/lifecycle/lifecycleStageActionScope";
 
@@ -275,6 +276,6 @@ export async function resolveActionsForContext(
         query.orgId,
         query.entityType,
         query.entityId,
-        out
+        stripMakePrimaryContactFromResolvedActionsBySlot(out, query.surface),
     );
 }

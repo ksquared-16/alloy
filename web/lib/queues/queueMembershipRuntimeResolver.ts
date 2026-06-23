@@ -25,6 +25,7 @@ import { resolveEffectiveLocationScopeSource } from "@/lib/queues/queueMembershi
 import { QUEUE_MEMBERSHIP_METADATA_KEY } from "@/lib/lifecycle/seedEnrollmentQueueMembershipV1";
 import type { NormalizedQueueDefinitionDocument } from "@/lib/config/queueDefinitionV2Runtime";
 import { buildChildTrackLaneFromMembership } from "@/lib/businessProcesses/resolveChildTrackLaneFromMembership";
+import { isEnrollmentNewLeadsQueueKey } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import {
     resolveOcmEnrollmentTrackLaneContext,
     type OcmEnrollmentTrackLaneContext,
@@ -162,6 +163,8 @@ function buildOcmLaneFromMembership(
     stageLabel?: string | null,
 ): OcmEnrollmentTrackLaneContext | null {
     if (!membershipAppliesToExecutableQueueKey(membership, executableQueueKey)) return null;
+    if (isEnrollmentNewLeadsQueueKey(executableQueueKey)) return null;
+    if (membership.subject_type === "case") return null;
     return buildChildTrackLaneFromMembership({
         executableQueueKey,
         membership,

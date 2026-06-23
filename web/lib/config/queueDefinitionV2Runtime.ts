@@ -11,6 +11,10 @@ import {
     type QueueDefinitionV1,
     type QueueFilter,
 } from "@/lib/config/queueDefinitionSchema";
+import {
+    expandEnrollmentNewLeadsQueueStatusKeys,
+    shouldExpandEnrollmentNewLeadsStatusAliases,
+} from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 
 export type QueueGrain = "case" | "child" | "candidate";
 
@@ -248,18 +252,68 @@ function coerceFilterToV1Executable(filter: unknown): QueueFilter | null {
     return null;
 }
 
+function caseStatusValuesFromRawFilters(filters: unknown): string[] {
+    if (!Array.isArray(filters)) return [];
+    const values: string[] = [];
+    for (const raw of filters) {
+        if (!isPlainObject(raw)) continue;
+        if (raw.type !== "case_status" || raw.operator !== "in" || !Array.isArray(raw.values)) continue;
+        for (const v of raw.values) {
+            if (typeof v === "string" && v.trim()) values.push(v.trim());
+        }
+    }
+    return values;
+}
+
+function applyNewLeadsStatusAliasExpansion(entry: NormalizedQueueEntry, filters: QueueFilter[]): QueueFilter[] {
+    return filters.map((f) => {
+        if (f.type !== "status" || f.operator !== "in") return f;
+        const values = f.values ?? [];
+        if (
+            !shouldExpandEnrollmentNewLeadsStatusAliases({
+                statusKeys: values,
+                queueKey: entry.key,
+                domain: entry.domain,
+            })
+        ) {
+            return f;
+        }
+        return { ...f, values: expandEnrollmentNewLeadsQueueStatusKeys(values) };
+    });
+}
+
 function executionFiltersForQueueEntry(entry: NormalizedQueueEntry): QueueFilter[] {
     const raw = entry.raw;
     const compat =
         isPlainObject(raw) && Array.isArray(raw.filters_compat_v1) ? raw.filters_compat_v1 : null;
     const source = compat ?? entry.filters;
+    const caseStatusValues = caseStatusValuesFromRawFilters(entry.filters);
 
     const out: QueueFilter[] = [];
     for (const f of source) {
         const coerced = coerceFilterToV1Executable(f);
         if (coerced) out.push(coerced);
     }
-    return out;
+
+    if (caseStatusValues.length > 0) {
+        let merged = false;
+        for (let i = 0; i < out.length; i++) {
+            const f = out[i];
+            if (f?.type === "status" && f.operator === "in") {
+                out[i] = {
+                    ...f,
+                    values: [...new Set([...(f.values ?? []), ...caseStatusValues])],
+                };
+                merged = true;
+                break;
+            }
+        }
+        if (!merged) {
+            out.push({ type: "status", operator: "in", values: caseStatusValues });
+        }
+    }
+
+    return applyNewLeadsStatusAliasExpansion(entry, out);
 }
 
 function coerceUiForV1Execution(raw: unknown): QueueDefinitionV1["ui"] | undefined {

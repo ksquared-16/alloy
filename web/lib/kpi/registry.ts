@@ -161,6 +161,30 @@ const DEFINITIONS: Record<MetricKey, MetricDefinition> = {
         defaultLane: "business",
         defaultFormat: "count",
     },
+    "oip.enrollment.tour_conversion_rate": {
+        key: "oip.enrollment.tour_conversion_rate",
+        family: "O",
+        allowedSurfaces: ["workspace", "work_unit"],
+        defaultLabel: "Tour conversion",
+        defaultLane: "business",
+        defaultFormat: "percent",
+    },
+    "oip.enrollment.time_to_schedule_tour": {
+        key: "oip.enrollment.time_to_schedule_tour",
+        family: "O",
+        allowedSurfaces: ["workspace", "work_unit"],
+        defaultLabel: "Time to tour",
+        defaultLane: "business",
+        defaultFormat: "duration",
+    },
+    "oip.ops.work_overdue_count": {
+        key: "oip.ops.work_overdue_count",
+        family: "O",
+        allowedSurfaces: ["workspace", "work_unit"],
+        defaultLabel: "Overdue work",
+        defaultLane: "business",
+        defaultFormat: "count",
+    },
 };
 
 const KEYS = new Set<string>(Object.keys(DEFINITIONS));

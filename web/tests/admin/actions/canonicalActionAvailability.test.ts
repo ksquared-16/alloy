@@ -69,6 +69,23 @@ describe("canonicalActionAvailability", () => {
         expect(enrolled.some((row) => row.actionKey === "add_emergency_contact")).toBe(false);
     });
 
+    it("hides make_primary_contact on opportunity drawer section_row", () => {
+        const rows = resolveLayoutBuilderAvailableActions({
+            surfaceKey: "opportunity_drawer",
+            context: "section_row",
+        });
+        expect(rows.some((row) => row.actionKey === "make_primary_contact")).toBe(false);
+    });
+
+    it("shows make_primary_contact on contact_block", () => {
+        const rows = resolveLayoutBuilderAvailableActions({
+            surfaceKey: "opportunity_drawer",
+            context: "contact_block",
+        });
+        const row = rows.find((entry) => entry.actionKey === "make_primary_contact");
+        expect(row?.available).toBe(true);
+    });
+
     it("intersects with dbAvailableKeys when provided", () => {
         const rows = resolveLayoutBuilderAvailableActions({
             surfaceKey: "child_drawer",

@@ -43,6 +43,7 @@ import {
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
 import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
+import { isMakePrimaryContactActionKey, MAKE_PRIMARY_CONTACT_REQUIRES_CONTACT_TARGET_MESSAGE } from "@/lib/admin/actions/makePrimaryContactAction";
 import {
     dispatchOpenRelationshipActionModal,
     isCanonicalRelationshipResolvedAction,
@@ -91,6 +92,8 @@ export type ApplyRegistryResolvedActionHost = {
         sourceSurface?: import("@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract").EnrollmentStatusTransitionSourceSurface;
         initialScope?: Partial<EnrollmentStatusTransitionScope>;
     }) => void;
+    /** Dedicated modal — household primary contact (requires contact row target). */
+    openMakePrimaryContact?: (input: { opportunityId: string; targetPersonId: string }) => void;
     openCreateLead?: () => void;
     /** VM / legacy drawer — open create-work modal without relying on window listeners. */
     openCreateWork?: (detail: OpportunityOpenCreateWorkModalDetail) => void;
@@ -105,6 +108,8 @@ export type ApplyRegistryResolvedActionHost = {
     needsAttentionHref?: string | null;
     /** When set, used for mutating / open_drawer actions that target the current record. */
     entityId?: string | null;
+    /** Contact row target for make_primary_contact from registry surfaces. */
+    makePrimaryContactTargetPersonId?: string | null;
     /** Surface-authored runtime context (queue row, drawer, etc.). */
     invocationContext?: ContextualActionInvocation | null;
     /** Queue row / drawer child scope for enrollment status transitions. */
@@ -141,13 +146,41 @@ export async function applyRegistryResolvedActionClient(
     a: ResolvedActionForClient,
     host: ApplyRegistryResolvedActionHost
 ): Promise<ApplyRegistryResolvedActionResult> {
+    if (isMakePrimaryContactActionKey(a.key)) {
+        const targetPersonId =
+            host.makePrimaryContactTargetPersonId?.trim()
+            || host.invocationContext?.person_id?.trim()
+            || null;
+        if (!targetPersonId) {
+            return {
+                ok: false,
+                error: MAKE_PRIMARY_CONTACT_REQUIRES_CONTACT_TARGET_MESSAGE,
+            };
+        }
+        const oid = host.entityId?.trim();
+        if (!oid) {
+            return {
+                ok: false,
+                error: MAKE_PRIMARY_CONTACT_REQUIRES_CONTACT_TARGET_MESSAGE,
+            };
+        }
+        if (host.openMakePrimaryContact) {
+            host.openMakePrimaryContact({ opportunityId: oid, targetPersonId });
+            return { ok: true };
+        }
+        return {
+            ok: false,
+            error: MAKE_PRIMARY_CONTACT_REQUIRES_CONTACT_TARGET_MESSAGE,
+        };
+    }
+
     const relationshipKey = resolveRelationshipActionKeyFromResolvedAction(a);
     if (relationshipKey && isCanonicalRelationshipResolvedAction(a)) {
         const oid = host.entityId?.trim();
         if (!oid) {
             return {
                 ok: false,
-                error: "Select a record from the queue or open a drawer before running this action.",
+                error: "Select a record first.",
             };
         }
         const sourceSurface = mapRegistrySurfaceToRelationshipSource(host.context.surface);
@@ -172,7 +205,7 @@ export async function applyRegistryResolvedActionClient(
         if (!oid) {
             return {
                 ok: false,
-                error: "Select a record from the queue or open a drawer before changing enrollment status.",
+                error: "Select a record first.",
             };
         }
         const sourceSurface = mapRegistrySurfaceToEnrollmentSource(host.context.surface);

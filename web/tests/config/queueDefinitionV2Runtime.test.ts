@@ -163,7 +163,7 @@ describe("coerceQueueDefinitionForExecution", () => {
         const def = coerceQueueDefinitionForExecution(V2_ENROLLMENT_FIXTURE);
         expect(def.version).toBe(1);
         expect(def.queues.find((q) => q.key === "new_leads")?.filters).toEqual([
-            { type: "status", operator: "in", values: ["new_inquiry", "open"] },
+            { type: "status", operator: "in", values: ["new_inquiry", "open", "new"] },
         ]);
         expect(def.queues.find((q) => q.key === "waitlist")?.filters).toEqual([
             { type: "status", operator: "in", values: ["waitlisted"] },

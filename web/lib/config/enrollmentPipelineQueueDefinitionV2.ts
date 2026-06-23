@@ -8,6 +8,7 @@
  */
 
 import { loadQueueDefinitionBundle } from "@/lib/config/queueDefinitionV2Runtime";
+import { expandEnrollmentNewLeadsQueueStatusKeys } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 
 /** Raw v2 document — not strict Zod v1; validated through runtime bundle loader. */
 export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
@@ -73,7 +74,7 @@ export const RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 = {
             grain: "case",
             aliases: ["new_inquiry"],
             filters: [{ type: "case_status", operator: "in", values: ["new_inquiry", "open", "new"] }],
-            filters_compat_v1: [{ type: "status", operator: "in", values: ["new_inquiry", "new"] }],
+            filters_compat_v1: [{ type: "status", operator: "in", values: ["new_inquiry", "open", "new"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
             limit: 50,
             priority: "standard",
@@ -304,15 +305,26 @@ export const ENROLLMENT_PIPELINE_V2_QUEUE_ALIASES: Record<string, string> = {
 export function enrollmentPipelineNewLeadsStatusKeys(
     raw: unknown = RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2
 ): string[] {
-    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return ["new_inquiry"];
-    const queues = (raw as { queues?: Array<{ key?: string; filters_compat_v1?: Array<{ values?: unknown[] }> }> })
-        .queues;
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+        return expandEnrollmentNewLeadsQueueStatusKeys(["new_inquiry"]);
+    }
+    const queues = (raw as {
+        queues?: Array<{
+            key?: string;
+            filters?: Array<{ type?: string; values?: unknown[] }>;
+            filters_compat_v1?: Array<{ values?: unknown[] }>;
+        }>;
+    }).queues;
     const entry = queues?.find((q) => q.key === "new_leads");
-    const compat = entry?.filters_compat_v1?.[0];
-    const values = Array.isArray(compat?.values) ?
-        compat.values.filter((v): v is string => typeof v === "string" && v.trim() !== "")
-    :   [];
-    return values.length > 0 ? values : ["new_inquiry"];
+    const keys = new Set<string>();
+    for (const source of [entry?.filters_compat_v1?.[0], entry?.filters?.find((f) => f.type === "case_status")]) {
+        const values = Array.isArray(source?.values) ? source.values : [];
+        for (const v of values) {
+            if (typeof v === "string" && v.trim()) keys.add(v.trim().toLowerCase());
+        }
+    }
+    const base = keys.size > 0 ? [...keys] : ["new_inquiry"];
+    return expandEnrollmentNewLeadsQueueStatusKeys(base);
 }
 
 /** Whether an opportunity status_key should appear in enrollment New Leads. */

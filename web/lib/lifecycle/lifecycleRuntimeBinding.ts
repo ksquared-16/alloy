@@ -5,6 +5,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressionRequirementsCatalog";
 import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+import { ENROLLMENT_NEW_LEADS_LEGACY_STATUS_ALIASES } from "@/lib/lifecycle/enrollmentLeadStageStatusAliases";
 import { RAW_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V2 } from "@/lib/config/enrollmentPipelineQueueDefinitionV2";
 import {
     lifecycleActivationFromMetadata,
@@ -57,6 +58,9 @@ export function statusKeysForOperatorStageQueueSync(
     const out = new Set(selectedStatusKeys.map((k) => k.trim().toLowerCase()).filter(Boolean));
     if (stage === "lead") {
         out.add(NEW_LEAD_STATUS_KEY);
+        for (const alias of ENROLLMENT_NEW_LEADS_LEGACY_STATUS_ALIASES) {
+            out.add(alias);
+        }
     }
     return [...out];
 }

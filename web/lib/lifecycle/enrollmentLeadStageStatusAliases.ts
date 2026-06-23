@@ -1,0 +1,56 @@
+/**
+ * Enrollment New Leads — backward-compatible opportunity status aliases.
+ *
+ * Fresh Create Lead writes `new_inquiry`; legacy/demo rows may still use `open` or `new`.
+ * Queue filters must include both without requiring a data migration.
+ */
+
+import { NEW_LEAD_STATUS_KEY } from "@/lib/admin/actions/createLeadActionConstants";
+
+/** Legacy opportunity.status_key values that belong in New Leads alongside new_inquiry. */
+export const ENROLLMENT_NEW_LEADS_LEGACY_STATUS_ALIASES = ["open", "new"] as const;
+
+const NEW_LEADS_CANONICAL_KEYS = new Set<string>([
+    NEW_LEAD_STATUS_KEY,
+    "new_inquiry",
+    "new_lead",
+    ...ENROLLMENT_NEW_LEADS_LEGACY_STATUS_ALIASES,
+]);
+
+function normalizeStatusKey(key: string): string {
+    return key.trim().toLowerCase();
+}
+
+/** Expand filter keys so legacy open/new rows remain visible in New Leads lanes. */
+export function expandEnrollmentNewLeadsQueueStatusKeys(statusKeys: readonly string[]): string[] {
+    const normalized = [...new Set(statusKeys.map(normalizeStatusKey).filter(Boolean))];
+    const hasNewLeadIntent = normalized.some((k) => k === "new_inquiry" || k === "new_lead");
+    if (!hasNewLeadIntent) return normalized;
+    const out = new Set(normalized);
+    for (const alias of ENROLLMENT_NEW_LEADS_LEGACY_STATUS_ALIASES) {
+        out.add(alias);
+    }
+    return [...out];
+}
+
+export function isEnrollmentNewLeadsQueueKey(queueKey: string): boolean {
+    const k = normalizeStatusKey(queueKey);
+    if (!k) return false;
+    if (k === "new_leads" || k === "new_inquiry" || k === "new_lead") return true;
+    if (k.startsWith("lifecycle_") && k.includes("new_lead")) return true;
+    return false;
+}
+
+export function shouldExpandEnrollmentNewLeadsStatusAliases(input: {
+    statusKeys: readonly string[];
+    queueKey?: string | null;
+    domain?: string | null;
+}): boolean {
+    const keys = input.statusKeys.map(normalizeStatusKey).filter(Boolean);
+    if (keys.some((k) => k === "new_inquiry" || k === "new_lead")) return true;
+    const queueKey = normalizeStatusKey(input.queueKey ?? "");
+    const domain = normalizeStatusKey(input.domain ?? "");
+    if (isEnrollmentNewLeadsQueueKey(queueKey)) return true;
+    if (domain === "new_leads") return true;
+    return keys.some((k) => NEW_LEADS_CANONICAL_KEYS.has(k));
+}

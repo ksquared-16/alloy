@@ -91,6 +91,9 @@ export async function executeCreateLeadAction(
         if (!workUnitId && binding.work_unit_id) {
             workUnitId = binding.work_unit_id;
         }
+        if (binding.status_key?.trim()) {
+            statusKeyForLead = binding.status_key.trim();
+        }
     }
     const locationId = trim(input.merged.location_id) || null;
 

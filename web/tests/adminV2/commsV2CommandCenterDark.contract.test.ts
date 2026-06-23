@@ -3,13 +3,15 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const modal = readFileSync(join(process.cwd(), "app", "adminV2", "components", "InboxModal.tsx"), "utf8");
+const panel = readFileSync(join(process.cwd(), "app", "adminV2", "communications", "CommunicationsModalTabPanel.tsx"), "utf8");
 const shell = readFileSync(join(process.cwd(), "app", "adminV2", "communications", "CommandCenterShell.tsx"), "utf8");
 
 /** Command Center REPLACES the inbox panel inside the existing BOS-rail modal — dark + doctrine. */
 describe("command center replaces inbox modal body", () => {
     it("InboxModal gates the body behind comms_v2_command_center, preserving the legacy panel when off", () => {
         expect(modal).toMatch(/isCommsV2FlagEnabled\(["']comms_v2_command_center["']\)/);
-        expect(modal).toMatch(/<CommandCenterShell\s*\/>/);
+        expect(modal).toMatch(/<CommunicationsModalTabPanel/);
+        expect(panel).toMatch(/<CommandCenterShell\s*\/>/);
         expect(modal).toMatch(/<InboxPanel/); // legacy panel still rendered in the off branch
     });
     it("the BOS rail stays put — modal still uses the workspace BOS shell", () => {

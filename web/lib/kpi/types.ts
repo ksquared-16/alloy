@@ -40,9 +40,12 @@ export type MetricKey =
     | "ctx.wu.total_in_queue"
     | "ctx.wu.selected_queue_count"
     | "ctx.wu.primary_lane_total"
-    | "ctx.wu.needs_attention_count";
+    | "ctx.wu.needs_attention_count"
+    | "oip.enrollment.tour_conversion_rate"
+    | "oip.enrollment.time_to_schedule_tour"
+    | "oip.ops.work_overdue_count";
 
-export type MetricFamily = "L" | "Q" | "S" | "R";
+export type MetricFamily = "L" | "Q" | "S" | "R" | "O";
 
 export type MetricDefinition = {
     key: MetricKey;
