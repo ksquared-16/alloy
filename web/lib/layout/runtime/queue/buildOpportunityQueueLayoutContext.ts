@@ -6,6 +6,9 @@ import type { QueueLayoutContextRequest } from "../../queueLayoutContext";
 
 export type OpportunityQueueLaneContextInput = {
     drillWorkUnitKey?: string | null;
+    /** Business process key for BP/stage layout assignment resolution. */
+    businessProcessKey?: string | null;
+    /** @deprecated Prefer businessProcessKey */
     lifecycleKey?: string | null;
     stageKey?: string | null;
     /** True when row is a waitlist placement candidate card. */
@@ -19,7 +22,10 @@ export function buildOpportunityQueueLayoutContext(
 ): QueueLayoutContextRequest {
     const work_unit_key = input.drillWorkUnitKey?.trim() || undefined;
     const stage_key = input.stageKey?.trim() || undefined;
-    const lifecycle_key = input.lifecycleKey?.trim() || undefined;
+    const lifecycle_key =
+        input.businessProcessKey?.trim()
+        || input.lifecycleKey?.trim()
+        || undefined;
 
     if (input.isWaitlistCandidate) {
         return {

@@ -154,6 +154,7 @@ import { mergeQueueRowQuickActions } from "@/lib/workspace/viewModels/mergeQueue
 import { extractQueueRowRelatedDrawerTargets } from "@/lib/workspace/viewModels/queueRowRelatedDrawerTargets";
 import { prepareDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/drawerModelSwapNavigation";
 import { PERSON_DRAWER_CHILD_OPEN_SOURCE } from "@/lib/admin/drawer/personDrawerOpenSeed";
+import { activeProcessFromDepartmentMetadata } from "@/lib/businessProcesses/businessProcessConfigReader";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import {
     buildWorkUnitQueueCrmCompactRowSlice,
@@ -5346,6 +5347,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             departmentId,
             deptName: dept.name ?? "Department",
             departmentKey: dept.key,
+            businessProcessKey: activeProcessFromDepartmentMetadata(dept.metadata ?? null)?.key ?? null,
             oq: oqFiltered,
             rowPreviewActions,
             queueRowRegistryPlacements: opportunityQueueRowResolved ?? [],

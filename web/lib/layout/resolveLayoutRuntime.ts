@@ -11,12 +11,19 @@ import { isLayoutRuntimeReadPathEnabled } from "./featureFlag";
 import { resolveLayout, type ExtendedLayoutResolution, type ResolveLayoutInput } from "./layoutResolver";
 import type { LayoutSurface } from "./layoutV2";
 import type { QueueLayoutContextRequest } from "./queueLayoutContext";
+import type { LayoutAssignmentContext } from "./businessProcessLayoutAssignmentTypes";
+import {
+    layoutAssignmentSurfaceKeyForRuntime,
+    resolveLayoutFromBusinessProcessAssignment,
+} from "./resolveBusinessProcessLayoutAssignment";
 
 export type ResolveLayoutForOrgInput = {
     orgId: string;
     entityType: string;
     surface: LayoutSurface;
     queueContext?: QueueLayoutContextRequest;
+    assignmentContext?: LayoutAssignmentContext;
+    isWaitlist?: boolean;
     supabase: SupabaseClient;
     /** When false, skips DB fetch and resolves registry/builtin only. Defaults to feature flag. */
     fetchPublishedLayouts?: boolean;
@@ -46,12 +53,36 @@ export async function resolveLayoutForOrg(input: ResolveLayoutForOrgInput): Prom
         ]);
     }
 
+    let assignmentRecord = null;
+    let assignmentMatchTier: string | undefined;
+    if (input.assignmentContext && shouldFetch) {
+        const surfaceKey = layoutAssignmentSurfaceKeyForRuntime({
+            entityType: input.entityType,
+            surface: input.surface,
+            isWaitlist: input.isWaitlist,
+        });
+        if (surfaceKey) {
+            const bpMatch = await resolveLayoutFromBusinessProcessAssignment({
+                supabase: input.supabase,
+                orgId: input.orgId,
+                surfaceKey,
+                assignmentContext: input.assignmentContext,
+            });
+            if (bpMatch) {
+                assignmentRecord = bpMatch.record;
+                assignmentMatchTier = bpMatch.tier;
+            }
+        }
+    }
+
     const resolution = resolveLayout({
         entityType: input.entityType,
         surface: input.surface,
         orgRecords,
         defaultRecords,
         queueContext: input.queueContext,
+        assignmentRecord,
+        assignmentMatchTier,
     });
 
     return {

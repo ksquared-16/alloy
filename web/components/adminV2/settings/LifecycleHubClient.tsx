@@ -11,6 +11,7 @@ import LifecycleCreateForm from "@/components/adminV2/settings/lifecycle/Lifecyc
 import LifecycleLanding from "@/components/adminV2/settings/lifecycle/LifecycleLanding";
 import LifecycleAddStageForm from "@/components/adminV2/settings/lifecycle/LifecycleAddStageForm";
 import LifecycleWorkbenchHeader from "@/components/adminV2/settings/lifecycle/LifecycleWorkbenchHeader";
+import LifecycleStageLayoutAssignmentsCard from "@/components/adminV2/settings/lifecycle/LifecycleStageLayoutAssignmentsCard";
 import LifecycleStageSetupWizard, {
     type LifecycleSetupStep,
 } from "@/components/adminV2/settings/lifecycle/LifecycleStageSetupWizard";
@@ -249,6 +250,23 @@ export default function LifecycleHubClient() {
                 ) : null,
             },
             {
+                id: "layouts",
+                title: "Layout assignments",
+                summary: "Queue and drawer layouts for this stage",
+                manageHref: "/admin/settings/layouts",
+                manageLabel: "Layout library",
+                content:
+                    activeProcess && activeStageKey ? (
+                        <LifecycleStageLayoutAssignmentsCard
+                            businessProcessKey={activeProcess.key}
+                            stageKey={activeStageKey}
+                            stageLabel={stageLabel}
+                        />
+                    ) : (
+                        <p className="text-xs text-alloy-midnight/50">Select a stage to assign layouts.</p>
+                    ),
+            },
+            {
                 id: "queue",
                 title: "Queue view",
                 summary: pipeline ? pipeline.name : "Not published yet",
@@ -297,6 +315,7 @@ export default function LifecycleHubClient() {
             },
         ];
     }, [
+        activeProcess,
         activeStageKey,
         departmentId,
         loadPipeline,

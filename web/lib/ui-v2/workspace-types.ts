@@ -436,9 +436,11 @@ export type QueueVm = {
   viewAllActionId?: string;
   viewAllLabel?: string;
   /**
-   * Department rollup drill: passed in `queue.item.action` payload as `workUnitKey` when the lane opens a work-unit view.
+   * Work-unit drill list: work unit key used for queue layout assignment (stage derivation).
    */
   drillWorkUnitKey?: string;
+  /** Active business process key for BP/stage layout assignment in this lane. */
+  businessProcessKey?: string;
   /**
    * Department surface: when present, lane renders as rollup groups (counts + descriptors),
    * not as item rows. Drill to work-unit list via `viewAllActionId`.

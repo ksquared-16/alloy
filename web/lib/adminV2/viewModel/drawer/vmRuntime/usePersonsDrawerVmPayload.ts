@@ -108,10 +108,9 @@ export function usePersonsDrawerVmPayload(): PersonsDrawerVmPayloadState {
                         ? "/api/admin/layout-runtime/child-drawer-body"
                         : "/api/admin/layout-runtime/person-drawer-body",
                 entityId: vm.entity.id,
-                queryParams:
-                    vm.surface === "child"
-                        ? undefined
-                        : { opportunityId: drawer.personDrawerOpenSeed?.opportunity_id ?? null },
+                queryParams: {
+                    opportunityId: drawer.personDrawerOpenSeed?.opportunity_id ?? null,
+                },
             });
             const payloadApplyMs =
                 typeof performance !== "undefined" ?

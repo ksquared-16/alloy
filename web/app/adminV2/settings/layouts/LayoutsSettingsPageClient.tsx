@@ -84,8 +84,23 @@ function LayoutsSettingsPageClientInner() {
     }
 
     return (
-        <div className="space-y-4" data-testid="layouts-gallery-shell">
-            <LayoutGalleryClient onOpenEditor={openEditor} />
+        <div className="space-y-6" data-testid="layouts-gallery-shell">
+            <section className="space-y-3">
+                <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50">
+                        Surface gallery
+                    </h2>
+                    <p className="mt-0.5 text-xs text-alloy-midnight/45">
+                        Create, duplicate, edit, and publish layout documents. Assign published layouts to business
+                        process stages from{" "}
+                        <Link href="/admin/settings/business-processes" className="font-medium text-alloy-pine hover:underline">
+                            Settings → Business processes
+                        </Link>
+                        .
+                    </p>
+                </div>
+                <LayoutGalleryClient onOpenEditor={openEditor} />
+            </section>
 
             <details className="rounded-lg border border-dashed border-alloy-forge/20 bg-alloy-stone/[0.03] px-3 py-2">
                 <summary className="cursor-pointer text-xs font-medium text-alloy-midnight/55">

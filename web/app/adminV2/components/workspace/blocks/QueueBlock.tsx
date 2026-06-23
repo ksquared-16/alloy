@@ -37,6 +37,7 @@ import type { LayoutFieldAdornment, LayoutItem } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import OpportunityQueueRowLayoutRuntimeShadowMount from "@/components/admin/workspace/OpportunityQueueRowLayoutRuntimeShadowMount";
 import { buildOpportunityQueueRowRecordFromPreview } from "@/lib/layout/runtime/buildOpportunityQueueRowRecordFromPreview";
+import { stageKeyFromQueueDrillWorkUnitKey } from "@/lib/layout/buildLayoutAssignmentContext";
 import { useOpportunityQueueLayoutRuntime } from "@/lib/layout/runtime/useOpportunityQueueLayoutRuntime";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import {
@@ -1744,10 +1745,17 @@ function WorkUnitQueueLane({
     [queue.items]
   );
 
+  const queueLaneStageKey = useMemo(
+    () => stageKeyFromQueueDrillWorkUnitKey(queue.drillWorkUnitKey),
+    [queue.drillWorkUnitKey],
+  );
+
   const queueLayoutRuntime = useOpportunityQueueLayoutRuntime(
-    `${queue.id}:${queue.drillWorkUnitKey ?? "lane"}:${hasCandidatePlacementRows ? "waitlist" : "pipeline"}`,
+    `${queue.id}:${queue.drillWorkUnitKey ?? "lane"}:${hasCandidatePlacementRows ? "waitlist" : "pipeline"}:${queueLaneStageKey ?? ""}`,
     {
       drillWorkUnitKey: queue.drillWorkUnitKey,
+      businessProcessKey: queue.businessProcessKey,
+      stageKey: queueLaneStageKey,
       isWaitlistCandidate: hasCandidatePlacementRows,
       grain: hasCandidatePlacementRows ? "candidate" : "case",
     },

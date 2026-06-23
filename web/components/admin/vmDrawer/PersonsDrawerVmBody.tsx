@@ -33,6 +33,7 @@ import {
 import { useDrawerLayoutRuntimeBody } from "@/lib/layout/runtime/useDrawerLayoutRuntimeBody";
 import { personDisplayName } from "@/lib/adminFormatters";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { DrawerTabKey } from "@/lib/entityPresentation";
 import type { ChildDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/child/types";
 import type { PersonDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/person/types";
@@ -98,6 +99,7 @@ export default function PersonsDrawerVmBody({
     onOpenDrawer,
     onOpenLinkedPerson,
 }: PersonsDrawerVmBodyProps) {
+    const { drawer } = useAdminDrawer();
     const record = displayVm.record;
     const [personRelatedData, setPersonRelatedData] = useState<PersonRelatedPayload | null>(null);
     const [personRelatedLoading, setPersonRelatedLoading] = useState(false);
@@ -210,11 +212,17 @@ export default function PersonsDrawerVmBody({
         record,
     });
 
+    const layoutAssignmentQueryParams = useMemo(() => {
+        const opportunityId = drawer.personDrawerOpenSeed?.opportunity_id?.trim() || null;
+        return opportunityId ? { opportunityId } : undefined;
+    }, [drawer.personDrawerOpenSeed?.opportunity_id]);
+
     const personLayoutBody = useDrawerLayoutRuntimeBody({
         cutoverEnabled: isLayoutRuntimePersonDrawerBodyEnabledClient() && !isChildSurface,
         entityId: personId,
         vmReady: Boolean(record?.id),
         apiPath: "/api/admin/layout-runtime/person-drawer-body",
+        queryParams: layoutAssignmentQueryParams,
         logTag: "person_drawer",
     });
 
@@ -223,6 +231,7 @@ export default function PersonsDrawerVmBody({
         entityId: personId,
         vmReady: Boolean(record?.id),
         apiPath: "/api/admin/layout-runtime/child-drawer-body",
+        queryParams: layoutAssignmentQueryParams,
         logTag: "child_drawer",
     });
 

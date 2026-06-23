@@ -127,6 +127,8 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     departmentId: string;
     deptName: string;
     departmentKey?: string | null;
+    /** Active business process key for queue layout assignment resolution. */
+    businessProcessKey?: string | null;
     oq: WorkspaceOpportunityQueueRuntime;
     /** When set (e.g. from GET /api/admin/actions?surface=queue_row), overrides per-row hardcoded quick actions. */
     queueRowQuickActions?: QueueItemQuickActionVm[] | null;
@@ -170,6 +172,8 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
         title: input.workUnitName,
         queueEntityType: "opportunity",
         countBadge: input.oq.total,
+        drillWorkUnitKey: input.workUnitKey,
+        businessProcessKey: input.businessProcessKey?.trim() || undefined,
         items,
         sortCaption: "Grouped by status",
         workUnitMidlineKeys: isEnrollmentDept

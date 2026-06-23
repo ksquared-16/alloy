@@ -9,6 +9,7 @@ import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { composeChildDrawerViewModel } from "@/lib/adminV2/viewModel/drawer/child/composeChildDrawerViewModel";
 import { resolveLayoutForOrg } from "../resolveLayoutRuntime";
+import { resolveLayoutAssignmentContextFromOpportunity } from "../resolveLayoutAssignmentContext";
 import { buildLayoutRuntimePlan, type LayoutRuntimePlan } from "./layoutRuntimePlan";
 import { buildChildLayoutRuntimeRecordFromVm } from "./buildChildLayoutRuntimeRecordFromVm";
 import { isLayoutDocRenderableForProduction } from "./isLayoutDocRenderableForProduction";
@@ -25,6 +26,7 @@ export async function evaluateChildLayoutRuntimeBody(input: {
     personId: string;
     gate: AdminRouteGateSuccess;
     supabase: SupabaseClient;
+    opportunityId?: string | null;
 }): Promise<EvaluateChildLayoutRuntimeBodyResult> {
     const personId = input.personId.trim();
     if (!personId) return { ok: false, reason: "missing_person_id", status: 400 };
@@ -41,10 +43,20 @@ export async function evaluateChildLayoutRuntimeBody(input: {
         return { ok: false, reason: composeResult.skipped?.reason ?? "vm_compose_skipped", status: 422 };
     }
 
+    const assignmentContext =
+        input.opportunityId ?
+            await resolveLayoutAssignmentContextFromOpportunity({
+                supabase: input.supabase,
+                orgId: input.gate.orgId,
+                opportunityId: input.opportunityId,
+            })
+        :   undefined;
+
     const layoutResolution = await resolveLayoutForOrg({
         orgId: input.gate.orgId,
         entityType: "child",
         surface: "drawer",
+        assignmentContext,
         supabase: input.supabase,
         fetchPublishedLayouts: true,
     });

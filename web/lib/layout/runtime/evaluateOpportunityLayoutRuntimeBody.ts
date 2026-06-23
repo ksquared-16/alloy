@@ -11,6 +11,7 @@ import { composeOpportunityDrawerViewModel } from "@/lib/adminV2/viewModel/drawe
 import type { LayoutDoc } from "../layoutV2";
 import { resolveLayoutForOrg } from "../resolveLayoutRuntime";
 import { buildLayoutRuntimePlan, layoutDocSupportsAllSprint1ItemKinds, type LayoutRuntimePlan } from "./layoutRuntimePlan";
+import { resolveLayoutAssignmentContextFromOpportunity } from "../resolveLayoutAssignmentContext";
 import {
     buildLayoutRuntimeRecordBindingEvidence,
     buildOpportunityLayoutRuntimeRecordFromVm,
@@ -107,10 +108,24 @@ export async function evaluateOpportunityLayoutRuntimeBody(
         vmRecord: vm.above_fold.record,
     });
 
+    const statusKey =
+        typeof enrichedVmRecord.status_key === "string" ? enrichedVmRecord.status_key
+        : typeof vm.above_fold.record.status_key === "string" ? vm.above_fold.record.status_key
+        : null;
+    const processStageKey = vm.workspace.lifecycle_rail?.current_stage_key ?? null;
+
     const layoutResolution = await resolveLayoutForOrg({
         orgId: input.gate.orgId,
         entityType: "opportunities",
         surface: "drawer",
+        assignmentContext: await resolveLayoutAssignmentContextFromOpportunity({
+            supabase: input.supabase,
+            orgId: input.gate.orgId,
+            opportunityId,
+            departmentId: input.departmentId ?? null,
+            processStageKey,
+            statusKey,
+        }),
         supabase: input.supabase,
         fetchPublishedLayouts: true,
     });

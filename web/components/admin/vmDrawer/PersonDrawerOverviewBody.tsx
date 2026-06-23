@@ -58,11 +58,17 @@ export default function PersonDrawerOverviewBody({
     const record = displayVm.record;
     const legacyEmergency = isLayoutRuntimeLegacyEmergencyFallbackEnabledClient();
 
+    const layoutAssignmentQueryParams = useMemo(() => {
+        const opportunityId = drawer.personDrawerOpenSeed?.opportunity_id?.trim() || null;
+        return opportunityId ? { opportunityId } : undefined;
+    }, [drawer.personDrawerOpenSeed?.opportunity_id]);
+
     const personLayoutBodyInternal = useDrawerLayoutRuntimeBody({
         cutoverEnabled: isLayoutRuntimePersonDrawerBodyEnabledClient() && !isChildSurface,
         entityId: layoutBodyProp ? null : personId,
         vmReady: layoutBodyProp ? false : vmReady,
         apiPath: "/api/admin/layout-runtime/person-drawer-body",
+        queryParams: layoutAssignmentQueryParams,
         logTag: "person_drawer",
     });
 
@@ -71,6 +77,7 @@ export default function PersonDrawerOverviewBody({
         entityId: layoutBodyProp ? null : personId,
         vmReady: layoutBodyProp ? false : vmReady,
         apiPath: "/api/admin/layout-runtime/child-drawer-body",
+        queryParams: layoutAssignmentQueryParams,
         logTag: "child_drawer",
     });
 

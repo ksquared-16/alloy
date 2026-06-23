@@ -47,7 +47,8 @@ export function useOpportunityQueueLayoutRuntime(
 
         const qs = new URLSearchParams();
         if (lane.drillWorkUnitKey) qs.set("work_unit_key", lane.drillWorkUnitKey);
-        if (lane.lifecycleKey) qs.set("lifecycle_key", lane.lifecycleKey);
+        if (lane.businessProcessKey) qs.set("business_process_key", lane.businessProcessKey);
+        else if (lane.lifecycleKey) qs.set("lifecycle_key", lane.lifecycleKey);
         if (lane.stageKey) qs.set("stage_key", lane.stageKey);
         if (lane.grain) qs.set("grain", lane.grain);
         if (lane.isWaitlistCandidate) {
@@ -73,6 +74,7 @@ export function useOpportunityQueueLayoutRuntime(
         laneKey,
         refreshToken,
         lane.drillWorkUnitKey,
+        lane.businessProcessKey,
         lane.lifecycleKey,
         lane.stageKey,
         lane.grain,

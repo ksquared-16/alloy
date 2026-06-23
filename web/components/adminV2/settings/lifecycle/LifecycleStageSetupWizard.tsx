@@ -6,6 +6,7 @@ import Link from "next/link";
 export type LifecycleSetupStepId =
     | "required"
     | "statuses"
+    | "layouts"
     | "queue"
     | "actions"
     | "forms"

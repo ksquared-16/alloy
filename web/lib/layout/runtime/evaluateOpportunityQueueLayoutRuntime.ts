@@ -10,6 +10,7 @@ import {
     opportunityQueueLayoutEntityType,
     type OpportunityQueueLaneContextInput,
 } from "./queue/buildOpportunityQueueLayoutContext";
+import { layoutAssignmentContextFromQueueLane } from "../buildLayoutAssignmentContext";
 import { isLayoutDocRenderableForProduction } from "./isLayoutDocRenderableForProduction";
 import type { LayoutDoc } from "../layoutV2";
 import { resolveEffectiveProductionLayoutDoc } from "./resolveEffectiveProductionLayoutDoc";
@@ -42,6 +43,8 @@ export async function evaluateOpportunityQueueLayoutRuntime(input: {
         entityType,
         surface: "queue",
         queueContext,
+        assignmentContext: layoutAssignmentContextFromQueueLane(input.lane),
+        isWaitlist,
         supabase: input.supabase,
         fetchPublishedLayouts: true,
     });

@@ -37,6 +37,9 @@ export interface ResolveLayoutInput {
     defaultRecords?: EntityLayoutRecord[];
     /** Queue surface only: lane/work-unit discriminators for variant selection. */
     queueContext?: QueueLayoutContextRequest;
+    /** When set, prefer this published row (BP assignment layer). */
+    assignmentRecord?: EntityLayoutRecord | null;
+    assignmentMatchTier?: string;
 }
 
 function latestPublished(
@@ -67,7 +70,27 @@ function resolveDrawerLayoutKey(entityType: string, layoutKey?: string): string 
  * Queue: DB variant match → builtin variant (when context provided) → registry.
  */
 export function resolveLayout(input: ResolveLayoutInput): ExtendedLayoutResolution {
-    const { entityType, surface, orgRecords, defaultRecords, queueContext, layoutKey } = input;
+    const {
+        entityType,
+        surface,
+        orgRecords,
+        defaultRecords,
+        queueContext,
+        layoutKey,
+        assignmentRecord,
+        assignmentMatchTier,
+    } = input;
+
+    if (assignmentRecord?.status === "published" && assignmentRecord.surface === surface) {
+        return {
+            doc: assignmentRecord.doc,
+            source: assignmentRecord.orgId ? "org" : "default",
+            record: assignmentRecord,
+            layoutKey: assignmentRecord.layoutKey,
+            matchedQueueContext: queueContext,
+            matchTier: assignmentMatchTier ?? "bp_assignment",
+        };
+    }
 
     if (surface === "queue") {
         const variantMatch = resolveQueueLayoutVariantFromRecords(orgRecords, defaultRecords, queueContext);

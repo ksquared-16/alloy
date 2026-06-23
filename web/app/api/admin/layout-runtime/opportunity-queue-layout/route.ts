@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
         supabase: createAdminClient(),
         lane: {
             drillWorkUnitKey: sp.get("work_unit_key"),
-            lifecycleKey: sp.get("lifecycle_key"),
+            businessProcessKey: sp.get("business_process_key") ?? sp.get("lifecycle_key"),
             stageKey: sp.get("stage_key"),
             grain: sp.get("grain"),
             isWaitlistCandidate,
