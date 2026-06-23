@@ -59,7 +59,12 @@ INSERT INTO public.action_placements (
     action_definition_id,
     surface,
     slot,
-    priority,
+    entity_type,
+    department_id,
+    work_unit_id,
+    section_key,
+    order_index,
+    display_style,
     condition_config,
     is_active
 )
@@ -68,7 +73,12 @@ SELECT
     canonical.id,
     ap.surface,
     ap.slot,
-    ap.priority,
+    ap.entity_type,
+    ap.department_id,
+    ap.work_unit_id,
+    ap.section_key,
+    ap.order_index,
+    ap.display_style,
     ap.condition_config,
     ap.is_active
 FROM public.action_placements ap
