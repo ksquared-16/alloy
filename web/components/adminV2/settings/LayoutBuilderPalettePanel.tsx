@@ -101,6 +101,7 @@ export default function LayoutBuilderPalettePanel({
         const result = createExperienceBuilderCard(doc, {
             ...input,
             afterSectionKey: selectedSectionId,
+            surfaceKey,
         });
         const title =
             input.cardType === "widget" ? input.title
@@ -133,6 +134,7 @@ export default function LayoutBuilderPalettePanel({
                     cardType: "fields",
                     placementIntent: "after_selected",
                     afterSectionKey: selectedSectionId,
+                    surfaceKey,
                 });
                 const added = addSectionWidgetItem(
                     result.doc,
@@ -161,6 +163,7 @@ export default function LayoutBuilderPalettePanel({
                 widgetKey: options.widgetKey,
                 placementIntent: "after_selected",
                 afterSectionKey: selectedSectionId,
+                surfaceKey,
             });
             focusCreatedCard(
                 result.doc,
@@ -184,6 +187,7 @@ export default function LayoutBuilderPalettePanel({
                 cardType: itemKind === "text" ? "text" : "fields",
                 placementIntent: "after_selected",
                 afterSectionKey: selectedSectionId,
+                surfaceKey,
             });
             workingDoc = created.doc;
             sectionId = created.sectionKey;

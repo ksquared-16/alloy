@@ -28,6 +28,7 @@ import {
 import type { CardWidthFractionKey } from "@/lib/layout/layoutBuilderCardWidth";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { OpportunityDrawerLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 
 /** Operator-facing peer blocks — no generic placeholder card. */
 export const EXPERIENCE_BUILDER_PEER_BLOCK_TYPES = [
@@ -60,6 +61,7 @@ export type CreateExperienceBuilderCardInput = {
     zone?: OpportunityDrawerLayoutZone;
     placementIntent?: ExperienceBuilderPlacementIntent;
     afterSectionKey?: string | null;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
 };
 
 export type CreateExperienceBuilderCardResult = {
@@ -96,6 +98,7 @@ export function createExperienceBuilderCard(
             "summary_strip"
         :   resolveExperienceBuilderPlacementZone(doc, afterSectionKey, placementIntent));
     const widthKey = input.widthKey ?? defaultWidthForBlockType(input.cardType);
+    const surfaceKey = input.surfaceKey ?? "opportunity_drawer";
 
     let next: LayoutDoc;
     if (input.cardType === "widget") {
@@ -120,7 +123,7 @@ export function createExperienceBuilderCard(
         next = markSectionAsKpiTile(next, sectionKey);
         next = setKpiTileSectionTitleHidden(next, sectionKey);
         const widgetKey = input.widgetKey ?? "tasks";
-        const added = addSectionWidgetItem(next, sectionKey, 0, 0, widgetKey);
+        const added = addSectionWidgetItem(next, sectionKey, 0, 0, widgetKey, surfaceKey);
         if (added.ok && added.doc) {
             next = added.doc;
             itemId = added.itemId;

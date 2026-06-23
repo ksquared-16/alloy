@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     CARD_WIDTH_FRACTION_KEYS,
     CARD_WIDTH_FRACTIONS,
@@ -8,7 +8,6 @@ import {
 } from "@/lib/layout/layoutBuilderCardWidth";
 import {
     EXPERIENCE_BUILDER_PEER_BLOCK_LABELS,
-    EXPERIENCE_BUILDER_PEER_BLOCK_TYPES,
     type ExperienceBuilderPeerBlockType,
 } from "@/lib/layout/layoutBuilderCardAuthoring";
 import {
@@ -19,6 +18,10 @@ import {
 import { layoutBuilderWidgetOptionsForSurface } from "@/lib/layout/layoutBuilderPaletteModel";
 import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
+import {
+    firstEnabledLayoutBuilderAddCardType,
+    layoutBuilderAddCardTypeOptionsForSurface,
+} from "@/lib/layout/layoutBuilderAddCardDialogModel";
 
 export type LayoutBuilderAddCardDialogSubmit = {
     title: string;
@@ -65,8 +68,14 @@ export default function LayoutBuilderAddCardDialog({
     onSubmit,
     surfaceKey = "opportunity_drawer",
 }: Props) {
-    const widgetOptions = layoutBuilderWidgetOptionsForSurface(surfaceKey);
-    const [blockType, setBlockType] = useState<ExperienceBuilderPeerBlockType>("fields");
+    const widgetOptions = useMemo(() => layoutBuilderWidgetOptionsForSurface(surfaceKey), [surfaceKey]);
+    const cardTypeOptions = useMemo(
+        () => layoutBuilderAddCardTypeOptionsForSurface(surfaceKey),
+        [surfaceKey],
+    );
+    const [blockType, setBlockType] = useState<ExperienceBuilderPeerBlockType>(() =>
+        firstEnabledLayoutBuilderAddCardType(surfaceKey),
+    );
     const [title, setTitle] = useState("");
     const [widthKey, setWidthKey] = useState<CardWidthFractionKey>("full");
     const [widgetKey, setWidgetKey] = useState(widgetOptions[0]?.key ?? "tasks");
@@ -74,12 +83,12 @@ export default function LayoutBuilderAddCardDialog({
 
     useEffect(() => {
         if (!open) return;
-        setBlockType("fields");
+        setBlockType(firstEnabledLayoutBuilderAddCardType(surfaceKey));
         setTitle("");
         setWidthKey("full");
         setWidgetKey(widgetOptions[0]?.key ?? "tasks");
         setPlacementIntent("after_selected");
-    }, [open, widgetOptions]);
+    }, [open, surfaceKey, widgetOptions]);
 
     useEffect(() => {
         if (widgetKey === "activity_timeline" && blockType === "widget") {
@@ -122,21 +131,28 @@ export default function LayoutBuilderAddCardDialog({
                     <fieldset>
                         <legend className="text-xs font-medium text-alloy-midnight/75">What to add</legend>
                         <div className="mt-2 grid grid-cols-2 gap-2">
-                            {EXPERIENCE_BUILDER_PEER_BLOCK_TYPES.map((type) => (
+                            {cardTypeOptions.map(({ type, enabled, disabledReason }) => (
                                 <button
                                     key={type}
                                     type="button"
+                                    disabled={!enabled}
                                     className={`rounded-lg border px-2.5 py-2.5 text-left text-xs transition ${
-                                        blockType === type ?
+                                        !enabled ?
+                                            "cursor-not-allowed border-alloy-forge/10 bg-alloy-stone/20 text-alloy-midnight/35"
+                                        : blockType === type ?
                                             "border-alloy-pine/40 bg-alloy-pine/[0.08] text-alloy-pine"
                                         :   "border-alloy-forge/12 bg-white text-alloy-midnight/75 hover:border-alloy-pine/25"
                                     }`}
-                                    onClick={() => setBlockType(type)}
+                                    onClick={() => {
+                                        if (!enabled) return;
+                                        setBlockType(type);
+                                    }}
                                     data-testid={`layout-builder-add-type-${type}`}
+                                    title={!enabled ? disabledReason : undefined}
                                 >
                                     <span className="block font-semibold">{EXPERIENCE_BUILDER_PEER_BLOCK_LABELS[type]}</span>
                                     <span className="mt-0.5 block text-[10px] leading-snug opacity-70">
-                                        {BLOCK_TYPE_HINTS[type]}
+                                        {!enabled && disabledReason ? disabledReason : BLOCK_TYPE_HINTS[type]}
                                     </span>
                                 </button>
                             ))}
