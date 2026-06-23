@@ -172,6 +172,8 @@ describe("tenant layout field picker catalog", () => {
                     {
                         columns: [
                             {
+                                id: "col-tenant-opp-field",
+                                width: 12,
                                 items: [
                                     {
                                         id: "tenant-opp-field",

@@ -17,6 +17,7 @@ import {
 import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import type { LayoutEditorVisibilityRule } from "@/lib/layout/layoutEditorVisibilityRules";
 import { visibilityConditionForRule } from "@/lib/layout/layoutEditorVisibilityRules";
+import type { LayoutEditorRowAction } from "@/lib/layout/layoutEditorRowTemplateConfig";
 import type { LayoutItem } from "@/lib/layout/layoutV2";
 
 export type LayoutEditorActionCatalogGroupKey = "contact_actions" | "enrollment_actions" | "record_actions";
@@ -217,6 +218,6 @@ export function makeLayoutEditorActionButtonFromCatalogEntry(
     };
 }
 
-export function layoutEditorRowTemplateActionKeys(): LayoutEditorDrawerActionKey[] {
+export function layoutEditorRowTemplateActionKeys(): LayoutEditorRowAction[] {
     return ["open_child_drawer", "edit_enrollment", "open_schedule"];
 }
