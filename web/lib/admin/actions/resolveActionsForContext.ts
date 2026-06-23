@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ActionSurface, ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { enrichResolvedActionForClient } from "@/lib/admin/actions/enrichResolvedActionWithCanonical";
 import { filterOpportunityActionsForRuntimeGates } from "@/lib/admin/actions/filterOpportunityActionsForRuntimeGates";
 import { lifecycleBuilderPlacementVisibleOnStage } from "@/lib/lifecycle/lifecycleBuilderActionVisibility";
 import { parseLifecycleActionDisplayOrder } from "@/lib/lifecycle/lifecycleStageActionScope";
@@ -225,20 +226,22 @@ export async function resolveActionsForContext(
         if (!evaluateActionPlacementCondition(d.condition_config, row.condition_config, statusKey, oppMetadata)) continue;
 
         const payload = (d.payload_schema && typeof d.payload_schema === "object" ? d.payload_schema : {}) as Record<string, unknown>;
-        resolved.push({
-            key: d.key,
-            label: d.label,
-            description: d.description,
-            action_type: d.action_type,
-            icon: d.icon,
-            style: d.style,
-            display_style: row.display_style ?? "button",
-            payload,
-            workflow_id: d.workflow_id,
-            _order: parseLifecycleActionDisplayOrder(row.condition_config) ?? row.order_index,
-            _slot: row.slot,
-            _scope_rank: d.org_id != null ? 2 : row.org_id != null ? 1 : 0,
-        } as ResolvedActionForClient & { _order: number; _slot: string });
+        resolved.push(
+            enrichResolvedActionForClient({
+                key: d.key,
+                label: d.label,
+                description: d.description,
+                action_type: d.action_type,
+                icon: d.icon,
+                style: d.style,
+                display_style: row.display_style ?? "button",
+                payload,
+                workflow_id: d.workflow_id,
+                _order: parseLifecycleActionDisplayOrder(row.condition_config) ?? row.order_index,
+                _slot: row.slot,
+                _scope_rank: d.org_id != null ? 2 : row.org_id != null ? 1 : 0,
+            } as ResolvedActionForClient & { _order: number; _slot: string }),
+        );
     }
 
     const withMeta = resolved as (ResolvedActionForClient & { _order: number; _slot: string; _scope_rank: number })[];

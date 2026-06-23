@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AdminRouteGateSuccess } from "@/lib/admin/adminRouteGate";
+import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
 import { resolveActionsForContext } from "@/lib/admin/actions/resolveActionsForContext";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
@@ -128,6 +129,7 @@ export async function resolveOpportunityDrawerFirstPaintDependencies(
                     params.record.metadata && typeof params.record.metadata === "object" ?
                         (params.record.metadata as Record<string, unknown>)
                     :   null,
+                lifecycleViewStageKey: stageKeyFromLifecycleWorkUnitMetadata(params.wuMetadata ?? null),
             })
         :   Promise.resolve(null),
         needsScheduledSends ?

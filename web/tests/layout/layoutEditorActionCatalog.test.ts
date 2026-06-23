@@ -27,14 +27,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 describe("layout editor action catalog", () => {
-    it("groups Make Primary Contact under Contact Actions for opportunity drawer", () => {
+    it("groups Make Primary Contact under Relationship Actions for opportunity drawer", () => {
         const groups = buildLayoutEditorActionCatalogGroups({
             surfaceKey: "opportunity_drawer",
             context: "contact_block",
         });
-        const contactGroup = groups.find((g) => g.groupKey === "contact_actions");
-        expect(contactGroup?.actions.some((a) => a.actionKey === MAKE_PRIMARY_CONTACT_ACTION_KEY)).toBe(true);
-        expect(contactGroup?.actions.find((a) => a.actionKey === MAKE_PRIMARY_CONTACT_ACTION_KEY)?.label).toBe(
+        const relationshipGroup = groups.find((g) => g.groupKey === "relationship_actions");
+        expect(relationshipGroup?.actions.some((a) => a.actionKey === MAKE_PRIMARY_CONTACT_ACTION_KEY)).toBe(true);
+        expect(relationshipGroup?.actions.find((a) => a.actionKey === MAKE_PRIMARY_CONTACT_ACTION_KEY)?.label).toBe(
             "Make Primary Contact",
         );
     });
@@ -122,11 +122,12 @@ describe("layout editor action catalog", () => {
         expect(config.label).toBe("Make Primary Contact");
     });
 
-    it("runtime still renders LayoutRuntimeMakePrimaryContactActionButton", () => {
+    it("runtime routes relationship actions through LayoutRuntimeRelationshipActionButton", () => {
         const planView = readFileSync(
             join(process.cwd(), "components/layout/LayoutRuntimePlanView.tsx"),
             "utf8",
         );
-        expect(planView).toContain("LayoutRuntimeMakePrimaryContactActionButton");
+        expect(planView).toContain("LayoutRuntimeRelationshipActionButton");
+        expect(planView).toContain("isRelationshipActionKey");
     });
 });

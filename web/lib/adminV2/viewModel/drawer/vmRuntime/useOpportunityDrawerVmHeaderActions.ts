@@ -39,7 +39,10 @@ export function useOpportunityDrawerVmHeaderActions(params: {
     opportunityId: string | null | undefined;
     departmentId: string | null | undefined;
     workUnitId: string | null | undefined;
-    registryHostExtensions?: Pick<ApplyRegistryResolvedActionHost, "openForm" | "openCreateWork">;
+    registryHostExtensions?: Pick<
+        ApplyRegistryResolvedActionHost,
+        "openForm" | "openCreateWork" | "openAddInquiryChild" | "openAddPerson" | "openRelationshipAction" | "openEnrollmentStatus"
+    >;
     actionHost: OpportunityDrawerVmHeaderActionHost;
 }) {
     const router = useRouter();
@@ -119,6 +122,7 @@ export function useOpportunityDrawerVmHeaderActions(params: {
                 if (action.action_type === "ui_intent") {
                     const resolvedIntent = readUiIntent(action);
                     if (
+                        resolvedIntent === "relationship_action" ||
                         resolvedIntent === "send_form" ||
                         resolvedIntent === "send_enrollment_packet" ||
                         resolvedIntent === "create_task" ||

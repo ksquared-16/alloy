@@ -43,6 +43,18 @@ import {
 import { formatRequirementValidationSummary } from "@/lib/completion/requirementValidationResult";
 import type { RequirementValidationResult } from "@/lib/completion/requirementValidationTypes";
 import { isScheduleTourRegistryAction } from "@/lib/admin/actions/scheduleTourWorkUnitActions";
+import {
+    dispatchOpenRelationshipActionModal,
+    isCanonicalRelationshipResolvedAction,
+    mapRegistrySurfaceToRelationshipSource,
+    resolveRelationshipActionKeyFromResolvedAction,
+} from "@/lib/admin/relationship/relationshipActionClient";
+import {
+    dispatchOpenEnrollmentStatusModal,
+    mapRegistrySurfaceToEnrollmentSource,
+    resolveEnrollmentStatusActionFromResolvedAction,
+} from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionClient";
+import type { EnrollmentStatusTransitionScope } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 
 export type RegistryActionSurfaceContext = {
     surface: string;
@@ -67,6 +79,18 @@ export type ApplyRegistryResolvedActionHost = {
     openAddInquiryChild?: (mode: "child" | "sibling") => void;
     /** Capture-first add person — same modal for add_family_member / add_related_person. */
     openAddPerson?: (actionKey: string) => void;
+    /** Capture-first relationship action — shared wizard with layout buttons. */
+    openRelationshipAction?: (input: {
+        actionKey: import("@/lib/admin/relationship/relationshipActionContract").RelationshipActionKey;
+        opportunityId: string;
+        sourceSurface?: import("@/lib/admin/relationship/relationshipActionContract").RelationshipActionSourceSurface;
+    }) => void;
+    /** Change Enrollment Status — OCM-scoped transition modal. */
+    openEnrollmentStatus?: (input: {
+        opportunityId: string;
+        sourceSurface?: import("@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract").EnrollmentStatusTransitionSourceSurface;
+        initialScope?: Partial<EnrollmentStatusTransitionScope>;
+    }) => void;
     openCreateLead?: () => void;
     /** VM / legacy drawer — open create-work modal without relying on window listeners. */
     openCreateWork?: (detail: OpportunityOpenCreateWorkModalDetail) => void;
@@ -83,6 +107,8 @@ export type ApplyRegistryResolvedActionHost = {
     entityId?: string | null;
     /** Surface-authored runtime context (queue row, drawer, etc.). */
     invocationContext?: ContextualActionInvocation | null;
+    /** Queue row / drawer child scope for enrollment status transitions. */
+    enrollmentStatusScope?: Partial<EnrollmentStatusTransitionScope>;
     context: RegistryActionSurfaceContext;
 };
 
@@ -115,6 +141,54 @@ export async function applyRegistryResolvedActionClient(
     a: ResolvedActionForClient,
     host: ApplyRegistryResolvedActionHost
 ): Promise<ApplyRegistryResolvedActionResult> {
+    const relationshipKey = resolveRelationshipActionKeyFromResolvedAction(a);
+    if (relationshipKey && isCanonicalRelationshipResolvedAction(a)) {
+        const oid = host.entityId?.trim();
+        if (!oid) {
+            return {
+                ok: false,
+                error: "Select a record from the queue or open a drawer before running this action.",
+            };
+        }
+        const sourceSurface = mapRegistrySurfaceToRelationshipSource(host.context.surface);
+        if (host.openRelationshipAction) {
+            host.openRelationshipAction({
+                actionKey: relationshipKey,
+                opportunityId: oid,
+                sourceSurface,
+            });
+            return { ok: true };
+        }
+        dispatchOpenRelationshipActionModal({
+            action_key: relationshipKey,
+            opportunity_id: oid,
+            source_surface: sourceSurface,
+        });
+        return { ok: true };
+    }
+
+    if (resolveEnrollmentStatusActionFromResolvedAction(a)) {
+        const oid = host.entityId?.trim();
+        if (!oid) {
+            return {
+                ok: false,
+                error: "Select a record from the queue or open a drawer before changing enrollment status.",
+            };
+        }
+        const sourceSurface = mapRegistrySurfaceToEnrollmentSource(host.context.surface);
+        const initialScope = host.enrollmentStatusScope;
+        if (host.openEnrollmentStatus) {
+            host.openEnrollmentStatus({ opportunityId: oid, sourceSurface, initialScope });
+            return { ok: true };
+        }
+        dispatchOpenEnrollmentStatusModal({
+            opportunity_id: oid,
+            source_surface: sourceSurface,
+            scope: initialScope,
+        });
+        return { ok: true };
+    }
+
     if (isScheduleTourRegistryAction(a) && !host.entityId?.trim()) {
         const delegated = applyScheduleTourWithoutSelectedRecord(a, host);
         if (delegated) return delegated;

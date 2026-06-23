@@ -51,11 +51,22 @@ export const ACTION_BUTTON_LIBRARY: ActionRegistryEntry[] = [
         defaultSlot: "secondary",
     },
     {
-        key: "update_status_add_note",
-        label: "Update status",
+        key: "update_enrollment_status",
+        label: "Change Enrollment Status",
         category: "status_lifecycle",
         settingsConfigurable: true,
-        description: "Change the record status and add an optional note. Required fields depend on the status you choose.",
+        description:
+            "Move a child enrollment track (or household record when no children) to a new stage with requirement checks.",
+        defaultSurface: "queue_row",
+        defaultSlot: "row_inline",
+    },
+    {
+        key: "update_status_add_note",
+        label: "Change Enrollment Status",
+        category: "status_lifecycle",
+        settingsConfigurable: true,
+        description:
+            "Legacy placement key — routes to Change Enrollment Status (OCM-scoped). Prefer update_enrollment_status for new placements.",
         defaultSurface: "queue_row",
         defaultSlot: "row_inline",
     },

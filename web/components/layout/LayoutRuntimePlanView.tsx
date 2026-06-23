@@ -29,9 +29,9 @@ import {
     resolveLayoutCollectionColumnLinkAdornment,
     resolveLayoutCollectionColumnShowIcon,
 } from "@/lib/layout/layoutEditorDisplayConfig";
-import LayoutRuntimeMakePrimaryContactActionButton from "@/components/layout/LayoutRuntimeMakePrimaryContactActionButton";
+import LayoutRuntimeRelationshipActionButton from "@/components/layout/LayoutRuntimeRelationshipActionButton";
 import { readLayoutEditorActionButtonConfig } from "@/lib/layout/layoutEditorActionButton";
-import { isMakePrimaryContactActionKey } from "@/lib/admin/actions/makePrimaryContactAction";
+import { isRelationshipActionKey, type RelationshipActionKey } from "@/lib/admin/relationship/relationshipActionContract";
 import { readLayoutEditorBlockConfig, resolveLayoutRuntimeSectionEditMode } from "@/lib/layout/layoutEditorBlockConfig";
 import { readLayoutEditorContactRole, contactRoleFieldRefs, type LayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 import {
@@ -532,11 +532,12 @@ function ValueCell({
                         getDependentValue={layoutRuntimeDependentValueReader(edit.getFieldValue)}
                     />
                 : actionButton ?
-                    isMakePrimaryContactActionKey(String(actionButton.actionKey ?? "")) ?
-                        <LayoutRuntimeMakePrimaryContactActionButton
+                    isRelationshipActionKey(String(actionButton.actionKey ?? "")) ?
+                        <LayoutRuntimeRelationshipActionButton
+                            actionKey={String(actionButton.actionKey) as RelationshipActionKey}
                             anchorRecord={record}
                             layoutContactRole={layoutContactRole}
-                            label={actionButton.label ?? item.label ?? "Make Primary Contact"}
+                            label={actionButton.label ?? item.label}
                             testId={`layout-runtime-action-button-${item.id}`}
                         />
                     :   <button
@@ -745,14 +746,15 @@ function RepeaterCellContent({
         col.refKey === "_action_button" ? readLayoutEditorActionButtonConfig(col.metadata) : null;
     if (
         actionButton
-        && isMakePrimaryContactActionKey(String(actionButton.actionKey ?? ""))
+        && isRelationshipActionKey(String(actionButton.actionKey ?? ""))
         && anchorRecord
     ) {
         return (
-            <LayoutRuntimeMakePrimaryContactActionButton
+            <LayoutRuntimeRelationshipActionButton
+                actionKey={String(actionButton.actionKey) as import("@/lib/admin/relationship/relationshipActionContract").RelationshipActionKey}
                 anchorRecord={anchorRecord}
                 rowRecord={row}
-                label={actionButton.label ?? col.label ?? "Make Primary Contact"}
+                label={actionButton.label ?? col.label}
                 testId={`layout-runtime-repeater-action-${col.refKey}`}
             />
         );

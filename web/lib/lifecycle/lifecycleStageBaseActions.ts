@@ -24,7 +24,7 @@ export const LIFECYCLE_BASE_ACTIONS: readonly LifecycleBaseActionDefinition[] = 
     { key: "add_child", label: "Add Child", definition_key: "add_child" },
     { key: "send_form", label: "Send Form", definition_key: "send_form" },
     { key: "schedule_tour", label: "Schedule Tour", definition_key: "schedule_tour" },
-    { key: "change_status", label: "Update Status", definition_key: "update_status_add_note" },
+    { key: "change_status", label: "Change Enrollment Status", definition_key: "update_enrollment_status" },
     { key: "create_task", label: "Create Task", definition_key: "create_task" },
     { key: "quick_message", label: "Message", definition_key: "quick_message" },
 ] as const;

@@ -364,7 +364,9 @@ import {
 import "@/lib/perf/workUnitVmRuntimeTrace";
 import { scheduleWorkUnitViewModelShadow } from "@/lib/adminV2/viewModel/workUnit/shadow/runWorkUnitViewModelShadow";
 import type { NeedsAttentionBucketWithCount } from "@/lib/opportunities/needsAttentionBuckets";
-import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
+import { ChangeEnrollmentStatusModal } from "@/components/admin/opportunity/actions/ChangeEnrollmentStatusModal";
+import { enrollmentScopeFromQueuePreviewItem } from "@/lib/admin/enrollmentStatus/enrollmentScopeFromQueueItem";
+import type { EnrollmentStatusTransitionScope } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { CreateLeadModal } from "@/components/admin/opportunity/actions/CreateLeadModal";
 import { MarkLostModal } from "@/components/admin/opportunity/actions/MarkLostModal";
@@ -851,9 +853,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [workflowPartitions, setWorkflowPartitions] = useState<WorkflowScopePartitionV1 | null>(null);
     const globalAssistant = useGlobalAssistantOptional();
 
-    const [statusOptions, setStatusOptions] = useState<Array<{ value: string; label: string }>>([]);
     const [updateStatusFormOpen, setUpdateStatusFormOpen] = useState(false);
     const [updateStatusTargetId, setUpdateStatusTargetId] = useState<string | null>(null);
+    const [updateStatusScope, setUpdateStatusScope] = useState<Partial<EnrollmentStatusTransitionScope> | null>(null);
     const [contactAttemptedOpen, setContactAttemptedOpen] = useState(false);
     const [contactAttemptedTargetId, setContactAttemptedTargetId] = useState<string | null>(null);
     const [createLeadOpen, setCreateLeadOpen] = useState(false);
@@ -5461,27 +5463,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return m;
     }, [opportunityQueueRowResolved]);
 
-    useEffect(() => {
-        if (!updateStatusFormOpen) return;
-        let cancelled = false;
-        (async () => {
-            try {
-                const res = await dedupeAdminFetchWithTtl(
-                    "/api/admin/status-options?entity_type=opportunities",
-                    { ...workspaceDataFetchInit(), credentials: "include" },
-                    60_000
-                );
-                const j = (await res.json().catch(() => ({}))) as { options?: Array<{ value: string; label: string }>; error?: string };
-                if (!cancelled && res.ok) setStatusOptions(j.options ?? []);
-            } catch {
-                if (!cancelled) setStatusOptions([]);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [updateStatusFormOpen]);
-
     const opportunityWorkspaceContext = useMemo(
         () =>
             workUnit?.id && departmentId
@@ -5856,6 +5837,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         invalidate,
                         needsAttentionHref,
                         invocationContext: rowInvocation,
+                        enrollmentStatusScope: enrollmentScopeFromQueuePreviewItem(
+                            queueItem ?? null,
+                            action.itemId,
+                        ),
+                        openEnrollmentStatus: ({ opportunityId, sourceSurface, initialScope }) => {
+                            setUpdateStatusTargetId(opportunityId);
+                            setUpdateStatusScope(
+                                initialScope ??
+                                    enrollmentScopeFromQueuePreviewItem(queueItem ?? null, opportunityId),
+                            );
+                            setUpdateStatusFormOpen(true);
+                        },
                         context: {
                             surface: "queue_row",
                             department_id: departmentId,
@@ -5867,8 +5860,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (resolved && resolved.action_type === "open_form") {
                     const formKey =
                         resolved.payload?.form_key != null ? String(resolved.payload.form_key).trim() : "";
-                    if (formKey === "update_status_add_note") {
+                    if (formKey === "update_status_add_note" || formKey === "update_enrollment_status") {
                         setUpdateStatusTargetId(action.itemId);
+                        setUpdateStatusScope(
+                            enrollmentScopeFromQueuePreviewItem(queueItem ?? null, action.itemId),
+                        );
                         setUpdateStatusFormOpen(true);
                         return;
                     }
@@ -5913,6 +5909,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         invalidate,
                         needsAttentionHref,
                         invocationContext: rowInvocation,
+                        enrollmentStatusScope: enrollmentScopeFromQueuePreviewItem(
+                            queueItem ?? null,
+                            action.itemId,
+                        ),
+                        openEnrollmentStatus: ({ opportunityId, sourceSurface, initialScope }) => {
+                            setUpdateStatusTargetId(opportunityId);
+                            setUpdateStatusScope(
+                                initialScope ??
+                                    enrollmentScopeFromQueuePreviewItem(queueItem ?? null, opportunityId),
+                            );
+                            setUpdateStatusFormOpen(true);
+                        },
                         context: {
                             surface: "queue_row",
                             department_id: departmentId,
@@ -6838,41 +6846,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             />
                         }
                     />
-                    <UpdateStatusAddNoteModal
-                        open={updateStatusFormOpen}
-                        title="Update status"
-                        statusOptions={statusOptions}
-                        transitionContext={{
-                            entityType: "opportunities",
-                            departmentId: departmentId,
-                            workUnitId: workUnit?.id ?? null,
-                            actionKey: "update_status_add_note",
-                        }}
+                    <ChangeEnrollmentStatusModal
+                        open={updateStatusFormOpen && Boolean(updateStatusTargetId)}
+                        opportunityId={updateStatusTargetId ?? ""}
+                        sourceSurface="queue_row"
+                        initialScope={updateStatusScope ?? undefined}
+                        departmentId={departmentId}
+                        workUnitId={workUnit?.id ?? null}
                         onClose={() => {
                             setUpdateStatusFormOpen(false);
                             setUpdateStatusTargetId(null);
+                            setUpdateStatusScope(null);
                         }}
-                        onSubmit={async (payload) => {
-                            if (!updateStatusTargetId) return;
-                            const res = await fetch("/api/admin/actions/execute", {
-                                method: "POST",
-                                credentials: "include",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    action_key: "update_status_add_note",
+                        onSuccess={() => {
+                            if (updateStatusTargetId) {
+                                invalidate({
                                     entity_type: "opportunity",
                                     entity_id: updateStatusTargetId,
-                                    context: {
-                                        surface: "queue_row",
-                                        work_unit_id: workUnit?.id ?? null,
-                                        department_id: departmentId,
-                                    },
-                                    payload,
-                                }),
-                            });
-                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-                            if (!res.ok || !json.ok) throw new Error(json.error ?? "Update failed");
-                            invalidate({ entity_type: "opportunity", entity_id: updateStatusTargetId, action_key: "update_status_add_note" });
+                                    action_key: "update_enrollment_status",
+                                });
+                            }
                         }}
                     />
                     <ContactAttemptedModal

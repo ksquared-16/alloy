@@ -3,6 +3,8 @@
  */
 
 import { makeId } from "@/lib/layout/builderOps";
+import { RELATIONSHIP_ACTION_KEYS } from "@/lib/admin/relationship/relationshipActionContract";
+import { relationshipActionRegistryEntry } from "@/lib/admin/relationship/relationshipActionRegistry";
 import type { LayoutItem } from "@/lib/layout/layoutV2";
 import { LAYOUT_EDITOR_ROW_ACTIONS } from "@/lib/layout/layoutEditorRowTemplateConfig";
 import type { LayoutEditorVisibilityRule } from "@/lib/layout/layoutEditorVisibilityRules";
@@ -13,22 +15,37 @@ export const LAYOUT_EDITOR_ACTION_BUTTON_METADATA_KEY = "layoutEditorActionButto
 export const LAYOUT_EDITOR_ACTION_STYLE_INTENTS = ["primary", "secondary", "ghost", "link"] as const;
 export type LayoutEditorActionStyleIntent = (typeof LAYOUT_EDITOR_ACTION_STYLE_INTENTS)[number];
 
+/** Relationship actions (excluding make_primary_contact — listed in row actions). */
+export const LAYOUT_EDITOR_RELATIONSHIP_ACTION_KEYS = RELATIONSHIP_ACTION_KEYS.filter(
+    (key) => key !== "make_primary_contact",
+) as Exclude<(typeof RELATIONSHIP_ACTION_KEYS)[number], "make_primary_contact">[];
+
 /** Drawer-safe action keys operators may place as layout buttons. */
 export const LAYOUT_EDITOR_DRAWER_ACTION_KEYS = [
     ...LAYOUT_EDITOR_ROW_ACTIONS,
+    ...LAYOUT_EDITOR_RELATIONSHIP_ACTION_KEYS,
     "add_family_member",
     "open_drawer",
 ] as const;
 export type LayoutEditorDrawerActionKey = (typeof LAYOUT_EDITOR_DRAWER_ACTION_KEYS)[number];
 
-export const LAYOUT_EDITOR_ACTION_KEY_LABELS: Record<LayoutEditorDrawerActionKey, string> = {
-    open_child_drawer: "Open child drawer",
-    edit_enrollment: "Edit enrollment",
-    open_schedule: "Open schedule",
-    add_family_member: "Add family member",
-    make_primary_contact: "Make Primary Contact",
-    open_drawer: "Open related drawer",
-};
+function labelForDrawerActionKey(key: LayoutEditorDrawerActionKey): string {
+    const fromRegistry = relationshipActionRegistryEntry(key as (typeof RELATIONSHIP_ACTION_KEYS)[number]);
+    if (fromRegistry) return fromRegistry.label;
+    const staticLabels: Record<string, string> = {
+        open_child_drawer: "Open child drawer",
+        edit_enrollment: "Edit enrollment",
+        open_schedule: "Open schedule",
+        add_family_member: "Add family member",
+        make_primary_contact: "Make Primary Contact",
+        open_drawer: "Open related drawer",
+    };
+    return staticLabels[key] ?? key;
+}
+
+export const LAYOUT_EDITOR_ACTION_KEY_LABELS = Object.fromEntries(
+    LAYOUT_EDITOR_DRAWER_ACTION_KEYS.map((key) => [key, labelForDrawerActionKey(key)]),
+) as Record<LayoutEditorDrawerActionKey, string>;
 
 export type LayoutEditorActionButtonConfig = {
     label?: string;

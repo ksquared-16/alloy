@@ -20,7 +20,7 @@ const EXPECTED_DEFINITION_KEYS: Record<LifecycleBaseActionKey, string> = {
     add_child: "add_child",
     send_form: "send_form",
     schedule_tour: "schedule_tour",
-    change_status: "update_status_add_note",
+    change_status: "update_enrollment_status",
     create_task: "create_task",
     quick_message: "quick_message",
 };
@@ -56,7 +56,7 @@ describe("lifecycle action save and forms removal", () => {
     it("Save Action succeeds for Create Lead and Update Status base keys", () => {
         expect(lifecycleActivationBaseActionByKey("create_record")?.definition_key).toBe("create_lead");
         expect(lifecycleActivationBaseActionByKey("change_status")?.definition_key).toBe(
-            "update_status_add_note"
+            "update_enrollment_status"
         );
     });
 

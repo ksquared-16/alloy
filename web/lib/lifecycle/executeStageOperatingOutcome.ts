@@ -3,7 +3,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { StageOperatingPlanV1, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { StageOperatingPlanV1, StageOutcomeRuleTargetKind, StageOutcomeRuleTargetV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { outcomeRulesForKey } from "@/lib/lifecycle/stageOperatingPlanV1";
 import {
     applyStageOutcomeRuleTarget,
@@ -20,6 +20,15 @@ export type StageOutcomeExecutionResult = {
     status_updated: boolean;
 };
 
+/** Status/movement targets skipped when the caller already applied the transition manually. */
+export const STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS: readonly StageOutcomeRuleTargetKind[] = [
+    "update_family_case_status",
+    "update_child_enrollment_status",
+    "update_candidate_status",
+    "move_to_stage",
+    "no_movement",
+];
+
 export async function executeStageOperatingOutcome(params: {
     supabase: SupabaseClient;
     orgId: string;
@@ -29,10 +38,12 @@ export async function executeStageOperatingOutcome(params: {
     outcomeKey: string;
     subject: StageOutcomeExecutionSubject;
     attemptCount?: number | null;
+    skipTargetKinds?: readonly StageOutcomeRuleTargetKind[];
 }): Promise<StageOutcomeExecutionResult> {
     const rules = outcomeRulesForKey(params.plan, params.outcomeKey, {
         attemptCount: params.attemptCount ?? null,
     });
+    const skipKinds = params.skipTargetKinds ?? null;
     const applied_targets: StageOutcomeRuleTargetV1[] = [];
     const errors: string[] = [];
     let needs_attention_set = false;
@@ -40,6 +51,7 @@ export async function executeStageOperatingOutcome(params: {
 
     for (const rule of rules) {
         for (const target of rule.targets) {
+            if (skipKinds?.includes(target.kind)) continue;
             const result = await applyStageOutcomeRuleTarget(params.supabase, {
                 orgId: params.orgId,
                 userId: params.userId,

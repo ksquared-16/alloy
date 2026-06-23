@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { executeStageOperatingOutcome } from "@/lib/lifecycle/executeStageOperatingOutcome";
+import { executeStageOperatingOutcome, STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS } from "@/lib/lifecycle/executeStageOperatingOutcome";
 import { defaultStageOperatingPlanForEnrollmentStage } from "@/lib/lifecycle/defaultEnrollmentStageOperatingPlans";
 
 const mockInstantiate = vi.fn();
@@ -129,6 +129,39 @@ describe("executeStageOperatingOutcome", () => {
         });
 
         expect(result.errors).toEqual([]);
+        expect(mockInstantiate).toHaveBeenCalledTimes(1);
+    });
+
+    it("create_next_work dedupes repeated outcome execution with manual skip flags", async () => {
+        mockInstantiate.mockResolvedValue({ status: "deduped", work_id: "work-existing" });
+        const plan = defaultStageOperatingPlanForEnrollmentStage("tour_completed")!;
+        plan.outcome_rules = [
+            {
+                rule_key: "spawn_outcome_work",
+                when_outcome_key: "tour_completed",
+                targets: [
+                    { kind: "update_family_case_status", status_key: "decision_pending" },
+                    { kind: "create_next_work", template_key: "record_tour_outcome_work" },
+                ],
+            },
+        ];
+
+        const result = await executeStageOperatingOutcome({
+            supabase: { from: vi.fn() } as never,
+            orgId: "org-1",
+            userId: "user-1",
+            departmentId: "dept-1",
+            plan,
+            outcomeKey: "tour_completed",
+            subject: {
+                journey_segment: "family",
+                opportunity_id: "opp-1",
+            },
+            skipTargetKinds: STAGE_OUTCOME_MANUAL_TRANSITION_SKIP_TARGET_KINDS,
+        });
+
+        expect(result.errors).toEqual([]);
+        expect(result.status_updated).toBe(false);
         expect(mockInstantiate).toHaveBeenCalledTimes(1);
     });
 

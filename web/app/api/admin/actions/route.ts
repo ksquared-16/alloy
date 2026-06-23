@@ -6,6 +6,26 @@ import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import { resolveActionsForContext } from "@/lib/admin/actions/resolveActionsForContext";
 import type { ActionSurface } from "@/lib/admin/actions/types";
 import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { stageKeyFromLifecycleWorkUnitMetadata } from "@/lib/lifecycle/lifecycleStageWorkUnit";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+async function resolveLifecycleViewStageKeyForActions(
+    supabase: SupabaseClient,
+    orgId: string,
+    workUnitId: string | null,
+    explicitStageKey: string | null,
+): Promise<string | null> {
+    if (explicitStageKey) return explicitStageKey;
+    const wuId = workUnitId?.trim();
+    if (!wuId) return null;
+    const { data } = await supabase
+        .from("work_units")
+        .select("metadata")
+        .eq("org_id", orgId)
+        .eq("id", wuId)
+        .maybeSingle();
+    return stageKeyFromLifecycleWorkUnitMetadata((data as { metadata?: unknown } | null)?.metadata ?? null);
+}
 
 const SURFACES = new Set<ActionSurface>([
     "record_header",
@@ -34,6 +54,7 @@ export async function GET(request: NextRequest) {
     const departmentId = searchParams.get("department_id")?.trim() || null;
     const workUnitId = searchParams.get("work_unit_id")?.trim() || null;
     const sectionKey = searchParams.get("section_key")?.trim() || null;
+    const lifecycleViewStageKeyParam = searchParams.get("lifecycle_view_stage_key")?.trim() || null;
     const hintStatusKeyRaw = searchParams.get("hint_opportunity_status_key")?.trim() || null;
     let hintOpportunityMetadata: Record<string, unknown> | null = null;
     const hintMetaRaw = searchParams.get("hint_opportunity_metadata")?.trim() || null;
@@ -64,6 +85,12 @@ export async function GET(request: NextRequest) {
         const actions = await unstable_cache(
             async () => {
                 const supabase = createAdminClient();
+                const lifecycleViewStageKey = await resolveLifecycleViewStageKeyForActions(
+                    supabase,
+                    ctx.orgId,
+                    workUnitId,
+                    lifecycleViewStageKeyParam,
+                );
                 return resolveActionsForContext(supabase, {
                     orgId: ctx.orgId,
                     surface,
@@ -74,6 +101,7 @@ export async function GET(request: NextRequest) {
                     sectionKey,
                     hintOpportunityStatusKey: hintStatusKeyRaw,
                     hintOpportunityMetadata,
+                    lifecycleViewStageKey,
                 });
             },
             [
@@ -86,6 +114,7 @@ export async function GET(request: NextRequest) {
                 departmentId ?? "-",
                 workUnitId ?? "-",
                 sectionKey ?? "-",
+                lifecycleViewStageKeyParam ?? "-",
                 hintStatusKeyRaw ?? "-",
                 hintMetaKey,
             ],
