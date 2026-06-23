@@ -32,7 +32,18 @@ export function evaluateLayoutCondition(
     if (!condition) return true;
     const raw = readPath(record, condition.path);
     if (condition.type === "exists") return !isEmptyValue(raw);
-    if (condition.type === "equals") return String(raw ?? "") === String(condition.value ?? "");
+    if (condition.type === "equals") {
+        const expected = condition.value ?? "";
+        const actual = raw;
+        if (typeof actual === "boolean") return String(actual) === expected || (actual && expected === "true") || (!actual && expected === "false");
+        return String(actual ?? "") === String(expected);
+    }
+    if (condition.type === "not_equals") {
+        const expected = condition.value ?? "";
+        const actual = raw;
+        if (typeof actual === "boolean") return String(actual) !== expected && !(actual && expected === "true") && !(!actual && expected === "false");
+        return String(actual ?? "") !== String(expected);
+    }
     if (condition.type === "count_gt") {
         const threshold = Number(condition.value ?? "0");
         const count =

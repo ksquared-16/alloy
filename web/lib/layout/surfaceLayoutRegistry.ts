@@ -347,12 +347,35 @@ function buildOpportunityDrawerAllowedFieldRefKeys(): readonly string[] {
 
 const OPPORTUNITY_DRAWER_FIELD_REFS = buildOpportunityDrawerAllowedFieldRefKeys();
 
+/** Child row fields allowed inside person-drawer linked-children / related-list contexts only. */
+export const PERSON_DRAWER_LINKED_CHILD_FIELD_REFS = [
+    "child.name",
+    "child.dob_age",
+    "child.date_of_birth",
+    "child.age_band",
+    "child.program",
+    "child.room",
+    "child.schedule",
+    "child.location",
+    "child.status",
+    "child.desired_start_date",
+    "inquiry_child.desired_start_date",
+    "inquiry_child.program",
+    "inquiry_child.program_room_cohort_key",
+] as const;
+
+const LINKED_CHILD_FIELD_PREFIXES = ["child.", "inquiry_child."] as const;
+
+function isLinkedChildScopedRefKey(refKey: string): boolean {
+    return LINKED_CHILD_FIELD_PREFIXES.some((prefix) => refKey.startsWith(prefix));
+}
+
 function buildPersonDrawerAllowedFieldRefKeys(): readonly string[] {
     const baseline = collectRefKeysFromLayoutDoc(buildPersonDrawerDefaultDoc());
     const catalog = childcareCatalogRefKeysForLayoutAnchor("person");
     const merged = new Set<string>([
-        ...baseline,
-        ...catalog,
+        ...baseline.filter((refKey) => !isLinkedChildScopedRefKey(refKey)),
+        ...catalog.filter((refKey) => !isLinkedChildScopedRefKey(refKey)),
         ...HOUSEHOLD_ADDRESS_LAYOUT_FIELD_REFS,
         ...PERSON_ADDRESS_LAYOUT_REF_KEYS,
         ...OPPORTUNITY_DRAWER_CONTACT_BLOCK_FIELD_REFS,
@@ -643,19 +666,27 @@ export function isAllowedOpportunityDrawerFieldRefKey(
     return false;
 }
 
-/** Field ref allow-list check for person drawer surfaces. */
+/** Field ref allow-list check for person drawer anchor fields (excludes linked-child row refs). */
 export function isAllowedPersonDrawerFieldRefKey(
     refKey: string,
     tenantRefKeys?: ReadonlySet<string>,
 ): boolean {
     const trimmed = refKey.trim();
     if (!trimmed) return false;
+    if (isLinkedChildScopedRefKey(trimmed)) return false;
     if (tenantRefKeys?.has(trimmed)) return true;
     const writeGuard = validateRefKeyForWrite(trimmed);
     if (!writeGuard.ok) return false;
     if ((PERSON_DRAWER_STRUCTURAL_REF_KEYS as readonly string[]).includes(trimmed)) return true;
     if (PERSON_DRAWER_FIELD_REFS.includes(trimmed)) return true;
     return false;
+}
+
+/** Linked-child row fields inside person-drawer related lists / child-row blocks. */
+export function isAllowedPersonDrawerLinkedChildFieldRefKey(refKey: string): boolean {
+    const trimmed = refKey.trim();
+    if (!trimmed) return false;
+    return (PERSON_DRAWER_LINKED_CHILD_FIELD_REFS as readonly string[]).includes(trimmed);
 }
 
 /** Field ref allow-list check for child drawer surfaces. */

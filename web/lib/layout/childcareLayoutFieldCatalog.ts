@@ -403,6 +403,7 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     parent("person.is_employee", "Employee", "boolean", 45, "is_employee"),
     parent("person.employee_id", "Employee ID", "text", 48, "employee_id"),
     parent("person.communication_preference", "Communication preference", "select", 80, "communication_preference"),
+    parent("person.communication_opt_out", "Communication opt-out", "boolean", 82, "communication_opt_out"),
     parent("person.sms_opt_in", "SMS opt-in", "boolean", 90, "sms_opt_in"),
     parent("person.email_opt_in", "Email opt-in", "boolean", 100, "email_opt_in"),
     parent("person.employer", "Employer", "text", 110, "employer"),

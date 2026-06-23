@@ -17,8 +17,11 @@ import {
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
+    LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_OPERATORS,
     LAYOUT_EDITOR_VISIBILITY_PRESETS,
     layoutEditorContactFieldVisibilityPresets,
+    type LayoutEditorCrossFieldVisibility,
+    type LayoutEditorCrossFieldVisibilityOperator,
     type LayoutEditorVisibilityRule,
 } from "@/lib/layout/layoutEditorVisibilityRules";
 import type { LayoutEditorFieldNode } from "@/lib/layout/layoutEditorCompositionModel";
@@ -36,6 +39,7 @@ type Props = {
         label?: string;
         display?: LayoutEditorDisplayConfig;
         visibility?: LayoutEditorVisibilityRule;
+        crossFieldVisibility?: LayoutEditorCrossFieldVisibility | null;
         editable?: boolean;
     }) => void;
     onClose: () => void;
@@ -344,7 +348,21 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                 When to show
                 <select
                     value={node.visibilityRule}
-                    onChange={(e) => onChange({ visibility: e.target.value as LayoutEditorVisibilityRule })}
+                    onChange={(e) => {
+                        const nextRule = e.target.value as LayoutEditorVisibilityRule;
+                        if (nextRule === "conditional") {
+                            onChange({
+                                visibility: nextRule,
+                                crossFieldVisibility: node.crossFieldVisibility ?? {
+                                    sourcePath: "",
+                                    operator: "equals",
+                                    value: "",
+                                },
+                            });
+                            return;
+                        }
+                        onChange({ visibility: nextRule, crossFieldVisibility: null });
+                    }}
                     className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
                     data-testid="visual-editor-field-visibility"
                 >
@@ -355,6 +373,88 @@ export default function OpportunityDrawerLayoutFieldSettings({ node, inline = fa
                     ))}
                 </select>
             </label>
+
+            {node.visibilityRule === "conditional" ?
+                <div
+                    className="mt-2 space-y-2 rounded-md border border-alloy-blue/20 bg-alloy-blue/[0.04] p-2"
+                    data-testid="visual-editor-field-conditional-visibility"
+                >
+                    <p className="text-[10px] font-medium text-alloy-midnight/55">Conditional visibility</p>
+                    <label className="block text-[11px] text-alloy-midnight/60">
+                        Source field
+                        <input
+                            type="text"
+                            value={node.crossFieldVisibility?.sourcePath ?? ""}
+                            placeholder="person.is_employee"
+                            onChange={(e) =>
+                                onChange({
+                                    visibility: "conditional",
+                                    crossFieldVisibility: {
+                                        sourcePath: e.target.value,
+                                        operator: node.crossFieldVisibility?.operator ?? "equals",
+                                        value: node.crossFieldVisibility?.value,
+                                    },
+                                })
+                            }
+                            className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs font-mono"
+                            data-testid="visual-editor-field-conditional-source"
+                        />
+                    </label>
+                    <label className="block text-[11px] text-alloy-midnight/60">
+                        Operator
+                        <select
+                            value={node.crossFieldVisibility?.operator ?? "equals"}
+                            onChange={(e) =>
+                                onChange({
+                                    visibility: "conditional",
+                                    crossFieldVisibility: {
+                                        sourcePath: node.crossFieldVisibility?.sourcePath ?? "",
+                                        operator: e.target.value as LayoutEditorCrossFieldVisibilityOperator,
+                                        value: node.crossFieldVisibility?.value,
+                                    },
+                                })
+                            }
+                            className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                            data-testid="visual-editor-field-conditional-operator"
+                        >
+                            {LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_OPERATORS.map((operator) => (
+                                <option key={operator} value={operator}>
+                                    {operator === "filled" ? "Is filled"
+                                    : operator === "equals" ? "Equals"
+                                    : operator === "not_equals" ? "Not equals"
+                                    : operator === "is_true" ? "Is true"
+                                    : "Is false"}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                    {(node.crossFieldVisibility?.operator === "equals" || node.crossFieldVisibility?.operator === "not_equals") ?
+                        <label className="block text-[11px] text-alloy-midnight/60">
+                            Value
+                            <input
+                                type="text"
+                                value={node.crossFieldVisibility?.value ?? ""}
+                                onChange={(e) =>
+                                    onChange({
+                                        visibility: "conditional",
+                                        crossFieldVisibility: {
+                                            sourcePath: node.crossFieldVisibility?.sourcePath ?? "",
+                                            operator: node.crossFieldVisibility?.operator ?? "equals",
+                                            value: e.target.value,
+                                        },
+                                    })
+                                }
+                                className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
+                                data-testid="visual-editor-field-conditional-value"
+                            />
+                        </label>
+                    :   null}
+                </div>
+            : node.crossFieldVisibility ?
+                <p className="mt-1 text-[10px] text-alloy-blue/80" data-testid="visual-editor-field-conditional-indicator">
+                    Conditional on {node.crossFieldVisibility.sourcePath}
+                </p>
+            :   null}
         </div>
     );
 }

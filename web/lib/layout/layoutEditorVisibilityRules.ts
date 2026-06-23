@@ -13,12 +13,29 @@ export const LAYOUT_EDITOR_VISIBILITY_RULES = [
     "hide_when_empty",
     "show_when_field_exists",
     "show_when_related_exists",
+    "conditional",
     "show_when_count_gt_1",
     "show_when_contact_record_exists",
     "show_when_contact_count_gt_1",
     "show_when_not_primary",
 ] as const;
 export type LayoutEditorVisibilityRule = (typeof LAYOUT_EDITOR_VISIBILITY_RULES)[number];
+
+export const LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_OPERATORS = [
+    "filled",
+    "equals",
+    "not_equals",
+    "is_true",
+    "is_false",
+] as const;
+export type LayoutEditorCrossFieldVisibilityOperator =
+    (typeof LAYOUT_EDITOR_CROSS_FIELD_VISIBILITY_OPERATORS)[number];
+
+export type LayoutEditorCrossFieldVisibility = {
+    sourcePath: string;
+    operator: LayoutEditorCrossFieldVisibilityOperator;
+    value?: string;
+};
 
 export type LayoutEditorVisibilityPreset = {
     key: LayoutEditorVisibilityRule;
@@ -34,6 +51,11 @@ export const LAYOUT_EDITOR_VISIBILITY_PRESETS: LayoutEditorVisibilityPreset[] = 
         key: "show_when_related_exists",
         label: "Show when related record exists",
         description: "Show when a related path resolves to a value.",
+    },
+    {
+        key: "conditional",
+        label: "Conditional (another field)",
+        description: "Show or hide based on another field on this record.",
     },
     { key: "show_when_count_gt_1", label: "Show when count > 1", description: "Show when a collection has more than one row." },
     {
@@ -76,11 +98,55 @@ export function layoutEditorContactFieldVisibilityPresets(
     return [...base, ...extras.filter(Boolean)];
 }
 
+export function parseCrossFieldVisibility(
+    condition: LayoutCondition | undefined,
+    boundPath: string,
+): LayoutEditorCrossFieldVisibility | null {
+    if (!condition?.path?.trim()) return null;
+    if (condition.path === boundPath) return null;
+    if (isLayoutEditorContactVisibilityPath(condition.path)) return null;
+    if (condition.type === "exists") {
+        return { sourcePath: condition.path, operator: "filled" };
+    }
+    if (condition.type === "equals") {
+        if (condition.value === "true") return { sourcePath: condition.path, operator: "is_true" };
+        if (condition.value === "false") return { sourcePath: condition.path, operator: "is_false" };
+        return { sourcePath: condition.path, operator: "equals", value: condition.value ?? "" };
+    }
+    if (condition.type === "not_equals") {
+        return { sourcePath: condition.path, operator: "not_equals", value: condition.value ?? "" };
+    }
+    return null;
+}
+
+export function buildCrossFieldVisibilityCondition(
+    crossField: LayoutEditorCrossFieldVisibility,
+): LayoutCondition | undefined {
+    const sourcePath = crossField.sourcePath.trim();
+    if (!sourcePath) return undefined;
+    switch (crossField.operator) {
+        case "filled":
+            return { type: "exists", path: sourcePath };
+        case "equals":
+            return { type: "equals", path: sourcePath, value: crossField.value ?? "" };
+        case "not_equals":
+            return { type: "not_equals", path: sourcePath, value: crossField.value ?? "" };
+        case "is_true":
+            return { type: "equals", path: sourcePath, value: "true" };
+        case "is_false":
+            return { type: "equals", path: sourcePath, value: "false" };
+        default:
+            return undefined;
+    }
+}
+
 export function resolveVisibilityRuleKey(
     condition: LayoutCondition | undefined,
     boundPath: string,
 ): LayoutEditorVisibilityRule {
     if (!condition) return "always";
+    const crossField = parseCrossFieldVisibility(condition, boundPath);
+    if (crossField) return "conditional";
     if (condition.type === "count_gt") {
         if (condition.path === LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.resolvedCount) {
             return "show_when_contact_count_gt_1";
@@ -126,6 +192,8 @@ export function visibilityConditionForRule(
             };
         case "show_when_not_primary":
             return { type: "exists", path: LAYOUT_CONTACT_BLOCK_VISIBILITY_PATHS.isNotPrimary };
+        case "conditional":
+            return undefined;
         default:
             return undefined;
     }

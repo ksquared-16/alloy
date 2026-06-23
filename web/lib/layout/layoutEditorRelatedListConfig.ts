@@ -13,6 +13,14 @@ import { LAYOUT_EDITOR_BLOCK_TEMPLATE_METADATA_KEY } from "@/lib/layout/layoutEd
 import { readLayoutEditorRowTemplateConfig, writeLayoutEditorRowTemplateConfig } from "@/lib/layout/layoutEditorRowTemplateConfig";
 import type { LayoutCollectionColumn, LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { relatedListPresentationToDisplayMode } from "@/lib/layout/runtime/resolveLayoutRuntimeRelatedListPresentation";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import {
+    isAllowedDrawerEditorFieldRefKey,
+    isAllowedDrawerRelatedListColumnRefKey,
+    tenantFieldRefKeysForDrawerSurface,
+} from "@/lib/layout/drawerSurfaceFieldValidation";
+import { resolveDrawerLayoutEditorSurfaceKeyFromDoc } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { isAllowedOpportunityDrawerFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
 
 export const LAYOUT_EDITOR_RELATED_LIST_CONFIG_METADATA_KEY = "layoutEditorRelatedListConfig" as const;
@@ -353,20 +361,50 @@ function removeRelatedListItemFromSection(doc: LayoutDoc, sectionKey: string): L
     return next;
 }
 
-export function validateLayoutEditorRelatedListConfig(config: LayoutEditorRelatedListConfig, path: string): string[] {
+function isAllowedRelatedListFieldRefKey(
+    refKey: string,
+    surfaceKey: DrawerLayoutEditorSurfaceKey,
+    entityType: LayoutEditorRelatedListEntityType,
+    tenantFieldRefKeys?: ReadonlySet<string>,
+): boolean {
+    if (surfaceKey === "person_drawer" && entityType === "children") {
+        const stub: LayoutItem = {
+            id: "stub",
+            kind: "related_list",
+            refKey: "household_children",
+            related: { entityType: "customer_members" },
+        };
+        return isAllowedDrawerRelatedListColumnRefKey(surfaceKey, refKey, stub, tenantFieldRefKeys);
+    }
+    if (surfaceKey === "opportunity_drawer") {
+        return isAllowedOpportunityDrawerFieldRefKey(refKey, tenantFieldRefKeys);
+    }
+    return isAllowedDrawerEditorFieldRefKey(refKey, {
+        surfaceKey,
+        linkedChildContext: entityType === "children",
+    });
+}
+
+export function validateLayoutEditorRelatedListConfig(
+    config: LayoutEditorRelatedListConfig,
+    path: string,
+    surfaceKey: DrawerLayoutEditorSurfaceKey = "opportunity_drawer",
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): string[] {
     const errors: string[] = [];
+    const tenantFieldRefKeys = tenantFieldRefKeysForDrawerSurface(surfaceKey, tenantFieldDefinitions);
     if (!isEntityType(config.entityType)) {
         errors.push(`${path}: invalid related list entityType "${String(config.entityType)}"`);
     }
     for (const refKey of config.primaryRow.fields) {
-        if (!isAllowedOpportunityDrawerFieldRefKey(refKey)) {
+        if (!isAllowedRelatedListFieldRefKey(refKey, surfaceKey, config.entityType, tenantFieldRefKeys)) {
             errors.push(`${path}.primaryRow: unknown field refKey "${refKey}"`);
         }
     }
     for (const row of [config.secondaryRow, config.tertiaryRow]) {
         if (!row) continue;
         for (const refKey of row.fields) {
-            if (!isAllowedOpportunityDrawerFieldRefKey(refKey)) {
+            if (!isAllowedRelatedListFieldRefKey(refKey, surfaceKey, config.entityType, tenantFieldRefKeys)) {
                 errors.push(`${path}: unknown field refKey "${refKey}"`);
             }
         }
@@ -374,12 +412,24 @@ export function validateLayoutEditorRelatedListConfig(config: LayoutEditorRelate
     return errors;
 }
 
-export function validateRelatedListSectionMetadata(doc: LayoutDoc): string[] {
+export function validateRelatedListSectionMetadata(
+    doc: LayoutDoc,
+    surfaceKey?: DrawerLayoutEditorSurfaceKey | null,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): string[] {
+    const resolvedSurface = surfaceKey ?? resolveDrawerLayoutEditorSurfaceKeyFromDoc(doc) ?? "opportunity_drawer";
     const errors: string[] = [];
     for (const section of doc.sections) {
         if (section.metadata?.layoutEditorSectionType !== "related_list") continue;
         const config = readLayoutEditorRelatedListConfig(section);
-        errors.push(...validateLayoutEditorRelatedListConfig(config, `Section "${section.key}" related list`));
+        errors.push(
+            ...validateLayoutEditorRelatedListConfig(
+                config,
+                `Section "${section.key}" related list`,
+                resolvedSurface,
+                tenantFieldDefinitions,
+            ),
+        );
     }
     return errors;
 }

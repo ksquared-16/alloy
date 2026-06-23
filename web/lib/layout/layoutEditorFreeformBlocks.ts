@@ -60,7 +60,13 @@ import {
     DEFAULT_LAYOUT_EDITOR_ROW_TEMPLATE_CONFIG,
     writeLayoutEditorRowTemplateConfig,
 } from "@/lib/layout/layoutEditorRowTemplateConfig";
-import { isAllowedOpportunityDrawerFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
+import {
+    drawerFieldRefNotAllowedError,
+    isAllowedDrawerEditorFieldRefKey,
+    isLinkedChildBlockContext,
+} from "@/lib/layout/drawerSurfaceFieldValidation";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 export type CreateCustomBlockInput = {
     title: string;
@@ -320,19 +326,34 @@ export function setCustomBlockRowColumnCount(
     return next;
 }
 
+export type AddBlockFieldOptions = {
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+};
+
 export function addFieldToCustomBlockRow(
     doc: LayoutDoc,
     blockItemId: string,
     rowIndex: number,
     columnIndex: number,
     field: LayoutCatalogField,
+    options: AddBlockFieldOptions = {},
 ): AddBlockFieldResult {
-    if (!isAllowedOpportunityDrawerFieldRefKey(field.refKey)) {
-        return { ok: false, error: `"${field.refKey}" is not allowed on the opportunity drawer.` };
-    }
+    const surfaceKey = options.surfaceKey ?? "opportunity_drawer";
     const loc = findLayoutBlockLocation(doc, blockItemId);
     if (!loc) return { ok: false, error: "Block not found." };
     const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    const linkedChildContext = isLinkedChildBlockContext(item);
+    if (
+        !isAllowedDrawerEditorFieldRefKey(field.refKey, {
+            surfaceKey,
+            tenantFieldDefinitions: options.tenantFieldDefinitions,
+            linkedChildContext,
+            relatedListItem: item?.kind === "related_list" ? item : undefined,
+        })
+    ) {
+        return { ok: false, error: drawerFieldRefNotAllowedError(field.refKey, surfaceKey) };
+    }
     if (item?.kind === "related_list") {
         const groups = readChildRowGroups(item);
         while (groups.length <= rowIndex) groups.push({ columnIndices: [] });
@@ -363,13 +384,23 @@ export function addFieldDisplayPresetToCustomBlockRow(
     rowIndex: number,
     columnIndex: number,
     preset: LayoutEditorFieldDisplayPreset,
+    options: AddBlockFieldOptions = {},
 ): AddBlockFieldResult {
-    if (!isAllowedOpportunityDrawerFieldRefKey(preset.refKey)) {
-        return { ok: false, error: `"${preset.refKey}" is not allowed on the opportunity drawer.` };
-    }
+    const surfaceKey = options.surfaceKey ?? "opportunity_drawer";
     const loc = findLayoutBlockLocation(doc, blockItemId);
     if (!loc) return { ok: false, error: "Block not found." };
     const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    const linkedChildContext = isLinkedChildBlockContext(item);
+    if (
+        !isAllowedDrawerEditorFieldRefKey(preset.refKey, {
+            surfaceKey,
+            tenantFieldDefinitions: options.tenantFieldDefinitions,
+            linkedChildContext,
+            relatedListItem: item?.kind === "related_list" ? item : undefined,
+        })
+    ) {
+        return { ok: false, error: drawerFieldRefNotAllowedError(preset.refKey, surfaceKey) };
+    }
     if (item?.kind !== "field_group") return { ok: false, error: "Field presets are supported inside layout blocks only." };
     const base = makeFieldItem(preset.refKey, preset.fieldLabel, preset.fieldType);
     const fieldItem = applyLayoutEditorFieldDisplayPresetToItem(base, preset);

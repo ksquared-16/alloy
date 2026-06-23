@@ -306,6 +306,7 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
                                                             row.rowIndex,
                                                             col.colIndex,
                                                             PRIMARY_CONTACT_BADGE_FIELD_PRESET,
+                                                            { surfaceKey },
                                                         )
                                                     :   addFieldToCustomBlockRow(
                                                             doc,
@@ -313,6 +314,7 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
                                                             row.rowIndex,
                                                             col.colIndex,
                                                             field,
+                                                            { surfaceKey },
                                                         );
                                                 if (!result.ok) {
                                                     onFieldAddError(result.error);

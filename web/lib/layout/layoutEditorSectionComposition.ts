@@ -41,12 +41,16 @@ import {
 import type { LayoutEditorVisibilityRule } from "@/lib/layout/layoutEditorVisibilityRules";
 import {
     isAllowedChildDrawerWidgetKey,
-    isAllowedOpportunityDrawerFieldRefKey,
     isAllowedOpportunityDrawerWidgetKey,
     isAllowedPersonDrawerWidgetKey,
     OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS,
 } from "@/lib/layout/surfaceLayoutRegistry";
 import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import {
+    drawerFieldRefNotAllowedError,
+    isAllowedDrawerEditorFieldRefKey,
+} from "@/lib/layout/drawerSurfaceFieldValidation";
 import { GLOBAL_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
 import {
     defaultActivityTimelineConfigForSurface,
@@ -107,10 +111,22 @@ function resolveSectionItemKind(item: LayoutItem): SectionItemKind {
     return "field";
 }
 
-function sectionItemRuntimeEffective(item: LayoutItem, kind: SectionItemKind): { effective: boolean; reason?: string } {
+function sectionItemRuntimeEffective(
+    item: LayoutItem,
+    kind: SectionItemKind,
+    surfaceKey: DrawerLayoutEditorSurfaceKey = "opportunity_drawer",
+): { effective: boolean; reason?: string } {
     if (kind === "widget") {
-        if (!isAllowedOpportunityDrawerWidgetKey(item.refKey)) {
-            return { effective: false, reason: "Widget key is not registered for the opportunity drawer." };
+        const allowed =
+            surfaceKey === "person_drawer" ? isAllowedPersonDrawerWidgetKey(item.refKey)
+            : surfaceKey === "child_drawer" ? isAllowedChildDrawerWidgetKey(item.refKey)
+            : isAllowedOpportunityDrawerWidgetKey(item.refKey);
+        if (!allowed) {
+            const label =
+                surfaceKey === "person_drawer" ? "person drawer"
+                : surfaceKey === "child_drawer" ? "child drawer"
+                : "opportunity drawer";
+            return { effective: false, reason: `Widget key is not registered for the ${label}.` };
         }
         return { effective: true };
     }
@@ -139,7 +155,11 @@ function sectionItemTitle(item: LayoutItem, kind: SectionItemKind): string {
     return item.label?.trim() || item.refKey || "Item";
 }
 
-export function listSectionCompositionRows(doc: LayoutDoc, sectionKey: string): SectionCompositionRow[] {
+export function listSectionCompositionRows(
+    doc: LayoutDoc,
+    sectionKey: string,
+    surfaceKey: DrawerLayoutEditorSurfaceKey = "opportunity_drawer",
+): SectionCompositionRow[] {
     const sIdx = sectionIndex(doc, sectionKey);
     if (sIdx < 0) return [];
     return doc.sections[sIdx]!.rows.map((row, rowIndex) => ({
@@ -151,7 +171,7 @@ export function listSectionCompositionRows(doc: LayoutDoc, sectionKey: string): 
             colId: col.id,
             items: col.items.map((item) => {
                 const kind = resolveSectionItemKind(item);
-                const runtime = sectionItemRuntimeEffective(item, kind);
+                const runtime = sectionItemRuntimeEffective(item, kind, surfaceKey);
                 return {
                     itemId: item.id,
                     kind,
@@ -213,15 +233,31 @@ export function setSectionRowColumnCount(
     return setRowColumnCount(doc, sIdx, rowIndex, columnCount);
 }
 
+export type AddSectionFieldOptions = {
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+    linkedChildContext?: boolean;
+    relatedListItem?: LayoutItem;
+};
+
 export function addSectionFieldItem(
     doc: LayoutDoc,
     sectionKey: string,
     rowIndex: number,
     colIndex: number,
     field: LayoutCatalogField,
+    options: AddSectionFieldOptions = {},
 ): AddSectionItemResult {
-    if (!isAllowedOpportunityDrawerFieldRefKey(field.refKey)) {
-        return { ok: false, error: `"${field.refKey}" is not allowed on the opportunity drawer.` };
+    const surfaceKey = options.surfaceKey ?? "opportunity_drawer";
+    if (
+        !isAllowedDrawerEditorFieldRefKey(field.refKey, {
+            surfaceKey,
+            tenantFieldDefinitions: options.tenantFieldDefinitions,
+            linkedChildContext: options.linkedChildContext,
+            relatedListItem: options.relatedListItem,
+        })
+    ) {
+        return { ok: false, error: drawerFieldRefNotAllowedError(field.refKey, surfaceKey) };
     }
     const sIdx = sectionIndex(doc, sectionKey);
     if (sIdx < 0) return { ok: false, error: "Section not found." };
@@ -327,9 +363,18 @@ export function addSectionFieldDisplayPresetItem(
     rowIndex: number,
     colIndex: number,
     preset: LayoutEditorFieldDisplayPreset,
+    options: AddSectionFieldOptions = {},
 ): AddSectionItemResult {
-    if (!isAllowedOpportunityDrawerFieldRefKey(preset.refKey)) {
-        return { ok: false, error: `"${preset.refKey}" is not allowed on the opportunity drawer.` };
+    const surfaceKey = options.surfaceKey ?? "opportunity_drawer";
+    if (
+        !isAllowedDrawerEditorFieldRefKey(preset.refKey, {
+            surfaceKey,
+            tenantFieldDefinitions: options.tenantFieldDefinitions,
+            linkedChildContext: options.linkedChildContext,
+            relatedListItem: options.relatedListItem,
+        })
+    ) {
+        return { ok: false, error: drawerFieldRefNotAllowedError(preset.refKey, surfaceKey) };
     }
     const sIdx = sectionIndex(doc, sectionKey);
     if (sIdx < 0) return { ok: false, error: "Section not found." };

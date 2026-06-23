@@ -11,6 +11,7 @@ import {
     type DrawerLayoutEditorSurfaceKey,
 } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import { validateLayoutDocForSurface } from "@/lib/layout/validateLayoutDocForSurface";
+import { validateRelatedListSectionMetadata } from "@/lib/layout/layoutEditorRelatedListConfig";
 import {
     layoutDocHasRepairableGeneratedKeys,
     repairOpportunityDrawerLayoutGeneratedKeys,
@@ -85,7 +86,8 @@ export function validateDrawerLayoutDoc(
     const surfaceValidation = validateLayoutDocForSurface(doc, surfaceKey, {
         tenantFieldDefinitions: options?.tenantFieldDefinitions,
     });
-    const errors = [...parsed.errors, ...(surfaceValidation.ok ? [] : surfaceValidation.errors)];
+    const relatedListErrors = validateRelatedListSectionMetadata(doc, surfaceKey, options?.tenantFieldDefinitions);
+    const errors = [...parsed.errors, ...(surfaceValidation.ok ? [] : surfaceValidation.errors), ...relatedListErrors];
     if (surfaceValidation.surfaceKey && surfaceValidation.surfaceKey !== surfaceKey) {
         errors.push(`Layout document surface mismatch: expected ${surfaceKey}.`);
     }

@@ -8,6 +8,7 @@ import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/Op
 import OpportunityDrawerLayoutWidgetPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutWidgetPicker";
 import OpportunityDrawerLayoutSectionCompositionDiagnostics from "@/components/adminV2/settings/OpportunityDrawerLayoutSectionCompositionDiagnostics";
 import OpportunityDrawerLayoutFieldSettingsModal from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettingsModal";
+import { parseCrossFieldVisibility } from "@/lib/layout/layoutEditorVisibilityRules";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
@@ -278,6 +279,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                                             row.rowIndex,
                                                             col.colIndex,
                                                             PRIMARY_CONTACT_BADGE_FIELD_PRESET,
+                                                            { surfaceKey },
                                                         )
                                                     :   addSectionFieldItem(
                                                             doc,
@@ -285,6 +287,7 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                                             row.rowIndex,
                                                             col.colIndex,
                                                             field,
+                                                            { surfaceKey },
                                                         );
                                                 if (!result.ok) {
                                                     onFieldAddError(result.error);
@@ -490,6 +493,8 @@ function SectionItemRow({
     canMoveRight: boolean;
 }) {
     const showInlineLabel = selected && (entry.kind === "field" || entry.kind === "widget");
+    const conditionalVisibility =
+        entry.kind === "field" ? parseCrossFieldVisibility(entry.item.visibleWhen, entry.item.refKey) : null;
 
     return (
         <li
@@ -505,6 +510,12 @@ function SectionItemRow({
                         {ITEM_KIND_LABELS[entry.kind]}
                         {!entry.runtimeEffective ?
                             <span className="text-alloy-midnight/35"> · preview only</span>
+                        :   null}
+                        {conditionalVisibility ?
+                            <span className="text-alloy-blue/70" data-testid="visual-editor-field-conditional-badge">
+                                {" "}
+                                · conditional
+                            </span>
                         :   null}
                     </span>
                 </button>

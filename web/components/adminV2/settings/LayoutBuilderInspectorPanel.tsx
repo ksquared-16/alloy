@@ -13,9 +13,9 @@ import {
     deleteOpportunityDrawerSection,
     isSectionEditorHidden,
     renameSectionTitle,
-    reorderSectionInZone,
     setSectionEditorHidden,
 } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
+import { reorderSectionInZone, resolveDrawerSectionZone } from "@/lib/layout/drawerLayoutEditorModel";
 import {
     patchLayoutDocSectionCollapse,
     readLayoutRuntimeSectionCollapseConfig,
@@ -52,7 +52,6 @@ import {
     repackPeerCardsAfterZoneReorder,
 } from "@/lib/layout/layoutBuilderPeerCardRows";
 import { applyKpiTileWidth } from "@/lib/layout/layoutBuilderKpiTileRows";
-import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import { listSectionWidgetItems, sectionIsKpiTile, sectionIsWidgetStrip, WIDGET_STRIP_WIDTH_PRESETS } from "@/lib/layout/layoutBuilderWidgetStrip";
 import { setRowColumnCount } from "@/lib/layout/builderOps";
 import { opSectionSupport, opSectionTitle } from "@/lib/operational/ui/operationalVisualTokens";
@@ -87,8 +86,12 @@ function resolveSelectedItemId(
     return null;
 }
 
-function collectSectionFieldRefKeys(doc: LayoutDoc, sectionKey: string): Set<string> {
-    const rows = listSectionCompositionRows(doc, sectionKey);
+function collectSectionFieldRefKeys(
+    doc: LayoutDoc,
+    sectionKey: string,
+    surfaceKey: DrawerLayoutEditorSurfaceKey,
+): Set<string> {
+    const rows = listSectionCompositionRows(doc, sectionKey, surfaceKey);
     const keys = new Set<string>();
     for (const row of rows) {
         for (const col of row.columns) {
@@ -151,7 +154,7 @@ export default function LayoutBuilderInspectorPanel({
 
     const selectedItem = useMemo(() => {
         if (!selectedSectionId || !selectedItemId) return null;
-        const rows = listSectionCompositionRows(doc, selectedSectionId);
+        const rows = listSectionCompositionRows(doc, selectedSectionId, surfaceKey);
         return rows.flatMap((r) => r.columns.flatMap((c) => c.items)).find((it) => it.itemId === selectedItemId) ?? null;
     }, [doc, selectedSectionId, selectedItemId]);
 
@@ -169,8 +172,8 @@ export default function LayoutBuilderInspectorPanel({
     const deleteGate = section ? canDeleteOpportunityDrawerSection(section) : { ok: false, reason: "" };
 
     const usedFieldRefKeys = useMemo(
-        () => (section ? collectSectionFieldRefKeys(doc, section.key) : new Set<string>()),
-        [doc, section],
+        () => (section ? collectSectionFieldRefKeys(doc, section.key, surfaceKey) : new Set<string>()),
+        [doc, section, surfaceKey],
     );
 
     const selectionTitle =
@@ -186,14 +189,14 @@ export default function LayoutBuilderInspectorPanel({
 
     const applyReorder = (direction: -1 | 1) => {
         if (!section) return;
-        let next = reorderSectionInZone(doc, section.key, direction);
+        let next = reorderSectionInZone(doc, section.key, direction, surfaceKey);
         next = repackPeerCardsAfterZoneReorder(next, section.key);
         applyDoc(next);
     };
 
     const applyDeleteBlock = () => {
         if (!section || !deleteGate.ok) return;
-        const zone = resolveOpportunityDrawerSectionZone(section);
+        const zone = resolveDrawerSectionZone(section, surfaceKey);
         let next = deleteOpportunityDrawerSection(doc, section.key);
         next = packPeerCardsInZone(next, zone);
         applyDoc(next);
@@ -407,7 +410,7 @@ export default function LayoutBuilderInspectorPanel({
                                             if (section.rows.length === 0) {
                                                 next = addSectionRow(next, section.key, 1);
                                             }
-                                            const result = addSectionFieldItem(next, section.key, 0, 0, field);
+                                            const result = addSectionFieldItem(next, section.key, 0, 0, field, { surfaceKey });
                                             if (!result.ok) {
                                                 onFieldAddError(result.error);
                                                 return;

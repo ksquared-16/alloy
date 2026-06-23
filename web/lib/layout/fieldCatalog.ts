@@ -240,6 +240,14 @@ export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
         relevantSurfaces: ["drawer"],
         defaultDisplayMode: "grouped_by_child",
     },
+    {
+        widgetKey: "documents",
+        label: "Documents",
+        category: "Work",
+        description: "Associated documents and forms for this record",
+        relevantSurfaces: ["drawer"],
+        defaultDisplayMode: "list",
+    },
     // Waitlist (queue-meaningful; shown disabled on drawer surfaces)
     { widgetKey: "waitlist_position", label: "Waitlist Position", category: "Waitlist", description: "Computed waitlist position", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },
     { widgetKey: "waitlist_tier", label: "Waitlist Tier", category: "Waitlist", description: "Priority tier / bucket", relevantSurfaces: ["queue"], defaultDisplayMode: "badge" },

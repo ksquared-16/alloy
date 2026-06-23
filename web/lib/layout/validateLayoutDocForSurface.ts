@@ -24,6 +24,14 @@ import { isLayoutItemKind, isLayoutQueueZone } from "@/lib/layout/layoutV2";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { buildTenantLayoutFieldRefKeySet } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import {
+    isAllowedDrawerRelatedListColumnRefKey,
+    isLinkedChildBlockContext,
+} from "@/lib/layout/drawerSurfaceFieldValidation";
+import {
+    LAYOUT_SECTION_COLLAPSED_SUMMARY_METADATA_KEY,
+    LAYOUT_SECTION_PERSIST_COLLAPSE_STATE_METADATA_KEY,
+} from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
+import {
     isAllowedDrawerSurfaceFieldRefKey,
     isDrawerSurfaceLayoutZone,
     CHILD_DRAWER_SECTION_KEYS,
@@ -88,6 +96,8 @@ const ALLOWED_SECTION_METADATA_KEYS = new Set([
     LAYOUT_EDITOR_KPI_TILE_METADATA_KEY,
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
     LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,
+    LAYOUT_SECTION_PERSIST_COLLAPSE_STATE_METADATA_KEY,
+    LAYOUT_SECTION_COLLAPSED_SUMMARY_METADATA_KEY,
 ]);
 
 const ALLOWED_ITEM_METADATA_KEYS = new Set([
@@ -175,6 +185,7 @@ function walkItem(
         allowedActionPlacements: readonly ActionSurface[];
         tenantFieldRefKeys?: ReadonlySet<string>;
         isDrawerSurface: boolean;
+        linkedChildContext?: boolean;
         errors: string[];
     },
 ): void {
@@ -182,8 +193,14 @@ function walkItem(
         ctx.errors.push(`${path}: unknown item kind "${String(item.kind)}"`);
     }
 
-    const isAllowedFieldRefKey = (refKey: string) =>
-        isAllowedDrawerSurfaceFieldRefKey(ctx.surfaceKey, refKey, ctx.tenantFieldRefKeys);
+    const inLinkedChildContext = ctx.linkedChildContext === true || isLinkedChildBlockContext(item);
+
+    const isAllowedFieldRefKey = (refKey: string) => {
+        if (ctx.surfaceKey === "person_drawer" && inLinkedChildContext) {
+            return isAllowedDrawerRelatedListColumnRefKey(ctx.surfaceKey, refKey, item, ctx.tenantFieldRefKeys);
+        }
+        return isAllowedDrawerSurfaceFieldRefKey(ctx.surfaceKey, refKey, ctx.tenantFieldRefKeys);
+    };
 
     if (item.kind === "field" && item.refKey) {
         if (!ctx.allowedStructuralRefKeys.has(item.refKey) && !isAllowedFieldRefKey(item.refKey)) {
@@ -212,7 +229,10 @@ function walkItem(
             ctx.errors.push(`${path}: unknown related_list refKey "${item.refKey}"`);
         }
         item.columns?.forEach((col, ci) => {
-            if (col.refKey && !isAllowedFieldRefKey(col.refKey)) {
+            if (
+                col.refKey
+                && !isAllowedDrawerRelatedListColumnRefKey(ctx.surfaceKey, col.refKey, item, ctx.tenantFieldRefKeys)
+            ) {
                 ctx.errors.push(`${path}.columns[${ci}]: unknown field refKey "${col.refKey}"`);
             }
             if (isObject(col.metadata)) {
@@ -283,10 +303,17 @@ function walkItem(
         }
     }
 
-    item.items?.forEach((child, i) => walkItem(child, `${path}.items[${i}]`, ctx));
+    const childCtx = {
+        ...ctx,
+        linkedChildContext: inLinkedChildContext || readLayoutEditorBlockConfig(item.metadata).dataContext === "child",
+    };
+
+    item.items?.forEach((child, i) => walkItem(child, `${path}.items[${i}]`, childCtx));
     item.rows?.forEach((row, ri) =>
         row.columns.forEach((col, ci) =>
-            col.items.forEach((child, ii) => walkItem(child, `${path}.rows[${ri}].columns[${ci}].items[${ii}]`, ctx)),
+            col.items.forEach((child, ii) =>
+                walkItem(child, `${path}.rows[${ri}].columns[${ci}].items[${ii}]`, childCtx),
+            ),
         ),
     );
 }

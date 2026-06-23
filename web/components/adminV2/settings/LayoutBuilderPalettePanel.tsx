@@ -275,7 +275,7 @@ export default function LayoutBuilderPalettePanel({
                                 onPickField={(field) =>
                                     addItemToTarget(
                                         "field",
-                                        (d, sk, ri, ci) => addSectionFieldItem(d, sk, ri, ci, field),
+                                        (d, sk, ri, ci) => addSectionFieldItem(d, sk, ri, ci, field, { surfaceKey }),
                                         field.fieldLabel,
                                     )
                                 }

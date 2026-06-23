@@ -83,10 +83,10 @@ export interface LayoutLinkTarget {
  * Optional visibility rule for an item/row/section (V1 — presentation only).
  * Preserves intent; the renderer may apply or ignore it. NOT a rules engine.
  *  - "exists": show when `path` resolves to a non-empty value.
- *  - "equals": show when `path` equals `value`.
+ *  - "not_equals": show when `path` does not equal `value`.
  * `path` is a namespaced source path, e.g. "person.secondary_contact".
  */
-export const LAYOUT_CONDITION_TYPES = ["exists", "equals", "count_gt"] as const;
+export const LAYOUT_CONDITION_TYPES = ["exists", "equals", "not_equals", "count_gt"] as const;
 export type LayoutConditionType = (typeof LAYOUT_CONDITION_TYPES)[number];
 export interface LayoutCondition {
     type: LayoutConditionType;
