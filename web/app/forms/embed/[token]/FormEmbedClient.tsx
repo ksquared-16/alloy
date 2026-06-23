@@ -10,7 +10,8 @@ import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/forms/engine/FormEngineRenderer";
 import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
-import { buildParentSubmissionSummary } from "@/lib/forms/parentSubmissionSummary";
+import { subSchemaForFieldsGrouped } from "@/lib/forms/guidedIntakePartition";
+import { buildGuidedQuestionPlan, mirrorCanonicalValues, type GuidedQuestionPlan } from "@/lib/forms/guidedQuestionPlan";
 
 type ResolvePacketMeta = {
     packet_session_id: string;
@@ -104,6 +105,9 @@ export function FormEmbedClient({
     const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
     const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
     const [advancingToNextPacketStep, setAdvancingToNextPacketStep] = useState(false);
+    // Guided intake shell (packets only): schema-generated steps, rendered by field type.
+    const [guidedPlan, setGuidedPlan] = useState<GuidedQuestionPlan | null>(null);
+    const [guidedStepIdx, setGuidedStepIdx] = useState(0);
     const draftPersistSeqRef = useRef(0);
     const submittedRef = useRef(false);
 
@@ -122,6 +126,8 @@ export function FormEmbedClient({
             setPacketFinalThankYou(false);
             setPacketAlreadyDone(false);
             setPacketProgress(null);
+            setGuidedPlan(null);
+            setGuidedStepIdx(0);
             const res = await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" });
             const json = (await res.json()) as ResolveOk | ApiErr;
             if (!json.ok) {
@@ -231,6 +237,13 @@ export function FormEmbedClient({
     useEffect(() => {
         void bootstrap();
     }, [bootstrap]);
+
+    // Generate the guided question plan once per form step (packets only), from the schema.
+    useEffect(() => {
+        if (phase !== "ready" || !schema || !packetProgress || guidedPlan) return;
+        setGuidedPlan(buildGuidedQuestionPlan(schema, (payload.values ?? {}) as Record<string, unknown>));
+        setGuidedStepIdx(0);
+    }, [phase, schema, packetProgress, guidedPlan, payload.values]);
 
     useLayoutEffect(() => {
         if ((!submitted && !packetFinalThankYou) || typeof window === "undefined") return;
@@ -398,10 +411,23 @@ export function FormEmbedClient({
     }
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
-    // Confirm-known / provide-missing summary (packets only — the POS parent experience).
-    const parentSummary = packetProgress
-        ? buildParentSubmissionSummary(schema, (payload.values ?? {}) as Record<string, unknown>)
-        : null;
+    // Guided intake (packets only): schema-generated steps, each rendered by field type.
+    const guided = packetProgress != null && guidedPlan != null && guidedPlan.steps.length > 0;
+    const guidedSteps = guidedPlan?.steps ?? [];
+    const stepIdx = guided ? Math.min(guidedStepIdx, guidedSteps.length - 1) : 0;
+    const guidedStep = guided ? guidedSteps[stepIdx] : null;
+    const isLastStep = guided ? stepIdx >= guidedSteps.length - 1 : false;
+    const PHASE_LABEL: Record<string, string> = { confirm: "Confirm", provide: "Add details", uploads: "Sign & upload" };
+    const onGuidedChange = (next: FormPayload) => {
+        const mirrored: FormPayload = {
+            ...next,
+            values: mirrorCanonicalValues((next.values ?? {}) as Record<string, unknown>, guidedPlan?.canonicalGroups ?? {}),
+        };
+        setValidationErrors(null);
+        setMessage(null);
+        setPayload(mirrored);
+        void persistDraft(mirrored);
+    };
     const summaries = packetProgress?.step_summaries ?? [];
     const currentStepNum = packetProgress ? packetProgress.current_sequence_index + 1 : 0;
     const remaining = packetProgress
@@ -439,67 +465,102 @@ export function FormEmbedClient({
                         )}
                     </div>
                 ) : null}
-                {parentSummary && parentSummary.knownCount > 0 ? (
-                    <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50/70 px-3 py-3 text-sm">
-                        <p className="font-semibold text-emerald-900">
-                            We already have {parentSummary.knownCount} detail{parentSummary.knownCount === 1 ? "" : "s"} —
-                            please confirm{parentSummary.neededCount > 0 ? " and add what's missing" : ""}.
-                        </p>
-                        <p className="mt-1 text-emerald-800">
-                            Pre-filled: {parentSummary.known.slice(0, 6).map((k) => k.label).join(", ")}
-                            {parentSummary.known.length > 6 ? `, +${parentSummary.known.length - 6} more` : ""}.
-                        </p>
-                        {parentSummary.neededCount > 0 ? (
-                            <p className="mt-1 text-emerald-800">
-                                Still needed ({parentSummary.requiredNeededCount} required):{" "}
-                                {parentSummary.needed.slice(0, 6).map((n) => n.label).join(", ")}
-                                {parentSummary.needed.length > 6 ? `, +${parentSummary.needed.length - 6} more` : ""}.
-                            </p>
-                        ) : null}
-                    </div>
-                ) : null}
-                <FormEngineRenderer
-                    schema={schema}
-                    payload={payload}
-                    onChange={(next) => {
-                        setValidationErrors(null);
-                        setMessage(null);
-                        setPayload(next);
-                        void persistDraft(next);
-                    }}
-                    mode="edit"
-                    optionValuesByFieldId={optionValuesByFieldId}
-                    optionChoicesByFieldId={optionChoicesByFieldId}
-                    variant="embed"
-                    validationErrors={validationErrors ?? undefined}
-                />
+                {packetProgress && !guidedPlan ? (
+                    <div className="py-10 text-center text-sm text-neutral-500">Preparing your steps…</div>
+                ) : guided && guidedStep ? (
+                    <div>
+                        <div className="mb-3 flex items-center justify-between text-xs text-neutral-500">
+                            <span className="font-medium text-neutral-700">{PHASE_LABEL[guidedStep.kind] ?? "Step"}</span>
+                            <span className="flex items-center gap-2">
+                                <span>Step {stepIdx + 1} of {guidedSteps.length}</span>
+                                <span className="flex gap-1.5">
+                                    {guidedSteps.map((s, i) => (
+                                        <span key={s.key} className={clsx("h-1.5 w-5 rounded-full", i <= stepIdx ? "bg-neutral-800" : "bg-neutral-200")} />
+                                    ))}
+                                </span>
+                            </span>
+                        </div>
 
-                <div className="mt-10 space-y-4 border-t border-neutral-200 pt-8">
-                    {errorLines.length ?
-                        <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
-                            {errorLines.map((line, i) => (
-                                <li key={i}>{line}</li>
-                            ))}
-                        </ul>
-                    : null}
-                    {message ?
-                        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">
-                            {message}
-                        </p>
-                    : null}
-                    <button
-                        type="button"
-                        disabled={submitting || !submissionId}
-                        aria-busy={submitting}
-                        className="w-full rounded-lg bg-neutral-900 py-3.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400"
-                        onClick={() => void handleSubmit()}
-                    >
-                        {submitting ? "Submitting…" : "Submit"}
-                    </button>
-                    <p className="text-center text-xs text-neutral-500">
-                        Scroll up to review your answers before submitting.
-                    </p>
-                </div>
+                        {stepIdx === 0 && guidedPlan ? (
+                            <div className="mb-4 flex flex-wrap gap-2 text-xs">
+                                {guidedPlan.counts.known > 0 ? <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-800">{guidedPlan.counts.known} already filled in</span> : null}
+                                {guidedPlan.counts.missing > 0 ? <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-800">{guidedPlan.counts.missing} to add</span> : null}
+                                {guidedPlan.counts.uploads > 0 ? <span className="rounded-full bg-sky-50 px-3 py-1 text-sky-800">{guidedPlan.counts.uploads} to sign/upload</span> : null}
+                            </div>
+                        ) : null}
+
+                        <div className="mb-4">
+                            <h2 className="text-base font-semibold text-neutral-900">{guidedStep.title}</h2>
+                            {guidedStep.subtitle ? <p className="mt-1 text-sm text-neutral-600">{guidedStep.subtitle}</p> : null}
+                        </div>
+                        <FormEngineRenderer
+                            schema={subSchemaForFieldsGrouped(schema, guidedStep.fieldIds, guidedStep.title)}
+                            payload={payload}
+                            onChange={onGuidedChange}
+                            mode="edit"
+                            optionValuesByFieldId={optionValuesByFieldId}
+                            optionChoicesByFieldId={optionChoicesByFieldId}
+                            variant="embed"
+                            validationErrors={validationErrors ?? undefined}
+                        />
+
+                        <div className="mt-8 space-y-3 border-t border-neutral-200 pt-6">
+                            {errorLines.length ? (
+                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
+                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
+                                </ul>
+                            ) : null}
+                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
+                            <div className="flex items-center gap-3">
+                                {stepIdx > 0 ? (
+                                    <button type="button" className="rounded-lg border border-neutral-300 px-4 py-2.5 text-sm font-medium text-neutral-600" onClick={() => setGuidedStepIdx((i) => Math.max(0, i - 1))}>
+                                        Back
+                                    </button>
+                                ) : null}
+                                {isLastStep ? (
+                                    <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
+                                        {submitting ? "Submitting…" : "Confirm & submit"}
+                                    </button>
+                                ) : (
+                                    <button type="button" disabled={!submissionId} className="flex-1 rounded-lg bg-neutral-900 py-3 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => setGuidedStepIdx((i) => Math.min(guidedSteps.length - 1, i + 1))}>
+                                        Continue
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        {/* Single-form (non-packet) experience — unchanged. */}
+                        <FormEngineRenderer
+                            schema={schema}
+                            payload={payload}
+                            onChange={(next) => {
+                                setValidationErrors(null);
+                                setMessage(null);
+                                setPayload(next);
+                                void persistDraft(next);
+                            }}
+                            mode="edit"
+                            optionValuesByFieldId={optionValuesByFieldId}
+                            optionChoicesByFieldId={optionChoicesByFieldId}
+                            variant="embed"
+                            validationErrors={validationErrors ?? undefined}
+                        />
+                        <div className="mt-10 space-y-4 border-t border-neutral-200 pt-8">
+                            {errorLines.length ? (
+                                <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
+                                    {errorLines.map((line, i) => <li key={i}>{line}</li>)}
+                                </ul>
+                            ) : null}
+                            {message ? <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">{message}</p> : null}
+                            <button type="button" disabled={submitting || !submissionId} aria-busy={submitting} className="w-full rounded-lg bg-neutral-900 py-3.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400" onClick={() => void handleSubmit()}>
+                                {submitting ? "Submitting…" : "Submit"}
+                            </button>
+                            <p className="text-center text-xs text-neutral-500">Scroll up to review your answers before submitting.</p>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );
