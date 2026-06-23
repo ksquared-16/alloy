@@ -9,6 +9,7 @@ import CommunicationsModalTabPanel, {
     type CommunicationsModalTab,
 } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 import CommunicationsWorkspaceShell from "@/app/adminV2/communications/CommunicationsWorkspaceShell";
+import { CommunicationsWorkspaceKpiProvider } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
 import { warmCommunicationsWorkspaceModal } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
@@ -46,16 +47,18 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
             panelClassName="max-h-[min(88vh,44rem)]"
         >
             {commandCenterEnabled ?
-                <CommunicationsWorkspaceShell
-                    tabs={COMMUNICATIONS_MODAL_TABS}
-                    activeTab={tab}
-                    onTabChange={setTab}
-                    onClose={onClose}
-                    onComposeNew={() => setComposeOpen(true)}
-                    showComposeNew={showComposeNew}
-                >
-                    <CommunicationsModalTabPanel tab={tab} />
-                </CommunicationsWorkspaceShell>
+                <CommunicationsWorkspaceKpiProvider>
+                    <CommunicationsWorkspaceShell
+                        tabs={COMMUNICATIONS_MODAL_TABS}
+                        activeTab={tab}
+                        onTabChange={setTab}
+                        onClose={onClose}
+                        onComposeNew={() => setComposeOpen(true)}
+                        showComposeNew={showComposeNew}
+                    >
+                        <CommunicationsModalTabPanel tab={tab} />
+                    </CommunicationsWorkspaceShell>
+                </CommunicationsWorkspaceKpiProvider>
             :   <div
                     className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
                     data-adminv2-inbox-modal="true"

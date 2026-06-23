@@ -12,6 +12,17 @@ import { isRecipientEligible, isRecipientSelected, selectionSummary } from "@/li
 import type { ConsentState, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import type { CommandCenterRecordLink } from "@/lib/communications/v2/commandCenterRecordLinks";
+import {
+    COMMS_ACCENT_BG_SUBTLE_CLASS,
+    COMMS_ACCENT_BORDER_CLASS,
+    COMMS_NOTE_BANNER_CLASS,
+    COMMS_OUTBOUND_BUBBLE_CLASS,
+    COMMS_OUTLINE_ACCENT_SOFT_BTN_CLASS,
+    COMMS_PRIMARY_BTN_CLASS,
+    COMMS_SECONDARY_BTN_CLASS,
+    COMMS_SURFACE_MUTED_CLASS,
+    COMMS_UTILITY_CARD_CLASS,
+} from "@/app/adminV2/communications/commsWorkspaceUi";
 
 /**
  * UI-6.1 — canonical Family Communication Workspace MARKUP (conversation | composer two-column body).
@@ -150,7 +161,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 data-cc-workspace-mode={mode}
                 aria-pressed={active}
                 onClick={() => onWorkspaceModeChange?.(mode)}
-                className={`border-l border-alloy-stone/15 px-2.5 py-1 first:border-l-0 ${active ? "bg-[#00A283] font-semibold text-white" : status.available ? "text-alloy-midnight/70 hover:bg-alloy-stone/[0.04]" : "text-alloy-midnight/45 hover:bg-alloy-stone/[0.04]"}`}
+                className={`border-l border-alloy-stone/15 px-2.5 py-1 first:border-l-0 ${active ? "bg-alloy-juniper font-semibold text-white" : status.available ? "text-alloy-midnight/70 hover:bg-alloy-stone/[0.04]" : "text-alloy-midnight/45 hover:bg-alloy-stone/[0.04]"}`}
             >
                 {label}
             </button>
@@ -175,13 +186,13 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
             <div data-cc-ws-column="timeline" className="flex min-h-0 flex-col border-r border-alloy-stone/20 bg-white">
                 <div data-cc-ws-section="snapshot" className="shrink-0 border-b border-alloy-stone/15 bg-white px-3.5 py-2.5">
                     <div className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#dff2ea] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/60">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-alloy-juniper/15 text-alloy-juniper ring-1 ring-alloy-juniper/60">
                             <Users className="h-4 w-4" />
                         </div>
                         <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
                                 {familyLink && onOpenRecordLink ? (
-                                    renderLinkChip(familyLink, "truncate text-[15px] font-semibold leading-tight text-[#0f6b4a] underline decoration-[#7fc9b6]/70 underline-offset-2 hover:text-[#009276]")
+                                    renderLinkChip(familyLink, "truncate text-[15px] font-semibold leading-tight text-alloy-juniper underline decoration-alloy-juniper/70 underline-offset-2 hover:text-alloy-juniper/90")
                                 ) : (
                                     <h3 className="truncate text-[15px] font-semibold leading-tight text-alloy-midnight">{selected.family_label ?? "Family"}</h3>
                                 )}
@@ -189,11 +200,11 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     ? childRecordLinks.map((link) =>
                                           renderLinkChip(
                                               link,
-                                              "inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-1.5 py-px text-[10px] font-medium text-[#0f6b4a] hover:bg-[#e7f5ef]"
+                                              "inline-flex items-center rounded-full border border-alloy-juniper/60 bg-alloy-juniper/10 px-1.5 py-px text-[10px] font-medium text-alloy-juniper hover:bg-alloy-juniper/10"
                                           )
                                       )
                                     : childNames.map((n) => (
-                                          <span key={n} className="inline-flex items-center rounded-full border border-[#7fc9b6]/60 bg-[#f0faf6] px-1.5 py-px text-[10px] font-medium text-[#0f6b4a]">
+                                          <span key={n} className="inline-flex items-center rounded-full border border-alloy-juniper/60 bg-alloy-juniper/10 px-1.5 py-px text-[10px] font-medium text-alloy-juniper">
                                               {n}
                                           </span>
                                       ))}
@@ -208,7 +219,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     <>
                                         {healthLabel ? <span className="text-alloy-midnight/25">•</span> : null}
                                         <span className="text-alloy-midnight/50">Parent</span>
-                                        {renderLinkChip(contactLink, "font-medium text-[#0f6b4a] underline decoration-[#7fc9b6]/60 underline-offset-2 hover:text-[#009276]")}
+                                        {renderLinkChip(contactLink, "font-medium text-alloy-juniper underline decoration-alloy-juniper/60 underline-offset-2 hover:text-alloy-juniper/90")}
                                     </>
                                 ) : detail?.contactName ? (
                                     <>
@@ -220,7 +231,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                     <>
                                         <span className="text-alloy-midnight/25">•</span>
                                         {stageLink && onOpenRecordLink ? (
-                                            renderLinkChip(stageLink, "truncate font-medium text-alloy-midnight/60 underline decoration-alloy-stone/30 underline-offset-2 hover:text-[#0f6b4a]")
+                                            renderLinkChip(stageLink, "truncate font-medium text-alloy-midnight/60 underline decoration-alloy-stone/30 underline-offset-2 hover:text-alloy-juniper")
                                         ) : (
                                             <span className="truncate text-alloy-midnight/60">{displayStage}</span>
                                         )}
@@ -240,7 +251,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                             data-cc-triage={action.key}
                                             disabled={triageBusy}
                                             onClick={() => onTriage(action.key)}
-                                            className="rounded-full border border-alloy-stone/20 bg-white px-2 py-0.5 text-[10px] text-alloy-midnight/60 hover:border-[#7fc9b6] hover:text-[#0f6b4a]"
+                                            className="rounded-full border border-alloy-stone/20 bg-white px-2 py-0.5 text-[10px] text-alloy-midnight/60 hover:border-alloy-juniper/50 hover:text-alloy-juniper"
                                         >
                                             {action.label}
                                         </button>
@@ -248,7 +259,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 : null}
                             </div>
                             {resolvedPreferenceProfile ? (
-                                <div data-cc-ws-section="preferences" className="mt-2 rounded-lg border border-alloy-stone/15 bg-[#fbfcfb] px-2.5 py-2">
+                                <div data-cc-ws-section="preferences" className={`mt-2 ${COMMS_UTILITY_CARD_CLASS}`}>
                                     <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Communication preferences</div>
                                     <div className="mt-1.5">
                                         <CommunicationPreferencesEditor
@@ -270,8 +281,8 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 onClick={() => onClaim(selected.id)}
                                 className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold shadow-sm transition ${
                                     selected.assignment_state === "assigned"
-                                        ? "border border-[#7fc9b6] bg-[#eafaf3] text-[#0f6b4a]"
-                                        : "bg-[#00A283] text-white hover:bg-[#009276]"
+                                        ? `${COMMS_ACCENT_BORDER_CLASS} ${COMMS_ACCENT_BG_SUBTLE_CLASS} text-alloy-juniper`
+                                        : `${COMMS_PRIMARY_BTN_CLASS} !rounded-full !px-2.5 !py-1 !text-[10px]`
                                 }`}
                             >
                                 {selected.assignment_state === "assigned" ? "Assigned" : "Claim"}
@@ -281,9 +292,9 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 </div>
 
                 {/* conversation history — reads like a chat */}
-                <div data-cc-ws-section="timeline" className="min-h-0 flex-1 overflow-auto bg-[#fbfcfb] px-3.5 py-3">
+                <div data-cc-ws-section="timeline" className={`min-h-0 flex-1 overflow-auto ${COMMS_SURFACE_MUTED_CLASS} px-3.5 py-3`}>
                     {LIVE_WORKSPACE && selectedThreadId ? (
-                        <div className="mb-2 flex items-center justify-between rounded-md border border-[#7fc9b6]/50 bg-[#f0faf6] px-2 py-1 text-[10px] text-[#0f6b4a]">
+                        <div className="mb-2 flex items-center justify-between rounded-md border border-alloy-juniper/50 bg-alloy-juniper/10 px-2 py-1 text-[10px] text-alloy-juniper">
                             <span>Viewing one thread</span>
                             <button type="button" onClick={onAllMessages} className="font-semibold underline">All messages</button>
                         </div>
@@ -306,7 +317,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 }
                                 if (isNote) {
                                     return (
-                                        <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className="rounded-lg border border-[#e6c98a]/60 bg-[#fbf6ea] px-3 py-1.5 text-[11px] text-[#9a6b16]">
+                                        <li key={m.id ?? i} data-cc-msg-dir={m.direction ?? ""} className={COMMS_NOTE_BANNER_CLASS}>
                                             <span className="font-semibold">Internal note</span> · {m.body ?? ""}
                                         </li>
                                     );
@@ -325,7 +336,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                                 data-cc-msg-bubble
                                                 className={`max-w-full break-words rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm [overflow-wrap:anywhere] whitespace-pre-wrap ${
                                                     out
-                                                        ? "rounded-tr-sm bg-[#e7f5ef] text-alloy-midnight"
+                                                        ? COMMS_OUTBOUND_BUBBLE_CLASS
                                                         : "rounded-tl-sm border border-alloy-stone/15 bg-white text-alloy-midnight"
                                                 }`}
                                             >
@@ -349,7 +360,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     {renderModeTab("tasks", "Tasks")}
                 </div>
                 {activeModeReason ? (
-                    <div data-cc-mode-unavailable className="mt-2 rounded-lg border border-alloy-stone/15 bg-[#fbfcfb] px-2.5 py-2 text-[11px] text-alloy-midnight/60">
+                    <div data-cc-mode-unavailable className={`mt-2 ${COMMS_UTILITY_CARD_CLASS} text-[11px] text-alloy-midnight/60`}>
                         {activeModeReason}
                     </div>
                 ) : null}
@@ -361,7 +372,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                             <input aria-label="Task title" value={taskTitleDraft} onChange={(e) => onTaskTitleChange?.(e.target.value)} placeholder="Task title" className="mt-1 w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm" />
                             <input aria-label="Due date" type="datetime-local" value={taskDueDraft} onChange={(e) => onTaskDueChange?.(e.target.value)} className="mt-1 w-full rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm" />
                             {taskError ? <div className="mt-1 text-[11px] text-alloy-ember">{taskError}</div> : null}
-                            <button type="button" data-cc-new-task disabled={taskSaving || !taskTitleDraft.trim()} onClick={() => onCreateTask?.()} className="mt-2 rounded-md bg-[#00A283] px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40">{taskSaving ? "Working…" : "New task"}</button>
+                            <button type="button" data-cc-new-task disabled={taskSaving || !taskTitleDraft.trim()} onClick={() => onCreateTask?.()} className="mt-2 rounded-md bg-alloy-juniper px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40">{taskSaving ? "Working…" : "New task"}</button>
                         </div>
                         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 shadow-sm">
                             <div className="text-[10px] font-semibold uppercase tracking-[0.05em] text-alloy-midnight/45">Related tasks</div>
@@ -370,13 +381,13 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                             ) : (
                                 <ul className="mt-2 space-y-1.5">
                                     {relatedTasks.map((t) => (
-                                        <li key={t.id} className="flex items-start justify-between gap-2 rounded-md border border-alloy-stone/12 bg-[#fbfcfb] px-2.5 py-2 text-[11px]">
+                                        <li key={t.id} className={`flex items-start justify-between gap-2 ${COMMS_UTILITY_CARD_CLASS} text-[11px]`}>
                                             <div>
                                                 <div className="font-medium text-alloy-midnight">{t.title}</div>
                                                 <div className="mt-0.5 text-alloy-midnight/50">Due {relTime(t.dueAt) || t.dueAt} · {t.status}</div>
                                             </div>
                                             {t.status === "open" && onCompleteTask ? (
-                                                <button type="button" data-cc-complete-task={t.id} disabled={taskSaving} onClick={() => onCompleteTask(t.id)} className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50 hover:bg-[#eafaf3]">Complete</button>
+                                                <button type="button" data-cc-complete-task={t.id} disabled={taskSaving} onClick={() => onCompleteTask(t.id)} className="shrink-0 rounded px-2 py-0.5 text-[10px] font-semibold text-alloy-juniper ring-1 ring-alloy-juniper/50 hover:bg-alloy-juniper/10">Complete</button>
                                             ) : null}
                                         </li>
                                     ))}
@@ -393,7 +404,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                             ) : (
                                 <ul className="mt-2 space-y-2">
                                     {noteMessages.map((m) => (
-                                        <li key={m.id ?? m.created_at} className="rounded-md border border-alloy-stone/12 bg-[#fbfcfb] px-2.5 py-2 text-[11px] text-alloy-midnight/75">
+                                        <li key={m.id ?? m.created_at} className={`${COMMS_UTILITY_CARD_CLASS} text-[11px] text-alloy-midnight/75`}>
                                             <div className="mb-1 text-[10px] text-alloy-midnight/45">{relTime(m.created_at)}</div>
                                             <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{m.body}</div>
                                         </li>
@@ -405,7 +416,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                             <div className="text-[10px] font-semibold text-alloy-midnight/50">Internal note</div>
                             <textarea aria-label="Internal note" value={noteDraft} onChange={(e) => onNoteDraftChange?.(e.target.value)} placeholder="Add an internal note for this family…" className="mt-1 min-h-[88px] w-full resize-y rounded-md border border-alloy-stone/20 px-2 py-1.5 text-sm text-alloy-midnight" />
                             {noteError ? <div className="mt-1 text-[11px] text-alloy-ember">{noteError}</div> : null}
-                            <button type="button" data-cc-add-note disabled={noteSaving || !noteDraft.trim()} onClick={() => onAddNote?.()} className="mt-2 rounded-md bg-[#00A283] px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40">{noteSaving ? "Saving…" : "Add note"}</button>
+                            <button type="button" data-cc-add-note disabled={noteSaving || !noteDraft.trim()} onClick={() => onAddNote?.()} className="mt-2 rounded-md bg-alloy-juniper px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40">{noteSaving ? "Saving…" : "Add note"}</button>
                         </div>
                     </div>
                 ) : composeMode ? (
@@ -430,7 +441,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                         }
                                         return (
                                             <button key={r.id} type="button" data-cc-recipient={r.id} aria-pressed={sel} onClick={() => onToggleRecipient(r.id)}
-                                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition ${sel ? "bg-[#00A283] text-white" : "bg-[#eafaf3] text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50 hover:ring-[#00A283]"}`}>
+                                                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium transition ${sel ? "bg-alloy-juniper text-white" : "bg-alloy-juniper/10 text-alloy-juniper ring-1 ring-alloy-juniper/50 hover:ring-alloy-juniper"}`}>
                                                 {sel ? <Check className="h-3 w-3" /> : null}{r.displayName}
                                             </button>
                                         );
@@ -442,10 +453,10 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 ) : (
                     <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 shadow-sm">
                         <span className="text-[10px] font-medium text-alloy-midnight/40">To</span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#eafaf3] px-2 py-0.5 text-[10px] font-medium text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-alloy-juniper/10 px-2 py-0.5 text-[10px] font-medium text-alloy-juniper ring-1 ring-alloy-juniper/50">
                             {detail ? detail.contactName : (selected.family_label ?? "")}
                         </span>
-                        <button type="button" className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/50 hover:border-[#7fc9b6] hover:text-[#0f6b4a]">
+                        <button type="button" className="inline-flex items-center gap-1 rounded-full border border-dashed border-alloy-stone/30 px-2 py-0.5 text-[10px] text-alloy-midnight/50 hover:border-alloy-juniper/50 hover:text-alloy-juniper">
                             <UserPlus className="h-3 w-3" />Add recipient
                         </button>
                         <ChevronDown className="ml-auto h-3.5 w-3.5 text-alloy-midnight/35" />
@@ -461,7 +472,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                 />
 
                 <div className="mt-2 flex min-h-[240px] flex-1 flex-col overflow-hidden rounded-lg border border-alloy-stone/20 bg-white shadow-sm">
-                    <div className="flex items-center gap-0.5 border-b border-alloy-stone/12 bg-[#fbfcfb] px-1.5 py-1">
+                    <div className={`flex items-center gap-0.5 border-b border-alloy-stone/12 ${COMMS_SURFACE_MUTED_CLASS} px-1.5 py-1`}>
                         <button type="button" aria-label="Bold" className={toolbarBtn}><Bold className="h-3.5 w-3.5" /></button>
                         <button type="button" aria-label="Italic" className={toolbarBtn}><Italic className="h-3.5 w-3.5" /></button>
                         <span className="mx-1 h-4 w-px bg-alloy-stone/20" />
@@ -498,7 +509,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 <ul className="space-y-0.5">
                                     {sendResult.results.map((r) => (
                                         <li key={r.person_id} className="flex items-center gap-1.5">
-                                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${r.status === "sent" || r.status === "ready" ? "bg-[#00A283]" : r.status === "blocked" ? "bg-[#e0a32e]" : "bg-red-500"}`} />
+                                            <span className={`inline-block h-1.5 w-1.5 rounded-full ${r.status === "sent" || r.status === "ready" ? "bg-alloy-juniper" : r.status === "blocked" ? "bg-alloy-amber" : "bg-red-500"}`} />
                                             <span className="font-medium text-alloy-midnight">{r.display_name}</span>
                                             <span className="text-alloy-midnight/55">· {r.status}{r.reason ? ` — ${r.reason}` : ""}</span>
                                         </li>
@@ -506,7 +517,7 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                                 </ul>
                                 <div className="mt-1.5 flex items-center gap-1.5">
                                     {sendResult.mode === "preflight" && sendResult.summary.ready > 0 ? (
-                                        <button type="button" disabled={sending} onClick={onConfirmSend} className="rounded-md bg-[#00A283] px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40">Confirm send ({sendResult.summary.ready})</button>
+                                        <button type="button" disabled={sending} onClick={onConfirmSend} className="rounded-md bg-alloy-juniper px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40">Confirm send ({sendResult.summary.ready})</button>
                                     ) : null}
                                     <button type="button" onClick={onDismissSend} className="rounded-md border border-alloy-stone/25 bg-white px-2.5 py-1 text-[11px] text-alloy-midnight">{sendResult.mode === "sent" ? "Done" : "Cancel"}</button>
                                 </div>
@@ -515,9 +526,9 @@ export default function FamilyCommunicationWorkspaceView(props: FamilyCommunicat
                     </div>
                 ) : null}
                 <div className="mt-2.5 flex items-center gap-1.5">
-                    <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-[#00A283] px-3 py-2 text-sm font-semibold text-white shadow-[0_2px_6px_rgba(0,162,131,0.3)] disabled:opacity-40"><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : "Send now"}</button>
-                    <button type="button" aria-label="Send later" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-stone/25 bg-white px-2.5 py-2 text-sm text-alloy-midnight/80 shadow-sm"><Clock className="h-3.5 w-3.5" />Later</button>
-                    <button type="button" className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-[#7fc9b6] bg-gradient-to-r from-[#eafaf4] to-[#e0f4ee] px-2.5 py-2 text-sm font-semibold text-[#0f6b4a] shadow-[0_1px_4px_rgba(0,162,131,0.18)] ring-1 ring-[#00A283]/15"><Sparkles className="h-3.5 w-3.5" />BOS Enhance</button>
+                    <button type="button" disabled={sending || !modeAvailability[workspaceMode]?.available || (LIVE_WORKSPACE && (selectedRecipientIds.length === 0 || !bodyDraft.trim()))} onClick={() => { if (LIVE_WORKSPACE) onSendNow(); }} className={`inline-flex shrink-0 items-center gap-1.5 ${COMMS_PRIMARY_BTN_CLASS} !px-3 !py-2 !text-sm disabled:opacity-40`}><Send className="h-3.5 w-3.5" />{sending ? "Working…" : workspaceMode === "sms" ? "Send SMS" : "Send now"}</button>
+                    <button type="button" aria-label="Send later" className={`inline-flex shrink-0 items-center gap-1 ${COMMS_SECONDARY_BTN_CLASS} !px-2.5 !py-2 !text-sm`}><Clock className="h-3.5 w-3.5" />Later</button>
+                    <button type="button" className={COMMS_OUTLINE_ACCENT_SOFT_BTN_CLASS}><Sparkles className="h-3.5 w-3.5" />BOS Enhance</button>
                     <span className="ml-auto text-[9px] leading-tight text-alloy-midnight/40">Review-first<br />manual send only</span>
                 </div>
                 </>

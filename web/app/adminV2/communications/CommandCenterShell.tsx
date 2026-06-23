@@ -16,7 +16,6 @@ import {
     conversationQueueStatusPill,
     queueStatusPillClass,
     resolveCommandCenterHealthDisplay,
-    NEEDS_REVIEW_STATUS_LABEL,
     type ConversationSummary,
     type CommandCenterFilters,
 } from "@/lib/communications/v2/commandCenterViewModel";
@@ -32,7 +31,14 @@ import { fetchCommandCenterThreadMessages, type CommandCenterTimelineMessage } f
 import { relTime } from "@/lib/communications/v2/familyWorkspace/timelinePresentation";
 import { computeCommunicationHealth } from "@/lib/communications/v2/communicationHealth";
 import FamilyCommunicationWorkspaceView, { type WorkspaceDetail } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
-import { CommsQueueListReserve, CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
+import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
+import {
+    COMMS_FILTER_INPUT_CLASS,
+    COMMS_LIST_ROW_SELECTED_CLASS,
+    COMMS_PANEL_SHELL_CLASS,
+    CommsQueueListReserve,
+    CommsWorkspacePanelReserve,
+} from "@/app/adminV2/communications/commsWorkspaceUi";
 import { isCommsV2FlagEnabled } from "@/lib/communications/v2/flags";
 import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import type { FamilyCommunicationWorkspaceVM, RecipientGroup, ComposerChannel } from "@/lib/communications/v2/familyWorkspace/types";
@@ -132,11 +138,11 @@ function initialHydratingWorkspace(): boolean {
 
 const attnAccent = (a: string | null | undefined): { rail: string; tint: string; dot: string } => {
     switch (a) {
-        case "awaiting_parent_reply": return { rail: "border-l-[#e0a32e]", tint: "bg-[#fdf9f0]", dot: "bg-[#e0a32e]" };
-        case "needs_follow_up": return { rail: "border-l-[#e0a32e]", tint: "bg-[#fdf9f0]", dot: "bg-[#e0a32e]" };
-        case "documents_missing": return { rail: "border-l-[#d9772e]", tint: "bg-[#fdf3ec]", dot: "bg-[#d9772e]" };
-        case "re_enrollment_outreach": return { rail: "border-l-[#00A283]", tint: "bg-[#f0faf6]", dot: "bg-[#00A283]" };
-        case "waitlist_update": return { rail: "border-l-[#5b9aa0]", tint: "bg-[#f3f8f8]", dot: "bg-[#5b9aa0]" };
+        case "awaiting_parent_reply": return { rail: "border-l-alloy-amber", tint: "bg-alloy-amber/10", dot: "bg-alloy-amber" };
+        case "needs_follow_up": return { rail: "border-l-alloy-amber", tint: "bg-alloy-amber/10", dot: "bg-alloy-amber" };
+        case "documents_missing": return { rail: "border-l-alloy-ember", tint: "bg-alloy-ember/10", dot: "bg-alloy-ember" };
+        case "re_enrollment_outreach": return { rail: "border-l-alloy-juniper", tint: "bg-alloy-juniper/10", dot: "bg-alloy-juniper" };
+        case "waitlist_update": return { rail: "border-l-alloy-blue", tint: "bg-alloy-blue/10", dot: "bg-alloy-blue" };
         default: return { rail: "border-l-alloy-stone/30", tint: "bg-white", dot: "bg-alloy-stone/40" };
     }
 };
@@ -152,6 +158,7 @@ const warmWorkspaceSeed = initialWorkspaceFromWarm();
 
 export default function CommandCenterShell() {
     const adminDrawer = useAdminDrawerOptional();
+    const kpiContext = useCommunicationsWorkspaceKpiOptional();
     const [conversations, setConversations] = useState<ConversationSummary[]>(initialConversations);
     const [loading, setLoading] = useState(initialLoading);
     const [error, setError] = useState<string | null>(null);
@@ -571,6 +578,19 @@ export default function CommandCenterShell() {
     const queueSections = useMemo(() => visibleCommandCenterQueues(grouped), [grouped]);
     const visibleIds = useMemo(() => flattenVisibleConversationIds(queueSections), [queueSections]);
     const metrics = useMemo(() => computeCommandCenterMetrics(filtered), [filtered]);
+
+    useEffect(() => {
+        kpiContext?.setInboxKpis({
+            metrics: {
+                requiresResponse: metrics.requiresResponse,
+                slaAtRisk: metrics.slaAtRisk,
+                unread: metrics.unread,
+                unclassified: metrics.unclassified,
+            },
+            loading,
+        });
+    }, [kpiContext, metrics, loading]);
+
     const detail: WorkspaceDetail | FixtureFamilyDetail | undefined =
         COMMS_FIXTURES_ENABLED && selected ? FIXTURE_FAMILY_DETAILS[selected.id] : liveWorkspaceDetail;
     const childNames = useMemo(
@@ -616,13 +636,6 @@ export default function CommandCenterShell() {
         [selected, timelineMessageCount, health.engagementScore]
     );
 
-    const kpis = [
-        { label: "Needs reply", value: metrics.requiresResponse, dot: "bg-[#e0a32e]", tone: "text-[#9a6b16]", status: metrics.requiresResponse > 0 ? "awaiting response" : "all caught up", statusTone: "text-[#9a6b16]" },
-        { label: "Overdue", value: metrics.slaAtRisk, dot: "bg-alloy-ember", tone: "text-alloy-ember", status: metrics.slaAtRisk > 0 ? "act now" : "none overdue", statusTone: metrics.slaAtRisk > 0 ? "text-alloy-ember" : "text-[#0f6b4a]" },
-        { label: "Unread", value: metrics.unread, dot: "bg-[#00A283]", tone: "text-[#0f6b4a]", status: metrics.unread > 0 ? "new inbound" : "caught up", statusTone: "text-[#0f6b4a]" },
-        { label: NEEDS_REVIEW_STATUS_LABEL, value: metrics.unclassified, dot: "bg-alloy-stone/50", tone: "text-alloy-midnight", status: metrics.unclassified > 0 ? "not yet triaged" : "all triaged", statusTone: "text-alloy-midnight/45" },
-    ];
-
     const queueUnresolved = loading && conversations.length === 0;
     const workspaceHydrating =
         !COMMS_FIXTURES_ENABLED &&
@@ -631,27 +644,13 @@ export default function CommandCenterShell() {
         !selected;
 
     return (
-        <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-2.5 bg-white p-2.5">
-            {/* KPI strip — max 4, compact; migrates to workspace shell in Increment 2 */}
-            <div data-cc-metrics className="flex flex-wrap gap-2">
-                {kpis.map((k) => (
-                    <div key={k.label} className="flex min-w-[170px] items-center gap-3 rounded-xl border border-alloy-stone/12 bg-white px-3.5 py-2 shadow-[0_1px_2px_rgba(20,30,25,0.05)]">
-                        <span className={`h-8 w-1.5 shrink-0 rounded-full ${k.dot}`} />
-                        <span className={`text-xl font-semibold leading-none tabular-nums ${k.tone}`}>{k.value}</span>
-                        <span className="min-w-0 leading-tight">
-                            <span className="block text-[12px] font-semibold text-alloy-midnight">{k.label}</span>
-                            <span className={`block truncate text-[10px] font-medium ${k.statusTone}`}>{k.status}</span>
-                        </span>
-                    </div>
-                ))}
-            </div>
-
+        <div data-cc-shell="communications-command-center" className="relative flex min-h-0 flex-1 flex-col gap-3 bg-white p-2.5">
             {error ? <div className="text-[11px] text-alloy-ember">{error}</div> : null}
 
             {/* Outer split — queue ~25% | workspace ~75%. Outer modal/BOS geometry untouched. */}
-            <div className="grid min-h-0 flex-1 grid-cols-[minmax(260px,25%)_minmax(0,1fr)] gap-2.5">
+            <div className="grid min-h-0 flex-1 grid-cols-[minmax(260px,25%)_minmax(0,1fr)] gap-3">
                 {/* QUEUE */}
-                <aside data-cc-column="queue" aria-label="Communication queue" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
+                <aside data-cc-column="queue" aria-label="Communication queue" className={`flex min-h-0 flex-col overflow-hidden ${COMMS_PANEL_SHELL_CLASS}`}>
                     <div className="shrink-0 border-b border-alloy-stone/12 px-3 py-2.5">
                         <div className="flex items-center justify-between">
                             <span className="text-sm font-semibold text-alloy-midnight">Communication queue</span>
@@ -663,7 +662,7 @@ export default function CommandCenterShell() {
                                     aria-label="Channel filter"
                                     value={filters.channel ?? ""}
                                     onChange={(e) => setFilters((f) => ({ ...f, channel: e.target.value || null }))}
-                                    className="appearance-none rounded-md border border-alloy-stone/20 bg-white py-1 pl-2 pr-6 text-[11px] text-alloy-midnight shadow-sm focus:outline-none focus:ring-1 focus:ring-[#00A283]/30"
+                                    className={`appearance-none ${COMMS_FILTER_INPUT_CLASS} py-1 pl-2 pr-6`}
                                 >
                                     <option value="">All channels</option>
                                     <option value="email">Email</option>
@@ -676,7 +675,7 @@ export default function CommandCenterShell() {
                                 value={filters.search ?? ""}
                                 onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value || null }))}
                                 placeholder="Search…"
-                                className="min-w-0 flex-1 rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] shadow-sm focus:outline-none focus:ring-1 focus:ring-[#00A283]/30"
+                                className={`min-w-0 flex-1 ${COMMS_FILTER_INPUT_CLASS}`}
                             />
                             {loading ? <span className="shrink-0 text-[10px] text-alloy-midnight/45">…</span> : null}
                         </div>
@@ -715,7 +714,7 @@ export default function CommandCenterShell() {
                                                         onClick={() => openConversation(c.id)}
                                                         className={`w-full rounded-xl border border-l-[3px] px-2.5 py-2 text-left transition ${
                                                             isSel
-                                                                ? "border-[#00A283] border-l-[#00A283] bg-[#f1faf7] shadow-[0_2px_8px_rgba(0,162,131,0.14)] ring-1 ring-[#00A283]/20"
+                                                                ? COMMS_LIST_ROW_SELECTED_CLASS
                                                                 : `border-alloy-stone/15 ${a.rail} ${a.tint} hover:border-alloy-stone/30 hover:shadow-sm`
                                                         }`}
                                                     >
@@ -737,7 +736,7 @@ export default function CommandCenterShell() {
                                                             </span>
                                                             <span className="ml-auto flex shrink-0 items-center gap-1.5">
                                                                 {unread ? (
-                                                                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-[#00A283] px-1 text-[9px] font-bold text-white shadow-sm">{unread}</span>
+                                                                    <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-alloy-juniper px-1 text-[9px] font-bold text-white shadow-sm">{unread}</span>
                                                                 ) : null}
                                                             </span>
                                                         </div>
@@ -756,7 +755,7 @@ export default function CommandCenterShell() {
                 </aside>
 
                 {/* WORKSPACE — Conversation (context) | Composer (action) */}
-                <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-alloy-stone/12 bg-white shadow-[0_1px_3px_rgba(20,30,25,0.05)]">
+                <section data-cc-column="workspace" data-cc-workspace="family-communication" aria-label="Family communication workspace" className={`flex min-h-0 flex-col overflow-hidden ${COMMS_PANEL_SHELL_CLASS}`}>
                     {selected ? (
                         <FamilyCommunicationWorkspaceView
                             selected={selected}

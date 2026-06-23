@@ -35,7 +35,8 @@ describe("Communications modal tabs", () => {
         expect(shell).toContain('data-inbox-compose-new="true"');
         expect(src).toContain("QuickMessageModal");
         expect(shell).toContain('data-comms-workspace-shell="true"');
-        expect(shell).toContain('data-comms-modal-version="workspace-inc1"');
+        expect(shell).toContain('data-comms-modal-version="workspace-inc2"');
+        expect(shell).toContain("CommunicationsWorkspaceKpiStrip");
     });
 
     it("CommsModalTabBar uses Bend Pine (alloy-juniper), not alloy-blue active styling", () => {

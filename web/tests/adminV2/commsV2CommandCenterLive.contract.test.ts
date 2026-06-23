@@ -9,12 +9,22 @@ describe("command center live wiring", () => {
         join(process.cwd(), "app", "adminV2", "communications", "FamilyCommunicationWorkspaceView.tsx"),
         "utf8"
     );
-    const src = `${shellSrc}\n${workspaceSrc}`;
+    const kpiStripSrc = readFileSync(
+        join(process.cwd(), "app", "adminV2", "communications", "CommunicationsWorkspaceKpiStrip.tsx"),
+        "utf8"
+    );
+    const kpiContextSrc = readFileSync(
+        join(process.cwd(), "app", "adminV2", "communications", "CommunicationsWorkspaceKpiContext.tsx"),
+        "utf8"
+    );
+    const src = `${shellSrc}\n${workspaceSrc}\n${kpiStripSrc}\n${kpiContextSrc}`;
     it("fetches conversations from the dark API", () => {
         expect(src).toMatch(/\/api\/admin\/communications\/conversations/);
     });
     it("renders metrics, filters, queues, and a timeline", () => {
-        expect(src).toMatch(/data-cc-metrics/);
+        expect(kpiStripSrc).toMatch(/data-comms-workspace-kpi-band/);
+        expect(kpiStripSrc).toMatch(/OipKpiObjectCard/);
+        expect(shellSrc).toMatch(/setInboxKpis/);
         expect(src).toMatch(/data-cc-filters/);
         expect(src).toMatch(/visibleCommandCenterQueues/);
         expect(src).toMatch(/data-cc-timeline/);
@@ -59,7 +69,7 @@ describe("command center live wiring", () => {
     });
     it("uses conservative health labels and needs-review KPI", () => {
         expect(shellSrc).toMatch(/resolveCommandCenterHealthDisplay/);
-        expect(shellSrc).toMatch(/NEEDS_REVIEW_STATUS_LABEL/);
+        expect(kpiStripSrc).toMatch(/NEEDS_REVIEW_STATUS_LABEL/);
         expect(shellSrc).not.toMatch(/Unresponsive/);
     });
     it("resolves business process stage labels via shared drawer batch helper", () => {

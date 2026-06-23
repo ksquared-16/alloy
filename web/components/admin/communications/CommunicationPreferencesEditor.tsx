@@ -26,7 +26,7 @@ export default function CommunicationPreferencesEditor({ profile, canEdit = fals
                             <div className="text-[10px] text-alloy-midnight/45">{label}</div>
                             {canEdit && onChange && status === "Unknown" ? (
                                 <div className="mt-1 flex flex-wrap gap-1">
-                                    <button type="button" disabled={saving} onClick={() => onChange(key, "Allowed")} className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-[#0f6b4a] ring-1 ring-[#7fc9b6]/50 hover:bg-[#eafaf3]">Allow</button>
+                                    <button type="button" disabled={saving} onClick={() => onChange(key, "Allowed")} className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-alloy-juniper ring-1 ring-alloy-juniper/50 hover:bg-alloy-juniper/10">Allow</button>
                                     <button type="button" disabled={saving} onClick={() => onChange(key, "Blocked")} className="rounded px-1.5 py-0.5 text-[10px] font-semibold text-red-600 ring-1 ring-red-200 hover:bg-red-50">Block</button>
                                 </div>
                             ) : canEdit && onChange ? (
@@ -41,7 +41,7 @@ export default function CommunicationPreferencesEditor({ profile, canEdit = fals
                                     <option value="Blocked">Blocked</option>
                                 </select>
                             ) : (
-                                <div className={`text-[11px] font-semibold ${status === "Allowed" ? "text-[#0f6b4a]" : status === "Blocked" ? "text-red-600" : "text-alloy-midnight/55"}`}>{status}</div>
+                                <div className={`text-[11px] font-semibold ${status === "Allowed" ? "text-alloy-juniper" : status === "Blocked" ? "text-red-600" : "text-alloy-midnight/55"}`}>{status}</div>
                             )}
                         </div>
                     );

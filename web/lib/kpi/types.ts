@@ -44,6 +44,7 @@ export type MetricKey =
     | "oip.enrollment.tour_conversion_rate"
     | "oip.enrollment.time_to_schedule_tour"
     | "oip.ops.work_overdue_count"
+    | "oip.ops.needs_attention_count"
     | "oip.forms.completion_rate";
 
 export type MetricFamily = "L" | "Q" | "S" | "R" | "O";

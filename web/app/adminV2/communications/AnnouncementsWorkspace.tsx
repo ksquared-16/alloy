@@ -25,12 +25,18 @@ import { parseProgramOptionRowsFromApi } from "@/lib/communications/v2/audienceH
 import CommsAudienceMultiSelect from "@/app/adminV2/communications/CommsAudienceMultiSelect";
 import CommsMessageTextToolbar from "@/app/adminV2/communications/CommsMessageTextToolbar";
 import {
+    COMMS_ACCENT_BG_SUBTLE_CLASS,
+    COMMS_ACCENT_BORDER_CLASS,
     COMMS_CARD_CLASS,
+    COMMS_EMPTY_STATE_DASHED_CLASS,
+    COMMS_ERROR_BANNER_CLASS,
     COMMS_FIELD_LABEL_CLASS,
     COMMS_INPUT_CLASS,
+    COMMS_OUTLINE_ACCENT_BTN_CLASS,
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SECONDARY_BTN_CLASS,
     COMMS_SELECT_CLASS,
+    COMMS_UTILITY_CARD_CLASS,
     CommsLibraryListReserve,
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
@@ -40,6 +46,7 @@ import {
     getCommunicationsWarmAudienceMetadata,
     subscribeCommunicationsWorkspaceWarm,
 } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 
 /**
  * Announcements Workspace (Phase 1 / B8E) — draft authoring + the Audience Builder.
@@ -139,6 +146,7 @@ function initialActiveTemplatesFromWarm(): TemplateOption[] {
 }
 
 export default function AnnouncementsWorkspace() {
+    const kpiContext = useCommunicationsWorkspaceKpiOptional();
     const siteFilter = useWorkspaceSiteFilter();
     const headerSiteId = siteFilter?.selectedSiteId ?? null;
     const appliedHeaderSiteRef = useRef<string | null>(null);
@@ -376,6 +384,13 @@ export default function AnnouncementsWorkspace() {
         void loadAudienceOptions({ background: warmMeta !== null });
         void loadStatusOptions({ background: warmMeta !== null });
     }, [loadList, loadTemplates, loadAudienceOptions, loadStatusOptions]);
+
+    useEffect(() => {
+        kpiContext?.setAnnouncementsKpis({
+            rows: list.map((a) => ({ status: a.status, updated_at: a.updated_at })),
+            listResolved,
+        });
+    }, [kpiContext, list, listResolved]);
 
     const loadTemplatePreview = useCallback(async (templateId: string | null, applyToDraft = false) => {
         if (!templateId) {
@@ -637,9 +652,9 @@ export default function AnnouncementsWorkspace() {
 
             {/* CENTER — draft editor */}
             <section data-announcement-editor="true" className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-                {error && <div className="rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-700">{error}</div>}
+                {error && <div className={COMMS_ERROR_BANNER_CLASS}>{error}</div>}
                 {!hasSelection ?
-                    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-alloy-stone/25 bg-white p-6 text-center text-[12px] text-alloy-midnight/50">
+                    <div className={COMMS_EMPTY_STATE_DASHED_CLASS}>
                         Select an announcement from the library or click New to create one.
                     </div>
                 :   (
@@ -762,7 +777,7 @@ export default function AnnouncementsWorkspace() {
                                         data-announcement-schedule-run="true"
                                         onClick={() => void doSchedule()}
                                         disabled={scheduling || !scheduleAt}
-                                        className="rounded-lg border border-[#00A283]/40 px-3 py-1.5 text-xs font-medium text-[#00A283] hover:bg-[#00A283]/5 disabled:opacity-50"
+                                        className={COMMS_OUTLINE_ACCENT_BTN_CLASS}
                                     >
                                         {scheduling ? "Scheduling…" : "Schedule"}
                                     </button>
@@ -774,7 +789,7 @@ export default function AnnouncementsWorkspace() {
                                     data-announcement-cancel-schedule="true"
                                     onClick={() => void doCancelSchedule()}
                                     disabled={scheduling}
-                                    className="rounded-lg border border-alloy-stone/25 px-3 py-1.5 text-xs font-medium text-alloy-midnight/70 hover:bg-alloy-stone/8 disabled:opacity-50"
+                                    className={COMMS_SECONDARY_BTN_CLASS}
                                 >
                                     {scheduling ? "Canceling…" : "Cancel schedule"}
                                 </button>
@@ -785,7 +800,7 @@ export default function AnnouncementsWorkspace() {
                                     data-announcement-archive="true"
                                     onClick={() => void archive()}
                                     disabled={saving}
-                                    className="rounded-lg border border-alloy-stone/25 px-3 py-1.5 text-xs font-medium text-alloy-midnight/70 hover:bg-alloy-stone/8 disabled:opacity-50"
+                                    className={COMMS_SECONDARY_BTN_CLASS}
                                 >
                                     Archive
                                 </button>
@@ -800,7 +815,7 @@ export default function AnnouncementsWorkspace() {
             <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
                 <CommsSectionCard title="Preview" data-announcement-preview="true">
                     {templatePreview && (
-                        <div data-announcement-template-preview="true" className="rounded-md border border-alloy-stone/12 bg-alloy-stone/5 px-2 py-1.5">
+                        <div data-announcement-template-preview="true" className={COMMS_UTILITY_CARD_CLASS}>
                             <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">From template</div>
                             {templatePreview.subject && <div className="text-[12px] font-medium text-alloy-midnight/85">{templatePreview.subject}</div>}
                             <div className="whitespace-pre-wrap text-[11px] text-alloy-midnight/70">{templatePreview.body}</div>
@@ -829,7 +844,9 @@ export default function AnnouncementsWorkspace() {
                                     aria-pressed={grain === g}
                                     onClick={() => setGrain(g)}
                                     className={`rounded-md border px-2 py-1 text-[11px] ${
-                                        grain === g ? "border-[#00A283]/50 bg-[#00A283]/10 text-alloy-midnight/90" : "border-alloy-stone/20 text-alloy-midnight/65"
+                                        grain === g
+                                            ? `${COMMS_ACCENT_BORDER_CLASS} ${COMMS_ACCENT_BG_SUBTLE_CLASS} text-alloy-midnight/90`
+                                            : "border-alloy-stone/20 text-alloy-midnight/65"
                                     }`}
                                 >
                                     {GRAIN_LABEL[g]}

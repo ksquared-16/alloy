@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 import { MessageSquare, X } from "lucide-react";
 
 import CommsModalTabBar from "@/app/adminV2/communications/CommsModalTabBar";
+import CommunicationsWorkspaceKpiStrip from "@/app/adminV2/communications/CommunicationsWorkspaceKpiStrip";
 import {
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SECONDARY_BTN_CLASS,
-    CommsWorkspaceKpiBand,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 
@@ -40,7 +40,7 @@ export default function CommunicationsWorkspaceShell({
         <div
             className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
             data-comms-workspace-shell="true"
-            data-comms-modal-version="workspace-inc1"
+            data-comms-modal-version="workspace-inc2"
         >
             <header
                 className="flex shrink-0 flex-col gap-2 border-b border-alloy-stone/15 bg-white px-4 py-3"
@@ -77,7 +77,7 @@ export default function CommunicationsWorkspaceShell({
                 </div>
             </header>
 
-            <CommsWorkspaceKpiBand activeTab={activeTab} />
+            <CommunicationsWorkspaceKpiStrip activeTab={activeTab} />
 
             <nav
                 className="shrink-0 border-b border-alloy-stone/12 bg-white px-4 py-2"

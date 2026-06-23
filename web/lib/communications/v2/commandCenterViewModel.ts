@@ -185,9 +185,9 @@ export function queueStatusPillClass(tone: QueueStatusPill["tone"]): string {
         case "danger":
             return "bg-alloy-ember text-white";
         case "warn":
-            return "border border-[#e6c98a] bg-[#fbf6ea] text-[#9a6b16]";
+            return "border border-alloy-amber/35 bg-alloy-amber/10 text-alloy-amber";
         case "brand":
-            return "border border-[#7fc9b6] bg-[#edf7f2] text-[#0f6b4a]";
+            return "border border-alloy-juniper/35 bg-alloy-juniper/10 text-alloy-juniper";
         default:
             return "border border-alloy-stone/20 bg-alloy-stone/[0.06] text-alloy-midnight/55";
     }
@@ -236,17 +236,17 @@ export function resolveCommandCenterHealthDisplay(
     const neutral = { label: null, tone: "text-alloy-midnight/45", dot: "bg-alloy-stone/40" };
     if (!conversation) return neutral;
     if (isResolvedConversation(conversation)) {
-        return { label: "Resolved", tone: "text-[#0f6b4a]", dot: "bg-[#00A283]" };
+        return { label: "Resolved", tone: "text-alloy-juniper", dot: "bg-alloy-juniper" };
     }
     if (isUnclassifiedConversation(conversation)) {
         return { label: NEEDS_REVIEW_STATUS_LABEL, tone: "text-alloy-midnight/50", dot: "bg-alloy-stone/40" };
     }
     if (messageCount < 2) return neutral;
     if (engagementScore >= 66) {
-        return { label: "Healthy", tone: "text-[#0f6b4a]", dot: "bg-[#00A283]" };
+        return { label: "Healthy", tone: "text-alloy-juniper", dot: "bg-alloy-juniper" };
     }
     if (engagementScore >= 33) {
-        return { label: "At risk", tone: "text-[#9a6b16]", dot: "bg-[#e0a32e]" };
+        return { label: "At risk", tone: "text-alloy-amber", dot: "bg-alloy-amber" };
     }
     return { label: "Low engagement", tone: "text-red-600", dot: "bg-red-500" };
 }

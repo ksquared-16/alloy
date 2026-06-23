@@ -47,7 +47,7 @@ export default function TemplateTokenPickerPanel({ onInsert }: Props) {
                                     data-token-path={t.path}
                                     onClick={() => onInsert(t.path)}
                                     title={`{{${t.path}}}`}
-                                    className="flex items-start justify-between gap-2 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] px-2 py-1.5 text-left hover:border-alloy-pine/35 hover:bg-alloy-pine/5"
+                                    className="flex items-start justify-between gap-2 rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] px-2 py-1.5 text-left hover:border-alloy-juniper/35 hover:bg-alloy-juniper/5"
                                 >
                                     <span className="text-[11px] font-medium text-alloy-midnight/85">{t.label}</span>
                                     <code className="shrink-0 text-[9px] text-alloy-midnight/45">{`{{${t.path}}}`}</code>

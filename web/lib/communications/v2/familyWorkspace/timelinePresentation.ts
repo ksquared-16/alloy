@@ -18,7 +18,7 @@ export const consentMark = (s: ConsentState | boolean): string =>
     s === true || s === "opted_in" ? "✓" : s === false || s === "opted_out" ? "✗" : "—";
 
 export const consentTone = (s: ConsentState | boolean): string =>
-    s === true || s === "opted_in" ? "text-[#0f6b4a]" : s === false || s === "opted_out" ? "text-red-600" : "text-alloy-midnight/40";
+    s === true || s === "opted_in" ? "text-alloy-juniper" : s === false || s === "opted_out" ? "text-red-600" : "text-alloy-midnight/40";
 
 export function consentReadableLabel(channel: "email" | "sms" | "marketing", state: ConsentState | boolean | undefined): string | null {
     const s = state ?? "unset";
@@ -38,8 +38,8 @@ export function consentReadableLabel(channel: "email" | "sms" | "marketing", sta
 export function statusDisplay(status: string | null | undefined): { label: string; cls: string } | null {
     switch (status) {
         case "failed": return { label: "Failed", cls: "text-red-600" };
-        case "replied": return { label: "Replied", cls: "text-[#0f6b4a]" };
-        case "opened": return { label: "Opened", cls: "text-[#0f6b4a]" };
+        case "replied": return { label: "Replied", cls: "text-alloy-juniper" };
+        case "opened": return { label: "Opened", cls: "text-alloy-juniper" };
         case "delivered": return { label: "Delivered", cls: "text-alloy-midnight/45" };
         case "sent": return { label: "Sent", cls: "text-alloy-midnight/45" };
         case "queued": return { label: "Queued", cls: "text-alloy-midnight/40" };

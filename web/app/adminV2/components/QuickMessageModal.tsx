@@ -21,15 +21,13 @@ import {
     fetchCommunicationTemplateCurrentVersion,
 } from "@/lib/communications/v2/communicationTemplateDraftSeed";
 import type { TemplateChannel } from "@/lib/communications/v2/templateSchema";
+import { COMMS_COMPACT_LABEL_CLASS, COMMS_INPUT_CLASS, CommsInlineListReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 
 const TEMPLATES_API = "/api/admin/communications/templates";
 
 type TemplateOption = { id: string; name: string; channel: TemplateChannel };
 
-const COMPOSE_SELECT_CLASS =
-    "w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-pine/40 focus:outline-none focus:ring-2 focus:ring-alloy-pine/15 disabled:opacity-60";
-
-const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
+const COMPOSE_SELECT_CLASS = COMMS_INPUT_CLASS;
 
 type PersonHit = QuickMessagePersonHit;
 
@@ -615,9 +613,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                         {recordScoped ? (
                             <div data-testid="quick-message-record-scoped">
                                 {scopedRecipientsLoading ? (
-                                    <p className="text-[11px] text-alloy-midnight/45" aria-live="polite">
-                                        Loading linked contacts…
-                                    </p>
+                                    <CommsInlineListReserve rows={3} label="Loading linked contacts" />
                                 ) : null}
                                 {scopedRecipientsErr ? (
                                     <p className="text-[11px] text-alloy-ember">{scopedRecipientsErr}</p>
@@ -651,8 +647,8 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                                 {scopedRecipients.length > 0 ? (
                                     <div>
                                         <div className="mb-1 flex items-center justify-between gap-2">
-                                            <div className={COMPOSER_LABEL}>Recipients</div>
-                                            <span className="text-[10px] font-semibold text-[#007a62]/80" data-adminv2-composer-add-recipient="true">
+                                            <div className={COMMS_COMPACT_LABEL_CLASS}>Recipients</div>
+                                            <span className="text-[10px] font-semibold text-alloy-juniper/80" data-adminv2-composer-add-recipient="true">
                                                 Add recipient
                                             </span>
                                         </div>
@@ -709,7 +705,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                             </div>
                         ) : (
                         <div>
-                            <div className={COMPOSER_LABEL}>Search</div>
+                            <div className={COMMS_COMPACT_LABEL_CLASS}>Search</div>
                             <input
                                 ref={recipientSearchRef}
                                 type="search"
@@ -766,12 +762,12 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
 
                         <div>
                             <div className="mb-1 flex items-center justify-between gap-2">
-                                <div className={COMPOSER_LABEL}>Selected</div>
+                                <div className={COMMS_COMPACT_LABEL_CLASS}>Selected</div>
                                 {!recordScoped ? (
                                     <button
                                         type="button"
                                         onClick={() => recipientSearchRef.current?.focus()}
-                                        className="text-[10px] font-semibold text-[#007a62] hover:underline"
+                                        className="text-[10px] font-semibold text-alloy-juniper hover:underline"
                                         data-adminv2-composer-add-recipient="true"
                                     >
                                         Add recipient
@@ -817,7 +813,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                     {/* Right ~70% — thread preview + composer */}
                     <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 border-t border-alloy-stone/12 pt-4 lg:w-[70%] lg:min-h-[min(52vh,28rem)] lg:border-t-0 lg:border-l lg:border-alloy-stone/12 lg:px-5 lg:py-5 lg:pt-5">
                         <div className="flex max-h-[min(28vh,12rem)] shrink-0 flex-col rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.04] p-3 lg:max-h-[min(24vh,11rem)]">
-                            <div className={COMPOSER_LABEL}>Thread preview</div>
+                            <div className={COMMS_COMPACT_LABEL_CLASS}>Thread preview</div>
                             {!previewPersonId ? (
                                 <p className="mt-1 text-[11px] text-alloy-midnight/50">Select a recipient to load context.</p>
                             ) : selectedRecipients.length > 1 ? (
@@ -828,13 +824,13 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                                 </p>
                             ) : null}
                             {threadsLoading ? (
-                                <p className="mt-2 text-[11px] text-alloy-midnight/45">Loading threads…</p>
+                                <CommsInlineListReserve rows={2} label="Loading thread preview" />
                             ) : threadsErr ? (
                                 <p className="mt-2 text-[11px] text-alloy-ember">{threadsErr}</p>
                             ) : !previewPersonId ? null : threadsPreview.length === 0 ? (
                                 <p className="mt-2 text-[11px] text-alloy-midnight/52">No threads yet for this person.</p>
                             ) : threadMsgsLoading && threadMsgsPreview.length === 0 ? (
-                                <p className="mt-2 text-[11px] text-alloy-midnight/45">Loading recent messages…</p>
+                                <CommsInlineListReserve rows={3} label="Loading recent messages" />
                             ) : threadMsgsPreview.length > 0 ? (
                                 <div
                                     className="mt-2 flex max-h-[min(36vh,16rem)] flex-col gap-1.5 overflow-y-auto lg:max-h-[min(40vh,20rem)]"
@@ -890,7 +886,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                             data-compose-editor-min-rows="8"
                         >
                             <label className="mb-2 flex flex-col gap-1">
-                                <span className={COMPOSER_LABEL}>Template</span>
+                                <span className={COMMS_COMPACT_LABEL_CLASS}>Template</span>
                                 <select
                                     data-compose-template="true"
                                     value={selectedTemplateId}
@@ -929,7 +925,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                                 }
                                 channelHint={
                                     loadingBindings
-                                        ? "Loading outbound configuration…"
+                                        ? undefined
                                         : bindingsErr
                                           ? bindingsErr
                                           : !emailReady && !smsReady

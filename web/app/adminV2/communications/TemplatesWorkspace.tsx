@@ -25,11 +25,14 @@ import {
 } from "@/lib/communications/v2/templateCategoryOptions";
 import {
     COMMS_CARD_CLASS,
+    COMMS_EMPTY_STATE_CLASS,
+    COMMS_ERROR_BANNER_CLASS,
     COMMS_FIELD_LABEL_CLASS,
     COMMS_INPUT_CLASS,
     COMMS_PRIMARY_BTN_CLASS,
     COMMS_SECONDARY_BTN_CLASS,
     COMMS_SELECT_CLASS,
+    COMMS_UTILITY_CARD_CLASS,
     CommsLibraryListReserve,
     CommsSectionCard,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
@@ -37,6 +40,7 @@ import {
     getCommunicationsWarmTemplatesLibrary,
     subscribeCommunicationsWorkspaceWarm,
 } from "@/lib/communications/v2/communicationsWorkspaceWarmCache";
+import { useCommunicationsWorkspaceKpiOptional } from "@/app/adminV2/communications/CommunicationsWorkspaceKpiContext";
 
 /**
  * Templates Workspace (Phase 1 / B3) — three-column template authoring.
@@ -116,6 +120,7 @@ function buildSampleContext(): Record<string, unknown> {
 }
 
 export default function TemplatesWorkspace() {
+    const kpiContext = useCommunicationsWorkspaceKpiOptional();
     const [templates, setTemplates] = useState<TemplateRow[]>(initialTemplatesFromWarm);
     const [loading, setLoading] = useState(() => !initialTemplatesListResolved());
     const [listResolved, setListResolved] = useState(initialTemplatesListResolved);
@@ -199,6 +204,17 @@ export default function TemplatesWorkspace() {
         const warm = filtersDefault ? getCommunicationsWarmTemplatesLibrary() : null;
         void loadList({ background: warm !== null });
     }, [loadList, filtersDefault]);
+
+    useEffect(() => {
+        kpiContext?.setTemplatesKpis({
+            rows: templates.map((t) => ({
+                status: t.status,
+                category: t.category,
+                updated_at: t.updated_at,
+            })),
+            listResolved,
+        });
+    }, [kpiContext, templates, listResolved]);
 
     const selectTemplate = useCallback(async (id: string) => {
         setCreating(false);
@@ -496,12 +512,12 @@ export default function TemplatesWorkspace() {
             {/* CENTER — details + message */}
             <section data-template-editor="true" className="flex min-h-0 flex-col gap-3 overflow-y-auto">
                 {error && (
-                    <div data-template-error="true" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
+                    <div data-template-error="true" className={COMMS_ERROR_BANNER_CLASS}>
                         {error}
                     </div>
                 )}
                 {!hasSelection ?
-                    <div className={`${COMMS_CARD_CLASS} flex h-full items-center justify-center text-center text-[12px] text-alloy-midnight/50`}>
+                    <div className={COMMS_EMPTY_STATE_CLASS}>
                         Select a template from the library or click New to create one.
                     </div>
                 :   (
@@ -650,12 +666,12 @@ export default function TemplatesWorkspace() {
                 <TemplateTokenPickerPanel onInsert={insertToken} />
                 <CommsSectionCard title="Live preview" data-template-preview="true">
                     {subjectPreview && (
-                        <div className="rounded-lg border border-alloy-stone/12 bg-alloy-stone/[0.03] px-2.5 py-2">
+                        <div className={COMMS_UTILITY_CARD_CLASS}>
                             <div className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Subject</div>
                             <div className="text-[12px] text-alloy-midnight/85">{subjectPreview.plainText}</div>
                         </div>
                     )}
-                    <div className="rounded-lg border border-alloy-stone/12 bg-alloy-stone/[0.03] px-2.5 py-2">
+                    <div className={COMMS_UTILITY_CARD_CLASS}>
                         <div className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Body</div>
                         <div className="whitespace-pre-wrap text-[12px] text-alloy-midnight/85">{bodyPreview.plainText}</div>
                     </div>

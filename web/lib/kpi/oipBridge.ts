@@ -9,6 +9,7 @@ export const OIP_STRIP_KEY_TO_METRIC: Record<string, OipMetricKey> = {
     "oip.enrollment.tour_conversion_rate": "enrollment.tour_conversion_rate",
     "oip.enrollment.time_to_schedule_tour": "enrollment.time_to_schedule_tour",
     "oip.ops.work_overdue_count": "ops.work_overdue_count",
+    "oip.ops.needs_attention_count": "ops.needs_attention_count",
     "oip.forms.completion_rate": "forms.completion_rate",
 };
 

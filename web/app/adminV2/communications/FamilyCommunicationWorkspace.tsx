@@ -6,6 +6,7 @@ import { toggleRecipientSelection } from "@/lib/communications/v2/familyWorkspac
 import type { FamilyCommunicationWorkspaceVM, TimelineEventVM } from "@/lib/communications/v2/familyWorkspace/types";
 import type { FamilySendResult } from "@/lib/communications/v2/familyWorkspace/orchestrateFamilySend";
 import FamilyCommunicationWorkspaceView, { type WorkspaceTimelineMessage } from "@/app/adminV2/communications/FamilyCommunicationWorkspaceView";
+import { CommsWorkspacePanelReserve } from "@/app/adminV2/communications/commsWorkspaceUi";
 
 /**
  * UI-6 / UI-6.1 — drawer Family Communication Workspace (no queue). Thin container: fetches the VM by
@@ -103,10 +104,10 @@ export default function FamilyCommunicationWorkspace(props: {
         [events]
     );
     const healthLabel = health.engagementScore >= 66 ? "Healthy" : health.engagementScore >= 33 ? "At risk" : "Unresponsive";
-    const healthTone = health.engagementScore >= 66 ? "text-[#0f6b4a]" : health.engagementScore >= 33 ? "text-[#9a6b16]" : "text-red-600";
-    const healthDot = health.engagementScore >= 66 ? "bg-[#00A283]" : health.engagementScore >= 33 ? "bg-[#e0a32e]" : "bg-red-500";
+    const healthTone = health.engagementScore >= 66 ? "text-alloy-juniper" : health.engagementScore >= 33 ? "text-alloy-amber" : "text-red-600";
+    const healthDot = health.engagementScore >= 66 ? "bg-alloy-juniper" : health.engagementScore >= 33 ? "bg-alloy-amber" : "bg-red-500";
 
-    if (loading && !vm) return <div className="p-4 text-xs text-alloy-midnight/45">Loading conversation…</div>;
+    if (loading && !vm) return <CommsWorkspacePanelReserve />;
     if (error && !vm) return <div className="p-4 text-xs text-alloy-ember">{error}</div>;
     if (!vm) return <div className="p-4 text-xs text-alloy-midnight/45">No conversation.</div>;
 

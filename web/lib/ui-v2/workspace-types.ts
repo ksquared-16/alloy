@@ -32,6 +32,10 @@ export type KPIVm = {
   lane?: "business" | "ai";
   /** Optional emphasis for compact record metrics (risk / positive) */
   tone?: "neutral" | "risk" | "positive";
+  /** OIP object card: formatted target (e.g. "60%") */
+  targetDisplay?: string;
+  /** OIP object card: healthy | warning | critical | unknown */
+  kpiStatus?: string;
 };
 
 /** Queue row quick actions — labels/presentation only; execution hosts use entity id + action key. */
