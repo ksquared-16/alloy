@@ -44,6 +44,6 @@ export function enrichHierarchyUnitsWithProgramCategories<T extends HierarchyLoc
         return {
             ...row,
             metadata: { ...base, category },
-        };
+        } as T;
     });
 }
