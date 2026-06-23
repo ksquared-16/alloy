@@ -76,4 +76,4 @@ Activation plan: `V1_ACTIVATION_PLAN.md`; UI QA sheets: `Alloy_Comms_V2_UI_QA_Sh
 
 ## ACT-0A + ACT-1 (activation)
 
-ACT-0A: flag matrix env block, idempotent synthetic dev seed, runbook, smoke tests. ACT-1: dark read-only `GET /communications/conversations` + `CommandCenterShell` wired to live data (queues, metrics, filters, unread, claim/assign, thread timeline). Enable with `COMMAND_CENTER+ASSIGNMENT+SLA`, seed, then visit `/adminV2/communications`. Flags off = unchanged (route + shell 404 via page). See `ACTIVATION_RUNBOOK_ACT1.md`.
+ACT-0A: flag matrix env block, idempotent synthetic dev seed, runbook, smoke tests. ACT-1: dark read-only `GET /communications/conversations` + `CommandCenterShell` wired to live data (queues, metrics, filters, unread, claim/assign, thread timeline). Enable with `COMMAND_CENTER+ASSIGNMENT+SLA`, seed, then open **TopNav → Inbox** (Communications modal → **Inbox** tab). **`/adminV2/communications` is deprecated** — not the primary operator entry. See `ACTIVATION_RUNBOOK_ACT1.md` and **`operator-surface-consolidation.md`** for the consolidated modal IA (Inbox · Templates · Announcements).

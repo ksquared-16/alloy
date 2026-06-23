@@ -8,8 +8,15 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 
 **Surfaces**
 
-- **Header Inbox (primary):** Top nav **Inbox** opens a contextual modal (`InboxModal` → `InboxPanel` with `layout="modal"`). Side-by-side folder list + conversation detail; **Compose New** in modal header. Does **not** navigate away from the current workspace.
-- **Full route (secondary):** `/adminV2/messages` still loads `InboxClient` → `InboxPanel` with `layout="page"` for a dedicated inbox page (same panel behavior, page chrome).
+- **Communications modal (primary):** Top nav **Inbox** opens the **Communications** modal (`InboxModal`). When **`comms_v2_command_center`** is on (core flag; defaults ON on staging), the modal exposes three tabs — **Inbox**, **Templates**, **Announcements** — via `CommunicationsModalTabPanel`. Templates and Announcements render with command center enabled; they do **not** require separate `comms_v2_templates` / `comms_v2_announcements` flags for modal tabs.
+  - **Inbox tab:** `CommandCenterShell` — org-wide queue, conversation workspace, composer (replaces legacy folder-list inbox in the modal when the flag is on).
+  - **Templates tab:** `TemplatesWorkspace` — template authoring.
+  - **Announcements tab:** `AnnouncementsWorkspace` — announcement authoring.
+- **Legacy modal fallback:** When `comms_v2_command_center` is off, the modal uses legacy `InboxPanel` (`layout="modal"`) — folder list + conversation detail only.
+- **Full route (secondary):** `/adminV2/messages` still loads `InboxClient` → `InboxPanel` with `layout="page"` for a dedicated inbox page (legacy folder UX, page chrome).
+- **Drawer Communications:** Entity drawer tab — **record-specific** conversation history and reply only; not org-wide inbox.
+- **Settings → Communications:** `/adminV2/settings/communications` — **provider bindings / channel setup only**; not template or announcement authoring.
+- **Deprecated:** `/adminV2/communications` and `/admin/communications` are **non-primary** — operators use the Inbox modal, not a standalone communications hub route.
 
 **Folders**
 
@@ -131,7 +138,8 @@ Org-wide thread list via **`GET /api/admin/inbox/threads`** (`web/lib/communicat
 | Dual-write flag | `web/lib/communications/communicationsEnabled.ts`, `web/lib/communications/mirrorQueuedMessage.ts` |
 | Workflow send / legacy queue | `web/lib/workflowRun.ts` (search `send_message`, `messages_outbox`) |
 | Drawer + modal | `web/components/admin/AdminEntityDrawer.tsx`, `web/components/admin/communications/CommunicationsDrawerSection.tsx`, `web/app/adminV2/components/QuickMessageModal.tsx` |
-| **Admin Inbox V2** | `web/app/adminV2/messages/InboxPanel.tsx`, `web/app/adminV2/components/InboxModal.tsx`, `web/lib/communications/inboxThreadsService.ts`, `web/components/adminV2/messaging/MessagingComposerFrame.tsx` |
+| **Communications modal (Command Center)** | `web/app/adminV2/components/InboxModal.tsx`, `web/app/adminV2/communications/CommunicationsModalTabPanel.tsx`, `web/app/adminV2/communications/CommandCenterShell.tsx`, `web/app/adminV2/communications/TemplatesWorkspace.tsx`, `web/app/adminV2/communications/AnnouncementsWorkspace.tsx` |
+| **Legacy Admin Inbox V2** | `web/app/adminV2/messages/InboxPanel.tsx`, `web/lib/communications/inboxThreadsService.ts`, `web/components/adminV2/messaging/MessagingComposerFrame.tsx` |
 | Bindings admin UI | `web/app/adminV2/settings/communications/CommunicationsSetupClient.tsx` |
 
 ## Guardrails

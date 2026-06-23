@@ -15,7 +15,7 @@
 
 ## What works on staging today
 
-- **Command Center opens** from TopNav Inbox when `comms_v2_command_center` is enabled (core flag defaults ON).
+- **Communications modal** opens from TopNav Inbox when `comms_v2_command_center` is enabled (core flag defaults ON). Modal tabs: **Inbox** (Command Center), **Templates**, **Announcements** — no separate template/announcement flags required for modal tabs.
 - **Queue hydrates** from `GET /api/admin/communications/conversations` — threads with null/unknown `attention_state` land in **All Conversations** (not hidden).
 - **Auto-select** picks the first visible queue row and loads the Family Communication Workspace when `comms_v2_live_workspace` is on and `customer_id` resolves.
 - **Background prefetch** warms the conversations API ~1.5s after AdminV2 shell mount; Inbox click triggers an additional prefetch.
@@ -31,7 +31,7 @@ AdminV2Shell mount
 
 TopNav Inbox click
   └─ prefetchCommandCenterConversations() (reuse cache if fresh)
-  └─ InboxModal opens → CommandCenterShell
+  └─ InboxModal opens → CommunicationsModalTabPanel (Inbox tab → CommandCenterShell)
        ├─ seed state from warm cache (if hit)
        ├─ refresh conversations (background if cache hit)
        ├─ auto-select first visible row
