@@ -30,6 +30,29 @@ import type { StoredFormDraftPreview } from "@/lib/pos/processingCase/formDraft/
 import { computePageMaps, svgRectToPdfBbox, type FieldWithRegion } from "@/lib/pos/processingCase/structure/pdfFieldMap";
 import PosPdfFieldMap from "./PosPdfFieldMap";
 import { WS_ACTION_PRIMARY, WS_ACTION_SECONDARY } from "@/components/workspace/workspaceTokens";
+import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
+import type { FormFieldSource } from "@/lib/forms/schema";
+
+/** Curated canonical bindings the operator can choose (in addition to the auto-suggestion). */
+const BINDING_OPTIONS: Array<{ value: string; label: string; field_source: FormFieldSource | null }> = [
+    { value: "", label: "Packet-only (unbound)", field_source: null },
+    { value: "customer_member:display_name", label: "Child · Name", field_source: { entity_type: "customer_member", field_key: "display_name" } },
+    { value: "customer_member:first_name", label: "Child · First name", field_source: { entity_type: "customer_member", field_key: "first_name" } },
+    { value: "customer_member:last_name", label: "Child · Last name", field_source: { entity_type: "customer_member", field_key: "last_name" } },
+    { value: "customer_member:dob", label: "Child · Date of birth", field_source: { entity_type: "customer_member", field_key: "dob" } },
+    { value: "customer_member:allergies", label: "Child · Allergies", field_source: { entity_type: "customer_member", field_key: "allergies" } },
+    { value: "customer_member:medical_notes", label: "Child · Medical notes", field_source: { entity_type: "customer_member", field_key: "medical_notes" } },
+    { value: "person:full_name", label: "Parent/guardian · Name", field_source: { entity_type: "person", field_key: "full_name" } },
+    { value: "person:first_name", label: "Parent/guardian · First name", field_source: { entity_type: "person", field_key: "first_name" } },
+    { value: "person:last_name", label: "Parent/guardian · Last name", field_source: { entity_type: "person", field_key: "last_name" } },
+    { value: "person:email", label: "Parent/guardian · Email", field_source: { entity_type: "person", field_key: "email" } },
+    { value: "person:phone", label: "Parent/guardian · Phone", field_source: { entity_type: "person", field_key: "phone" } },
+    { value: "customer:address", label: "Household · Address", field_source: { entity_type: "customer", field_key: "address" } },
+];
+const bindingKey = (fs?: FormFieldSource | null): string => (fs ? `${fs.entity_type}:${fs.field_key}` : "");
+function bindingOptionByKey(key: string): FormFieldSource | null {
+    return BINDING_OPTIONS.find((o) => o.value === key)?.field_source ?? null;
+}
 
 function formatWhen(iso: string | null | undefined): string {
     if (!iso) return "—";
@@ -85,6 +108,8 @@ interface ReviewField {
     pdf_field_name?: string;
     page?: number;
     bbox?: [number, number, number, number];
+    /** Operator-reviewed canonical binding (auto-suggested on load; absent = packet-only). */
+    field_source?: FormFieldSource;
 }
 
 /** Build the editable reviewed list from the stored draft, preserving provenance. */
@@ -106,6 +131,8 @@ function seedReviewFields(draft: StoredFormDraftPreview | null): ReviewField[] {
                 pdf_field_name: f.pdf_field_name,
                 page: f.page,
                 bbox: f.bbox,
+                // Auto-propose a canonical binding on load (operator-set binding wins).
+                field_source: f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source,
             });
         }
     }
@@ -294,6 +321,7 @@ export default function PosTemplateSetupColumn({
                         page: f.page,
                         bbox: f.bbox,
                         evidence: f.evidence,
+                        ...(f.field_source ? { field_source: f.field_source } : {}),
                     })),
                 }),
             });
@@ -547,6 +575,33 @@ export default function PosTemplateSetupColumn({
                                                     >
                                                         <Trash2 className="h-3.5 w-3.5" aria-hidden />
                                                     </button>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 border-t border-stone-100 px-2 py-1.5">
+                                                    <span className="shrink-0 text-[10px] text-stone-400">Binds to</span>
+                                                    <select
+                                                        value={bindingKey(f.field_source)}
+                                                        onChange={(e) => updateField(f.id, { field_source: bindingOptionByKey(e.target.value) ?? undefined })}
+                                                        className="min-w-0 flex-1 rounded border border-stone-200 px-1.5 py-0.5 text-[11px] text-stone-700"
+                                                    >
+                                                        {BINDING_OPTIONS.map((o) => (
+                                                            <option key={o.value} value={o.value}>{o.label}</option>
+                                                        ))}
+                                                    </select>
+                                                    {(() => {
+                                                        const sug = suggestFieldBinding(f.label, f.type);
+                                                        if (sug?.field_source && bindingKey(sug.field_source) !== bindingKey(f.field_source)) {
+                                                            return (
+                                                                <button type="button" onClick={() => updateField(f.id, { field_source: sug.field_source })} className="shrink-0 rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[9.5px] font-medium text-emerald-700 hover:bg-emerald-100">
+                                                                    Suggest: {bindingKey(sug.field_source)} ({sug.confidence})
+                                                                </button>
+                                                            );
+                                                        }
+                                                        if (sug && !f.field_source) {
+                                                            return <span className="shrink-0 text-[9.5px] text-amber-600">{sug.special ? sug.special.replace(/_/g, " ") : "review"} · {sug.confidence}</span>;
+                                                        }
+                                                        if (!f.field_source) return <span className="shrink-0 text-[9.5px] text-stone-400">packet-only</span>;
+                                                        return null;
+                                                    })()}
                                                 </div>
                                                 {isEditing ? (
                                                     <div className="space-y-1.5 border-t border-stone-100 px-2 py-2">

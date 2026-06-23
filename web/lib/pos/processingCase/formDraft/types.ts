@@ -33,6 +33,8 @@ export interface DraftFormField {
     pdf_field_name?: string;
     page?: number;
     bbox?: [number, number, number, number];
+    /** Canonical binding (operator-reviewed or auto-suggested) — persisted to the form. */
+    field_source?: import("@/lib/forms/schema").FormFieldSource;
 }
 
 export interface DraftFormSection {

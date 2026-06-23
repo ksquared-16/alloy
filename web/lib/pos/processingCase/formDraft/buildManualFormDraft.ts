@@ -27,6 +27,8 @@ export interface ManualFieldInput {
     bbox?: [number, number, number, number];
     /** Provenance tag, e.g. "pdf_field" | "manual_pdf_mapping" | "operator". */
     evidence?: string;
+    /** Operator-reviewed canonical binding — persisted through to the generated form. */
+    field_source?: import("@/lib/forms/schema").FormFieldSource;
 }
 
 export interface BuildManualDraftInput {
@@ -71,6 +73,7 @@ export function buildManualFormDraft(input: BuildManualDraftInput): StoredFormDr
             ...(Array.isArray(f.bbox) && f.bbox.length >= 4
                 ? { bbox: [f.bbox[0], f.bbox[1], f.bbox[2], f.bbox[3]] as [number, number, number, number] }
                 : {}),
+            ...(f.field_source ? { field_source: f.field_source } : {}),
         });
     }
 

@@ -39,6 +39,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 Array.isArray(f.bbox) && f.bbox.length >= 4 && f.bbox.every((n) => typeof n === "number")
                     ? ([f.bbox[0], f.bbox[1], f.bbox[2], f.bbox[3]] as [number, number, number, number])
                     : undefined;
+            // Operator-reviewed canonical binding ({entity_type, field_key}); absent = packet-only/unbound.
+            const fs = f.field_source as Record<string, unknown> | undefined;
+            const et = fs && typeof fs.entity_type === "string" ? fs.entity_type.trim() : "";
+            const fk = fs && typeof fs.field_key === "string" ? fs.field_key.trim() : "";
+            const field_source = et && fk
+                ? { entity_type: et, field_key: fk, ...(typeof fs!.shared_value_key === "string" ? { shared_value_key: fs!.shared_value_key as string } : {}) }
+                : undefined;
             return {
                 label: typeof f.label === "string" ? f.label : "",
                 type: typeof f.type === "string" ? f.type : undefined,
@@ -50,6 +57,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 page: typeof f.page === "number" ? f.page : undefined,
                 bbox,
                 evidence: typeof f.evidence === "string" ? f.evidence : undefined,
+                ...(field_source ? { field_source } : {}),
             };
         })
         .filter((f) => f.label.trim().length > 0);

@@ -9,16 +9,21 @@
  */
 
 import type { FormField, FormSchemaV1, FormSection } from "@/lib/forms/schema";
+import { suggestFieldBinding } from "@/lib/forms/canonicalBindingSuggestions";
 import type { StoredFormDraftPreview } from "./types";
 
 export function draftFormToFormSchemaV1(draft: StoredFormDraftPreview): FormSchemaV1 {
     const fields: FormField[] = draft.fields.map((f) => {
+        // Persist canonical binding: operator-reviewed binding wins; otherwise auto-suggest
+        // from the label/type so generated forms prefill + drive guided intake by default.
+        const field_source = f.field_source ?? suggestFieldBinding(f.label, f.type)?.field_source;
         const base = {
             id: f.id,
             label: f.label,
             required: f.required,
             ...(f.description ? { description: f.description } : {}),
             ...(f.layout_width ? { layout_width: f.layout_width } : {}),
+            ...(field_source ? { field_source } : {}),
         };
         switch (f.type) {
             case "number":
