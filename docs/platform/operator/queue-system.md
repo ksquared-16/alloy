@@ -58,9 +58,39 @@ Code: `workUnitQueueSelection.ts`, bootstrap `focus_queue`.
 
 ## Operational queue rows (layout v3)
 
-`metadata.queue_record_layout` v3 — columns, fields, widgets from Settings layouts.
+`metadata.queue_record_layout` v3 — columns, fields, widgets configured in Settings layouts / BP assignment.
+
+| Queue type | Grain | Composer |
+|------------|-------|----------|
+| Pipeline (`queue_record`) | Case / opportunity preview | v3 field + widget columns |
+| Waitlist (`waitlist_queue_record`) | **Candidate** (OCM / child-primary) | v3 + waitlist placement fields |
 
 Renderer owns spacing/typography only. Locked: `../../system/queue-record-doctrine.md`.
+
+### Queue row picker (context-first)
+
+Builder groups: Lead/Enrollment, Candidate/Child, Contacts, Household/Shared, Status/Lifecycle, Waitlist/Placement, Activity/Work.
+
+- Shared operator labels; backend refKeys hidden in normal picker
+- Column scope = **default resolver context** — not global availability
+- Pipeline excludes waitlist-only refs; waitlist adds placement fields
+
+### Queue widgets (v3)
+
+| Widget key | Purpose |
+|------------|---------|
+| `current_work` | Active operational work preview |
+| `attention` | Needs-attention signals |
+| `activity_timeline` | Compact timeline (`fetchQueueActivityTimelineEvents`) |
+| `follow_ups` | Follow-up preview |
+
+Legacy `tasks` widget remains valid for existing layouts but is hidden from new picker.
+
+### Waitlist placement fields
+
+`waitlist.positionLabel`, `waitlist.tierLabel`, `waitlist.priorityLabel`, `overrides.flags`, `waitlist.waitSince`, `waitlist.siblingContext` — candidate-grain only.
+
+Code: `queueWaitlistPlacementField.ts`, `queueRecordLayoutAllowList.ts`, `validateQueueRecordLayoutConfig.ts`.
 
 ---
 

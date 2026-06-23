@@ -118,8 +118,62 @@ Items below extend the drawer Experience Builder framework. They do **not** appl
 - Contact block: add action button item, action key `make_primary_contact`, visibility `show_when_not_primary`
 - Contact related list: add `_action_button` column with same action key
 - Optional display: `person.is_primary_contact` as read-only badge/chip
+- **Not** available in drawer header, work-unit rail, or queue row — registry strips generic placements; requires contact row target
 
 **Later:** Child-scoped guardian primary when scope is child-specific; person drawer EB layouts.
+
+---
+
+## Unified relationship action framework ✅ (implemented)
+
+**Goal:** Single canonical registry + shared wizard/executor for relationship mutations.
+
+**Implemented:**
+- `canonicalActionRegistry.ts` + `relationshipActionRegistry.ts`
+- `RelationshipActionGuidedModal` + unified executor (idempotent writes, confirmation)
+- DB seeds: `20260622210000_relationship_action_definitions.sql`
+- Work-unit rail modal host: `useWorkUnitRegistryModals.tsx`
+- Layout catalog: `layoutEditorActionCatalog.ts` (Add Action picker, not raw keys)
+- Registry client router: `applyRegistryResolvedActionClient.ts`
+
+---
+
+## BP / stage layout assignment ✅ (implemented)
+
+**Goal:** Assign published layouts per business process stage and surface without changing LayoutDoc.
+
+**Implemented:**
+- Table: `business_process_layout_assignments` (`20260622180000_business_process_layout_assignments.sql`)
+- Settings UX: Business Processes → stage wizard → Layout assignments
+- Resolver: `resolveBusinessProcessLayoutAssignment.ts` hooked into `resolveLayoutForOrg`
+- Doc: `docs/platform/operator/business-process-layout-assignments.md`
+
+---
+
+## OCM-first Change Enrollment Status ✅ (implemented)
+
+**Goal:** Replace generic Update Status on enrollment surfaces with OCM-scoped transition modal + BP rules.
+
+**Implemented:**
+- Action: `update_enrollment_status` (`20260622220000_update_enrollment_status_action.sql`)
+- BP-aware destination resolver + preflight
+- Work-unit + drawer modal hosts
+- Case fallback when no OCM
+
+---
+
+## Follow-up / post-MVP
+
+| Item | Notes |
+|------|-------|
+| BOS rail UI wiring | Adapters ready; full proposal UI deferred |
+| Legacy drawer retirement | VM drawer default; kill switches remain |
+| `add_sibling` / `add_family_member` convergence | Multiple entry paths today |
+| Remove deprecated emergency route/wrappers | Cleanup pass |
+| Normalize legacy `open` → `new_inquiry` | Optional data migration; alias handles visibility |
+| POS verification | Out of scope for EB sprint |
+| Communications verification | Separate initiative |
+| make_primary_contact target picker on header | Only if product requires header placement without row context |
 
 ---
 

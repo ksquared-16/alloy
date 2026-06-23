@@ -50,6 +50,41 @@ Person/Child: transitional VM runtime; layout runtime v1 shipped.
 
 ---
 
+## Relationship model (June 2026)
+
+### Doctrine
+
+| Principle | Detail |
+|-----------|--------|
+| Global person identity | `persons` — one human, many scoped links |
+| Household membership | `customer_persons` — role on account, not child responsibility |
+| Child responsibility | `customer_member_contacts`, OCM links — scoped to child/member |
+| Not booleans on person | Primary contact, emergency contact, pickup authorization are **relationship actions**, not inline person fields |
+
+### Child-scoped relationships
+
+Guardians, emergency contacts, authorized pickup, billing/payer contacts — each may scope to:
+
+- this child
+- selected siblings
+- all children in household
+
+Runtime: `layoutRuntimeScopedRelationshipContacts.ts`, `fetchChildScopedContactLinks.ts`, relationship action wizard.
+
+### Durable write surfaces
+
+`contacts`, `customer_persons`, `customer_members`, `opportunity_persons`, `opportunity_customer_members`, `customer_member_contacts`, plus `workflow_events` for audit.
+
+### Primary contact
+
+- One primary per household scope; old primary remains linked as additional contact
+- Designation via **Make Primary Contact** layout action or PATCH `/api/admin/customers/[id]/household-primary-contact`
+- Event: `household.primary_contact_changed`
+
+See `../modules/actions-and-workflows.md` § Relationship Action Framework.
+
+---
+
 ## Operational attention on records
 
 Entity GET may attach `_operational_attention`, `_attention_suggestion`, `_operational_summary` — deterministic; enrich is separate gated POST.

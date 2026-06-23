@@ -41,6 +41,8 @@ Start here: **`platform/foundation/system-overview.md`**
 
 11. `platform/operator/queue-system.md`
 12. `platform/operator/drawer-system.md`
+13. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
+14. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
 
 ### 4. Platform modules (load when touching area)
 
@@ -143,6 +145,8 @@ CSV source: `supabase/reference/*.csv` (8 files)
 ## Active initiatives (June 2026)
 
 See `sprints/active/README.md` and `platform/foundation/product-roadmap.md`.
+
+**Experience Builder / unified actions (shipped to staging):** layout library + BP assignment, queue v3 composer, relationship action framework, OCM-first enrollment status, Create Lead lifecycle binding, New Leads legacy alias compatibility. Backlog status: `backlog/experience-builder-framework-backlog.md`.
 
 ---
 

@@ -172,6 +172,16 @@ export const LAYOUT_EDITOR_ACTION_CATALOG: LayoutEditorActionCatalogEntry[] = de
         context: "section_row",
         includeUnavailable: true,
     }).map(catalogEntryFromAvailabilityRow),
+    ...resolveLayoutBuilderAvailableActions({
+        surfaceKey: "opportunity_drawer",
+        context: "contact_block",
+        includeUnavailable: true,
+    }).map(catalogEntryFromAvailabilityRow),
+    ...resolveLayoutBuilderAvailableActions({
+        surfaceKey: "person_drawer",
+        context: "contact_block",
+        includeUnavailable: true,
+    }).map(catalogEntryFromAvailabilityRow),
     ...layoutOnlyCatalogEntries(),
 ]);
 

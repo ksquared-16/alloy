@@ -50,8 +50,9 @@ A business process defines:
 - **Queue membership** — which records appear in which stage (`queue_membership_v1`)
 - **Status bindings** — platform status keys tied to stage transitions
 - **Required information & actions** — per-stage configuration
+- **Layout assignments** — published layouts per stage slot — see `../operator/business-process-layout-assignments.md`
 
-**Implementation tables:** `lifecycles`, lifecycle builder metadata (JSON in org/dept metadata), stage keys in builder config.
+**Implementation tables:** `lifecycles`, `business_process_layout_assignments`, lifecycle builder metadata (JSON in org/dept metadata), stage keys in builder config.
 
 **Code entry points:**
 

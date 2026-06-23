@@ -185,6 +185,75 @@ These fields remain **display-only** in default LayoutDocs because there is no r
 
 ---
 
+## Configuration model (June 2026)
+
+### Layout library vs assignment
+
+| Plane | Path | Responsibility |
+|-------|------|----------------|
+| **Layout library** | Settings → Layouts (`/admin/settings/layouts`) | Create, edit, publish `LayoutDoc` per surface. Does **not** assign layouts to BP stages. |
+| **BP assignment** | Settings → Business Processes → stage wizard → Layout assignments | Select **published** layouts per stage slot and surface. |
+
+**LayoutDoc shape is unchanged.** Assignment is a routing layer above `entity_layouts` resolution — see [business-process-layout-assignments.md](./business-process-layout-assignments.md).
+
+### Supported surfaces
+
+| Surface key | Operator label | Notes |
+|-------------|----------------|-------|
+| `opportunity_drawer` | Enrollment / Opportunity record drawer | Reference implementation |
+| `person_drawer` | Person / Parent drawer | VM + layout runtime |
+| `child_drawer` | Child drawer | Requires child/OCM context for enrollment fields |
+| `queue_record` | Pipeline queue row | v3 metadata layout — not drawer sections |
+| `waitlist_queue_record` | Waitlist queue row | Candidate-grain v3 composer |
+
+### BP / stage layout resolver order
+
+1. Exact BP + stage (+ optional status) + surface
+2. BP + stage + surface
+3. BP + status + surface
+4. BP surface default (no stage/status)
+5. Org → default → builtin → registry fallback (`resolveLayoutForOrg`)
+
+Code: `web/lib/layout/resolveBusinessProcessLayoutAssignment.ts`
+
+### Queue row doctrine (v3)
+
+- Queue rows use **`doc.metadata.queue_record_layout` (v3)** — not `LayoutDoc.sections[]`.
+- Fields and widgets share **operator-facing labels** from the context field catalog; backend refKeys are hidden in normal pickers.
+- Column scope in the builder is **“Default resolver context”** — not global field availability.
+- **Add Field / Add Widget** are scope-independent except inside repeated child blocks (repeater scope).
+- Pipeline queue excludes waitlist-only refs; waitlist queue adds placement fields (`waitlist.positionLabel`, `waitlist.tierLabel`, etc.).
+
+### Picker model
+
+- Shared operator labels (`platformFieldResolutionManifest`, context catalog groups).
+- Tenant `field_definitions` merge dynamically into picker + validator.
+- Picker-visible refs must pass `validateQueueRecordLayoutConfig` / surface allow-lists.
+- Context-first groups on queue rows: Lead/Enrollment, Candidate/Child, Contacts, Household/Shared, Status/Lifecycle, Waitlist/Placement, Activity/Work.
+
+### Builder primitives: Fields, Widgets, Actions
+
+Fields, widgets, and actions are **peer primitives** in the builder:
+
+| Primitive | Add path | Notes |
+|-----------|----------|-------|
+| **Field** | Add Field (catalog / tenant fields) | Inline edit when `editable: true` + save adapter |
+| **Widget** | Add Widget | KPI, attention, `current_work`, `activity_timeline`, relationship contact widgets |
+| **Action** | Add Action (catalog) | **Not raw action keys** — `layoutEditorActionCatalog` + canonical availability |
+
+Layout action catalog: `web/lib/layout/layoutEditorActionCatalog.ts` — groups relationship, contact, enrollment, and record actions by surface + context (`contact_block`, `contact_related_list`, `contact_repeater_row`, `section_row`).
+
+### Make Primary Contact (layout-only)
+
+- **Contact-row action only** — contact block, household contacts widget, related-list row.
+- **Hidden** from generic drawer header, work-unit rail, queue row, and BOS rail (requires target person).
+- Primary contact shown via **read-only badge** (`person.is_primary_contact`); promotion via **Make Primary Contact** action button with confirmation modal.
+- Registry routing returns disabled reason if invoked without target: *“Select a contact first to make them primary.”*
+
+Code: `makePrimaryContactAction.ts`, `layoutRuntimeMakePrimaryContactAction.ts`, `LayoutRuntimeMakePrimaryContactActionButton.tsx`.
+
+---
+
 ## Related docs
 
 - [Drawer system](./drawer-system.md)

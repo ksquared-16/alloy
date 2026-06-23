@@ -33,18 +33,30 @@ Stages are **not** separate work units in enrollment — they are lanes inside `
 
 ## Transition paths
 
-1. **Admin actions** — `executeAdminAction` with guardrails
-2. **Workflow effects** — event-triggered automation
-3. **Stage outcome rules** — metadata-driven routing after outcome picker
-4. **Direct PATCH** — field-policy bounded; not a substitute for lifecycle actions where catalog exists
+1. **Change Enrollment Status** — `update_enrollment_status` — OCM-first modal; BP transition rules; preflight (replaces generic update status on enrollment surfaces)
+2. **Admin actions** — `executeAdminAction` with guardrails
+3. **Workflow effects** — event-triggered automation
+4. **Stage outcome rules** — metadata-driven routing after outcome picker
+5. **Direct PATCH** — field-policy bounded; not a substitute for lifecycle actions where catalog exists
+
+---
+
+## Create Lead and New Leads lane
+
+| Topic | Behavior |
+|-------|----------|
+| **Create Lead binding** | Writes `opportunity.status_key` from BP lifecycle binding (e.g. `new_inquiry`) |
+| **OCM at intake** | `outcome_status_key = new_inquiry` when child captured |
+| **Legacy compatibility** | Existing `open` / `new` records appear in New Leads via alias expansion — no migration required |
+| **Queue filter path** | V2 execution prefers `filters_compat_v1`; aliases merged at runtime (`enrollmentLeadStageStatusAliases.ts`) |
 
 ---
 
 ## Canonical action catalog
 
-Platform `action_definitions` aligned to lifecycle matrix. Legacy `*_placeholder` keys being retired.
+Platform `action_definitions` aligned to lifecycle matrix. Relationship actions seeded globally (`20260622210000_relationship_action_definitions.sql`). Legacy `*_placeholder` keys being retired.
 
-**In progress:** `move_to_waitlist` activation; `mark_won` deprecation.
+**Shipped:** `move_to_waitlist` activation path; `update_enrollment_status`; unified relationship framework.
 
 ---
 

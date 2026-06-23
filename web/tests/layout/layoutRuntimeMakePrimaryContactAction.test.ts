@@ -148,10 +148,11 @@ describe("make_primary_contact framework action", () => {
         expect(runtime).toContain("MAKE_PRIMARY_CONTACT_ACTION_KEY");
 
         const planView = readFileSync(
-            join(process.cwd(), "components/layout/LayoutRuntimePlanView.tsx"),
+            join(process.cwd(), "components/layout/LayoutRuntimeRelationshipActionButton.tsx"),
             "utf8",
         );
         expect(planView).toContain("LayoutRuntimeMakePrimaryContactActionButton");
+        expect(planView).toContain("isMakePrimaryContactActionKey");
     });
 
     it("maps show_when_not_primary visibility to contact block overlay path", () => {
