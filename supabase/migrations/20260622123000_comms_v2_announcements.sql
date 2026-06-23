@@ -6,6 +6,15 @@
 -- AND mirrored in web/lib/communications/v2/announcementSchema.ts (schema-parity test guards drift).
 -- created_by / person_id are uuid WITHOUT FK (repo uuid actor-id convention).
 
+-- Evolve announcements when v1 table (20260619150000) already exists on remote.
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS created_by uuid NULL;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS channels text[] NOT NULL DEFAULT '{}'::text[];
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS body_format text NOT NULL DEFAULT 'text';
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS send_at timestamptz NULL;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS sent_at timestamptz NULL;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS archived_at timestamptz NULL;
+ALTER TABLE public.announcements ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+
 -- 1) announcements — one-to-many broadcast container (Draft → Scheduled → Sent → Archived).
 CREATE TABLE IF NOT EXISTS public.announcements (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
