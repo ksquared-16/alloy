@@ -66,17 +66,11 @@ export default function QueueRecordLayoutVisualEditor({
     const isWaitlist = isWaitlistQueueLayoutDoc(workingDoc);
     const editable = record?.status !== "published";
 
-    const loadCatalogs = useCallback(async (doc: LayoutDoc, entityType: string) => {
-        const entityRes = await fetch(
-            `/api/admin/entity-layouts/field-catalog?entity_type=${encodeURIComponent(entityType)}`,
-        );
-        const entityCat = entityRes.ok ? ((await entityRes.json()) as CatalogResponse) : null;
-        let v3Cat = entityCat;
-        if (doc.surface === "queue" && isWaitlistQueueLayoutDoc(doc)) {
-            const oppRes = await fetch("/api/admin/entity-layouts/field-catalog?entity_type=opportunities");
-            v3Cat = oppRes.ok ? ((await oppRes.json()) as CatalogResponse) : entityCat;
-        }
-        setCatalog(v3Cat);
+    const loadCatalogs = useCallback(async (doc: LayoutDoc, _entityType: string) => {
+        // v3 row composer uses opportunities catalog for labels only; validator allow-list drives field refs.
+        // Legacy placement_candidate / zone section catalogs are not used by the v3 picker.
+        const oppRes = await fetch("/api/admin/entity-layouts/field-catalog?entity_type=opportunities");
+        setCatalog(oppRes.ok ? ((await oppRes.json()) as CatalogResponse) : null);
     }, []);
 
     const load = useCallback(async () => {

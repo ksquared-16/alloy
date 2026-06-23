@@ -10,15 +10,19 @@
 
 import type { EntityDrawerShellSlot } from "@/lib/admin/drawer/entityDrawerOperatingModel";
 import type { ActionSurface } from "@/lib/admin/actions/types";
-import { buildLeadDrawerDefaultDoc, buildLeadQueueDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
+import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { buildPersonDrawerDefaultDoc } from "@/lib/layout/defaultPersonLayouts";
 import { buildChildDrawerDefaultDoc } from "@/lib/layout/defaultChildLayouts";
-import { buildWaitlistCandidateCardDefaultDoc } from "@/lib/layout/defaultWaitlistLayouts";
 import {
     QUEUE_RECORD_PIPELINE_WIDGET_KEYS,
     QUEUE_RECORD_WAITLIST_WIDGET_KEYS,
 } from "@/lib/layout/queueRecordLayoutAllowList";
-import { WAITLIST_PLACEMENT_FIELD_KEYS } from "@/lib/layout/runtime/queueWaitlistPlacementField";
+import {
+    PIPELINE_QUEUE_RECORD_VALIDATOR_FIELD_REFS,
+    WAITLIST_QUEUE_RECORD_VALIDATOR_FIELD_REFS,
+    isValidatorAllowedQueueRecordFieldRefKey,
+    validatorAllowedQueueRecordFieldRefKeys,
+} from "@/lib/layout/queueRecordValidatorAllowList";
 import { GLOBAL_WIDGET_CATALOG, type LayoutCatalogGroup, type LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
 import {
     collectRefKeysFromLayoutDoc,
@@ -372,20 +376,8 @@ function buildChildDrawerAllowedFieldRefKeys(): readonly string[] {
 const PERSON_DRAWER_FIELD_REFS = buildPersonDrawerAllowedFieldRefKeys();
 const CHILD_DRAWER_FIELD_REFS = buildChildDrawerAllowedFieldRefKeys();
 
-function buildPipelineQueueRecordAllowedFieldRefKeys(): readonly string[] {
-    const baseline = collectRefKeysFromLayoutDoc(buildLeadQueueDefaultDoc());
-    const merged = new Set<string>([...baseline, ...OPPORTUNITY_DRAWER_CONTACT_REPEATER_FIELD_REFS]);
-    return [...merged].sort();
-}
-
-function buildWaitlistQueueRecordAllowedFieldRefKeys(): readonly string[] {
-    const baseline = collectRefKeysFromLayoutDoc(buildWaitlistCandidateCardDefaultDoc());
-    const merged = new Set<string>([...baseline, ...WAITLIST_PLACEMENT_FIELD_KEYS, "overrides.reason"]);
-    return [...merged].sort();
-}
-
-const PIPELINE_QUEUE_RECORD_FIELD_REFS = buildPipelineQueueRecordAllowedFieldRefKeys();
-const WAITLIST_QUEUE_RECORD_FIELD_REFS = buildWaitlistQueueRecordAllowedFieldRefKeys();
+const PIPELINE_QUEUE_RECORD_FIELD_REFS = PIPELINE_QUEUE_RECORD_VALIDATOR_FIELD_REFS;
+const WAITLIST_QUEUE_RECORD_FIELD_REFS = WAITLIST_QUEUE_RECORD_VALIDATOR_FIELD_REFS;
 
 /** Queue row layout zones (v3 column scopes — editor hint). */
 export const QUEUE_RECORD_LAYOUT_ZONES = [
@@ -667,6 +659,27 @@ export function isAllowedChildDrawerFieldRefKey(refKey: string): boolean {
     if ((CHILD_DRAWER_STRUCTURAL_REF_KEYS as readonly string[]).includes(trimmed)) return true;
     if (CHILD_DRAWER_FIELD_REFS.includes(trimmed)) return true;
     return false;
+}
+
+/** Field ref allow-list for pipeline / waitlist queue row surfaces. */
+export function isAllowedQueueRecordFieldRefKey(refKey: string, isWaitlist = false): boolean {
+    return isValidatorAllowedQueueRecordFieldRefKey(refKey, isWaitlist);
+}
+
+/** Validator-aligned allow-list (picker + validation share this set). */
+export { validatorAllowedQueueRecordFieldRefKeys };
+
+/** Filter raw catalog groups to queue surface allow-list (validator-aligned picker source). */
+export function filterCatalogGroupsForQueueSurface(
+    groups: LayoutCatalogGroup[],
+    isWaitlist: boolean,
+): LayoutCatalogGroup[] {
+    return groups
+        .map((group) => ({
+            ...group,
+            fields: group.fields.filter((field) => isAllowedQueueRecordFieldRefKey(field.refKey, isWaitlist)),
+        }))
+        .filter((group) => group.fields.length > 0);
 }
 
 export function isAllowedDrawerSurfaceFieldRefKey(surfaceKey: SurfaceLayoutKey, refKey: string): boolean {

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
     allowedQueueRecordWidgetKeys,
+    isAllowedQueueRecordPickerWidgetKey,
     isAllowedQueueRecordWidgetKey,
     QUEUE_RECORD_PIPELINE_WIDGET_KEYS,
+    QUEUE_RECORD_PICKER_WIDGET_KEYS,
 } from "@/lib/layout/queueRecordLayoutAllowList";
 import { defaultLeadQueueLayoutV3 } from "@/lib/layout/queueRecordLayoutV3";
 import { createWidgetBlock } from "@/lib/layout/queueRecordLayoutV3";
@@ -34,7 +36,7 @@ describe("validateQueueRecordLayoutConfig", () => {
         expect(result.errors.some((e) => e.path.includes("widgetKey") && e.message.includes("follow_ups"))).toBe(true);
     });
 
-    it("rejects child field on main_record scope", () => {
+    it("accepts mixed-context fields in a main_record column field group", () => {
         const config = normalizeQueueRecordLayoutConfig(defaultLeadQueueLayoutV3());
         const col = config.columns[0]!;
         const block = col.blocks[0];
@@ -52,7 +54,7 @@ describe("validateQueueRecordLayoutConfig", () => {
                                     fields: [
                                         ...b.fields,
                                         {
-                                            id: "bad-child-field",
+                                            id: "mixed-child-field",
                                             fieldKey: "child.name",
                                             display: "text" as const,
                                         },
@@ -65,8 +67,7 @@ describe("validateQueueRecordLayoutConfig", () => {
             ),
         };
         const result = validateQueueRecordLayoutConfig(next, { isWaitlist: false });
-        expect(result.ok).toBe(false);
-        expect(result.errors.some((e) => e.message.includes("child.name"))).toBe(true);
+        expect(result.ok).toBe(true);
     });
 
     it("accepts activity_timeline widget block", () => {
@@ -103,5 +104,7 @@ describe("queue record widget allow-list", () => {
         expect(isAllowedQueueRecordWidgetKey("activity_timeline", false)).toBe(true);
         expect(isAllowedQueueRecordWidgetKey("current_work", false)).toBe(true);
         expect(isAllowedQueueRecordWidgetKey("tasks", true)).toBe(true);
+        expect(isAllowedQueueRecordPickerWidgetKey("tasks")).toBe(false);
+        expect(QUEUE_RECORD_PICKER_WIDGET_KEYS).not.toContain("tasks");
     });
 });

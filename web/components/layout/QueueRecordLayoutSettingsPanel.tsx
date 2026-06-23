@@ -21,7 +21,8 @@ import {
     removeFieldFromBlock,
     resolveEditorConfigFromDoc,
 } from "@/lib/layout/queueRecordLayoutEditorModel";
-import { filterCatalogGroupsForScope } from "@/lib/layout/queueRecordScopeCatalog";
+import { buildQueueRecordFieldPickerGroups } from "@/lib/layout/queueRecordFieldPickerCatalog";
+import { filterCatalogWidgetsForQueueRecord } from "@/lib/layout/queueRecordLayoutAllowList";
 import type { QueueRecordLayoutEditorConfig } from "@/lib/layout/queueRecordLayoutV3";
 import {
     QUEUE_RECORD_SCOPE_PRESETS,
@@ -84,19 +85,20 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
     const pickerColumn = picker ? editorConfig.columns.find((c) => c.id === picker.columnId) : null;
     const pickerBlock =
         pickerColumn && picker ? pickerColumn.blocks.find((b) => b.id === picker.blockId) : null;
-    const pickerScope = pickerColumn?.scope;
 
-    const scopedCatalog = useMemo((): LayoutFieldPickerCatalog | null => {
-        if (!catalog || !pickerScope) return catalog;
-        const groups = filterCatalogGroupsForScope(catalog.groups, pickerScope);
-        return { groups, widgets: catalog.widgets };
-    }, [catalog, pickerScope]);
+    const queuePickerCatalog = useMemo((): LayoutFieldPickerCatalog | null => {
+        if (!catalog) return null;
+        // v3 row picker: validator allow-list + opportunities catalog labels only (no legacy zone catalog merge).
+        const groups = buildQueueRecordFieldPickerGroups(catalog.groups, isWaitlist);
+        const widgets = filterCatalogWidgetsForQueueRecord(catalog.widgets, isWaitlist);
+        return { groups, widgets };
+    }, [catalog, isWaitlist]);
 
     useEffect(() => {
-        if (scopedCatalog?.groups?.length && !pickerGroup) {
-            setPickerGroup(scopedCatalog.groups[0]!.entityKey);
+        if (queuePickerCatalog?.groups?.length && !pickerGroup) {
+            setPickerGroup(queuePickerCatalog.groups[0]!.entityKey);
         }
-    }, [scopedCatalog, pickerGroup]);
+    }, [queuePickerCatalog, pickerGroup]);
 
     const usedRefKeys = useMemo(() => {
         if (!pickerBlock || pickerBlock.type === "widget") return new Set<string>();
@@ -200,7 +202,7 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                                 className="mb-1 w-full rounded border border-[#e6e8ec] bg-white px-2 py-1 text-sm font-semibold text-[#273f52] disabled:bg-[#f4f6f9]"
                             />
                             <label className="mb-2 flex flex-col gap-0.5 text-[11px] text-[#59678b]">
-                                <span className="shrink-0">Scope</span>
+                                <span className="shrink-0">Row context</span>
                                 <select
                                     disabled={!editable}
                                     value={scopePresetKey(col.scope)}
@@ -219,7 +221,9 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                                         </option>
                                     ))}
                                 </select>
-                                <span className="text-[10px] text-[#9aa4bf]">{scopeLabel(col.scope)}</span>
+                                <span className="text-[10px] text-[#9aa4bf]">
+                                    {scopeLabel(col.scope)} — controls repeat/resolve defaults, not Add Field options.
+                                </span>
                             </label>
                             <label className="mb-2 flex items-center gap-2 text-[11px] text-[#59678b]">
                                 <span className="shrink-0">Width</span>
@@ -425,8 +429,8 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                                                     type="button"
                                                     disabled={!catalog}
                                                     onClick={() => {
-                                                        if (scopedCatalog?.groups?.length) {
-                                                            setPickerGroup(scopedCatalog.groups[0]!.entityKey);
+                                                        if (queuePickerCatalog?.groups?.length) {
+                                                            setPickerGroup(queuePickerCatalog.groups[0]!.entityKey);
                                                         }
                                                         setPickerTab("field");
                                                         setPicker({ columnId: col.id, blockId: block.id });
@@ -530,11 +534,12 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
                 </div>
             </section>
 
-            {picker && scopedCatalog ?
+            {picker && queuePickerCatalog ?
                 <LayoutFieldPickerOverlay
-                    catalog={scopedCatalog}
+                    catalog={queuePickerCatalog}
                     surface="queue"
                     queueIsWaitlist={isWaitlist}
+                    queueSearchAllGroups
                     tab={pickerTab}
                     setTab={setPickerTab}
                     group={pickerGroup}

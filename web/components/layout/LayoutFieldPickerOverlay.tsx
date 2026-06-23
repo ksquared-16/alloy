@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { isAllowedQueueRecordWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
+import { isAllowedQueueRecordPickerWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
 import {
     catalogGroupDisplayLabel,
     type LayoutCatalogField,
@@ -11,6 +11,7 @@ import {
     countAvailableFieldsInGroup,
     partitionCatalogFieldsForPicker,
 } from "@/lib/layout/layoutFieldPickerHelpers";
+import { flattenQueueRecordFieldPickerFields } from "@/lib/layout/queueRecordFieldPickerCatalog";
 
 const WIDGET_CATEGORY_ORDER = ["Work", "Communication", "Enrollment", "Waitlist", "System"];
 
@@ -43,6 +44,8 @@ type Props = {
     fieldsOnly?: boolean;
     /** When surface is queue — drives widget allow-list (pipeline vs waitlist). */
     queueIsWaitlist?: boolean;
+    /** Queue row picker searches across all context groups (not just active nav group). */
+    queueSearchAllGroups?: boolean;
 };
 
 function FieldPickerRow({
@@ -50,11 +53,13 @@ function FieldPickerRow({
     used,
     justAdded,
     onPick,
+    contextLabel,
 }: {
     field: LayoutCatalogField;
     used: boolean;
     justAdded: boolean;
     onPick: () => void;
+    contextLabel?: string | null;
 }) {
     return (
         <button
@@ -71,8 +76,15 @@ function FieldPickerRow({
             ].join(" ")}
         >
             <span className="min-w-0 truncate font-medium text-[#31394d]">{field.fieldLabel}</span>
-            <span className="shrink-0 rounded bg-[#f4f6f9] px-1.5 py-0.5 font-mono text-[10px] text-[#9aa4bf]">
-                {field.refKey.split(".").pop()}
+            <span className="flex shrink-0 items-center gap-1.5">
+                {contextLabel ? (
+                    <span className="rounded bg-[#eef4ff] px-1.5 py-0.5 text-[10px] font-medium text-[#2f6df6]">
+                        {contextLabel}
+                    </span>
+                ) : null}
+                <span className="rounded bg-[#f4f6f9] px-1.5 py-0.5 font-mono text-[10px] text-[#9aa4bf]">
+                    {field.refKey.split(".").pop()}
+                </span>
             </span>
         </button>
     );
@@ -92,6 +104,7 @@ export default function LayoutFieldPickerOverlay({
     onClose,
     fieldsOnly = false,
     queueIsWaitlist = false,
+    queueSearchAllGroups = false,
 }: Props) {
     const [searchQuery, setSearchQuery] = useState("");
     const [showUsedFields, setShowUsedFields] = useState(false);
@@ -99,6 +112,12 @@ export default function LayoutFieldPickerOverlay({
 
     const activeGroup = catalog.groups.find((g) => g.entityKey === group) ?? catalog.groups[0];
     const groupFields = activeGroup?.fields ?? [];
+    const allQueueFields = useMemo(
+        () => (surface === "queue" && queueSearchAllGroups ? flattenQueueRecordFieldPickerFields(catalog.groups) : []),
+        [catalog.groups, queueSearchAllGroups, surface],
+    );
+    const searchFields =
+        surface === "queue" && queueSearchAllGroups && searchQuery.trim() ? allQueueFields : groupFields;
 
     useEffect(() => {
         setSearchQuery("");
@@ -110,8 +129,8 @@ export default function LayoutFieldPickerOverlay({
     }, [tab, group]);
 
     const { available, used } = useMemo(
-        () => partitionCatalogFieldsForPicker(groupFields, usedRefKeys, searchQuery),
-        [groupFields, usedRefKeys, searchQuery],
+        () => partitionCatalogFieldsForPicker(searchFields, usedRefKeys, searchQuery),
+        [searchFields, usedRefKeys, searchQuery],
     );
 
     const groupCounts = useMemo(
@@ -124,7 +143,7 @@ export default function LayoutFieldPickerOverlay({
 
     const widgetIsRelevant = (w: LayoutCatalogWidget) => {
         if (surface === "queue") {
-            return isAllowedQueueRecordWidgetKey(w.widgetKey, queueIsWaitlist);
+            return isAllowedQueueRecordPickerWidgetKey(w.widgetKey);
         }
         if (w.relevantSurfaces && !w.relevantSurfaces.includes("drawer")) return false;
         return true;
@@ -133,10 +152,18 @@ export default function LayoutFieldPickerOverlay({
         cat,
         widgets: catalog.widgets.filter((w) => {
             if ((w.category ?? "Work") !== cat) return false;
-            if (surface === "queue") return isAllowedQueueRecordWidgetKey(w.widgetKey, queueIsWaitlist);
+            if (surface === "queue") return isAllowedQueueRecordPickerWidgetKey(w.widgetKey);
             return true;
         }),
     })).filter((x) => x.widgets.length > 0);
+
+    const crossGroupSearch = surface === "queue" && queueSearchAllGroups && searchQuery.trim().length > 0;
+    const searchPlaceholder =
+        crossGroupSearch ? "Search all queue row fields…" : `Search ${activeGroup?.entityLabel ?? "entity"} fields…`;
+    const emptySearchMessage =
+        crossGroupSearch ?
+            `No queue row fields match “${searchQuery.trim()}”.`
+        :   `No ${activeGroup?.entityLabel ?? "entity"} fields match “${searchQuery.trim()}”.`;
 
     const hiddenUsedCount = used.length;
     const noResults = available.length === 0 && (!showUsedFields || used.length === 0);
@@ -230,7 +257,7 @@ export default function LayoutFieldPickerOverlay({
                                         type="search"
                                         value={searchQuery}
                                         onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder={`Search ${activeGroup?.entityLabel ?? "entity"} fields…`}
+                                        placeholder={searchPlaceholder}
                                         data-testid="layout-field-picker-search"
                                         className="w-full rounded-md border border-[#e6e8ec] py-2 pl-3 pr-3 text-sm placeholder:text-[#9aa4bf] focus:border-[#2f6df6] focus:outline-none focus:ring-2 focus:ring-[#dbe7ff]"
                                     />
@@ -240,8 +267,7 @@ export default function LayoutFieldPickerOverlay({
                             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
                                 {noResults ? (
                                     <p className="py-8 text-center text-sm text-[#9aa4bf]">
-                                        {searchQuery.trim()
-                                            ? `No ${activeGroup?.entityLabel ?? "entity"} fields match “${searchQuery.trim()}”.`
+                                        {searchQuery.trim() ? emptySearchMessage
                                             : showUsedFields
                                               ? "No fields in this category."
                                               : "All fields in this category are already on the layout."}
@@ -255,6 +281,7 @@ export default function LayoutFieldPickerOverlay({
                                                 used={false}
                                                 justAdded={lastAddedRefKey === f.refKey}
                                                 onPick={() => onPickField(f)}
+                                                contextLabel={crossGroupSearch ? f.entityLabel : null}
                                             />
                                         ))}
 
@@ -272,6 +299,7 @@ export default function LayoutFieldPickerOverlay({
                                                         used
                                                         justAdded={lastAddedRefKey === f.refKey}
                                                         onPick={() => onPickField(f)}
+                                                        contextLabel={crossGroupSearch ? f.entityLabel : null}
                                                     />
                                                 ))}
                                             </>

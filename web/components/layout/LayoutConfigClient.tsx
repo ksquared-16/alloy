@@ -298,15 +298,11 @@ export default function LayoutConfigClient({
                     const entityCat = entityRes.ok ? ((await entityRes.json()) as CatalogResponse) : null;
                     setCatalog(entityCat);
 
-                    // Waitlist queue v3 editor uses the opportunities catalog (same as Lead Queue).
-                    // queue_record_layout runtime resolves Lead-style refKeys (child.*, inquiry_child.*,
-                    // customer.*, opportunity.*). placement_candidate catalog stays on `catalog` for
-                    // legacy zone sections only — avoids saving flat VM keys (household.*, waitlist.*)
-                    // into v3 scoped columns where runtime scope rules do not apply.
-                    const useOpportunitiesQueueCatalog =
-                        layoutDoc.surface === "queue" && isWaitlistQueueLayoutDoc(layoutDoc);
+                    // Legacy zone sections use entity-type catalog (`catalog`).
+                    // v3 queue row composer always uses opportunities catalog for labels only;
+                    // field refs come from queueRecordValidatorAllowList (not legacy placement_candidate groups).
                     let v3Cat = entityCat;
-                    if (useOpportunitiesQueueCatalog) {
+                    if (layoutDoc.surface === "queue") {
                         const oppRes = await fetch(
                             "/api/admin/entity-layouts/field-catalog?entity_type=opportunities",
                         );

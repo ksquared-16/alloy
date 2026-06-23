@@ -3,10 +3,9 @@
  */
 
 import { isAllowedQueueRecordWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
-import { filterCatalogFieldForScope } from "@/lib/layout/queueRecordScopeCatalog";
-import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
-import { scopeAllowsFieldKey } from "@/lib/layout/runtime/queueRecordScopedResolve";
+import { isAllowedQueueRecordFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
+import { assertChildScopedFieldKey } from "@/lib/layout/runtime/queueRecordScopedResolve";
 import { isWaitlistOnlyFieldKey } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 import { queueRecordActivityTimelineConfig } from "@/lib/layout/runtime/queueRecordWidgetConfig";
 
@@ -21,16 +20,16 @@ export type QueueRecordLayoutValidationResult = {
     warnings: QueueRecordLayoutValidationIssue[];
 };
 
-function catalogFieldFromRefKey(refKey: string): LayoutCatalogField {
-    const [entityKey, ...rest] = refKey.split(".");
-    return {
-        entityKey: entityKey ?? "opportunity",
-        entityLabel: entityKey ?? "opportunity",
-        fieldKey: rest.join(".") || refKey,
-        fieldLabel: refKey,
-        fieldType: "text",
-        refKey,
-    };
+
+function isValidQueueRecordFieldInBlock(
+    fieldKey: string,
+    block: QueueRecordLayoutConfigV3["columns"][number]["blocks"][number],
+    isWaitlist: boolean,
+): boolean {
+    if (block.type === "repeated_record_block") {
+        return assertChildScopedFieldKey(fieldKey, block.relationshipKey);
+    }
+    return isAllowedQueueRecordFieldRefKey(fieldKey, isWaitlist);
 }
 
 /** Validate v3 config against scope rules and widget allow-list (picker parity). */
@@ -85,23 +84,19 @@ export function validateQueueRecordLayoutConfig(
             const fields = block.type === "field_group" || block.type === "repeated_record_block" ? block.fields : [];
             fields.forEach((field, fi) => {
                 const fieldPath = `${blockPath}.fields[${fi}]`;
-                if (!scopeAllowsFieldKey(column.scope, field.fieldKey)) {
+                if (!isValidQueueRecordFieldInBlock(field.fieldKey, block, isWaitlist)) {
                     errors.push({
                         path: `${fieldPath}.fieldKey`,
-                        message: `field "${field.fieldKey}" is not allowed for scope ${column.scope.type}`,
+                        message:
+                            block.type === "repeated_record_block"
+                                ? `field "${field.fieldKey}" must be child-scoped inside a repeated ${block.relationshipKey} block`
+                                : `field "${field.fieldKey}" is not allowed on ${isWaitlist ? "waitlist" : "pipeline"} queue rows`,
                     });
                 }
                 if (!isWaitlist && isWaitlistOnlyFieldKey(field.fieldKey)) {
                     errors.push({
                         path: `${fieldPath}.fieldKey`,
                         message: `field "${field.fieldKey}" is only allowed on waitlist queue rows`,
-                    });
-                }
-                const catalogField = catalogFieldFromRefKey(field.fieldKey);
-                if (!filterCatalogFieldForScope(catalogField, column.scope)) {
-                    warnings.push({
-                        path: `${fieldPath}.fieldKey`,
-                        message: `field "${field.fieldKey}" may not match column scope catalog rules`,
                     });
                 }
             });

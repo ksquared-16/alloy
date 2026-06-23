@@ -118,19 +118,27 @@ export const QUEUE_RECORD_SCOPE_PRESETS: {
     label: string;
     description: string;
 }[] = [
-    { scope: { type: "main_record" }, label: "Main record", description: "Lead / opportunity fields on the queue item" },
+    {
+        scope: { type: "main_record" },
+        label: "Main record",
+        description: "Default row anchor — does not limit Add Field options",
+    },
     {
         scope: { type: "primary_related", relationshipKey: "person" },
         label: "Primary contact",
-        description: "Person / contact fields for the primary related person",
+        description: "Repeat/resolve hint for primary contact — Add Field stays context-based",
     },
     {
         scope: { type: "repeated_related", relationshipKey: "children" },
-        label: "Children / related records",
-        description: "One row per child or related record",
+        label: "Children / repeat source",
+        description: "Repeat source for child rows — field groups still allow mixed contexts",
     },
-    { scope: { type: "lifecycle_context" }, label: "Lifecycle / status", description: "Status, attention, next step, work-unit context" },
-    { scope: { type: "system" }, label: "System", description: "Record ids, timestamps, system metadata" },
+    {
+        scope: { type: "lifecycle_context" },
+        label: "Lifecycle / status",
+        description: "Status and work context defaults — not a field picker filter",
+    },
+    { scope: { type: "system" }, label: "System", description: "Ids and timestamps — repeat/resolve hint only" },
 ];
 
 export function scopePresetKey(scope: QueueRecordScope): string {
@@ -433,6 +441,21 @@ export function defaultLeadQueueLayoutV3(): QueueRecordLayoutConfigV3 {
         columns: [household, childCol, statusContext, nextStep, dateCol],
         fixedControls: { actionsMenu: true, workWithBos: true, actionRailStyle: "stacked" },
     };
+}
+
+/** Collect field ref keys from a v3 queue row layout (validator / allow-list baseline). */
+export function collectRefKeysFromQueueRecordLayoutV3(config: QueueRecordLayoutConfigV3): string[] {
+    const keys = new Set<string>();
+    for (const column of config.columns) {
+        for (const block of column.blocks) {
+            if (block.type !== "field_group" && block.type !== "repeated_record_block") continue;
+            for (const field of block.fields) {
+                const key = field.fieldKey.trim();
+                if (key) keys.add(key);
+            }
+        }
+    }
+    return [...keys];
 }
 
 export function defaultWaitlistQueueLayoutV3(): QueueRecordLayoutConfigV3 {
