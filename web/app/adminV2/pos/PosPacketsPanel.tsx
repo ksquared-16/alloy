@@ -374,15 +374,27 @@ export default function PosPacketsPanel() {
                                         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold ${status.cls}`}>{status.label}</span>
                                     </div>
                                     <div className="mt-0.5 text-[11px] text-stone-500">
-                                        {p.step_count} form{p.step_count === 1 ? "" : "s"} · {p.shares.length} share{p.shares.length === 1 ? "" : "s"} · Created {fmtDate(p.created_at)}
+                                        {p.step_count} form{p.step_count === 1 ? "" : "s"} · {p.instances.length} family packet{p.instances.length === 1 ? "" : "s"} · Created {fmtDate(p.created_at)}
                                     </div>
-                                    {p.shares.length > 0 ? (
-                                        <>
-                                            <ul className="mt-2 divide-y divide-stone-100 rounded border border-stone-100">
-                                                {p.shares.map((s) => <ShareRow key={s.link_id} share={s} />)}
-                                            </ul>
-                                            <p className="mt-1 text-[9.5px] text-stone-400">Existing links show status only — full URLs are shown once at creation (tokens are stored hashed).</p>
-                                        </>
+                                    {p.instances.length > 0 ? (
+                                        <div className="mt-2 space-y-2">
+                                            {p.instances.map((inst, ii) => (
+                                                <div key={inst.packet_instance_id ?? `i${ii}`} className="rounded border border-stone-100 p-2">
+                                                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10.5px] text-stone-500">
+                                                        <span className="font-medium text-stone-700">Children:</span>
+                                                        <span className="text-stone-700">{inst.child_labels.length ? inst.child_labels.join(", ") : "—"}</span>
+                                                        <span aria-hidden>·</span>
+                                                        <span>{inst.recipient_count} recipient{inst.recipient_count === 1 ? "" : "s"}</span>
+                                                        <span aria-hidden>·</span>
+                                                        <span>Signatures {inst.signatures.signed}/{inst.signatures.total}</span>
+                                                    </div>
+                                                    <ul className="mt-1 divide-y divide-stone-100">
+                                                        {inst.recipients.map((s) => <ShareRow key={s.link_id} share={s} />)}
+                                                    </ul>
+                                                </div>
+                                            ))}
+                                            <p className="text-[9.5px] text-stone-400">Recipient links are nested under one family packet. Existing links show status only — full URLs appear once at creation (tokens stored hashed).</p>
+                                        </div>
                                     ) : (
                                         <div className="mt-2 text-[10.5px] text-stone-400">No shares yet.</div>
                                     )}

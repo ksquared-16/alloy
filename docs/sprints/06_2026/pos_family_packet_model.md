@@ -129,6 +129,53 @@ slice; metadata covers everything else.
 (`canonicalPrefillMap`, `familyPacketPlan`); run `npm run test -- tests/pos/` locally
 (sandbox can't run vitest/build — native-binary mismatch).
 
+## P2 — grouped family packet list (done)
+
+`posPacketReadModel` now emits `instances: PosFamilyInstance[]` via the pure
+`groupSharesIntoInstances` (group share rows by `packet_instance_id`; legacy links stand
+alone). Each instance carries `child_ids`/`child_labels`, nested `recipients` (one row per
+recipient access), `recipient_count`, and a `signatures` placeholder (submitted recipients /
+total). `PosPacketsPanel` renders **one family-packet card per instance** with recipient
+access rows nested (recipient name · email/phone · link status · opened/submitted · prefix).
+Copy/open remains only for freshly-minted URLs (tokens stored hashed). The GET route resolves
+labels for all `selected_customer_member_ids`. No schema change beyond P1.
+
+## P3 — family parent intake (model + storage done; client wiring specified)
+
+**Done (pure + tested):**
+- `lib/forms/familyGuidedPlan.ts` — `buildFamilyGuidedPlan(schema, children)` → ordered steps
+  **household once → one child step per selected child → signatures** (empty scopes skipped),
+  using the field-scope classifier (config-driven). `assembleFamilySubmissionPayload(...)` is
+  the **payload-key approach**: canonical `values` = household/signature + the **first** child's
+  child-field answers (so required child fields validate and flow to existing record mapping),
+  and `meta.family.children[]` keeps **every** child's child-field answers (siblings preserved).
+
+**Storage gap (documented).** `form_submissions` validate against ONE form schema, so canonical
+`values` can hold only one child's child-fields. The first selected child writes to canonical
+`values`; siblings persist in `payload.meta.family.children[]` for later mapping. True per-child
+record writes await child-scoped storage (deferred). Autosave/submit/session plumbing is
+unchanged — the family payload is a normal `payload` with extra `meta`.
+
+**Client wiring (specified for a focused, QA'd follow-up — not landed in the shared public
+`FormEmbedClient` this pass, to avoid shipping an unvalidated per-child renderer):**
+1. `GET /resolve` already returns `link.metadata`; read `selected_customer_member_ids` (+ add
+   `selected_customer_member_labels` at compose time for nice "About <name>" titles).
+2. When `length > 1`: build `buildFamilyGuidedPlan(schema, children)`; keep a per-child values
+   slice in component state. Household/signature steps render the main payload; each child step
+   renders `subSchemaForFieldsGrouped(schema, childFieldIds)` bound to that child's slice.
+3. On submit, call `assembleFamilySubmissionPayload(...)` and POST the existing submit route.
+4. Single-child / legacy stays on the existing guided shell unchanged (strict gate).
+
+This is additive and isolated; it needs a local visual QA pass before merging into the shared
+renderer.
+
+## P0 carryover (verified)
+
+Canonical `field_source` prefill still maps child **Name → `customer_member.display_name`** and
+**DOB aliases → `customer_member.dob`** regardless of field id (regression test +
+`tests/pos/canonicalPrefillMap.test.ts` re-run green in the harness). Generated/manual child
+fields prefill once bound.
+
 ## Remaining blockers (for the runtime slice, not this pass)
 
 - Shared answers across recipients need the single-session-per-instance change (P1 #3).

@@ -107,6 +107,9 @@ export async function GET() {
         const r = (m.composer_recipient_id ?? m.recipient_person_id) as unknown;
         if (typeof c === "string") childIds.add(c);
         if (typeof r === "string") recipientIds.add(r);
+        // Family packet: resolve labels for all selected children too.
+        const sel = m.selected_customer_member_ids;
+        if (Array.isArray(sel)) for (const id of sel) if (typeof id === "string") childIds.add(id);
     }
 
     const childLabels: Record<string, string> = {};

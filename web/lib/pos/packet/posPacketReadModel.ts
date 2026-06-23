@@ -68,6 +68,23 @@ export interface PosPacketShareRow {
     /** A packet session for this link has completed. */
     submitted: boolean;
     created_at: string;
+    /** Family Packet instance this link belongs to (null = legacy independent link). */
+    packet_instance_id: string | null;
+    /** All children selected for this family packet instance. */
+    selected_child_ids: string[];
+    selected_child_labels: string[];
+}
+
+/** A family packet instance: one card grouping its recipient access rows. */
+export interface PosFamilyInstance {
+    packet_instance_id: string | null;
+    child_ids: string[];
+    child_labels: string[];
+    /** One row per recipient (or the single legacy link). */
+    recipients: PosPacketShareRow[];
+    recipient_count: number;
+    /** Signature/submission progress (placeholder: submitted recipients / total recipients). */
+    signatures: { signed: number; total: number };
 }
 
 export interface PosPacketLinkSummary {
@@ -109,8 +126,10 @@ export interface PosPacketSummary {
     step_count: number;
     share_links: { count: number; active_count: number; latest: PosPacketLinkSummary | null };
     sessions: { count: number; latest: PosPacketSessionSummary | null };
-    /** Per child-recipient share rows (one per link). */
+    /** Per-link share rows (one per link). */
     shares: PosPacketShareRow[];
+    /** Family packet instances (grouped recipient access). One card per instance in the UI. */
+    instances: PosFamilyInstance[];
     status: PosPacketStatus;
 }
 
@@ -170,6 +189,43 @@ function shareChildId(meta: Record<string, unknown> | null): string | null {
 }
 function shareRecipientId(meta: Record<string, unknown> | null): string | null {
     return metaString(meta, "composer_recipient_id") ?? metaString(meta, "recipient_person_id");
+}
+function sharePacketInstanceId(meta: Record<string, unknown> | null): string | null {
+    return metaString(meta, "packet_instance_id");
+}
+function shareSelectedChildIds(meta: Record<string, unknown> | null): string[] {
+    const v = meta?.selected_customer_member_ids;
+    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string" && x.length > 0);
+    const single = shareChildId(meta);
+    return single ? [single] : [];
+}
+
+/** Group share rows into family packet instances (by packet_instance_id; legacy links stand alone). */
+export function groupSharesIntoInstances(shares: PosPacketShareRow[]): PosFamilyInstance[] {
+    const byKey = new Map<string, PosFamilyInstance>();
+    const order: string[] = [];
+    for (const s of shares) {
+        const key = s.packet_instance_id ?? `link:${s.link_id}`;
+        let inst = byKey.get(key);
+        if (!inst) {
+            inst = {
+                packet_instance_id: s.packet_instance_id,
+                child_ids: s.selected_child_ids,
+                child_labels: s.selected_child_labels,
+                recipients: [],
+                recipient_count: 0,
+                signatures: { signed: 0, total: 0 },
+            };
+            byKey.set(key, inst);
+            order.push(key);
+        }
+        inst.recipients.push(s);
+    }
+    for (const inst of byKey.values()) {
+        inst.recipient_count = inst.recipients.length;
+        inst.signatures = { signed: inst.recipients.filter((r) => r.submitted).length, total: inst.recipients.length };
+    }
+    return order.map((k) => byKey.get(k)!);
 }
 
 /**
@@ -250,6 +306,7 @@ export function buildPosPacketReadModel(input: PosPacketReadModelInput): PosPack
             .map((ln) => {
                 const childId = shareChildId(ln.metadata);
                 const recipientId = shareRecipientId(ln.metadata);
+                const selectedChildIds = shareSelectedChildIds(ln.metadata);
                 const expired = Boolean(ln.expires_at && new Date(ln.expires_at).getTime() < nowMs);
                 return {
                     link_id: ln.id,
@@ -265,6 +322,9 @@ export function buildPosPacketReadModel(input: PosPacketReadModelInput): PosPack
                     opened: Boolean(ln.last_used_at),
                     submitted: completedLinkIds.has(ln.id),
                     created_at: ln.created_at,
+                    packet_instance_id: sharePacketInstanceId(ln.metadata),
+                    selected_child_ids: selectedChildIds,
+                    selected_child_labels: selectedChildIds.map((id) => input.childLabels?.[id] ?? `${id.slice(0, 8)}…`),
                 };
             });
 
@@ -279,6 +339,7 @@ export function buildPosPacketReadModel(input: PosPacketReadModelInput): PosPack
             share_links: { count: links.length, active_count: activeLinkCount, latest: latestLink },
             sessions: { count: sessions.length, latest: latestSession },
             shares,
+            instances: groupSharesIntoInstances(shares),
             status: deriveStatus(def.is_active, latestSession, activeLinkCount),
         } satisfies PosPacketSummary;
     });
