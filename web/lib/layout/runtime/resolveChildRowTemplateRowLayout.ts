@@ -3,6 +3,7 @@
  */
 
 import { readLayoutEditorBlockConfig, type LayoutEditorChildRowGroup } from "@/lib/layout/layoutEditorBlockConfig";
+import { LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS } from "@/lib/layout/layoutEditorRelatedListConfig";
 import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 
 export type ChildRowTemplateRowLayout = {
@@ -17,7 +18,7 @@ function childRowGroupColumnCount(group: LayoutEditorChildRowGroup): number {
     const fromIndices = validIndices.length;
     if (fromIndices === 0) return Math.max(1, group.columnCount ?? 1);
     // Honor every configured column index — stale columnCount must not drop fields.
-    return Math.max(fromIndices, Math.min(3, group.columnCount ?? fromIndices));
+    return Math.max(fromIndices, Math.min(LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS, group.columnCount ?? fromIndices));
 }
 
 export function resolveChildRowTemplateRowLayout(item: LayoutItem): ChildRowTemplateRowLayout[] | null {

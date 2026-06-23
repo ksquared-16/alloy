@@ -4,6 +4,8 @@
 
 import { listSectionCompositionRows } from "@/lib/layout/layoutEditorSectionComposition";
 import { readSectionType, sectionHasWidgetItems } from "@/lib/layout/layoutEditorSectionLayout";
+import { LAYOUT_EDITOR_KPI_TILE_METADATA_KEY } from "@/lib/layout/layoutBuilderKpiTileRows";
+import { patchSection } from "@/lib/layout/builderOps";
 import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import type { SectionCompositionItem } from "@/lib/layout/layoutEditorSectionComposition";
@@ -21,10 +23,37 @@ function countSectionWidgets(section: LayoutSection): number {
     );
 }
 
+export const LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY = "layoutEditorWidgetCard" as const;
+
+/** Widget keys that render as full-width/right-rail cards — not summary-strip KPI tiles. */
+export const LAYOUT_BUILDER_WIDGET_CARD_WIDGET_KEYS = new Set([
+    "documents",
+    "activity",
+    "activity_timeline",
+]);
+
+export function isLayoutBuilderWidgetCardWidgetKey(widgetKey: string): boolean {
+    return LAYOUT_BUILDER_WIDGET_CARD_WIDGET_KEYS.has(widgetKey.trim());
+}
+
+export function markSectionAsWidgetCard(doc: LayoutDoc, sectionKey: string): LayoutDoc {
+    const sIdx = doc.sections.findIndex((s) => s.key === sectionKey);
+    if (sIdx < 0) return doc;
+    const metadata = {
+        ...(doc.sections[sIdx]!.metadata ?? {}),
+        [LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY]: true,
+    };
+    delete metadata[LAYOUT_EDITOR_KPI_TILE_METADATA_KEY];
+    return patchSection(doc, sIdx, { metadata });
+}
+
 /** Single-widget KPI tile — first-class surface block, not a card wrapper. */
 export function sectionIsKpiTile(section: LayoutSection): boolean {
-    if (section.metadata?.layoutEditorKpiTile === true) return true;
+    if (section.metadata?.[LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY] === true) return false;
+    if (section.metadata?.[LAYOUT_EDITOR_KPI_TILE_METADATA_KEY] === true) return true;
     if (readSectionType(section) !== "widget") return false;
+    const layoutZone = section.metadata?.layoutZone;
+    if (layoutZone === "right_rail" || layoutZone === "main" || layoutZone === "footer_actions") return false;
     return countSectionWidgets(section) === 1;
 }
 

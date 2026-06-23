@@ -18,6 +18,11 @@ import {
     enrollmentStatusDestinationLabel,
     resolveEnrollmentStatusTargetKey,
 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionDestinations";
+import { enrollmentDestinationDisplayLabel } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionLabels";
+import {
+    readEnrollmentManualTransitionPolicy,
+    type EnrollmentManualTransitionPolicyV1,
+} from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 import { resolveStatusProcessStageAssignment } from "@/lib/businessProcesses/resolveStatusProcessStageAssignment";
 import {
     legacyCanonicalProcessStageForStatusKey,
@@ -148,7 +153,7 @@ export function resolveBuilderStageKeyForStatus(input: {
     return null;
 }
 
-function mapBuilderStageToDestinationKey(stageKey: string): EnrollmentStatusDestinationKey | null {
+export function mapBuilderStageToDestinationKey(stageKey: string): EnrollmentStatusDestinationKey | null {
     const s = stageKey.trim();
     if (s === "waitlist") return "waitlist";
     if (s === "enrolled") return "enrolled";
@@ -373,6 +378,53 @@ function dedupeDestinations(rows: BpResolvedEnrollmentDestination[]): BpResolved
     return out;
 }
 
+function destinationsFromConfiguredStages(
+    process: LifecycleBuilderProcessRecord,
+    grain: EnrollmentStatusTransitionGrain,
+    currentStatusKey: string | null,
+    currentBuilderStageKey: string | null,
+    departmentMetadata: Record<string, unknown>,
+    policy: EnrollmentManualTransitionPolicyV1,
+): BpResolvedEnrollmentDestination[] {
+    const current = currentStatusKey?.trim() ?? "";
+    const out: BpResolvedEnrollmentDestination[] = [];
+    const seenDest = new Set<EnrollmentStatusDestinationKey>();
+
+    for (const stage of process.stages.filter((s) => s.is_active !== false).sort((a, b) => a.sort_order - b.sort_order)) {
+        if (TERMINAL_BUILDER_STAGE_KEYS.has(stage.key) && stage.key !== currentBuilderStageKey) {
+            // Still allow closed/withdrawn as destination when configured
+        }
+        const destinationKey = mapBuilderStageToDestinationKey(stage.key);
+        if (!destinationKey) continue;
+        if (stage.key === currentBuilderStageKey) continue;
+        if (seenDest.has(destinationKey)) continue;
+
+        const defaultStatusKey = resolveEnrollmentStatusTargetKey(destinationKey, grain);
+        if (defaultStatusKey === current) continue;
+
+        if (destinationKey === "waitlist" && policy.waitlist_as_parking_lot === false) continue;
+
+        seenDest.add(destinationKey);
+        const requiresTourBypass =
+            destinationKey === "waitlist" &&
+            PRE_TOUR_BUILDER_STAGE_KEYS.has(currentBuilderStageKey ?? "") &&
+            !TOUR_COMPLETE_STATUS_KEYS.has(current);
+
+        out.push({
+            destinationKey,
+            label: enrollmentDestinationDisplayLabel(destinationKey, departmentMetadata, stage.key),
+            defaultStatusKey,
+            entityType: grain === "case" ? "opportunities" : "opportunity_customer_members",
+            builderStageKey: stage.key,
+            bpSource: "default",
+            parkingLot: PARKING_LOT_BUILDER_STAGE_KEYS.has(stage.key),
+            requiresTourBypass,
+        });
+    }
+
+    return out;
+}
+
 /** Resolve BP-configured destinations for Change Enrollment Status modal. */
 export function resolveBpEnrollmentStatusDestinations(
     input: ResolveBpEnrollmentDestinationsInput,
@@ -406,6 +458,8 @@ export function resolveBpEnrollmentStatusDestinations(
         };
     }
 
+    const policy = readEnrollmentManualTransitionPolicy(process);
+
     const { plan } = resolveEffectiveStageOperatingPlan({
         departmentMetadata,
         builderStageKey: currentBuilderStageKey,
@@ -419,7 +473,21 @@ export function resolveBpEnrollmentStatusDestinations(
         input.currentStatusKey,
     );
 
-    let combined = dedupeDestinations([...fromPlan, ...fromSplit]);
+    let combined =
+        policy.mode === "operator_jump_with_preflight"
+            ? dedupeDestinations([
+                  ...destinationsFromConfiguredStages(
+                      process,
+                      grain,
+                      input.currentStatusKey,
+                      currentBuilderStageKey,
+                      departmentMetadata,
+                      policy,
+                  ),
+                  ...fromPlan,
+                  ...fromSplit,
+              ])
+            : dedupeDestinations([...fromPlan, ...fromSplit]);
 
     const parkingLot = parkingLotWaitlistDestination(
         process,
@@ -428,7 +496,7 @@ export function resolveBpEnrollmentStatusDestinations(
         input.currentStatusKey,
         combined,
     );
-    if (parkingLot) combined = [...combined, parkingLot];
+    if (parkingLot && policy.waitlist_as_parking_lot !== false) combined = [...combined, parkingLot];
 
     if (!combined.length) {
         const operatorStage = input.currentStatusKey

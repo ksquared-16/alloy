@@ -17,6 +17,12 @@ import {
 } from "@/lib/layout/fieldCatalog";
 import type { LayoutItem } from "@/lib/layout/layoutV2";
 import type { LayoutEditorRelatedListEntityType } from "@/lib/layout/layoutEditorRelatedListConfig";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import { buildChildDrawerEditorFieldPickerGroups } from "@/lib/layout/childDrawerLayoutEditorFieldCatalog";
+import {
+    buildPersonDrawerEditorFieldPickerGroups,
+    buildPersonDrawerLinkedChildRelatedListFieldPickerGroups,
+} from "@/lib/layout/personDrawerLayoutEditorFieldCatalog";
 import {
     isRefKeyPickerEligible,
     manifestEntryForRefKey,
@@ -202,9 +208,26 @@ export const RELATED_LIST_FIELD_GROUP_ENTITY_KEYS: Record<
 /** Field picker groups for related-list row config — defaults to the selected list entity. */
 export function buildRelatedListFieldPickerGroups(
     entityType: LayoutEditorRelatedListEntityType,
-    options?: { includeAllEntities?: boolean },
+    options?: {
+        includeAllEntities?: boolean;
+        surfaceKey?: DrawerLayoutEditorSurfaceKey;
+        tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+    },
 ): LayoutCatalogGroup[] {
-    const all = buildOpportunityDrawerEditorFieldPickerGroups();
+    const surfaceKey = options?.surfaceKey ?? "opportunity_drawer";
+    if (
+        surfaceKey === "person_drawer"
+        && entityType === "children"
+        && !options?.includeAllEntities
+    ) {
+        return buildPersonDrawerLinkedChildRelatedListFieldPickerGroups(options);
+    }
+
+    const all =
+        surfaceKey === "person_drawer" ? buildPersonDrawerEditorFieldPickerGroups(options)
+        : surfaceKey === "child_drawer" ? buildChildDrawerEditorFieldPickerGroups(options)
+        : buildOpportunityDrawerEditorFieldPickerGroups(options);
+
     if (options?.includeAllEntities) return all;
     const allowed = new Set(RELATED_LIST_FIELD_GROUP_ENTITY_KEYS[entityType]);
     return all.filter((group) => allowed.has(group.entityKey));

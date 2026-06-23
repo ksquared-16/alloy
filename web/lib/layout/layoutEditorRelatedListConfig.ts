@@ -14,12 +14,11 @@ import { readLayoutEditorRowTemplateConfig, writeLayoutEditorRowTemplateConfig }
 import type { LayoutCollectionColumn, LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { relatedListPresentationToDisplayMode } from "@/lib/layout/runtime/resolveLayoutRuntimeRelatedListPresentation";
 import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import { resolveDrawerLayoutEditorSurfaceKeyFromDoc } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import {
-    isAllowedDrawerEditorFieldRefKey,
     isAllowedDrawerRelatedListColumnRefKey,
     tenantFieldRefKeysForDrawerSurface,
 } from "@/lib/layout/drawerSurfaceFieldValidation";
-import { resolveDrawerLayoutEditorSurfaceKeyFromDoc } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { isAllowedOpportunityDrawerFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
 
@@ -62,12 +61,34 @@ export const LAYOUT_EDITOR_RELATED_LIST_ENTITY_LABELS: Record<LayoutEditorRelate
     opportunities: "Opportunities",
 };
 
+export const EMPTY_CHILDREN_RELATED_LIST_CONFIG: LayoutEditorRelatedListConfig = {
+    entityType: "children",
+    primaryRow: { fields: [] },
+};
+
 export const DEFAULT_CHILDREN_RELATED_LIST_CONFIG: LayoutEditorRelatedListConfig = {
     entityType: "children",
     primaryRow: { fields: ["child.name", "child.dob_age"] },
     secondaryRow: { fields: ["child.program", "child.room"] },
     tertiaryRow: { fields: ["child.schedule", "child.status"] },
 };
+
+export const LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS = 6 as const;
+
+export function defaultRelatedListConfigForSurface(
+    surfaceKey: DrawerLayoutEditorSurfaceKey,
+    entityType: LayoutEditorRelatedListEntityType = "children",
+): LayoutEditorRelatedListConfig {
+    if (entityType === "children") {
+        if (surfaceKey === "person_drawer" || surfaceKey === "child_drawer") {
+            return { ...EMPTY_CHILDREN_RELATED_LIST_CONFIG };
+        }
+        return { ...DEFAULT_CHILDREN_RELATED_LIST_CONFIG };
+    }
+    if (entityType === "contacts") return { ...DEFAULT_CONTACTS_RELATED_LIST_CONFIG };
+    if (entityType === "household_members") return { ...DEFAULT_HOUSEHOLD_MEMBERS_RELATED_LIST_CONFIG };
+    return { entityType, primaryRow: { fields: [] } };
+}
 
 export const DEFAULT_CONTACTS_RELATED_LIST_CONFIG: LayoutEditorRelatedListConfig = {
     entityType: "contacts",
@@ -121,19 +142,25 @@ function normalizeRowTemplate(raw: unknown): LayoutEditorRelatedListRowTemplate 
     return fields.length > 0 ? { fields } : null;
 }
 
-export function readLayoutEditorRelatedListConfig(section: LayoutSection): LayoutEditorRelatedListConfig {
+export function readLayoutEditorRelatedListConfig(
+    section: LayoutSection,
+    surfaceKey: DrawerLayoutEditorSurfaceKey = "opportunity_drawer",
+): LayoutEditorRelatedListConfig {
     const raw = section.metadata?.[LAYOUT_EDITOR_RELATED_LIST_CONFIG_METADATA_KEY];
-    if (!raw || typeof raw !== "object") return { ...DEFAULT_CHILDREN_RELATED_LIST_CONFIG };
+    const entityTypeFromMeta =
+        raw && typeof raw === "object" && typeof (raw as Record<string, unknown>).entityType === "string"
+            && isEntityType((raw as Record<string, unknown>).entityType as string) ?
+            ((raw as Record<string, unknown>).entityType as LayoutEditorRelatedListEntityType)
+        :   "children";
+    const defaults = defaultRelatedListConfigForSurface(surfaceKey, entityTypeFromMeta);
+    if (!raw || typeof raw !== "object") return { ...defaults };
     const bag = raw as Record<string, unknown>;
     const entityType =
-        typeof bag.entityType === "string" && isEntityType(bag.entityType) ? bag.entityType : "children";
-    const defaults =
-        entityType === "contacts" ? DEFAULT_CONTACTS_RELATED_LIST_CONFIG
-        : entityType === "household_members" ? DEFAULT_HOUSEHOLD_MEMBERS_RELATED_LIST_CONFIG
-        : DEFAULT_CHILDREN_RELATED_LIST_CONFIG;
-    const primaryRow = normalizeRowTemplate(bag.primaryRow) ?? defaults.primaryRow;
-    const secondaryRow = normalizeRowTemplate(bag.secondaryRow) ?? defaults.secondaryRow;
-    const tertiaryRow = normalizeRowTemplate(bag.tertiaryRow) ?? defaults.tertiaryRow;
+        typeof bag.entityType === "string" && isEntityType(bag.entityType) ? bag.entityType : entityTypeFromMeta;
+    const entityDefaults = defaultRelatedListConfigForSurface(surfaceKey, entityType);
+    const primaryRow = normalizeRowTemplate(bag.primaryRow) ?? entityDefaults.primaryRow;
+    const secondaryRow = normalizeRowTemplate(bag.secondaryRow) ?? entityDefaults.secondaryRow;
+    const tertiaryRow = normalizeRowTemplate(bag.tertiaryRow) ?? entityDefaults.tertiaryRow;
     const presentationMode =
         typeof bag.presentationMode === "string" && isPresentationMode(bag.presentationMode) ?
             bag.presentationMode
@@ -165,7 +192,8 @@ export function patchLayoutEditorRelatedListConfig(
     const sIdx = doc.sections.findIndex((s) => s.key === sectionKey);
     if (sIdx < 0) return doc;
     const section = doc.sections[sIdx]!;
-    const current = readLayoutEditorRelatedListConfig(section);
+    const surfaceKey = resolveDrawerLayoutEditorSurfaceKeyFromDoc(doc) ?? "opportunity_drawer";
+    const current = readLayoutEditorRelatedListConfig(section, surfaceKey);
     const nextConfig: LayoutEditorRelatedListConfig = {
         ...current,
         ...patch,
@@ -220,7 +248,7 @@ function buildChildRowGroups(config: LayoutEditorRelatedListConfig, columns: Lay
         if (indices.length === 0) return;
         groups.push({
             columnIndices: indices,
-            columnCount: Math.max(1, Math.min(3, indices.length)) as 1 | 2 | 3,
+            columnCount: Math.max(1, Math.min(LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS, indices.length)),
         });
     };
 
@@ -304,7 +332,7 @@ export function syncRelatedListSectionToItem(doc: LayoutDoc, sectionKey: string)
     const sIdx = doc.sections.findIndex((s) => s.key === sectionKey);
     if (sIdx < 0) return doc;
     const section = doc.sections[sIdx]!;
-    const config = readLayoutEditorRelatedListConfig(section);
+    const config = readLayoutEditorRelatedListConfig(section, resolveDrawerLayoutEditorSurfaceKeyFromDoc(doc) ?? "opportunity_drawer");
 
     if (!relatedListEntityTypeRuntimeSupported(config.entityType)) {
         return removeRelatedListItemFromSection(doc, sectionKey);
@@ -379,10 +407,17 @@ function isAllowedRelatedListFieldRefKey(
     if (surfaceKey === "opportunity_drawer") {
         return isAllowedOpportunityDrawerFieldRefKey(refKey, tenantFieldRefKeys);
     }
-    return isAllowedDrawerEditorFieldRefKey(refKey, {
+    return isAllowedDrawerRelatedListColumnRefKey(
         surfaceKey,
-        linkedChildContext: entityType === "children",
-    });
+        refKey,
+        {
+            id: "stub",
+            kind: "related_list",
+            refKey: entityType === "children" ? "children" : ENTITY_REF_KEYS[entityType],
+            related: { entityType: entityType === "children" ? "child" : entityType },
+        },
+        tenantFieldRefKeys,
+    );
 }
 
 export function validateLayoutEditorRelatedListConfig(
@@ -421,7 +456,7 @@ export function validateRelatedListSectionMetadata(
     const errors: string[] = [];
     for (const section of doc.sections) {
         if (section.metadata?.layoutEditorSectionType !== "related_list") continue;
-        const config = readLayoutEditorRelatedListConfig(section);
+        const config = readLayoutEditorRelatedListConfig(section, resolveDrawerLayoutEditorSurfaceKeyFromDoc(doc) ?? "opportunity_drawer");
         errors.push(
             ...validateLayoutEditorRelatedListConfig(
                 config,

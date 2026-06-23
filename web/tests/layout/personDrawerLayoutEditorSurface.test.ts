@@ -8,7 +8,7 @@ import { buildChildDrawerDefaultDoc } from "@/lib/layout/defaultChildLayouts";
 import { buildLeadDrawerDefaultDoc } from "@/lib/layout/defaultLeadLayouts";
 import { addSectionFieldItem } from "@/lib/layout/layoutEditorSectionComposition";
 import { addFieldToCustomBlockRow } from "@/lib/layout/layoutEditorFreeformBlocks";
-import { validateDrawerLayoutDoc } from "@/lib/layout/drawerLayoutEditorModel";
+import { validateDrawerLayoutDoc, reorderSectionInZone, resolveCompositionGridLayout } from "@/lib/layout/drawerLayoutEditorModel";
 import { patchLayoutDocSectionCollapse } from "@/lib/layout/runtime/layoutRuntimeSectionCollapse";
 import { patchItem, addItem, makeFieldItem } from "@/lib/layout/builderOps";
 import type { LayoutCatalogField } from "@/lib/layout/fieldCatalog";
@@ -16,6 +16,19 @@ import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { evaluateLayoutCondition } from "@/lib/layout/runtime/evaluateLayoutCondition";
 import { layoutBuilderWidgetOptionsForSurface } from "@/lib/layout/layoutBuilderPaletteModel";
 import { buildCrossFieldVisibilityCondition } from "@/lib/layout/layoutEditorVisibilityRules";
+import { createExperienceBuilderCard } from "@/lib/layout/layoutBuilderCardAuthoring";
+import { formatDrawerLayoutValidationErrors } from "@/lib/layout/drawerSurfaceFieldValidation";
+import {
+    LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS,
+    patchLayoutEditorRelatedListConfig,
+    readLayoutEditorRelatedListConfig,
+} from "@/lib/layout/layoutEditorRelatedListConfig";
+import { readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
+import { applyLayoutEditorFieldSettingsPatch } from "@/lib/layout/layoutEditorCompositionModel";
+import {
+    LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY,
+    sectionIsKpiTile,
+} from "@/lib/layout/layoutBuilderWidgetStrip";
 
 const PERSON_FIELD: LayoutCatalogField = {
     entityKey: "person",
@@ -167,6 +180,124 @@ describe("documents widget picker", () => {
         for (const surfaceKey of ["person_drawer", "child_drawer", "opportunity_drawer"] as const) {
             const keys = layoutBuilderWidgetOptionsForSurface(surfaceKey).map((w) => w.key);
             expect(keys, surfaceKey).toContain("documents");
+        }
+    });
+
+    it("documents widget adds as widget card, not KPI tile", () => {
+        const doc = buildPersonDrawerDefaultDoc();
+        const { doc: next, sectionKey } = createExperienceBuilderCard(doc, {
+            title: "Documents",
+            widthKey: "full",
+            cardType: "widget",
+            widgetKey: "documents",
+            surfaceKey: "person_drawer",
+            zone: "right_rail",
+        });
+        const section = next.sections.find((s) => s.key === sectionKey)!;
+        expect(section.metadata?.[LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY]).toBe(true);
+        expect(sectionIsKpiTile(section)).toBe(false);
+        const validation = validateDrawerLayoutDoc(next, "person_drawer");
+        expect(validation.ok, validation.errors.join("; ")).toBe(true);
+    });
+});
+
+describe("person drawer related list authoring", () => {
+    it("adding related list produces valid doc with empty child defaults", () => {
+        const doc = buildPersonDrawerDefaultDoc();
+        const { doc: next } = createExperienceBuilderCard(doc, {
+            title: "Linked children",
+            widthKey: "full",
+            cardType: "related_list",
+            surfaceKey: "person_drawer",
+        });
+        const section = next.sections.find((s) => s.metadata?.layoutEditorSectionType === "related_list");
+        expect(section).toBeTruthy();
+        const config = readLayoutEditorRelatedListConfig(section!, "person_drawer");
+        expect(config.primaryRow.fields).toEqual([]);
+        expect(config.secondaryRow?.fields ?? []).toEqual([]);
+        expect(config.tertiaryRow?.fields ?? []).toEqual([]);
+        const validation = validateDrawerLayoutDoc(next, "person_drawer");
+        expect(validation.ok, validation.errors.join("; ")).toBe(true);
+    });
+
+    it("related list validation errors use person drawer copy", () => {
+        const doc = buildPersonDrawerDefaultDoc();
+        const { doc: withList } = createExperienceBuilderCard(doc, {
+            title: "Children",
+            widthKey: "full",
+            cardType: "related_list",
+            surfaceKey: "person_drawer",
+        });
+        const section = withList.sections.find((s) => s.metadata?.layoutEditorSectionType === "related_list")!;
+        const bad = patchLayoutEditorRelatedListConfig(withList, section.key, {
+            primaryRow: { fields: ["opportunity.attention_reason"] },
+        });
+        const validation = validateDrawerLayoutDoc(bad, "person_drawer");
+        expect(validation.ok).toBe(false);
+        const friendly = formatDrawerLayoutValidationErrors(validation.errors, "person_drawer");
+        expect(friendly.join(" ")).not.toMatch(/opportunity drawer/i);
+    });
+
+    it("supports more than three related-list columns", () => {
+        const uniqueFields = ["child.name", "child.dob_age", "child.program", "child.room", "child.schedule", "child.status"];
+        const doc = buildPersonDrawerDefaultDoc();
+        const { doc: withList, sectionKey } = createExperienceBuilderCard(doc, {
+            title: "Children",
+            widthKey: "full",
+            cardType: "related_list",
+            surfaceKey: "person_drawer",
+        });
+        const patched = patchLayoutEditorRelatedListConfig(withList, sectionKey, {
+            primaryRow: { fields: uniqueFields },
+        });
+        const config = readLayoutEditorRelatedListConfig(
+            patched.sections.find((s) => s.key === sectionKey)!,
+            "person_drawer",
+        );
+        expect(config.primaryRow.fields.length).toBe(LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS);
+        const validation = validateDrawerLayoutDoc(patched, "person_drawer");
+        expect(validation.ok, validation.errors.join("; ")).toBe(true);
+    });
+
+    it("persists related-list column display metadata", () => {
+        const doc = buildPersonDrawerDefaultDoc();
+        const located = findConnectedChildrenTable(doc);
+        expect(located).toBeTruthy();
+        const colIdx = located!.item.columns?.findIndex((c) => c.refKey === "child.name") ?? -1;
+        expect(colIdx).toBeGreaterThanOrEqual(0);
+        const patched = applyLayoutEditorFieldSettingsPatch(doc, {
+            kind: "column",
+            sectionKey: located!.sectionKey,
+            blockItemId: located!.item.id,
+            colIdx,
+        }, {
+            display: { showLabel: false, icon: "user", linkBehavior: "open_drawer" },
+        });
+        const section = patched.sections.find((s) => s.key === located!.sectionKey)!;
+        const item = findConnectedChildrenTable(patched)!.item;
+        const col = item.columns![colIdx]!;
+        const display = readLayoutEditorDisplayConfig(col);
+        expect(display.showLabel).toBe(false);
+        expect(display.icon).toBe("user");
+        expect(display.linkBehavior).toBe("open_drawer");
+    });
+});
+
+describe("section reorder and composition grid", () => {
+    it("reordering a section does not duplicate section keys", () => {
+        const doc = buildPersonDrawerDefaultDoc();
+        const countBefore = doc.sections.length;
+        const reordered = reorderSectionInZone(doc, "recent_activity", -1, "person_drawer");
+        expect(reordered.sections.length).toBe(countBefore);
+        const keys = reordered.sections.map((s) => s.key);
+        expect(new Set(keys).size).toBe(keys.length);
+    });
+
+    it("does not duplicate rail sections in overflow", () => {
+        const layout = resolveCompositionGridLayout(buildPersonDrawerDefaultDoc(), "person_drawer");
+        const overflowKeys = layout.overflowSections.map((s) => s.key);
+        for (const section of layout.rightRailSections) {
+            expect(overflowKeys).not.toContain(section.key);
         }
     });
 });

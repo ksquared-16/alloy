@@ -24,6 +24,8 @@ import {
     layoutDocHasRepairableGeneratedKeys,
     repairOpportunityDrawerLayoutGeneratedKeys,
 } from "@/lib/layout/layoutEditorGeneratedKeys";
+import { formatDrawerLayoutValidationErrors } from "@/lib/layout/drawerSurfaceFieldValidation";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import { validateRelatedListSectionMetadata } from "@/lib/layout/layoutEditorRelatedListConfig";
 import { validateOpportunityDrawerLayoutPublishGuards } from "@/lib/layout/layoutEditorPublishGuards";
 import { validateSectionLayoutMetadata } from "@/lib/layout/layoutEditorSectionLayout";
@@ -337,47 +339,11 @@ export function ensureOpportunityDrawerLayoutDocSaveReady(doc: LayoutDoc): {
     return { doc: repaired.doc, repaired: repaired.changed, repairs: repaired.repairs };
 }
 
-export function formatLayoutValidationErrors(errors: string[]): string[] {
-    return errors.map((err) => {
-        let msg = err
-            .replace(/^sections\[(\d+)\]\.key:/, "Section $1:")
-            .replace(/^sections\[(\d+)\]\./, "Section $1 · ")
-            .replace(/^doc\.metadata:/, "Layout settings:")
-            .replace(/^doc\.sections\[(\d+)\]\./, "Section $1 · ");
-
-        msg = msg.replace(
-            /legacy_invalid_section_key "([^"]+)"/,
-            'This custom section was created with an invalid key ("$1"). Please recreate it or use "Repair generated layout keys".',
-        );
-        msg = msg.replace(
-            /custom_section_missing_metadata for key "([^"]+)"/,
-            'Custom section "$1" is missing required layout metadata. Use "Repair generated layout keys" or recreate the section.',
-        );
-        msg = msg.replace(
-            /legacy_invalid_block_refKey "([^"]+)"/,
-            'This custom block is missing a valid layout block ID. Use "Repair generated layout keys" or add the block again.',
-        );
-        msg = msg.replace(
-            /custom_block_missing_metadata for refKey "([^"]+)"/,
-            'Custom block "$1" is missing required layout metadata. Use "Repair generated layout keys" or recreate the block.',
-        );
-        msg = msg.replace(/unknown field refKey "([^"]+)"/, 'Field "$1" is not allowed on the opportunity drawer');
-        msg = msg.replace(/unknown field_group refKey "([^"]+)"/, 'Block "$1" is not allowed on this surface');
-        msg = msg.replace(/unknown related_list refKey "([^"]+)"/, 'List "$1" is not allowed on this surface');
-        msg = msg.replace(/unknown section key "([^"]+)"/, 'Section "$1" is not registered for this surface');
-        msg = msg.replace(/unknown metadata key "([^"]+)"/, 'Setting "$1" is not supported');
-        msg = msg.replace(/unknown widget refKey "([^"]+)"/, 'Widget "$1" is not allowed on this surface');
-        msg = msg.replace(
-            /related list entity "([^"]+)" is preview-only and cannot be published/,
-            'Related list "$1" is preview-only — choose Children, Contacts, or Household members before publishing',
-        );
-        msg = msg.replace(
-            /action buttons are preview-only and cannot be published/,
-            "Action buttons are preview-only — remove them or wait for live drawer action wiring before publishing",
-        );
-
-        return msg;
-    });
+export function formatLayoutValidationErrors(
+    errors: string[],
+    surfaceKey: DrawerLayoutEditorSurfaceKey = "opportunity_drawer",
+): string[] {
+    return formatDrawerLayoutValidationErrors(errors, surfaceKey);
 }
 
 export {

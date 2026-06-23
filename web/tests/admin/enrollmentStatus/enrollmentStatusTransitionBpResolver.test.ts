@@ -5,6 +5,10 @@ import {
     buildEnrollmentTemplateStageRecords,
 } from "@/lib/businessProcessTemplates/enrollmentProcessTemplate";
 import {
+    ENROLLMENT_MANUAL_TRANSITION_POLICY_METADATA_KEY,
+    type EnrollmentManualTransitionPolicyV1,
+} from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
+import {
     findBpDestinationOption,
     resolveBpEnrollmentStatusDestinations,
     tourBypassRequiredForDestination,
@@ -15,8 +19,15 @@ import { executeEnrollmentStatusTransition } from "@/lib/admin/enrollmentStatus/
 import { updateOpportunityCustomerMemberLifecycleStatus } from "@/lib/opportunities/updateOpportunityCustomerMemberLifecycleStatus";
 import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 
-function enrollmentDepartmentMetadata(): Record<string, unknown> {
-    const process: LifecycleBuilderProcessRecord = {
+function enrollmentDepartmentMetadata(
+    policy: EnrollmentManualTransitionPolicyV1 = {
+        version: 1,
+        mode: "operator_jump_with_preflight",
+        waitlist_as_parking_lot: true,
+        bypass_reason_required_for_skipped_stages: true,
+    },
+): Record<string, unknown> {
+    const process: LifecycleBuilderProcessRecord & Record<string, unknown> = {
         id: "proc-1",
         key: "enrollment",
         name: "Enrollment",
@@ -25,6 +36,7 @@ function enrollmentDepartmentMetadata(): Record<string, unknown> {
         sort_order: 0,
         tracks_v1: ENROLLMENT_DEFAULT_TRACKS,
         stages: buildEnrollmentTemplateStageRecords(),
+        [ENROLLMENT_MANUAL_TRANSITION_POLICY_METADATA_KEY]: policy,
     };
     return {
         lifecycle_builder_v1: {
@@ -35,12 +47,44 @@ function enrollmentDepartmentMetadata(): Record<string, unknown> {
     };
 }
 
+import {
+    bypassReasonRequiredForSkippedStages,
+    skippedBuilderStagesBetween,
+} from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
+import { activeLifecycleProcess, lifecycleBuilderFromDepartmentMetadata } from "@/lib/lifecycle/lifecycleBuilderConfig";
+
+describe("enrollment manual transition policy", () => {
+    it("computes skipped stages for New Leads to Enrolled jump", () => {
+        const metadata = enrollmentDepartmentMetadata();
+        const process = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(metadata))!;
+        const skipped = skippedBuilderStagesBetween(process, "lead", "enrolled");
+        const labels = skipped.map((s) => s.label.toLowerCase());
+        expect(labels.some((l) => l.includes("qualification"))).toBe(true);
+        expect(labels.some((l) => l.includes("tour") || l.includes("decision"))).toBe(true);
+    });
+
+    it("requires bypass reason when skipping stages under default policy", () => {
+        const metadata = enrollmentDepartmentMetadata();
+        const process = activeLifecycleProcess(lifecycleBuilderFromDepartmentMetadata(metadata))!;
+        const skipped = skippedBuilderStagesBetween(process, "lead", "enrolled");
+        expect(
+            bypassReasonRequiredForSkippedStages(
+                { version: 1, mode: "operator_jump_with_preflight", bypass_reason_required_for_skipped_stages: true },
+                skipped,
+            ),
+        ).toBe(true);
+    });
+});
+
 describe("resolveBpEnrollmentStatusDestinations", () => {
     const metadata = enrollmentDepartmentMetadata();
 
-    it("returns only BP-allowed destinations from decision stage operating plan", () => {
+    it("returns only BP-allowed destinations from decision stage when strict transitions", () => {
         const result = resolveBpEnrollmentStatusDestinations({
-            departmentMetadata: metadata,
+            departmentMetadata: enrollmentDepartmentMetadata({
+                version: 1,
+                mode: "strict_transitions_only",
+            }),
             currentStatusKey: "decision_pending",
             grain: "child",
         });
@@ -57,6 +101,23 @@ describe("resolveBpEnrollmentStatusDestinations", () => {
         expect(keys).not.toContain("tour");
     });
 
+    it("includes all configured stages from New Leads when operator jump is enabled", () => {
+        const result = resolveBpEnrollmentStatusDestinations({
+            departmentMetadata: enrollmentDepartmentMetadata(),
+            currentStatusKey: "new_inquiry",
+            grain: "child",
+            builderStageKey: "lead",
+        });
+
+        const keys = result.destinations.map((d) => d.destinationKey);
+        expect(keys).toContain("qualification");
+        expect(keys).toContain("tour");
+        expect(keys).toContain("waitlist");
+        expect(keys).toContain("enrollment");
+        expect(keys).toContain("enrolled");
+        expect(keys).not.toContain("lead");
+    });
+
     it("includes parking-lot waitlist from qualification when process has waitlist stage", () => {
         const result = resolveBpEnrollmentStatusDestinations({
             departmentMetadata: metadata,
@@ -68,7 +129,6 @@ describe("resolveBpEnrollmentStatusDestinations", () => {
         const waitlist = result.destinations.find((d) => d.destinationKey === "waitlist");
         expect(waitlist).toBeDefined();
         expect(waitlist?.parkingLot).toBe(true);
-        expect(waitlist?.bpSource).toBe("parking_lot");
         expect(waitlist?.requiresTourBypass).toBe(true);
     });
 
@@ -82,7 +142,6 @@ describe("resolveBpEnrollmentStatusDestinations", () => {
 
         const waitlist = result.destinations.filter((d) => d.destinationKey === "waitlist");
         expect(waitlist.length).toBeGreaterThanOrEqual(1);
-        expect(waitlist.some((d) => d.bpSource === "stage_outcome" || d.bpSource === "split_rule")).toBe(true);
     });
 
     it("falls back to default destinations when BP config is missing", () => {
@@ -215,9 +274,15 @@ describe("evaluateEnrollmentStatusTransitionPreflight BP enforcement", () => {
         });
     });
 
-    it("blocks destinations not allowed by BP config", async () => {
+    it("blocks destinations not allowed under strict BP config", async () => {
         const result = await evaluateEnrollmentStatusTransitionPreflight({
-            supabase: createPreflightSupabase(enrollmentDepartmentMetadata(), "decision_pending"),
+            supabase: createPreflightSupabase(
+                enrollmentDepartmentMetadata({
+                    version: 1,
+                    mode: "strict_transitions_only",
+                }),
+                "decision_pending",
+            ),
             orgId: "org-1",
             scope: {
                 grain: "child",

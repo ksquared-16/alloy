@@ -19,7 +19,7 @@ import {
     addSectionWidgetItem,
 } from "@/lib/layout/layoutEditorSectionComposition";
 import { readSectionType } from "@/lib/layout/layoutEditorSectionLayout";
-import { listSectionWidgetItems, sectionIsKpiTile } from "@/lib/layout/layoutBuilderWidgetStrip";
+import { listSectionWidgetItems, sectionIsKpiTile, isLayoutBuilderWidgetCardWidgetKey } from "@/lib/layout/layoutBuilderWidgetStrip";
 import {
     buildAddSuccessMessage,
     resolvePaletteTargetSectionId,
@@ -169,7 +169,9 @@ export default function LayoutBuilderPalettePanel({
                 result.doc,
                 result.sectionKey,
                 result.itemId,
-            `Added KPI tile "${itemLabel}".`,
+                isLayoutBuilderWidgetCardWidgetKey(options.widgetKey ?? "") ?
+                    `Added "${itemLabel}" widget card.`
+                :   `Added KPI tile "${itemLabel}".`,
             );
             return;
         }
@@ -225,7 +227,11 @@ export default function LayoutBuilderPalettePanel({
     };
 
     const quickWidgets = useMemo(
-        () => layoutBuilderWidgetOptionsForSurface(surfaceKey).slice(0, 6),
+        () => layoutBuilderWidgetOptionsForSurface(surfaceKey).filter((w) => !isLayoutBuilderWidgetCardWidgetKey(w.key)),
+        [surfaceKey],
+    );
+    const widgetCards = useMemo(
+        () => layoutBuilderWidgetOptionsForSurface(surfaceKey).filter((w) => isLayoutBuilderWidgetCardWidgetKey(w.key)),
         [surfaceKey],
     );
 
@@ -307,6 +313,33 @@ export default function LayoutBuilderPalettePanel({
                             ))}
                         </div>
                     </section>
+
+                    {widgetCards.length > 0 ?
+                        <section data-testid="layout-builder-palette-group-widget-cards">
+                            <h4 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/45">Add widget</h4>
+                            <p className="mt-1 text-[11px] text-alloy-midnight/45">Full card widgets for documents, activity, and similar rails.</p>
+                            <div className="mt-2 grid grid-cols-2 gap-2">
+                                {widgetCards.map((widget) => (
+                                    <button
+                                        key={widget.key}
+                                        type="button"
+                                        className="rounded-lg border border-alloy-forge/12 bg-white px-2.5 py-2 text-left text-xs font-medium text-alloy-midnight/75 transition hover:border-alloy-pine/30 hover:bg-alloy-pine/[0.04]"
+                                        data-testid={`layout-builder-palette-widget-card-${widget.key}`}
+                                        onClick={() =>
+                                            addItemToTarget(
+                                                "widget",
+                                                (d, sk, ri, ci) => addSectionWidgetItem(d, sk, ri, ci, widget.key, surfaceKey),
+                                                widget.label,
+                                                { widgetKey: widget.key, forceNewCard: true },
+                                            )
+                                        }
+                                    >
+                                        {widget.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+                    :   null}
 
                     <section>
                         <button

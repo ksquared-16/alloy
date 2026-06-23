@@ -59,6 +59,7 @@ import {
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
 } from "@/lib/layout/layoutEditorGeneratedKeys";
 import { LAYOUT_EDITOR_KPI_TILE_METADATA_KEY } from "@/lib/layout/layoutBuilderKpiTileRows";
+import { LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY } from "@/lib/layout/layoutBuilderWidgetStrip";
 import {
     LAYOUT_EDITOR_ACTIVITY_TIMELINE_CONFIG_METADATA_KEY,
     validateLayoutEditorActivityTimelineMetadata,
@@ -94,6 +95,7 @@ const ALLOWED_SECTION_METADATA_KEYS = new Set([
     "layoutEditorSectionType",
     "layoutEditorRelatedListConfig",
     LAYOUT_EDITOR_KPI_TILE_METADATA_KEY,
+    LAYOUT_EDITOR_WIDGET_CARD_METADATA_KEY,
     LAYOUT_EDITOR_CUSTOM_METADATA_KEY,
     LAYOUT_EDITOR_CREATED_BY_VISUAL_EDITOR_METADATA_KEY,
     LAYOUT_SECTION_PERSIST_COLLAPSE_STATE_METADATA_KEY,

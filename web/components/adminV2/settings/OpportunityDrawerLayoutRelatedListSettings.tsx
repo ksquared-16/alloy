@@ -1,6 +1,7 @@
 "use client";
 
 import OpportunityDrawerLayoutFieldSettingsModal from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettingsModal";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import {
     applyLayoutEditorFieldSettingsPatch,
@@ -9,12 +10,13 @@ import {
 import { readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
 import { resolveVisibilityRuleKey } from "@/lib/layout/layoutEditorVisibilityRules";
 import {
-    DEFAULT_CHILDREN_RELATED_LIST_CONFIG,
+    defaultRelatedListConfigForSurface,
     findRelatedListItemInSection,
     LAYOUT_EDITOR_RELATED_LIST_ENTITY_LABELS,
     LAYOUT_EDITOR_RELATED_LIST_ENTITY_TYPES,
     LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_LABELS,
     LAYOUT_EDITOR_RELATED_LIST_PRESENTATION_MODES,
+    LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS,
     patchLayoutEditorRelatedListConfig,
     readLayoutEditorRelatedListConfig,
     relatedListEntityTypeRuntimeSupported,
@@ -29,10 +31,11 @@ type Props = {
     doc: LayoutDoc;
     sectionKey: string;
     applyDoc: (next: LayoutDoc) => void;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
 };
 
 const ROW_LABELS = ["Row 1", "Row 2", "Row 3"] as const;
-const COLUMN_COUNTS = [1, 2, 3] as const;
+const COLUMN_COUNTS = [1, 2, 3, 4, 5, 6] as const;
 
 function rowKey(index: number): "primaryRow" | "secondaryRow" | "tertiaryRow" {
     if (index === 0) return "primaryRow";
@@ -68,10 +71,14 @@ function RelatedListRowEditor({
     onSelectRefKey: (refKey: string | null) => void;
 }) {
     const fields = row?.fields ?? [];
-    const [columnCount, setColumnCount] = useState(Math.min(3, Math.max(1, fields.length || 1)));
+    const [columnCount, setColumnCount] = useState(
+        Math.min(LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS, Math.max(1, fields.length || 1)),
+    );
 
     useEffect(() => {
-        setColumnCount((prev) => Math.max(prev, Math.min(3, Math.max(1, fields.length || 1))));
+        setColumnCount((prev) =>
+            Math.max(prev, Math.min(LAYOUT_EDITOR_RELATED_LIST_MAX_ROW_FIELDS, Math.max(1, fields.length || 1))),
+        );
     }, [fields.length]);
 
     const setColumnCountAndPad = (count: number) => {
@@ -207,9 +214,14 @@ function RelatedListRowEditor({
     );
 }
 
-export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectionKey, applyDoc }: Props) {
+export default function OpportunityDrawerLayoutRelatedListSettings({
+    doc,
+    sectionKey,
+    applyDoc,
+    surfaceKey = "opportunity_drawer",
+}: Props) {
     const section = doc.sections.find((s) => s.key === sectionKey);
-    const config = section ? readLayoutEditorRelatedListConfig(section) : DEFAULT_CHILDREN_RELATED_LIST_CONFIG;
+    const config = section ? readLayoutEditorRelatedListConfig(section, surfaceKey) : defaultRelatedListConfigForSurface(surfaceKey, "children");
     const [showAllFields, setShowAllFields] = useState(false);
     const [selectedRefKey, setSelectedRefKey] = useState<string | null>(null);
 
@@ -232,8 +244,8 @@ export default function OpportunityDrawerLayoutRelatedListSettings({ doc, sectio
     }, [relatedListItem, sectionKey, selectedRefKey]);
 
     const fieldGroups = useMemo(
-        () => buildRelatedListFieldPickerGroups(config.entityType, { includeAllEntities: showAllFields }),
-        [config.entityType, showAllFields],
+        () => buildRelatedListFieldPickerGroups(config.entityType, { includeAllEntities: showAllFields, surfaceKey }),
+        [config.entityType, showAllFields, surfaceKey],
     );
 
     const columnEditableByRefKey = useMemo(() => {

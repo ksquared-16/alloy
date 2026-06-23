@@ -18,6 +18,8 @@ import type { QueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import { parseQueueMembershipV1 } from "@/lib/lifecycle/queueMembershipV1";
 import type { StageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
 import { parseStageOperatingPlanV1 } from "@/lib/lifecycle/stageOperatingPlanV1";
+import type { EnrollmentManualTransitionPolicyV1 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
+import { parseEnrollmentManualTransitionPolicy } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 import { parseStatusRollupV1, type StatusRollupV1 } from "@/lib/lifecycle/statusRollupV1";
 
 export const LIFECYCLE_BUILDER_METADATA_KEY = "lifecycle_builder_v1" as const;
@@ -51,6 +53,8 @@ export type LifecycleBuilderProcessRecord = {
     is_active: boolean;
     /** Tracks and split rules — template-defined, stored as generic metadata. */
     tracks_v1?: ProcessTracksV1;
+    /** Manual Change Enrollment Status transition policy. */
+    manual_status_transition_policy_v1?: EnrollmentManualTransitionPolicyV1;
     stages: LifecycleBuilderStageRecord[];
 };
 
@@ -139,6 +143,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
         }
         stages.sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label));
         const tracks_v1 = parseProcessTracksV1(row.tracks_v1) ?? undefined;
+        const manualPolicy = parseEnrollmentManualTransitionPolicy(row.manual_status_transition_policy_v1);
         processes.push({
             id,
             key,
@@ -147,6 +152,7 @@ export function parseLifecycleBuilderV1(raw: unknown): LifecycleBuilderV1 | null
             sort_order: typeof row.sort_order === "number" ? row.sort_order : processes.length,
             is_active: row.is_active !== false,
             ...(tracks_v1 ? { tracks_v1 } : {}),
+            manual_status_transition_policy_v1: manualPolicy,
             stages,
         });
     }

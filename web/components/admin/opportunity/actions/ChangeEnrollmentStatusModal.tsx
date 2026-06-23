@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { EnrollmentStatusDestinationKey } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import {
     ENROLLMENT_STATUS_BYPASS_REASON_OPTIONS,
@@ -22,6 +22,9 @@ type Props = {
     onSuccess?: () => void;
 };
 
+const DEBUG_ENROLLMENT_STATUS =
+    typeof process !== "undefined" && process.env.NEXT_PUBLIC_ENROLLMENT_STATUS_DEBUG === "1";
+
 export function ChangeEnrollmentStatusModal({
     open,
     opportunityId,
@@ -32,7 +35,7 @@ export function ChangeEnrollmentStatusModal({
     onClose,
     onSuccess,
 }: Props) {
-    const [loading, setLoading] = useState(false);
+    const [loadPhase, setLoadPhase] = useState<"idle" | "loading" | "ready" | "error">("idle");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [context, setContext] = useState<EnrollmentStatusTransitionContextResult | null>(null);
@@ -42,7 +45,10 @@ export function ChangeEnrollmentStatusModal({
     const [customBypassReason, setCustomBypassReason] = useState("");
     const [note, setNote] = useState("");
     const [preflight, setPreflight] = useState<RequirementValidationResult | null>(null);
+    const [skippedStageLabels, setSkippedStageLabels] = useState<string[]>([]);
     const [requiresBypassReason, setRequiresBypassReason] = useState(false);
+    const loadRequestId = useRef(0);
+    const preflightRequestId = useRef(0);
 
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel =
@@ -61,56 +67,80 @@ export function ChangeEnrollmentStatusModal({
         [context?.destinations, destinationKey],
     );
 
-    const loadContext = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-        try {
-            const res = await fetch("/api/admin/enrollment-status-transition/context", {
-                method: "POST",
-                credentials: "include",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    opportunity_id: opportunityId,
-                    source_surface: sourceSurface,
-                    scope: {
-                        opportunityId,
-                        sourceSurface,
-                        opportunityCustomerMemberId:
-                            (initialScope?.opportunityCustomerMemberId ?? selectedOcmId.trim()) || undefined,
-                        placementCandidateId: initialScope?.placementCandidateId,
-                        rowGrain: initialScope?.grain,
-                        childDisplayName: initialScope?.childDisplayName,
-                    },
-                    department_id: departmentId,
-                }),
-            });
-            const json = (await res.json().catch(() => ({}))) as {
-                ok?: boolean;
-                error?: string;
-                context?: EnrollmentStatusTransitionContextResult;
-            };
-            if (!res.ok || !json.context) {
-                throw new Error(json.error ?? "Failed to load enrollment context");
+    const fetchContext = useCallback(
+        async (ocmIdOverride?: string) => {
+            const requestId = ++loadRequestId.current;
+            setLoadPhase("loading");
+            setError(null);
+            setPreflight(null);
+            setSkippedStageLabels([]);
+            setRequiresBypassReason(false);
+            setDestinationKey("");
+
+            try {
+                const res = await fetch("/api/admin/enrollment-status-transition/context", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        opportunity_id: opportunityId,
+                        source_surface: sourceSurface,
+                        scope: {
+                            opportunityId,
+                            sourceSurface,
+                            grain: initialScope?.grain,
+                            opportunityCustomerMemberId:
+                                ocmIdOverride?.trim() ||
+                                initialScope?.opportunityCustomerMemberId?.trim() ||
+                                undefined,
+                            placementCandidateId: initialScope?.placementCandidateId,
+                            childDisplayName: initialScope?.childDisplayName,
+                        },
+                        department_id: departmentId,
+                    }),
+                });
+                const json = (await res.json().catch(() => ({}))) as {
+                    ok?: boolean;
+                    error?: string;
+                    context?: EnrollmentStatusTransitionContextResult;
+                };
+                if (requestId !== loadRequestId.current) return;
+                if (!res.ok || !json.context) {
+                    throw new Error(json.error ?? "Failed to load enrollment context");
+                }
+                setContext(json.context);
+                setSelectedOcmId(json.context.scope.opportunityCustomerMemberId?.trim() ?? ocmIdOverride?.trim() ?? "");
+                setLoadPhase("ready");
+            } catch (e) {
+                if (requestId !== loadRequestId.current) return;
+                setError(e instanceof Error ? e.message : "Failed to load");
+                setLoadPhase("error");
             }
-            setContext(json.context);
-            if (json.context.scope.opportunityCustomerMemberId) {
-                setSelectedOcmId(json.context.scope.opportunityCustomerMemberId);
-            }
-        } catch (e) {
-            setError(e instanceof Error ? e.message : "Failed to load");
-        } finally {
-            setLoading(false);
-        }
-    }, [departmentId, initialScope, opportunityId, selectedOcmId, sourceSurface]);
+        },
+        [departmentId, initialScope, opportunityId, sourceSurface],
+    );
 
     useEffect(() => {
-        if (!open || !selectedOcmId.trim() || !context) return;
-        if (context.scope.opportunityCustomerMemberId === selectedOcmId.trim()) return;
-        void loadContext();
-    }, [open, selectedOcmId, context, loadContext]);
+        if (!open) {
+            setLoadPhase("idle");
+            setContext(null);
+            setSelectedOcmId("");
+            setDestinationKey("");
+            setBypassReason("");
+            setCustomBypassReason("");
+            setNote("");
+            setPreflight(null);
+            setSkippedStageLabels([]);
+            setRequiresBypassReason(false);
+            setError(null);
+            return;
+        }
+        void fetchContext(initialScope?.opportunityCustomerMemberId?.trim());
+    }, [open, fetchContext, initialScope?.opportunityCustomerMemberId]);
 
     const runPreflight = useCallback(async () => {
         if (!destinationKey) return;
+        const requestId = ++preflightRequestId.current;
         const res = await fetch("/api/admin/enrollment-status-transition/preflight", {
             method: "POST",
             credentials: "include",
@@ -131,9 +161,12 @@ export function ChangeEnrollmentStatusModal({
         const json = (await res.json().catch(() => ({}))) as {
             completion_requirements?: RequirementValidationResult;
             requires_bypass_reason?: boolean;
+            skipped_stage_labels?: string[];
         };
+        if (requestId !== preflightRequestId.current) return;
         setPreflight(json.completion_requirements ?? null);
         setRequiresBypassReason(Boolean(json.requires_bypass_reason));
+        setSkippedStageLabels(Array.isArray(json.skipped_stage_labels) ? json.skipped_stage_labels : []);
     }, [
         bypassReason,
         customBypassReason,
@@ -147,46 +180,41 @@ export function ChangeEnrollmentStatusModal({
     ]);
 
     useEffect(() => {
-        if (!open) return;
-        setDestinationKey("");
-        setBypassReason("");
-        setCustomBypassReason("");
-        setNote("");
-        setPreflight(null);
-        setRequiresBypassReason(false);
-        setSelectedOcmId(initialScope?.opportunityCustomerMemberId?.trim() ?? "");
-        void loadContext();
-    }, [open, loadContext, initialScope?.opportunityCustomerMemberId]);
-
-    useEffect(() => {
-        if (!open || !destinationKey) {
+        if (!open || loadPhase !== "ready" || !destinationKey) {
             setPreflight(null);
+            setSkippedStageLabels([]);
             return;
         }
         if (context?.requiresChildSelection && !effectiveOcmId) return;
-        const t = window.setTimeout(() => void runPreflight(), 200);
+        const t = window.setTimeout(() => void runPreflight(), 250);
         return () => window.clearTimeout(t);
-    }, [open, destinationKey, effectiveOcmId, context?.requiresChildSelection, runPreflight]);
+    }, [open, loadPhase, destinationKey, effectiveOcmId, context?.requiresChildSelection, runPreflight]);
 
     if (!open) return null;
 
     const blockingSummary = preflight && !preflight.ok ? formatRequirementValidationSummary(preflight) : null;
     const canSubmit =
+        loadPhase === "ready" &&
         Boolean(destinationKey) &&
         (!context?.requiresChildSelection || Boolean(effectiveOcmId)) &&
         (!requiresBypassReason || Boolean(bypassReason.trim() || customBypassReason.trim())) &&
         preflight?.ok !== false;
 
+    const scopeHint =
+        context?.childScoped
+            ? context.requiresChildSelection
+                ? "Select which child's enrollment track to move."
+                : `Updating enrollment for ${context.scope.childDisplayName ?? "this child"}.`
+            : "Updating household / case record status.";
+
     return (
         <>
             <div className={overlay} onClick={() => (!busy ? onClose() : null)} />
-            <div className={panel} role="dialog" aria-modal="true" aria-label="Change Enrollment Status">
+            <div className={panel} role="dialog" aria-modal="true" aria-label="Change enrollment stage">
                 <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-alloy-stone/15">
                     <div className="min-w-0">
-                        <div className="text-sm font-semibold text-alloy-midnight">Change Enrollment Status</div>
-                        <div className="mt-0.5 text-[12px] text-alloy-midnight/60">
-                            Move a child enrollment track or household record to a new stage.
-                        </div>
+                        <div className="text-sm font-semibold text-alloy-midnight">Change enrollment stage</div>
+                        <div className="mt-0.5 text-[12px] text-alloy-midnight/60">{scopeHint}</div>
                     </div>
                     <button
                         type="button"
@@ -199,26 +227,45 @@ export function ChangeEnrollmentStatusModal({
                 </div>
 
                 <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
-                    {loading ?
-                        <div className="text-sm text-alloy-midnight/60">Loading enrollment context…</div>
+                    {loadPhase === "loading" ?
+                        <div className="space-y-3 animate-pulse" data-testid="enrollment-status-modal-skeleton">
+                            <div className="h-14 rounded-lg bg-alloy-stone/15" />
+                            <div className="h-10 rounded-lg bg-alloy-stone/10" />
+                            <div className="h-10 rounded-lg bg-alloy-stone/10" />
+                        </div>
                     :   null}
 
-                    {context ?
+                    {loadPhase === "error" && error ?
+                        <div className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember">
+                            {error}
+                        </div>
+                    :   null}
+
+                    {loadPhase === "ready" && context ?
                         <>
                             <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 px-3 py-2">
-                                <div className={label}>Current enrollment status</div>
+                                <div className={label}>Current stage</div>
                                 <div className="mt-1 text-sm font-semibold text-alloy-midnight">
                                     {context.currentStatusLabel}
                                 </div>
+                                {DEBUG_ENROLLMENT_STATUS && context.currentStatusKey ?
+                                    <div className="mt-0.5 text-[10px] text-alloy-midnight/45">
+                                        Status: {context.currentStatusKey}
+                                    </div>
+                                :   null}
                             </div>
 
                             {context.requiresChildSelection && context.children.length > 1 ?
                                 <div>
-                                    <div className={label}>Which child?</div>
+                                    <div className={label}>Which child enrollment?</div>
                                     <select
                                         value={selectedOcmId}
                                         disabled={busy}
-                                        onChange={(e) => setSelectedOcmId(e.target.value)}
+                                        onChange={(e) => {
+                                            const next = e.target.value;
+                                            setSelectedOcmId(next);
+                                            if (next.trim()) void fetchContext(next);
+                                        }}
                                         className={input}
                                     >
                                         <option value="">Select child…</option>
@@ -235,28 +282,37 @@ export function ChangeEnrollmentStatusModal({
                             :   null}
 
                             <div>
-                                <div className={label}>Move to</div>
+                                <div className={label}>Move to stage</div>
                                 <select
                                     value={destinationKey}
-                                    disabled={busy || loading}
+                                    disabled={busy}
                                     onChange={(e) =>
                                         setDestinationKey(e.target.value as EnrollmentStatusDestinationKey | "")
                                     }
                                     className={input}
                                 >
-                                    <option value="">Select destination…</option>
+                                    <option value="">Select stage…</option>
                                     {context.destinations.map((d) => (
-                                        <option key={d.destinationKey} value={d.destinationKey}>
+                                        <option key={`${d.destinationKey}:${d.defaultStatusKey}`} value={d.destinationKey}>
                                             {d.label}
-                                            {d.parkingLot ? " (reachable from multiple stages)" : ""}
+                                            {d.parkingLot ? " (parking lot)" : ""}
                                         </option>
                                     ))}
                                 </select>
                             </div>
 
+                            {skippedStageLabels.length > 0 ?
+                                <div className="rounded-lg border border-alloy-blue/20 bg-alloy-blue/[0.04] px-3 py-2">
+                                    <div className={label}>Skipped stages</div>
+                                    <p className="mt-1 text-sm text-alloy-midnight/75">
+                                        {skippedStageLabels.join(" · ")}
+                                    </p>
+                                </div>
+                            :   null}
+
                             {requiresBypassReason ?
                                 <div>
-                                    <div className={label}>Reason for skipping tour requirement</div>
+                                    <div className={label}>Reason for bypass</div>
                                     <select
                                         value={bypassReason}
                                         disabled={busy}
@@ -276,7 +332,7 @@ export function ChangeEnrollmentStatusModal({
                                             disabled={busy}
                                             onChange={(e) => setCustomBypassReason(e.target.value)}
                                             className={`${input} mt-2`}
-                                            placeholder="Describe why tour is being skipped"
+                                            placeholder="Describe why requirements are being skipped"
                                         />
                                     :   null}
                                 </div>
@@ -309,15 +365,21 @@ export function ChangeEnrollmentStatusModal({
                                     onChange={(e) => setNote(e.target.value)}
                                     className={input}
                                     rows={3}
-                                    placeholder="Add context for this status change."
+                                    placeholder="Add context for this stage change."
                                 />
                             </div>
                         </>
                     :   null}
 
-                    {error || blockingSummary ?
+                    {error && loadPhase === "ready" ?
                         <div className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember">
-                            {error ?? blockingSummary}
+                            {error}
+                        </div>
+                    :   null}
+
+                    {blockingSummary && loadPhase === "ready" ?
+                        <div className="rounded-lg border border-alloy-ember/30 bg-alloy-ember/5 px-3 py-2 text-sm text-alloy-ember">
+                            {blockingSummary}
                         </div>
                     :   null}
                 </div>

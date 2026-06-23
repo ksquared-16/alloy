@@ -19,6 +19,10 @@ import {
     markSectionAsKpiTile,
     setKpiTileSectionTitleHidden,
 } from "@/lib/layout/layoutBuilderKpiTileRows";
+import {
+    isLayoutBuilderWidgetCardWidgetKey,
+    markSectionAsWidgetCard,
+} from "@/lib/layout/layoutBuilderWidgetStrip";
 import { applyPeerCardWidth, packPeerCardsInZone } from "@/lib/layout/layoutBuilderPeerCardRows";
 import {
     applyExperienceBuilderPlacement,
@@ -101,12 +105,18 @@ export function createExperienceBuilderCard(
     const surfaceKey = input.surfaceKey ?? "opportunity_drawer";
 
     let next: LayoutDoc;
-    if (input.cardType === "widget") {
+    const widgetKey = input.widgetKey?.trim() ?? "";
+    const widgetCard = input.cardType === "widget" && isLayoutBuilderWidgetCardWidgetKey(widgetKey);
+
+    if (widgetCard) {
+        next = addCustomOpportunityDrawerSection(doc, { title: title || "Widget", zone });
+    } else if (input.cardType === "widget") {
         next = addWidgetOpportunityDrawerSection(doc, { title: "", zone });
     } else if (input.cardType === "related_list") {
         next = addRelatedListOpportunityDrawerSection(doc, {
             title: title || "Related list",
             zone,
+            surfaceKey,
         });
     } else if (input.cardType === "text") {
         next = addCustomOpportunityDrawerSection(doc, { title: title || "Text block", zone });
@@ -120,18 +130,28 @@ export function createExperienceBuilderCard(
 
     let itemId: string | undefined;
     if (input.cardType === "widget") {
-        next = markSectionAsKpiTile(next, sectionKey);
-        next = setKpiTileSectionTitleHidden(next, sectionKey);
-        const widgetKey = input.widgetKey ?? "tasks";
-        const added = addSectionWidgetItem(next, sectionKey, 0, 0, widgetKey, surfaceKey);
-        if (added.ok && added.doc) {
-            next = added.doc;
-            itemId = added.itemId;
-            if (title && itemId) {
-                next = patchSectionItem(next, sectionKey, itemId, { label: title });
+        const resolvedWidgetKey = widgetKey || "tasks";
+        if (widgetCard) {
+            next = markSectionAsWidgetCard(next, sectionKey);
+            const added = addSectionWidgetItem(next, sectionKey, 0, 0, resolvedWidgetKey, surfaceKey);
+            if (added.ok && added.doc) {
+                next = added.doc;
+                itemId = added.itemId;
             }
+            next = applyPeerCardWidth(next, sectionKey, widthKey);
+        } else {
+            next = markSectionAsKpiTile(next, sectionKey);
+            next = setKpiTileSectionTitleHidden(next, sectionKey);
+            const added = addSectionWidgetItem(next, sectionKey, 0, 0, resolvedWidgetKey, surfaceKey);
+            if (added.ok && added.doc) {
+                next = added.doc;
+                itemId = added.itemId;
+                if (title && itemId) {
+                    next = patchSectionItem(next, sectionKey, itemId, { label: title });
+                }
+            }
+            next = applyKpiTileWidth(next, sectionKey, widthKey);
         }
-        next = applyKpiTileWidth(next, sectionKey, widthKey);
     } else {
         next = applyPeerCardWidth(next, sectionKey, widthKey);
         if (input.cardType === "text") {

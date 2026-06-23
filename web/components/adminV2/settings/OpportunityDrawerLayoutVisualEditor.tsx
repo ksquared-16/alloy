@@ -43,9 +43,9 @@ import {
     type OpportunityDrawerStarterTemplateKey,
 } from "@/lib/layout/layoutEditorOpportunityDrawerStarterTemplates";
 import { diffNewSectionKeys } from "@/lib/layout/layoutBuilderStudioUx";
+import { formatDrawerLayoutValidationErrors } from "@/lib/layout/drawerSurfaceFieldValidation";
 import {
     ensureOpportunityDrawerLayoutDocSaveReady,
-    formatLayoutValidationErrors,
     layoutDocHasRepairableGeneratedKeys,
     repairOpportunityDrawerLayoutGeneratedKeys,
     resolveVisualEditorActionState,
@@ -153,7 +153,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
             setTenantFieldDefinitions(catalogJson?.tenantFieldDefinitions ?? []);
             const prepared = prepareDrawerLayoutDocForEditor(rec.doc);
             if (!prepared.ok) {
-                throw new Error(formatLayoutValidationErrors(prepared.errors).join("; ") || "Invalid layout document");
+                throw new Error(formatDrawerLayoutValidationErrors(prepared.errors, surfaceKey).join("; ") || "Invalid layout document");
             }
             setSurfaceKey(prepared.surfaceKey);
             setForceAdvanced(false);
@@ -484,7 +484,7 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
                 >
                     <p className="font-semibold">Fix validation issues before saving:</p>
                     <ul className="mt-1 list-inside list-disc text-xs">
-                        {formatLayoutValidationErrors(validation.errors).map((msg) => (
+                        {formatDrawerLayoutValidationErrors(validation.errors, surfaceKey).map((msg) => (
                             <li key={msg}>{msg}</li>
                         ))}
                     </ul>

@@ -3,31 +3,35 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { humanizeSnakeCaseToken } from "@/lib/admin/activityTimelineFormat";
-import { canonicalOperatorStageForStatusKey } from "@/lib/lifecycle/enrollmentOperatorStage";
 import type {
     EnrollmentStatusTransitionChildOption,
     EnrollmentStatusTransitionDestinationOption,
     EnrollmentStatusTransitionScope,
 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import { resolveBpEnrollmentStatusDestinations } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionBpResolver";
+import { resolveEnrollmentOperatorStageDisplay } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionLabels";
+import { canonicalOperatorStageForStatusKey } from "@/lib/lifecycle/enrollmentOperatorStage";
 
 export type EnrollmentStatusTransitionContextResult = {
     scope: EnrollmentStatusTransitionScope;
     children: EnrollmentStatusTransitionChildOption[];
     currentStatusKey: string | null;
+    /** Operator-facing BP / queue lane label (primary). */
     currentStatusLabel: string;
     currentOperatorStage: string | null;
     currentBuilderStageKey: string | null;
     destinationSource: "bp" | "default_fallback";
     destinations: EnrollmentStatusTransitionDestinationOption[];
     requiresChildSelection: boolean;
+    /** True when multiple children exist and action is child-scoped. */
+    childScoped: boolean;
 };
 
 async function loadChildOptions(
     supabase: SupabaseClient,
     orgId: string,
     opportunityId: string,
+    departmentMetadata: Record<string, unknown> | null,
 ): Promise<EnrollmentStatusTransitionChildOption[]> {
     const { data: ocmRows } = await supabase
         .from("opportunity_customer_members")
@@ -54,11 +58,15 @@ async function loadChildOptions(
             [cm?.first_name, cm?.last_name].filter(Boolean).join(" ").trim() ||
             "Child";
         const statusKey = rec.outcome_status_key?.trim() || null;
+        const stageDisplay = resolveEnrollmentOperatorStageDisplay({
+            statusKey,
+            departmentMetadata,
+        });
         out.push({
             opportunityCustomerMemberId: ocmId,
             displayName,
             outcomeStatusKey: statusKey,
-            outcomeStatusLabel: statusKey ? humanizeSnakeCaseToken(statusKey) : "—",
+            outcomeStatusLabel: stageDisplay.label,
             operatorStageKey: statusKey ? canonicalOperatorStageForStatusKey(statusKey) : null,
         });
     }
@@ -93,7 +101,19 @@ export async function loadEnrollmentStatusTransitionContext(
         builderStageKey?: string | null;
     },
 ): Promise<EnrollmentStatusTransitionContextResult> {
-    const children = await loadChildOptions(supabase, orgId, scope.opportunityId);
+    const { data: opp } = await supabase
+        .from("opportunities")
+        .select("status_key, department_id")
+        .eq("id", scope.opportunityId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+
+    const oppRow = opp as { status_key?: string | null; department_id?: string | null } | null;
+    const departmentId = options?.departmentId?.trim() || oppRow?.department_id?.trim() || null;
+    const departmentMetadata = await loadDepartmentMetadata(supabase, orgId, departmentId);
+
+    const children = await loadChildOptions(supabase, orgId, scope.opportunityId, departmentMetadata);
+    const childScoped = children.length > 0;
     const requiresChildSelection = children.length > 1 && !scope.opportunityCustomerMemberId?.trim();
 
     let effectiveScope = scope;
@@ -106,34 +126,16 @@ export async function loadEnrollmentStatusTransitionContext(
         };
     }
 
-    const { data: opp } = await supabase
-        .from("opportunities")
-        .select("status_key, department_id")
-        .eq("id", scope.opportunityId)
-        .eq("org_id", orgId)
-        .maybeSingle();
-
-    const oppRow = opp as { status_key?: string | null; department_id?: string | null } | null;
-    const departmentId = options?.departmentId?.trim() || oppRow?.department_id?.trim() || null;
-    const departmentMetadata = await loadDepartmentMetadata(supabase, orgId, departmentId);
-
     let currentStatusKey: string | null = null;
-    let currentStatusLabel = "—";
 
     if (effectiveScope.opportunityCustomerMemberId) {
         const match = children.find(
             (c) => c.opportunityCustomerMemberId === effectiveScope.opportunityCustomerMemberId,
         );
         currentStatusKey = match?.outcomeStatusKey ?? null;
-        currentStatusLabel = match?.outcomeStatusLabel ?? "—";
     } else {
         currentStatusKey = oppRow?.status_key?.trim() || null;
-        currentStatusLabel = currentStatusKey ? humanizeSnakeCaseToken(currentStatusKey) : "—";
     }
-
-    const currentOperatorStage = currentStatusKey
-        ? canonicalOperatorStageForStatusKey(currentStatusKey)
-        : null;
 
     const grain =
         effectiveScope.grain === "case" && children.length === 0 ? "case" : "child";
@@ -145,15 +147,24 @@ export async function loadEnrollmentStatusTransitionContext(
         builderStageKey: options?.builderStageKey,
     });
 
+    const stageDisplay = resolveEnrollmentOperatorStageDisplay({
+        statusKey: currentStatusKey,
+        departmentMetadata,
+        builderStageKey: bpResolved.currentBuilderStageKey,
+    });
+
     return {
         scope: effectiveScope,
         children,
         currentStatusKey,
-        currentStatusLabel,
-        currentOperatorStage,
+        currentStatusLabel: stageDisplay.label,
+        currentOperatorStage: currentStatusKey
+            ? canonicalOperatorStageForStatusKey(currentStatusKey)
+            : null,
         currentBuilderStageKey: bpResolved.currentBuilderStageKey,
         destinationSource: bpResolved.destinationSource,
         destinations: bpResolved.destinations,
         requiresChildSelection,
+        childScoped,
     };
 }

@@ -51,6 +51,16 @@ describe("drawerLayoutEditorModel composition grid", () => {
         const reordered = reorderSectionInZone(doc, "recent_activity", -1, "person_drawer");
         const after = reordered.sections.map((s) => s.key);
         expect(after.indexOf("recent_activity")).toBeLessThan(after.indexOf("notes_communication"));
+        expect(after.length).toBe(before.length);
+        expect(new Set(after).size).toBe(after.length);
+    });
+
+    it("does not duplicate rail sections in person drawer overflow", () => {
+        const layout = resolveCompositionGridLayout(buildPersonDrawerDefaultDoc(), "person_drawer");
+        const overflowKeys = new Set(layout.overflowSections.map((s) => s.key));
+        for (const section of layout.rightRailSections) {
+            expect(overflowKeys.has(section.key)).toBe(false);
+        }
     });
 });
 

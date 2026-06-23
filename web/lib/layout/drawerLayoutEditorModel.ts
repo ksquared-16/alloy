@@ -228,12 +228,7 @@ export function resolveCompositionGridLayout(
             mainColumn: slots.children,
             rightRailSections: zones.right_rail,
             fullWidthRow: slots.contact,
-            overflowSections: [
-                ...(slots.notes ? [slots.notes] : []),
-                ...(slots.activity ? [slots.activity] : []),
-                ...(slots.documents ? [slots.documents] : []),
-                ...slots.overflow.filter((section) => !renderedInZones.has(section.key)),
-            ],
+            overflowSections: slots.overflow.filter((section) => !renderedInZones.has(section.key)),
             summaryHostSectionKey: "person_summary",
         };
     }
@@ -246,12 +241,7 @@ export function resolveCompositionGridLayout(
             mainColumn: slots.program,
             rightRailSections: zones.right_rail,
             fullWidthRow: slots.schedule,
-            overflowSections: [
-                ...(slots.notes ? [slots.notes] : []),
-                ...(slots.activity ? [slots.activity] : []),
-                ...(slots.documents ? [slots.documents] : []),
-                ...slots.overflow.filter((section) => !renderedInZones.has(section.key)),
-            ],
+            overflowSections: slots.overflow.filter((section) => !renderedInZones.has(section.key)),
             summaryHostSectionKey: "child_summary",
         };
     }
@@ -263,11 +253,7 @@ export function resolveCompositionGridLayout(
         mainColumn: slots.enrollment,
         rightRailSections: zones.right_rail,
         fullWidthRow: slots.leadSource,
-        overflowSections: [
-            ...(slots.notes ? [slots.notes] : []),
-            ...(slots.activity ? [slots.activity] : []),
-            ...slots.overflow.filter((section) => !renderedInZones.has(section.key)),
-        ],
+        overflowSections: slots.overflow.filter((section) => !renderedInZones.has(section.key)),
         summaryHostSectionKey: "lead_summary",
     };
 }

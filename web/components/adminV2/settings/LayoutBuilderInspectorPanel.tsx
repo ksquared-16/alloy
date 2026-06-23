@@ -524,6 +524,7 @@ export default function LayoutBuilderInspectorPanel({
                                     doc={doc}
                                     sectionKey={section.key}
                                     applyDoc={applyDoc}
+                                    surfaceKey={surfaceKey}
                                 />
                             </div>
                         :   null}

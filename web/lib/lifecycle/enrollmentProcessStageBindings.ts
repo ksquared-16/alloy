@@ -6,7 +6,7 @@ import type { LifecycleOperatorStage } from "@/lib/completion/lifecycleProgressi
 
 export const ENROLLMENT_STAGE_STATUS_KEYS: Record<LifecycleOperatorStage, readonly string[]> = {
     lead: ["new_inquiry", "open", "new"],
-    qualification: ["contact_attempted", "contacted", "qualification"],
+    qualification: ["contact_attempted", "contacted", "qualification", "qualified"],
     tour: ["tour_scheduled", "tour_completed", "follow_up_attempted", "tour_no_show"],
     waitlist: ["waitlisted"],
     enrollment: ["enrolling", "ready_to_enroll"],
@@ -20,6 +20,7 @@ const STATUS_DISPLAY: Record<string, string> = {
     contact_attempted: "Contact Attempted",
     contacted: "Contacted",
     qualification: "Qualification",
+    qualified: "Qualified",
     tour_scheduled: "Tour Scheduled",
     tour_completed: "Tour Completed",
     follow_up_attempted: "Follow-Up Attempted",

@@ -68,6 +68,6 @@ export async function POST(request: NextRequest) {
         completion_requirements: result.validation,
         summary: result.ok ? null : formatRequirementValidationSummary(result.validation),
         bos_preflight: toBosCompletionRequirementPayload(result.validation),
-        executable: result.ok,
+        skipped_stage_labels: result.skippedStageLabels,
     });
 }

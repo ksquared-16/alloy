@@ -7,12 +7,13 @@
 import { makeId, patchSection, removeSection } from "@/lib/layout/builderOps";
 import { addCustomOpportunityDrawerSection } from "@/lib/layout/layoutEditorGeneratedKeys";
 import {
-    DEFAULT_CHILDREN_RELATED_LIST_CONFIG,
+    defaultRelatedListConfigForSurface,
     readLayoutEditorRelatedListConfig,
     relatedListEntityTypeRuntimeSupported,
     syncRelatedListSectionToItem,
     writeLayoutEditorRelatedListConfig,
 } from "@/lib/layout/layoutEditorRelatedListConfig";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import type { OpportunityDrawerLayoutZone } from "@/lib/layout/surfaceLayoutRegistry";
 import { resolveOpportunityDrawerSectionZone } from "@/lib/layout/opportunityDrawerLayoutEditorModel";
@@ -377,8 +378,9 @@ export function addWidgetOpportunityDrawerSection(
 
 export function addRelatedListOpportunityDrawerSection(
     doc: LayoutDoc,
-    input?: { title?: string; zone?: OpportunityDrawerLayoutZone },
+    input?: { title?: string; zone?: OpportunityDrawerLayoutZone; surfaceKey?: DrawerLayoutEditorSurfaceKey },
 ): LayoutDoc {
+    const surfaceKey = input?.surfaceKey ?? "opportunity_drawer";
     let next = addCustomOpportunityDrawerSection(doc, {
         title: input?.title ?? "Related list",
         zone: input?.zone ?? "main",
@@ -387,7 +389,10 @@ export function addRelatedListOpportunityDrawerSection(
     const sectionKey = next.sections[sIdx]!.key;
     next = setSectionType(next, sectionKey, "related_list");
     next = patchSection(next, sIdx, {
-        metadata: writeLayoutEditorRelatedListConfig(next.sections[sIdx]!.metadata, DEFAULT_CHILDREN_RELATED_LIST_CONFIG),
+        metadata: writeLayoutEditorRelatedListConfig(
+            next.sections[sIdx]!.metadata,
+            defaultRelatedListConfigForSurface(surfaceKey, "children"),
+        ),
     });
     return syncRelatedListSectionToItem(next, sectionKey);
 }

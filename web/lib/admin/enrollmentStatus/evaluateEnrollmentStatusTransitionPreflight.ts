@@ -20,11 +20,20 @@ import type {
 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import { UPDATE_ENROLLMENT_STATUS_ACTION_KEY } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionContract";
 import {
+    activeLifecycleProcess,
+    lifecycleBuilderFromDepartmentMetadata,
+} from "@/lib/lifecycle/lifecycleBuilderConfig";
+import { resolveEnrollmentStatusTargetKey } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionDestinations";
+import {
     findBpDestinationOption,
     resolveBpEnrollmentStatusDestinations,
     tourBypassRequiredForDestination,
 } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionBpResolver";
-import { resolveEnrollmentStatusTargetKey } from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionDestinations";
+import {
+    bypassReasonRequiredForSkippedStages,
+    readEnrollmentManualTransitionPolicy,
+    skippedBuilderStagesBetween,
+} from "@/lib/admin/enrollmentStatus/enrollmentStatusTransitionPolicy";
 
 export type EnrollmentStatusTransitionPreflightInput = {
     supabase: SupabaseClient;
@@ -44,6 +53,7 @@ export type EnrollmentStatusTransitionPreflightResult = {
     validation: RequirementValidationResult;
     requiresBypassReason: boolean;
     destinationSource: "bp" | "default_fallback";
+    skippedStageLabels: string[];
 };
 
 async function loadDepartmentMetadata(
@@ -99,6 +109,7 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
             targetStatusKey: fallbackTarget,
             requiresBypassReason: false,
             destinationSource: "default_fallback",
+            skippedStageLabels: [],
             validation: buildRequirementValidationResult([
                 makeRequirementViolation({
                     entity_type: "opportunity",
@@ -148,13 +159,28 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
         input.targetStatusKey,
     );
 
+    const builder = lifecycleBuilderFromDepartmentMetadata(departmentMetadata ?? {});
+    const process = activeLifecycleProcess(builder);
+    const policy = readEnrollmentManualTransitionPolicy(process);
+
     const targetStatusKey =
         input.targetStatusKey?.trim() ||
         bpDestination?.defaultStatusKey ||
         resolveEnrollmentStatusTargetKey(input.destinationKey, grain);
 
+    const targetBuilderStageKey = bpDestination?.builderStageKey ?? null;
+    const skippedStages =
+        process && bpResolved.currentBuilderStageKey && targetBuilderStageKey
+            ? skippedBuilderStagesBetween(process, bpResolved.currentBuilderStageKey, targetBuilderStageKey)
+            : [];
+    const skippedStageLabels = skippedStages.map((s) => s.label);
+
+    const destinationAllowed =
+        Boolean(bpDestination) ||
+        bpResolved.destinations.some((d) => d.destinationKey === input.destinationKey);
+
     const destinationViolations = [];
-    if (bpResolved.destinationSource === "bp" && !bpDestination) {
+    if (!destinationAllowed) {
         destinationViolations.push(
             makeRequirementViolation({
                 entity_type: "opportunity",
@@ -164,7 +190,9 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
                 requirement_type: "required_before_action",
                 blocking_level: "hard_block",
                 missing_reason:
-                    "That destination is not allowed from the current enrollment stage per Business Process configuration.",
+                    policy.mode === "strict_transitions_only"
+                        ? "That destination is not allowed from the current stage per Business Process configuration."
+                        : "That destination is not configured on the enrollment Business Process.",
             }),
         );
     }
@@ -185,6 +213,7 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
             targetStatusKey,
             requiresBypassReason: false,
             destinationSource: bpResolved.destinationSource,
+            skippedStageLabels,
             validation: mergeRequirementValidationResults(
                 buildRequirementValidationResult(destinationViolations),
                 buildRequirementValidationResult([
@@ -235,11 +264,25 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
             ? scopedChild.outcome_status_key
             : null;
 
-    const requiresBypassReason = tourBypassRequiredForDestination(bpDestination, {
+    const tourBypassRequired = tourBypassRequiredForDestination(bpDestination, {
         destinationKey: input.destinationKey,
         currentCaseStatusKey: currentCaseStatus,
         currentChildStatusKey: currentChildStatus,
     });
+    const skipBypassRequired = bypassReasonRequiredForSkippedStages(policy, skippedStages);
+    const requiresBypassReason = tourBypassRequired || skipBypassRequired;
+
+    const skippedStageWarnings = skippedStages.map((stage) =>
+        makeRequirementViolation({
+            entity_type: "opportunity",
+            entity_id: input.scope.opportunityId,
+            field_key: `skipped_stage_${stage.key}`,
+            label: "Skipped stage",
+            requirement_type: "recommended_before_action",
+            blocking_level: "recommendation",
+            missing_reason: stage.label,
+        }),
+    );
 
     const bypassViolations = [];
     if (requiresBypassReason && !input.bypassReason?.trim()) {
@@ -248,11 +291,13 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
                 entity_type: "opportunity",
                 entity_id: input.scope.opportunityId,
                 field_key: "bypass_reason",
-                label: "Reason for skipping tour",
+                label: "Reason for skipping requirements",
                 requirement_type: "required_before_action",
                 blocking_level: "hard_block",
                 missing_reason:
-                    "A reason is required when moving to Waitlist before tour completion (e.g. No space available).",
+                    skippedStageLabels.length > 0
+                        ? `A reason is required when skipping: ${skippedStageLabels.join(", ")}.`
+                        : "A reason is required when moving to Waitlist before tour completion (e.g. No space available).",
                 context: { requirement_level: "required" },
             }),
         );
@@ -262,6 +307,7 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
         buildRequirementValidationResult(destinationViolations),
         actionValidation,
         buildRequirementValidationResult(bypassViolations),
+        buildRequirementValidationResult(skippedStageWarnings),
     );
 
     return {
@@ -270,5 +316,6 @@ export async function evaluateEnrollmentStatusTransitionPreflight(
         validation,
         requiresBypassReason,
         destinationSource: bpResolved.destinationSource,
+        skippedStageLabels,
     };
 }
