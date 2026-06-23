@@ -7,6 +7,7 @@ import {
     type LayoutCatalogField,
     type LayoutCatalogGroup,
 } from "@/lib/layout/fieldCatalog";
+import { buildContextFirstDrawerFieldPickerGroups } from "@/lib/layout/drawerContextPickerGroups";
 import { organizeChildcarePickerGroups } from "@/lib/layout/childcareLayoutFieldCatalog";
 import { isRefKeyPickerEligible, manifestEntryForRefKey } from "@/lib/layout/platformFieldResolutionManifest";
 import { resolveLayoutEditorFieldRefLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
@@ -35,7 +36,10 @@ export function buildChildDrawerEditorFieldPickerGroups(): LayoutCatalogGroup[] 
         const field = refKeyToCatalogField(refKey);
         if (field) fields.push(field);
     }
-    return finalizeCatalogGroupsForPicker(
-        organizeChildcarePickerGroups(fields, "child", { supplementFromStarterCatalog: false }) as LayoutCatalogGroup[],
+    return buildContextFirstDrawerFieldPickerGroups(
+        "child_drawer",
+        finalizeCatalogGroupsForPicker(
+            organizeChildcarePickerGroups(fields, "child", { supplementFromStarterCatalog: false }) as LayoutCatalogGroup[],
+        ),
     );
 }

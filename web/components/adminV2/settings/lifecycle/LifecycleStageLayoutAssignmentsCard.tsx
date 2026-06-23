@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-    LAYOUT_ASSIGNMENT_SURFACE_IDENTITIES,
     type BusinessProcessLayoutAssignmentRecord,
     type LayoutAssignmentSurfaceKey,
 } from "@/lib/layout/businessProcessLayoutAssignmentTypes";
 import { layoutAssignmentSlotsForStage } from "@/lib/layout/layoutAssignmentSlots";
+import { publishedLayoutOptionsForAssignmentSlot } from "@/lib/layout/layoutAssignmentLayoutOptions";
+import { formatLayoutTitleWithVersion } from "@/lib/layout/layoutVersionNaming";
 import { LAYOUTS_SETTINGS_HREF } from "@/lib/admin/canonicalAdminRoutes";
 import type { EntityLayoutRecord } from "@/lib/layout/layoutV2";
 
@@ -41,24 +42,12 @@ function layoutOptionsForSurface(
     records: EntityLayoutRecord[],
     surfaceKey: LayoutAssignmentSurfaceKey,
 ): EntityLayoutRecord[] {
-    const identity = LAYOUT_ASSIGNMENT_SURFACE_IDENTITIES[surfaceKey];
-    const published = records.filter(
-        (r) =>
-            r.status === "published"
-            && r.entityType === identity.entityType
-            && r.surface === identity.surface,
-    );
-    const byKey = new Map<string, EntityLayoutRecord>();
-    for (const row of published) {
-        const prev = byKey.get(row.layoutKey);
-        if (!prev || row.version > prev.version) byKey.set(row.layoutKey, row);
-    }
-    return [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name));
+    return publishedLayoutOptionsForAssignmentSlot(records, surfaceKey);
 }
 
 function layoutLabel(record: EntityLayoutRecord | null): string {
     if (!record) return "Surface default";
-    return `${record.name} (v${record.version})`;
+    return formatLayoutTitleWithVersion(record.name, record.version);
 }
 
 export default function LifecycleStageLayoutAssignmentsCard({
@@ -208,7 +197,7 @@ export default function LifecycleStageLayoutAssignmentsCard({
                                 <option value="">Surface default</option>
                                 {options.map((opt) => (
                                     <option key={opt.id} value={opt.id}>
-                                        {opt.name} (v{opt.version})
+                                        {formatLayoutTitleWithVersion(opt.name, opt.version)}
                                     </option>
                                 ))}
                             </select>

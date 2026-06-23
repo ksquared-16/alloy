@@ -404,7 +404,7 @@ export function defaultLeadQueueLayoutV3(): QueueRecordLayoutConfigV3 {
             ],
         },
         createWidgetBlock("attention", "Attention", { displayMode: "compact" }),
-        createWidgetBlock("tasks", "Tasks", { displayMode: "compact" }),
+        createWidgetBlock("current_work", "Current Work", { displayMode: "compact" }),
     ];
 
     const dateCol = createColumnFromScope({ type: "main_record" }, "Date / Event");

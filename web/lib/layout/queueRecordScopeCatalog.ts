@@ -13,6 +13,9 @@ const LIFECYCLE_REF_PATTERNS = [
     /work_unit/,
     /tour/,
     /lifecycle/,
+    /current_work/,
+    /last_activity/,
+    /queue_row\./,
 ];
 
 const SYSTEM_REF_PATTERNS = [/\.id$/, /created_at/, /updated_at/, /record_id/];

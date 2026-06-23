@@ -29,6 +29,7 @@ const EXTRA_LAYOUT_ENTITY_TYPES: readonly string[] = [WAITLIST_CANDIDATE_ENTITY_
 function isAllowedLayoutEntityType(t: string): boolean {
     return (ALL_ENTITY_PRESENTATION_TYPES as readonly string[]).includes(t) || EXTRA_LAYOUT_ENTITY_TYPES.includes(t);
 }
+import { defaultLayoutDisplayNameForDoc } from "@/lib/layout/defaultLayoutDisplayName";
 import {
     createDraft,
     listAllForOrg,
@@ -177,7 +178,10 @@ export async function POST(request: NextRequest) {
     }
     doc = validated.doc;
 
-    const name = typeof body.name === "string" && body.name.trim() ? body.name.trim() : `${entityType} ${surface} layout`;
+    const name =
+        typeof body.name === "string" && body.name.trim() ?
+            body.name.trim()
+        :   defaultLayoutDisplayNameForDoc(doc, entityType, surface);
 
     try {
         const created = await createDraft(supabase, {

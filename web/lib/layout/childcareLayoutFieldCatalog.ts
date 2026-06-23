@@ -92,7 +92,7 @@ function childField(
     def:
         | { entityType: string; fieldKey: string; storageTable?: string; storageColumn?: string; enrollmentDetail?: boolean }
         | { computed: true; storageTable?: string; storageColumn?: string },
-    anchors: LayoutPickerAnchorEntity[] = ["opportunities", "child"],
+    anchors: LayoutPickerAnchorEntity[] = ["opportunities", "person", "child"],
 ): ChildcareCatalogFieldEntry {
     return {
         refKey,
@@ -391,6 +391,15 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     parent("person.last_name", "Last name", "text", 20, "last_name"),
     parent("person.email", "Email", "text", 30, "email"),
     parent("person.phone", "Phone", "phone", 40, "phone"),
+    {
+        refKey: "person.is_primary_contact",
+        operatorEntity: "parent",
+        pickerLabel: "Is primary contact",
+        fieldType: "text",
+        sortOrder: 42,
+        computed: true,
+        layoutAnchors: ["opportunities", "person", "child"],
+    },
     parent("person.is_employee", "Employee", "boolean", 45, "is_employee"),
     parent("person.employee_id", "Employee ID", "text", 48, "employee_id"),
     parent("person.communication_preference", "Communication preference", "select", 80, "communication_preference"),
@@ -398,23 +407,23 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     parent("person.email_opt_in", "Email opt-in", "boolean", 100, "email_opt_in"),
     parent("person.employer", "Employer", "text", 110, "employer"),
     parent("person.contact_notes", "Notes", "text", 120, "contact_notes"),
-    parent("person.address_line1", "Address line 1", "text", 130, "address_line1", ["person"], {
+    parent("person.address_line1", "Person address line 1", "text", 130, "address_line1", ["person"], {
         storageTable: "field_values",
         storageColumn: "address_line1",
     }),
-    parent("person.address_line2", "Address line 2", "text", 131, "address_line2", ["person"], {
+    parent("person.address_line2", "Person address line 2", "text", 131, "address_line2", ["person"], {
         storageTable: "field_values",
         storageColumn: "address_line2",
     }),
-    parent("person.city", "City", "text", 132, "city", ["person"], {
+    parent("person.city", "Person city", "text", 132, "city", ["person"], {
         storageTable: "field_values",
         storageColumn: "city",
     }),
-    parent("person.state", "State", "text", 133, "state", ["person"], {
+    parent("person.state", "Person state", "text", 133, "state", ["person"], {
         storageTable: "field_values",
         storageColumn: "state",
     }),
-    parent("person.postal_code", "ZIP code", "text", 134, "postal_code", ["person"], {
+    parent("person.postal_code", "Person ZIP code", "text", 134, "postal_code", ["person"], {
         storageTable: "field_values",
         storageColumn: "postal_code",
     }),
@@ -424,22 +433,22 @@ export const CHILDCARE_STARTER_FIELD_CATALOG: ChildcareCatalogFieldEntry[] = [
     household("customer.family_notes", "Family notes", "text", 50, "family_notes"),
     household("customer.customer_number", "Family number", "text", 70, "customer_number"),
     household("customer.status_key", "Household status", "status", 75, "status_key"),
-    household("location.household_address", "Household address", "text", 80, "formatted_address", {
+    household("location.household_address", "Shared household mailing address", "text", 80, "formatted_address", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_line1", "Household address line 1", "text", 81, "address_line1", {
+    household("location.household_address_line1", "Shared mailing address line 1", "text", 81, "address_line1", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_line2", "Household address line 2", "text", 82, "address_line2", {
+    household("location.household_address_line2", "Shared mailing address line 2", "text", 82, "address_line2", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_city", "Household city", "text", 83, "city", {
+    household("location.household_address_city", "Shared mailing city", "text", 83, "city", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_state", "Household state", "text", 84, "state", {
+    household("location.household_address_state", "Shared mailing state", "text", 84, "state", {
         anchors: ["opportunities", "person", "child"],
     }),
-    household("location.household_address_postal_code", "Household ZIP code", "text", 85, "postal_code", {
+    household("location.household_address_postal_code", "Shared mailing ZIP code", "text", 85, "postal_code", {
         anchors: ["opportunities", "person", "child"],
     }),
 

@@ -109,19 +109,13 @@ function refKeyToCatalogField(refKey: string): LayoutCatalogField | null {
     };
 }
 
-import { contactRoleFieldRefs, type LayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
+import { applyDrawerContextPickerLabels } from "@/lib/layout/drawerContextPickerGroups";
+import { contactRolePickerRefKeys, type LayoutEditorContactRole } from "@/lib/layout/layoutEditorContactRoles";
 
-function contactRolePickerRefKeys(role: LayoutEditorContactRole): string[] {
-    const refs = contactRoleFieldRefs(role);
+function contactRolePickerRefKeysForOpportunity(role: LayoutEditorContactRole): string[] {
     return [
-        refs.name,
-        refs.email,
-        refs.phone,
-        refs.addressLine1,
-        refs.addressLine2,
-        refs.city,
-        refs.state,
-        refs.postalCode,
+        ...contactRolePickerRefKeys(role),
+        ...(role === "primary" ? (["person.is_primary_contact"] as const) : []),
     ];
 }
 
@@ -131,7 +125,7 @@ const CONTACT_ROLE_PICKER_GROUP_DEFS = [
         entityKey: "contact_primary",
         entityLabel: "Primary Contact",
         groupDescription: "Uses the linked primary contact on this lead",
-        refKeys: contactRolePickerRefKeys("primary"),
+        refKeys: contactRolePickerRefKeysForOpportunity("primary"),
     },
     {
         entityKey: "contact_parents",
@@ -200,7 +194,9 @@ export function buildOpportunityDrawerEditorFieldPickerGroups(): LayoutCatalogGr
     const groups = organizeChildcarePickerGroups(fields, "opportunities", {
         supplementFromStarterCatalog: false,
     }) as LayoutCatalogGroup[];
-    return finalizeCatalogGroupsForPicker(splitPersonContactRolePickerGroups(groups));
+    return finalizeCatalogGroupsForPicker(
+        applyDrawerContextPickerLabels(splitPersonContactRolePickerGroups(groups), "opportunity_drawer"),
+    );
 }
 
 /** Entity namespace keys shown in related-list field pickers per list entity type. */

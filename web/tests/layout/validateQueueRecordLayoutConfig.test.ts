@@ -101,7 +101,7 @@ describe("queue record widget allow-list", () => {
     it("matches picker invariant for pipeline and waitlist", () => {
         expect(allowedQueueRecordWidgetKeys(false)).toEqual([...QUEUE_RECORD_PIPELINE_WIDGET_KEYS]);
         expect(isAllowedQueueRecordWidgetKey("activity_timeline", false)).toBe(true);
-        expect(isAllowedQueueRecordWidgetKey("current_work", false)).toBe(false);
+        expect(isAllowedQueueRecordWidgetKey("current_work", false)).toBe(true);
         expect(isAllowedQueueRecordWidgetKey("tasks", true)).toBe(true);
     });
 });

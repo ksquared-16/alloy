@@ -152,6 +152,21 @@ export function contactRoleFieldRefs(role: LayoutEditorContactRole): LayoutEdito
     return CONTACT_ROLE_FIELD_REFS[normalizeLayoutEditorContactRole(role)];
 }
 
+/** Scalar refKeys shown in contact-role context picker groups. */
+export function contactRolePickerRefKeys(role: LayoutEditorContactRole): string[] {
+    const refs = contactRoleFieldRefs(role);
+    return [
+        refs.name,
+        refs.email,
+        refs.phone,
+        refs.addressLine1,
+        refs.addressLine2,
+        refs.city,
+        refs.state,
+        refs.postalCode,
+    ];
+}
+
 export function contactRoleBlockTitle(role: LayoutEditorContactRole): string {
     return LAYOUT_EDITOR_CONTACT_ROLE_BLOCK_TITLES[role];
 }

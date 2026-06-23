@@ -5,9 +5,10 @@
  */
 
 export const QUEUE_RECORD_PIPELINE_WIDGET_KEYS = [
-    "tasks",
+    "current_work",
     "attention",
     "activity_timeline",
+    "tasks",
 ] as const;
 
 /** Waitlist queue rows share pipeline widgets; placement-specific widgets remain field keys until renderers ship. */

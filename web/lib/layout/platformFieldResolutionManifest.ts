@@ -102,13 +102,13 @@ const LEAD_PRIMARY_CONTACT_PROJECTION_MANIFEST: PlatformFieldManifestEntry[] = [
     entry("person.is_primary", "Primary flag", "text", "computed", "household_contact.is_primary", "now", ["repeater", "relationship"], ["opportunities"]),
     entry(
         "person.is_primary_contact",
-        "Primary contact",
+        "Is primary contact",
         "text",
         "computed",
         "household_contact.is_primary",
         "now",
         ["repeater", "relationship"],
-        ["opportunities"],
+        ["opportunities", "person", "child"],
     ),
     entry("person.display_name", "Display name", "text", "computed", "person.display_name", "now", ["repeater", "relationship"], ["opportunities"]),
 ];
