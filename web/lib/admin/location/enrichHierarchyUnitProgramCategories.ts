@@ -19,10 +19,10 @@ function unitHasExplicitCategoryMetadata(metadata: unknown): boolean {
 }
 
 /** Merge resolved program category keys onto unit rows missing metadata.category. */
-export function enrichHierarchyUnitsWithProgramCategories(
-    locations: HierarchyLocationRow[],
+export function enrichHierarchyUnitsWithProgramCategories<T extends HierarchyLocationRow>(
+    locations: readonly T[],
     fieldValues: ReadonlyArray<UnitProgramCategoryFieldValue>
-): HierarchyLocationRow[] {
+): T[] {
     const categoryByUnitId = new Map<string, string>();
     for (const row of fieldValues) {
         const unitId = row.entity_id.trim();
