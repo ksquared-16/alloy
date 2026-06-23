@@ -8,11 +8,10 @@ import {
     isChildcareCatalogRefKey,
     organizeChildcarePickerGroups,
 } from "@/lib/layout/childcareLayoutFieldCatalog";
+import { resolveFieldPickerLabel } from "@/lib/layout/fieldPickerContextCatalog";
 import {
     finalizeCatalogGroupsForPicker,
     GLOBAL_WIDGET_CATALOG,
-    inquiryChildPickerFieldLabel,
-    parseRefKey,
     type LayoutCatalogField,
     type LayoutCatalogGroup,
 } from "@/lib/layout/fieldCatalog";
@@ -23,6 +22,11 @@ import {
     manifestEntryForRefKey,
 } from "@/lib/layout/platformFieldResolutionManifest";
 import { OPPORTUNITY_DRAWER_SURFACE } from "@/lib/layout/surfaceLayoutRegistry";
+import {
+    buildTenantLayoutCatalogFields,
+    mergeTenantFieldsIntoPickerGroups,
+    type TenantFieldDefinitionRow,
+} from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 const RELATED_LIST_LABELS: Record<string, string> = {
     children: "Children list",
@@ -43,29 +47,7 @@ function humanizeToken(token: string): string {
 
 /** Operator-facing label for a layout field refKey — never returns raw dotted keys when manifest exists. */
 export function resolveLayoutEditorFieldRefLabel(refKey: string): string {
-    const trimmed = refKey.trim();
-    if (!trimmed) return "Field";
-
-    const catalog = applyChildcareCatalogLabel({ refKey: trimmed, fieldLabel: trimmed });
-    if (catalog.fieldLabel && catalog.fieldLabel !== trimmed) return catalog.fieldLabel;
-
-    const manifest = manifestEntryForRefKey(trimmed);
-    if (manifest?.label) {
-        const parsed = parseRefKey(trimmed);
-        if (parsed.entityKey === "inquiry_child") {
-            return inquiryChildPickerFieldLabel(parsed.fieldKey, manifest.label);
-        }
-        return manifest.label;
-    }
-
-    const parsed = parseRefKey(trimmed);
-    if (parsed.entityKey === "inquiry_child") {
-        return inquiryChildPickerFieldLabel(parsed.fieldKey, humanizeToken(parsed.fieldKey));
-    }
-
-    const dot = trimmed.lastIndexOf(".");
-    if (dot > 0) return humanizeToken(trimmed.slice(dot + 1));
-    return humanizeToken(trimmed);
+    return resolveFieldPickerLabel(refKey);
 }
 
 /** Operator-facing label for any top-level layout item in the visual editor field list. */
@@ -182,7 +164,9 @@ function splitPersonContactRolePickerGroups(groups: LayoutCatalogGroup[]): Layou
     return output;
 }
 
-export function buildOpportunityDrawerEditorFieldPickerGroups(): LayoutCatalogGroup[] {
+export function buildOpportunityDrawerEditorFieldPickerGroups(options?: {
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+}): LayoutCatalogGroup[] {
     const fields: LayoutCatalogField[] = [];
     for (const refKey of OPPORTUNITY_DRAWER_SURFACE.allowedFieldRefKeys) {
         if (refKey === "_template" || refKey.startsWith("_")) continue;
@@ -191,9 +175,14 @@ export function buildOpportunityDrawerEditorFieldPickerGroups(): LayoutCatalogGr
         if (field) fields.push(field);
     }
 
-    const groups = organizeChildcarePickerGroups(fields, "opportunities", {
-        supplementFromStarterCatalog: false,
-    }) as LayoutCatalogGroup[];
+    const tenantFields = buildTenantLayoutCatalogFields(options?.tenantFieldDefinitions ?? [], "opportunity_drawer");
+
+    const groups = mergeTenantFieldsIntoPickerGroups(
+        organizeChildcarePickerGroups(fields, "opportunities", {
+            supplementFromStarterCatalog: false,
+        }) as LayoutCatalogGroup[],
+        tenantFields,
+    );
     return finalizeCatalogGroupsForPicker(
         applyDrawerContextPickerLabels(splitPersonContactRolePickerGroups(groups), "opportunity_drawer"),
     );

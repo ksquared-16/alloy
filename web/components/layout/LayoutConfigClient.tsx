@@ -43,7 +43,7 @@ import * as ops from "@/lib/layout/builderOps";
 import { readWaitlistGroupConfig } from "@/lib/layout/defaultWaitlistLayouts";
 import QueueRecordLayoutSettingsPanel from "@/components/layout/QueueRecordLayoutSettingsPanel";
 import type { QueueRecordLayoutEditorConfig } from "@/lib/layout/queueRecordLayoutV3";
-import { isWaitlistQueueLayoutDoc } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 /** Display/render modes a user can pick per field or related-list column. */
 const RENDER_MODES: { key: LayoutRenderHint; label: string }[] = [
@@ -135,6 +135,7 @@ type CatalogResponse = {
         fields: LayoutCatalogField[];
     }[];
     widgets: LayoutCatalogWidget[];
+    tenantFieldDefinitions?: TenantFieldDefinitionRow[];
 };
 
 type PickerTarget = { sIdx: number; rIdx: number; cIdx: number; group?: { itemId: string; gr: number; gc: number } } | null;
@@ -219,6 +220,7 @@ export default function LayoutConfigClient({
     const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
     /** v3 queue row editor catalog — opportunities-backed for waitlist queue docs. */
     const [queueRecordCatalog, setQueueRecordCatalog] = useState<CatalogResponse | null>(null);
+    const [tenantFieldDefinitions, setTenantFieldDefinitions] = useState<readonly TenantFieldDefinitionRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
@@ -309,6 +311,7 @@ export default function LayoutConfigClient({
                         v3Cat = oppRes.ok ? ((await oppRes.json()) as CatalogResponse) : entityCat;
                     }
                     setQueueRecordCatalog(v3Cat);
+                    setTenantFieldDefinitions(v3Cat?.tenantFieldDefinitions ?? entityCat?.tenantFieldDefinitions ?? []);
 
                     if (entityCat?.groups?.length) setPickerGroup(entityCat.groups[0].entityKey);
                 } catch {
@@ -722,6 +725,7 @@ export default function LayoutConfigClient({
                                                 doc={workingDoc}
                                                 editable={editable}
                                                 catalog={queueRecordCatalog ?? catalog}
+                                                tenantFieldDefinitions={tenantFieldDefinitions}
                                                 onChange={(config: QueueRecordLayoutEditorConfig) => {
                                                     applyDoc({
                                                         ...workingDoc,

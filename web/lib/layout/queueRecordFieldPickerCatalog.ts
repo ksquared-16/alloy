@@ -2,196 +2,60 @@
  * Queue row composer — context-first field picker (not scope-isolated).
  *
  * Column scope controls repeat/resolve behavior; Add Field shows all validator-
- * allowed contexts. Picker refs are generated from `queueRecordValidatorAllowList`
- * with labels resolved from the opportunities field catalog only (legacy zone
- * catalogs are never merged into v3 picker options).
+ * allowed contexts. Labels and groups come from `fieldPickerContextCatalog`.
  *
  * Invariant: pickerVisibleRefs ⊆ validatorAllowedQueueRecordFieldRefKeys
  */
 
 import type { LayoutCatalogField, LayoutCatalogGroup, LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
 import { GLOBAL_WIDGET_CATALOG } from "@/lib/layout/fieldCatalog";
+import {
+    classifyFieldPickerContext,
+    FIELD_PICKER_CONTEXT_DESCRIPTIONS,
+    FIELD_PICKER_CONTEXT_LABELS,
+    FIELD_PICKER_CONTEXT_ORDER,
+    isFieldPickerOperatorVisible,
+    resolveFieldPickerLabel,
+    type FieldPickerContextKey,
+    type FieldPickerSurface,
+} from "@/lib/layout/fieldPickerContextCatalog";
 import { buildQueueRecordWidgetPickerCatalog } from "@/lib/layout/queueRecordLayoutAllowList";
 import { assertChildScopedFieldKey } from "@/lib/layout/runtime/queueRecordScopedResolve";
-import { applyChildcareCatalogLabel } from "@/lib/layout/childcareLayoutFieldCatalog";
-import { contactRolePickerRefKeys } from "@/lib/layout/layoutEditorContactRoles";
-import { isWaitlistOnlyFieldKey } from "@/lib/layout/runtime/queueWaitlistPlacementField";
+import { validatorAllowedQueueRecordFieldRefKeys } from "@/lib/layout/queueRecordValidatorAllowList";
 import {
-    validatorAllowedQueueRecordFieldRefKeys,
-} from "@/lib/layout/queueRecordValidatorAllowList";
+    buildTenantLayoutCatalogFields,
+    type TenantFieldDefinitionRow,
+    type TenantLayoutFieldSurface,
+} from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
-export type QueueRecordFieldContextKey =
-    | "lead_enrollment"
-    | "candidate_child"
-    | "primary_contact"
-    | "secondary_contact"
-    | "billing_contact"
-    | "emergency_contact"
-    | "household_shared"
-    | "status_lifecycle"
-    | "waitlist_placement"
-    | "activity_work"
-    | "system";
+export type QueueRecordFieldContextKey = FieldPickerContextKey;
 
-const QUEUE_FIELD_CONTEXT_ORDER: QueueRecordFieldContextKey[] = [
-    "lead_enrollment",
-    "candidate_child",
-    "primary_contact",
-    "secondary_contact",
-    "billing_contact",
-    "emergency_contact",
-    "household_shared",
-    "status_lifecycle",
-    "waitlist_placement",
-    "activity_work",
-    "system",
-];
-
-const QUEUE_FIELD_CONTEXT_LABELS: Record<QueueRecordFieldContextKey, string> = {
-    lead_enrollment: "Lead / Enrollment",
-    candidate_child: "Candidate / Child",
-    primary_contact: "Primary Contact",
-    secondary_contact: "Secondary Contact",
-    billing_contact: "Billing Contact",
-    emergency_contact: "Emergency Contact",
-    household_shared: "Household / Shared",
-    status_lifecycle: "Status / Lifecycle",
-    waitlist_placement: "Waitlist / Placement",
-    activity_work: "Activity / Work",
-    system: "System",
-};
-
-const QUEUE_FIELD_CONTEXT_DESCRIPTIONS: Partial<Record<QueueRecordFieldContextKey, string>> = {
-    lead_enrollment: "Enrollment record and lead-level fields on the queue row",
-    candidate_child: "Child or waitlist candidate identity and enrollment participation",
-    primary_contact: "Primary contact name, phone, email, and designation",
-    household_shared: "Household display name and shared mailing context — not individual contact addresses",
-    waitlist_placement: "Waitlist position, tier, priority, overrides, and sibling context",
-    activity_work: "Current work, attention, next step, and queue row activity summaries",
-};
-
-const PRIMARY_CONTACT_REFS = new Set([
-    ...contactRolePickerRefKeys("primary"),
-    "person.is_primary_contact",
-    "household.primaryContactName",
-]);
-
-const SECONDARY_CONTACT_REFS = new Set(contactRolePickerRefKeys("secondary"));
-const BILLING_CONTACT_REFS = new Set(contactRolePickerRefKeys("billing"));
-const EMERGENCY_CONTACT_REFS = new Set(contactRolePickerRefKeys("emergency"));
-
-const QUEUE_FIELD_FALLBACK_LABELS: Record<string, string> = {
-    "queue_row.subject_label": "Subject focus",
-    "queue_row.stage_label": "Stage label",
-    "queue_row.group_count_label": "Group count",
-    "queue_row.work_summary": "Work summary",
-    "queue_row.next_best_action_label": "Next best action",
-    "waitlist.positionLabel": "Position",
-    "waitlist.tierLabel": "Priority tier",
-    "waitlist.priorityLabel": "Priority",
-    "waitlist.waitSince": "Waitlisted since",
-    "waitlist.siblingContext": "Sibling context",
-    "overrides.flags": "Override flags",
-    "overrides.reason": "Override reason",
-    "customer.display_name": "Household display name",
-    "person.primary_contact_name": "Primary contact name",
-    "person.primary_phone": "Primary phone",
-    "person.primary_email": "Primary email",
-    "opportunity.status_label": "Status label",
-    "opportunity.attention_reason": "Attention reason",
-    "opportunity.next_step": "Next step",
-    candidateId: "Candidate ID",
-};
-
-/** Classify a queue row field ref into an operator context group. */
-export function classifyQueueRecordFieldContext(
-    refKey: string,
-    isWaitlist: boolean,
-): QueueRecordFieldContextKey | null {
-    const key = refKey.trim();
-    if (!key) return null;
-
-    if (isWaitlistOnlyFieldKey(key) || key.startsWith("waitlist.") || key.startsWith("overrides.")) {
-        return isWaitlist ? "waitlist_placement" : null;
-    }
-
-    if (PRIMARY_CONTACT_REFS.has(key) || (key.startsWith("person.primary_") && !key.includes("address"))) {
-        return "primary_contact";
-    }
-    if (SECONDARY_CONTACT_REFS.has(key) || key.startsWith("person.secondary_")) return "secondary_contact";
-    if (BILLING_CONTACT_REFS.has(key) || key.startsWith("person.billing_")) return "billing_contact";
-    if (EMERGENCY_CONTACT_REFS.has(key) || key.startsWith("person.emergency_")) return "emergency_contact";
-
-    if (key.startsWith("child.") || key.startsWith("inquiry_child.") || key === "candidateId") {
-        return "candidate_child";
-    }
-
-    if (
-        key.startsWith("customer.")
-        || key.startsWith("household.")
-        || key.startsWith("location.household_")
-    ) {
-        return "household_shared";
-    }
-
-    if (
-        key.startsWith("queue_row.")
-        || /attention|next_step|current_work|last_activity|work_summary|next_best_action/.test(key)
-    ) {
-        return "activity_work";
-    }
-
-    if (
-        /(?:^|\.)(?:status|lifecycle|stage|disposition|tour_status|attention)(?:_key|_label|_name)?$/i.test(key)
-        && !key.startsWith("waitlist.")
-    ) {
-        return "status_lifecycle";
-    }
-
-    if (key.startsWith("person.")) return "primary_contact";
-
-    if (/\.id$|created_at|updated_at|record_id|candidateId/i.test(key)) return "system";
-
-    if (key.startsWith("opportunity.")) return "lead_enrollment";
-
-    return "lead_enrollment";
+function queuePickerSurface(isWaitlist: boolean): FieldPickerSurface {
+    return isWaitlist ? "waitlist_queue_row" : "pipeline_queue_row";
 }
 
-function indexCatalogFieldsByRefKey(groups: LayoutCatalogGroup[]): Map<string, LayoutCatalogField> {
-    const byRef = new Map<string, LayoutCatalogField>();
-    for (const group of groups) {
-        for (const field of group.fields) {
-            if (!byRef.has(field.refKey)) byRef.set(field.refKey, field);
-        }
-    }
-    return byRef;
-}
-
-function catalogFieldForRefKey(refKey: string, labelByRef: Map<string, LayoutCatalogField>): LayoutCatalogField {
-    const fromCatalog = labelByRef.get(refKey);
-    if (fromCatalog) {
-        const labeled = applyChildcareCatalogLabel(fromCatalog);
-        return { ...labeled, fieldLabel: labeled.fieldLabel || labeled.refKey };
-    }
+function catalogFieldForRefKey(refKey: string, surface: FieldPickerSurface): LayoutCatalogField {
     const [entityKey, ...rest] = refKey.split(".");
-    const fallbackLabel = QUEUE_FIELD_FALLBACK_LABELS[refKey] ?? refKey;
-    return applyChildcareCatalogLabel({
+    const fieldLabel = resolveFieldPickerLabel(refKey, surface);
+    return {
         entityKey: entityKey ?? "opportunity",
         entityLabel: entityKey ?? "opportunity",
         fieldKey: rest.join(".") || refKey,
-        fieldLabel: fallbackLabel,
+        fieldLabel,
         fieldType: "text",
         refKey,
-    });
+    };
 }
 
 export type QueueRecordPickerBlockFilter = "field_group" | "repeated_record_block" | "widget";
 
 export type BuildQueueRecordPickerCatalogOptions = {
     isWaitlist: boolean;
-    /** Label source only — field refs come from validator allow-list. */
+    /** @deprecated Label source ignored — labels resolve via fieldPickerContextCatalog. */
     labelCatalogGroups?: LayoutCatalogGroup[];
     widgetCatalog?: readonly LayoutCatalogWidget[];
+    /** Org tenant field_definitions — merged into picker and validation. */
+    tenantFieldDefinitions?: readonly import("@/lib/layout/tenantLayoutFieldPickerCatalog").TenantFieldDefinitionRow[];
     /** Only repeated child blocks narrow picker fields; column scope never does. */
     blockFilter?: QueueRecordPickerBlockFilter;
     relationshipKey?: string;
@@ -205,10 +69,10 @@ export function buildQueueRecordPickerCatalog(options: BuildQueueRecordPickerCat
     widgetCount: number;
     layoutKindLabel: string;
 } {
-    const labelGroups = options.labelCatalogGroups ?? [];
-    const groups = buildQueueRecordFieldPickerGroups(labelGroups, options.isWaitlist, {
+    const groups = buildQueueRecordFieldPickerGroups(options.isWaitlist, {
         blockFilter: options.blockFilter,
         relationshipKey: options.relationshipKey ?? "children",
+        tenantFieldDefinitions: options.tenantFieldDefinitions,
     });
     const widgets = buildQueueRecordWidgetPickerCatalog(options.widgetCatalog ?? GLOBAL_WIDGET_CATALOG);
     const fieldCount = groups.reduce((sum, g) => sum + g.fields.length, 0);
@@ -221,24 +85,45 @@ export function buildQueueRecordPickerCatalog(options: BuildQueueRecordPickerCat
     };
 }
 
+function queueLayoutSurface(isWaitlist: boolean): TenantLayoutFieldSurface {
+    return isWaitlist ? "waitlist_queue_row" : "pipeline_queue_row";
+}
+
 /**
- * Build picker fields from validator allow-list + opportunities catalog labels.
+ * Build picker fields from validator allow-list + tenant custom fields + shared operator labels.
  */
 export function buildQueueRecordPickerFieldsFromAllowList(
-    labelCatalogGroups: LayoutCatalogGroup[],
     isWaitlist: boolean,
-    options?: Pick<BuildQueueRecordPickerCatalogOptions, "blockFilter" | "relationshipKey">,
+    options?: Pick<
+        BuildQueueRecordPickerCatalogOptions,
+        "blockFilter" | "relationshipKey" | "tenantFieldDefinitions"
+    >,
 ): LayoutCatalogField[] {
-    const labelByRef = indexCatalogFieldsByRefKey(labelCatalogGroups);
+    const surface = queuePickerSurface(isWaitlist);
+    const layoutSurface = queueLayoutSurface(isWaitlist);
     const childBlockOnly = options?.blockFilter === "repeated_record_block";
     const relationshipKey = options?.relationshipKey ?? "children";
-    return validatorAllowedQueueRecordFieldRefKeys(isWaitlist).flatMap((refKey) => {
+    const tenantDefs = options?.tenantFieldDefinitions ?? [];
+
+    const staticFields = validatorAllowedQueueRecordFieldRefKeys(isWaitlist).flatMap((refKey) => {
+        if (!isFieldPickerOperatorVisible(refKey, surface)) return [];
         if (childBlockOnly && !assertChildScopedFieldKey(refKey, relationshipKey)) return [];
-        const context = classifyQueueRecordFieldContext(refKey, isWaitlist);
+        const context = classifyFieldPickerContext(refKey, { surface, isWaitlist });
         if (!context) return [];
-        const field = catalogFieldForRefKey(refKey, labelByRef);
-        return [{ ...field, entityLabel: QUEUE_FIELD_CONTEXT_LABELS[context] }];
+        const field = catalogFieldForRefKey(refKey, surface);
+        return [{ ...field, entityLabel: FIELD_PICKER_CONTEXT_LABELS[context] }];
     });
+
+    const staticRefs = new Set(staticFields.map((f) => f.refKey));
+    const tenantFields = buildTenantLayoutCatalogFields(tenantDefs, layoutSurface).flatMap((field) => {
+        if (staticRefs.has(field.refKey)) return [];
+        if (childBlockOnly && !assertChildScopedFieldKey(field.refKey, relationshipKey)) return [];
+        const context = classifyFieldPickerContext(field.refKey, { surface, isWaitlist });
+        if (!context) return [];
+        return [{ ...field, entityLabel: FIELD_PICKER_CONTEXT_LABELS[context] }];
+    });
+
+    return [...staticFields, ...tenantFields];
 }
 
 /**
@@ -246,33 +131,47 @@ export function buildQueueRecordPickerFieldsFromAllowList(
  * Independent of column scope — only repeated_record_block narrows fields.
  */
 export function buildQueueRecordFieldPickerGroups(
-    rawGroups: LayoutCatalogGroup[],
     isWaitlist: boolean,
-    options?: Pick<BuildQueueRecordPickerCatalogOptions, "blockFilter" | "relationshipKey">,
+    options?: Pick<
+        BuildQueueRecordPickerCatalogOptions,
+        "blockFilter" | "relationshipKey" | "tenantFieldDefinitions"
+    >,
 ): LayoutCatalogGroup[] {
-    const fields = buildQueueRecordPickerFieldsFromAllowList(rawGroups, isWaitlist, options);
-    const buckets = new Map<QueueRecordFieldContextKey, LayoutCatalogField[]>();
+    const surface = queuePickerSurface(isWaitlist);
+    const fields = buildQueueRecordPickerFieldsFromAllowList(isWaitlist, options);
+    const buckets = new Map<FieldPickerContextKey, LayoutCatalogField[]>();
 
     for (const field of fields) {
-        const context = classifyQueueRecordFieldContext(field.refKey, isWaitlist);
+        const context = classifyFieldPickerContext(field.refKey, { surface, isWaitlist });
         if (!context) continue;
         const bucket = buckets.get(context) ?? [];
         bucket.push(field);
         buckets.set(context, bucket);
     }
 
-    return QUEUE_FIELD_CONTEXT_ORDER.flatMap((contextKey) => {
+    return FIELD_PICKER_CONTEXT_ORDER.flatMap((contextKey) => {
         const groupFields = buckets.get(contextKey);
         if (!groupFields?.length) return [];
         groupFields.sort((a, b) => a.fieldLabel.localeCompare(b.fieldLabel));
         return [
             {
                 entityKey: contextKey,
-                entityLabel: QUEUE_FIELD_CONTEXT_LABELS[contextKey],
-                groupDescription: QUEUE_FIELD_CONTEXT_DESCRIPTIONS[contextKey],
+                entityLabel: FIELD_PICKER_CONTEXT_LABELS[contextKey],
+                groupDescription: FIELD_PICKER_CONTEXT_DESCRIPTIONS[contextKey],
                 fields: groupFields,
             },
         ];
+    });
+}
+
+/** @deprecated Pass isWaitlist only — label catalog groups no longer used for labels. */
+export function classifyQueueRecordFieldContext(
+    refKey: string,
+    isWaitlist: boolean,
+): FieldPickerContextKey | null {
+    return classifyFieldPickerContext(refKey, {
+        surface: queuePickerSurface(isWaitlist),
+        isWaitlist,
     });
 }
 
@@ -288,9 +187,22 @@ export function flattenQueueRecordFieldPickerFields(groups: LayoutCatalogGroup[]
 
 /** Picker-visible ref keys — must be subset of validator allow-list. */
 export function queueRecordPickerVisibleRefKeys(
-    labelCatalogGroups: LayoutCatalogGroup[],
+    _labelCatalogGroups: LayoutCatalogGroup[],
     isWaitlist: boolean,
-    options?: Pick<BuildQueueRecordPickerCatalogOptions, "blockFilter" | "relationshipKey">,
+    options?: Pick<
+        BuildQueueRecordPickerCatalogOptions,
+        "blockFilter" | "relationshipKey" | "tenantFieldDefinitions"
+    >,
 ): string[] {
-    return buildQueueRecordPickerFieldsFromAllowList(labelCatalogGroups, isWaitlist, options).map((f) => f.refKey);
+    return buildQueueRecordPickerFieldsFromAllowList(isWaitlist, options).map((f) => f.refKey);
+}
+
+/** Tenant custom ref keys allowed on queue row picker for validation parity. */
+export function queueRecordTenantPickerRefKeys(
+    isWaitlist: boolean,
+    tenantFieldDefinitions: readonly TenantFieldDefinitionRow[],
+): string[] {
+    return buildTenantLayoutCatalogFields(tenantFieldDefinitions, queueLayoutSurface(isWaitlist)).map(
+        (f) => f.refKey,
+    );
 }

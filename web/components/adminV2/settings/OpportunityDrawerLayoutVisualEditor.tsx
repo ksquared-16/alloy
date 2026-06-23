@@ -88,6 +88,9 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const [autoRepairNotice, setAutoRepairNotice] = useState<string | null>(null);
     const previewRecordState = useLayoutBuilderPreviewRecord();
     const [inspectorRailWidth, setInspectorRailWidth] = useState(LAYOUT_BUILDER_INSPECTOR_RAIL_DEFAULT_PX);
+    const [tenantFieldDefinitions, setTenantFieldDefinitions] = useState<
+        import("@/lib/layout/tenantLayoutFieldPickerCatalog").TenantFieldDefinitionRow[]
+    >([]);
 
     useEffect(() => {
         setInspectorRailWidth(readLayoutBuilderInspectorRailWidth());
@@ -98,8 +101,11 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
     const surfaceConfig = useMemo(() => getDrawerLayoutEditorSurfaceConfig(surfaceKey), [surfaceKey]);
 
     const validation = useMemo(
-        () => (workingDoc ? validateDrawerLayoutDoc(workingDoc, surfaceKey) : { ok: true, errors: [], warnings: [] }),
-        [workingDoc, surfaceKey],
+        () =>
+            workingDoc ?
+                validateDrawerLayoutDoc(workingDoc, surfaceKey, { tenantFieldDefinitions })
+            :   { ok: true, errors: [], warnings: [] },
+        [workingDoc, surfaceKey, tenantFieldDefinitions],
     );
 
     const repairableKeys = useMemo(
@@ -126,14 +132,25 @@ export default function OpportunityDrawerLayoutVisualEditor({ layoutId, basePath
         [record, dirty, validation.ok, busy],
     );
 
-    const fieldPickerGroups = useMemo(() => surfaceConfig.buildFieldPickerGroups(), [surfaceConfig]);
+    const fieldPickerGroups = useMemo(
+        () => surfaceConfig.buildFieldPickerGroups({ tenantFieldDefinitions }),
+        [surfaceConfig, tenantFieldDefinitions],
+    );
 
     const load = useCallback(async () => {
         setLoading(true);
         setError(null);
         setAutoRepairNotice(null);
         try {
-            const rec = await fetchEntityLayoutRecord(layoutId);
+            const [rec, catalogRes] = await Promise.all([
+                fetchEntityLayoutRecord(layoutId),
+                fetch("/api/admin/entity-layouts/field-catalog?entity_type=opportunities"),
+            ]);
+            const catalogJson =
+                catalogRes.ok ?
+                    ((await catalogRes.json()) as { tenantFieldDefinitions?: typeof tenantFieldDefinitions })
+                :   null;
+            setTenantFieldDefinitions(catalogJson?.tenantFieldDefinitions ?? []);
             const prepared = prepareDrawerLayoutDocForEditor(rec.doc);
             if (!prepared.ok) {
                 throw new Error(formatLayoutValidationErrors(prepared.errors).join("; ") || "Invalid layout document");

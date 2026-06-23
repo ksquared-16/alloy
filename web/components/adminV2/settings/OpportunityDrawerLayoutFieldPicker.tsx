@@ -7,6 +7,10 @@ import {
     type LayoutCatalogGroup,
 } from "@/lib/layout/fieldCatalog";
 import { EXPERIENCE_BUILDER_COMMON_FIELD_REF_KEYS } from "@/lib/layout/layoutBuilderFieldAuthoring";
+import {
+    LAYOUT_EDITOR_FIELD_DISPLAY_PRESETS,
+    layoutEditorFieldDisplayPresetToCatalogField,
+} from "@/lib/layout/layoutEditorFieldDisplayPresets";
 import { partitionCatalogFieldsForPicker } from "@/lib/layout/layoutFieldPickerHelpers";
 
 type Props = {
@@ -45,12 +49,16 @@ export default function OpportunityDrawerLayoutFieldPicker({
 
     const commonFields = useMemo(() => {
         const byRef = new Map(allFields.map((f) => [f.refKey, f]));
-        return EXPERIENCE_BUILDER_COMMON_FIELD_REF_KEYS.map((refKey) => byRef.get(refKey)).filter(
+        const presetFields = LAYOUT_EDITOR_FIELD_DISPLAY_PRESETS.map((preset) =>
+            layoutEditorFieldDisplayPresetToCatalogField(preset),
+        ).filter((f) => !used.has(f.refKey));
+        const staticCommon = EXPERIENCE_BUILDER_COMMON_FIELD_REF_KEYS.map((refKey) => byRef.get(refKey)).filter(
             (f): f is LayoutCatalogField => {
                 if (!f) return false;
                 return !used.has(f.refKey);
             },
         );
+        return [...presetFields, ...staticCommon];
     }, [allFields, used]);
 
     const { available } = useMemo(

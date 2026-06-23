@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import OpportunityDrawerLayoutActionPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutActionPicker";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
 import OpportunityDrawerLayoutFieldSettingsModal from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldSettingsModal";
 import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
@@ -11,7 +12,8 @@ import {
 } from "@/lib/layout/layoutEditorCompositionModel";
 import { readLayoutEditorDisplayConfig } from "@/lib/layout/layoutEditorDisplayConfig";
 import {
-    addActionToCustomBlockRow,
+    addActionCatalogEntryToCustomBlockRow,
+    addFieldDisplayPresetToCustomBlockRow,
     addFieldToCustomBlockRow,
     addTextToCustomBlockRow,
     listCustomBlockRowLayout,
@@ -19,6 +21,8 @@ import {
     removeCustomBlockNestedField,
 } from "@/lib/layout/layoutEditorFreeformBlocks";
 import { resolveLayoutEditorItemDisplayLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
+import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import { isPrimaryContactBadgePresetRefKey, PRIMARY_CONTACT_BADGE_FIELD_PRESET } from "@/lib/layout/layoutEditorFieldDisplayPresets";
 import { resolveVisibilityRuleKey } from "@/lib/layout/layoutEditorVisibilityRules";
 
 type Props = {
@@ -34,6 +38,7 @@ type Props = {
     supportsText?: boolean;
     onSetRowColumns?: (rowIndex: number, columnCount: 1 | 2 | 3) => void;
     onRemoveRow?: (rowIndex: number) => void;
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
 };
 
 export default function OpportunityDrawerLayoutBlockRowEditor({
@@ -49,9 +54,10 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
     supportsText = true,
     onSetRowColumns,
     onRemoveRow,
+    surfaceKey = "opportunity_drawer",
 }: Props) {
     const rows = useMemo(() => listCustomBlockRowLayout(blockItem), [blockItem]);
-    const [pickerTarget, setPickerTarget] = useState<{ rowIndex: number; colIndex: number } | null>(null);
+    const [pickerTarget, setPickerTarget] = useState<{ rowIndex: number; colIndex: number; kind: "field" | "action" } | null>(null);
     const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 
     const selectedField = useMemo(() => {
@@ -286,18 +292,54 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
                                     ))}
                                 </ul>
 
-                                {pickerTarget?.rowIndex === row.rowIndex && pickerTarget.colIndex === col.colIndex ?
+                                {pickerTarget?.rowIndex === row.rowIndex && pickerTarget.colIndex === col.colIndex && pickerTarget.kind === "field" ?
                                     <div className="mt-2">
                                         <OpportunityDrawerLayoutFieldPicker
                                             groups={fieldPickerGroups}
                                             disabled={!validationOk}
                                             onPickField={(field) => {
-                                                const result = addFieldToCustomBlockRow(
+                                                const result =
+                                                    isPrimaryContactBadgePresetRefKey(field.refKey) ?
+                                                        addFieldDisplayPresetToCustomBlockRow(
+                                                            doc,
+                                                            blockItemId,
+                                                            row.rowIndex,
+                                                            col.colIndex,
+                                                            PRIMARY_CONTACT_BADGE_FIELD_PRESET,
+                                                        )
+                                                    :   addFieldToCustomBlockRow(
+                                                            doc,
+                                                            blockItemId,
+                                                            row.rowIndex,
+                                                            col.colIndex,
+                                                            field,
+                                                        );
+                                                if (!result.ok) {
+                                                    onFieldAddError(result.error);
+                                                    return;
+                                                }
+                                                applyDoc(result.doc);
+                                                onFieldAddError(null);
+                                                setSelectedFieldId(result.fieldId);
+                                                setPickerTarget(null);
+                                            }}
+                                        />
+                                    </div>
+                                :   null}
+
+                                {pickerTarget?.rowIndex === row.rowIndex && pickerTarget.colIndex === col.colIndex && pickerTarget.kind === "action" ?
+                                    <div className="mt-2">
+                                        <OpportunityDrawerLayoutActionPicker
+                                            surfaceKey={surfaceKey}
+                                            context={blockItem.refKey === "contact_block" ? "contact_block" : "section_row"}
+                                            disabled={!validationOk}
+                                            onPickAction={(entry) => {
+                                                const result = addActionCatalogEntryToCustomBlockRow(
                                                     doc,
                                                     blockItemId,
                                                     row.rowIndex,
                                                     col.colIndex,
-                                                    field,
+                                                    entry,
                                                 );
                                                 if (!result.ok) {
                                                     onFieldAddError(result.error);
@@ -317,7 +359,7 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
                                         label="Field"
                                         testId={`visual-editor-block-add-field-${row.rowIndex}-${col.colIndex}`}
                                         onClick={() => {
-                                            setPickerTarget({ rowIndex: row.rowIndex, colIndex: col.colIndex });
+                                            setPickerTarget({ rowIndex: row.rowIndex, colIndex: col.colIndex, kind: "field" });
                                             setSelectedFieldId(null);
                                         }}
                                     />
@@ -347,19 +389,8 @@ export default function OpportunityDrawerLayoutBlockRowEditor({
                                             label="Action"
                                             testId={`visual-editor-block-add-action-${row.rowIndex}-${col.colIndex}`}
                                             onClick={() => {
-                                                const result = addActionToCustomBlockRow(
-                                                    doc,
-                                                    blockItemId,
-                                                    row.rowIndex,
-                                                    col.colIndex,
-                                                );
-                                                if (!result.ok) {
-                                                    onFieldAddError(result.error);
-                                                    return;
-                                                }
-                                                applyDoc(result.doc);
-                                                onFieldAddError(null);
-                                                setSelectedFieldId(result.fieldId);
+                                                setPickerTarget({ rowIndex: row.rowIndex, colIndex: col.colIndex, kind: "action" });
+                                                setSelectedFieldId(null);
                                             }}
                                         />
                                     :   null}

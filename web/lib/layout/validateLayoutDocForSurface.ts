@@ -21,6 +21,8 @@ import {
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import type { LayoutDoc, LayoutItem, LayoutSection } from "@/lib/layout/layoutV2";
 import { isLayoutItemKind, isLayoutQueueZone } from "@/lib/layout/layoutV2";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import { buildTenantLayoutFieldRefKeySet } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import {
     isAllowedDrawerSurfaceFieldRefKey,
     isDrawerSurfaceLayoutZone,
@@ -171,6 +173,7 @@ function walkItem(
         allowedWidgetKeys: ReadonlySet<string>;
         allowedStructuralRefKeys: ReadonlySet<string>;
         allowedActionPlacements: readonly ActionSurface[];
+        tenantFieldRefKeys?: ReadonlySet<string>;
         isDrawerSurface: boolean;
         errors: string[];
     },
@@ -179,7 +182,8 @@ function walkItem(
         ctx.errors.push(`${path}: unknown item kind "${String(item.kind)}"`);
     }
 
-    const isAllowedFieldRefKey = (refKey: string) => isAllowedDrawerSurfaceFieldRefKey(ctx.surfaceKey, refKey);
+    const isAllowedFieldRefKey = (refKey: string) =>
+        isAllowedDrawerSurfaceFieldRefKey(ctx.surfaceKey, refKey, ctx.tenantFieldRefKeys);
 
     if (item.kind === "field" && item.refKey) {
         if (!ctx.allowedStructuralRefKeys.has(item.refKey) && !isAllowedFieldRefKey(item.refKey)) {
@@ -352,6 +356,7 @@ type DrawerSurfaceValidationConfig = {
     allowedStructuralRefKeys: readonly string[];
     allowedWidgetKeys: readonly string[];
     allowedActionPlacements: readonly ActionSurface[];
+    tenantFieldRefKeys?: ReadonlySet<string>;
 };
 
 function validateRegisteredDrawerSurfaceDoc(doc: LayoutDoc, config: DrawerSurfaceValidationConfig): string[] {
@@ -400,6 +405,7 @@ function validateRegisteredDrawerSurfaceDoc(doc: LayoutDoc, config: DrawerSurfac
         allowedWidgetKeys,
         allowedStructuralRefKeys,
         allowedActionPlacements: config.allowedActionPlacements,
+        tenantFieldRefKeys: config.tenantFieldRefKeys,
         isDrawerSurface: true,
         errors,
     };
@@ -447,28 +453,73 @@ function validateChildDrawerDoc(doc: LayoutDoc): string[] {
     });
 }
 
+export type LayoutSurfaceValidationOptions = {
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+};
+
+function tenantFieldRefKeysForSurface(
+    surfaceKey: SurfaceLayoutKey,
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[],
+): ReadonlySet<string> | undefined {
+    if (!tenantFieldDefinitions?.length) return undefined;
+    if (surfaceKey === "opportunity_drawer") {
+        return buildTenantLayoutFieldRefKeySet(tenantFieldDefinitions, "opportunity_drawer");
+    }
+    if (surfaceKey === "person_drawer") {
+        return buildTenantLayoutFieldRefKeySet(tenantFieldDefinitions, "person_drawer");
+    }
+    if (surfaceKey === "child_drawer") {
+        return buildTenantLayoutFieldRefKeySet(tenantFieldDefinitions, "child_drawer");
+    }
+    return undefined;
+}
+
 /** Validate a structurally valid LayoutDoc against a registered surface vocabulary. */
 export function validateLayoutDocForSurface(
     doc: LayoutDoc,
     surfaceKey?: SurfaceLayoutKey | null,
+    options?: LayoutSurfaceValidationOptions,
 ): LayoutSurfaceValidationResult {
     const resolved = surfaceKey ?? resolveSurfaceLayoutKeyFromDoc(doc);
     if (!resolved) {
         return { ok: true, surfaceKey: null, errors: [] };
     }
 
+    const tenantFieldRefKeys = tenantFieldRefKeysForSurface(resolved, options?.tenantFieldDefinitions);
+
     if (resolved === "opportunity_drawer") {
-        const errors = validateOpportunityDrawerDoc(doc);
+        const errors = validateRegisteredDrawerSurfaceDoc(doc, {
+            surfaceKey: "opportunity_drawer",
+            allowedSectionKeys: OPPORTUNITY_DRAWER_SECTION_KEYS,
+            allowedStructuralRefKeys: OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS,
+            allowedWidgetKeys: OPPORTUNITY_DRAWER_SURFACE.allowedWidgetKeys,
+            allowedActionPlacements: OPPORTUNITY_DRAWER_ACTION_PLACEMENTS,
+            tenantFieldRefKeys,
+        });
         return { ok: errors.length === 0, surfaceKey: resolved, errors };
     }
 
     if (resolved === "person_drawer") {
-        const errors = validatePersonDrawerDoc(doc);
+        const errors = validateRegisteredDrawerSurfaceDoc(doc, {
+            surfaceKey: "person_drawer",
+            allowedSectionKeys: PERSON_DRAWER_SECTION_KEYS,
+            allowedStructuralRefKeys: PERSON_DRAWER_STRUCTURAL_REF_KEYS,
+            allowedWidgetKeys: PERSON_DRAWER_SURFACE.allowedWidgetKeys,
+            allowedActionPlacements: PERSON_CHILD_DRAWER_ACTION_PLACEMENTS,
+            tenantFieldRefKeys,
+        });
         return { ok: errors.length === 0, surfaceKey: resolved, errors };
     }
 
     if (resolved === "child_drawer") {
-        const errors = validateChildDrawerDoc(doc);
+        const errors = validateRegisteredDrawerSurfaceDoc(doc, {
+            surfaceKey: "child_drawer",
+            allowedSectionKeys: CHILD_DRAWER_SECTION_KEYS,
+            allowedStructuralRefKeys: CHILD_DRAWER_STRUCTURAL_REF_KEYS,
+            allowedWidgetKeys: CHILD_DRAWER_SURFACE.allowedWidgetKeys,
+            allowedActionPlacements: PERSON_CHILD_DRAWER_ACTION_PLACEMENTS,
+            tenantFieldRefKeys,
+        });
         return { ok: errors.length === 0, surfaceKey: resolved, errors };
     }
 
@@ -478,10 +529,16 @@ export function validateLayoutDocForSurface(
 /** Surface validation helper for admin write paths. */
 export function validateLayoutDocForWrite(
     doc: LayoutDoc,
-    options?: { surfaceKey?: SurfaceLayoutKey | null; inferSurfaceKey?: boolean },
+    options?: {
+        surfaceKey?: SurfaceLayoutKey | null;
+        inferSurfaceKey?: boolean;
+        tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+    },
 ): LayoutSurfaceValidationResult {
     const surfaceKey =
         options?.surfaceKey ??
         (options?.inferSurfaceKey !== false ? resolveSurfaceLayoutKeyFromDoc(doc) : null);
-    return validateLayoutDocForSurface(doc, surfaceKey);
+    return validateLayoutDocForSurface(doc, surfaceKey, {
+        tenantFieldDefinitions: options?.tenantFieldDefinitions,
+    });
 }

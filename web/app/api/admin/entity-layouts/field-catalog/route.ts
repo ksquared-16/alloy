@@ -46,6 +46,14 @@ import {
     CHILDCARE_DEF_ENTITY_BY_LOAD_GROUP,
     isChildcareCatalogRefKey,
 } from "@/lib/layout/childcareLayoutFieldCatalog";
+import { loadTenantFieldDefinitionsForLayoutPicker } from "@/lib/layout/loadTenantLayoutFieldDefinitions";
+import {
+    filterLoadedLayoutCatalogFields,
+    indexTenantFieldDefinitionsByRefKey,
+    buildTenantLayoutCatalogFields,
+    mergeTenantFieldsIntoPickerGroups,
+    type TenantFieldDefinitionRow,
+} from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import {
     filterCatalogGroupsForDrawerSurface,
 } from "@/lib/layout/surfaceLayoutRegistry";
@@ -64,10 +72,9 @@ function filterLoadedFields(
     group: LayoutEntityGroupKey,
     fields: LayoutCatalogField[],
     anchor: ReturnType<typeof layoutPickerAnchorForEntityType>,
+    tenantDefsByRef: ReadonlyMap<string, TenantFieldDefinitionRow>,
 ): LayoutCatalogField[] {
-    return fields.filter(
-        (f) => !isBlockedLayoutPickerRefKey(f.refKey) && isChildcareCatalogRefKey(f.refKey, anchor),
-    );
+    return filterLoadedLayoutCatalogFields(fields, anchor, tenantDefsByRef);
 }
 
 async function loadGroupFields(
@@ -75,13 +82,14 @@ async function loadGroupFields(
     orgId: string,
     group: LayoutEntityGroupKey,
     anchor: ReturnType<typeof layoutPickerAnchorForEntityType>,
+    tenantDefsByRef: ReadonlyMap<string, TenantFieldDefinitionRow>,
 ): Promise<{ fields: LayoutCatalogField[]; curatedFallback: boolean; inquiryChildParityGaps: string[] }> {
     const fieldEntity = GROUP_FIELD_ENTITY[group];
     let inquiryChildParityGaps: string[] = [];
 
     if (!fieldEntity) {
         return {
-            fields: filterLoadedFields(group, CURATED_FIELDS[group], anchor),
+            fields: filterLoadedFields(group, CURATED_FIELDS[group], anchor, tenantDefsByRef),
             curatedFallback: true,
             inquiryChildParityGaps,
         };
@@ -89,7 +97,7 @@ async function loadGroupFields(
 
     const { data, error } = await supabase
         .from("field_definitions")
-        .select("field_key, label, field_type, section_key, sort_order, is_active, is_visible_in_drawer, entity_type")
+        .select("field_key, label, field_type, section_key, sort_order, is_active, is_visible_in_drawer, entity_type, is_system, config")
         .eq("org_id", orgId)
         .eq("entity_type", fieldEntity)
         .eq("is_active", true)
@@ -98,7 +106,7 @@ async function loadGroupFields(
 
     if (error || !data || data.length === 0) {
         return {
-            fields: filterLoadedFields(group, CURATED_FIELDS[group], anchor),
+            fields: filterLoadedFields(group, CURATED_FIELDS[group], anchor, tenantDefsByRef),
             curatedFallback: true,
             inquiryChildParityGaps:
                 group === "inquiry_child"
@@ -122,7 +130,7 @@ async function loadGroupFields(
         const merged =
             inquiryChildParityGaps.length > 0 ? mergeCatalogWithCuratedFallback(group, registryFields) : registryFields;
         return {
-            fields: filterLoadedFields(group, merged, anchor),
+            fields: filterLoadedFields(group, merged, anchor, tenantDefsByRef),
             curatedFallback: inquiryChildParityGaps.length > 0,
             inquiryChildParityGaps,
         };
@@ -133,14 +141,14 @@ async function loadGroupFields(
         const merged =
             configParityGaps.length > 0 ? mergeCatalogWithCuratedFallback(group, registryFields) : registryFields;
         return {
-            fields: filterLoadedFields(group, merged, anchor),
+            fields: filterLoadedFields(group, merged, anchor, tenantDefsByRef),
             curatedFallback: configParityGaps.length > 0,
             inquiryChildParityGaps,
         };
     }
 
     return {
-        fields: filterLoadedFields(group, registryFields, anchor),
+        fields: filterLoadedFields(group, registryFields, anchor, tenantDefsByRef),
         curatedFallback: false,
         inquiryChildParityGaps,
     };
@@ -170,11 +178,14 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminClient();
     try {
+        const tenantFieldDefinitions = await loadTenantFieldDefinitionsForLayoutPicker(supabase, ctx.orgId);
+        const tenantDefsByRef = indexTenantFieldDefinitionsByRefKey(tenantFieldDefinitions);
         const rawGroups: LayoutCatalogGroup[] = [];
         const catalogMeta: {
             curatedFallbackGroups: LayoutEntityGroupKey[];
             inquiryChildParityGaps: string[];
             anchorEntity: typeof anchor;
+            tenantCustomFieldCount?: number;
         } = { curatedFallbackGroups: [], inquiryChildParityGaps: [], anchorEntity: anchor };
 
         for (const g of LAYOUT_ENTITY_GROUPS) {
@@ -183,6 +194,7 @@ export async function GET(request: NextRequest) {
                 ctx.orgId,
                 g.entityKey,
                 anchor,
+                tenantDefsByRef,
             );
             if (curatedFallback) catalogMeta.curatedFallbackGroups.push(g.entityKey);
             if (inquiryChildParityGaps.length > 0) {
@@ -194,21 +206,31 @@ export async function GET(request: NextRequest) {
         }
 
         let groups = buildLeadLayoutPickerGroups(rawGroups, anchor);
+        let drawerSurface: "opportunity_drawer" | "person_drawer" | "child_drawer" | null = null;
         if (entityType === "opportunities") {
-            groups = filterCatalogGroupsForDrawerSurface("opportunity_drawer", groups);
+            drawerSurface = "opportunity_drawer";
         } else if (entityType === "persons" || entityType === "person") {
-            groups = filterCatalogGroupsForDrawerSurface("person_drawer", groups);
+            drawerSurface = "person_drawer";
         } else if (entityType === "customer_members" || entityType === "child") {
-            groups = filterCatalogGroupsForDrawerSurface("child_drawer", groups);
+            drawerSurface = "child_drawer";
+        }
+        if (drawerSurface) {
+            groups = filterCatalogGroupsForDrawerSurface(drawerSurface, groups);
+            groups = mergeTenantFieldsIntoPickerGroups(
+                groups,
+                buildTenantLayoutCatalogFields(tenantFieldDefinitions, drawerSurface),
+            );
         }
         const emittedRefKeys = collectRefKeysFromCatalogGroups(groups);
 
         return NextResponse.json({
             groups,
             widgets: catalogWidgetsForEntityType(),
+            tenantFieldDefinitions,
             catalogMeta: {
                 ...catalogMeta,
                 emittedRefKeyCount: emittedRefKeys.length,
+                tenantCustomFieldCount: tenantFieldDefinitions.filter((d) => d.is_system === false).length,
             },
         });
     } catch (e) {

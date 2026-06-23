@@ -12,6 +12,11 @@ import { organizeChildcarePickerGroups } from "@/lib/layout/childcareLayoutField
 import { isRefKeyPickerEligible, manifestEntryForRefKey } from "@/lib/layout/platformFieldResolutionManifest";
 import { resolveLayoutEditorFieldRefLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 import { PERSON_DRAWER_SURFACE } from "@/lib/layout/surfaceLayoutRegistry";
+import {
+    buildTenantLayoutCatalogFields,
+    mergeTenantFieldsIntoPickerGroups,
+    type TenantFieldDefinitionRow,
+} from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 
 function refKeyToCatalogField(refKey: string): LayoutCatalogField | null {
     if (!isRefKeyPickerEligible(refKey, "person")) return null;
@@ -29,17 +34,25 @@ function refKeyToCatalogField(refKey: string): LayoutCatalogField | null {
     };
 }
 
-export function buildPersonDrawerEditorFieldPickerGroups(): LayoutCatalogGroup[] {
+export function buildPersonDrawerEditorFieldPickerGroups(options?: {
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
+}): LayoutCatalogGroup[] {
     const fields: LayoutCatalogField[] = [];
     for (const refKey of PERSON_DRAWER_SURFACE.allowedFieldRefKeys) {
         if (refKey.startsWith("_")) continue;
         const field = refKeyToCatalogField(refKey);
         if (field) fields.push(field);
     }
+
+    const tenantFields = buildTenantLayoutCatalogFields(options?.tenantFieldDefinitions ?? [], "person_drawer");
+
     return buildContextFirstDrawerFieldPickerGroups(
         "person_drawer",
         finalizeCatalogGroupsForPicker(
-            organizeChildcarePickerGroups(fields, "person", { supplementFromStarterCatalog: false }) as LayoutCatalogGroup[],
+            mergeTenantFieldsIntoPickerGroups(
+                organizeChildcarePickerGroups(fields, "person", { supplementFromStarterCatalog: false }) as LayoutCatalogGroup[],
+                tenantFields,
+            ),
         ),
     );
 }

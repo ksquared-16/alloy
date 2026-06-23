@@ -5,6 +5,8 @@
 import { makeId } from "@/lib/layout/builderOps";
 import type { LayoutItem } from "@/lib/layout/layoutV2";
 import { LAYOUT_EDITOR_ROW_ACTIONS } from "@/lib/layout/layoutEditorRowTemplateConfig";
+import type { LayoutEditorVisibilityRule } from "@/lib/layout/layoutEditorVisibilityRules";
+import { visibilityConditionForRule } from "@/lib/layout/layoutEditorVisibilityRules";
 
 export const LAYOUT_EDITOR_ACTION_BUTTON_METADATA_KEY = "layoutEditorActionButton" as const;
 
@@ -72,17 +74,24 @@ export function validateLayoutEditorActionButtonConfig(config: LayoutEditorActio
     return errors;
 }
 
-export function makeLayoutEditorActionButtonItem(config?: Partial<LayoutEditorActionButtonConfig>): LayoutItem {
+export function makeLayoutEditorActionButtonItem(
+    config?: Partial<LayoutEditorActionButtonConfig> & { defaultVisibility?: LayoutEditorVisibilityRule },
+): LayoutItem {
     const actionKey = config?.actionKey && isAllowedLayoutEditorActionKey(String(config.actionKey)) ?
         config.actionKey
     :   "edit_enrollment";
     const label = config?.label?.trim() || LAYOUT_EDITOR_ACTION_KEY_LABELS[actionKey as LayoutEditorDrawerActionKey] || "Action";
+    const visibleWhen =
+        config?.defaultVisibility ?
+            visibilityConditionForRule(config.defaultVisibility, "_action_button")
+        :   undefined;
     return {
         id: makeId("item"),
         kind: "field",
         refKey: "_action_button",
         label,
         renderHint: "link",
+        visibleWhen,
         metadata: writeLayoutEditorActionButtonConfig(undefined, {
             label,
             actionKey,

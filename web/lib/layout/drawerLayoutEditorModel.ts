@@ -79,9 +79,12 @@ export function partitionDrawerSectionsByZone(doc: LayoutDoc, surfaceKey: Drawer
 export function validateDrawerLayoutDoc(
     doc: LayoutDoc,
     surfaceKey: DrawerLayoutEditorSurfaceKey,
+    options?: { tenantFieldDefinitions?: readonly import("@/lib/layout/tenantLayoutFieldPickerCatalog").TenantFieldDefinitionRow[] },
 ): { ok: boolean; errors: string[]; warnings: string[] } {
     const parsed = parseLayoutDoc(doc, { inferSurfaceKey: true });
-    const surfaceValidation = validateLayoutDocForSurface(doc);
+    const surfaceValidation = validateLayoutDocForSurface(doc, surfaceKey, {
+        tenantFieldDefinitions: options?.tenantFieldDefinitions,
+    });
     const errors = [...parsed.errors, ...(surfaceValidation.ok ? [] : surfaceValidation.errors)];
     if (surfaceValidation.surfaceKey && surfaceValidation.surfaceKey !== surfaceKey) {
         errors.push(`Layout document surface mismatch: expected ${surfaceKey}.`);

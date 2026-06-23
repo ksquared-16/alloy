@@ -3,6 +3,8 @@ import { buildFormSystemFieldPicker } from "@/lib/fields/formFieldRegistryPicker
 import { mergeLifecycleFieldPaletteForStage } from "@/lib/lifecycle/lifecycleFieldPaletteMerge";
 import { customFieldRuleId } from "@/lib/lifecycle/lifecycleFieldRuleBindings";
 import { fieldDefToCatalog, mergeCatalogWithCuratedFallback } from "@/lib/layout/fieldCatalog";
+import { buildOpportunityDrawerEditorFieldPickerGroups } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
+import { buildQueueRecordPickerCatalog } from "@/lib/layout/queueRecordFieldPickerCatalog";
 import { OPERATIONAL_FORM_SYSTEM_FIELDS } from "@/lib/forms/systemFieldRegistry";
 
 const PREFERRED_START_MONTH = {
@@ -44,6 +46,21 @@ describe("field registry trust — end-to-end", () => {
         const layoutMerged = mergeCatalogWithCuratedFallback("inquiry_child", layoutRegistry);
         expect(layoutMerged.some((f) => f.fieldKey === "preferred_start_month")).toBe(true);
         expect(layoutMerged.some((f) => f.refKey === "inquiry_child.preferred_start_month")).toBe(true);
+
+        const queuePicker = buildQueueRecordPickerCatalog({
+            isWaitlist: true,
+            tenantFieldDefinitions: [PREFERRED_START_MONTH],
+        });
+        expect(
+            queuePicker.groups.flatMap((g) => g.fields).some((f) => f.refKey === "inquiry_child.preferred_start_month"),
+        ).toBe(true);
+
+        const drawerPicker = buildOpportunityDrawerEditorFieldPickerGroups({
+            tenantFieldDefinitions: [PREFERRED_START_MONTH],
+        });
+        expect(
+            drawerPicker.flatMap((g) => g.fields).some((f) => f.refKey === "inquiry_child.preferred_start_month"),
+        ).toBe(true);
 
         expect(OPERATIONAL_FORM_SYSTEM_FIELDS.some((e) => e.field_key === "preferred_start_month")).toBe(false);
     });

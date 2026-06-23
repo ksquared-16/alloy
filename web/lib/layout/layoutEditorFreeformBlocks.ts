@@ -25,6 +25,13 @@ import {
     makeLayoutEditorActionButtonItem,
     type LayoutEditorActionButtonConfig,
 } from "@/lib/layout/layoutEditorActionButton";
+import type { LayoutEditorActionCatalogEntry } from "@/lib/layout/layoutEditorActionCatalog";
+import { layoutEditorActionButtonConfigFromCatalogEntry } from "@/lib/layout/layoutEditorActionCatalog";
+import {
+    applyLayoutEditorFieldDisplayPresetToItem,
+    type LayoutEditorFieldDisplayPreset,
+} from "@/lib/layout/layoutEditorFieldDisplayPresets";
+import type { LayoutEditorVisibilityRule } from "@/lib/layout/layoutEditorVisibilityRules";
 import {
     blockRefKeyForType,
     blockVisibilityCondition,
@@ -350,6 +357,25 @@ export function addFieldToCustomBlockRow(
     return { ok: true, doc: groupAddItem(doc, loc, rowIndex, columnIndex, fieldItem), fieldId: fieldItem.id };
 }
 
+export function addFieldDisplayPresetToCustomBlockRow(
+    doc: LayoutDoc,
+    blockItemId: string,
+    rowIndex: number,
+    columnIndex: number,
+    preset: LayoutEditorFieldDisplayPreset,
+): AddBlockFieldResult {
+    if (!isAllowedOpportunityDrawerFieldRefKey(preset.refKey)) {
+        return { ok: false, error: `"${preset.refKey}" is not allowed on the opportunity drawer.` };
+    }
+    const loc = findLayoutBlockLocation(doc, blockItemId);
+    if (!loc) return { ok: false, error: "Block not found." };
+    const item = doc.sections[loc.sIdx]?.rows[loc.rIdx]?.columns[loc.cIdx]?.items.find((it) => it.id === blockItemId);
+    if (item?.kind !== "field_group") return { ok: false, error: "Field presets are supported inside layout blocks only." };
+    const base = makeFieldItem(preset.refKey, preset.fieldLabel, preset.fieldType);
+    const fieldItem = applyLayoutEditorFieldDisplayPresetToItem(base, preset);
+    return { ok: true, doc: groupAddItem(doc, loc, rowIndex, columnIndex, fieldItem), fieldId: fieldItem.id };
+}
+
 export function addTextToCustomBlockRow(
     doc: LayoutDoc,
     blockItemId: string,
@@ -371,7 +397,7 @@ export function addActionToCustomBlockRow(
     blockItemId: string,
     rowIndex: number,
     columnIndex: number,
-    config?: Partial<LayoutEditorActionButtonConfig>,
+    config?: Partial<LayoutEditorActionButtonConfig> & { defaultVisibility?: LayoutEditorVisibilityRule },
 ): AddBlockFieldResult {
     const loc = findLayoutBlockLocation(doc, blockItemId);
     if (!loc) return { ok: false, error: "Block not found." };
@@ -379,6 +405,25 @@ export function addActionToCustomBlockRow(
     if (item?.kind !== "field_group") return { ok: false, error: "Action items are supported inside layout blocks only." };
     const actionItem = makeLayoutEditorActionButtonItem(config);
     return { ok: true, doc: groupAddItem(doc, loc, rowIndex, columnIndex, actionItem), fieldId: actionItem.id };
+}
+
+export function addActionCatalogEntryToCustomBlockRow(
+    doc: LayoutDoc,
+    blockItemId: string,
+    rowIndex: number,
+    columnIndex: number,
+    entry: LayoutEditorActionCatalogEntry,
+): AddBlockFieldResult {
+    if (!entry.selectableInActionPicker) {
+        return { ok: false, error: entry.disabledReason ?? `"${entry.label}" cannot be added as a layout action button.` };
+    }
+    return addActionToCustomBlockRow(
+        doc,
+        blockItemId,
+        rowIndex,
+        columnIndex,
+        layoutEditorActionButtonConfigFromCatalogEntry(entry),
+    );
 }
 
 export function removeCustomBlockNestedField(

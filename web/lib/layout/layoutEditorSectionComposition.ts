@@ -32,6 +32,13 @@ import {
     writeLayoutEditorActionButtonConfig,
     type LayoutEditorActionButtonConfig,
 } from "@/lib/layout/layoutEditorActionButton";
+import type { LayoutEditorActionCatalogEntry } from "@/lib/layout/layoutEditorActionCatalog";
+import { layoutEditorActionButtonConfigFromCatalogEntry } from "@/lib/layout/layoutEditorActionCatalog";
+import {
+    applyLayoutEditorFieldDisplayPresetToItem,
+    type LayoutEditorFieldDisplayPreset,
+} from "@/lib/layout/layoutEditorFieldDisplayPresets";
+import type { LayoutEditorVisibilityRule } from "@/lib/layout/layoutEditorVisibilityRules";
 import {
     isAllowedChildDrawerWidgetKey,
     isAllowedOpportunityDrawerFieldRefKey,
@@ -290,14 +297,47 @@ export function addSectionActionButtonItem(
     sectionKey: string,
     rowIndex: number,
     colIndex: number,
-    config?: Partial<LayoutEditorActionButtonConfig>,
+    config?: Partial<LayoutEditorActionButtonConfig> & { defaultVisibility?: LayoutEditorVisibilityRule },
 ): AddSectionItemResult {
     const sIdx = sectionIndex(doc, sectionKey);
     if (sIdx < 0) return { ok: false, error: "Section not found." };
-    const item = makeLayoutEditorActionButtonItem(config);
     if (config?.actionKey && !isAllowedLayoutEditorActionKey(config.actionKey)) {
         return { ok: false, error: `"${config.actionKey}" is not an allowed drawer action key.` };
     }
+    const item = makeLayoutEditorActionButtonItem(config);
+    return { ok: true, doc: addItem(doc, sIdx, rowIndex, colIndex, item), itemId: item.id };
+}
+
+export function addSectionActionButtonCatalogEntry(
+    doc: LayoutDoc,
+    sectionKey: string,
+    rowIndex: number,
+    colIndex: number,
+    entry: LayoutEditorActionCatalogEntry,
+): AddSectionItemResult {
+    if (!entry.selectableInActionPicker) {
+        return { ok: false, error: entry.disabledReason ?? `"${entry.label}" cannot be added as a layout action button.` };
+    }
+    return addSectionActionButtonItem(doc, sectionKey, rowIndex, colIndex, layoutEditorActionButtonConfigFromCatalogEntry(entry));
+}
+
+export function addSectionFieldDisplayPresetItem(
+    doc: LayoutDoc,
+    sectionKey: string,
+    rowIndex: number,
+    colIndex: number,
+    preset: LayoutEditorFieldDisplayPreset,
+): AddSectionItemResult {
+    if (!isAllowedOpportunityDrawerFieldRefKey(preset.refKey)) {
+        return { ok: false, error: `"${preset.refKey}" is not allowed on the opportunity drawer.` };
+    }
+    const sIdx = sectionIndex(doc, sectionKey);
+    if (sIdx < 0) return { ok: false, error: "Section not found." };
+    const section = doc.sections[sIdx]!;
+    if (!section.rows[rowIndex]) return { ok: false, error: "Row not found." };
+    if (!section.rows[rowIndex]!.columns[colIndex]) return { ok: false, error: "Column not found." };
+    const base = makeFieldItem(preset.refKey, preset.fieldLabel, preset.fieldType);
+    const item = applyLayoutEditorFieldDisplayPresetToItem(base, preset);
     return { ok: true, doc: addItem(doc, sIdx, rowIndex, colIndex, item), itemId: item.id };
 }
 

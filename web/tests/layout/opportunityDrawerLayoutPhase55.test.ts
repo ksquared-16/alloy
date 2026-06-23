@@ -33,7 +33,7 @@ describe("opportunity drawer layout editor field catalog", () => {
     it("builds entity-first picker groups", () => {
         const groups = buildOpportunityDrawerEditorFieldPickerGroups();
         expect(groups.length).toBeGreaterThan(0);
-        expect(groups.some((g) => g.entityLabel === "Child" || g.entityLabel === "Lead")).toBe(true);
+        expect(groups.some((g) => g.entityLabel === "Children" || g.entityLabel === "Enrollment Record")).toBe(true);
         for (const group of groups) {
             for (const field of group.fields) {
                 expect(field.fieldLabel).not.toContain("child.");

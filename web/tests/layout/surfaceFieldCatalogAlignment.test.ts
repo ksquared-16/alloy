@@ -68,7 +68,7 @@ describe("drawer surface field picker / validator alignment", () => {
 
     it("household address refs remain separate and clearly labeled in catalog", () => {
         expect(CHILDCARE_CATALOG_BY_REFKEY.get("location.household_address_line1")?.pickerLabel).toBe(
-            "Household address line 1",
+            "Shared mailing address line 1",
         );
         expect(CHILDCARE_CATALOG_BY_REFKEY.get("location.address1")?.pickerLabel).toBe("Site address line 1");
         const refs = flatRefKeys(buildPersonDrawerEditorFieldPickerGroups());

@@ -629,9 +629,13 @@ export function buildSurfaceLayoutRegistryResponse() {
 }
 
 /** Field ref allow-list check for opportunity drawer surfaces. */
-export function isAllowedOpportunityDrawerFieldRefKey(refKey: string): boolean {
+export function isAllowedOpportunityDrawerFieldRefKey(
+    refKey: string,
+    tenantRefKeys?: ReadonlySet<string>,
+): boolean {
     const trimmed = refKey.trim();
     if (!trimmed) return false;
+    if (tenantRefKeys?.has(trimmed)) return true;
     const writeGuard = validateRefKeyForWrite(trimmed);
     if (!writeGuard.ok) return false;
     if ((OPPORTUNITY_DRAWER_STRUCTURAL_REF_KEYS as readonly string[]).includes(trimmed)) return true;
@@ -640,9 +644,13 @@ export function isAllowedOpportunityDrawerFieldRefKey(refKey: string): boolean {
 }
 
 /** Field ref allow-list check for person drawer surfaces. */
-export function isAllowedPersonDrawerFieldRefKey(refKey: string): boolean {
+export function isAllowedPersonDrawerFieldRefKey(
+    refKey: string,
+    tenantRefKeys?: ReadonlySet<string>,
+): boolean {
     const trimmed = refKey.trim();
     if (!trimmed) return false;
+    if (tenantRefKeys?.has(trimmed)) return true;
     const writeGuard = validateRefKeyForWrite(trimmed);
     if (!writeGuard.ok) return false;
     if ((PERSON_DRAWER_STRUCTURAL_REF_KEYS as readonly string[]).includes(trimmed)) return true;
@@ -651,9 +659,13 @@ export function isAllowedPersonDrawerFieldRefKey(refKey: string): boolean {
 }
 
 /** Field ref allow-list check for child drawer surfaces. */
-export function isAllowedChildDrawerFieldRefKey(refKey: string): boolean {
+export function isAllowedChildDrawerFieldRefKey(
+    refKey: string,
+    tenantRefKeys?: ReadonlySet<string>,
+): boolean {
     const trimmed = refKey.trim();
     if (!trimmed) return false;
+    if (tenantRefKeys?.has(trimmed)) return true;
     const writeGuard = validateRefKeyForWrite(trimmed);
     if (!writeGuard.ok) return false;
     if ((CHILD_DRAWER_STRUCTURAL_REF_KEYS as readonly string[]).includes(trimmed)) return true;
@@ -662,8 +674,14 @@ export function isAllowedChildDrawerFieldRefKey(refKey: string): boolean {
 }
 
 /** Field ref allow-list for pipeline / waitlist queue row surfaces. */
-export function isAllowedQueueRecordFieldRefKey(refKey: string, isWaitlist = false): boolean {
-    return isValidatorAllowedQueueRecordFieldRefKey(refKey, isWaitlist);
+export function isAllowedQueueRecordFieldRefKey(
+    refKey: string,
+    isWaitlist = false,
+    tenantRefKeys?: ReadonlySet<string>,
+): boolean {
+    const trimmed = refKey.trim();
+    if (tenantRefKeys?.has(trimmed)) return true;
+    return isValidatorAllowedQueueRecordFieldRefKey(trimmed, isWaitlist);
 }
 
 /** Validator-aligned allow-list (picker + validation share this set). */
@@ -682,10 +700,14 @@ export function filterCatalogGroupsForQueueSurface(
         .filter((group) => group.fields.length > 0);
 }
 
-export function isAllowedDrawerSurfaceFieldRefKey(surfaceKey: SurfaceLayoutKey, refKey: string): boolean {
-    if (surfaceKey === "opportunity_drawer") return isAllowedOpportunityDrawerFieldRefKey(refKey);
-    if (surfaceKey === "person_drawer") return isAllowedPersonDrawerFieldRefKey(refKey);
-    if (surfaceKey === "child_drawer") return isAllowedChildDrawerFieldRefKey(refKey);
+export function isAllowedDrawerSurfaceFieldRefKey(
+    surfaceKey: SurfaceLayoutKey,
+    refKey: string,
+    tenantRefKeys?: ReadonlySet<string>,
+): boolean {
+    if (surfaceKey === "opportunity_drawer") return isAllowedOpportunityDrawerFieldRefKey(refKey, tenantRefKeys);
+    if (surfaceKey === "person_drawer") return isAllowedPersonDrawerFieldRefKey(refKey, tenantRefKeys);
+    if (surfaceKey === "child_drawer") return isAllowedChildDrawerFieldRefKey(refKey, tenantRefKeys);
     return false;
 }
 

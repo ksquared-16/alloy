@@ -29,6 +29,8 @@ import {
     isValidatorAllowedQueueRecordFieldRefKey,
     validatorAllowedQueueRecordFieldRefKeys,
 } from "@/lib/layout/queueRecordValidatorAllowList";
+import { resolveFieldPickerLabel, isFieldPickerOperatorVisible } from "@/lib/layout/fieldPickerContextCatalog";
+import { resolveLayoutEditorFieldRefLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 
 function leadOpportunitiesCatalogGroups() {
     const raw = LAYOUT_ENTITY_GROUPS.map((g) => ({
@@ -172,14 +174,16 @@ describe("queue record field picker catalog", () => {
         );
     });
 
-    it("picker-visible refs are generated from validator allow-list (full parity)", () => {
+    it("picker-visible refs are a subset of validator allow-list (backend ids hidden from picker)", () => {
         for (const isWaitlist of [false, true] as const) {
             const allowed = validatorAllowedQueueRecordFieldRefKeys(isWaitlist);
             const visible = pickerRefKeys(isWaitlist);
+            const surface = isWaitlist ? "waitlist_queue_row" : "pipeline_queue_row";
             for (const refKey of visible) {
                 expect(isValidatorAllowedQueueRecordFieldRefKey(refKey, isWaitlist)).toBe(true);
             }
             for (const refKey of allowed) {
+                if (!isFieldPickerOperatorVisible(refKey, surface)) continue;
                 const contextClassifiable =
                     refKey.startsWith("waitlist.") || refKey.startsWith("overrides.")
                         ? isWaitlist
@@ -188,11 +192,6 @@ describe("queue record field picker catalog", () => {
                     expect(visible).toContain(refKey);
                 }
             }
-            expect(visible.length).toBe(
-                allowed.filter((refKey) =>
-                    refKey.startsWith("waitlist.") || refKey.startsWith("overrides.") ? isWaitlist : true,
-                ).length,
-            );
         }
     });
 
@@ -208,9 +207,8 @@ describe("queue record field picker catalog", () => {
     });
 
     it("picker groups are independent of column row context", () => {
-        const catalog = leadOpportunitiesCatalogGroups();
-        const main = buildQueueRecordFieldPickerGroups(catalog, false, { blockFilter: "field_group" });
-        const lifecycle = buildQueueRecordFieldPickerGroups(catalog, false, { blockFilter: "field_group" });
+        const main = buildQueueRecordFieldPickerGroups(false, { blockFilter: "field_group" });
+        const lifecycle = buildQueueRecordFieldPickerGroups(false, { blockFilter: "field_group" });
         expect(main.map((g) => g.entityKey)).toEqual(lifecycle.map((g) => g.entityKey));
     });
 
@@ -347,10 +345,80 @@ describe("queue record field picker catalog", () => {
     });
 
     it("buildQueueRecordPickerFieldsFromAllowList never exceeds validator allow-list", () => {
-        const fields = buildQueueRecordPickerFieldsFromAllowList(leadOpportunitiesCatalogGroups(), false);
+        const fields = buildQueueRecordPickerFieldsFromAllowList(false);
         const allowed = new Set(validatorAllowedQueueRecordFieldRefKeys(false));
         for (const field of fields) {
             expect(allowed.has(field.refKey)).toBe(true);
+        }
+    });
+});
+
+describe("queue record field picker — operator labels (P0)", () => {
+    function allPickerFields(isWaitlist: boolean) {
+        return buildQueuePicker(isWaitlist).groups.flatMap((g) => g.fields);
+    }
+
+    function labelFor(isWaitlist: boolean, refKey: string): string | undefined {
+        return allPickerFields(isWaitlist).find((f) => f.refKey === refKey)?.fieldLabel;
+    }
+
+    it("waitlist Add Field does not show opportunity.primary_person_id", () => {
+        const refs = pickerRefKeys(true);
+        expect(refs).not.toContain("opportunity.primary_person_id");
+    });
+
+    it("waitlist Add Field does not show opportunity.location as raw ref label", () => {
+        const fields = allPickerFields(true);
+        const location = fields.find((f) => f.refKey === "opportunity.location");
+        expect(location).toBeDefined();
+        expect(location!.fieldLabel).toBe("Site / Location");
+        expect(location!.fieldLabel).not.toContain("opportunity.");
+    });
+
+    it("waitlist Add Field shows operator-friendly labels for key concepts", () => {
+        expect(labelFor(true, "person.primary_contact_name")).toBe("Primary contact name");
+        expect(labelFor(true, "child.name")).toBe("Child full name");
+        expect(labelFor(true, "waitlist.positionLabel")).toBe("Waitlist position");
+        expect(labelFor(true, "overrides.flags")).toBe("Overrides");
+        expect(labelFor(true, "opportunity.status_label")).toBe("Status");
+    });
+
+    it("no visible queue picker field label contains a raw dotted refKey", () => {
+        for (const isWaitlist of [false, true] as const) {
+            for (const field of allPickerFields(isWaitlist)) {
+                expect(field.fieldLabel).not.toBe(field.refKey);
+                expect(field.fieldLabel).not.toMatch(/^[a-z_]+\.[a-z_0-9.]+$/);
+            }
+        }
+    });
+
+    it("no raw *_id fields appear in queue picker", () => {
+        for (const isWaitlist of [false, true] as const) {
+            const refs = pickerRefKeys(isWaitlist);
+            for (const refKey of refs) {
+                const fieldKey = refKey.includes(".") ? refKey.slice(refKey.indexOf(".") + 1) : refKey;
+                expect(fieldKey.endsWith("_id")).toBe(false);
+                expect(fieldKey).not.toBe("id");
+            }
+        }
+    });
+
+    it("queue and drawer share labels for common childcare catalog refs", () => {
+        const sharedRefs = [
+            "opportunity.tour_date",
+            "person.primary_contact_name",
+            "inquiry_child.desired_start_date",
+            "inquiry_child.desired_program_type",
+        ];
+        for (const refKey of sharedRefs) {
+            expect(resolveFieldPickerLabel(refKey, "waitlist_queue_row")).toBe(resolveLayoutEditorFieldRefLabel(refKey));
+        }
+    });
+
+    it("every visible waitlist picker ref validates", () => {
+        const refs = pickerRefKeys(true);
+        for (const refKey of refs) {
+            expect(isValidatorAllowedQueueRecordFieldRefKey(refKey, true)).toBe(true);
         }
     });
 });

@@ -174,6 +174,14 @@ export const GLOBAL_WIDGET_CATALOG: LayoutCatalogWidget[] = [
     // Enrollment
     { widgetKey: "tour_summary", label: "Tour Summary", category: "Enrollment", description: "Tour date & follow-up", defaultDisplayMode: "summary" },
     { widgetKey: "children_list", label: "Children List", category: "Enrollment", description: "Children on this lead", defaultDisplayMode: "list" },
+    {
+        widgetKey: "household_contacts",
+        label: "Household contacts",
+        category: "Enrollment",
+        description: "Shows contacts with primary designation and contact actions.",
+        relevantSurfaces: ["drawer"],
+        defaultDisplayMode: "list",
+    },
     { widgetKey: "activity", label: "Activity", category: "Communication", description: "Recent record activity preview", defaultDisplayMode: "feed" },
     {
         widgetKey: "activity_timeline",

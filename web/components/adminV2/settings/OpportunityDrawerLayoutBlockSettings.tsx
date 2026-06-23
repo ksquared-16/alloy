@@ -29,7 +29,6 @@ import type { LayoutDoc, LayoutItem } from "@/lib/layout/layoutV2";
 import type { listCustomBlockRows } from "@/lib/layout/layoutEditorFreeformBlocks";
 import OpportunityDrawerLayoutBlockRowEditor from "@/components/adminV2/settings/OpportunityDrawerLayoutBlockRowEditor";
 import {
-    LAYOUT_EDITOR_ROW_ACTIONS,
     LAYOUT_EDITOR_ROW_ACTION_LABELS,
     LAYOUT_EDITOR_ROW_LAYOUT_MODES,
     LAYOUT_EDITOR_ROW_LAYOUT_MODE_LABELS,
@@ -37,6 +36,7 @@ import {
     type LayoutEditorRowAction,
     type LayoutEditorRowTemplateConfig,
 } from "@/lib/layout/layoutEditorRowTemplateConfig";
+import { layoutEditorRowTemplateActionKeys } from "@/lib/layout/layoutEditorActionCatalog";
 
 type CustomBlockRow = ReturnType<typeof listCustomBlockRows>[number];
 
@@ -62,6 +62,7 @@ type Props = {
     applyDoc?: (doc: LayoutDoc) => void;
     onFieldAddError?: (message: string | null) => void;
     onClose: () => void;
+    surfaceKey?: import("@/lib/layout/drawerLayoutEditorSurfaceConfig").DrawerLayoutEditorSurfaceKey;
 };
 
 export default function OpportunityDrawerLayoutBlockSettings({
@@ -86,6 +87,7 @@ export default function OpportunityDrawerLayoutBlockSettings({
     applyDoc,
     onFieldAddError,
     onClose,
+    surfaceKey = "opportunity_drawer",
 }: Props) {
     const blockConfig = readLayoutEditorBlockConfig(blockItemMetadata);
     const rowConfig = rowTemplateConfig ?? readLayoutEditorRowTemplateConfig(undefined);
@@ -228,6 +230,7 @@ export default function OpportunityDrawerLayoutBlockSettings({
                             supportsText={blockItem.kind === "field_group"}
                             onSetRowColumns={onSetRowColumns}
                             onRemoveRow={onRemoveRow}
+                            surfaceKey={surfaceKey}
                         />
                     :   rows.map((row) => (
                         <div
@@ -309,7 +312,7 @@ export default function OpportunityDrawerLayoutBlockSettings({
                             by editing the Is primary contact display field.
                         </p>
                         <div className="mt-1 space-y-1">
-                            {LAYOUT_EDITOR_ROW_ACTIONS.map((action) => {
+                            {layoutEditorRowTemplateActionKeys().map((action) => {
                                 const unsupported = unsupportedRowActions.includes(action);
                                 return (
                                     <label key={action} className="flex items-center gap-2 text-[11px] text-alloy-midnight/75">

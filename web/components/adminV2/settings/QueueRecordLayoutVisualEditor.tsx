@@ -33,7 +33,13 @@ import {
     getSurfaceLayoutRegistryEntry,
 } from "@/lib/layout/surfaceLayoutRegistry";
 
-type CatalogResponse = { groups: LayoutFieldPickerCatalog["groups"]; widgets: LayoutFieldPickerCatalog["widgets"] };
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+
+type CatalogResponse = {
+    groups: LayoutFieldPickerCatalog["groups"];
+    widgets: LayoutFieldPickerCatalog["widgets"];
+    tenantFieldDefinitions?: TenantFieldDefinitionRow[];
+};
 
 type Props = {
     layoutId: string;
@@ -56,6 +62,7 @@ export default function QueueRecordLayoutVisualEditor({
     const [dirty, setDirty] = useState(false);
     const [busy, setBusy] = useState<"save" | "publish" | null>(null);
     const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
+    const [tenantFieldDefinitions, setTenantFieldDefinitions] = useState<readonly TenantFieldDefinitionRow[]>([]);
     const [validationError, setValidationError] = useState<string | null>(null);
 
     const surfaceKey = useMemo(
@@ -70,7 +77,14 @@ export default function QueueRecordLayoutVisualEditor({
         // v3 row composer uses opportunities catalog for labels only; validator allow-list drives field refs.
         // Legacy placement_candidate / zone section catalogs are not used by the v3 picker.
         const oppRes = await fetch("/api/admin/entity-layouts/field-catalog?entity_type=opportunities");
-        setCatalog(oppRes.ok ? ((await oppRes.json()) as CatalogResponse) : null);
+        if (oppRes.ok) {
+            const json = (await oppRes.json()) as CatalogResponse;
+            setCatalog(json);
+            setTenantFieldDefinitions(json.tenantFieldDefinitions ?? []);
+        } else {
+            setCatalog(null);
+            setTenantFieldDefinitions([]);
+        }
     }, []);
 
     const load = useCallback(async () => {
@@ -116,10 +130,10 @@ export default function QueueRecordLayoutVisualEditor({
             };
             setWorkingDoc(next);
             setDirty(true);
-            const validation = validateQueueRecordLayoutConfig(config, { isWaitlist });
+            const validation = validateQueueRecordLayoutConfig(config, { isWaitlist, tenantFieldDefinitions });
             setValidationError(validation.ok ? null : validation.errors.map((e) => e.message).join("; "));
         },
-        [workingDoc, isWaitlist],
+        [workingDoc, isWaitlist, tenantFieldDefinitions],
     );
 
     const saveDraft = useCallback(async () => {
@@ -128,7 +142,7 @@ export default function QueueRecordLayoutVisualEditor({
         if (config) {
             const validation = validateQueueRecordLayoutConfig(
                 config as QueueRecordLayoutEditorConfig,
-                { isWaitlist },
+                { isWaitlist, tenantFieldDefinitions },
             );
             if (!validation.ok) {
                 setValidationError(validation.errors.map((e) => e.message).join("; "));
@@ -273,6 +287,7 @@ export default function QueueRecordLayoutVisualEditor({
                     doc={workingDoc}
                     editable={editable || record.status === "draft"}
                     catalog={catalog}
+                    tenantFieldDefinitions={tenantFieldDefinitions}
                     onChange={applyQueueConfig}
                 />
             </div>

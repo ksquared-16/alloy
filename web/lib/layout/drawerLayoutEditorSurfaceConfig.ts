@@ -52,7 +52,9 @@ export type DrawerLayoutEditorSurfaceConfig = {
     sectionKeys: readonly string[];
     sectionDefaultZone: Readonly<Record<string, DrawerSurfaceLayoutZone>>;
     shellPartitionKind: "opportunity" | "person" | "child";
-    buildFieldPickerGroups: () => LayoutCatalogGroup[];
+    buildFieldPickerGroups: (options?: {
+        tenantFieldDefinitions?: readonly import("@/lib/layout/tenantLayoutFieldPickerCatalog").TenantFieldDefinitionRow[];
+    }) => LayoutCatalogGroup[];
     visualEditorCompositionHints: (
         overrides?: Partial<LayoutRuntimeCompositionHints>,
     ) => LayoutRuntimeCompositionHints;

@@ -34,12 +34,14 @@ import {
 import { QUEUE_RECORD_WIDTH_OPTIONS } from "@/lib/layout/queueRecordLayoutWidth";
 import type { QueueRecordColumnWidth } from "@/lib/layout/queueRecordLayoutConfig";
 import type { LayoutCatalogField, LayoutCatalogWidget } from "@/lib/layout/fieldCatalog";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { isWaitlistQueueLayoutDoc } from "@/lib/layout/runtime/resolveQueueRecordLayoutConfig";
 
 type Props = {
     doc: LayoutDoc;
     editable: boolean;
     catalog: LayoutFieldPickerCatalog | null;
+    tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[];
     onChange: (config: QueueRecordLayoutEditorConfig) => void;
 };
 
@@ -51,7 +53,13 @@ function blockLabel(block: QueueRecordBlockConfig): string {
     return block.label ?? "Field group";
 }
 
-export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog, onChange }: Props) {
+export default function QueueRecordLayoutSettingsPanel({
+    doc,
+    editable,
+    catalog,
+    tenantFieldDefinitions = [],
+    onChange,
+}: Props) {
     const initial = useMemo(
         () =>
             resolveEditorConfigFromDoc(
@@ -94,11 +102,12 @@ export default function QueueRecordLayoutSettingsPanel({ doc, editable, catalog,
             isWaitlist,
             labelCatalogGroups: catalog?.groups ?? [],
             widgetCatalog: catalog?.widgets,
+            tenantFieldDefinitions,
             blockFilter: picker ? pickerBlockFilter : "field_group",
             relationshipKey:
                 pickerBlock?.type === "repeated_record_block" ? pickerBlock.relationshipKey : "children",
         });
-    }, [catalog, isWaitlist, picker, pickerBlock, pickerBlockFilter]);
+    }, [catalog, isWaitlist, picker, pickerBlock, pickerBlockFilter, tenantFieldDefinitions]);
 
     const queuePickerOverlayCatalog = useMemo(
         (): LayoutFieldPickerCatalog => ({

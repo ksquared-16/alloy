@@ -6,6 +6,7 @@
  */
 
 import type { LayoutCatalogField, LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
+import { FIELD_PICKER_CONTEXT_GROUP_DEFS } from "@/lib/layout/fieldPickerContextCatalog";
 import {
     contactRolePickerRefKeys,
     type LayoutEditorContactRole,
@@ -22,7 +23,7 @@ const CONTACT_ROLE_CONTEXT_DEFS: readonly {
     {
         role: "primary",
         entityKey: "contact_primary",
-        entityLabel: "Primary Contact",
+        entityLabel: FIELD_PICKER_CONTEXT_GROUP_DEFS.find((g) => g.contextKey === "primary_contact")!.entityLabel,
         groupDescription: "Primary contact on the linked enrollment record",
     },
     {
@@ -34,19 +35,19 @@ const CONTACT_ROLE_CONTEXT_DEFS: readonly {
     {
         role: "billing",
         entityKey: "contact_billing",
-        entityLabel: "Billing Contact",
+        entityLabel: FIELD_PICKER_CONTEXT_GROUP_DEFS.find((g) => g.contextKey === "billing_contact")!.entityLabel,
         groupDescription: "Billing and payer contact fields when present",
     },
     {
         role: "emergency",
         entityKey: "contact_emergency",
-        entityLabel: "Emergency Contact",
+        entityLabel: FIELD_PICKER_CONTEXT_GROUP_DEFS.find((g) => g.contextKey === "emergency_contact")!.entityLabel,
         groupDescription: "Emergency contact fields when present",
     },
     {
         role: "secondary",
         entityKey: "contact_secondary",
-        entityLabel: "Secondary Contact",
+        entityLabel: FIELD_PICKER_CONTEXT_GROUP_DEFS.find((g) => g.contextKey === "secondary_contact")!.entityLabel,
         groupDescription: "Additional associated contact fields",
     },
 ] as const;

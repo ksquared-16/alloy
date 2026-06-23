@@ -5,6 +5,8 @@
 import { isAllowedQueueRecordWidgetKey } from "@/lib/layout/queueRecordLayoutAllowList";
 import type { QueueRecordLayoutConfigV3 } from "@/lib/layout/queueRecordLayoutV3";
 import { isAllowedQueueRecordFieldRefKey } from "@/lib/layout/surfaceLayoutRegistry";
+import { buildTenantLayoutFieldRefKeySet } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
+import type { TenantFieldDefinitionRow } from "@/lib/layout/tenantLayoutFieldPickerCatalog";
 import { assertChildScopedFieldKey } from "@/lib/layout/runtime/queueRecordScopedResolve";
 import { isWaitlistOnlyFieldKey } from "@/lib/layout/runtime/queueWaitlistPlacementField";
 import { queueRecordActivityTimelineConfig } from "@/lib/layout/runtime/queueRecordWidgetConfig";
@@ -25,19 +27,27 @@ function isValidQueueRecordFieldInBlock(
     fieldKey: string,
     block: QueueRecordLayoutConfigV3["columns"][number]["blocks"][number],
     isWaitlist: boolean,
+    tenantFieldRefKeys?: ReadonlySet<string>,
 ): boolean {
     if (block.type === "repeated_record_block") {
         return assertChildScopedFieldKey(fieldKey, block.relationshipKey);
     }
-    return isAllowedQueueRecordFieldRefKey(fieldKey, isWaitlist);
+    return isAllowedQueueRecordFieldRefKey(fieldKey, isWaitlist, tenantFieldRefKeys);
 }
 
 /** Validate v3 config against scope rules and widget allow-list (picker parity). */
 export function validateQueueRecordLayoutConfig(
     config: QueueRecordLayoutConfigV3,
-    options?: { isWaitlist?: boolean },
+    options?: { isWaitlist?: boolean; tenantFieldDefinitions?: readonly TenantFieldDefinitionRow[] },
 ): QueueRecordLayoutValidationResult {
     const isWaitlist = options?.isWaitlist ?? false;
+    const tenantFieldRefKeys =
+        options?.tenantFieldDefinitions?.length ?
+            buildTenantLayoutFieldRefKeySet(
+                options.tenantFieldDefinitions,
+                isWaitlist ? "waitlist_queue_row" : "pipeline_queue_row",
+            )
+        :   undefined;
     const errors: QueueRecordLayoutValidationIssue[] = [];
     const warnings: QueueRecordLayoutValidationIssue[] = [];
 
@@ -84,7 +94,7 @@ export function validateQueueRecordLayoutConfig(
             const fields = block.type === "field_group" || block.type === "repeated_record_block" ? block.fields : [];
             fields.forEach((field, fi) => {
                 const fieldPath = `${blockPath}.fields[${fi}]`;
-                if (!isValidQueueRecordFieldInBlock(field.fieldKey, block, isWaitlist)) {
+                if (!isValidQueueRecordFieldInBlock(field.fieldKey, block, isWaitlist, tenantFieldRefKeys)) {
                     errors.push({
                         path: `${fieldPath}.fieldKey`,
                         message:

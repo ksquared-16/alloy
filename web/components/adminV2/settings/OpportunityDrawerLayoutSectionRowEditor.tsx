@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import OpportunityDrawerLayoutActionPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutActionPicker";
 import OpportunityDrawerLayoutActivityTimelineSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutActivityTimelineSettings";
 import OpportunityDrawerLayoutBlockSettings from "@/components/adminV2/settings/OpportunityDrawerLayoutBlockSettings";
 import OpportunityDrawerLayoutFieldPicker from "@/components/adminV2/settings/OpportunityDrawerLayoutFieldPicker";
@@ -11,12 +12,16 @@ import type { LayoutCatalogGroup } from "@/lib/layout/fieldCatalog";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import { layoutBuilderEditableInputProps } from "@/lib/layout/layoutBuilderEditableInput";
 import {
-    LAYOUT_EDITOR_ACTION_KEY_LABELS,
     LAYOUT_EDITOR_ACTION_STYLE_INTENTS,
-    LAYOUT_EDITOR_DRAWER_ACTION_KEYS,
     readLayoutEditorActionButtonConfig,
     type LayoutEditorActionStyleIntent,
 } from "@/lib/layout/layoutEditorActionButton";
+import {
+    buildLayoutEditorActionCatalogGroups,
+    layoutEditorActionCatalogEntryForKey,
+    layoutEditorActionRuntimeWiredNote,
+    resolveLayoutEditorActionFriendlyLabel,
+} from "@/lib/layout/layoutEditorActionCatalog";
 import { findLayoutBlockLocation, patchLayoutBlockRowTemplateConfig } from "@/lib/layout/layoutEditorBlockRegistry";
 import { buildBlockContextFieldPickerGroups } from "@/lib/layout/layoutEditorBlockFieldCatalog";
 import { readLayoutEditorBlockConfig } from "@/lib/layout/layoutEditorBlockConfig";
@@ -35,8 +40,9 @@ import {
 } from "@/lib/layout/layoutEditorFreeformBlocks";
 import { readLayoutEditorRowTemplateConfig } from "@/lib/layout/layoutEditorRowTemplateConfig";
 import {
-    addSectionActionButtonItem,
+    addSectionActionButtonCatalogEntry,
     addSectionBlockItem,
+    addSectionFieldDisplayPresetItem,
     addSectionFieldItem,
     addSectionListItem,
     addSectionRow,
@@ -65,6 +71,10 @@ import {
 import { resolveLayoutRuntimeWidgetKey } from "@/lib/layout/runtime/resolveLayoutRuntimeWidgetKey";
 import type { DrawerLayoutEditorSurfaceKey } from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
 import { summarizeSectionCompositionDiagnostic } from "@/lib/layout/layoutEditorSectionCompositionDiagnostics";
+import {
+    isPrimaryContactBadgePresetRefKey,
+    PRIMARY_CONTACT_BADGE_FIELD_PRESET,
+} from "@/lib/layout/layoutEditorFieldDisplayPresets";
 import { resolveVisibilityRuleKey } from "@/lib/layout/layoutEditorVisibilityRules";
 
 type Props = {
@@ -113,7 +123,11 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
     surfaceKey = "opportunity_drawer",
 }: Props) {
     const rows = useMemo(() => listSectionCompositionRows(doc, sectionKey), [doc, sectionKey]);
-    const [pickerTarget, setPickerTarget] = useState<{ rowIndex: number; colIndex: number; kind: "field" | "widget" } | null>(null);
+    const [pickerTarget, setPickerTarget] = useState<{
+        rowIndex: number;
+        colIndex: number;
+        kind: "field" | "widget" | "action";
+    } | null>(null);
     const previewDiagnostic = useMemo(
         () =>
             summarizeSectionCompositionDiagnostic(doc, sectionKey, {
@@ -256,13 +270,22 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                             groups={fieldPickerGroups}
                                             disabled={!validationOk}
                                             onPickField={(field) => {
-                                                const result = addSectionFieldItem(
-                                                    doc,
-                                                    sectionKey,
-                                                    row.rowIndex,
-                                                    col.colIndex,
-                                                    field,
-                                                );
+                                                const result =
+                                                    isPrimaryContactBadgePresetRefKey(field.refKey) ?
+                                                        addSectionFieldDisplayPresetItem(
+                                                            doc,
+                                                            sectionKey,
+                                                            row.rowIndex,
+                                                            col.colIndex,
+                                                            PRIMARY_CONTACT_BADGE_FIELD_PRESET,
+                                                        )
+                                                    :   addSectionFieldItem(
+                                                            doc,
+                                                            sectionKey,
+                                                            row.rowIndex,
+                                                            col.colIndex,
+                                                            field,
+                                                        );
                                                 if (!result.ok) {
                                                     onFieldAddError(result.error);
                                                     return;
@@ -289,6 +312,33 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                                     col.colIndex,
                                                     widgetKey,
                                                     surfaceKey,
+                                                );
+                                                if (!result.ok) {
+                                                    onFieldAddError(result.error);
+                                                    return;
+                                                }
+                                                applyDoc(result.doc);
+                                                onFieldAddError(null);
+                                                onSelectItemId(result.itemId);
+                                                setPickerTarget(null);
+                                            }}
+                                        />
+                                    </div>
+                                :   null}
+
+                                {pickerTarget?.rowIndex === row.rowIndex && pickerTarget.colIndex === col.colIndex && pickerTarget.kind === "action" ?
+                                    <div className="mt-2">
+                                        <OpportunityDrawerLayoutActionPicker
+                                            surfaceKey={surfaceKey}
+                                            context="section_row"
+                                            disabled={!validationOk}
+                                            onPickAction={(entry) => {
+                                                const result = addSectionActionButtonCatalogEntry(
+                                                    doc,
+                                                    sectionKey,
+                                                    row.rowIndex,
+                                                    col.colIndex,
+                                                    entry,
                                                 );
                                                 if (!result.ok) {
                                                     onFieldAddError(result.error);
@@ -355,13 +405,8 @@ export default function OpportunityDrawerLayoutSectionRowEditor({
                                         label="Action"
                                         testId={`visual-editor-add-action-${row.rowIndex}-${col.colIndex}`}
                                         onClick={() => {
-                                            const result = addSectionActionButtonItem(doc, sectionKey, row.rowIndex, col.colIndex);
-                                            if (!result.ok) {
-                                                onFieldAddError(result.error);
-                                                return;
-                                            }
-                                            applyDoc(result.doc);
-                                            onSelectItemId(result.itemId);
+                                            setPickerTarget({ rowIndex: row.rowIndex, colIndex: col.colIndex, kind: "action" });
+                                            onSelectItemId(null);
                                         }}
                                     />
                                     <AddItemButton
@@ -578,11 +623,18 @@ export function LayoutBuilderItemInspector({
 
     if (entry.kind === "action_button") {
         const cfg = readLayoutEditorActionButtonConfig(entry.item.metadata) ?? {};
+        const actionKey = String(cfg.actionKey ?? "edit_enrollment");
+        const catalogEntry = layoutEditorActionCatalogEntryForKey(actionKey);
+        const wiredNote = layoutEditorActionRuntimeWiredNote(actionKey);
+        const pickerActions = buildLayoutEditorActionCatalogGroups({
+            surfaceKey,
+            context: entry.item.refKey === "contact_block" ? "contact_block" : "section_row",
+        }).flatMap((group) => group.actions.filter((action) => action.selectableInActionPicker));
         return (
             <div className="space-y-2">
-                <SettingsHeader title="Edit action button" onClose={onClose} />
+                <SettingsHeader title="Edit action" onClose={onClose} />
                 <label className="block text-[11px] text-alloy-midnight/60">
-                    Label
+                    Button label
                     <input
                         type="text"
                         defaultValue={cfg.label ?? entry.item.label ?? ""}
@@ -599,27 +651,37 @@ export function LayoutBuilderItemInspector({
                     />
                 </label>
                 <label className="block text-[11px] text-alloy-midnight/60">
-                    Action key
+                    Action
                     <select
-                        value={String(cfg.actionKey ?? "edit_enrollment")}
+                        value={actionKey}
                         onChange={(e) =>
                             applyDoc(
                                 patchSectionActionButtonItem(doc, sectionKey, entry.itemId, {
                                     ...cfg,
                                     actionKey: e.target.value,
+                                    label:
+                                        resolveLayoutEditorActionFriendlyLabel(e.target.value) || cfg.label,
                                 }),
                             )
                         }
                         className="mt-1 w-full rounded-md border border-alloy-forge/20 px-2 py-1 text-xs"
-                        data-testid="visual-editor-action-key"
+                        data-testid="visual-editor-action-select"
                     >
-                        {LAYOUT_EDITOR_DRAWER_ACTION_KEYS.map((key) => (
-                            <option key={key} value={key}>
-                                {LAYOUT_EDITOR_ACTION_KEY_LABELS[key]}
+                        {pickerActions.map((action) => (
+                            <option key={action.actionKey} value={action.actionKey}>
+                                {action.label}
                             </option>
                         ))}
                     </select>
                 </label>
+                {catalogEntry?.helperCopy ?
+                    <p className="text-[10px] leading-relaxed text-alloy-midnight/55">{catalogEntry.helperCopy}</p>
+                :   null}
+                {wiredNote ?
+                    <p className="text-[10px] text-amber-700/85" data-testid="visual-editor-action-wired-note">
+                        {wiredNote}
+                    </p>
+                :   null}
                 <label className="block text-[11px] text-alloy-midnight/60">
                     Style
                     <select
@@ -641,7 +703,6 @@ export function LayoutBuilderItemInspector({
                         ))}
                     </select>
                 </label>
-                <p className="text-[10px] text-alloy-midnight/45">Preview only until live drawer action wiring ships.</p>
             </div>
         );
     }
@@ -706,6 +767,7 @@ export function LayoutBuilderItemInspector({
                 applyDoc={applyDoc}
                 onFieldAddError={onFieldAddError}
                 onClose={onClose}
+                surfaceKey={surfaceKey}
             />
         );
     }
