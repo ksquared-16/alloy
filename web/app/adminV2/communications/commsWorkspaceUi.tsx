@@ -1,8 +1,6 @@
 "use client";
 
 import type { HTMLAttributes, ReactNode } from "react";
-import { WorkspaceQuietKpiReserve } from "@/components/admin/workspace/WorkspaceQuietLoadingReserve";
-import { oipKpiCommandSurfaceClass } from "@/lib/metrics/oipKpiCardVisualSystem";
 import type { CommunicationsModalTab } from "@/app/adminV2/communications/CommunicationsModalTabPanel";
 
 /** Shared Alloy card + field styling for Communications modal workspaces. */
@@ -22,6 +20,38 @@ export const COMMS_SECTION_HELPER_CLASS = "mt-0.5 text-[10px] leading-snug text-
 export const COMMS_PRIMARY_BTN_CLASS = COMMS_BEND_PINE_BTN_CLASS;
 export const COMMS_SECONDARY_BTN_CLASS =
     "rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/75 shadow-sm hover:bg-alloy-stone/8 disabled:opacity-50";
+export const COMMS_OUTLINE_ACCENT_BTN_CLASS =
+    "rounded-lg border border-alloy-juniper/40 bg-white px-3 py-1.5 text-xs font-medium text-alloy-juniper shadow-sm hover:bg-alloy-juniper/5 disabled:opacity-50";
+export const COMMS_DESTRUCTIVE_BTN_CLASS =
+    "rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-medium text-alloy-midnight/70 shadow-sm hover:bg-alloy-stone/8 disabled:opacity-50";
+
+/** Level B — section / panel shells */
+export const COMMS_PANEL_SHELL_CLASS =
+    "rounded-xl border border-alloy-stone/20 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]";
+/** Level C — nested utility / preview blocks */
+export const COMMS_UTILITY_CARD_CLASS = "rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.03] px-2.5 py-2";
+export const COMMS_EMPTY_STATE_CLASS = `${COMMS_CARD_CLASS} flex h-full items-center justify-center text-center text-[12px] text-alloy-midnight/50`;
+export const COMMS_EMPTY_STATE_DASHED_CLASS =
+    "flex h-full items-center justify-center rounded-xl border border-dashed border-alloy-stone/25 bg-white p-6 text-center text-[12px] text-alloy-midnight/50";
+
+export const COMMS_ACCENT_TEXT_CLASS = "text-alloy-juniper";
+export const COMMS_ACCENT_BG_SUBTLE_CLASS = "bg-alloy-juniper/10";
+export const COMMS_ACCENT_BORDER_CLASS = "border-alloy-juniper/35";
+export const COMMS_LIST_ROW_SELECTED_CLASS =
+    "border-alloy-juniper/35 border-l-alloy-juniper bg-alloy-juniper/10 shadow-[0_2px_8px_rgba(0,162,131,0.14)] ring-1 ring-alloy-juniper/20";
+export const COMMS_CHIP_SELECTED_CLASS = "bg-alloy-juniper text-white";
+export const COMMS_CHIP_UNSELECTED_CLASS = "bg-alloy-juniper/10 text-alloy-juniper ring-1 ring-alloy-juniper/50";
+export const COMMS_FILTER_INPUT_CLASS =
+    "rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-midnight shadow-sm focus:outline-none focus:ring-1 focus:ring-alloy-juniper/30";
+export const COMMS_COMPACT_LABEL_CLASS = COMMS_FIELD_LABEL_CLASS;
+export const COMMS_ERROR_BANNER_CLASS = "rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700";
+/** Muted panel / timeline canvas background */
+export const COMMS_SURFACE_MUTED_CLASS = "bg-alloy-stone/[0.03]";
+export const COMMS_NOTE_BANNER_CLASS =
+    "rounded-lg border border-alloy-amber/35 bg-alloy-amber/10 px-3 py-1.5 text-[11px] text-alloy-amber";
+export const COMMS_OUTBOUND_BUBBLE_CLASS = "rounded-tr-sm bg-alloy-juniper/10 text-alloy-midnight";
+export const COMMS_OUTLINE_ACCENT_SOFT_BTN_CLASS =
+    "inline-flex shrink-0 items-center gap-1 rounded-lg border border-alloy-juniper/40 bg-alloy-juniper/10 px-2.5 py-2 text-sm font-semibold text-alloy-juniper shadow-sm hover:bg-alloy-juniper/15";
 
 const COMMS_LIST_RESERVE_ROW_COUNT = 5;
 
@@ -81,18 +111,24 @@ export function CommsWorkspacePanelReserve({ label = "Loading conversation…" }
     );
 }
 
-/** Layer 2 KPI reserve — stable band for non-inbox tabs; inbox uses Command Center metrics for now. */
-export function CommsWorkspaceKpiBand({ activeTab }: { activeTab: CommunicationsModalTab }) {
-    if (activeTab === "inbox") {
-        return null;
-    }
+/** Compact inline reserve for compose / preview panels */
+export function CommsInlineListReserve({ rows = 2, label = "Loading content" }: { rows?: number; label?: string }) {
     return (
-        <div className={oipKpiCommandSurfaceClass()} data-comms-workspace-kpi-band="true">
-            <div className="px-3 py-2">
-                <WorkspaceQuietKpiReserve id="comms-workspace-kpi-reserve" />
-            </div>
+        <div className="mt-2 flex flex-col gap-1.5" aria-busy="true" aria-label={label}>
+            {Array.from({ length: rows }, (_, i) => (
+                <div
+                    key={i}
+                    className="h-6 animate-pulse rounded-md border border-alloy-stone/10 bg-alloy-stone/[0.06]"
+                    aria-hidden
+                />
+            ))}
         </div>
     );
+}
+
+/** @deprecated use CommunicationsWorkspaceKpiStrip */
+export function CommsWorkspaceKpiBand(_props: { activeTab: CommunicationsModalTab }) {
+    return null;
 }
 
 export function CommsSectionCard({
