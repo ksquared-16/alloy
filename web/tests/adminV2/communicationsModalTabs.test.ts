@@ -38,6 +38,9 @@ describe("Communications modal tabs", () => {
         expect(src).toContain("CommandCenterShell");
         expect(src).toContain("TemplatesWorkspace");
         expect(src).toContain("AnnouncementsWorkspace");
+        expect(src).toContain('data-comms-tab-panel="inbox"');
+        expect(src).toContain('data-comms-tab-panel="templates"');
+        expect(src).toContain('data-comms-tab-panel="announcements"');
         expect(src).not.toContain("comms_v2_templates");
         expect(src).not.toContain("comms_v2_announcements");
         expect(src).not.toContain("comms-modal-placeholder");

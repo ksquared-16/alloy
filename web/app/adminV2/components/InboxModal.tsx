@@ -42,10 +42,10 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
             panelClassName="max-h-[min(88vh,44rem)]"
         >
             <div
-                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-[#f3f5f7]"
+                className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
                 data-adminv2-inbox-modal="true"
             >
-                <div className="flex shrink-0 flex-col gap-3 border-b border-alloy-stone/15 bg-white px-4 py-3 shadow-[0_1px_3px_rgba(15,23,42,0.06)]">
+                <div className="flex shrink-0 flex-col gap-3 border-b border-alloy-stone/15 bg-white px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <div className="flex min-w-0 flex-wrap items-center gap-3">
                             <div className="flex min-w-0 items-center gap-2">
@@ -81,7 +81,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
                         </div>
                     </div>
                 </div>
-                <div className="flex min-h-[min(22rem,65vh)] flex-1 flex-col overflow-hidden p-3">
+                <div className="flex min-h-[min(22rem,65vh)] flex-1 flex-col overflow-hidden bg-white p-3">
                     {commandCenterEnabled ?
                         <CommunicationsModalTabPanel tab={tab} />
                     :   <InboxPanel

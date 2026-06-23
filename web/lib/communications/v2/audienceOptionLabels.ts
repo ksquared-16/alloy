@@ -3,9 +3,14 @@
  * Pure logic only; no API or send behavior.
  */
 
+import {
+    resolveRoomsForSiteAndProgram,
+    type InquiryChildPlacementHierarchyRow,
+} from "@/lib/admin/location/inquiryChildPlacementOptions";
+
 export type LabeledOption = { id: string; label: string };
 
-export type ProgramOptionRow = { id: string; label: string; location_id: string };
+export type ProgramOptionRow = { id: string; label: string; location_id: string; key: string };
 
 /** When duplicate labels exist, append location context for disambiguation. */
 export function programOptionsForDisplay(
@@ -60,4 +65,56 @@ export function filterProgramIdsForLocations(
     if (selectedLocationIds.length === 0) return programIds;
     const allowed = new Set(programs.filter((p) => selectedLocationIds.includes(p.location_id)).map((p) => p.id));
     return programIds.filter((id) => allowed.has(id));
+}
+
+export type RoomAudienceBuilderState = {
+    enabled: boolean;
+    options: LabeledOption[];
+    helper: string;
+};
+
+/**
+ * Room/classroom options scoped to a single selected school + program category.
+ * Uses the inquiry-child location hierarchy (unit rows under a site).
+ */
+export function roomAudienceBuilderState(
+    hierarchy: InquiryChildPlacementHierarchyRow[],
+    programs: ProgramOptionRow[],
+    selectedLocationIds: string[],
+    selectedProgramIds: string[]
+): RoomAudienceBuilderState {
+    if (hierarchy.length === 0) {
+        return {
+            enabled: false,
+            options: [],
+            helper: "Room targeting needs a room option source before counts can be resolved.",
+        };
+    }
+    if (selectedLocationIds.length !== 1 || selectedProgramIds.length !== 1) {
+        return {
+            enabled: false,
+            options: [],
+            helper: "Select exactly one location and one program to choose a room/classroom.",
+        };
+    }
+    const locationId = selectedLocationIds[0]!;
+    const programId = selectedProgramIds[0]!;
+    const programRow = programs.find((p) => p.id === programId);
+    const programKey = programRow?.key?.trim() ?? "";
+    const options = resolveRoomsForSiteAndProgram(hierarchy, locationId, programKey || null).map((o) => ({
+        id: o.value,
+        label: o.label,
+    }));
+    if (options.length === 0) {
+        return {
+            enabled: false,
+            options: [],
+            helper: "No rooms/classrooms are configured for the selected location and program.",
+        };
+    }
+    return {
+        enabled: true,
+        options,
+        helper: "Rooms are scoped to the selected location and program.",
+    };
 }

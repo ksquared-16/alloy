@@ -2,12 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import type { InquiryChildPlacementHierarchyRow } from "@/lib/admin/location/inquiryChildPlacementOptions";
 import { segmentCommunicationTemplate } from "@/lib/communications/v2/templateTokens";
 import { ANNOUNCEMENT_CHANNELS, type AnnouncementChannel } from "@/lib/communications/v2/announcementSchema";
 import { AUDIENCE_GRAINS, type AnnouncementAudienceSpec, type AudienceGrain } from "@/lib/communications/v2/audienceSpec";
 import {
     filterProgramIdsForLocations,
     programOptionsForDisplay,
+    roomAudienceBuilderState,
     statusOptionsForDisplay,
     type ProgramOptionRow,
 } from "@/lib/communications/v2/audienceOptionLabels";
@@ -37,6 +40,7 @@ const TEMPLATES_API = "/api/admin/communications/templates";
 const LOCATION_OPTIONS_API = "/api/admin/location-options";
 const PROGRAM_OPTIONS_API = "/api/admin/location-program-categories";
 const STATUS_OPTIONS_API = "/api/admin/communications/status-options";
+const LOCATION_HIERARCHY_API = "/api/admin/locations?hierarchy=1";
 
 type AnnouncementRow = {
     id: string;
@@ -92,6 +96,10 @@ const SAMPLE_CONTEXT: Record<string, unknown> = {
 };
 
 export default function AnnouncementsWorkspace() {
+    const siteFilter = useWorkspaceSiteFilter();
+    const headerSiteId = siteFilter?.selectedSiteId ?? null;
+    const appliedHeaderSiteRef = useRef<string | null>(null);
+
     const [list, setList] = useState<AnnouncementRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -107,6 +115,7 @@ export default function AnnouncementsWorkspace() {
 
     const [locationOptions, setLocationOptions] = useState<IdLabel[]>([]);
     const [programOptions, setProgramOptions] = useState<ProgramOptionRow[]>([]);
+    const [locationHierarchy, setLocationHierarchy] = useState<InquiryChildPlacementHierarchyRow[]>([]);
     const [familyStatusOptions, setFamilyStatusOptions] = useState<StatusOpt[]>([]);
     const [childStatusOptions, setChildStatusOptions] = useState<StatusOpt[]>([]);
 
@@ -116,6 +125,7 @@ export default function AnnouncementsWorkspace() {
     const [childStatusKeys, setChildStatusKeys] = useState<string[]>([]);
     const [locationIds, setLocationIds] = useState<string[]>([]);
     const [programIds, setProgramIds] = useState<string[]>([]);
+    const [roomCohortKeys, setRoomCohortKeys] = useState<string[]>([]);
 
     const [recipientPreview, setRecipientPreview] = useState<RecipientPreviewResult | null>(null);
     const [previewLoading, setPreviewLoading] = useState(false);
@@ -132,6 +142,8 @@ export default function AnnouncementsWorkspace() {
         setChildStatusKeys(((find("child_enrollment_status") as { status_keys?: string[] } | undefined)?.status_keys ?? []).slice());
         setLocationIds(((find("location") as { location_ids?: string[] } | undefined)?.location_ids ?? []).slice());
         setProgramIds(((find("program") as { program_category_ids?: string[] } | undefined)?.program_category_ids ?? []).slice());
+        const room = find("room") as { room_cohort_keys?: string[] } | undefined;
+        setRoomCohortKeys((room?.room_cohort_keys ?? []).slice());
     }, []);
 
     // Build the audience spec from the builder state (room is never written yet).
@@ -141,8 +153,16 @@ export default function AnnouncementsWorkspace() {
         if (childStatusKeys.length) filters.push({ kind: "child_enrollment_status", status_keys: childStatusKeys });
         if (locationIds.length) filters.push({ kind: "location", location_ids: locationIds });
         if (programIds.length) filters.push({ kind: "program", program_category_ids: programIds });
+        if (roomCohortKeys.length && locationIds.length === 1 && programIds.length === 1) {
+            filters.push({
+                kind: "room",
+                room_cohort_keys: roomCohortKeys,
+                location_id: locationIds[0]!,
+                program_category_id: programIds[0]!,
+            });
+        }
         return { grain, filters };
-    }, [grain, familyStatusKeys, childStatusKeys, locationIds, programIds]);
+    }, [grain, familyStatusKeys, childStatusKeys, locationIds, programIds, roomCohortKeys]);
 
     const locationLabelById = useMemo(() => new Map(locationOptions.map((l) => [l.id, l.label])), [locationOptions]);
     const familyStatusDisplay = useMemo(() => statusOptionsForDisplay(familyStatusOptions), [familyStatusOptions]);
@@ -151,10 +171,31 @@ export default function AnnouncementsWorkspace() {
         () => programOptionsForDisplay(programOptions, locationLabelById, locationIds),
         [programOptions, locationLabelById, locationIds]
     );
+    const roomBuilder = useMemo(
+        () => roomAudienceBuilderState(locationHierarchy, programOptions, locationIds, programIds),
+        [locationHierarchy, programOptions, locationIds, programIds]
+    );
+
+    useEffect(() => {
+        if (!headerSiteId) return;
+        if (appliedHeaderSiteRef.current === headerSiteId) return;
+        setLocationIds((prev) => {
+            if (prev.length > 0) return prev;
+            appliedHeaderSiteRef.current = headerSiteId;
+            return [headerSiteId];
+        });
+    }, [headerSiteId]);
 
     useEffect(() => {
         setProgramIds((prev) => filterProgramIdsForLocations(prev, programOptions, locationIds));
     }, [locationIds, programOptions]);
+
+    useEffect(() => {
+        setRoomCohortKeys((prev) => {
+            if (roomBuilder.enabled) return prev;
+            return prev.length ? [] : prev;
+        });
+    }, [roomBuilder.enabled, locationIds, programIds]);
 
     // ---- loaders ----
     const loadList = useCallback(async () => {
@@ -192,12 +233,14 @@ export default function AnnouncementsWorkspace() {
 
     const loadAudienceOptions = useCallback(async () => {
         try {
-            const [locRes, progRes] = await Promise.all([
+            const [locRes, progRes, hierarchyRes] = await Promise.all([
                 fetch(LOCATION_OPTIONS_API, { credentials: "include" }),
                 fetch(PROGRAM_OPTIONS_API, { credentials: "include" }),
+                fetch(LOCATION_HIERARCHY_API, { credentials: "include" }),
             ]);
             const locJson = await locRes.json().catch(() => ({}));
             const progJson = await progRes.json().catch(() => ({}));
+            const hierarchyJson = await hierarchyRes.json().catch(() => ({}));
             if (locRes.ok && Array.isArray(locJson.locations)) {
                 setLocationOptions(locJson.locations.map((l: Record<string, unknown>) => ({ id: String(l.id), label: String(l.label ?? l.id) })));
             }
@@ -210,8 +253,13 @@ export default function AnnouncementsWorkspace() {
                         id: String(p.id),
                         label: String(p.label ?? p.id),
                         location_id: String(p.location_id ?? ""),
+                        key: String(p.key ?? ""),
                     }))
                 );
+            }
+            const hierarchyArr = hierarchyJson.locations as InquiryChildPlacementHierarchyRow[] | undefined;
+            if (hierarchyRes.ok && Array.isArray(hierarchyArr)) {
+                setLocationHierarchy(hierarchyArr);
             }
         } catch {
             /* options are best-effort */
@@ -727,6 +775,11 @@ export default function AnnouncementsWorkspace() {
                     <div data-target-location="true">
                         <CommsAudienceMultiSelect
                             label="Location"
+                            helper={
+                                headerSiteId
+                                    ? "Workspace location filter applied — adjust here if needed."
+                                    : "Schools / sites where children are enrolled or inquiring."
+                            }
                             options={locationOptions}
                             selected={locationIds}
                             onChange={setLocationIds}
@@ -747,18 +800,31 @@ export default function AnnouncementsWorkspace() {
                         />
                     </div>
 
-                    <div>
-                        <div className="text-[10px] font-medium text-alloy-midnight/70">Room/classroom</div>
-                        <button
-                            type="button"
-                            data-target-room="true"
-                            disabled
-                            aria-label="Room/classroom (unavailable)"
-                            title="Room targeting needs a room option source before counts can be resolved."
-                            className="mt-1 w-full cursor-not-allowed rounded-md border border-dashed border-alloy-stone/25 px-2 py-1.5 text-left text-[11px] text-alloy-midnight/35"
-                        >
-                            Room targeting needs a room option source before counts can be resolved.
-                        </button>
+                    <div data-target-room="true">
+                        {roomBuilder.enabled ? (
+                            <CommsAudienceMultiSelect
+                                label="Room/classroom"
+                                helper={roomBuilder.helper}
+                                options={roomBuilder.options}
+                                selected={roomCohortKeys}
+                                onChange={setRoomCohortKeys}
+                                emptyNote="No rooms for this location and program"
+                                data-filter="room"
+                            />
+                        ) : (
+                            <>
+                                <div className="text-[10px] font-medium text-alloy-midnight/70">Room/classroom</div>
+                                <button
+                                    type="button"
+                                    disabled
+                                    aria-label="Room/classroom (unavailable)"
+                                    title={roomBuilder.helper}
+                                    className="mt-1 w-full cursor-not-allowed rounded-lg border border-dashed border-alloy-stone/25 bg-white px-2 py-2 text-left text-[11px] text-alloy-midnight/40"
+                                >
+                                    {roomBuilder.helper}
+                                </button>
+                            </>
+                        )}
                     </div>
 
                     <p className="text-[9px] leading-snug text-alloy-midnight/45">

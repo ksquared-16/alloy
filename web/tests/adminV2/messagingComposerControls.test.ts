@@ -13,7 +13,7 @@ describe("Messaging composer shared controls", () => {
     it("MessagingComposerFrame bundles channel toggle, toolbar, and action cluster", () => {
         const frame = read("components/adminV2/messaging/MessagingComposerFrame.tsx");
         expect(frame).toContain("ComposerChannelToggle");
-        expect(frame).toContain("ComposerFormattingToolbar");
+        expect(frame).toContain("ComposerMessageTextToolbar");
         expect(frame).toContain("ComposerReplyActionCluster");
         expect(frame).toContain('data-adminv2-messaging-composer="true"');
         expect(frame).toContain("onSendLater");
@@ -39,7 +39,7 @@ describe("Messaging composer shared controls", () => {
     it("QuickMessageModal keeps hooks before early return", () => {
         const compose = read("app/adminV2/components/QuickMessageModal.tsx");
         const scheduleMemo = compose.indexOf("const scheduleContext = useMemo(");
-        const earlyReturn = compose.indexOf("if (!open) return null;");
+        const earlyReturn = compose.indexOf("if (!open || !portalReady || typeof document === \"undefined\") return null;");
         expect(scheduleMemo).toBeGreaterThan(-1);
         expect(earlyReturn).toBeGreaterThan(scheduleMemo);
     });

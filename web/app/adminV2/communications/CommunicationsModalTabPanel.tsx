@@ -13,15 +13,36 @@ export const COMMUNICATIONS_MODAL_TABS: { key: CommunicationsModalTab; label: st
     { key: "announcements", label: "Announcements" },
 ];
 
+function tabPanelClass(active: boolean): string {
+    return active
+        ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+        : "pointer-events-none absolute inset-0 flex min-h-0 flex-1 flex-col overflow-hidden opacity-0";
+}
+
+/** Keep all workspaces mounted while the modal is open so tab switches feel instant. */
 export default function CommunicationsModalTabPanel({ tab }: { tab: CommunicationsModalTab }) {
     return (
         <div
             data-comms-modal-body="true"
-            className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-white shadow-sm"
+            className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/20 bg-white shadow-[0_1px_3px_rgba(15,23,42,0.06)]"
         >
-            {tab === "inbox" ? <CommandCenterShell /> : null}
-            {tab === "templates" ? <TemplatesWorkspace /> : null}
-            {tab === "announcements" ? <AnnouncementsWorkspace /> : null}
+            <div className={tabPanelClass(tab === "inbox")} data-comms-tab-panel="inbox" aria-hidden={tab !== "inbox"}>
+                <CommandCenterShell />
+            </div>
+            <div
+                className={tabPanelClass(tab === "templates")}
+                data-comms-tab-panel="templates"
+                aria-hidden={tab !== "templates"}
+            >
+                <TemplatesWorkspace />
+            </div>
+            <div
+                className={tabPanelClass(tab === "announcements")}
+                data-comms-tab-panel="announcements"
+                aria-hidden={tab !== "announcements"}
+            >
+                <AnnouncementsWorkspace />
+            </div>
         </div>
     );
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 
 import ComposerChannelToggle, { type ComposerChannel } from "@/components/adminV2/messaging/ComposerChannelToggle";
-import ComposerFormattingToolbar from "@/components/adminV2/messaging/ComposerFormattingToolbar";
+import ComposerMessageTextToolbar from "@/components/adminV2/messaging/ComposerMessageTextToolbar";
 import ComposerReplyActionCluster from "@/components/adminV2/messaging/ComposerReplyActionCluster";
 
 export type MessagingComposerFrameProps = {
@@ -73,7 +73,9 @@ export default function MessagingComposerFrame({
 }: MessagingComposerFrameProps) {
     const inputClass = compact
         ? "w-full rounded-md border border-alloy-stone/18 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 disabled:opacity-50"
-        : "w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
+        : "w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-pine/40 focus:outline-none focus:ring-2 focus:ring-alloy-pine/15 disabled:opacity-60";
+
+    const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
     return (
         <div className={className} data-adminv2-messaging-composer="true" data-testid={dataTestId}>
@@ -116,7 +118,16 @@ export default function MessagingComposerFrame({
                 />
             ) : null}
 
+            <ComposerMessageTextToolbar
+                compact={compact}
+                value={body}
+                onChange={onBodyChange}
+                textareaRef={bodyRef}
+                className="mb-2"
+            />
+
             <textarea
+                ref={bodyRef}
                 value={body}
                 onChange={(e) => onBodyChange(e.target.value)}
                 disabled={bodyDisabled || sendBusy}
@@ -124,8 +135,6 @@ export default function MessagingComposerFrame({
                 rows={bodyRows}
                 className={`${inputClass} resize-none leading-snug disabled:cursor-not-allowed disabled:bg-alloy-stone/[0.04] disabled:opacity-70`}
             />
-
-            <ComposerFormattingToolbar compact={compact} className="mt-2" />
 
             {error ? <p className="mt-2 text-[11px] text-red-700/90">{error}</p> : null}
             {okNote ? (

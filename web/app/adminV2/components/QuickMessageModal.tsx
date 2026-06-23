@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ADMINV2_DRAWER_ACTION_MODAL_Z } from "@/components/admin/Drawer";
 import { fetchCommunicationsBindingsCached } from "@/lib/communications/communicationsBindingsCache";
 import { launchAdminV2OpenOpportunityFromContext } from "@/lib/adminV2/contextualRecordOpen";
 import ComposerBosEnhanceModal from "@/components/adminV2/messaging/ComposerBosEnhanceModal";
@@ -122,6 +124,11 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     const [threadMsgsLoading, setThreadMsgsLoading] = useState(false);
     const [threadMsgsErr, setThreadMsgsErr] = useState<string | null>(null);
 
+    const [portalReady, setPortalReady] = useState(false);
+
+    useEffect(() => {
+        setPortalReady(true);
+    }, []);
     const searchSeq = useRef(0);
     const scopedFetchSeq = useRef(0);
     const recipientSearchRef = useRef<HTMLInputElement | null>(null);
@@ -474,7 +481,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
         [recordScoped, opportunityId, selectedRecipients]
     );
 
-    if (!open) return null;
+    if (!open || !portalReady || typeof document === "undefined") return null;
 
     const canSend =
         selectedRecipients.length > 0 &&
@@ -491,9 +498,10 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
 
     const threadStripFallback = threadsPreview.slice(0, 5);
 
-    return (
+    const dialog = (
         <div
-            className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-alloy-midnight/45 px-2 py-6 backdrop-blur-[2px] sm:px-4 sm:py-10"
+            className="fixed inset-0 flex items-center justify-center overflow-y-auto bg-alloy-midnight/45 px-3 py-6 backdrop-blur-[2px] sm:px-4 sm:py-8"
+            style={{ zIndex: ADMINV2_DRAWER_ACTION_MODAL_Z }}
             data-adminv2-quick-message-modal="true"
         >
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close modal" onClick={onClose} />
@@ -501,7 +509,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="quick-message-title"
-                className="relative z-[101] mx-auto flex w-full max-w-5xl max-h-[min(92vh,56rem)] flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-white shadow-xl"
+                className="relative mx-auto flex w-full max-w-5xl max-h-[min(88vh,calc(100vh-3rem))] flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white shadow-xl"
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="flex shrink-0 items-start justify-between gap-2 border-b border-alloy-stone/12 px-4 py-3 sm:px-5">
@@ -853,6 +861,13 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                     </div>
                 </div>
             </div>
+            <ComposerBosEnhanceModal open={bosOpen} onClose={() => setBosOpen(false)} draft={body} />
+        </div>
+    );
+
+    return createPortal(
+        <>
+            {dialog}
             <ComposerScheduleSendModal
                 open={scheduleOpen}
                 onClose={() => setScheduleOpen(false)}
@@ -866,7 +881,7 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                     setSendOk("Send scheduled.");
                 }}
             />
-            <ComposerBosEnhanceModal open={bosOpen} onClose={() => setBosOpen(false)} draft={body} />
-        </div>
+        </>,
+        document.body
     );
 }

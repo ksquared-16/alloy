@@ -3,21 +3,10 @@
 import { useMemo, useState } from "react";
 import { COMMS_CARD_CLASS, COMMS_INPUT_CLASS, COMMS_SECTION_TITLE_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
 import {
+    COMMUNICATION_TOKEN_GROUP_LABELS,
     filterCommunicationTokens,
     listCommunicationTokensByGroup,
-    type CommunicationTokenGroup,
 } from "@/lib/communications/v2/templateTokens";
-
-const GROUP_LABEL: Record<CommunicationTokenGroup, string> = {
-    family: "Family",
-    contact: "Contact / guardian",
-    child: "Child",
-    location: "Location",
-    program: "Program",
-    enrollment: "Enrollment / opportunity",
-    schedule: "Schedule / tour",
-    org: "Organization",
-};
 
 type Props = {
     onInsert: (path: string) => void;
@@ -48,7 +37,7 @@ export default function TemplateTokenPickerPanel({ onInsert }: Props) {
                 {groups.map(({ group, tokens }) => (
                     <div key={group}>
                         <div className="mb-1 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                            {GROUP_LABEL[group] ?? group}
+                            {COMMUNICATION_TOKEN_GROUP_LABELS[group] ?? group}
                         </div>
                         <div className="flex flex-col gap-1">
                             {tokens.map((t) => (

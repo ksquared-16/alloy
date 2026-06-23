@@ -38,6 +38,18 @@ export const COMMUNICATION_TOKEN_GROUPS = [
 ] as const;
 export type CommunicationTokenGroup = (typeof COMMUNICATION_TOKEN_GROUPS)[number];
 
+/** Operator-facing group headings for the token picker. */
+export const COMMUNICATION_TOKEN_GROUP_LABELS: Record<CommunicationTokenGroup, string> = {
+    family: "Family",
+    contact: "Parent / Person",
+    child: "Child",
+    location: "Location",
+    program: "Program",
+    enrollment: "Enrollment / opportunity",
+    schedule: "Schedule / tour",
+    org: "Organization",
+};
+
 export type CommunicationTokenDef = {
     /** Dot-path resolved against the render context, e.g. "person.first_name". */
     path: string;
@@ -68,10 +80,13 @@ export const COMMUNICATION_TOKEN_CATALOG: readonly CommunicationTokenDef[] = [
     { path: "person.first_name", label: "Child first name", group: "child", sample: "Mateo" },
     { path: "person.name", label: "Child full name", group: "child", sample: "Mateo Rivera" },
     { path: "person.id", label: "Child / person ID", group: "child", sample: "per_5567" },
-    // contact / guardian (documented workflow merge paths)
-    { path: "contact.id", label: "Contact ID", group: "contact", sample: "con_8821" },
-    { path: "contact.email", label: "Contact email", group: "contact", sample: "rivera@example.com" },
-    { path: "contact.phone", label: "Contact phone", group: "contact", sample: "(555) 010-2048" },
+    // contact / guardian (documented workflow merge paths + platform person fields)
+    { path: "contact.id", label: "Parent / contact ID", group: "contact", sample: "con_8821" },
+    { path: "contact.first_name", label: "Parent first name", group: "contact", sample: "Maria" },
+    { path: "contact.last_name", label: "Parent last name", group: "contact", sample: "Rivera" },
+    { path: "contact.email", label: "Parent email", group: "contact", sample: "rivera@example.com" },
+    { path: "contact.phone", label: "Parent phone", group: "contact", sample: "(555) 010-2048" },
+    { path: "person.last_name", label: "Person last name", group: "contact", sample: "Rivera" },
     { path: "person.email", label: "Person email", group: "contact", sample: "rivera@example.com" },
     { path: "person.phone", label: "Person phone", group: "contact", sample: "(555) 010-2048" },
     // location
@@ -80,6 +95,7 @@ export const COMMUNICATION_TOKEN_CATALOG: readonly CommunicationTokenDef[] = [
     { path: "opportunity.program", label: "Program name", group: "program", sample: "Toddlers" },
     // enrollment / opportunity
     { path: "opportunity.id", label: "Opportunity ID", group: "enrollment", sample: "opp_3301" },
+    { path: "opportunity.name", label: "Opportunity / child inquiry name", group: "enrollment", sample: "Mateo Rivera inquiry" },
     // schedule / tour / job (documented workflow merge paths)
     {
         path: "opportunity.metadata.tour_date",

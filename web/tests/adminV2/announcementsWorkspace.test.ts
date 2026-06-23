@@ -30,6 +30,7 @@ describe("Announcements workspace", () => {
             "/api/admin/location-options",
             "/api/admin/location-program-categories",
             "/api/admin/communications/status-options",
+            "/api/admin/locations?hierarchy=1",
         ];
         for (const api of apis) {
             expect(
@@ -82,6 +83,8 @@ describe("Announcements workspace", () => {
         expect(WS).toContain("Match children, send to guardians.");
         expect(WS).toContain("CommsAudienceMultiSelect");
         expect(WS).toContain("programOptionsForDisplay");
+        expect(WS).toContain("useWorkspaceSiteFilter");
+        expect(WS).toContain("roomAudienceBuilderState");
         // no fixed-bucket affordances any more
         expect(WS).not.toContain("data-target-group");
         expect(WS).not.toMatch(/type: "(all_families|active_families|waitlist)"/);
@@ -93,11 +96,10 @@ describe("Announcements workspace", () => {
         expect(WS).toContain("loadStatusOptions");
     });
 
-    it("keeps Room visible but disabled (no room filter written)", () => {
+    it("enables room targeting when hierarchy options exist for one location + program", () => {
         expect(WS).toContain('data-target-room="true"');
-        expect(WS).toMatch(/data-target-room="true"[\s\S]*?disabled/);
-        // the builder never emits a room filter
-        expect(WS).not.toMatch(/kind: "room"/);
+        expect(WS).toContain("roomAudienceBuilderState");
+        expect(WS).toMatch(/kind: "room"/);
     });
 
     it("saves the audience as ONE custom rule.audience_spec via the targets endpoint", () => {
@@ -128,6 +130,7 @@ describe("Announcements workspace", () => {
             "/api/admin/location-options",
             "/api/admin/location-program-categories",
             "/api/admin/communications/status-options",
+            "/api/admin/locations?hierarchy=1",
         ];
         for (const api of apis) {
             expect(allowedPrefixes.some((p) => api.startsWith(p)), `unexpected API: ${api}`).toBe(true);

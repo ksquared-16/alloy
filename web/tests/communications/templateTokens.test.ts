@@ -71,6 +71,12 @@ describe("communication token catalog", () => {
         expect(getCommunicationTokenDef("job.title")?.group).toBe("schedule");
         expect(getCommunicationTokenDef("job.id")?.group).toBe("schedule");
     });
+
+    it("includes parent/person name tokens from documented merge paths", () => {
+        expect(getCommunicationTokenDef("contact.first_name")?.label).toBe("Parent first name");
+        expect(getCommunicationTokenDef("contact.last_name")?.label).toBe("Parent last name");
+        expect(getCommunicationTokenDef("person.last_name")?.label).toBe("Person last name");
+    });
 });
 
 describe("parseCommunicationTokenPaths", () => {

@@ -112,6 +112,7 @@ export default function TemplatesWorkspace() {
     const [draft, setDraft] = useState<EditorDraft>(EMPTY_DRAFT);
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [extraCategories, setExtraCategories] = useState<string[]>([]);
     const [versionInfo, setVersionInfo] = useState<{ current: number | null; count: number }>({
         current: null,
         count: 0,
@@ -440,6 +441,12 @@ export default function TemplatesWorkspace() {
                                     value={draft.category}
                                     onChange={(category) => setDraft((d) => ({ ...d, category }))}
                                     existingCategories={categoryOptions}
+                                    extraCategories={extraCategories}
+                                    onCreateCategory={(category) =>
+                                        setExtraCategories((prev) =>
+                                            prev.includes(category) ? prev : [...prev, category]
+                                        )
+                                    }
                                 />
                                 <label className="flex flex-col gap-1.5">
                                     <span className={COMMS_FIELD_LABEL_CLASS}>Channel</span>
