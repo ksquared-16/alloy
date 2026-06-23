@@ -84,26 +84,32 @@ ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcement_targets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.announcement_recipients ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS announcements_select_org ON public.announcements;
 CREATE POLICY announcements_select_org
     ON public.announcements FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = announcements.org_id));
+DROP POLICY IF EXISTS announcements_service_all ON public.announcements;
 CREATE POLICY announcements_service_all
     ON public.announcements FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
 
+DROP POLICY IF EXISTS announcement_targets_select_org ON public.announcement_targets;
 CREATE POLICY announcement_targets_select_org
     ON public.announcement_targets FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = announcement_targets.org_id));
+DROP POLICY IF EXISTS announcement_targets_service_all ON public.announcement_targets;
 CREATE POLICY announcement_targets_service_all
     ON public.announcement_targets FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
 
+DROP POLICY IF EXISTS announcement_recipients_select_org ON public.announcement_recipients;
 CREATE POLICY announcement_recipients_select_org
     ON public.announcement_recipients FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = announcement_recipients.org_id));
+DROP POLICY IF EXISTS announcement_recipients_service_all ON public.announcement_recipients;
 CREATE POLICY announcement_recipients_service_all
     ON public.announcement_recipients FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
