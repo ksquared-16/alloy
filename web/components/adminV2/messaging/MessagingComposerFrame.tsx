@@ -25,6 +25,7 @@ export type MessagingComposerFrameProps = {
     bodyDisabled?: boolean;
     bodyPlaceholder?: string;
     bodyRows?: number;
+    bodyMinHeightClass?: string;
     sendDisabled?: boolean;
     sendBusy?: boolean;
     sendLabel?: string;
@@ -58,6 +59,7 @@ export default function MessagingComposerFrame({
     bodyDisabled = false,
     bodyPlaceholder = "Write your message…",
     bodyRows = 3,
+    bodyMinHeightClass = "",
     sendDisabled = false,
     sendBusy = false,
     sendLabel = "Send now",
@@ -133,7 +135,7 @@ export default function MessagingComposerFrame({
                 disabled={bodyDisabled || sendBusy}
                 placeholder={bodyPlaceholder}
                 rows={bodyRows}
-                className={`${inputClass} resize-none leading-snug disabled:cursor-not-allowed disabled:bg-alloy-stone/[0.04] disabled:opacity-70`}
+                className={`${inputClass} resize-none leading-snug disabled:cursor-not-allowed disabled:bg-alloy-stone/[0.04] disabled:opacity-70 ${bodyMinHeightClass}`.trim()}
             />
 
             {error ? <p className="mt-2 text-[11px] text-red-700/90">{error}</p> : null}

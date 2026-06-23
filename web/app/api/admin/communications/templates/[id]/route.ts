@@ -4,6 +4,7 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import type { TemplateChannel } from "@/lib/communications/v2/templateSchema";
 import {
+    buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
     mergeContent,
     nextVersionNumber,
@@ -141,15 +142,17 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
         const { data: inserted, error: insErr } = await supabase
             .from("communication_template_versions")
-            .insert({
-                org_id: orgId,
-                template_id: id,
-                version_number: nextNum,
-                subject: merged.subject,
-                body: merged.body,
-                token_paths: computeTemplateTokenPaths(merged.subject, merged.body),
-                created_by: userId,
-            })
+            .insert(
+                buildTemplateVersionInsertPayload({
+                    org_id: orgId,
+                    template_id: id,
+                    version_number: nextNum,
+                    subject: merged.subject,
+                    body: merged.body,
+                    token_paths: computeTemplateTokenPaths(merged.subject, merged.body),
+                    created_by: userId,
+                })
+            )
             .select(VERSION_COLS)
             .single();
         if (insErr || !inserted) {

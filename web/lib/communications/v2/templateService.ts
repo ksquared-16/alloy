@@ -220,6 +220,38 @@ export function nextVersionNumber(currentMaxVersion: number | null | undefined):
     return max + 1;
 }
 
+export type TemplateVersionInsertFields = {
+    org_id: string;
+    template_id: string;
+    version_number: number;
+    subject: string | null;
+    body: string;
+    token_paths: string[];
+    created_by: string | null;
+};
+
+/**
+ * Build a version insert row compatible with PKG-05 (`version` NOT NULL) and B2 (`version_number`).
+ * Also mirrors `created_by` into legacy `created_by_user_id` when present.
+ */
+export function buildTemplateVersionInsertPayload(fields: TemplateVersionInsertFields): Record<string, unknown> {
+    const versionNumber = fields.version_number;
+    const payload: Record<string, unknown> = {
+        org_id: fields.org_id,
+        template_id: fields.template_id,
+        version_number: versionNumber,
+        version: versionNumber,
+        subject: fields.subject,
+        body: fields.body,
+        token_paths: fields.token_paths,
+        created_by: fields.created_by,
+    };
+    if (fields.created_by) {
+        payload.created_by_user_id = fields.created_by;
+    }
+    return payload;
+}
+
 /** Effective subject/body after applying a content patch over the current version. */
 export function mergeContent(
     current: { subject: string | null; body: string },

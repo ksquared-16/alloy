@@ -105,6 +105,9 @@ describe("Inbox thread history rendering", () => {
         const compose = read("app/adminV2/components/QuickMessageModal.tsx");
         expect(compose).toContain("MessagingThreadMessageBubble");
         expect(compose).toContain("data-adminv2-composer-add-recipient");
+        expect(compose).toContain('bodyRows={8}');
+        expect(compose).toContain('bodyMinHeightClass="min-h-[12rem]"');
+        expect(compose).toContain('data-compose-editor-min-rows="8"');
         expect(compose).not.toContain("bg-alloy-midnight/[0.9]");
     });
 });

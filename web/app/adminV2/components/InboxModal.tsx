@@ -44,6 +44,7 @@ export default function InboxModal({ open, onClose }: InboxModalProps) {
             <div
                 className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-alloy-stone/20 bg-white"
                 data-adminv2-inbox-modal="true"
+                data-comms-modal-version="polish-2"
             >
                 <div className="flex shrink-0 flex-col gap-3 border-b border-alloy-stone/15 bg-white px-4 py-3">
                     <div className="flex flex-wrap items-center justify-between gap-3">

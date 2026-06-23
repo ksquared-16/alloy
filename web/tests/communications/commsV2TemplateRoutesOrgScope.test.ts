@@ -68,4 +68,13 @@ describe("B2 template routes — auth + org scoping + scope guards", () => {
         expect(insertCount).toBeGreaterThan(0);
         expect(insertOrgCount).toBeGreaterThanOrEqual(insertCount);
     });
+
+    it("version inserts use legacy + B2 version fields via buildTemplateVersionInsertPayload", () => {
+        for (const rel of ["route.ts", join("[id]", "route.ts")]) {
+            const src = read(rel);
+            expect(src).toContain("buildTemplateVersionInsertPayload");
+        }
+        const createRoute = read("route.ts");
+        expect(createRoute).toMatch(/version_number:\s*1/);
+    });
 });

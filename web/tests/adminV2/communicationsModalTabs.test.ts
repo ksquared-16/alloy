@@ -21,6 +21,7 @@ describe("Communications modal tabs", () => {
     it("InboxModal exposes Inbox, Templates, and Announcements tabs when Command Center is enabled", () => {
         const src = read(MODAL);
         const panel = read(PANEL);
+        expect(src).toContain('data-comms-modal-version="polish-2"');
         expect(src).toContain("CommsModalTabBar");
         expect(src).toContain("COMMUNICATIONS_MODAL_TABS");
         expect(src).not.toContain("SettingsEntityTabBar");
@@ -31,6 +32,23 @@ describe("Communications modal tabs", () => {
         expect(src).toContain('data-inbox-compose-new="true"');
         expect(src).toContain("QuickMessageModal");
         expect(src).toContain('data-adminv2-inbox-modal="true"');
+        expect(src).toContain('data-comms-modal-version="polish-2"');
+    });
+
+    it("CommsModalTabBar uses Bend Pine (alloy-juniper), not alloy-blue active styling", () => {
+        const tabBar = read("app/adminV2/communications/CommsModalTabBar.tsx");
+        expect(tabBar).toContain("COMMS_BEND_PINE_ACTIVE_TAB_CLASS");
+        expect(tabBar).toContain("alloy-juniper");
+        expect(tabBar).not.toContain("alloy-blue");
+        expect(tabBar).not.toMatch(/bg-alloy-pine\b/);
+    });
+
+    it("TemplateCategoryField uses dropdown default and explicit create mode", () => {
+        const field = read("app/adminV2/communications/TemplateCategoryField.tsx");
+        expect(field).toContain("resolveTemplateCategoryCommitValue");
+        expect(field).toContain('data-template-category-add="true"');
+        expect(field).toContain('data-template-category-mode="dropdown"');
+        expect(field).toContain("+ Create new category");
     });
 
     it("tab panel mounts Command Center, TemplatesWorkspace, and AnnouncementsWorkspace without separate tab flags", () => {

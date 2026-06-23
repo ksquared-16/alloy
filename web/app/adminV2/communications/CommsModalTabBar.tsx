@@ -1,6 +1,8 @@
 "use client";
 
-/** Communications modal tabs — Alloy action-button style with Bend Pine active state. */
+import { COMMS_BEND_PINE_ACTIVE_TAB_CLASS, COMMS_SECONDARY_BTN_CLASS } from "@/app/adminV2/communications/commsWorkspaceUi";
+
+/** Communications modal tabs — Bend Pine (alloy-juniper) active state. */
 export default function CommsModalTabBar<K extends string>({
     tabs,
     activeKey,
@@ -26,8 +28,8 @@ export default function CommsModalTabBar<K extends string>({
                         onClick={() => onSelect(tab.key)}
                         className={
                             isOn
-                                ? "rounded-lg border border-alloy-pine/35 bg-alloy-pine px-3 py-1.5 text-xs font-semibold text-white shadow-[0_4px_12px_rgba(0,162,131,0.22)]"
-                                : "rounded-lg border border-alloy-stone/25 bg-white px-3 py-1.5 text-xs font-semibold text-alloy-midnight/70 shadow-sm hover:border-alloy-stone/35 hover:bg-alloy-stone/[0.04]"
+                                ? COMMS_BEND_PINE_ACTIVE_TAB_CLASS
+                                : `${COMMS_SECONDARY_BTN_CLASS} !px-3 !py-1.5 text-xs font-semibold`
                         }
                     >
                         {tab.label}

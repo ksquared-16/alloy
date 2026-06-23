@@ -11,6 +11,8 @@ import {
     filterProgramIdsForLocations,
     programOptionsForDisplay,
     roomAudienceBuilderState,
+    siteLocationLabelById,
+    siteLocationOptionsFromHierarchy,
     statusOptionsForDisplay,
     type ProgramOptionRow,
 } from "@/lib/communications/v2/audienceOptionLabels";
@@ -36,8 +38,8 @@ import {
  */
 
 const ANNOUNCEMENTS_API = "/api/admin/communications/announcements";
+const RECIPIENT_PREVIEW_API = "/api/admin/communications/announcements/recipient-preview";
 const TEMPLATES_API = "/api/admin/communications/templates";
-const LOCATION_OPTIONS_API = "/api/admin/location-options";
 const PROGRAM_OPTIONS_API = "/api/admin/location-program-categories";
 const STATUS_OPTIONS_API = "/api/admin/communications/status-options";
 const LOCATION_HIERARCHY_API = "/api/admin/locations?hierarchy=1";
@@ -54,7 +56,6 @@ type AnnouncementRow = {
 };
 
 type TemplateOption = { id: string; name: string; channel: string };
-type IdLabel = { id: string; label: string };
 type StatusOpt = { status_key: string; label: string };
 
 type PerFilterRow = {
@@ -113,7 +114,6 @@ export default function AnnouncementsWorkspace() {
     const [templates, setTemplates] = useState<TemplateOption[]>([]);
     const [templatePreview, setTemplatePreview] = useState<{ subject: string | null; body: string } | null>(null);
 
-    const [locationOptions, setLocationOptions] = useState<IdLabel[]>([]);
     const [programOptions, setProgramOptions] = useState<ProgramOptionRow[]>([]);
     const [locationHierarchy, setLocationHierarchy] = useState<InquiryChildPlacementHierarchyRow[]>([]);
     const [familyStatusOptions, setFamilyStatusOptions] = useState<StatusOpt[]>([]);
@@ -132,6 +132,7 @@ export default function AnnouncementsWorkspace() {
     const [scheduleAt, setScheduleAt] = useState("");
     const [scheduling, setScheduling] = useState(false);
     const bodyRef = useRef<HTMLTextAreaElement | null>(null);
+    const didAutoOpenEditorRef = useRef(false);
 
     // Populate the builder from a saved/parsed audience spec (or reset when null).
     const applyAudienceSpec = useCallback((spec: AnnouncementAudienceSpec | null) => {
@@ -164,7 +165,11 @@ export default function AnnouncementsWorkspace() {
         return { grain, filters };
     }, [grain, familyStatusKeys, childStatusKeys, locationIds, programIds, roomCohortKeys]);
 
-    const locationLabelById = useMemo(() => new Map(locationOptions.map((l) => [l.id, l.label])), [locationOptions]);
+    const locationLabelById = useMemo(() => siteLocationLabelById(locationHierarchy), [locationHierarchy]);
+    const siteLocationOptions = useMemo(
+        () => siteLocationOptionsFromHierarchy(locationHierarchy),
+        [locationHierarchy]
+    );
     const familyStatusDisplay = useMemo(() => statusOptionsForDisplay(familyStatusOptions), [familyStatusOptions]);
     const childStatusDisplay = useMemo(() => statusOptionsForDisplay(childStatusOptions), [childStatusOptions]);
     const programDisplay = useMemo(
@@ -172,19 +177,21 @@ export default function AnnouncementsWorkspace() {
         [programOptions, locationLabelById, locationIds]
     );
     const roomBuilder = useMemo(
-        () => roomAudienceBuilderState(locationHierarchy, programOptions, locationIds, programIds),
-        [locationHierarchy, programOptions, locationIds, programIds]
+        () => roomAudienceBuilderState(locationHierarchy, programOptions, locationIds, programIds, locationLabelById),
+        [locationHierarchy, programOptions, locationIds, programIds, locationLabelById]
     );
 
     useEffect(() => {
         if (!headerSiteId) return;
+        const validSiteIds = new Set(siteLocationOptions.map((s) => s.id));
+        if (!validSiteIds.has(headerSiteId)) return;
         if (appliedHeaderSiteRef.current === headerSiteId) return;
         setLocationIds((prev) => {
             if (prev.length > 0) return prev;
             appliedHeaderSiteRef.current = headerSiteId;
             return [headerSiteId];
         });
-    }, [headerSiteId]);
+    }, [headerSiteId, siteLocationOptions]);
 
     useEffect(() => {
         setProgramIds((prev) => filterProgramIdsForLocations(prev, programOptions, locationIds));
@@ -233,17 +240,12 @@ export default function AnnouncementsWorkspace() {
 
     const loadAudienceOptions = useCallback(async () => {
         try {
-            const [locRes, progRes, hierarchyRes] = await Promise.all([
-                fetch(LOCATION_OPTIONS_API, { credentials: "include" }),
+            const [progRes, hierarchyRes] = await Promise.all([
                 fetch(PROGRAM_OPTIONS_API, { credentials: "include" }),
                 fetch(LOCATION_HIERARCHY_API, { credentials: "include" }),
             ]);
-            const locJson = await locRes.json().catch(() => ({}));
             const progJson = await progRes.json().catch(() => ({}));
             const hierarchyJson = await hierarchyRes.json().catch(() => ({}));
-            if (locRes.ok && Array.isArray(locJson.locations)) {
-                setLocationOptions(locJson.locations.map((l: Record<string, unknown>) => ({ id: String(l.id), label: String(l.label ?? l.id) })));
-            }
             const progArr = (progJson.categories ?? progJson.program_categories ?? progJson.location_program_categories) as
                 | Record<string, unknown>[]
                 | undefined;
@@ -359,13 +361,20 @@ export default function AnnouncementsWorkspace() {
         setRecipientPreview(null);
     }, [applyAudienceSpec]);
 
+    useEffect(() => {
+        if (loading || didAutoOpenEditorRef.current) return;
+        if (!selectedId && !creating) {
+            didAutoOpenEditorRef.current = true;
+            startCreate();
+        }
+    }, [loading, selectedId, creating, startCreate]);
+
     // ---- recipient preview (READ-ONLY; no send/queue/recipient writes) ----
     const previewRecipients = useCallback(async () => {
-        if (!selectedId) return;
         setPreviewLoading(true);
         setError(null);
         try {
-            const res = await fetch(`${ANNOUNCEMENTS_API}/${selectedId}/recipient-preview`, {
+            const res = await fetch(RECIPIENT_PREVIEW_API, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
@@ -379,7 +388,7 @@ export default function AnnouncementsWorkspace() {
         } finally {
             setPreviewLoading(false);
         }
-    }, [selectedId, buildAudienceSpec]);
+    }, [buildAudienceSpec]);
 
     // ---- mutations (draft-only; no send/schedule) ----
     const save = useCallback(async () => {
@@ -511,16 +520,16 @@ export default function AnnouncementsWorkspace() {
     return (
         <div data-announcements-workspace="true" className="grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-3">
             {/* LEFT — list */}
-            <CommsSectionCard title="Announcements" helper="Draft and scheduled broadcasts." data-announcement-list="true" className="flex min-h-0 flex-col !p-0">
+            <CommsSectionCard title="Announcements" helper="Draft and Scheduled Broadcasts" data-announcement-list="true" className="flex min-h-0 flex-col !p-0">
                 <div className="flex items-center justify-between border-b border-alloy-stone/12 p-3">
-                    <span className="text-xs font-semibold text-alloy-midnight/80">All announcements</span>
+                    <span className="text-xs font-semibold text-alloy-midnight/80">All Announcements</span>
                     <button type="button" data-announcement-new="true" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} !px-2 !py-1 text-[11px]`}>
                         New
                     </button>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-2">
                     {loading && <div className="p-3 text-[11px] text-alloy-midnight/50">Loading…</div>}
-                    {!loading && list.length === 0 && <div className="p-3 text-[11px] text-alloy-midnight/50">No announcements.</div>}
+                    {!loading && list.length === 0 && <div className="p-3 text-[11px] text-alloy-midnight/50">No Announcements</div>}
                     {list.map((a) => (
                         <button
                             key={a.id}
@@ -529,7 +538,7 @@ export default function AnnouncementsWorkspace() {
                             onClick={() => void selectAnnouncement(a.id)}
                             className={`mb-1 flex w-full flex-col items-start gap-0.5 rounded-lg border px-2 py-2 text-left transition-colors ${
                                 selectedId === a.id
-                                    ? "border-alloy-pine/35 bg-alloy-pine/10 shadow-sm"
+                                    ? "border-alloy-juniper/35 bg-alloy-juniper/10 shadow-sm"
                                     : "border-transparent hover:border-alloy-stone/15 hover:bg-alloy-stone/8"
                             }`}
                         >
@@ -553,7 +562,7 @@ export default function AnnouncementsWorkspace() {
                 ) : (
                     <>
                         <div className="flex items-center justify-between px-1">
-                            <span className="text-xs font-semibold text-alloy-midnight/80">{creating ? "New announcement" : "Edit announcement"}</span>
+                            <span className="text-xs font-semibold text-alloy-midnight/80">{creating ? "New Announcement" : "Edit announcement"}</span>
                             <span data-announcement-status="true" className="rounded bg-alloy-stone/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-alloy-midnight/55">
                                 {status}
                             </span>
@@ -584,7 +593,7 @@ export default function AnnouncementsWorkspace() {
                                                 onClick={() => toggleChannel(c)}
                                                 className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium shadow-sm ${
                                                     on
-                                                        ? "border-alloy-pine/35 bg-alloy-pine/10 text-alloy-midnight/90"
+                                                        ? "border-alloy-juniper/35 bg-alloy-juniper/10 text-alloy-midnight/90"
                                                         : "border-alloy-stone/25 bg-white text-alloy-midnight/65 hover:bg-alloy-stone/8"
                                                 }`}
                                             >
@@ -780,7 +789,7 @@ export default function AnnouncementsWorkspace() {
                                     ? "Workspace location filter applied — adjust here if needed."
                                     : "Schools / sites where children are enrolled or inquiring."
                             }
-                            options={locationOptions}
+                            options={siteLocationOptions}
                             selected={locationIds}
                             onChange={setLocationIds}
                             emptyNote="No locations"
@@ -838,8 +847,8 @@ export default function AnnouncementsWorkspace() {
                             type="button"
                             data-recipient-preview-run="true"
                             onClick={() => void previewRecipients()}
-                            disabled={previewLoading || !selectedId}
-                            title={!selectedId ? "Save the draft first" : "Estimate recipients from current targets"}
+                            disabled={previewLoading}
+                            title="Estimate recipients from the current audience"
                             className="rounded-md border border-alloy-stone/25 px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/70 hover:bg-alloy-stone/8 disabled:opacity-50"
                         >
                             {previewLoading ? "Estimating…" : "Preview recipients"}
@@ -848,7 +857,7 @@ export default function AnnouncementsWorkspace() {
 
                     {!recipientPreview ? (
                         <p className="text-[10px] text-alloy-midnight/45">
-                            {selectedId ? "Run a preview to estimate recipients from the current audience." : "Save the draft to preview recipients."}
+                            Run a preview to estimate recipients from the current audience — no save required.
                         </p>
                     ) : (
                         <div className="flex flex-col gap-1.5 rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.03] p-2">

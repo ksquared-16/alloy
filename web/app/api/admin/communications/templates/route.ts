@@ -3,6 +3,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
+    buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
     parseTemplateListFilters,
     validateCreateTemplateInput,
@@ -128,15 +129,17 @@ export async function POST(request: NextRequest) {
     const tokenPaths = computeTemplateTokenPaths(input.subject, input.body);
     const { data: version, error: vErr } = await supabase
         .from("communication_template_versions")
-        .insert({
-            org_id: orgId,
-            template_id: templateId,
-            version_number: 1,
-            subject: input.subject,
-            body: input.body,
-            token_paths: tokenPaths,
-            created_by: userId,
-        })
+        .insert(
+            buildTemplateVersionInsertPayload({
+                org_id: orgId,
+                template_id: templateId,
+                version_number: 1,
+                subject: input.subject,
+                body: input.body,
+                token_paths: tokenPaths,
+                created_by: userId,
+            })
+        )
         .select(VERSION_COLS)
         .single();
     if (vErr || !version) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
     COMMS_FIELD_LABEL_CLASS,
     COMMS_INPUT_CLASS,
@@ -9,6 +9,8 @@ import {
     COMMS_SECONDARY_BTN_CLASS,
 } from "@/app/adminV2/communications/commsWorkspaceUi";
 import { TEMPLATE_CATEGORY_PLACEHOLDER } from "@/lib/communications/v2/templateSchema";
+import { resolveTemplateCategoryCommitValue } from "@/lib/communications/v2/templateCategoryCreate";
+import { normalizeTemplateCategoryLabel } from "@/lib/communications/v2/templateCategoryOptions";
 
 type Props = {
     value: string;
@@ -21,7 +23,7 @@ type Props = {
 
 const CREATE_VALUE = "__create_category__";
 
-/** Lightweight category picker — options derived from existing templates; operator can add new inline. */
+/** Category picker — dropdown by default; explicit create mode reveals a visible text input. */
 export default function TemplateCategoryField({
     value,
     onChange,
@@ -31,6 +33,7 @@ export default function TemplateCategoryField({
 }: Props) {
     const [creating, setCreating] = useState(false);
     const [draft, setDraft] = useState("");
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
     const options = useMemo(() => {
         const set = new Set(
@@ -41,8 +44,12 @@ export default function TemplateCategoryField({
         return [...set].sort((a, b) => a.localeCompare(b));
     }, [existingCategories, extraCategories, value]);
 
+    const selectValue = options.includes(value.trim()) ? value.trim() : "";
+
     const commitNewCategory = () => {
-        const next = draft.trim();
+        const next = normalizeTemplateCategoryLabel(
+            resolveTemplateCategoryCommitValue({ creating: true, draft, value: "" })
+        );
         if (!next) return;
         onChange(next);
         onCreateCategory?.(next);
@@ -50,21 +57,30 @@ export default function TemplateCategoryField({
         setCreating(false);
     };
 
-    const showSelect = !creating && (options.length > 0 || value.trim());
-    const selectValue = options.includes(value) ? value : value.trim() ? value : "";
+    const cancelCreate = () => {
+        setCreating(false);
+        setDraft("");
+    };
+
+    const openCreateMode = () => {
+        setCreating(true);
+        setDraft("");
+        queueMicrotask(() => inputRef.current?.focus());
+    };
 
     return (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-template-category-field="true">
             <span className={COMMS_FIELD_LABEL_CLASS}>Category</span>
-            {showSelect ? (
+
+            {!creating ? (
                 <select
                     data-template-category="true"
+                    data-template-category-mode="dropdown"
                     value={selectValue}
                     onChange={(e) => {
                         const v = e.target.value;
                         if (v === CREATE_VALUE) {
-                            setCreating(true);
-                            setDraft(value.trim());
+                            openCreateMode();
                             return;
                         }
                         onChange(v);
@@ -77,50 +93,50 @@ export default function TemplateCategoryField({
                             {c}
                         </option>
                     ))}
-                    <option value={CREATE_VALUE}>+ Create category…</option>
+                    <option value={CREATE_VALUE}>+ Create new category</option>
                 </select>
-            ) : null}
-            {(creating || options.length === 0) && (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            ) : (
+                <div
+                    data-template-category-mode="create"
+                    className="rounded-lg border border-alloy-stone/25 bg-white p-2.5 shadow-sm"
+                >
                     <input
+                        ref={inputRef}
                         data-template-category-new="true"
-                        value={creating ? draft : value}
-                        onChange={(e) => {
-                            const next = e.target.value;
-                            if (creating) setDraft(next);
-                            else onChange(next);
-                        }}
+                        value={draft}
+                        onChange={(e) => setDraft(e.target.value)}
                         onKeyDown={(e) => {
                             if (e.key === "Enter") {
                                 e.preventDefault();
                                 commitNewCategory();
                             }
+                            if (e.key === "Escape") {
+                                e.preventDefault();
+                                cancelCreate();
+                            }
                         }}
                         placeholder={TEMPLATE_CATEGORY_PLACEHOLDER}
-                        className={COMMS_INPUT_CLASS}
+                        className={`${COMMS_INPUT_CLASS} text-alloy-midnight caret-alloy-midnight`}
+                        autoComplete="off"
                     />
-                    <div className="flex shrink-0 gap-2">
+                    <div className="mt-2 flex shrink-0 gap-2">
                         <button
                             type="button"
                             data-template-category-add="true"
-                            className={`${COMMS_PRIMARY_BTN_CLASS} !px-2 !py-1 text-[10px]`}
+                            className={`${COMMS_PRIMARY_BTN_CLASS} !px-2.5 !py-1 text-[10px]`}
                             onClick={commitNewCategory}
-                            disabled={!(creating ? draft.trim() : value.trim())}
+                            disabled={!normalizeTemplateCategoryLabel(draft)}
                         >
-                            Add category
+                            Add
                         </button>
-                        {options.length > 0 ? (
-                            <button
-                                type="button"
-                                className={`${COMMS_SECONDARY_BTN_CLASS} !px-2 !py-1 text-[10px]`}
-                                onClick={() => {
-                                    setCreating(false);
-                                    setDraft("");
-                                }}
-                            >
-                                Pick existing
-                            </button>
-                        ) : null}
+                        <button
+                            type="button"
+                            data-template-category-cancel="true"
+                            className={`${COMMS_SECONDARY_BTN_CLASS} !px-2.5 !py-1 text-[10px]`}
+                            onClick={cancelCreate}
+                        >
+                            Cancel
+                        </button>
                     </div>
                 </div>
             )}

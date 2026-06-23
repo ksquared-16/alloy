@@ -738,8 +738,8 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                     </aside>
 
                     {/* Right ~70% — thread preview + composer */}
-                    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 border-t border-alloy-stone/12 pt-4 lg:w-[70%] lg:border-t-0 lg:border-l lg:border-alloy-stone/12 lg:px-5 lg:py-5 lg:pt-5">
-                        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.04] p-3 lg:min-h-0">
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 border-t border-alloy-stone/12 pt-4 lg:w-[70%] lg:min-h-[min(52vh,28rem)] lg:border-t-0 lg:border-l lg:border-alloy-stone/12 lg:px-5 lg:py-5 lg:pt-5">
+                        <div className="flex max-h-[min(28vh,12rem)] shrink-0 flex-col rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.04] p-3 lg:max-h-[min(24vh,11rem)]">
                             <div className={COMPOSER_LABEL}>Thread preview</div>
                             {!previewPersonId ? (
                                 <p className="mt-1 text-[11px] text-alloy-midnight/50">Select a recipient to load context.</p>
@@ -808,7 +808,10 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                             )}
                         </div>
 
-                        <div className="shrink-0 space-y-3 border-t border-alloy-stone/12 pt-3 lg:border-t-0 lg:pt-0">
+                        <div
+                            className="flex min-h-[min(36vh,20rem)] flex-1 flex-col lg:min-h-[min(40vh,22rem)]"
+                            data-compose-editor-min-rows="8"
+                        >
                             <MessagingComposerFrame
                                 channel={channel}
                                 onChannelChange={setChannel}
@@ -845,7 +848,8 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                                           ? "Write an SMS…"
                                           : "Write an email…"
                                 }
-                                bodyRows={4}
+                                bodyRows={8}
+                                bodyMinHeightClass="min-h-[12rem]"
                                 sendDisabled={!canSend}
                                 sendBusy={sendBusy}
                                 sendLabel={sendLabel}

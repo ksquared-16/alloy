@@ -15,8 +15,14 @@ import {
     type TemplateStatus,
 } from "@/lib/communications/v2/templateSchema";
 import TemplateCategoryField from "@/app/adminV2/communications/TemplateCategoryField";
+import TemplateCategoriesManageModal from "@/app/adminV2/communications/TemplateCategoriesManageModal";
 import TemplateTokenPickerPanel from "@/app/adminV2/communications/TemplateTokenPickerPanel";
 import CommsMessageTextToolbar from "@/app/adminV2/communications/CommsMessageTextToolbar";
+import {
+    collectTemplateCategories,
+    mergeTemplateCategoryOptions,
+    normalizeTemplateCategoryLabel,
+} from "@/lib/communications/v2/templateCategoryOptions";
 import {
     COMMS_CARD_CLASS,
     COMMS_FIELD_LABEL_CLASS,
@@ -113,24 +119,24 @@ export default function TemplatesWorkspace() {
     const [creating, setCreating] = useState(false);
     const [saving, setSaving] = useState(false);
     const [extraCategories, setExtraCategories] = useState<string[]>([]);
+    const [removedCategories, setRemovedCategories] = useState<string[]>([]);
+    const [categoriesManageOpen, setCategoriesManageOpen] = useState(false);
     const [versionInfo, setVersionInfo] = useState<{ current: number | null; count: number }>({
         current: null,
         count: 0,
     });
 
     const sampleContext = useMemo(buildSampleContext, []);
-    const categoryOptions = useMemo(() => {
-        const set = new Set<string>();
-        for (const t of templates) {
-            const c = t.category?.trim();
-            if (c) set.add(c);
-        }
-        return [...set].sort((a, b) => a.localeCompare(b));
-    }, [templates]);
+    const templateDerivedCategories = useMemo(() => collectTemplateCategories(templates), [templates]);
+    const categoryOptions = useMemo(
+        () => mergeTemplateCategoryOptions(templateDerivedCategories, extraCategories, removedCategories),
+        [templateDerivedCategories, extraCategories, removedCategories]
+    );
 
     const bodyRef = useRef<HTMLTextAreaElement | null>(null);
     const subjectRef = useRef<HTMLInputElement | null>(null);
     const activeFieldRef = useRef<"body" | "subject">("body");
+    const didAutoOpenEditorRef = useRef(false);
 
     const isEmail = templateChannelSupportsSubject(draft.channel);
 
@@ -191,6 +197,14 @@ export default function TemplatesWorkspace() {
         setDraft(EMPTY_DRAFT);
         setVersionInfo({ current: null, count: 0 });
     }, []);
+
+    useEffect(() => {
+        if (loading || didAutoOpenEditorRef.current) return;
+        if (!selectedId && !creating) {
+            didAutoOpenEditorRef.current = true;
+            startCreate();
+        }
+    }, [loading, selectedId, creating, startCreate]);
 
     const save = useCallback(async () => {
         setSaving(true);
@@ -254,6 +268,64 @@ export default function TemplatesWorkspace() {
         }
     }, [selectedId, loadList, selectTemplate]);
 
+    const addSessionCategory = useCallback((category: string) => {
+        const next = normalizeTemplateCategoryLabel(category);
+        if (!next) return;
+        setExtraCategories((prev) => (prev.includes(next) ? prev : [...prev, next]));
+        setRemovedCategories((prev) => prev.filter((c) => c !== next));
+    }, []);
+
+    const renameCategory = useCallback(
+        async (from: string, to: string) => {
+            const next = normalizeTemplateCategoryLabel(to);
+            const prev = from.trim();
+            if (!next || !prev || next === prev) return;
+
+            const affected = templates.filter((t) => (t.category ?? "").trim() === prev);
+            setTemplates((list) =>
+                list.map((t) => ((t.category ?? "").trim() === prev ? { ...t, category: next } : t))
+            );
+            setDraft((d) => ((d.category ?? "").trim() === prev ? { ...d, category: next } : d));
+            setExtraCategories((list) => {
+                const mapped = list.map((c) => (c === prev ? next : c));
+                return mapped.includes(next) ? [...new Set(mapped)] : [...new Set([...mapped, next])];
+            });
+            setRemovedCategories((list) => list.filter((c) => c !== prev && c !== next));
+            if (categoryFilter === prev) setCategoryFilter(next);
+
+            const errors: string[] = [];
+            for (const t of affected) {
+                const res = await fetch(`${TEMPLATES_API}/${t.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ category: next }),
+                });
+                if (!res.ok) {
+                    const json = await res.json().catch(() => ({}));
+                    errors.push(typeof json.error === "string" ? json.error : `Failed to rename ${t.name}`);
+                }
+            }
+            if (errors.length) {
+                await loadList();
+                throw new Error(errors[0]);
+            }
+        },
+        [templates, categoryFilter, loadList]
+    );
+
+    const removeCategory = useCallback(
+        (name: string) => {
+            const trimmed = name.trim();
+            if (!trimmed) return;
+            setExtraCategories((prev) => prev.filter((c) => c !== trimmed));
+            setRemovedCategories((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+            setDraft((d) => ((d.category ?? "").trim() === trimmed ? { ...d, category: "" } : d));
+            if (categoryFilter === trimmed) setCategoryFilter("");
+        },
+        [categoryFilter]
+    );
+
     // ---- token insertion ----
     const insertToken = useCallback(
         (path: string) => {
@@ -302,9 +374,9 @@ export default function TemplatesWorkspace() {
     const isArchived = draft.status === "archived";
 
     return (
-        <div data-templates-workspace="true" className="grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-3">
+        <div data-templates-workspace="true" className="relative grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-3">
             {/* LEFT — list + filters */}
-            <CommsSectionCard title="Template library" helper="Search and filter saved templates." data-template-list="true" className="flex min-h-0 flex-col !p-0">
+            <CommsSectionCard title="Template Library" helper="Search and filter saved templates." data-template-list="true" className="flex min-h-0 flex-col !p-0">
                 <div className="border-b border-alloy-stone/12 p-3">
                     <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-semibold text-alloy-midnight/80">Templates</span>
@@ -369,7 +441,7 @@ export default function TemplatesWorkspace() {
                 <div className="min-h-0 flex-1 overflow-y-auto p-2">
                     {loading && <div className="p-3 text-[11px] text-alloy-midnight/50">Loading…</div>}
                     {!loading && visibleTemplates.length === 0 && (
-                        <div className="p-3 text-[11px] text-alloy-midnight/50">No templates.</div>
+                        <div className="p-3 text-[11px] text-alloy-midnight/50">No Templates</div>
                     )}
                     {visibleTemplates.map((t) => (
                         <button
@@ -379,7 +451,7 @@ export default function TemplatesWorkspace() {
                             onClick={() => void selectTemplate(t.id)}
                             className={`mb-1 flex w-full flex-col items-start gap-0.5 rounded-lg border px-2 py-2 text-left transition-colors ${
                                 selectedId === t.id
-                                    ? "border-alloy-pine/35 bg-alloy-pine/10 shadow-sm"
+                                    ? "border-alloy-juniper/35 bg-alloy-juniper/10 shadow-sm"
                                     : "border-transparent hover:border-alloy-stone/15 hover:bg-alloy-stone/8"
                             }`}
                         >
@@ -407,7 +479,7 @@ export default function TemplatesWorkspace() {
                     <>
                         <div className="flex items-center justify-between px-1">
                             <span className="text-xs font-semibold text-alloy-midnight/80">
-                                {creating ? "New template" : "Edit template"}
+                                {creating ? "New Template" : "Edit template"}
                             </span>
                             {!creating && (
                                 <span data-template-version="true" className="text-[10px] text-alloy-midnight/45">
@@ -442,11 +514,7 @@ export default function TemplatesWorkspace() {
                                     onChange={(category) => setDraft((d) => ({ ...d, category }))}
                                     existingCategories={categoryOptions}
                                     extraCategories={extraCategories}
-                                    onCreateCategory={(category) =>
-                                        setExtraCategories((prev) =>
-                                            prev.includes(category) ? prev : [...prev, category]
-                                        )
-                                    }
+                                    onCreateCategory={addSessionCategory}
                                 />
                                 <label className="flex flex-col gap-1.5">
                                     <span className={COMMS_FIELD_LABEL_CLASS}>Channel</span>
@@ -588,6 +656,28 @@ export default function TemplatesWorkspace() {
                     )}
                 </CommsSectionCard>
             </aside>
+
+            <button
+                type="button"
+                data-template-categories-settings="true"
+                aria-label="Manage categories"
+                title="Manage categories"
+                onClick={() => setCategoriesManageOpen(true)}
+                className="absolute bottom-2 left-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-lg border border-alloy-stone/25 bg-white text-alloy-midnight/60 shadow-sm hover:border-alloy-juniper/35 hover:text-alloy-juniper"
+            >
+                <svg viewBox="0 0 20 20" aria-hidden="true" className="h-4 w-4 fill-current">
+                    <path d="M10 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Zm7.4-2.5c0-.5-.04-.98-.11-1.45l1.6-1.24a.75.75 0 0 0 .18-.96l-1.52-2.63a.75.75 0 0 0-.9-.33l-1.88.76a7.2 7.2 0 0 0-1.26-.73l-.29-2a.75.75 0 0 0-.74-.64H9.92a.75.75 0 0 0-.74.64l-.29 2c-.45.18-.87.42-1.26.73l-1.88-.76a.75.75 0 0 0-.9.33L3.33 6.85a.75.75 0 0 0 .18.96l1.6 1.24c-.07.47-.11.95-.11 1.45s.04.98.11 1.45l-1.6 1.24a.75.75 0 0 0-.18.96l1.52 2.63c.2.35.6.48.9.33l1.88-.76c.39.31.81.55 1.26.73l.29 2c.06.4.4.69.74.64h3.04c.34.05.68-.24.74-.64l.29-2c.45-.18.87-.42 1.26-.73l1.88.76c.3.15.7.02.9-.33l1.52-2.63a.75.75 0 0 0-.18-.96l-1.6-1.24c.07-.47.11-.95.11-1.45Z" />
+                </svg>
+            </button>
+
+            <TemplateCategoriesManageModal
+                open={categoriesManageOpen}
+                onClose={() => setCategoriesManageOpen(false)}
+                categories={categoryOptions}
+                templates={templates}
+                onRename={renameCategory}
+                onRemove={removeCategory}
+            />
         </div>
     );
 }

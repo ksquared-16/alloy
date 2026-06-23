@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { validateAnnouncementTargets } from "@/lib/communications/v2/announcementService";
-import { resolveAudienceSpec, type ResolveTarget } from "@/lib/communications/v2/resolveAnnouncementAudience";
-import { audiencePreviewResponse, resolveTargetsToSpec, type LegacyTargetRow } from "@/lib/communications/v2/audienceSpec";
-import type { AnnouncementTargetType } from "@/lib/communications/v2/announcementSchema";
+import {
+    mapSavedAnnouncementTargets,
+    runAnnouncementRecipientPreview,
+} from "@/lib/communications/v2/runAnnouncementRecipientPreview";
 
 /**
  * Communications V2 — announcement recipient preview (Phase 1 / B6 → B8D).
@@ -42,38 +42,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     if (aErr) return NextResponse.json({ error: aErr.message }, { status: 500 });
     if (!ann) return NextResponse.json({ error: "Announcement not found" }, { status: 404 });
 
-    // Targets: prefer validated targets from the body (preview the unsaved selection);
-    // otherwise read the saved announcement_targets config.
-    let targets: ResolveTarget[] = [];
     let body: unknown = null;
     try {
         body = await request.json();
     } catch {
         body = null;
     }
+
     const rawTargets = body && typeof body === "object" ? (body as Record<string, unknown>).targets : undefined;
     if (rawTargets !== undefined) {
-        const parsed = validateAnnouncementTargets(rawTargets);
-        if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-        // Carry rule so a 'custom' target's audience_spec resolves through the spec engine.
-        targets = parsed.value.map((t) => ({ target_type: t.target_type, target_ref: t.target_ref, rule: t.rule }));
-    } else {
-        const { data: rows, error: tErr } = await supabase
-            .from("announcement_targets")
-            .select("target_type, target_ref, rule")
-            .eq("org_id", orgId)
-            .eq("announcement_id", id);
-        if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
-        targets = (rows ?? []).map((r) => {
-            const row = r as { target_type: string; target_ref: string | null; rule: Record<string, unknown> | null };
-            return { target_type: row.target_type as AnnouncementTargetType, target_ref: row.target_ref ?? null, rule: row.rule ?? null };
-        });
+        const result = await runAnnouncementRecipientPreview(supabase, orgId, body);
+        if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+        return NextResponse.json(result.preview);
     }
 
-    // Resolve to a spec (custom row authoritative; missing/invalid → error, never all families).
-    const specRes = resolveTargetsToSpec(targets as LegacyTargetRow[]);
-    if (!specRes.ok) return NextResponse.json({ error: specRes.error }, { status: 400 });
+    const { data: rows, error: tErr } = await supabase
+        .from("announcement_targets")
+        .select("target_type, target_ref, rule")
+        .eq("org_id", orgId)
+        .eq("announcement_id", id);
+    if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
 
-    const preview = await resolveAudienceSpec(supabase, orgId, specRes.spec);
-    return NextResponse.json(audiencePreviewResponse(preview));
+    const targets = mapSavedAnnouncementTargets(
+        (rows ?? []) as Array<{ target_type: string; target_ref: string | null; rule: Record<string, unknown> | null }>
+    );
+    const result = await runAnnouncementRecipientPreview(supabase, orgId, { targets });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    return NextResponse.json(result.preview);
 }

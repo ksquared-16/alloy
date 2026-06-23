@@ -27,7 +27,6 @@ describe("Announcements workspace", () => {
         const allowedPrefixes = [
             "/api/admin/communications/announcements",
             "/api/admin/communications/templates",
-            "/api/admin/location-options",
             "/api/admin/location-program-categories",
             "/api/admin/communications/status-options",
             "/api/admin/locations?hierarchy=1",
@@ -82,7 +81,8 @@ describe("Announcements workspace", () => {
         expect(WS).toContain("Child status");
         expect(WS).toContain("Match children, send to guardians.");
         expect(WS).toContain("CommsAudienceMultiSelect");
-        expect(WS).toContain("programOptionsForDisplay");
+        expect(WS).toContain("siteLocationOptionsFromHierarchy");
+        expect(WS).not.toContain("/api/admin/location-options");
         expect(WS).toContain("useWorkspaceSiteFilter");
         expect(WS).toContain("roomAudienceBuilderState");
         // no fixed-bucket affordances any more
@@ -114,12 +114,24 @@ describe("Announcements workspace", () => {
     it("calls the recipient-preview endpoint (read-only) and renders counts + unresolved", () => {
         expect(WS).toContain('data-recipient-preview="true"');
         expect(WS).toContain('data-recipient-preview-run="true"');
-        expect(WS).toMatch(/`\$\{ANNOUNCEMENTS_API\}\/\$\{selectedId\}\/recipient-preview`/);
+        expect(WS).toContain("RECIPIENT_PREVIEW_API");
+        expect(WS).toContain("/api/admin/communications/announcements/recipient-preview");
         expect(WS).toContain("previewRecipients");
         expect(WS).toContain('data-recipient-total="true"');
         expect(WS).toContain('data-recipient-unresolved="true"');
+        expect(WS).not.toContain("Save the draft to preview recipients");
+        expect(WS).not.toContain("Save the draft first");
         // preview is read-only — it must not write recipients or send
         expect(WS).not.toMatch(/announcement_recipients/);
+    });
+
+    it("opens New Announcement editor on initial load when nothing is selected", () => {
+        expect(WS).toContain("didAutoOpenEditorRef");
+        expect(WS).toMatch(/startCreate\(\)/);
+        expect(WS).toContain("New Announcement");
+        expect(WS).toContain("All Announcements");
+        expect(WS).toContain("No Announcements");
+        expect(WS).toContain("Draft and Scheduled Broadcasts");
     });
 
     it("only adds the preview endpoint to its API surface (still no send/scheduled APIs)", () => {
@@ -127,7 +139,6 @@ describe("Announcements workspace", () => {
         const allowedPrefixes = [
             "/api/admin/communications/announcements",
             "/api/admin/communications/templates",
-            "/api/admin/location-options",
             "/api/admin/location-program-categories",
             "/api/admin/communications/status-options",
             "/api/admin/locations?hierarchy=1",
@@ -135,6 +146,7 @@ describe("Announcements workspace", () => {
         for (const api of apis) {
             expect(allowedPrefixes.some((p) => api.startsWith(p)), `unexpected API: ${api}`).toBe(true);
         }
+        expect(WS).toContain("/api/admin/communications/announcements/recipient-preview");
         expect(WS).not.toMatch(/executeCommunicationsSend|communication-scheduled-sends/);
     });
 });

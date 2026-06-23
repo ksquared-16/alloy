@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     buildTemplatePreview,
+    buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
     mergeContent,
     nextVersionNumber,
@@ -106,6 +107,37 @@ describe("nextVersionNumber / mergeContent", () => {
     it("merges a content patch over the current version", () => {
         expect(mergeContent({ subject: "A", body: "B" }, { body: "B2" })).toEqual({ subject: "A", body: "B2" });
         expect(mergeContent({ subject: "A", body: "B" }, {})).toEqual({ subject: "A", body: "B" });
+    });
+});
+
+describe("buildTemplateVersionInsertPayload", () => {
+    it("writes both legacy version and B2 version_number", () => {
+        const payload = buildTemplateVersionInsertPayload({
+            org_id: "org-1",
+            template_id: "tpl-1",
+            version_number: 1,
+            subject: "Hello",
+            body: "Body",
+            token_paths: ["person.first_name"],
+            created_by: "user-1",
+        });
+        expect(payload.version_number).toBe(1);
+        expect(payload.version).toBe(1);
+        expect(payload.created_by_user_id).toBe("user-1");
+    });
+
+    it("omits created_by_user_id when created_by is null", () => {
+        const payload = buildTemplateVersionInsertPayload({
+            org_id: "org-1",
+            template_id: "tpl-1",
+            version_number: 2,
+            subject: null,
+            body: "",
+            token_paths: [],
+            created_by: null,
+        });
+        expect(payload.version).toBe(2);
+        expect(payload).not.toHaveProperty("created_by_user_id");
     });
 });
 
