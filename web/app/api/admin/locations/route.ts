@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import {
+    enrichHierarchyUnitsWithProgramCategories,
+    UNIT_PROGRAM_CATEGORY_FIELD_KEYS,
+} from "@/lib/admin/location/enrichHierarchyUnitProgramCategories";
 import { assertAllowedStatusKey, displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 /** GET: list locations for current org (dropdowns). Admin + ops. is_active only by default. */
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest) {
     const locDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "locations", { activeOnly: true });
     const locStatusLabels = displayLabelsFromDefinitions(locDefs);
 
-    const locations = list.map((r) => {
+    let locations = list.map((r) => {
         const id = String(r.id ?? "");
         const customer_id = (r.customer_id as string | null | undefined) ?? null;
         const skRaw = r.status_key;
@@ -82,6 +86,37 @@ export async function GET(request: NextRequest) {
                 sk != null ? (locStatusLabels.get(sk) ?? sk) : null,
         };
     });
+
+    if (hierarchy) {
+        const unitIds = locations
+            .filter((row) => String(row.location_type ?? "").trim() === "unit")
+            .map((row) => String(row.id));
+        if (unitIds.length > 0) {
+            const { data: fieldDefs } = await supabase
+                .from("field_definitions")
+                .select("id")
+                .eq("org_id", ctx.orgId)
+                .eq("entity_type", "location")
+                .in("field_key", [...UNIT_PROGRAM_CATEGORY_FIELD_KEYS]);
+            const defIds = (fieldDefs ?? []).map((d) => String((d as { id: string }).id)).filter(Boolean);
+            if (defIds.length > 0) {
+                const { data: fieldValues } = await supabase
+                    .from("field_values")
+                    .select("entity_id, value_text")
+                    .eq("org_id", ctx.orgId)
+                    .eq("entity_type", "location")
+                    .in("entity_id", unitIds)
+                    .in("field_definition_id", defIds);
+                locations = enrichHierarchyUnitsWithProgramCategories(
+                    locations,
+                    (fieldValues ?? []).map((fv) => ({
+                        entity_id: String((fv as { entity_id: string }).entity_id),
+                        value_text: (fv as { value_text?: string | null }).value_text ?? null,
+                    }))
+                );
+            }
+        }
+    }
 
     return NextResponse.json({ locations });
 }

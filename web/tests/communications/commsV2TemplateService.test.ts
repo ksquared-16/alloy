@@ -3,6 +3,8 @@ import {
     buildTemplatePreview,
     buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
+    formatTemplateDuplicateNameError,
+    isTemplateNameUniqueConstraintError,
     mergeContent,
     nextVersionNumber,
     parseTemplateListFilters,
@@ -107,6 +109,20 @@ describe("nextVersionNumber / mergeContent", () => {
     it("merges a content patch over the current version", () => {
         expect(mergeContent({ subject: "A", body: "B" }, { body: "B2" })).toEqual({ subject: "A", body: "B2" });
         expect(mergeContent({ subject: "A", body: "B" }, {})).toEqual({ subject: "A", body: "B" });
+    });
+    it("detects template duplicate-name constraint errors", () => {
+        expect(
+            isTemplateNameUniqueConstraintError(
+                'duplicate key value violates unique constraint "communication_templates_org_name_uq"'
+            )
+        ).toBe(true);
+        expect(isTemplateNameUniqueConstraintError("some other error")).toBe(false);
+    });
+
+    it("formats a friendly duplicate-name message", () => {
+        expect(formatTemplateDuplicateNameError("Welcome")).toBe(
+            "A template named Welcome already exists. Choose a different name."
+        );
     });
 });
 

@@ -50,6 +50,34 @@ Templates and Announcements inside the modal do not require separate feature fla
 
 ---
 
+## Template Library (Communications V2)
+
+**Canonical asset:** `communication_templates` + immutable `communication_template_versions` (`current_version_id` on the template row). Org-scoped list/create/update via `/api/admin/communications/templates`.
+
+### Integration by surface
+
+| Surface | Template integration | Send / schedule behavior |
+|---------|---------------------|--------------------------|
+| **Template Library** (modal tab) | Authoring + versioning | N/A — registry only |
+| **Compose New** (`QuickMessageModal`) | Channel-filtered picker; applies `current_version` to editable subject/body | Outbound send uses composed text only (no `template_id` on message row today) |
+| **Announcements** | `announcements.template_id` FK + picker; apply-on-select copies `current_version` into draft fields | Schedule snapshots `announcements.subject` / `announcements.body` at schedule time — not a live re-resolve from `template_id` |
+| **Inbox reply / drawer compose** | Not integrated | Free-text compose |
+| **Workflow `create_message` / `send_message`** | Inline `body` / `template` strings with payload path tokens | Separate from Template Library — no `communication_template_id` yet |
+| **Tour comms / Workflow Assist / BOS copy** | Parallel template/config systems | Do not duplicate bodies into shared modules without migration |
+
+### Doctrine
+
+1. **Templates are the reusable operator-authored asset** for modal Compose and Announcements.
+2. **Copy-on-apply, edit freely** — selecting a template fetches `GET …/templates/[id]` → `current_version` and seeds the composer; operators may edit before send/save.
+3. **Do not duplicate message bodies** across features when a Template Library entry exists — reference `template_id` where persistence is needed (Announcements today).
+4. **Scheduled announcements use saved draft text** — updating a template in the library does not retroactively change already-saved announcement bodies; re-select the template in the picker to refresh from the latest version.
+
+Shared client helper: `web/lib/communications/v2/communicationTemplateDraftSeed.ts` (`fetchCommunicationTemplateCurrentVersion`, `communicationTemplateDraftSeedFromPreview`).
+
+**Next increment (not shipped):** optional `communication_template_id` on workflow communication actions with runtime resolve of `current_version`; keep inline body as override during migration.
+
+---
+
 ## Related
 
 - `../../product/communications.md` (transitional expanded reference)

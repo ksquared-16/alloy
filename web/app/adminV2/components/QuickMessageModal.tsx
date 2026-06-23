@@ -16,6 +16,18 @@ import {
     resolveQuickMessageSelection,
     type QuickMessagePersonHit,
 } from "@/lib/adminV2/quickMessageRecordRecipients";
+import {
+    communicationTemplateDraftSeedFromPreview,
+    fetchCommunicationTemplateCurrentVersion,
+} from "@/lib/communications/v2/communicationTemplateDraftSeed";
+import type { TemplateChannel } from "@/lib/communications/v2/templateSchema";
+
+const TEMPLATES_API = "/api/admin/communications/templates";
+
+type TemplateOption = { id: string; name: string; channel: TemplateChannel };
+
+const COMPOSE_SELECT_CLASS =
+    "w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-pine/40 focus:outline-none focus:ring-2 focus:ring-alloy-pine/15 disabled:opacity-60";
 
 const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
 
@@ -105,6 +117,10 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     const [channel, setChannel] = useState<"email" | "sms">("email");
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
+    const [templateOptions, setTemplateOptions] = useState<TemplateOption[]>([]);
+    const [selectedTemplateId, setSelectedTemplateId] = useState("");
+    const [templateBusy, setTemplateBusy] = useState(false);
+    const [templateErr, setTemplateErr] = useState<string | null>(null);
 
     const [channelsAvailable, setChannelsAvailable] = useState<string[]>([]);
     const [bindingsErr, setBindingsErr] = useState<string | null>(null);
@@ -141,6 +157,11 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     const emailReady = channelsAvailable.includes("email") && !bindingsErr && !loadingBindings;
     const smsReady = channelsAvailable.includes("sms") && !bindingsErr && !loadingBindings;
 
+    const channelTemplates = useMemo(
+        () => templateOptions.filter((t) => t.channel === channel),
+        [templateOptions, channel]
+    );
+
     const previewPersonId = selectedRecipients[0]?.person_id ?? null;
 
     useEffect(() => {
@@ -169,6 +190,58 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
     }, [open]);
 
     useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        void (async () => {
+            try {
+                const res = await fetch(`${TEMPLATES_API}?status=active`, { credentials: "include" });
+                const json = await res.json().catch(() => ({}));
+                if (cancelled || !res.ok || !Array.isArray(json.templates)) return;
+                setTemplateOptions(
+                    (json.templates as Record<string, unknown>[])
+                        .map((t) => ({
+                            id: String(t.id),
+                            name: String(t.name ?? ""),
+                            channel: String(t.channel ?? "") as TemplateChannel,
+                        }))
+                        .filter((t) => t.channel === "email" || t.channel === "sms")
+                );
+            } catch {
+                /* template options are best-effort */
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
+
+    useEffect(() => {
+        if (!selectedTemplateId) return;
+        const match = templateOptions.find((t) => t.id === selectedTemplateId);
+        if (match && match.channel !== channel) setSelectedTemplateId("");
+    }, [channel, selectedTemplateId, templateOptions]);
+
+    const applyTemplate = useCallback(
+        async (templateId: string) => {
+            if (!templateId) return;
+            setTemplateBusy(true);
+            setTemplateErr(null);
+            try {
+                const preview = await fetchCommunicationTemplateCurrentVersion(TEMPLATES_API, templateId);
+                if (!preview) throw new Error("Failed to load template");
+                const seed = communicationTemplateDraftSeedFromPreview(preview, channel);
+                setSubject(seed.subject);
+                setBody(seed.body);
+            } catch (e) {
+                setTemplateErr(e instanceof Error ? e.message : "Failed to apply template");
+            } finally {
+                setTemplateBusy(false);
+            }
+        },
+        [channel]
+    );
+
+    useEffect(() => {
         if (!open) {
             setSearchQ("");
             setSearchHits([]);
@@ -177,6 +250,10 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
             setChannel(seed?.defaultChannel === "sms" ? "sms" : "email");
             setSubject("");
             setBody("");
+            setTemplateOptions([]);
+            setSelectedTemplateId("");
+            setTemplateBusy(false);
+            setTemplateErr(null);
             setSendErr(null);
             setSendOk(null);
             setScheduleOpen(false);
@@ -812,6 +889,33 @@ export default function QuickMessageModal({ open, onClose, seed = null }: QuickM
                             className="flex min-h-[min(36vh,20rem)] flex-1 flex-col lg:min-h-[min(40vh,22rem)]"
                             data-compose-editor-min-rows="8"
                         >
+                            <label className="mb-2 flex flex-col gap-1">
+                                <span className={COMPOSER_LABEL}>Template</span>
+                                <select
+                                    data-compose-template="true"
+                                    value={selectedTemplateId}
+                                    disabled={templateBusy || sendBusy || channelTemplates.length === 0}
+                                    onChange={(e) => {
+                                        const v = e.target.value;
+                                        setSelectedTemplateId(v);
+                                        if (v) void applyTemplate(v);
+                                    }}
+                                    className={COMPOSE_SELECT_CLASS}
+                                >
+                                    <option value="">
+                                        {channelTemplates.length === 0 ? "No templates for this channel" : "No template"}
+                                    </option>
+                                    {channelTemplates.map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                            {t.name}
+                                        </option>
+                                    ))}
+                                </select>
+                                <span className="text-[10px] text-alloy-midnight/50">
+                                    Optional — applies the current template version; you can edit before sending.
+                                </span>
+                                {templateErr ? <span className="text-[10px] text-alloy-ember">{templateErr}</span> : null}
+                            </label>
                             <MessagingComposerFrame
                                 channel={channel}
                                 onChannelChange={setChannel}

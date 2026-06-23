@@ -6,6 +6,8 @@ import type { TemplateChannel } from "@/lib/communications/v2/templateSchema";
 import {
     buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
+    formatTemplateDuplicateNameError,
+    isTemplateNameUniqueConstraintError,
     mergeContent,
     nextVersionNumber,
     shouldCreateNewVersion,
@@ -101,6 +103,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
     const { meta, content, hasContentFields } = parsed.value;
 
+    if (meta.name !== undefined) {
+        const { data: nameConflict } = await supabase
+            .from("communication_templates")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("name", meta.name)
+            .neq("id", id)
+            .maybeSingle();
+        if (nameConflict) {
+            return NextResponse.json({ error: formatTemplateDuplicateNameError(meta.name) }, { status: 409 });
+        }
+    }
+
     // Current version content (for diffing + merge).
     let currentContent = { subject: null as string | null, body: "" };
     const currentVersionId = (template as Record<string, unknown>).current_version_id;
@@ -178,6 +193,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         .select(TEMPLATE_COLS)
         .single();
     if (uErr || !updated) {
+        if (uErr && meta.name !== undefined && isTemplateNameUniqueConstraintError(uErr.message)) {
+            return NextResponse.json({ error: formatTemplateDuplicateNameError(meta.name) }, { status: 409 });
+        }
         return NextResponse.json({ error: uErr?.message ?? "Failed to update template" }, { status: 500 });
     }
 

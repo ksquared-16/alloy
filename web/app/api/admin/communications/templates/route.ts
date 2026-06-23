@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     buildTemplateVersionInsertPayload,
     computeTemplateTokenPaths,
+    formatTemplateDuplicateNameError,
+    isTemplateNameUniqueConstraintError,
     parseTemplateListFilters,
     validateCreateTemplateInput,
 } from "@/lib/communications/v2/templateService";
@@ -105,6 +107,16 @@ export async function POST(request: NextRequest) {
     const orgId = ctx.orgId;
     const userId = ctx.userId;
 
+    const { data: existingName } = await supabase
+        .from("communication_templates")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("name", input.name)
+        .maybeSingle();
+    if (existingName) {
+        return NextResponse.json({ error: formatTemplateDuplicateNameError(input.name) }, { status: 409 });
+    }
+
     // 1) Insert the template container (current_version_id set after the version exists).
     const { data: template, error: tErr } = await supabase
         .from("communication_templates")
@@ -121,6 +133,9 @@ export async function POST(request: NextRequest) {
         .select(TEMPLATE_COLS)
         .single();
     if (tErr || !template) {
+        if (tErr && isTemplateNameUniqueConstraintError(tErr.message)) {
+            return NextResponse.json({ error: formatTemplateDuplicateNameError(input.name) }, { status: 409 });
+        }
         return NextResponse.json({ error: tErr?.message ?? "Failed to create template" }, { status: 500 });
     }
     const templateId = String((template as Record<string, unknown>).id);

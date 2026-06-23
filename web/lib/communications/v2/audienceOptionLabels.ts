@@ -4,11 +4,14 @@
  */
 
 import { filterInquiryChildSiteLocationOptions } from "@/lib/admin/drawer/inquiryChildPlacementScope";
-import { readLocationMetadataPresentation } from "@/lib/admin/location/locationMetadataFields";
 import {
     resolveRoomsForSiteAndProgram,
     type InquiryChildPlacementHierarchyRow,
 } from "@/lib/admin/location/inquiryChildPlacementOptions";
+import {
+    countActiveUnitsUnderSite,
+    unitMatchesProgramCategoryRow,
+} from "@/lib/communications/v2/audienceHierarchy";
 
 export type LabeledOption = { id: string; label: string };
 
@@ -53,16 +56,15 @@ export function programOptionsForDisplay(
 
     const deduped = dedupeProgramRowsByLocationAndLabel(filtered);
 
-    // Single location: unique labels only — never append location context.
+    // Single location: unique program keys/labels only — never append location context.
     if (selectedLocationIds.length === 1) {
-        const byLabel = new Map<string, LabeledOption>();
+        const byKey = new Map<string, LabeledOption>();
         for (const p of deduped) {
-            const labelKey = p.label.trim().toLowerCase();
-            if (!byLabel.has(labelKey)) {
-                byLabel.set(labelKey, { id: p.id, label: p.label.trim() });
-            }
+            const dedupeKey = (p.key || p.label).trim().toLowerCase();
+            if (!dedupeKey || byKey.has(dedupeKey)) continue;
+            byKey.set(dedupeKey, { id: p.id, label: p.label.trim() });
         }
-        return [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label));
+        return [...byKey.values()].sort((a, b) => a.label.localeCompare(b.label));
     }
 
     const labelCounts = new Map<string, number>();
@@ -120,12 +122,6 @@ export type RoomAudienceBuilderState = {
     helper: string;
 };
 
-function isActiveUnitRow(row: InquiryChildPlacementHierarchyRow): boolean {
-    if (String(row.location_type ?? "").trim() !== "unit") return false;
-    return row.is_active !== false;
-}
-
-/** Resolve unit/classroom options for a site + program category row. */
 export function resolveRoomsForProgramCategoryRow(
     hierarchy: InquiryChildPlacementHierarchyRow[],
     siteId: string,
@@ -142,22 +138,22 @@ export function resolveRoomsForProgramCategoryRow(
         }
     }
 
-    // Some units store the program category id in metadata.category instead of the stable key.
-    const categoryId = programRow.id.trim();
-    if (!categoryId) return [];
-
-    return hierarchy
+    const matched = hierarchy
         .filter((row) => {
-            if (!isActiveUnitRow(row)) return false;
+            if (String(row.location_type ?? "").trim() !== "unit") return false;
+            if (row.is_active === false) return false;
             if (String(row.parent_location_id ?? "").trim() !== site) return false;
-            const category = readLocationMetadataPresentation(row.metadata).category;
-            return (category ?? "").trim() === categoryId;
+            return unitMatchesProgramCategoryRow(row, programRow);
         })
         .map((row) => ({
             id: String(row.id),
             label: (row.label ?? row.id).trim() || String(row.id),
         }))
         .sort((a, b) => a.label.localeCompare(b.label));
+
+    if (matched.length > 0) return matched;
+
+    return [];
 }
 
 /**
@@ -201,10 +197,14 @@ export function roomAudienceBuilderState(
 
     const options = resolveRoomsForProgramCategoryRow(hierarchy, locationId, programRow);
     if (options.length === 0) {
+        const unitsUnderSite = countActiveUnitsUnderSite(hierarchy, locationId);
         return {
             enabled: false,
             options: [],
-            helper: `No classrooms are configured for ${locationLabel} → ${programLabel}.`,
+            helper:
+                unitsUnderSite > 0
+                    ? `No classrooms match ${programLabel} at ${locationLabel}.`
+                    : `No classrooms are configured for ${locationLabel} → ${programLabel}.`,
         };
     }
     return {

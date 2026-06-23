@@ -65,7 +65,9 @@ describe("Announcements workspace", () => {
     it("has a working template selector that previews the chosen template", () => {
         expect(WS).toContain('data-announcement-template="true"');
         expect(WS).toMatch(/loadTemplatePreview/);
-        expect(WS).toMatch(/`\$\{TEMPLATES_API\}\/\$\{templateId\}`/);
+        expect(WS).toMatch(/fetchCommunicationTemplateCurrentVersion/);
+        expect(WS).toMatch(/loadTemplatePreview\(v, Boolean\(v\)\)/);
+        expect(WS).toMatch(/loadTemplatePreview\(a\.template_id \?\? null, false\)/);
     });
 
     it("provides channel selection + the Audience Builder (grain + composable filters)", () => {

@@ -252,6 +252,21 @@ export function buildTemplateVersionInsertPayload(fields: TemplateVersionInsertF
     return payload;
 }
 
+/** Friendly duplicate-name message for template create/update. */
+export function formatTemplateDuplicateNameError(name: string): string {
+    const trimmed = name.trim();
+    return `A template named ${trimmed} already exists. Choose a different name.`;
+}
+
+/** Detect Postgres unique violations for communication_templates (org_id, name). */
+export function isTemplateNameUniqueConstraintError(message: string): boolean {
+    const normalized = message.toLowerCase();
+    return (
+        normalized.includes("communication_templates_org_name_uq") ||
+        (normalized.includes("duplicate key") && normalized.includes("communication_templates"))
+    );
+}
+
 /** Effective subject/body after applying a content patch over the current version. */
 export function mergeContent(
     current: { subject: string | null; body: string },

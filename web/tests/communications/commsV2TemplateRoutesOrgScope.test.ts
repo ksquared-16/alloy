@@ -77,4 +77,11 @@ describe("B2 template routes — auth + org scoping + scope guards", () => {
         const createRoute = read("route.ts");
         expect(createRoute).toMatch(/version_number:\s*1/);
     });
+
+    it("create route checks duplicate template names before insert", () => {
+        const src = read("route.ts");
+        expect(src).toContain("formatTemplateDuplicateNameError");
+        expect(src).toContain("isTemplateNameUniqueConstraintError");
+        expect(src).toContain('.eq("name", input.name)');
+    });
 });

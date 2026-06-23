@@ -108,6 +108,8 @@ describe("Inbox thread history rendering", () => {
         expect(compose).toContain('bodyRows={8}');
         expect(compose).toContain('bodyMinHeightClass="min-h-[12rem]"');
         expect(compose).toContain('data-compose-editor-min-rows="8"');
+        expect(compose).toContain('data-compose-template="true"');
+        expect(compose).toContain("fetchCommunicationTemplateCurrentVersion");
         expect(compose).not.toContain("bg-alloy-midnight/[0.9]");
     });
 });

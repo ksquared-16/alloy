@@ -4,7 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import type { InquiryChildPlacementHierarchyRow } from "@/lib/admin/location/inquiryChildPlacementOptions";
+import {
+    communicationTemplateDraftSeedFromPreview,
+    fetchCommunicationTemplateCurrentVersion,
+} from "@/lib/communications/v2/communicationTemplateDraftSeed";
 import { segmentCommunicationTemplate } from "@/lib/communications/v2/templateTokens";
+import type { TemplateChannel } from "@/lib/communications/v2/templateSchema";
 import { ANNOUNCEMENT_CHANNELS, type AnnouncementChannel } from "@/lib/communications/v2/announcementSchema";
 import { AUDIENCE_GRAINS, type AnnouncementAudienceSpec, type AudienceGrain } from "@/lib/communications/v2/audienceSpec";
 import {
@@ -16,6 +21,7 @@ import {
     statusOptionsForDisplay,
     type ProgramOptionRow,
 } from "@/lib/communications/v2/audienceOptionLabels";
+import { parseProgramOptionRowsFromApi } from "@/lib/communications/v2/audienceHierarchy";
 import CommsAudienceMultiSelect from "@/app/adminV2/communications/CommsAudienceMultiSelect";
 import CommsMessageTextToolbar from "@/app/adminV2/communications/CommsMessageTextToolbar";
 import {
@@ -249,19 +255,14 @@ export default function AnnouncementsWorkspace() {
             const progArr = (progJson.categories ?? progJson.program_categories ?? progJson.location_program_categories) as
                 | Record<string, unknown>[]
                 | undefined;
-            if (progRes.ok && Array.isArray(progArr)) {
-                setProgramOptions(
-                    progArr.map((p) => ({
-                        id: String(p.id),
-                        label: String(p.label ?? p.id),
-                        location_id: String(p.location_id ?? ""),
-                        key: String(p.key ?? ""),
-                    }))
-                );
-            }
             const hierarchyArr = hierarchyJson.locations as InquiryChildPlacementHierarchyRow[] | undefined;
             if (hierarchyRes.ok && Array.isArray(hierarchyArr)) {
                 setLocationHierarchy(hierarchyArr);
+            }
+            if (progRes.ok && Array.isArray(progArr)) {
+                setProgramOptions(
+                    parseProgramOptionRowsFromApi(progArr, hierarchyRes.ok && Array.isArray(hierarchyArr) ? hierarchyArr : [])
+                );
             }
         } catch {
             /* options are best-effort */
@@ -291,27 +292,28 @@ export default function AnnouncementsWorkspace() {
         void loadStatusOptions();
     }, [loadList, loadTemplates, loadAudienceOptions, loadStatusOptions]);
 
-    const loadTemplatePreview = useCallback(async (templateId: string | null) => {
+    const loadTemplatePreview = useCallback(async (templateId: string | null, applyToDraft = false) => {
         if (!templateId) {
             setTemplatePreview(null);
             return;
         }
         try {
-            const res = await fetch(`${TEMPLATES_API}/${templateId}`, { credentials: "include" });
-            const json = await res.json().catch(() => ({}));
-            if (res.ok && json.current_version) {
-                const cv = json.current_version as Record<string, unknown>;
-                setTemplatePreview({
-                    subject: cv.subject != null ? String(cv.subject) : null,
-                    body: cv.body != null ? String(cv.body) : "",
-                });
-            } else {
+            const preview = await fetchCommunicationTemplateCurrentVersion(TEMPLATES_API, templateId);
+            if (!preview) {
                 setTemplatePreview(null);
+                return;
+            }
+            setTemplatePreview(preview);
+            if (applyToDraft) {
+                const templateChannel =
+                    (templates.find((t) => t.id === templateId)?.channel as TemplateChannel | undefined) ?? "email";
+                const seed = communicationTemplateDraftSeedFromPreview(preview, templateChannel);
+                setDraft((d) => ({ ...d, subject: seed.subject, body: seed.body }));
             }
         } catch {
             setTemplatePreview(null);
         }
-    }, []);
+    }, [templates]);
 
     const selectAnnouncement = useCallback(
         async (id: string) => {
@@ -334,7 +336,7 @@ export default function AnnouncementsWorkspace() {
                     body: a.body ?? "",
                 });
                 setStatus(a.status ?? "draft");
-                void loadTemplatePreview(a.template_id ?? null);
+                void loadTemplatePreview(a.template_id ?? null, false);
 
                 const tgtJson = await tgtRes.json().catch(() => ({}));
                 const rows = Array.isArray(tgtJson.targets) ? (tgtJson.targets as Record<string, unknown>[]) : [];
@@ -614,7 +616,7 @@ export default function AnnouncementsWorkspace() {
                                     onChange={(e) => {
                                         const v = e.target.value || null;
                                         setDraft((d) => ({ ...d, template_id: v }));
-                                        void loadTemplatePreview(v);
+                                        void loadTemplatePreview(v, Boolean(v));
                                     }}
                                     className={COMMS_SELECT_CLASS}
                                 >
