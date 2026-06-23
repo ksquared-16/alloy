@@ -175,6 +175,11 @@ export const CONFIGURATION_WORKSPACE_DOMAINS: readonly ConfigurationWorkspaceDom
                 description: "Dashboard KPI tiles.",
             },
             {
+                href: "/admin/settings/analytics",
+                label: "Analytics",
+                description: "Operational intelligence — KPI packs, targets, and placement.",
+            },
+            {
                 href: "/admin/settings/documents/document-fields",
                 label: "Document fields",
                 description: "Fields on enrollment documents.",

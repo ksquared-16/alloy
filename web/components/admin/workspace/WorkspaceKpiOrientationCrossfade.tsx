@@ -1,6 +1,6 @@
 "use client";
 
-import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
+import WorkspaceKpiUnifiedStrip from "@/components/admin/workspace/WorkspaceKpiUnifiedStrip";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 
 const PLACEHOLDER_CELLS = 5;
@@ -67,7 +67,7 @@ export function WorkspaceKpiOrientationCrossfade({
                 className="adminv2-ws-kpi-orient-crossfade-layer adminv2-ws-kpi-orient-crossfade-layer--data"
                 data-active={placeholderPending ? "false" : "true"}
             >
-                <KPIBlock kpis={kpis} maxVisible={maxVisible} />
+                <WorkspaceKpiUnifiedStrip kpis={kpis} inventoryMaxVisible={5} performanceMaxVisible={4} />
             </div>
         </div>
     );

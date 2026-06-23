@@ -23,8 +23,8 @@ const KPI_DEFINITIONS: Record<OipKpiKey, KpiDefinition> = {
         defaultTarget: {
             metricKey: "enrollment.tour_conversion_rate",
             kind: "rate_min",
-            targetMinRate: 0.5,
-            thresholds: { healthyMinRate: 0.5, warningMinRate: 0.3 },
+            targetMinRate: 0.6,
+            thresholds: { healthyMinRate: 0.6, warningMinRate: 0.4 },
         },
     },
     "comms.delivery_rate": {
@@ -49,8 +49,8 @@ const KPI_DEFINITIONS: Record<OipKpiKey, KpiDefinition> = {
         defaultTarget: {
             metricKey: "forms.completion_rate",
             kind: "rate_min",
-            targetMinRate: 0.8,
-            thresholds: { healthyMinRate: 0.8, warningMinRate: 0.6 },
+            targetMinRate: 0.9,
+            thresholds: { healthyMinRate: 0.9, warningMinRate: 0.7 },
         },
     },
     "ops.work_overdue_count": {

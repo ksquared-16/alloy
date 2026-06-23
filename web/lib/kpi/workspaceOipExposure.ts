@@ -51,6 +51,38 @@ function kpiToneFromStatus(status: string | undefined): KPIVm["tone"] {
     return "neutral";
 }
 
+/** Code-owned work-unit OIP strip keys (append when placements omit them). */
+export const DEFAULT_WORK_UNIT_OIP_STRIP_KEYS: readonly MetricKey[] = [
+    "oip.enrollment.tour_conversion_rate",
+    "oip.enrollment.time_to_schedule_tour",
+    "oip.forms.completion_rate",
+    "oip.ops.work_overdue_count",
+];
+
+export function resolveWorkUnitOipMetricKeys(placementRows: WorkspaceKpiPlacementRow[] | undefined): OipMetricKey[] {
+    const fromPlacements = placementRows?.length ? extractOipMetricKeysFromPlacements(placementRows) : [];
+    const defaults = DEFAULT_WORK_UNIT_OIP_STRIP_KEYS.map((k) => oipMetricKeyForStripKey(k)).filter(
+        (k): k is OipMetricKey => k != null
+    );
+    const merged = [...fromPlacements];
+    for (const key of defaults) {
+        if (!merged.includes(key)) merged.push(key);
+    }
+    return merged;
+}
+
+export function appendWorkUnitOipKpis(
+    strip: KPIVm[],
+    resolved: ResolvedMetricMap,
+    stripKeys: readonly MetricKey[] = DEFAULT_WORK_UNIT_OIP_STRIP_KEYS
+): KPIVm[] {
+    return appendWorkspaceOipKpis(strip, resolved, stripKeys);
+}
+
+export function filterOipKpiCells(kpis: KPIVm[]): KPIVm[] {
+    return kpis.filter((k) => k.id.startsWith("oip."));
+}
+
 /** Append default OIP KPI cells not already present in the strip. */
 export function appendWorkspaceOipKpis(
     strip: KPIVm[],
@@ -85,7 +117,7 @@ function metricDisplay(key: OipMetricKey, resolved: ResolvedMetricMap): { label:
     };
 }
 
-/** Light performance metrics for lifecycle command tiles — max 2 per card. */
+/** Light performance metrics for lifecycle command tiles — max 3 per card. */
 export function enrichLifecycleCardsWithOipMetrics(
     cards: readonly OperatorLifecycleLandingCard[],
     resolved: ResolvedMetricMap
@@ -95,11 +127,9 @@ export function enrichLifecycleCardsWithOipMetrics(
         const metrics: { label: string; value: string }[] = [];
 
         if (processKey.includes("enroll")) {
-            metrics.push(metricDisplay("enrollment.time_to_schedule_tour", resolved));
             metrics.push(metricDisplay("enrollment.tour_conversion_rate", resolved));
-            if (metrics.length < 2) {
-                metrics.push(metricDisplay("forms.completion_rate", resolved));
-            }
+            metrics.push(metricDisplay("enrollment.time_to_schedule_tour", resolved));
+            metrics.push(metricDisplay("forms.completion_rate", resolved));
         }
 
         if (processKey.includes("form")) {
@@ -111,7 +141,7 @@ export function enrichLifecycleCardsWithOipMetrics(
             metrics.push(metricDisplay("ops.needs_attention_count", resolved));
         }
 
-        const performanceMetrics = metrics.slice(0, 2);
+        const performanceMetrics = metrics.slice(0, 3);
         if (!performanceMetrics.length) return card;
         return { ...card, performanceMetrics };
     });

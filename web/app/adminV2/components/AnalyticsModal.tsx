@@ -37,11 +37,11 @@ export default function AnalyticsModal({ open, onClose }: AnalyticsModalProps) {
                                 strokeWidth={2}
                             />
                             <h2 id="adminv2-analytics-modal-title" className="text-sm font-semibold text-alloy-midnight">
-                                Analytics
+                                Operational Intelligence
                             </h2>
                         </div>
                         <p className="mt-1 text-xs text-alloy-midnight/55">
-                            Operational intelligence — live metrics from MetricEngine (rolling 30 days).
+                            Enrollment, communications, forms, and operational health — live from your workspace data.
                         </p>
                     </div>
                     <button

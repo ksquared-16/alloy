@@ -206,9 +206,29 @@ Unknown keys return **400** with `unknown_keys`, `available_keys`, and `packs`.
 
 ---
 
-## Analytics workspace (Phase 3)
+## Analytics admin workspace (Phase 3A — productization)
 
-Design plan: `docs/sprints/06_2026/analytics_workspace_shell_plan.md` — route, nav, pack sidebar, KPI grid, trend chart, BOS rail, permissions. **No UI in Phase 1.**
+**Route:** `/admin/settings/analytics` (Admin → Configuration → Experience → Analytics)
+
+Configuration surface (not the operator Analytics modal):
+
+| Tab | Purpose |
+|-----|---------|
+| KPI packs | Read-only pack catalog — metrics and KPI keys per domain |
+| KPI targets | Org overrides via `org_settings.metadata.kpi_targets` — PATCH `/api/admin/metrics/kpi-targets` |
+| KPI placement | Visibility matrix (workspace strip, work unit strip, Analytics modal, lifecycle tile) + link to Workspace metrics |
+
+**Operator Analytics modal** — Operational Intelligence Center: summary row (tour conversion, time to tour, overdue work, forms completion), pack health chips, site scope, pack sections below.
+
+**Workspace strip** — dual band: Pipeline overview (inventory Q/L metrics) + Operational performance (O-family OIP cells).
+
+**Work unit OIP** — lifecycle builder-owned shells show OIP-only performance strip; default keys include forms completion; resolve passes `workUnitId`.
+
+---
+
+## Analytics workspace (Phase 3 — deferred)
+
+Design plan: `docs/sprints/06_2026/analytics_workspace_shell_plan.md` — dedicated route nav (beyond modal). Modal + admin config delivered in Phase 3A.
 
 ---
 
@@ -229,8 +249,9 @@ See `docs/platform/modules/ai-platform.md` and BOS GATE 0 doctrine.
 | 0 + MVP | Metric registry, 3 metrics, 1 KPI, admin API, tests | **Done** |
 | 1 | 11 metrics, snapshots, KPI expansion, API hardening, O-family workspace bridge | **Done** |
 | 2A | Analytics modal, KPI packs, workspace OIP exposure | **Done** |
-| 2B | Snapshot writer route, trend API, sparklines, site filter passthrough | **Current** |
-| 3 | Settings targets UI, scheduled snapshot cron infra | Planned |
+| 2B | Snapshot writer route, trend API, sparklines, site filter passthrough | **Done** |
+| 3A | Analytics admin config, modal polish, unified workspace strip, WU OIP visibility, lifecycle tile performance band | **Done** |
+| 3B | Scheduled snapshot cron infra, settings targets table (optional) | Planned |
 | 4 | BOS aggregate queries | Planned |
 | 5 | Report exports | Planned |
 

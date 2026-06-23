@@ -145,15 +145,24 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
 
                                 {lifecycle.performanceMetrics?.length ?
                                     <div
-                                        className="adminv2-ws-lifecycle-command-metrics mt-4 grid grid-cols-2 gap-3 border-t border-alloy-forge/10 pt-4"
+                                        className="adminv2-ws-lifecycle-command-oip-band mt-5 rounded-xl border border-alloy-pine/20 bg-white/55 px-4 py-3 backdrop-blur-[1px]"
                                         data-ws-lifecycle-oip-metrics="true"
                                     >
-                                        {lifecycle.performanceMetrics.map((m) => (
-                                            <div key={m.label} className="adminv2-ws-lifecycle-command-metric">
-                                                <div className="adminv2-ws-lifecycle-command-metric-label">{m.label}</div>
-                                                <div className="adminv2-ws-lifecycle-command-metric-value">{m.value}</div>
-                                            </div>
-                                        ))}
+                                        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-pine">
+                                            Performance
+                                        </div>
+                                        <div className="mt-3 grid grid-cols-3 gap-3">
+                                            {lifecycle.performanceMetrics.map((m) => (
+                                                <div key={m.label} className="adminv2-ws-lifecycle-command-metric">
+                                                    <div className="adminv2-ws-lifecycle-command-metric-label text-[10px]">
+                                                        {m.label}
+                                                    </div>
+                                                    <div className="adminv2-ws-lifecycle-command-metric-value text-lg font-semibold text-alloy-midnight">
+                                                        {m.value}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
                                 :   null}
                             </div>

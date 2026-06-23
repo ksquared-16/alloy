@@ -31,6 +31,7 @@ describe("analytics modal shell", () => {
         expect(read("app/adminV2/components/AnalyticsModal.tsx")).toContain("AdminV2WorkspaceBosModalShell");
         expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain("fetchOipMetricsResolved");
         expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain("fetchMetricTrends");
+        expect(read("app/adminV2/analytics/AnalyticsWorkspacePanel.tsx")).toContain("data-analytics-summary-row");
         expect(read("lib/metrics/packs.ts")).toContain("operational_health");
     });
 });

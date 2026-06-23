@@ -171,10 +171,14 @@ import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWor
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
 import {
-    extractOipMetricKeysFromPlacements,
-    fetchOipMetricStripValues,
+    fetchOipMetricsResolved,
     type OipMetricStripValues,
 } from "@/lib/kpi/oipBridge";
+import {
+    appendWorkUnitOipKpis,
+    resolveWorkUnitOipMetricKeys,
+} from "@/lib/kpi/workspaceOipExposure";
+import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import {
     applyLifecycleWorkUnitQueueUiOverlay,
     isLifecycleStageWorkUnitKey,
@@ -749,6 +753,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     /** `undefined` = placement config not loaded → baseline strip; values are derived in `wuResolvedPlacementKpis`. */
     const [wuPlacementRows, setWuPlacementRows] = useState<WorkspaceKpiPlacementRow[] | undefined>(undefined);
     const [oipMetricValues, setOipMetricValues] = useState<OipMetricStripValues | undefined>(undefined);
+    const [oipResolved, setOipResolved] = useState<ResolvedMetricMap>({});
+    const [oipFetchPending, setOipFetchPending] = useState(false);
     const [wuScopeHasPlacements, setWuScopeHasPlacements] = useState(false);
     const queueItemsRequestSeq = useRef(0);
     const queueSummariesRequestSeq = useRef(0);
@@ -1366,10 +1372,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         selectedQueueKey,
     ]);
 
+    const showOipOnlyKpiStrip = builderOwnedLifecycleShell;
+
     const suppressWorkUnitKpiStrip = useMemo(() => {
-        if (builderOwnedLifecycleShell) return true;
+        if (showOipOnlyKpiStrip) return false;
         return shouldSuppressWorkUnitKpiStrip({ def: queueDef, ui: queueUi });
-    }, [builderOwnedLifecycleShell, queueDef, queueUi]);
+    }, [showOipOnlyKpiStrip, queueDef, queueUi]);
 
     const otherPillSectionKey = useMemo(() => resolveWorkUnitOtherPillSectionKey(queueUi), [queueUi]);
 
@@ -5435,16 +5443,28 @@ export default function AdminV2OpportunityWorkUnitPage() {
     ]);
 
     const wuResolvedPlacementKpis = useMemo(() => {
+        if (showOipOnlyKpiStrip) {
+            return appendWorkUnitOipKpis([], oipResolved);
+        }
         if (suppressWorkUnitKpiStrip) return [];
         if (!workUnitKpiContext) return undefined;
         if (wuPlacementRows === undefined) return undefined;
-        return resolveKpisForWorkUnit({
+        const base = resolveKpisForWorkUnit({
             placementRows: wuPlacementRows,
             scopeHasPlacementRows: wuScopeHasPlacements,
             context: workUnitKpiContext,
             oipMetricValues,
         }).items;
-    }, [suppressWorkUnitKpiStrip, wuPlacementRows, wuScopeHasPlacements, workUnitKpiContext, oipMetricValues]);
+        return appendWorkUnitOipKpis(base, oipResolved);
+    }, [
+        showOipOnlyKpiStrip,
+        suppressWorkUnitKpiStrip,
+        wuPlacementRows,
+        wuScopeHasPlacements,
+        workUnitKpiContext,
+        oipMetricValues,
+        oipResolved,
+    ]);
 
     const enrollmentRightRailByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();
@@ -6191,13 +6211,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const mergedWorkspaceModel = useMemo(() => {
         const base = queueModel ?? model;
         if (!base || !workUnitKpiContext) return base;
-        if (suppressWorkUnitKpiStrip) {
+        if (suppressWorkUnitKpiStrip && !showOipOnlyKpiStrip) {
             return { ...base, kpis: [] };
         }
-        if (wuPlacementRows === undefined) {
+        if (wuPlacementRows === undefined && !showOipOnlyKpiStrip) {
             return { ...base, kpis: [] };
         }
-        const rawKpis = wuResolvedPlacementKpis ?? buildDefaultWorkUnitKpis(workUnitKpiContext);
+        const rawKpis =
+            showOipOnlyKpiStrip
+                ? (wuResolvedPlacementKpis ?? [])
+                : (wuResolvedPlacementKpis ?? buildDefaultWorkUnitKpis(workUnitKpiContext));
         const kpis = rawKpis.map((k) => ({
             ...k,
             label: applyEntityLabelToOperatorCopy(k.label, entityLabels),
@@ -6209,6 +6232,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         workUnitKpiContext,
         wuResolvedPlacementKpis,
         suppressWorkUnitKpiStrip,
+        showOipOnlyKpiStrip,
         wuPlacementRows,
         entityLabels,
     ]);
@@ -6216,9 +6240,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const effectiveModel = mergedWorkspaceModel;
 
     const workUnitKpiMetricsPending =
-        !suppressWorkUnitKpiStrip &&
-        (wuPlacementRows === undefined ||
-            (wuPlacementRows !== undefined && queueSummaries === null && !queueSummariesError));
+        showOipOnlyKpiStrip
+            ? oipFetchPending
+            : !suppressWorkUnitKpiStrip &&
+              (wuPlacementRows === undefined ||
+                  (wuPlacementRows !== undefined && queueSummaries === null && !queueSummariesError));
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
     const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
     /** UI: only block full-page shell — above-fold slots mount from atomic model. */
@@ -6377,7 +6403,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             actions_ready,
             rows_ready,
             kpi_ready: workUnitRevealKpiReady({
-                suppress_kpi_strip: suppressWorkUnitKpiStrip,
+                suppress_kpi_strip: suppressWorkUnitKpiStrip && !showOipOnlyKpiStrip,
                 kpi_metrics_pending: workUnitKpiMetricsPending,
             }),
         });
@@ -6396,6 +6422,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItems?.items?.length,
         queueRowActionsReady,
         suppressWorkUnitKpiStrip,
+        showOipOnlyKpiStrip,
         workUnitKpiMetricsPending,
     ]);
 
@@ -6566,7 +6593,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             queueModel,
             kpiMetrics: mergedWorkspaceModel?.kpis ?? [],
             kpiMetricsPending: workUnitKpiMetricsPending,
-            kpiStripVisible: !suppressWorkUnitKpiStrip,
+            kpiStripVisible: !suppressWorkUnitKpiStrip || showOipOnlyKpiStrip,
             shellReady: workUnitShellReady,
             enrollmentActionsSettled: enrollmentActionsSettled,
             opportunityQueueRowResolved,
@@ -6772,23 +6799,39 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [wuPlacementRows, workUnitKpiMetricsPending, departmentId, workUnitId]);
 
     useEffect(() => {
-        if (!wuPlacementRows?.length) {
+        const keys = resolveWorkUnitOipMetricKeys(wuPlacementRows);
+        if (!keys.length && !showOipOnlyKpiStrip) {
             setOipMetricValues(undefined);
-            return;
-        }
-        const keys = extractOipMetricKeysFromPlacements(wuPlacementRows);
-        if (!keys.length) {
-            setOipMetricValues(undefined);
+            setOipResolved({});
             return;
         }
         let cancelled = false;
-        void fetchOipMetricStripValues({ keys, siteId: selectedSiteId, window: "rolling_30d" }).then((values) => {
-            if (!cancelled) setOipMetricValues(values);
-        });
+        setOipFetchPending(true);
+        void fetchOipMetricsResolved({
+            keys,
+            siteId: selectedSiteId,
+            workUnitId: workUnitId ?? null,
+            window: "rolling_30d",
+        })
+            .then((resolved) => {
+                if (!cancelled) {
+                    setOipResolved(resolved);
+                    setOipMetricValues(
+                        Object.fromEntries(
+                            Object.entries(resolved)
+                                .filter(([, v]) => v?.formatted_value)
+                                .map(([k, v]) => [k, v!.formatted_value])
+                        ) as OipMetricStripValues
+                    );
+                }
+            })
+            .finally(() => {
+                if (!cancelled) setOipFetchPending(false);
+            });
         return () => {
             cancelled = true;
         };
-    }, [wuPlacementRows, selectedSiteId]);
+    }, [wuPlacementRows, selectedSiteId, workUnitId, showOipOnlyKpiStrip]);
 
     useEffect(() => {
         if (workUnitAboveFold.queue_lane.state === "held") {

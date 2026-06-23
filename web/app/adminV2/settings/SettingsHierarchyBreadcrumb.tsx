@@ -81,6 +81,11 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
+    if (tail === "/analytics" || tail.startsWith("/analytics/")) {
+        base.push({ label: "Analytics", href: null });
+        return base;
+    }
+
     if (tail === "/work-units" || tail.startsWith("/work-units/")) {
         base.push({ label: "Work units", href: null });
         return base;
