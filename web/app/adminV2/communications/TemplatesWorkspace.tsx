@@ -4,18 +4,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
     COMMUNICATION_TOKEN_CATALOG,
-    listCommunicationTokensByGroup,
     segmentCommunicationTemplate,
     validateCommunicationTokenPaths,
 } from "@/lib/communications/v2/templateTokens";
 import {
-    TEMPLATE_CATEGORY_PLACEHOLDER,
     TEMPLATE_CHANNELS,
     TEMPLATE_STATUSES,
     templateChannelSupportsSubject,
     type TemplateChannel,
     type TemplateStatus,
 } from "@/lib/communications/v2/templateSchema";
+import TemplateCategoryField from "@/app/adminV2/communications/TemplateCategoryField";
+import TemplateTokenPickerPanel from "@/app/adminV2/communications/TemplateTokenPickerPanel";
+import CommsMessageTextToolbar from "@/app/adminV2/communications/CommsMessageTextToolbar";
+import {
+    COMMS_CARD_CLASS,
+    COMMS_FIELD_LABEL_CLASS,
+    COMMS_INPUT_CLASS,
+    COMMS_PRIMARY_BTN_CLASS,
+    COMMS_SECONDARY_BTN_CLASS,
+    COMMS_SELECT_CLASS,
+    CommsSectionCard,
+} from "@/app/adminV2/communications/commsWorkspaceUi";
 
 /**
  * Templates Workspace (Phase 1 / B3) — three-column template authoring.
@@ -108,7 +118,14 @@ export default function TemplatesWorkspace() {
     });
 
     const sampleContext = useMemo(buildSampleContext, []);
-    const tokenGroups = useMemo(() => listCommunicationTokensByGroup(), []);
+    const categoryOptions = useMemo(() => {
+        const set = new Set<string>();
+        for (const t of templates) {
+            const c = t.category?.trim();
+            if (c) set.add(c);
+        }
+        return [...set].sort((a, b) => a.localeCompare(b));
+    }, [templates]);
 
     const bodyRef = useRef<HTMLTextAreaElement | null>(null);
     const subjectRef = useRef<HTMLInputElement | null>(null);
@@ -284,18 +301,13 @@ export default function TemplatesWorkspace() {
     const isArchived = draft.status === "archived";
 
     return (
-        <div data-templates-workspace="true" className="grid h-full min-h-0 grid-cols-[260px_minmax(0,1fr)_300px] gap-3">
-            {/* LEFT RAIL */}
-            <aside data-template-list="true" className="flex min-h-0 flex-col rounded-xl border border-alloy-stone/20 bg-white">
-                <div className="border-b border-alloy-stone/15 p-2">
+        <div data-templates-workspace="true" className="grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-3">
+            {/* LEFT — list + filters */}
+            <CommsSectionCard title="Template library" helper="Search and filter saved templates." data-template-list="true" className="flex min-h-0 flex-col !p-0">
+                <div className="border-b border-alloy-stone/12 p-3">
                     <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-semibold text-alloy-midnight/80">Templates</span>
-                        <button
-                            type="button"
-                            data-template-new="true"
-                            onClick={startCreate}
-                            className="rounded-md bg-[#00A283] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#00916f]"
-                        >
+                        <button type="button" data-template-new="true" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} !px-2 !py-1 text-[11px]`}>
                             New
                         </button>
                     </div>
@@ -306,24 +318,29 @@ export default function TemplatesWorkspace() {
                         onChange={(e) => setSearch(e.target.value)}
                         placeholder="Search templates…"
                         aria-label="Search templates"
-                        className="mt-2 w-full rounded-lg border border-alloy-stone/18 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 focus:border-[#00A283]/35 focus:outline-none focus:ring-1 focus:ring-[#00A283]/20"
+                        className={`${COMMS_INPUT_CLASS} mt-2`}
                     />
-                    <div className="mt-2 grid grid-cols-1 gap-1.5">
-                        <input
-                            type="search"
+                    <div className="mt-2 grid grid-cols-1 gap-2">
+                        <select
                             data-template-filter-category="true"
                             aria-label="Filter by category"
                             value={categoryFilter}
                             onChange={(e) => setCategoryFilter(e.target.value)}
-                            placeholder="Filter category…"
-                            className="w-full rounded-md border border-alloy-stone/18 bg-white px-2 py-1 text-[11px] text-alloy-midnight/80"
-                        />
+                            className={COMMS_SELECT_CLASS}
+                        >
+                            <option value="">All categories</option>
+                            {categoryOptions.map((c) => (
+                                <option key={c} value={c}>
+                                    {c}
+                                </option>
+                            ))}
+                        </select>
                         <select
                             data-template-filter-channel="true"
                             aria-label="Filter by channel"
                             value={channelFilter}
                             onChange={(e) => setChannelFilter(e.target.value as TemplateChannel | "")}
-                            className="w-full rounded-md border border-alloy-stone/18 bg-white px-2 py-1 text-[11px] text-alloy-midnight/80"
+                            className={COMMS_SELECT_CLASS}
                         >
                             <option value="">All channels</option>
                             {TEMPLATE_CHANNELS.map((c) => (
@@ -337,7 +354,7 @@ export default function TemplatesWorkspace() {
                             aria-label="Filter by status"
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as TemplateStatus | "")}
-                            className="w-full rounded-md border border-alloy-stone/18 bg-white px-2 py-1 text-[11px] text-alloy-midnight/80"
+                            className={COMMS_SELECT_CLASS}
                         >
                             <option value="">All statuses</option>
                             {TEMPLATE_STATUSES.map((s) => (
@@ -348,7 +365,7 @@ export default function TemplatesWorkspace() {
                         </select>
                     </div>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto p-1">
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
                     {loading && <div className="p-3 text-[11px] text-alloy-midnight/50">Loading…</div>}
                     {!loading && visibleTemplates.length === 0 && (
                         <div className="p-3 text-[11px] text-alloy-midnight/50">No templates.</div>
@@ -359,8 +376,10 @@ export default function TemplatesWorkspace() {
                             type="button"
                             data-template-row={t.id}
                             onClick={() => void selectTemplate(t.id)}
-                            className={`flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors ${
-                                selectedId === t.id ? "bg-[#00A283]/10" : "hover:bg-alloy-stone/8"
+                            className={`mb-1 flex w-full flex-col items-start gap-0.5 rounded-lg border px-2 py-2 text-left transition-colors ${
+                                selectedId === t.id
+                                    ? "border-alloy-pine/35 bg-alloy-pine/10 shadow-sm"
+                                    : "border-transparent hover:border-alloy-stone/15 hover:bg-alloy-stone/8"
                             }`}
                         >
                             <span className="truncate text-[12px] font-medium text-alloy-midnight/90">{t.name}</span>
@@ -370,22 +389,22 @@ export default function TemplatesWorkspace() {
                         </button>
                     ))}
                 </div>
-            </aside>
+            </CommsSectionCard>
 
-            {/* CENTER PANEL */}
-            <section data-template-editor="true" className="flex min-h-0 flex-col overflow-y-auto rounded-xl border border-alloy-stone/20 bg-white p-3">
+            {/* CENTER — details + message */}
+            <section data-template-editor="true" className="flex min-h-0 flex-col gap-3 overflow-y-auto">
                 {error && (
-                    <div data-template-error="true" className="mb-2 rounded-md bg-red-50 px-2 py-1 text-[11px] text-red-700">
+                    <div data-template-error="true" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-700">
                         {error}
                     </div>
                 )}
                 {!hasSelection ? (
-                    <div className="flex h-full items-center justify-center text-[12px] text-alloy-midnight/50">
+                    <div className={`${COMMS_CARD_CLASS} flex h-full items-center justify-center text-[12px] text-alloy-midnight/50`}>
                         Select a template or create a new one.
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
+                    <>
+                        <div className="flex items-center justify-between px-1">
                             <span className="text-xs font-semibold text-alloy-midnight/80">
                                 {creating ? "New template" : "Edit template"}
                             </span>
@@ -397,112 +416,111 @@ export default function TemplatesWorkspace() {
                             )}
                         </div>
 
-                        <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                            Name
-                            <input
-                                data-template-name="true"
-                                value={draft.name}
-                                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
-                                className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                            />
-                        </label>
-
-                        <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                            Description
-                            <input
-                                data-template-description="true"
-                                value={draft.description}
-                                onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
-                                className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                            />
-                        </label>
-
-                        <div className="grid grid-cols-3 gap-2">
-                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Category
+                        <CommsSectionCard title="Template details" data-template-details="true">
+                            <label className="flex flex-col gap-1.5">
+                                <span className={COMMS_FIELD_LABEL_CLASS}>Name</span>
                                 <input
-                                    data-template-category="true"
+                                    data-template-name="true"
+                                    value={draft.name}
+                                    onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                                    className={COMMS_INPUT_CLASS}
+                                />
+                            </label>
+                            <label className="flex flex-col gap-1.5">
+                                <span className={COMMS_FIELD_LABEL_CLASS}>Description</span>
+                                <input
+                                    data-template-description="true"
+                                    value={draft.description}
+                                    onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))}
+                                    className={COMMS_INPUT_CLASS}
+                                />
+                            </label>
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <TemplateCategoryField
                                     value={draft.category}
-                                    onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
-                                    placeholder={TEMPLATE_CATEGORY_PLACEHOLDER}
-                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
+                                    onChange={(category) => setDraft((d) => ({ ...d, category }))}
+                                    existingCategories={categoryOptions}
+                                />
+                                <label className="flex flex-col gap-1.5">
+                                    <span className={COMMS_FIELD_LABEL_CLASS}>Channel</span>
+                                    <select
+                                        data-template-channel="true"
+                                        value={draft.channel}
+                                        onChange={(e) => {
+                                            const channel = e.target.value as TemplateChannel;
+                                            setDraft((d) => ({
+                                                ...d,
+                                                channel,
+                                                subject: templateChannelSupportsSubject(channel) ? d.subject : "",
+                                            }));
+                                        }}
+                                        className={COMMS_SELECT_CLASS}
+                                    >
+                                        {TEMPLATE_CHANNELS.map((c) => (
+                                            <option key={c} value={c}>
+                                                {c}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className="flex flex-col gap-1.5">
+                                    <span className={COMMS_FIELD_LABEL_CLASS}>Status</span>
+                                    <select
+                                        data-template-status="true"
+                                        value={draft.status}
+                                        onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value as TemplateStatus }))}
+                                        className={COMMS_SELECT_CLASS}
+                                    >
+                                        {TEMPLATE_STATUSES.map((s) => (
+                                            <option key={s} value={s}>
+                                                {s}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                            </div>
+                        </CommsSectionCard>
+
+                        <CommsSectionCard title="Message content" helper="Subject applies to email templates only." data-template-message="true">
+                            {isEmail && (
+                                <label className="flex flex-col gap-1.5">
+                                    <span className={COMMS_FIELD_LABEL_CLASS}>Subject</span>
+                                    <input
+                                        data-template-subject="true"
+                                        ref={subjectRef}
+                                        value={draft.subject}
+                                        onFocus={() => (activeFieldRef.current = "subject")}
+                                        onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
+                                        className={COMMS_INPUT_CLASS}
+                                    />
+                                </label>
+                            )}
+                            <label className="flex flex-col gap-1.5">
+                                <span className={COMMS_FIELD_LABEL_CLASS}>Body</span>
+                                <CommsMessageTextToolbar
+                                    value={draft.body}
+                                    onChange={(body) => setDraft((d) => ({ ...d, body }))}
+                                    textareaRef={bodyRef}
+                                />
+                                <textarea
+                                    data-template-body="true"
+                                    ref={bodyRef}
+                                    value={draft.body}
+                                    onFocus={() => (activeFieldRef.current = "body")}
+                                    onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
+                                    rows={10}
+                                    className={`${COMMS_INPUT_CLASS} font-mono`}
                                 />
                             </label>
-                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Channel
-                                <select
-                                    data-template-channel="true"
-                                    value={draft.channel}
-                                    onChange={(e) => {
-                                        const channel = e.target.value as TemplateChannel;
-                                        // Clear subject when leaving email so non-email never carries a subject.
-                                        setDraft((d) => ({
-                                            ...d,
-                                            channel,
-                                            subject: templateChannelSupportsSubject(channel) ? d.subject : "",
-                                        }));
-                                    }}
-                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                                >
-                                    {TEMPLATE_CHANNELS.map((c) => (
-                                        <option key={c} value={c}>
-                                            {c}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Status
-                                <select
-                                    data-template-status="true"
-                                    value={draft.status}
-                                    onChange={(e) => setDraft((d) => ({ ...d, status: e.target.value as TemplateStatus }))}
-                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                                >
-                                    {TEMPLATE_STATUSES.map((s) => (
-                                        <option key={s} value={s}>
-                                            {s}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                        </div>
+                        </CommsSectionCard>
 
-                        {/* Subject — EMAIL ONLY. Hidden entirely for sms/in_app. */}
-                        {isEmail && (
-                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Subject
-                                <input
-                                    data-template-subject="true"
-                                    ref={subjectRef}
-                                    value={draft.subject}
-                                    onFocus={() => (activeFieldRef.current = "subject")}
-                                    onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
-                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
-                                />
-                            </label>
-                        )}
-
-                        <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                            Body
-                            <textarea
-                                data-template-body="true"
-                                ref={bodyRef}
-                                value={draft.body}
-                                onFocus={() => (activeFieldRef.current = "body")}
-                                onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
-                                rows={10}
-                                className="rounded-md border border-alloy-stone/18 px-2 py-1.5 font-mono text-[12px] text-alloy-midnight/85"
-                            />
-                        </label>
-
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 px-1">
                             <button
                                 type="button"
                                 data-template-save="true"
                                 onClick={() => void save()}
                                 disabled={saving || draft.name.trim() === "" || draft.category.trim() === ""}
-                                className="rounded-lg bg-[#00A283] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#00916f] disabled:opacity-50"
+                                className={COMMS_PRIMARY_BTN_CLASS}
                             >
                                 {saving ? "Saving…" : creating ? "Create" : "Save"}
                             </button>
@@ -512,63 +530,34 @@ export default function TemplatesWorkspace() {
                                     data-template-archive="true"
                                     onClick={() => void archive()}
                                     disabled={saving}
-                                    className="rounded-lg border border-alloy-stone/25 px-3 py-1.5 text-xs font-medium text-alloy-midnight/70 hover:bg-alloy-stone/8 disabled:opacity-50"
+                                    className={COMMS_SECONDARY_BTN_CLASS}
                                 >
                                     Archive
                                 </button>
                             )}
                             {isArchived && <span className="text-[11px] text-alloy-midnight/45">Archived</span>}
                         </div>
-                    </div>
+                    </>
                 )}
             </section>
 
-            {/* RIGHT PANEL */}
+            {/* RIGHT — tokens + preview */}
             <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-                {/* Token picker */}
-                <div data-template-token-picker="true" className="rounded-xl border border-alloy-stone/20 bg-white p-2">
-                    <div className="mb-1 text-[11px] font-semibold text-alloy-midnight/80">Insert token</div>
-                    <div className="flex flex-col gap-2">
-                        {tokenGroups.map((g) => (
-                            <div key={g.group}>
-                                <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">{g.group}</div>
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                    {g.tokens.map((t) => (
-                                        <button
-                                            key={t.path}
-                                            type="button"
-                                            data-token-path={t.path}
-                                            onClick={() => insertToken(t.path)}
-                                            title={`{{${t.path}}}`}
-                                            className="rounded-md border border-alloy-stone/20 bg-alloy-stone/5 px-1.5 py-0.5 text-[10px] text-alloy-midnight/75 hover:border-[#00A283]/40 hover:bg-[#00A283]/5"
-                                        >
-                                            {t.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Live preview */}
-                <div data-template-preview="true" className="rounded-xl border border-alloy-stone/20 bg-white p-2">
-                    <div className="mb-1 text-[11px] font-semibold text-alloy-midnight/80">Live preview</div>
+                <TemplateTokenPickerPanel onInsert={insertToken} />
+                <CommsSectionCard title="Live preview" data-template-preview="true">
                     {subjectPreview && (
-                        <div className="mb-1 rounded-md bg-alloy-stone/5 px-2 py-1">
-                            <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">Subject</div>
+                        <div className="rounded-lg border border-alloy-stone/12 bg-alloy-stone/[0.03] px-2.5 py-2">
+                            <div className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Subject</div>
                             <div className="text-[12px] text-alloy-midnight/85">{subjectPreview.plainText}</div>
                         </div>
                     )}
-                    <div className="rounded-md bg-alloy-stone/5 px-2 py-1">
-                        <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">Body</div>
+                    <div className="rounded-lg border border-alloy-stone/12 bg-alloy-stone/[0.03] px-2.5 py-2">
+                        <div className="text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/40">Body</div>
                         <div className="whitespace-pre-wrap text-[12px] text-alloy-midnight/85">{bodyPreview.plainText}</div>
                     </div>
-
-                    {/* Missing token indicators */}
                     {missingTokens.length > 0 && (
-                        <div data-template-missing-tokens="true" className="mt-2">
-                            <div className="text-[9px] uppercase tracking-wide text-amber-600">Missing tokens</div>
+                        <div data-template-missing-tokens="true">
+                            <div className="text-[9px] font-semibold uppercase tracking-wide text-amber-600">Missing tokens</div>
                             <div className="mt-1 flex flex-wrap gap-1">
                                 {missingTokens.map((p) => (
                                     <span key={p} className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] text-amber-700">
@@ -578,11 +567,9 @@ export default function TemplatesWorkspace() {
                             </div>
                         </div>
                     )}
-
-                    {/* Unknown token indicators */}
                     {unknownTokens.length > 0 && (
-                        <div data-template-unknown-tokens="true" className="mt-2">
-                            <div className="text-[9px] uppercase tracking-wide text-red-600">Unknown tokens</div>
+                        <div data-template-unknown-tokens="true">
+                            <div className="text-[9px] font-semibold uppercase tracking-wide text-red-600">Unknown tokens</div>
                             <div className="mt-1 flex flex-wrap gap-1">
                                 {unknownTokens.map((p) => (
                                     <span key={p} className="rounded bg-red-50 px-1.5 py-0.5 text-[10px] text-red-700">
@@ -592,7 +579,7 @@ export default function TemplatesWorkspace() {
                             </div>
                         </div>
                     )}
-                </div>
+                </CommsSectionCard>
             </aside>
         </div>
     );

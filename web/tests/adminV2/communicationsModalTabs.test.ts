@@ -21,12 +21,15 @@ describe("Communications modal tabs", () => {
     it("InboxModal exposes Inbox, Templates, and Announcements tabs when Command Center is enabled", () => {
         const src = read(MODAL);
         const panel = read(PANEL);
-        expect(src).toContain("SettingsEntityTabBar");
+        expect(src).toContain("CommsModalTabBar");
         expect(src).toContain("COMMUNICATIONS_MODAL_TABS");
+        expect(src).not.toContain("SettingsEntityTabBar");
         expect(src).toContain("CommunicationsModalTabPanel");
         for (const label of ["Inbox", "Templates", "Announcements"]) {
             expect(panel).toContain(label);
         }
+        expect(src).toContain('data-inbox-compose-new="true"');
+        expect(src).toContain("QuickMessageModal");
         expect(src).toContain('data-adminv2-inbox-modal="true"');
     });
 
@@ -81,6 +84,10 @@ describe("Templates workspace", () => {
         expect(src).toContain('data-templates-workspace="true"');
         expect(src).toContain('data-template-list="true"');
         expect(src).toContain('data-template-editor="true"');
-        expect(src).toMatch(/grid-cols-\[260px_minmax\(0,1fr\)_300px\]/);
+        expect(src).toContain('data-template-details="true"');
+        expect(src).toContain('data-template-message="true"');
+        expect(src).toContain("TemplateCategoryField");
+        expect(src).toContain("TemplateTokenPickerPanel");
+        expect(src).toMatch(/grid-cols-\[272px_minmax\(0,1fr\)_320px\]/);
     });
 });

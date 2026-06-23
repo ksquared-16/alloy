@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     COMMUNICATION_TOKEN_CATALOG,
     COMMUNICATION_TOKEN_GROUPS,
+    filterCommunicationTokens,
     getCommunicationTokenDef,
     isKnownCommunicationTokenPath,
     listCommunicationTokensByGroup,
@@ -57,6 +58,18 @@ describe("communication token catalog", () => {
         const flattened = grouped.flatMap((g) => g.tokens);
         expect(flattened).toHaveLength(COMMUNICATION_TOKEN_CATALOG.length);
         for (const g of grouped) expect(g.tokens.length).toBeGreaterThan(0);
+    });
+
+    it("filters tokens by search query", () => {
+        const grouped = filterCommunicationTokens("tour");
+        const paths = grouped.flatMap((g) => g.tokens.map((t) => t.path));
+        expect(paths).toContain("opportunity.metadata.tour_date");
+        expect(paths).not.toContain("org.name");
+    });
+
+    it("includes documented workflow merge paths for job and schedule", () => {
+        expect(getCommunicationTokenDef("job.title")?.group).toBe("schedule");
+        expect(getCommunicationTokenDef("job.id")?.group).toBe("schedule");
     });
 });
 

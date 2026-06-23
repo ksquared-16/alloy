@@ -1,10 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type HTMLAttributes, type ReactNode, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { segmentCommunicationTemplate } from "@/lib/communications/v2/templateTokens";
 import { ANNOUNCEMENT_CHANNELS, type AnnouncementChannel } from "@/lib/communications/v2/announcementSchema";
 import { AUDIENCE_GRAINS, type AnnouncementAudienceSpec, type AudienceGrain } from "@/lib/communications/v2/audienceSpec";
+import {
+    filterProgramIdsForLocations,
+    programOptionsForDisplay,
+    statusOptionsForDisplay,
+    type ProgramOptionRow,
+} from "@/lib/communications/v2/audienceOptionLabels";
+import CommsAudienceMultiSelect from "@/app/adminV2/communications/CommsAudienceMultiSelect";
+import CommsMessageTextToolbar from "@/app/adminV2/communications/CommsMessageTextToolbar";
+import {
+    COMMS_CARD_CLASS,
+    COMMS_FIELD_LABEL_CLASS,
+    COMMS_INPUT_CLASS,
+    COMMS_PRIMARY_BTN_CLASS,
+    COMMS_SECONDARY_BTN_CLASS,
+    COMMS_SELECT_CLASS,
+    CommsSectionCard,
+} from "@/app/adminV2/communications/commsWorkspaceUi";
 
 /**
  * Announcements Workspace (Phase 1 / B8E) — draft authoring + the Audience Builder.
@@ -20,10 +37,6 @@ const TEMPLATES_API = "/api/admin/communications/templates";
 const LOCATION_OPTIONS_API = "/api/admin/location-options";
 const PROGRAM_OPTIONS_API = "/api/admin/location-program-categories";
 const STATUS_OPTIONS_API = "/api/admin/communications/status-options";
-
-function toggleInList(setter: Dispatch<SetStateAction<string[]>>, id: string) {
-    setter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-}
 
 type AnnouncementRow = {
     id: string;
@@ -71,66 +84,6 @@ const EMPTY_DRAFT: Draft = { title: "", channels: [], template_id: null, subject
 
 const GRAIN_LABEL: Record<AudienceGrain, string> = { families: "Families", children: "Children (guardians)" };
 
-/** Bordered section card for editor / audience panels. */
-function SectionCard({
-    title,
-    helper,
-    children,
-    className,
-    ...rest
-}: {
-    title: string;
-    helper?: string;
-    children: ReactNode;
-    className?: string;
-} & HTMLAttributes<HTMLDivElement>) {
-    return (
-        <div {...rest} className={`rounded-xl border border-alloy-stone/20 bg-white p-3 shadow-sm ${className ?? ""}`}>
-            <div className="mb-2 border-b border-alloy-stone/10 pb-2">
-                <div className="text-[11px] font-semibold text-alloy-midnight/85">{title}</div>
-                {helper ? <p className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/50">{helper}</p> : null}
-            </div>
-            <div className="flex flex-col gap-2.5">{children}</div>
-        </div>
-    );
-}
-
-/** Toggleable option chips (OR within a filter). Renders an empty note when there are no options. */
-function Chips({
-    options,
-    selected,
-    onToggle,
-    emptyNote,
-}: {
-    options: { id: string; label: string }[];
-    selected: string[];
-    onToggle: (id: string) => void;
-    emptyNote: string;
-}) {
-    if (options.length === 0) return <span className="text-[10px] text-alloy-midnight/35">{emptyNote}</span>;
-    return (
-        <>
-            {options.map((o) => {
-                const on = selected.includes(o.id);
-                return (
-                    <button
-                        key={o.id}
-                        type="button"
-                        data-option-id={o.id}
-                        aria-pressed={on}
-                        onClick={() => onToggle(o.id)}
-                        className={`rounded-md border px-1.5 py-0.5 text-[10px] ${
-                            on ? "border-[#00A283]/50 bg-[#00A283]/10 text-alloy-midnight/90" : "border-alloy-stone/20 text-alloy-midnight/65"
-                        }`}
-                    >
-                        {o.label}
-                    </button>
-                );
-            })}
-        </>
-    );
-}
-
 const SAMPLE_CONTEXT: Record<string, unknown> = {
     person: { first_name: "Mateo", name: "Mateo Rivera" },
     customer: { name: "The Rivera Family" },
@@ -153,7 +106,7 @@ export default function AnnouncementsWorkspace() {
     const [templatePreview, setTemplatePreview] = useState<{ subject: string | null; body: string } | null>(null);
 
     const [locationOptions, setLocationOptions] = useState<IdLabel[]>([]);
-    const [programOptions, setProgramOptions] = useState<IdLabel[]>([]);
+    const [programOptions, setProgramOptions] = useState<ProgramOptionRow[]>([]);
     const [familyStatusOptions, setFamilyStatusOptions] = useState<StatusOpt[]>([]);
     const [childStatusOptions, setChildStatusOptions] = useState<StatusOpt[]>([]);
 
@@ -168,6 +121,7 @@ export default function AnnouncementsWorkspace() {
     const [previewLoading, setPreviewLoading] = useState(false);
     const [scheduleAt, setScheduleAt] = useState("");
     const [scheduling, setScheduling] = useState(false);
+    const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
     // Populate the builder from a saved/parsed audience spec (or reset when null).
     const applyAudienceSpec = useCallback((spec: AnnouncementAudienceSpec | null) => {
@@ -189,6 +143,18 @@ export default function AnnouncementsWorkspace() {
         if (programIds.length) filters.push({ kind: "program", program_category_ids: programIds });
         return { grain, filters };
     }, [grain, familyStatusKeys, childStatusKeys, locationIds, programIds]);
+
+    const locationLabelById = useMemo(() => new Map(locationOptions.map((l) => [l.id, l.label])), [locationOptions]);
+    const familyStatusDisplay = useMemo(() => statusOptionsForDisplay(familyStatusOptions), [familyStatusOptions]);
+    const childStatusDisplay = useMemo(() => statusOptionsForDisplay(childStatusOptions), [childStatusOptions]);
+    const programDisplay = useMemo(
+        () => programOptionsForDisplay(programOptions, locationLabelById, locationIds),
+        [programOptions, locationLabelById, locationIds]
+    );
+
+    useEffect(() => {
+        setProgramIds((prev) => filterProgramIdsForLocations(prev, programOptions, locationIds));
+    }, [locationIds, programOptions]);
 
     // ---- loaders ----
     const loadList = useCallback(async () => {
@@ -239,7 +205,13 @@ export default function AnnouncementsWorkspace() {
                 | Record<string, unknown>[]
                 | undefined;
             if (progRes.ok && Array.isArray(progArr)) {
-                setProgramOptions(progArr.map((p) => ({ id: String(p.id), label: String(p.label ?? p.id) })));
+                setProgramOptions(
+                    progArr.map((p) => ({
+                        id: String(p.id),
+                        label: String(p.label ?? p.id),
+                        location_id: String(p.location_id ?? ""),
+                    }))
+                );
             }
         } catch {
             /* options are best-effort */
@@ -489,21 +461,16 @@ export default function AnnouncementsWorkspace() {
     const isArchived = status === "archived";
 
     return (
-        <div data-announcements-workspace="true" className="grid h-full min-h-0 grid-cols-[260px_minmax(0,1fr)_300px] gap-3">
+        <div data-announcements-workspace="true" className="grid h-full min-h-0 grid-cols-[272px_minmax(0,1fr)_320px] gap-3">
             {/* LEFT — list */}
-            <aside data-announcement-list="true" className="flex min-h-0 flex-col rounded-xl border border-alloy-stone/20 bg-white">
-                <div className="flex items-center justify-between border-b border-alloy-stone/15 p-2">
-                    <span className="text-xs font-semibold text-alloy-midnight/80">Announcements</span>
-                    <button
-                        type="button"
-                        data-announcement-new="true"
-                        onClick={startCreate}
-                        className="rounded-md bg-[#00A283] px-2 py-1 text-[11px] font-medium text-white hover:bg-[#00916f]"
-                    >
+            <CommsSectionCard title="Announcements" helper="Draft and scheduled broadcasts." data-announcement-list="true" className="flex min-h-0 flex-col !p-0">
+                <div className="flex items-center justify-between border-b border-alloy-stone/12 p-3">
+                    <span className="text-xs font-semibold text-alloy-midnight/80">All announcements</span>
+                    <button type="button" data-announcement-new="true" onClick={startCreate} className={`${COMMS_PRIMARY_BTN_CLASS} !px-2 !py-1 text-[11px]`}>
                         New
                     </button>
                 </div>
-                <div className="min-h-0 flex-1 overflow-y-auto p-1">
+                <div className="min-h-0 flex-1 overflow-y-auto p-2">
                     {loading && <div className="p-3 text-[11px] text-alloy-midnight/50">Loading…</div>}
                     {!loading && list.length === 0 && <div className="p-3 text-[11px] text-alloy-midnight/50">No announcements.</div>}
                     {list.map((a) => (
@@ -512,8 +479,10 @@ export default function AnnouncementsWorkspace() {
                             type="button"
                             data-announcement-row={a.id}
                             onClick={() => void selectAnnouncement(a.id)}
-                            className={`flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left transition-colors ${
-                                selectedId === a.id ? "bg-[#00A283]/10" : "hover:bg-alloy-stone/8"
+                            className={`mb-1 flex w-full flex-col items-start gap-0.5 rounded-lg border px-2 py-2 text-left transition-colors ${
+                                selectedId === a.id
+                                    ? "border-alloy-pine/35 bg-alloy-pine/10 shadow-sm"
+                                    : "border-transparent hover:border-alloy-stone/15 hover:bg-alloy-stone/8"
                             }`}
                         >
                             <span className="truncate text-[12px] font-medium text-alloy-midnight/90">{a.title || "Untitled"}</span>
@@ -524,7 +493,7 @@ export default function AnnouncementsWorkspace() {
                         </button>
                     ))}
                 </div>
-            </aside>
+            </CommsSectionCard>
 
             {/* CENTER — draft editor */}
             <section data-announcement-editor="true" className="flex min-h-0 flex-col gap-3 overflow-y-auto">
@@ -542,19 +511,19 @@ export default function AnnouncementsWorkspace() {
                             </span>
                         </div>
 
-                        <SectionCard title="Announcement details" data-announcement-details="true">
-                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Title
+                        <CommsSectionCard title="Announcement details" data-announcement-details="true">
+                            <label className="flex flex-col gap-1.5">
+                                <span className={COMMS_FIELD_LABEL_CLASS}>Title</span>
                                 <input
                                     data-announcement-title="true"
                                     value={draft.title}
                                     onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
-                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
+                                    className={COMMS_INPUT_CLASS}
                                 />
                             </label>
 
-                            <div data-announcement-channels="true" className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Channels
+                            <div data-announcement-channels="true" className="flex flex-col gap-1.5">
+                                <span className={COMMS_FIELD_LABEL_CLASS}>Channels</span>
                                 <div className="flex flex-wrap gap-1.5">
                                     {ANNOUNCEMENT_CHANNELS.map((c) => {
                                         const on = draft.channels.includes(c);
@@ -565,8 +534,10 @@ export default function AnnouncementsWorkspace() {
                                                 data-channel-option={c}
                                                 aria-pressed={on}
                                                 onClick={() => toggleChannel(c)}
-                                                className={`rounded-md border px-2 py-1 text-[11px] ${
-                                                    on ? "border-[#00A283]/50 bg-[#00A283]/10 text-alloy-midnight/90" : "border-alloy-stone/20 text-alloy-midnight/65"
+                                                className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium shadow-sm ${
+                                                    on
+                                                        ? "border-alloy-pine/35 bg-alloy-pine/10 text-alloy-midnight/90"
+                                                        : "border-alloy-stone/25 bg-white text-alloy-midnight/65 hover:bg-alloy-stone/8"
                                                 }`}
                                             >
                                                 {c}
@@ -575,11 +546,11 @@ export default function AnnouncementsWorkspace() {
                                     })}
                                 </div>
                             </div>
-                        </SectionCard>
+                        </CommsSectionCard>
 
-                        <SectionCard title="Message content" helper="Optional template seeds subject and body; edit before sending." data-announcement-message="true">
-                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Template
+                        <CommsSectionCard title="Message content" helper="Optional template seeds subject and body; edit before sending." data-announcement-message="true">
+                            <label className="flex flex-col gap-1.5">
+                                <span className={COMMS_FIELD_LABEL_CLASS}>Template</span>
                                 <select
                                     data-announcement-template="true"
                                     value={draft.template_id ?? ""}
@@ -588,7 +559,7 @@ export default function AnnouncementsWorkspace() {
                                         setDraft((d) => ({ ...d, template_id: v }));
                                         void loadTemplatePreview(v);
                                     }}
-                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
+                                    className={COMMS_SELECT_CLASS}
                                 >
                                     <option value="">No template</option>
                                     {templates.map((t) => (
@@ -599,27 +570,33 @@ export default function AnnouncementsWorkspace() {
                                 </select>
                             </label>
 
-                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Subject
+                            <label className="flex flex-col gap-1.5">
+                                <span className={COMMS_FIELD_LABEL_CLASS}>Subject</span>
                                 <input
                                     data-announcement-subject="true"
                                     value={draft.subject}
                                     onChange={(e) => setDraft((d) => ({ ...d, subject: e.target.value }))}
-                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 text-[12px] text-alloy-midnight/85"
+                                    className={COMMS_INPUT_CLASS}
                                 />
                             </label>
 
-                            <label className="flex flex-col gap-1 text-[11px] text-alloy-midnight/70">
-                                Body
+                            <label className="flex flex-col gap-1.5">
+                                <span className={COMMS_FIELD_LABEL_CLASS}>Body</span>
+                                <CommsMessageTextToolbar
+                                    value={draft.body}
+                                    onChange={(body) => setDraft((d) => ({ ...d, body }))}
+                                    textareaRef={bodyRef}
+                                />
                                 <textarea
                                     data-announcement-body="true"
+                                    ref={bodyRef}
                                     value={draft.body}
                                     onChange={(e) => setDraft((d) => ({ ...d, body: e.target.value }))}
                                     rows={8}
-                                    className="rounded-md border border-alloy-stone/18 px-2 py-1.5 font-mono text-[12px] text-alloy-midnight/85"
+                                    className={`${COMMS_INPUT_CLASS} font-mono`}
                                 />
                             </label>
-                        </SectionCard>
+                        </CommsSectionCard>
 
                         <div className="flex flex-wrap items-center gap-2 px-1">
                             <button
@@ -627,7 +604,7 @@ export default function AnnouncementsWorkspace() {
                                 data-announcement-save="true"
                                 onClick={() => void save()}
                                 disabled={saving || draft.title.trim() === ""}
-                                className="rounded-lg bg-[#00A283] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#00916f] disabled:opacity-50"
+                                className={COMMS_PRIMARY_BTN_CLASS}
                             >
                                 {saving ? "Saving…" : creating ? "Create draft" : "Save draft"}
                             </button>
@@ -681,7 +658,7 @@ export default function AnnouncementsWorkspace() {
 
             {/* RIGHT — template preview + targets + recipient preview */}
             <aside className="flex min-h-0 flex-col gap-3 overflow-y-auto">
-                <SectionCard title="Preview" data-announcement-preview="true">
+                <CommsSectionCard title="Preview" data-announcement-preview="true">
                     {templatePreview && (
                         <div data-announcement-template-preview="true" className="rounded-md border border-alloy-stone/12 bg-alloy-stone/5 px-2 py-1.5">
                             <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">From template</div>
@@ -693,9 +670,9 @@ export default function AnnouncementsWorkspace() {
                         <div className="text-[9px] uppercase tracking-wide text-alloy-midnight/40">Body (sample-rendered)</div>
                         <div className="whitespace-pre-wrap text-[12px] text-alloy-midnight/85">{bodyPreview.plainText}</div>
                     </div>
-                </SectionCard>
+                </CommsSectionCard>
 
-                <SectionCard
+                <CommsSectionCard
                     title="Audience builder"
                     helper="Choose who to match, then narrow with filters. Messages go to guardians, not children directly."
                     data-announcement-targets="true"
@@ -724,43 +701,50 @@ export default function AnnouncementsWorkspace() {
                         ) : null}
                     </div>
 
-                    <div>
-                        <div className="text-[10px] font-medium text-alloy-midnight/70">Family status</div>
-                        <div data-filter-family-status="true" className="mt-1 flex flex-wrap gap-1">
-                            <Chips
-                                options={familyStatusOptions.map((o) => ({ id: o.status_key, label: o.label }))}
-                                selected={familyStatusKeys}
-                                onToggle={(id) => toggleInList(setFamilyStatusKeys, id)}
-                                emptyNote="No configured family statuses"
-                            />
-                        </div>
+                    <div data-filter-family-status="true">
+                        <CommsAudienceMultiSelect
+                            label="Family status"
+                            options={familyStatusDisplay}
+                            selected={familyStatusKeys}
+                            onChange={setFamilyStatusKeys}
+                            emptyNote="No configured family statuses"
+                            data-filter="family-status"
+                        />
                     </div>
 
-                    <div>
-                        <div className="text-[10px] font-medium text-alloy-midnight/70">Child status</div>
-                        <p className="text-[9px] text-alloy-midnight/45">Enrollment status</p>
-                        <div data-filter-child-status="true" className="mt-1 flex flex-wrap gap-1">
-                            <Chips
-                                options={childStatusOptions.map((o) => ({ id: o.status_key, label: o.label }))}
-                                selected={childStatusKeys}
-                                onToggle={(id) => toggleInList(setChildStatusKeys, id)}
-                                emptyNote="No configured child statuses"
-                            />
-                        </div>
+                    <div data-filter-child-status="true">
+                        <CommsAudienceMultiSelect
+                            label="Child status"
+                            helper="Enrollment status"
+                            options={childStatusDisplay}
+                            selected={childStatusKeys}
+                            onChange={setChildStatusKeys}
+                            emptyNote="No configured child statuses"
+                            data-filter="child-status"
+                        />
                     </div>
 
-                    <div>
-                        <div className="text-[10px] font-medium text-alloy-midnight/70">Location</div>
-                        <div data-target-location="true" className="mt-1 flex flex-wrap gap-1">
-                            <Chips options={locationOptions} selected={locationIds} onToggle={(id) => toggleInList(setLocationIds, id)} emptyNote="No locations" />
-                        </div>
+                    <div data-target-location="true">
+                        <CommsAudienceMultiSelect
+                            label="Location"
+                            options={locationOptions}
+                            selected={locationIds}
+                            onChange={setLocationIds}
+                            emptyNote="No locations"
+                            data-filter="location"
+                        />
                     </div>
 
-                    <div>
-                        <div className="text-[10px] font-medium text-alloy-midnight/70">Program</div>
-                        <div data-target-program="true" className="mt-1 flex flex-wrap gap-1">
-                            <Chips options={programOptions} selected={programIds} onToggle={(id) => toggleInList(setProgramIds, id)} emptyNote="No programs" />
-                        </div>
+                    <div data-target-program="true">
+                        <CommsAudienceMultiSelect
+                            label="Program"
+                            helper={locationIds.length > 0 ? "Filtered by selected location(s)." : "Select a location to narrow programs."}
+                            options={programDisplay}
+                            selected={programIds}
+                            onChange={setProgramIds}
+                            emptyNote={locationIds.length > 0 ? "No programs for selected locations" : "No programs"}
+                            data-filter="program"
+                        />
                     </div>
 
                     <div>
@@ -780,9 +764,9 @@ export default function AnnouncementsWorkspace() {
                     <p className="text-[9px] leading-snug text-alloy-midnight/45">
                         No filters = all families. Multiple values in a filter are OR; different filters are AND.
                     </p>
-                </SectionCard>
+                </CommsSectionCard>
 
-                <SectionCard title="Recipient preview" helper="Read-only estimate from the current audience. Nothing is sent." data-recipient-preview="true">
+                <CommsSectionCard title="Recipient preview" helper="Read-only estimate from the current audience. Nothing is sent." data-recipient-preview="true">
                     <div className="flex items-center justify-end">
                         <button
                             type="button"
@@ -851,7 +835,7 @@ export default function AnnouncementsWorkspace() {
                             {recipientPreview.capped && <div className="text-[9px] text-alloy-midnight/40">Counts capped for preview.</div>}
                         </div>
                     )}
-                </SectionCard>
+                </CommsSectionCard>
             </aside>
         </div>
     );

@@ -80,6 +80,8 @@ describe("Announcements workspace", () => {
         expect(WS).toContain("Family status");
         expect(WS).toContain("Child status");
         expect(WS).toContain("Match children, send to guardians.");
+        expect(WS).toContain("CommsAudienceMultiSelect");
+        expect(WS).toContain("programOptionsForDisplay");
         // no fixed-bucket affordances any more
         expect(WS).not.toContain("data-target-group");
         expect(WS).not.toMatch(/type: "(all_families|active_families|waitlist)"/);

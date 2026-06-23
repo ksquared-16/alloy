@@ -28,11 +28,12 @@ function makeTokenRegex(): RegExp {
 
 export const COMMUNICATION_TOKEN_GROUPS = [
     "family",
-    "child",
     "contact",
+    "child",
     "location",
     "program",
-    "tour",
+    "enrollment",
+    "schedule",
     "org",
 ] as const;
 export type CommunicationTokenGroup = (typeof COMMUNICATION_TOKEN_GROUPS)[number];
@@ -60,13 +61,13 @@ export type CommunicationTokenDef = {
  * matching `renderTemplate`).
  */
 export const COMMUNICATION_TOKEN_CATALOG: readonly CommunicationTokenDef[] = [
-    // family
+    // family / customer
     { path: "customer.id", label: "Family ID", group: "family", sample: "fam_1042" },
     { path: "customer.name", label: "Family name", group: "family", sample: "The Rivera Family" },
     // child
     { path: "person.first_name", label: "Child first name", group: "child", sample: "Mateo" },
     { path: "person.name", label: "Child full name", group: "child", sample: "Mateo Rivera" },
-    { path: "person.id", label: "Child ID", group: "child", sample: "per_5567" },
+    { path: "person.id", label: "Child / person ID", group: "child", sample: "per_5567" },
     // contact / guardian (documented workflow merge paths)
     { path: "contact.id", label: "Contact ID", group: "contact", sample: "con_8821" },
     { path: "contact.email", label: "Contact email", group: "contact", sample: "rivera@example.com" },
@@ -75,28 +76,31 @@ export const COMMUNICATION_TOKEN_CATALOG: readonly CommunicationTokenDef[] = [
     { path: "person.phone", label: "Person phone", group: "contact", sample: "(555) 010-2048" },
     // location
     { path: "location.name", label: "Location name", group: "location", sample: "North Campus" },
-    // program / enrollment
-    { path: "opportunity.id", label: "Opportunity ID", group: "program", sample: "opp_3301" },
-    { path: "opportunity.program", label: "Program", group: "program", sample: "Toddlers" },
-    // tour
+    // program
+    { path: "opportunity.program", label: "Program name", group: "program", sample: "Toddlers" },
+    // enrollment / opportunity
+    { path: "opportunity.id", label: "Opportunity ID", group: "enrollment", sample: "opp_3301" },
+    // schedule / tour / job (documented workflow merge paths)
     {
         path: "opportunity.metadata.tour_date",
         label: "Tour date",
-        group: "tour",
+        group: "schedule",
         sample: "July 14, 2026",
     },
     {
         path: "opportunity.metadata.tour_time",
         label: "Tour time",
-        group: "tour",
+        group: "schedule",
         sample: "10:00 AM",
     },
     {
         path: "schedule.start_at",
         label: "Scheduled start",
-        group: "tour",
+        group: "schedule",
         sample: "July 14, 2026 at 10:00 AM",
     },
+    { path: "job.id", label: "Job ID", group: "schedule", sample: "job_9012" },
+    { path: "job.title", label: "Job title", group: "schedule", sample: "North Campus tour" },
     // org
     { path: "org.name", label: "Organization name", group: "org", sample: "Bright Beginnings" },
 ] as const;
@@ -123,6 +127,22 @@ export function listCommunicationTokensByGroup(): Array<{
     return COMMUNICATION_TOKEN_GROUPS.map((group) => ({
         group,
         tokens: COMMUNICATION_TOKEN_CATALOG.filter((t) => t.group === group),
+    })).filter((g) => g.tokens.length > 0);
+}
+
+/** Filter catalog entries by label/path query; returns grouped matches for the picker. */
+export function filterCommunicationTokens(query: string): Array<{
+    group: CommunicationTokenGroup;
+    tokens: CommunicationTokenDef[];
+}> {
+    const q = query.trim().toLowerCase();
+    if (!q) return listCommunicationTokensByGroup();
+    const matches = COMMUNICATION_TOKEN_CATALOG.filter(
+        (t) => t.label.toLowerCase().includes(q) || t.path.toLowerCase().includes(q) || t.group.includes(q)
+    );
+    return COMMUNICATION_TOKEN_GROUPS.map((group) => ({
+        group,
+        tokens: matches.filter((t) => t.group === group),
     })).filter((g) => g.tokens.length > 0);
 }
 
