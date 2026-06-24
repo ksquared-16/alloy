@@ -1,8 +1,9 @@
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { OipMetricKey } from "@/lib/metrics/types";
+import type { MetricKey } from "@/lib/kpi/types";
 
 /** Approved workspace operational pulse — max four cross-cutting signals. */
-export const OPERATIONAL_PULSE_STRIP_KEYS: readonly string[] = [
+export const OPERATIONAL_PULSE_STRIP_KEYS: readonly MetricKey[] = [
     "oip.enrollment.tour_conversion_rate",
     "oip.ops.needs_attention_count",
     "oip.ops.work_overdue_count",
@@ -19,7 +20,7 @@ export const OPERATIONAL_PULSE_METRIC_KEYS: readonly OipMetricKey[] = [
 export const MAX_OPERATIONAL_PULSE_METRICS = 4;
 
 export function sortPerformanceKpis(kpis: KPIVm[]): KPIVm[] {
-    const order = new Map(OPERATIONAL_PULSE_STRIP_KEYS.map((id, i) => [id, i]));
+    const order = new Map<string, number>(OPERATIONAL_PULSE_STRIP_KEYS.map((id, i) => [id, i]));
     return [...kpis].sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
 }
 
@@ -51,7 +52,7 @@ export function filterPerformanceKpis(kpis: KPIVm[]): KPIVm[] {
 
 /** Operational pulse row — capped at four approved metrics, ordered consistently. */
 export function filterOperationalPulseKpis(kpis: KPIVm[]): KPIVm[] {
-    const allowed = new Set(OPERATIONAL_PULSE_STRIP_KEYS);
+    const allowed = new Set<string>(OPERATIONAL_PULSE_STRIP_KEYS);
     const pulse = filterPerformanceKpis(kpis).filter((k) => allowed.has(k.id));
     return sortPerformanceKpis(pulse).slice(0, MAX_OPERATIONAL_PULSE_METRICS);
 }
