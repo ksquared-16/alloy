@@ -10,6 +10,8 @@ Entity drawer architecture, VM ownership, and navigation semantics.
 
 Drawers are **operational workspaces** for record detail — opened from queue rows, search, or linked navigation.
 
+> **One universal drawer, not per-entity products.** There is a single drawer shell across the platform. Opportunity, Person, Child, Billing Account, Attendance Event, and Location remain distinct **records/entities**, but operators do not experience separate "drawer products." Every open carries three concepts: **Record of Truth** (the authoritative entity), **Record of Attention** (what the operator is working on), and **Context Frame** (why it was opened right now). The runtime matrix below lists VM runtimes per entity; it does **not** imply separate drawer experiences. See [`./canonical-interaction-model.md`](./canonical-interaction-model.md).
+
 ---
 
 ## Runtime matrix
@@ -83,5 +85,8 @@ Header slot for assist — proposals require human approve/apply. No autonomous 
 
 ## Related
 
+- `./canonical-interaction-model.md` — universal drawer (Truth / Attention / Frame), Modes, Cards
+- `./interaction-grammar.md` — drawer preserves context; Previous/Next follows current queue
+- `./operator-story.md` — lived drawer flow
 - `../core/record-system.md`
 - `../core/navigation-and-workspace-doctrine.md`

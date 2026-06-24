@@ -51,6 +51,11 @@ Legacy admin remains at `/legacy-admin` for unmigrated modules.
 |-------|-----|
 | Business processes | `../core/business-process-system.md` |
 | Navigation | `../core/navigation-and-workspace-doctrine.md` |
+| Canonical interaction model | `../operator/canonical-interaction-model.md` |
+| Interaction grammar (laws) | `../operator/interaction-grammar.md` |
+| Operator story (lived flow) | `../operator/operator-story.md` |
+| Alloy visual language (mockup bridge) | `../operator/alloy-visual-language.md` |
+| Alloy Runtime Specification (synthesis) | `../operator/alloy-runtime-specification.md` |
 | Records | `../core/record-system.md` |
 | Queues | `../operator/queue-system.md` |
 | Drawers | `../operator/drawer-system.md` |

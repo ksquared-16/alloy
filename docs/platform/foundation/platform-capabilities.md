@@ -125,6 +125,7 @@ Statuses: **Complete** · **In Progress** · **Planned** · **Future**
 | Tour Band B+ | **Planned** | Calendar sync, public hardening | |
 | Waitlist V2 candidate rows | **Complete** | Ranking validation scripts | |
 | move_to_waitlist mutator | **In Progress** | Catalog seeded; activation open | |
+| Operational enrollment V1 (agreements/placements/schedules) | **In Progress** | Flag-gated post-approval layer | `child_enrollment_agreements`, effective-dated `child_placements` / `schedule_assignments`; approve-handoff + operator edit flows (Batches 1–5.5) |
 | Reporting V1 | **Planned** | Beyond KPI strips | |
 
 ## Billing

@@ -116,6 +116,8 @@ Queue row API latency (~800ms–1s) is known backend debt — not a reveal regre
 
 ## Related
 
+- `./canonical-interaction-model.md` — Perspective / Queue / Row primitives
+- `./interaction-grammar.md` — queues do not own data; Previous/Next follows current filtered queue
 - `../core/business-process-system.md`
 - `../core/record-system.md`
 - `../../system/workspace-system.md` (transitional expanded reference)

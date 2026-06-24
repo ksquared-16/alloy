@@ -6,6 +6,12 @@
 
 For behavior-changing work, include **`docs/platform/governance/design-and-operational-doctrine.md`** in context.
 
+**Cross-cutting UX model:** How every operational domain (Enrollment, Attendance, Scheduling, Billing, Staffing, Subsidy, POS, Capacity, Compliance) shares one architecture — five planes, Operations/Records split, progressive drawers, tabs-vs-actions — is defined in **`platform/operational-ux-doctrine.md`**.
+
+**Canonical interaction model:** The single operator spine every domain inherits — **Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field** — plus the one universal drawer (Record of Truth / Record of Attention / Context Frame) is defined in **`platform/operator/canonical-interaction-model.md`**, with laws in **`platform/operator/interaction-grammar.md`** and the lived flow in **`platform/operator/operator-story.md`**. How that model should **look and feel** (the bridge into mockups) is **`platform/operator/alloy-visual-language.md`**.
+
+**Runtime Specification (read before building any operational domain):** The synthesis of all interaction/visual doctrine into one implementation-ready spec is **`platform/operator/alloy-runtime-specification.md`**. *The Runtime Specification is the implementation bridge between doctrine and visual mockups* — it freezes behavior; mockups express it; implementation expresses the mockups.
+
 ---
 
 ## What Alloy is
@@ -39,10 +45,16 @@ Start here: **`platform/foundation/system-overview.md`**
 
 ### 3. Operator experience
 
-11. `platform/operator/queue-system.md`
-12. `platform/operator/drawer-system.md`
-13. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
-14. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
+11. `platform/operational-ux-doctrine.md` — **operational UX architecture** (five planes, Operations/Records, progressive drawers, tabs vs actions)
+12. `platform/operator/canonical-interaction-model.md` — **canonical interaction spine** (Workspace → … → Field; one universal drawer)
+13. `platform/operator/interaction-grammar.md` — **interaction laws** (records own truth, projections observe, cards talk through records)
+14. `platform/operator/operator-story.md` — **lived operator experience** (open → work → interrupt → return)
+15. `platform/operator/alloy-visual-language.md` — **visual doctrine** (how the model looks/feels; bridge into mockups)
+16. `platform/operator/alloy-runtime-specification.md` — **runtime specification** (synthesis; read before building any domain)
+17. `platform/operator/queue-system.md`
+18. `platform/operator/drawer-system.md`
+19. `platform/operator/experience-builder-doctrine.md` — LayoutDoc, builder, queue v3, actions/widgets
+20. `platform/operator/business-process-layout-assignments.md` — BP stage layout routing
 
 ### 4. Platform modules (load when touching area)
 
@@ -142,11 +154,17 @@ CSV source: `supabase/reference/*.csv` (8 files)
 
 ---
 
+## Current platform direction (June 2026)
+
+Alloy is moving from "Enrollment CRM + configured drawers" toward a **universal operational platform** standardizing on the canonical interaction spine (**Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field**). Enrollment is the reference implementation; **Billing is the validation case**; Attendance and Scheduling should fit with no new paradigm. Mockups should derive from doctrine (`platform/operator/canonical-interaction-model.md`), and future implementation should refactor **toward shared primitives**, not one-off screens. Doctrine, current implementation, and gaps are tracked separately in that doc.
+
 ## Active initiatives (June 2026)
 
 See `sprints/active/README.md` and `platform/foundation/product-roadmap.md`.
 
 **Experience Builder / unified actions (shipped to staging):** layout library + BP assignment, queue v3 composer, relationship action framework, OCM-first enrollment status, Create Lead lifecycle binding, New Leads legacy alias compatibility. Backlog status: `backlog/experience-builder-framework-backlog.md`.
+
+**Childcare operational enrollment V1 (flag-gated):** post-approval operational layer — `child_enrollment_agreements`, effective-dated `child_placements` and `schedule_assignments`, approve-handoff from enrollment proposals, and operator edit flows (placement/schedule supersede; agreement ending/ended/cancel). See `sprints/06_2026/childcare_operational_enrollment_batches.md` and `platform/core/placement-system.md`.
 
 ---
 

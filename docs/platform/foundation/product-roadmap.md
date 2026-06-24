@@ -6,6 +6,12 @@ For capability inventory see `platform-capabilities.md`. For shipped milestones 
 
 ---
 
+## Platform direction
+
+Alloy is standardizing from "Enrollment CRM + configured drawers" onto a **universal operational platform** built on the canonical interaction spine (Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field — see `../operator/canonical-interaction-model.md`). **Enrollment** is the reference implementation, **Billing** is the validation case, and **Attendance / Scheduling** should fit with no new paradigm. New work should refactor toward shared **primitives** (one universal drawer, reusable cards) rather than per-domain screens.
+
+---
+
 ## Complete
 
 Foundations operators and implementers can rely on today:

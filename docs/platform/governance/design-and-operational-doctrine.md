@@ -26,6 +26,17 @@ AdminV2 reveal gates, queue empty semantics, composed payload readiness — **pr
 
 ---
 
+## Interaction doctrine
+
+- Canonical interaction model (primitives): `../operator/canonical-interaction-model.md`
+- Interaction grammar (laws): `../operator/interaction-grammar.md`
+- Operator story (lived flow): `../operator/operator-story.md`
+- Alloy visual language (look/feel; bridge into mockups): `../operator/alloy-visual-language.md`
+- Alloy Runtime Specification (synthesis; read before building any domain): `../operator/alloy-runtime-specification.md`
+- Cross-cutting operational UX (planes/domains): `../operational-ux-doctrine.md`
+
+---
+
 ## Presentation doctrine
 
 - Typography: `../../system/typography-and-presentation-doctrine.md`

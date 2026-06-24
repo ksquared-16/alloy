@@ -9,7 +9,9 @@
 ### June 2026
 
 - **Documentation rebaseline** — canonical platform/schema doc structure; Business Process operator model
+- **Canonical Interaction Model doctrine** — Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field; one universal drawer (Truth / Attention / Frame); interaction grammar + operator story
 - **Business Processes V1** — operator rename, 13-stage enrollment defaults, outcome picker on My Tasks
+- **Childcare operational enrollment V1 (flag-gated)** — `child_enrollment_agreements`, effective-dated `child_placements` / `schedule_assignments`, approve-handoff from enrollment proposals, operator edit flows (placement/schedule supersede; agreement ending/ended/cancel)
 - **AdminV2 Pass 3** — atomic above-fold reveal; sidecar deferral
 - **Work unit layout V3 freeze** — header → queue primary column; command rail doctrine
 - **Drawer operating model V1** — subject context, warm navigation closeouts

@@ -106,5 +106,7 @@ Full drawer rules: `../operator/drawer-system.md`.
 ## Related
 
 - `business-process-system.md`
+- `../operator/canonical-interaction-model.md` — full interaction spine (Workspace → … → Field)
+- `../operator/interaction-grammar.md` — drawer preserves workspace/perspective/queue context
 - `../operator/queue-system.md`
 - `../../system/navigation-doctrine.md` (transitional — same content, prefer this file)

@@ -17,6 +17,25 @@
 
 ---
 
+## Interaction model
+
+Canonical spine: **Workspace → Perspective → Queue → Row → Drawer → Context Frame → Mode → Card → Section → Field** (see `../operator/canonical-interaction-model.md`).
+
+| Term | Meaning |
+|------|---------|
+| **Perspective** | Operating lens over the same records — a saved filter/sort/grouping (e.g. Today's Tours, Failed Payments). Changes the lens, not reality. |
+| **Row** | A single preview of one record in a queue; selecting it opens the drawer in place. |
+| **Drawer** | The **one universal** record surface — no per-entity drawer products. |
+| **Context Frame** | *Why* a drawer was opened right now — the entry intent (Tour, Billing, Attendance, …) that decides which mode/cards lead. |
+| **Mission** | Operator-facing name for the **Context Frame** — *why* the operator is here (e.g. Today's Tour). |
+| **Subject** | Operator-facing name for the **Record of Attention** — *who/what* the operator is working on (e.g. Wright Family). |
+| **Mode** | Primary lens within a drawer: **Summary** (ambient understanding), **Work** (active work cards), **Activity** (history). Canonical runtime vocabulary; earlier drafts said Overview / Operations / Activity. |
+| **Card** | Reusable business primitive answering a business question (Enrollment Readiness, Tour, Billing Setup, …) — not a raw field group. Composes from record truth across drawer/queue/analytics/BOS. |
+| **Record of Truth** | The authoritative database/domain entity behind a drawer. |
+| **Record of Attention** | What the operator is currently working on (may be narrower than the Record of Truth). |
+
+---
+
 ## Identity
 
 | Term | Meaning |
