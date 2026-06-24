@@ -147,3 +147,42 @@ Shared contracts unify spacing/typography rhythm across Household, Children, Doc
 | Equal height / sections | `layoutRuntimeSurfaceStyles.ts`, `LayoutEditorSectionFlowView.tsx`, `LayoutRuntimePlanView.tsx`, `LayoutRuntimeCollapsibleSectionShell.tsx`, `drawerOverviewCompositionStandard.ts` |
 | Stacked runtime | `PersonOverviewRuntimeComposition.tsx`, `ChildOverviewRuntimeComposition.tsx`, `LayoutRuntimeSectionFlowView.tsx`, `mergeCompositionSlotIntoFlowWhenRowGrouped` |
 | Child polish | `layoutRuntimeProfileCardStyles.ts`, `partitionLayoutRuntimeProfileCardMeta.ts`, `PersonConnectedChildrenCardList.tsx` |
+
+---
+
+## Activation audit (2026-06-24)
+
+### Why sprint 1 was not visible on staging
+
+**Code was deployed** (`3d1a7dde` + build fix `432f7942`), but most person-drawer sessions never activated the polish paths.
+
+| Symptom | Root cause |
+|---------|------------|
+| Children still cramped (table rows) | Person drawer **fallback** used `leadOverviewCompositionHints` — `personConnectedChildrenCardList` never set |
+| Section borders unchanged | Same — `compositionSectionSurface` false on person fallback |
+| Header phone raw | `PersonDrawerCommandHeader` only when `shouldUsePersonOverviewComposition` |
+| Equal height / stacked-half | Requires v2 composition shell **or** row-group metadata on published doc |
+| Primary contact confusing | Resolver fix was in code; published items may retain old `renderHint: "status"` |
+
+### Runtime paths
+
+| Drawer | Composition shell | Fallback body |
+|--------|-------------------|---------------|
+| Person v2 | `PersonOverviewRuntimeComposition` + `PublishedSectionFlow` | — |
+| Person legacy org layout | No | Was lead hints → **fixed: person hints** |
+| Family/Lead | `LeadOverviewRuntimeComposition` | Lead hints (correct) |
+
+### Published layout snapshot
+
+Stacked-half requires `layoutEditorSectionRowGroup` on the published org LayoutDoc — republish after configuring row presets in Experience Builder.
+
+### Tailwind
+
+Polish classes are static strings — not a purge issue.
+
+### Activation fix
+
+- `resolveDrawerLayoutRuntimeCompositionHints()`
+- Person fallback + shell zone use person/child hints by surface
+- Person header active whenever layout runtime body is ready
+- QA: `data-layout-runtime-composition-profile` (`person` | `person-shell` | `lead`)

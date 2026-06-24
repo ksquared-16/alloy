@@ -193,9 +193,17 @@ export default function PersonsDrawerVmRuntime() {
 
     const summaryStripBoundaryEnabled = isDrawerSummaryStripBoundaryEnabledClient();
 
-    const personCompositionActive = useMemo(
+    const personOverviewShellActive = useMemo(
         () => !isChildSurface && shouldUsePersonOverviewComposition(personOverviewLayoutBody.doc),
         [isChildSurface, personOverviewLayoutBody.doc],
+    );
+
+    const personLayoutRuntimeHeaderActive = useMemo(
+        () =>
+            !isChildSurface
+            && personOverviewLayoutBody.bodyReady
+            && Boolean(personOverviewLayoutBody.doc?.sections?.length),
+        [isChildSurface, personOverviewLayoutBody.bodyReady, personOverviewLayoutBody.doc],
     );
 
     const childCompositionActive = useMemo(
@@ -208,7 +216,7 @@ export default function PersonsDrawerVmRuntime() {
             return null;
         }
         if (isChildSurface && !childCompositionActive) return null;
-        if (!isChildSurface && !personCompositionActive) return null;
+        if (!isChildSurface && !personOverviewShellActive) return null;
         return splitDrawerLayoutDocShellZones(
             activeOverviewLayoutBody.doc,
             isChildSurface ? "child" : "person",
@@ -218,7 +226,7 @@ export default function PersonsDrawerVmRuntime() {
         summaryStripBoundaryEnabled,
         activeOverviewLayoutBody.doc,
         activeOverviewLayoutBody.bodyReady,
-        personCompositionActive,
+        personOverviewShellActive,
         childCompositionActive,
     ]);
 
@@ -366,12 +374,12 @@ export default function PersonsDrawerVmRuntime() {
 
     const tabs = useMemo((): DrawerTabKey[] => {
         if (isChildSurface) return OPERATING_TABS;
-        if (personCompositionActive || chrome === "parent") return OPERATING_TABS;
+        if (personOverviewShellActive || chrome === "parent") return OPERATING_TABS;
         return ["overview"];
-    }, [chrome, isChildSurface, personCompositionActive]);
+    }, [chrome, isChildSurface, personOverviewShellActive]);
 
     const lifecycleRail = useMemo(() => {
-        if (personCompositionActive || childCompositionActive) return null;
+        if (personOverviewShellActive || childCompositionActive) return null;
         if (!isLayoutRuntimeLegacyEmergencyFallbackEnabledClient()) return null;
         if (!record || chrome === "generic") return null;
         const childChromeHint = { presentation_emphasis: PERSON_DRAWER_CHILD_PRESENTATION_EMPHASIS };
@@ -395,7 +403,7 @@ export default function PersonsDrawerVmRuntime() {
             );
         }
         return null;
-    }, [record, chrome, isChildSurface, onTabSelect, personCompositionActive, childCompositionActive]);
+    }, [record, chrome, isChildSurface, onTabSelect, personOverviewShellActive, childCompositionActive]);
 
     const proofTitle = useMemo(() => {
         if (!record) return entityLabel;
@@ -441,7 +449,7 @@ export default function PersonsDrawerVmRuntime() {
                     :   null
                 }
                 dataAttribute={isChildSurface ? "child-drawer-runtime" : "person-drawer-runtime"}
-                personCompositionActive={personCompositionActive}
+                personCompositionActive={personLayoutRuntimeHeaderActive}
                 childCompositionActive={childCompositionActive}
             />
         );
@@ -465,7 +473,7 @@ export default function PersonsDrawerVmRuntime() {
         backLink,
         handleBackLink,
         isChildSurface,
-        personCompositionActive,
+        personLayoutRuntimeHeaderActive,
         childCompositionActive,
     ]);
 

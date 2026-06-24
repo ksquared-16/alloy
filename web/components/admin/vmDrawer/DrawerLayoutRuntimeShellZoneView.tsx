@@ -11,6 +11,10 @@ import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRun
 import { leadOverviewCompositionHints, shouldUseLeadOverviewComposition } from "@/lib/layout/runtime/leadOverviewComposition";
 import { personOverviewCompositionHints, shouldUsePersonOverviewComposition } from "@/lib/layout/runtime/personOverviewComposition";
 import { childOverviewCompositionHints, shouldUseChildOverviewComposition } from "@/lib/layout/runtime/childOverviewComposition";
+import {
+    layoutRuntimeCompositionHintsProfile,
+    resolveDrawerLayoutRuntimeCompositionHints,
+} from "@/lib/layout/runtime/resolveDrawerLayoutRuntimeCompositionHints";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
 import type { LayoutDoc } from "@/lib/layout/layoutV2";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
@@ -45,7 +49,15 @@ export default function DrawerLayoutRuntimeShellZoneView({
             leadOverviewCompositionHints({ summaryStripCompactRow: false, honorLayoutDocBlocks: true })
         : !isSummaryStrip && shouldUsePersonOverviewComposition(doc) ? personOverviewCompositionHints({ honorLayoutDocBlocks: true })
         : !isSummaryStrip && shouldUseChildOverviewComposition(doc) ? childOverviewCompositionHints()
-        :   {};
+        :   resolveDrawerLayoutRuntimeCompositionHints({
+                surface: doc.entityType === "person" ? "person_drawer_overview"
+                : doc.entityType === "child" ? "child_drawer_overview"
+                :   "opportunity_drawer_overview",
+                doc,
+                honorLayoutDocBlocks: true,
+                summaryStripCompactRow: isSummaryStrip ? undefined : false,
+            });
+    const compositionProfile = layoutRuntimeCompositionHintsProfile(compositionHints);
 
     return (
         <LayoutRuntimeCompositionProvider value={compositionHints}>
@@ -57,6 +69,7 @@ export default function DrawerLayoutRuntimeShellZoneView({
             }
             data-drawer-layout-runtime-shell-zone={zone}
             data-drawer-layout-runtime-shell-zone-sections={doc.sections.map((s) => s.key).join(",")}
+            data-layout-runtime-composition-profile={compositionProfile}
         >
             <LayoutRuntimeDrawerEditProvider
                 record={record}

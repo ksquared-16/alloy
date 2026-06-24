@@ -15,8 +15,11 @@ import PersonOverviewRuntimeComposition from "@/components/layout/person/PersonO
 import ChildOverviewRuntimeComposition from "@/components/layout/child/ChildOverviewRuntimeComposition";
 import LayoutRuntimeDrawerEditProvider from "@/components/layout/LayoutRuntimeDrawerEditProvider";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
-import { leadOverviewCompositionHints } from "@/lib/layout/runtime/leadOverviewComposition";
 import LayoutRuntimeErrorPanel from "@/components/layout/LayoutRuntimeErrorPanel";
+import {
+    layoutRuntimeCompositionHintsProfile,
+    resolveDrawerLayoutRuntimeCompositionHints,
+} from "@/lib/layout/runtime/resolveDrawerLayoutRuntimeCompositionHints";
 import {
     isLayoutRuntimeHardCutoverActiveClient,
 } from "@/lib/layout/featureFlag";
@@ -142,6 +145,12 @@ export default function DrawerLayoutRuntimeOverviewBody({
             surface === "person_drawer_overview" && shouldUsePersonOverviewComposition(effectiveDoc);
         const useChildComposition =
             surface === "child_drawer_overview" && shouldUseChildOverviewComposition(effectiveDoc);
+        const fallbackCompositionHints = resolveDrawerLayoutRuntimeCompositionHints({
+            surface,
+            doc: effectiveDoc,
+            honorLayoutDocBlocks: true,
+        });
+        const compositionProfile = layoutRuntimeCompositionHintsProfile(fallbackCompositionHints);
         return (
             <OpportunityDrawerLayoutRuntimeBodyErrorBoundary
                 fallback={fallbackNode}
@@ -209,14 +218,16 @@ export default function DrawerLayoutRuntimeOverviewBody({
                                 canMutate={canMutate}
                                 onAdornmentAction={onAdornmentAction}
                             />
-                        :   <LayoutRuntimeCompositionProvider value={leadOverviewCompositionHints({ honorLayoutDocBlocks: true })}>
-                                <LayoutRuntimeDrawerBodyView
-                                    doc={effectiveDoc}
-                                    record={layoutBody.record}
-                                    entityId={entityId}
-                                    canMutate={canMutate}
-                                    onAdornmentAction={onAdornmentAction}
-                                />
+                        :   <LayoutRuntimeCompositionProvider value={fallbackCompositionHints}>
+                                <div data-layout-runtime-composition-profile={compositionProfile}>
+                                    <LayoutRuntimeDrawerBodyView
+                                        doc={effectiveDoc}
+                                        record={layoutBody.record}
+                                        entityId={entityId}
+                                        canMutate={canMutate}
+                                        onAdornmentAction={onAdornmentAction}
+                                    />
+                                </div>
                             </LayoutRuntimeCompositionProvider>
                         }
                     </LayoutRuntimeDrawerEditProvider>
