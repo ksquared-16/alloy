@@ -536,7 +536,7 @@ function rebalanceSectionRowGroup(doc: LayoutDoc, groupId: string): LayoutDoc {
 
 export function addWidgetOpportunityDrawerSection(
     doc: LayoutDoc,
-    input?: { title?: string; zone?: OpportunityDrawerLayoutZone },
+    input?: { title?: string; zone?: DrawerSurfaceLayoutZone },
 ): LayoutDoc {
     let next = addCustomOpportunityDrawerSection(doc, {
         title: input?.title ?? "Widget section",
@@ -548,7 +548,7 @@ export function addWidgetOpportunityDrawerSection(
 
 export function addRelatedListOpportunityDrawerSection(
     doc: LayoutDoc,
-    input?: { title?: string; zone?: OpportunityDrawerLayoutZone; surfaceKey?: DrawerLayoutEditorSurfaceKey },
+    input?: { title?: string; zone?: DrawerSurfaceLayoutZone; surfaceKey?: DrawerLayoutEditorSurfaceKey },
 ): LayoutDoc {
     const surfaceKey = input?.surfaceKey ?? "opportunity_drawer";
     let next = addCustomOpportunityDrawerSection(doc, {
