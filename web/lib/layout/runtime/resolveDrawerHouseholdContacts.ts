@@ -11,6 +11,7 @@ import {
     resolveLeadSummaryPrimaryPersonId,
     sortOpportunityFamilyContactRows,
 } from "@/lib/admin/drawer/opportunityFamilyContactsOrdering";
+import { resolveHouseholdPrimaryContactPersonIdFromRecord } from "@/lib/admin/person/householdPrimaryContact";
 import { personDrawerHouseholdInitials } from "@/lib/admin/person/personDrawerHouseholdDisplay";
 import {
     PERSON_DRAWER_HOUSEHOLD_EMERGENCY_ROLES,
@@ -94,6 +95,18 @@ function sortDrawerHouseholdContacts(rows: DrawerHouseholdContactRow[]): DrawerH
         if (rankDelta !== 0) return rankDelta;
         return a.display_name.localeCompare(b.display_name);
     });
+}
+
+function applyCanonicalHouseholdPrimaryFlag(
+    record: ProofRuntimeRecord,
+    contacts: DrawerHouseholdContactRow[],
+): DrawerHouseholdContactRow[] {
+    const canonicalPrimaryPersonId = resolveHouseholdPrimaryContactPersonIdFromRecord(record);
+    if (!canonicalPrimaryPersonId) return contacts;
+    return contacts.map((contact) => ({
+        ...contact,
+        is_primary: contact.person_id === canonicalPrimaryPersonId,
+    }));
 }
 
 function dedupeContacts(rows: DrawerHouseholdContactRow[]): DrawerHouseholdContactRow[] {
@@ -283,17 +296,23 @@ export function resolvePersonDrawerHouseholdContacts(
     const viewingPersonId = trimOrNull(record.id ?? record["person.id"]);
     const groups = resolvePersonOverviewRelatedPeopleGroups(record);
     const contacts = sortDrawerHouseholdContacts(flattenPersonGroups(groups));
-    const merged = mergeAdultLinksIntoContacts(
+    const merged = applyCanonicalHouseholdPrimaryFlag(
         record,
-        contacts.filter((row) => !viewingPersonId || row.person_id !== viewingPersonId),
-        viewingPersonId,
+        mergeAdultLinksIntoContacts(
+            record,
+            contacts.filter((row) => !viewingPersonId || row.person_id !== viewingPersonId),
+            viewingPersonId,
+        ),
     );
+    const primaryPersonId = resolveHouseholdPrimaryContactPersonIdFromRecord(record)
+        ?? merged.find((row) => row.is_primary)?.person_id
+        ?? null;
     const { visible, overflowCount } = projectVisible(merged, maxVisible);
     return {
         contacts: merged,
         visible,
         overflowCount,
-        primaryPersonId: viewingPersonId,
+        primaryPersonId,
     };
 }
 

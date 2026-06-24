@@ -1,25 +1,20 @@
 "use client";
 
-import LayoutRuntimeDrawerBodyView from "@/components/layout/LayoutRuntimeDrawerBodyView";
+import { useMemo } from "react";
 import LayoutRuntimeSectionFlowView from "@/components/layout/LayoutRuntimeSectionFlowView";
 import type { AdornmentActionHandler } from "@/components/layout/LayoutRuntimePlanView";
+import { partitionDrawerSectionsByZone } from "@/lib/layout/drawerLayoutEditorModel";
 import type { LayoutDoc, LayoutSection } from "@/lib/layout/layoutV2";
 import { LayoutRuntimeCompositionProvider } from "@/lib/layout/runtime/layoutRuntimeCompositionContext";
-import {
-    partitionPersonOverviewBodySections,
-    personOverviewCompositionHints,
-    sliceLayoutDocSections,
-} from "@/lib/layout/runtime/personOverviewComposition";
-import { resolvePersonOverviewRightRailSections } from "@/lib/layout/runtime/resolvePersonOverviewRightRailSections";
+import { personOverviewCompositionHints } from "@/lib/layout/runtime/personOverviewComposition";
+import { readLayoutSectionPresentationMetadata } from "@/lib/layout/runtime/layoutSectionPresentationMetadata";
 import { shouldRenderLayoutRuntimeSection } from "@/lib/layout/runtime/resolveLayoutRuntimeSectionVisibility";
 import {
     DRAWER_OVERVIEW_CANVAS_CLASS,
-    DRAWER_OVERVIEW_COMPOSITION_SLOT_CLASS,
-    DRAWER_OVERVIEW_LEFT_COLUMN_CLASS,
-    DRAWER_OVERVIEW_MAIN_COLUMN_CLASS,
+    DRAWER_OVERVIEW_MAIN_ZONE_FLOW_CLASS,
     DRAWER_OVERVIEW_RIGHT_RAIL_CLASS,
     DRAWER_OVERVIEW_SHELL_GRID_CLASS,
-    mergeCompositionSlotIntoFlowWhenRowGrouped,
+    DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS,
 } from "@/lib/layout/runtime/drawerOverviewCompositionStandard";
 import {
     LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS,
@@ -36,41 +31,6 @@ type Props = {
     onAdornmentAction?: AdornmentActionHandler;
 };
 
-function CompositionSlot({
-    slotKey,
-    sectionKeys,
-    doc,
-    record,
-    entityId,
-    canMutate,
-    onAdornmentAction,
-    className,
-}: {
-    slotKey: string;
-    sectionKeys: string[];
-    doc: LayoutDoc;
-    record: ProofRuntimeRecord;
-    entityId: string;
-    canMutate?: boolean;
-    onAdornmentAction?: AdornmentActionHandler;
-    className?: string;
-}) {
-    const slice = sliceLayoutDocSections(doc, sectionKeys);
-    if (!slice.sections.length) return null;
-
-    return (
-        <div className={`${DRAWER_OVERVIEW_COMPOSITION_SLOT_CLASS} ${className ?? ""}`.trim()} data-person-overview-slot={slotKey}>
-            <LayoutRuntimeDrawerBodyView
-                doc={slice}
-                record={record}
-                entityId={entityId}
-                canMutate={canMutate}
-                onAdornmentAction={onAdornmentAction}
-            />
-        </div>
-    );
-}
-
 /** Published runtime section flow — honors layoutEditorSectionRowGroup metadata. */
 function PublishedSectionFlow({
     sections,
@@ -80,6 +40,8 @@ function PublishedSectionFlow({
     canMutate,
     onAdornmentAction,
     stackClassName,
+    rowClassName,
+    rowCellClassName,
 }: {
     sections: LayoutSection[];
     doc: LayoutDoc;
@@ -88,6 +50,8 @@ function PublishedSectionFlow({
     canMutate?: boolean;
     onAdornmentAction?: AdornmentActionHandler;
     stackClassName?: string;
+    rowClassName?: string;
+    rowCellClassName?: string;
 }) {
     if (sections.length === 0) return null;
     return (
@@ -99,13 +63,27 @@ function PublishedSectionFlow({
             canMutate={canMutate}
             onAdornmentAction={onAdornmentAction}
             stackClassName={stackClassName}
-            rowClassName={LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS}
-            rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
+            rowClassName={rowClassName}
+            rowCellClassName={rowCellClassName}
         />
     );
 }
 
-/** Person drawer relationship workspace — layout-owned sections in dashboard slots. */
+function sortRightRailSections(sections: LayoutSection[]): LayoutSection[] {
+    return [...sections].sort((a, b) => {
+        const pa = readLayoutSectionPresentationMetadata(a).priority;
+        const pb = readLayoutSectionPresentationMetadata(b).priority;
+        if (pa !== pb) return pa - pb;
+        return a.key.localeCompare(b.key);
+    });
+}
+
+/**
+ * Person drawer — published runtime matches Builder section flow (not slot columns).
+ *
+ * Main-zone sections share one `LayoutEditorSectionFlowView` primitive so row groups,
+ * stacked halves, and peer stretch behave like `/admin/settings/layouts` preview.
+ */
 export default function PersonOverviewRuntimeComposition({
     doc,
     record,
@@ -113,96 +91,86 @@ export default function PersonOverviewRuntimeComposition({
     canMutate = false,
     onAdornmentAction,
 }: Props) {
-    const slots = partitionPersonOverviewBodySections(doc);
     const hints = personOverviewCompositionHints({ honorLayoutDocBlocks: true });
-    const rightRailSections = resolvePersonOverviewRightRailSections(slots, record);
-    const showContact =
-        slots.contact
-        && shouldRenderLayoutRuntimeSection(slots.contact, record, { compositionShell: true });
-    const { slotStandalone: contactStandalone, flowSections: belowShellFlow } =
-        mergeCompositionSlotIntoFlowWhenRowGrouped(
-            doc,
-            showContact ? slots.contact : null,
-            slots.overflow,
-        );
+    const zones = useMemo(() => partitionDrawerSectionsByZone(doc, "person_drawer"), [doc]);
+    const rightRailSections = useMemo(
+        () =>
+            sortRightRailSections(
+                zones.right_rail.filter((section) =>
+                    shouldRenderLayoutRuntimeSection(section, record, { compositionShell: true }),
+                ),
+            ),
+        [zones.right_rail, record],
+    );
 
     return (
         <LayoutRuntimeCompositionProvider value={hints}>
             <div
                 className={DRAWER_OVERVIEW_CANVAS_CLASS}
                 data-person-overview-composition="true"
-                data-layout-runtime-composition-profile="person-shell"
+                data-layout-runtime-composition-profile="person-section-flow"
                 data-debug-drawer-path="PersonOverviewRuntimeComposition"
             >
-                <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
-                    {slots.household ?
-                        <CompositionSlot
-                            slotKey="household_relationships"
-                            sectionKeys={[slots.household.key]}
+                {zones.summary_strip.length > 0 ?
+                    <div
+                        data-person-overview-slot="summary_strip"
+                        className={DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS}
+                    >
+                        <PublishedSectionFlow
+                            sections={zones.summary_strip}
                             doc={doc}
                             record={record}
                             entityId={entityId}
                             canMutate={canMutate}
                             onAdornmentAction={onAdornmentAction}
-                            className={DRAWER_OVERVIEW_LEFT_COLUMN_CLASS}
+                            stackClassName="min-w-0"
+                            rowClassName="min-w-0 w-full"
+                            rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
                         />
-                    :   null}
-
-                    {slots.children ?
-                        <CompositionSlot
-                            slotKey="connected_children"
-                            sectionKeys={[slots.children.key]}
-                            doc={doc}
-                            record={record}
-                            entityId={entityId}
-                            canMutate={canMutate}
-                            onAdornmentAction={onAdornmentAction}
-                            className={DRAWER_OVERVIEW_MAIN_COLUMN_CLASS}
-                        />
-                    :   null}
-
-                    {rightRailSections.length > 0 ?
-                        <div
-                            className={DRAWER_OVERVIEW_RIGHT_RAIL_CLASS}
-                            data-person-overview-slot="right_rail"
-                            data-person-overview-right-rail-section-count={String(rightRailSections.length)}
-                        >
-                            <PublishedSectionFlow
-                                sections={rightRailSections}
-                                doc={doc}
-                                record={record}
-                                entityId={entityId}
-                                canMutate={canMutate}
-                                onAdornmentAction={onAdornmentAction}
-                                stackClassName={LAYOUT_RUNTIME_SECTION_STACK_CLASS}
-                            />
-                        </div>
-                    :   null}
-                </div>
-
-                {contactStandalone ?
-                    <CompositionSlot
-                        slotKey="contact_information"
-                        sectionKeys={[contactStandalone.key]}
-                        doc={doc}
-                        record={record}
-                        entityId={entityId}
-                        canMutate={canMutate}
-                        onAdornmentAction={onAdornmentAction}
-                    />
+                    </div>
                 :   null}
 
-                {belowShellFlow.length > 0 ?
-                    <div data-person-overview-overflow="true">
-                        <PublishedSectionFlow
-                            sections={belowShellFlow}
-                            doc={doc}
-                            record={record}
-                            entityId={entityId}
-                            canMutate={canMutate}
-                            onAdornmentAction={onAdornmentAction}
-                            stackClassName={LAYOUT_RUNTIME_SECTION_STACK_CLASS}
-                        />
+                {zones.main.length > 0 || rightRailSections.length > 0 ?
+                    <div className={DRAWER_OVERVIEW_SHELL_GRID_CLASS}>
+                        {zones.main.length > 0 ?
+                            <div
+                                className={DRAWER_OVERVIEW_MAIN_ZONE_FLOW_CLASS}
+                                data-person-overview-slot="main_zone"
+                                data-person-overview-main-zone-flow="true"
+                            >
+                                <PublishedSectionFlow
+                                    sections={zones.main}
+                                    doc={doc}
+                                    record={record}
+                                    entityId={entityId}
+                                    canMutate={canMutate}
+                                    onAdornmentAction={onAdornmentAction}
+                                    stackClassName={LAYOUT_RUNTIME_SECTION_STACK_CLASS}
+                                    rowClassName={LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS}
+                                    rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
+                                />
+                            </div>
+                        :   null}
+
+                        {rightRailSections.length > 0 ?
+                            <div
+                                className={DRAWER_OVERVIEW_RIGHT_RAIL_CLASS}
+                                data-person-overview-slot="right_rail"
+                                data-person-overview-right-rail-section-count={String(rightRailSections.length)}
+                            >
+                                <PublishedSectionFlow
+                                    sections={rightRailSections}
+                                    doc={doc}
+                                    record={record}
+                                    entityId={entityId}
+                                    canMutate={canMutate}
+                                    onAdornmentAction={onAdornmentAction}
+                                    stackClassName={LAYOUT_RUNTIME_SECTION_STACK_CLASS}
+                                    rowClassName={LAYOUT_RUNTIME_SECTION_ROW_GROUP_CLASS}
+                                    rowCellClassName={LAYOUT_RUNTIME_SECTION_ROW_CELL_CLASS}
+                                />
+                            </div>
+                        :   null}
                     </div>
                 :   null}
             </div>

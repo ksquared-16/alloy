@@ -145,6 +145,25 @@ describe("person drawer follow-up fixes", () => {
         expect(itemValue.display).toBe("Not primary");
     });
 
+    it("does not treat opportunity-primary fallback as primary for other household adults", () => {
+        const projection = resolvePersonDrawerPrimaryContactProjection(
+            {
+                id: "justin-1",
+                _primary_contact_on_opportunity: true,
+                _customer_persons: [
+                    {
+                        person_id: "molly-1",
+                        role_type: "parent",
+                        is_primary: false,
+                    },
+                ],
+            },
+            "molly-1",
+        );
+        expect(projection.isPrimary).toBe(false);
+        expect(projection.display).toBe("Not primary");
+    });
+
     it("edit affordance class is persistently visible without requiring hover", () => {
         expect(LAYOUT_RUNTIME_FIELD_EDITABLE_AFFORDANCE).toContain("border-alloy-juniper/30");
         expect(LAYOUT_RUNTIME_FIELD_EDITABLE_AFFORDANCE).toContain("bg-alloy-juniper/[0.05]");

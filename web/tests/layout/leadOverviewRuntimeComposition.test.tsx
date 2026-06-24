@@ -14,20 +14,20 @@ describe("LeadOverviewRuntimeComposition", () => {
     const bodyDoc = splitDrawerLayoutDocShellZones(doc, "opportunity").bodyDoc;
     const record = buildProofOpportunityRecord();
 
-    it("renders dashboard grid slots for v2 sections", () => {
+    it("renders main-zone section flow for published layout sections", () => {
         const html = renderToStaticMarkup(
             <LeadOverviewRuntimeComposition doc={bodyDoc} record={record} entityId="opp-1" />,
         );
         expect(html).toContain('data-lead-overview-composition="true"');
-        expect(html).toContain('data-lead-overview-slot="household_contact"');
-        expect(html).toContain('data-lead-overview-slot="children_enrollment"');
-        expect(html).toContain("adminv2-drawer-overview-shell-grid");
-        expect(html).toContain("adminv2-drawer-overview-col-main");
-        expect(html).toContain("adminv2-drawer-overview-col-rail");
-        expect(html).not.toContain("lg:col-span-7");
-        expect(html).not.toContain("lg:grid-cols-12");
+        expect(html).toContain('data-lead-overview-slot="main_zone"');
+        expect(html).toContain('data-lead-overview-main-zone-flow="true"');
+        expect(html).toContain('data-layout-runtime-section-flow="true"');
         expect(html).toContain('data-lead-overview-slot="right_rail"');
-        expect(html).toContain('data-lead-overview-slot="lead_source"');
         expect(html).toContain('data-layout-runtime-section-key="children_enrollment"');
+        expect(html).toContain('data-layout-runtime-section-key="household_contact"');
+        expect(html).toContain("adminv2-drawer-overview-shell-grid");
+        expect(html).toContain("adminv2-drawer-overview-main-zone-flow");
+        expect(html).not.toContain('data-lead-overview-slot="household_contact"');
+        expect(html).not.toContain('data-lead-overview-slot="children_enrollment"');
     });
 });

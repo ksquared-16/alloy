@@ -175,6 +175,53 @@ describe("Person drawer — actionable household contacts", () => {
         expect(html).toContain('data-drawer-household-make-primary-contact="true"');
     });
 
+    it("shows Make primary for Molly when Justin is household primary (Wright fixture)", () => {
+        const record = buildProofPersonRecord({
+            id: "justin-1",
+            customer_id: "cust-wright",
+            "person.id": "justin-1",
+            _primary_contact_on_opportunity: true,
+            _household_context: [{ customer_id: "cust-wright", household_name: "Wright Family" }],
+            _customer_persons: [
+                {
+                    customer_id: "cust-wright",
+                    person_id: "justin-1",
+                    role_type: "primary_contact",
+                    is_primary: true,
+                },
+                {
+                    customer_id: "cust-wright",
+                    person_id: "molly-1",
+                    role_type: "parent",
+                    is_primary: true,
+                },
+            ],
+            _household_adult_links: [
+                {
+                    customer_id: "cust-wright",
+                    person_id: "justin-1",
+                    display_name: "Justin Wright",
+                    role_type: "primary_contact",
+                    is_primary: true,
+                    is_household_primary_contact: true,
+                },
+                {
+                    customer_id: "cust-wright",
+                    person_id: "molly-1",
+                    display_name: "Molly Wright",
+                    role_type: "parent",
+                    is_primary: true,
+                },
+            ],
+        });
+        const html = renderToStaticMarkup(
+            <PersonHouseholdContactsActionableWidget record={record} canMutate />,
+        );
+        expect(html).toContain("Molly Wright");
+        expect(html).toContain('data-drawer-household-make-primary-contact="true"');
+        expect(html).not.toMatch(/Molly Wright[\s\S]*data-drawer-household-primary-contact-badge/);
+    });
+
     it("shows Make primary for visible non-guardian linked adults when multiple adults exist", () => {
         const record = buildProofPersonRecord({
             id: "parent-1",

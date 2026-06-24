@@ -37,7 +37,12 @@ export function resolvePersonDrawerPrimaryContactProjection(
         };
     }
 
-    if (vmRecord._primary_contact_on_opportunity === true) {
+    const anchorPersonId = String(vmRecord.id ?? vmRecord["person.id"] ?? "").trim();
+    if (
+        vmRecord._primary_contact_on_opportunity === true
+        && anchorPersonId
+        && personId === anchorPersonId
+    ) {
         return { isPrimary: true, display: LAYOUT_RUNTIME_PRIMARY_CONTACT_LABEL };
     }
 

@@ -134,6 +134,51 @@ describe("resolvePersonDrawerHouseholdContacts", () => {
         const projection = resolvePersonDrawerHouseholdContacts(record);
         expect(projection.contacts.map((row) => row.display_name)).toEqual(["Alex Johnson"]);
     });
+
+    it("does not mark a non-primary adult primary when viewing the household primary person", () => {
+        const record = buildProofPersonRecord({
+            id: "justin-1",
+            customer_id: "cust-wright",
+            _customer_persons: [
+                {
+                    customer_id: "cust-wright",
+                    person_id: "justin-1",
+                    role_type: "primary_contact",
+                    is_primary: true,
+                },
+                {
+                    customer_id: "cust-wright",
+                    person_id: "molly-1",
+                    role_type: "parent",
+                    is_primary: true,
+                },
+            ],
+            _household_context: [{ customer_id: "cust-wright", customer_name: "Wright Family" }],
+            _household_adult_links: [
+                {
+                    customer_id: "cust-wright",
+                    person_id: "justin-1",
+                    display_name: "Justin Wright",
+                    role_type: "primary_contact",
+                    is_primary: true,
+                    is_household_primary_contact: true,
+                },
+                {
+                    customer_id: "cust-wright",
+                    person_id: "molly-1",
+                    display_name: "Molly Wright",
+                    role_type: "parent",
+                    is_primary: true,
+                },
+            ],
+        });
+
+        const projection = resolvePersonDrawerHouseholdContacts(record);
+        expect(projection.contacts).toHaveLength(1);
+        expect(projection.contacts[0]?.display_name).toBe("Molly Wright");
+        expect(projection.contacts[0]?.is_primary).toBe(false);
+        expect(projection.primaryPersonId).toBe("justin-1");
+    });
 });
 
 describe("lead drawer default doc (household contacts widget)", () => {

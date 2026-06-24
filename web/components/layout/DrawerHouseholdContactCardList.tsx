@@ -27,6 +27,8 @@ type Props = {
     canMutatePrimaryContact?: boolean;
     onMakePrimaryContact?: (contact: DrawerHouseholdContactRow) => void;
     makePrimarySavingPersonId?: string | null;
+    /** Optional filter — only eligible contacts show make-primary (person drawer guardians). */
+    makePrimaryContactEligible?: (contact: DrawerHouseholdContactRow) => boolean;
 };
 
 function PrimaryContactBadge() {
@@ -54,6 +56,7 @@ function HouseholdContactCard({
     canMutatePrimaryContact,
     onMakePrimaryContact,
     makePrimarySavingPersonId,
+    makePrimaryContactEligible,
 }: {
     contact: DrawerHouseholdContactRow;
     anchorRecord: ProofRuntimeRecord;
@@ -63,6 +66,7 @@ function HouseholdContactCard({
     canMutatePrimaryContact: boolean;
     onMakePrimaryContact?: (contact: DrawerHouseholdContactRow) => void;
     makePrimarySavingPersonId?: string | null;
+    makePrimaryContactEligible?: (contact: DrawerHouseholdContactRow) => boolean;
 }) {
     const rowRecord: ProofRuntimeRecord = {
         id: contact.person_id,
@@ -78,7 +82,8 @@ function HouseholdContactCard({
         canMutatePrimaryContact
         && !contact.is_primary
         && Boolean(contact.person_id)
-        && Boolean(onMakePrimaryContact);
+        && Boolean(onMakePrimaryContact)
+        && (makePrimaryContactEligible == null || makePrimaryContactEligible(contact));
     const isSavingPrimary = makePrimarySavingPersonId === contact.person_id;
 
     return (
@@ -170,6 +175,7 @@ export default function DrawerHouseholdContactCardList({
     canMutatePrimaryContact = false,
     onMakePrimaryContact,
     makePrimarySavingPersonId = null,
+    makePrimaryContactEligible,
 }: Props) {
     if (contacts.length === 0) {
         return (
@@ -193,6 +199,7 @@ export default function DrawerHouseholdContactCardList({
                         canMutatePrimaryContact={canMutatePrimaryContact}
                         onMakePrimaryContact={onMakePrimaryContact}
                         makePrimarySavingPersonId={makePrimarySavingPersonId}
+                        makePrimaryContactEligible={makePrimaryContactEligible}
                     />
                 ))}
             </ul>

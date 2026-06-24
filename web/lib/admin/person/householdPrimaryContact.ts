@@ -78,3 +78,42 @@ export async function resolveCustomerHouseholdPrimaryContactPersonId(
 
     return trimOrNull((roleRow as { person_id?: string } | null)?.person_id);
 }
+
+type HouseholdPrimaryLinkRow = CustomerPersonPrimaryContactRow & {
+    is_household_primary_contact?: boolean | null;
+};
+
+/**
+ * Canonical household primary person for drawer runtime — one badge source of truth.
+ * Prefers `customer_persons` (`role_type = primary_contact`, `is_primary = true`).
+ */
+export function resolveHouseholdPrimaryContactPersonIdFromRecord(
+    record: Record<string, unknown>,
+): string | null {
+    const customerId =
+        trimOrNull(record.customer_id)
+        ?? trimOrNull(
+            (record._household_context as { customer_id?: string | null }[] | undefined)?.[0]?.customer_id,
+        );
+
+    const customerPersonRows = (record._customer_persons as HouseholdPrimaryLinkRow[]) ?? [];
+    if (customerId) {
+        const fromCustomerPersons = resolveHouseholdPrimaryContactPersonIdFromRows(customerPersonRows, customerId);
+        if (fromCustomerPersons) return fromCustomerPersons;
+    }
+
+    for (const row of customerPersonRows) {
+        if (!customerPersonRowIsHouseholdPrimaryContact(row)) continue;
+        const personId = trimOrNull(row.person_id);
+        if (personId) return personId;
+    }
+
+    for (const link of (record._household_adult_links as HouseholdPrimaryLinkRow[]) ?? []) {
+        if (link.is_household_primary_contact === true || customerPersonRowIsHouseholdPrimaryContact(link)) {
+            const personId = trimOrNull(link.person_id);
+            if (personId) return personId;
+        }
+    }
+
+    return null;
+}
