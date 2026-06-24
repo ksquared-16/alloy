@@ -14,6 +14,7 @@ import {
     resolveLeadDrawerHouseholdProfile,
     resolvePersonDrawerHouseholdProfile,
 } from "@/lib/layout/runtime/resolveDrawerHouseholdProfile";
+import { resolveOpportunityDrawerHouseholdContacts } from "@/lib/layout/runtime/resolveDrawerHouseholdContacts";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE,
@@ -274,11 +275,17 @@ export default function DrawerHouseholdProfileSection({
         );
     }
 
+    // Multi-adult households always expose the actionable contact list (Make Primary
+    // Contact for non-primary members) even when the layout has no explicit
+    // household_contacts widget — single source of truth for primary reassignment.
+    const householdAdultCount = resolveOpportunityDrawerHouseholdContacts(record).contacts.length;
+    const showActionableContacts = showContactsList || householdAdultCount > 1;
+
     return (
         <div className="min-w-0" data-drawer-household-profile-section="true" data-drawer-household-profile-variant="lead">
             <LeadHouseholdIdentityStrip profile={profile} />
             <div className="space-y-3 border-t border-alloy-stone/10 p-2" data-drawer-household-contacts-group="true">
-                {!showContactsList ?
+                {!showActionableContacts ?
                     <ul className="flex flex-col gap-2">
                         <PrimaryContactProfileCard
                             name={profile.primaryName}
@@ -292,7 +299,7 @@ export default function DrawerHouseholdProfileSection({
                         />
                     </ul>
                 :   null}
-                {profile.secondaryName ?
+                {!showActionableContacts && profile.secondaryName ?
                     <div className="rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.015] px-3 py-2">
                         <p className={PRESENTATION_LABEL}>Secondary contact</p>
                         <DrawerRelationshipOverflowText
@@ -302,8 +309,8 @@ export default function DrawerHouseholdProfileSection({
                         />
                     </div>
                 :   null}
-                {showContactsList ?
-                    <div className="space-y-1.5 px-1">
+                {showActionableContacts ?
+                    <div className="space-y-1.5 px-1" data-drawer-household-contacts-actionable="true">
                         <p className={PRESENTATION_LABEL}>Household contacts</p>
                         <LeadHouseholdContactsWidget
                             record={record}

@@ -44,6 +44,7 @@ export const SECTION_ROW_WIDTH_PRESET_KEYS = [
     "stacked_right_2x2",
     "stacked_left_2x2",
     "half_stacked_right",
+    "half_stacked_left",
 ] as const;
 
 export type SectionRowWidthPresetKey = (typeof SECTION_ROW_WIDTH_PRESET_KEYS)[number];
@@ -63,9 +64,10 @@ export const SECTION_ROW_WIDTH_PRESETS: Record<
     "25_25_50": { label: "25 / 25 / 50", spans: [3, 3, 6] },
     equal_3: { label: "Equal (3)", spans: [4, 4, 4] },
     equal_4: { label: "Equal (4)", spans: [3, 3, 3, 3] },
-    stacked_right_2x2: { label: "Stacked right (2×2)", spans: [8, 4, 4], stackLayout: "stacked_right" },
-    stacked_left_2x2: { label: "Stacked left (2×2)", spans: [4, 4, 8], stackLayout: "stacked_left" },
-    half_stacked_right: { label: "Half + stacked half", spans: [6, 6, 6], stackLayout: "stacked_right_equal" },
+    stacked_right_2x2: { label: "Wide left · stacked right (2/3 + 1/3×2)", spans: [8, 4, 4], stackLayout: "stacked_right" },
+    stacked_left_2x2: { label: "Stacked left · wide right (1/3×2 + 2/3)", spans: [4, 4, 8], stackLayout: "stacked_left" },
+    half_stacked_right: { label: "Half + stacked right (1/2 + 1/2×2)", spans: [6, 6, 6], stackLayout: "stacked_right_equal" },
+    half_stacked_left: { label: "Stacked left + half (1/2×2 + 1/2)", spans: [6, 6, 6], stackLayout: "stacked_left_equal" },
 };
 
 export type SectionLayoutSegment =

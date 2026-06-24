@@ -51,6 +51,50 @@ describe("section composition presets (EB-FW-02)", () => {
         }
     });
 
+    it("exposes half + stacked right and stacked left + half presets", () => {
+        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_right.stackLayout).toBe("stacked_right_equal");
+        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_right.spans).toEqual([6, 6, 6]);
+        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_left.stackLayout).toBe("stacked_left_equal");
+        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_left.spans).toEqual([6, 6, 6]);
+        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_right.label).toMatch(/half \+ stacked right/i);
+        expect(SECTION_ROW_WIDTH_PRESETS.half_stacked_left.label).toMatch(/stacked left \+ half/i);
+    });
+
+    it("segments half_stacked_right: one half-width primary + two stacked on the right", () => {
+        let doc = buildLeadDrawerDefaultDoc();
+        const zoneKeys = ["children_enrollment", "household_contact", "lead_source"];
+        doc = applySectionRowLayout(doc, zoneKeys[0]!, "half_stacked_right");
+        const grouped = doc.sections.filter((s) => zoneKeys.includes(s.key));
+        expect(readSectionRowStackRole(grouped[0]!)).toBe("primary");
+        expect(readSectionRowStackRole(grouped[1]!)).toBe("stack");
+        expect(readSectionRowStackRole(grouped[2]!)).toBe("stack");
+
+        const segments = segmentSectionsForRowLayout(grouped);
+        expect(segments).toHaveLength(1);
+        expect(segments[0]?.kind).toBe("stacked_row");
+        if (segments[0]?.kind === "stacked_row") {
+            expect(segments[0].layout).toBe("stacked_right_equal");
+            expect(segments[0].primary.key).toBe(zoneKeys[0]);
+            expect(segments[0].stacked.map((s) => s.key)).toEqual([zoneKeys[1], zoneKeys[2]]);
+        }
+    });
+
+    it("segments half_stacked_left: two stacked on the left + half-width primary on the right", () => {
+        let doc = buildLeadDrawerDefaultDoc();
+        const zoneKeys = ["children_enrollment", "household_contact", "lead_source"];
+        doc = applySectionRowLayout(doc, zoneKeys[0]!, "half_stacked_left");
+        const grouped = doc.sections.filter((s) => zoneKeys.includes(s.key));
+        expect(readSectionRowStackRole(grouped[2]!)).toBe("primary");
+
+        const segments = segmentSectionsForRowLayout(grouped);
+        expect(segments[0]?.kind).toBe("stacked_row");
+        if (segments[0]?.kind === "stacked_row") {
+            expect(segments[0].layout).toBe("stacked_left_equal");
+            expect(segments[0].primary.key).toBe(zoneKeys[2]);
+            expect(segments[0].stacked.map((s) => s.key)).toEqual([zoneKeys[0], zoneKeys[1]]);
+        }
+    });
+
     it("applies two_thirds_third width spans", () => {
         let doc = buildLeadDrawerDefaultDoc();
         doc = applySectionRowLayout(doc, "children_enrollment", "two_thirds_third");

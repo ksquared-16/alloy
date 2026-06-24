@@ -63,20 +63,20 @@ export const DRAWER_OVERVIEW_SUMMARY_STRIP_HOST_CLASS =
 export const DRAWER_OVERVIEW_EMPTY_STATE_CLASS = PRESENTATION_EMPTY_STATE;
 
 /** Default section body padding inside premium panel shell. */
-export const DRAWER_OVERVIEW_PANEL_BODY_CLASS = "px-3 pb-3 pt-2";
+export const DRAWER_OVERVIEW_PANEL_BODY_CLASS = "px-3.5 pb-3.5 pt-2.5";
 
 /** Enrollment / roster sections — card list bleeds to panel edges. */
 export const DRAWER_OVERVIEW_PANEL_ENROLLMENT_BODY_CLASS = "px-0 pb-0 pt-0";
 
 /** Premium drawer overview panel — pine accent + soft header (Lead reference styling). */
 export const DRAWER_OVERVIEW_PANEL_SURFACE =
-    "flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/22 border-b-alloy-stone/30 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_5px_rgba(24,39,58,0.07)]";
+    "flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/40 border-b-[2px] border-b-alloy-stone/55 border-l-[3px] border-l-alloy-juniper/75 bg-white shadow-[0_2px_6px_rgba(24,39,58,0.09)]";
 
 export const DRAWER_OVERVIEW_PANEL_CENTERPIECE_SURFACE =
-    "overflow-hidden rounded-xl border border-alloy-stone/20 border-l-[3px] border-l-alloy-juniper/75 bg-white shadow-[0_2px_8px_rgba(24,39,58,0.06)] ring-1 ring-alloy-stone/10";
+    "overflow-hidden rounded-xl border border-alloy-stone/38 border-b-[2px] border-b-alloy-stone/55 border-l-[3px] border-l-alloy-juniper/80 bg-white shadow-[0_3px_10px_rgba(24,39,58,0.09)] ring-1 ring-alloy-stone/12";
 
 export const DRAWER_OVERVIEW_PANEL_HEADER =
-    "border-b border-alloy-stone/10 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3 py-2";
+    "border-b border-alloy-stone/16 bg-gradient-to-r from-emerald-50/70 via-emerald-50/35 to-white px-3.5 py-2.5";
 
 export const DRAWER_OVERVIEW_PANEL_ICON_BADGE =
     "flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border border-alloy-stone/10 bg-alloy-juniper/[0.08] text-alloy-juniper/80";

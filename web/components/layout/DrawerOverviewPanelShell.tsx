@@ -67,7 +67,7 @@ export default function DrawerOverviewPanelShell({
     title,
     variant = "default",
     tone,
-    bodyClassName = "px-3 pb-3 pt-2",
+    bodyClassName = "px-3.5 pb-3.5 pt-2.5",
     headerActions,
     children,
     collapse,

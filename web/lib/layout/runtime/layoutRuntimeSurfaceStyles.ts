@@ -47,12 +47,12 @@ export const LAYOUT_RUNTIME_PRIMARY_WORKSPACE_SECTION =
 export const LAYOUT_RUNTIME_PRIMARY_WORKSPACE_HEADER =
     "border-b border-alloy-stone/12 bg-[linear-gradient(180deg,rgba(251,252,253,1)_0%,rgba(255,255,255,1)_100%)] px-4 py-2.5 text-[13px] font-semibold tracking-tight text-alloy-midnight";
 
-/** Lighter body section chrome — avoids settings-preview heaviness. */
+/** Body section chrome — clear outer border + stronger bottom edge for visible card definition. */
 export const LAYOUT_RUNTIME_BODY_SECTION_SURFACE =
-    "mb-3 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/26 border-b-alloy-stone/34 bg-white shadow-[0_1px_4px_rgba(24,39,58,0.06)]";
+    "mb-3 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/40 border-b-[2px] border-b-alloy-stone/55 bg-white shadow-[0_2px_6px_rgba(24,39,58,0.08)]";
 
 export const LAYOUT_RUNTIME_BODY_SECTION_HEADER =
-    "shrink-0 border-b border-alloy-stone/12 px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/58";
+    "shrink-0 border-b border-alloy-stone/16 px-3.5 py-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/58";
 
 /** White drawer overview canvas — depth comes from section panels, not gray fill. */
 export const LAYOUT_RUNTIME_DRAWER_OVERVIEW_CANVAS = "bg-white";
@@ -78,11 +78,11 @@ export const LAYOUT_RUNTIME_ENROLLMENT_GRID_WRAP = "min-w-0 bg-white";
 /** @deprecated use LAYOUT_RUNTIME_ENROLLMENT_GRID_WRAP */
 export const LAYOUT_RUNTIME_ENROLLMENT_TABLE_WRAP = LAYOUT_RUNTIME_ENROLLMENT_GRID_WRAP;
 
-/** Lead overview composition card — white card with Bend Pine left accent. */
+/** Lead overview composition card — white card with Bend Pine left accent + clear definition. */
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_SURFACE =
-    "mb-3 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/26 border-b-alloy-stone/34 border-l-[3px] border-l-alloy-juniper/70 bg-white shadow-[0_1px_5px_rgba(24,39,58,0.07)]";
+    "mb-3 flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-alloy-stone/40 border-b-[2px] border-b-alloy-stone/55 border-l-[3px] border-l-alloy-juniper/75 bg-white shadow-[0_2px_6px_rgba(24,39,58,0.09)]";
 
-export const LAYOUT_RUNTIME_COMPOSITION_SECTION_BODY = "px-3 pb-3 pt-2";
+export const LAYOUT_RUNTIME_COMPOSITION_SECTION_BODY = "px-3.5 pb-3.5 pt-2.5";
 
 export const LAYOUT_RUNTIME_COMPOSITION_SECTION_EYEBROW =
     "text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/42";
