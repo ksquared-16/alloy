@@ -26,6 +26,36 @@ CREATE TABLE IF NOT EXISTS public.communication_templates (
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- PKG-05 compatibility (20260619150000): CREATE TABLE IF NOT EXISTS is a no-op when the
+-- earlier templates table exists without B1 lifecycle columns. Add missing columns before
+-- indexes that reference status (full alignment continues in 20260623130000).
+ALTER TABLE public.communication_templates ADD COLUMN IF NOT EXISTS description text NULL;
+ALTER TABLE public.communication_templates ADD COLUMN IF NOT EXISTS status text NULL;
+ALTER TABLE public.communication_templates ADD COLUMN IF NOT EXISTS created_by uuid NULL;
+ALTER TABLE public.communication_templates ADD COLUMN IF NOT EXISTS updated_by uuid NULL;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'communication_templates'
+          AND column_name = 'approval_status'
+    ) THEN
+        UPDATE public.communication_templates
+        SET status = CASE
+            WHEN approval_status = 'approved' THEN 'active'
+            WHEN approval_status = 'pending' THEN 'draft'
+            WHEN approval_status = 'draft' THEN 'draft'
+            ELSE 'draft'
+        END
+        WHERE status IS NULL;
+    END IF;
+END $$;
+
+UPDATE public.communication_templates SET status = 'draft' WHERE status IS NULL;
+
 CREATE INDEX IF NOT EXISTS idx_comm_templates_org
     ON public.communication_templates (org_id);
 CREATE INDEX IF NOT EXISTS idx_comm_templates_org_category_channel
@@ -48,6 +78,30 @@ CREATE TABLE IF NOT EXISTS public.communication_template_versions (
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT communication_template_versions_template_version_uq UNIQUE (template_id, version_number)
 );
+
+-- PKG-05 compatibility: versions table may exist with `version` instead of `version_number`.
+ALTER TABLE public.communication_template_versions ADD COLUMN IF NOT EXISTS version_number integer NULL;
+ALTER TABLE public.communication_template_versions ADD COLUMN IF NOT EXISTS token_paths text[] NOT NULL DEFAULT '{}'::text[];
+ALTER TABLE public.communication_template_versions ADD COLUMN IF NOT EXISTS metadata jsonb NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE public.communication_template_versions ADD COLUMN IF NOT EXISTS created_by uuid NULL;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'communication_template_versions'
+          AND column_name = 'version'
+    ) THEN
+        UPDATE public.communication_template_versions
+        SET version_number = version
+        WHERE version_number IS NULL AND version IS NOT NULL;
+    END IF;
+END $$;
+
+UPDATE public.communication_template_versions SET version_number = 1 WHERE version_number IS NULL;
+UPDATE public.communication_template_versions SET body = '' WHERE body IS NULL;
+
 CREATE INDEX IF NOT EXISTS idx_comm_template_versions_template
     ON public.communication_template_versions (template_id, version_number DESC);
 CREATE INDEX IF NOT EXISTS idx_comm_template_versions_org
@@ -57,18 +111,22 @@ CREATE INDEX IF NOT EXISTS idx_comm_template_versions_org
 ALTER TABLE public.communication_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.communication_template_versions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS communication_templates_select_org ON public.communication_templates;
 CREATE POLICY communication_templates_select_org
     ON public.communication_templates FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = communication_templates.org_id));
+DROP POLICY IF EXISTS communication_templates_service_all ON public.communication_templates;
 CREATE POLICY communication_templates_service_all
     ON public.communication_templates FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));
 
+DROP POLICY IF EXISTS communication_template_versions_select_org ON public.communication_template_versions;
 CREATE POLICY communication_template_versions_select_org
     ON public.communication_template_versions FOR SELECT TO authenticated
     USING (EXISTS (SELECT 1 FROM public.user_roles ur
         WHERE ur.user_id = auth.uid() AND ur.org_id = communication_template_versions.org_id));
+DROP POLICY IF EXISTS communication_template_versions_service_all ON public.communication_template_versions;
 CREATE POLICY communication_template_versions_service_all
     ON public.communication_template_versions FOR ALL TO authenticated
     USING ((auth.role() = 'service_role'::text)) WITH CHECK ((auth.role() = 'service_role'::text));

@@ -18,6 +18,8 @@ import { OipKpiIcon } from "@/components/admin/workspace/OipKpiIcon";
 import { oipDomainVisualTokens, oipProcessAccentKey } from "@/lib/metrics/oipKpiCardVisualSystem";
 import { oipProcessIconKey } from "@/lib/metrics/oipKpiIcons";
 import { WS_LAYOUT, WS_LAYOUT_ATTR } from "@/lib/workspace/workspaceLayoutSystem";
+import { MetricPlacementRenderer } from "@/components/admin/metrics/MetricPlacementRenderer";
+import { resolveMetricSurfaceKey } from "@/lib/metrics/platform/resolveMetricSurfaceKey";
 import "@/app/adminV2/components/workspace/workspace.css";
 
 type Props = {
@@ -167,33 +169,40 @@ export function WorkspaceRootLifecycleGrid({ lifecycles, pending = false }: Prop
                                     </h3>
                                 </div>
 
-                                {inlineMetrics.length ?
-                                    <ul
-                                        className="mt-2.5 space-y-1.5"
-                                        data-ws-business-process-performance="true"
-                                    >
-                                        {inlineMetrics.map((metric) => (
-                                            <li
-                                                key={metric.label}
-                                                className="flex items-baseline justify-between gap-2 text-xs"
-                                            >
-                                                <span className="font-medium text-alloy-midnight/55">
-                                                    {metric.label}
-                                                </span>
-                                                <span
-                                                    className={`shrink-0 font-semibold tabular-nums ${
-                                                        metric.label.toLowerCase().includes("needs attention") &&
-                                                        metric.value !== "—"
-                                                            ? "text-alloy-ember"
-                                                            : "text-alloy-midnight"
-                                                    }`}
-                                                >
-                                                    {metric.value}
-                                                </span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                :   <p className="mt-2.5 text-[11px] text-alloy-midnight/40">Preview unavailable</p>}
+                                <div className="mt-2.5" data-ws-business-process-performance="true">
+                                    <MetricPlacementRenderer
+                                        surface="business_process_tile"
+                                        surfaceKey={resolveMetricSurfaceKey({ processKey: lifecycle.processKey })}
+                                        placementZone="tile_metrics"
+                                        layout="inline"
+                                        emptyFallback={
+                                            inlineMetrics.length ?
+                                                <ul className="space-y-1.5">
+                                                    {inlineMetrics.map((metric) => (
+                                                        <li
+                                                            key={metric.label}
+                                                            className="flex items-baseline justify-between gap-2 text-xs"
+                                                        >
+                                                            <span className="font-medium text-alloy-midnight/55">
+                                                                {metric.label}
+                                                            </span>
+                                                            <span
+                                                                className={`shrink-0 font-semibold tabular-nums ${
+                                                                    metric.label.toLowerCase().includes("needs attention") &&
+                                                                    metric.value !== "—"
+                                                                        ? "text-alloy-ember"
+                                                                        : "text-alloy-midnight"
+                                                                }`}
+                                                            >
+                                                                {metric.value}
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            :   <p className="text-[11px] text-alloy-midnight/40">Preview unavailable</p>
+                                        }
+                                    />
+                                </div>
 
                                 <div className="mt-auto flex items-end justify-between gap-3 border-t border-alloy-midnight/8 pt-2.5">
                                     <div className="flex gap-4">

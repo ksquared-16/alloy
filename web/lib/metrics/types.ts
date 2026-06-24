@@ -5,6 +5,8 @@ import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 export type OipMetricKey =
     | "enrollment.time_to_schedule_tour"
     | "enrollment.tour_conversion_rate"
+    | "enrollment.lead_count"
+    | "enrollment.tour_completed_count"
     | "comms.delivery_rate"
     | "comms.reply_rate"
     | "comms.failed_delivery_count"

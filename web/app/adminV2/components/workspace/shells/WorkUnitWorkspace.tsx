@@ -171,6 +171,8 @@ export default function WorkUnitWorkspace({
                   otherPillSectionKey={otherPillSectionKey}
                   queuePillPendingKey={queuePillPendingKey}
                   processName={processName}
+                  workUnitId={model.workUnitId}
+                  surfaceKey="default"
                 />
               : null}
             </div>

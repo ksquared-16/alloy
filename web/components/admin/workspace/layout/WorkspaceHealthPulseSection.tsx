@@ -5,6 +5,7 @@ import type { ResolvedMetricMap } from "@/lib/metrics/fetchResolvedMetrics";
 import type { WorkspaceHealthSummary } from "@/lib/metrics/workspaceHealthSummary";
 import { OipHealthStrip } from "@/components/admin/workspace/OipHealthStrip";
 import { OipPerformanceKpiRow } from "@/components/admin/workspace/OipKpiObjectCard";
+import { MetricPlacementRenderer } from "@/components/admin/metrics/MetricPlacementRenderer";
 import { WS_LAYOUT, WS_LAYOUT_ATTR } from "@/lib/workspace/workspaceLayoutSystem";
 import { WS_ZONE_MT } from "@/lib/workspace/workspaceLayoutSpacing";
 
@@ -25,6 +26,16 @@ export function WorkspaceHealthPulseSection({
     contextLabel = null,
 }: Props) {
     const orgName = contextLabel?.trim() ?? "";
+
+    const v1PulseFallback =
+        kpis.length ?
+            <OipPerformanceKpiRow
+                kpis={kpis}
+                oipResolved={oipResolved}
+                loading={loading}
+                layout="command"
+            />
+        :   null;
 
     return (
         <section
@@ -48,12 +59,21 @@ export function WorkspaceHealthPulseSection({
 
             <div className={WS_LAYOUT.sectionBreak} data-workspace-zone="operational-pulse">
                 <h3 className={`${WS_LAYOUT.sectionKicker} mb-1.5`}>Operational Pulse</h3>
-                <OipPerformanceKpiRow
-                    kpis={kpis}
-                    oipResolved={oipResolved}
-                    loading={loading}
-                    layout="command"
-                />
+                <div className="space-y-2">
+                    <MetricPlacementRenderer
+                        surface="workspace_header"
+                        surfaceKey="default"
+                        placementZone="primary_metrics"
+                        layout="row"
+                    />
+                    <MetricPlacementRenderer
+                        surface="workspace_header"
+                        surfaceKey="default"
+                        placementZone="secondary_metrics"
+                        layout="row"
+                        emptyFallback={v1PulseFallback}
+                    />
+                </div>
             </div>
         </section>
     );

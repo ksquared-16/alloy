@@ -21,6 +21,8 @@ type Props = {
     otherPillSectionKey?: string | null;
     queuePillPendingKey?: string | null;
     processName?: string | null;
+    workUnitId?: string | null;
+    surfaceKey?: string;
 };
 
 function headerSectionsWithoutNeedsAttention(
@@ -52,6 +54,8 @@ export default function WorkUnitUnifiedOperationalHeader({
     otherPillSectionKey = null,
     queuePillPendingKey = null,
     processName = null,
+    workUnitId = null,
+    surfaceKey = "default",
 }: Props) {
     const suppressNeedsAttention = hasOipPerformanceStrip(kpis);
     const filteredAboveFold = useMemo(
@@ -85,6 +89,8 @@ export default function WorkUnitUnifiedOperationalHeader({
             kpis={kpis}
             oipResolved={oipResolved}
             kpiStripPlaceholder={kpiStripPlaceholder}
+            workUnitId={workUnitId}
+            surfaceKey={surfaceKey}
         />
     );
 }

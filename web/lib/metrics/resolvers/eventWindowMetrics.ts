@@ -95,6 +95,58 @@ export function computeTourConversionRate(
     return { rate: completed / scheduled, completed, scheduled };
 }
 
+export function computeTourCompletedCount(bookings: TourBookingMetricRow[]): number {
+    return bookings.filter((b) => !isSupersededRescheduleRow(b) && b.status_key === "completed").length;
+}
+
+export function computeLeadCount(opportunities: OpportunityCreatedRow[]): number {
+    return opportunities.length;
+}
+
+export async function resolveEnrollmentLeadCount(
+    ctx: MetricResolveContext
+): Promise<ResolvedMetricValue> {
+    const def = getMetricDefinition("enrollment.lead_count");
+    const now = ctx.now ?? new Date();
+    const { windowStart, windowEnd } = resolveMetricTimeWindowBounds(ctx.window, now);
+    const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
+
+    const base: Omit<ResolvedMetricValue, "value" | "formattedValue" | "meta"> = {
+        key: def.key,
+        label: def.label,
+        format: def.format,
+        window: ctx.window,
+        windowStartIso: windowStart.toISOString(),
+        windowEndIso: windowEnd.toISOString(),
+        computedAtIso: now.toISOString(),
+        sources: def.sources,
+        resolveMode: ctx.mode ?? "live",
+    };
+
+    if (filter.impossible) {
+        return { ...base, value: 0, formattedValue: formatMetricValue(def.format, 0), meta: { count: 0 } };
+    }
+
+    let oppQ = ctx.supabase
+        .from("opportunities")
+        .select("id, created_at")
+        .eq("org_id", ctx.orgId)
+        .gte("created_at", windowStart.toISOString())
+        .lte("created_at", windowEnd.toISOString());
+    oppQ = applyOpportunityScopeToQuery(oppQ, filter);
+
+    const { data: opps, error } = await oppQ;
+    if (error) throw new Error(error.message);
+
+    const count = computeLeadCount((opps ?? []) as OpportunityCreatedRow[]);
+    return {
+        ...base,
+        value: count,
+        formattedValue: formatMetricValue(def.format, count),
+        meta: { count },
+    };
+}
+
 export async function resolveEnrollmentTimeToScheduleTour(
     ctx: MetricResolveContext
 ): Promise<ResolvedMetricValue> {
@@ -212,5 +264,49 @@ export async function resolveEnrollmentTourConversionRate(
         value: rate,
         formattedValue: formatMetricValue(def.format, rate),
         meta: { completed, scheduled },
+    };
+}
+
+export async function resolveEnrollmentTourCompletedCount(
+    ctx: MetricResolveContext
+): Promise<ResolvedMetricValue> {
+    const def = getMetricDefinition("enrollment.tour_completed_count");
+    const now = ctx.now ?? new Date();
+    const { windowStart, windowEnd } = resolveMetricTimeWindowBounds(ctx.window, now);
+    const filter = await resolveMetricScopeFilter(ctx.supabase, ctx.orgId, ctx.scope, ctx.siteLocationId);
+
+    const base: Omit<ResolvedMetricValue, "value" | "formattedValue" | "meta"> = {
+        key: def.key,
+        label: def.label,
+        format: def.format,
+        window: ctx.window,
+        windowStartIso: windowStart.toISOString(),
+        windowEndIso: windowEnd.toISOString(),
+        computedAtIso: now.toISOString(),
+        sources: def.sources,
+        resolveMode: ctx.mode ?? "live",
+    };
+
+    if (filter.impossible) {
+        return { ...base, value: 0, formattedValue: formatMetricValue(def.format, 0), meta: { completed: 0 } };
+    }
+
+    let bookQ = ctx.supabase
+        .from("tour_bookings")
+        .select("id, opportunity_id, status_key, created_at, rescheduled_from_booking_id")
+        .eq("org_id", ctx.orgId)
+        .gte("created_at", windowStart.toISOString())
+        .lte("created_at", windowEnd.toISOString());
+    bookQ = applyTourBookingLocationScope(bookQ, filter);
+
+    const { data: bookings, error } = await bookQ;
+    if (error) throw new Error(error.message);
+
+    const completed = computeTourCompletedCount((bookings ?? []) as TourBookingMetricRow[]);
+    return {
+        ...base,
+        value: completed,
+        formattedValue: formatMetricValue(def.format, completed),
+        meta: { completed },
     };
 }

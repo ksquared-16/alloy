@@ -12,6 +12,8 @@ import { formatMetricValue } from "@/lib/metrics/formatMetricValue";
 import {
     resolveEnrollmentTimeToScheduleTour,
     resolveEnrollmentTourConversionRate,
+    resolveEnrollmentLeadCount,
+    resolveEnrollmentTourCompletedCount,
 } from "@/lib/metrics/resolvers/eventWindowMetrics";
 import {
     resolveOpsWorkOverdueCount,
@@ -37,6 +39,10 @@ async function resolveLiveMetric(ctx: MetricResolveContext, key: OipMetricKey): 
             return resolveEnrollmentTimeToScheduleTour(ctx);
         case "enrollment.tour_conversion_rate":
             return resolveEnrollmentTourConversionRate(ctx);
+        case "enrollment.lead_count":
+            return resolveEnrollmentLeadCount(ctx);
+        case "enrollment.tour_completed_count":
+            return resolveEnrollmentTourCompletedCount(ctx);
         case "comms.delivery_rate":
             return resolveCommsDeliveryRate(ctx);
         case "comms.reply_rate":

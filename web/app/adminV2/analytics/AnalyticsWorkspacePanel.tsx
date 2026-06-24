@@ -8,6 +8,7 @@ import {
     OIP_SECONDARY_BTN_CLASS,
 } from "@/app/adminV2/analytics/oipWorkspaceUi";
 import { OipOverviewStructure } from "@/components/admin/workspace/OipOverviewStructure";
+import { OiV2MetricOverview } from "@/components/admin/metrics/OiV2MetricOverview";
 import {
     OipKpiObjectCard,
     OipKpiObjectRow,
@@ -282,6 +283,9 @@ export default function AnalyticsWorkspacePanel({ onRequestClose }: AnalyticsWor
                             </p>
                         :   null}
                         <OipOverviewStructure health={health} resolved={resolved} loading={loading} />
+                        <div className="mt-4 border-t border-alloy-stone/12 pt-4">
+                            <OiV2MetricOverview />
+                        </div>
                         <div className="mt-4 flex justify-end md:hidden">
                             <button type="button" onClick={openConfiguration} className={OIP_SECONDARY_BTN_CLASS}>
                                 Configure

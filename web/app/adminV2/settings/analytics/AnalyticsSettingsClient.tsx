@@ -14,15 +14,19 @@ import OipSettingsSummary from "@/app/adminV2/settings/analytics/OipSettingsSumm
 import { OipSettingsProvider } from "@/app/adminV2/settings/analytics/OipSettingsContext";
 import { OIP_SECONDARY_BTN_CLASS } from "@/app/adminV2/analytics/oipWorkspaceUi";
 
+import MetricPlatformBuilderTabs from "@/app/adminV2/settings/analytics/MetricPlatformBuilderTabs";
+
+type TabKey = "packs" | "targets" | "visibility" | "builders";
+
 const TABS: { key: TabKey; label: string }[] = [
     { key: "packs", label: "Operational playbooks" },
     { key: "targets", label: "Targets" },
     { key: "visibility", label: "Experience placement" },
+    { key: "builders", label: "Metric builders" },
 ];
 
-type TabKey = "packs" | "targets" | "visibility";
-
 function tabFromParam(raw: string | null): TabKey {
+    if (raw === "builders") return "builders";
     if (raw === "targets" || raw === "visibility" || raw === "placements") return raw === "placements" ? "visibility" : raw;
     return "packs";
 }
@@ -40,6 +44,8 @@ function AnalyticsSettingsInner() {
         dispatchAdminV2OpenAnalyticsModal();
     }, []);
 
+    const tabs = TABS;
+
     return (
         <div className={SETTINGS_PAGE_SHELL_CLASS} data-adminv2-analytics-settings="true">
             <SettingsPageHeader
@@ -56,13 +62,15 @@ function AnalyticsSettingsInner() {
                 </button>
             </div>
 
-            <SettingsEntityTabBar tabs={TABS} activeKey={tab} onSelect={setTab} aria-label="Operational Intelligence sections" />
+            <SettingsEntityTabBar tabs={tabs} activeKey={tab} onSelect={setTab} aria-label="Operational Intelligence sections" />
 
             <div className="mt-4">
                 {tab === "packs" ?
                     <KpiPacksPanel onNavigateTab={setTab} />
                 : tab === "targets" ?
                     <KpiTargetsPanel canEdit={canMutate} />
+                : tab === "builders" ?
+                    <MetricPlatformBuilderTabs canEdit={canMutate} />
                 :   <OipVisibilityPanel canEdit={canMutate} />}
             </div>
         </div>
