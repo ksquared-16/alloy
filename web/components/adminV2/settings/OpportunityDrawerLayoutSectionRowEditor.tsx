@@ -721,6 +721,7 @@ export function LayoutBuilderItemInspector({
     if (entry.kind === "block" || entry.kind === "list") {
         const blockConfig = readLayoutEditorBlockConfig(entry.item.metadata);
         const blockFieldPickerGroups = buildBlockContextFieldPickerGroups({
+            surfaceKey,
             dataContext: blockConfig.dataContext,
             contactRole:
                 entry.item.refKey === "contact_block" ?

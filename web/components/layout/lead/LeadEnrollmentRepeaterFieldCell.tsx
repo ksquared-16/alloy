@@ -9,7 +9,6 @@ import type { LayoutCollectionColumn, LayoutItem } from "@/lib/layout/layoutV2";
 import {
     readLayoutEditorDisplayConfig,
     resolveLayoutCollectionColumnLinkAdornment,
-    resolveLayoutCollectionColumnShowIcon,
     typographyIntentClass,
 } from "@/lib/layout/layoutEditorDisplayConfig";
 import { formatLayoutRuntimeRepeaterColumnDisplay } from "@/lib/layout/runtime/formatLayoutRuntimeRepeaterColumnDisplay";
@@ -20,7 +19,7 @@ import {
 import { layoutRuntimeCollectionColumnIsInlineEditable } from "@/lib/layout/runtime/layoutRuntimeFieldEditability";
 import { readEnrollmentGridCellRole } from "@/lib/layout/runtime/enrollmentGridPresentation";
 import { layoutRuntimeEnrollmentPlacementDependentValueReader } from "@/lib/layout/runtime/resolveLayoutRuntimeEnrollmentPlacementContext";
-import { isLayoutRuntimeChildLinkColumn } from "@/lib/layout/runtime/layoutRuntimeLinkHarness";
+import { isLayoutRuntimeChildLinkColumn, layoutRuntimeRepeaterColumnShowsEntityIcon } from "@/lib/layout/runtime/layoutRuntimeLinkHarness";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 import {
     PRESENTATION_DATA_VALUE_COMPACT,
@@ -53,7 +52,8 @@ export default function LeadEnrollmentRepeaterFieldCell({
     const edit = useLayoutRuntimeDrawerEdit();
     const displayConfig = readLayoutEditorDisplayConfig(col);
     const columnAdornment = resolveLayoutCollectionColumnLinkAdornment(col);
-    const showColumnIcon = resolveLayoutCollectionColumnShowIcon(col);
+    const isRowPrimaryEntityLink = isLayoutRuntimeChildLinkColumn(col.refKey);
+    const showColumnIcon = layoutRuntimeRepeaterColumnShowsEntityIcon(col, { isRowPrimaryEntityLink });
     const showLabel = shouldShowLayoutEditorFieldLabel(displayConfig);
     const label = showLabel ?
         col.label?.trim() || col.refKey.split(".").pop()?.replace(/_/g, " ") || col.refKey

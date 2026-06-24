@@ -47,6 +47,8 @@ type Props = {
     anchorRecord?: ProofRuntimeRecord;
     personId?: string | null;
     adornment?: LayoutFieldAdornment | null;
+    /** When row chrome already shows the entity avatar, omit duplicate child/person icons. */
+    suppressEntityIcon?: boolean;
 };
 
 /** Unified person/child link surface with optional visible debug badge. */
@@ -63,12 +65,19 @@ export default function LayoutRuntimeLinkSurface({
     anchorRecord,
     personId,
     adornment,
+    suppressEntityIcon = false,
 }: Props) {
     const linkSurface = surface === "drawer" ? "drawer" : "queue";
-    const effectiveAdornment =
-        entityType === "child"
-            ? ensureLayoutRuntimeChildLinkAdornment(adornment, item.refKey)
-            : ensureLayoutRuntimePersonLinkAdornment(adornment);
+    const effectiveAdornment = useMemo(() => {
+        const base =
+            entityType === "child"
+                ? ensureLayoutRuntimeChildLinkAdornment(adornment, item.refKey)
+                : ensureLayoutRuntimePersonLinkAdornment(adornment);
+        if (suppressEntityIcon) {
+            return { ...base, icon: undefined };
+        }
+        return base;
+    }, [adornment, entityType, item.refKey, suppressEntityIcon]);
 
     const childOpenTarget = useMemo(() => {
         if (entityType !== "child" || !rowRecord) return null;

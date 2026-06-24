@@ -159,7 +159,7 @@ import DrawerHouseholdProfileSection from "@/components/layout/DrawerHouseholdPr
 import LayoutRuntimeLinkDebugModeBanner from "@/components/layout/LayoutRuntimeLinkDebugModeBanner";
 import { useLayoutRuntimeDrawerHost } from "@/lib/layout/runtime/layoutRuntimeDrawerHostContext";
 import { logChildLinkInstrumentationMounted } from "@/lib/layout/runtime/childLinkBrowserTrace";
-import { isLayoutRuntimeChildLinkColumn } from "@/lib/layout/runtime/layoutRuntimeLinkHarness";
+import { isLayoutRuntimeChildLinkColumn, layoutRuntimeRepeaterColumnShowsEntityIcon } from "@/lib/layout/runtime/layoutRuntimeLinkHarness";
 import {
     layoutRepeaterColumnHeaderLabel,
     layoutRepeaterColumnWidthStyle,
@@ -740,7 +740,8 @@ function RepeaterCellContent({
     const onAction = useContext(AdornmentActionContext);
     const displayConfig = readLayoutEditorDisplayConfig(col);
     const columnAdornment = resolveLayoutCollectionColumnLinkAdornment(col);
-    const showColumnIcon = resolveLayoutCollectionColumnShowIcon(col);
+    const isRowPrimaryEntityLink = isLayoutRuntimeChildLinkColumn(col.refKey);
+    const showColumnIcon = layoutRuntimeRepeaterColumnShowsEntityIcon(col, { isRowPrimaryEntityLink });
     const synthetic: LayoutItem = {
         id: col.refKey,
         kind: "field",

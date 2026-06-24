@@ -9,7 +9,11 @@ import {
     LAYOUT_EDITOR_CONTACT_ROLE_LABELS,
     type LayoutEditorContactRole,
 } from "@/lib/layout/layoutEditorContactRoles";
-import { buildOpportunityDrawerEditorFieldPickerGroups, resolveLayoutEditorFieldRefLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
+import {
+    getDrawerLayoutEditorSurfaceConfig,
+    type DrawerLayoutEditorSurfaceKey,
+} from "@/lib/layout/drawerLayoutEditorSurfaceConfig";
+import { resolveLayoutEditorFieldRefLabel } from "@/lib/layout/opportunityDrawerLayoutEditorFieldCatalog";
 
 const CONTEXT_ENTITY_ORDER: Record<LayoutEditorDataContext, string[]> = {
     contact: ["person", "customer", "opportunity"],
@@ -44,11 +48,14 @@ function contactRoleSuggestedFields(role: LayoutEditorContactRole) {
 
 /** Entity-first picker groups prioritized for a block's data context. */
 export function buildBlockContextFieldPickerGroups(input: {
+    /** Drawer surface — block pickers use the same catalog as card field pickers. */
+    surfaceKey?: DrawerLayoutEditorSurfaceKey;
     dataContext?: LayoutEditorDataContext;
     contactRole?: LayoutEditorContactRole;
     isChildRowTemplate?: boolean;
 }): LayoutCatalogGroup[] {
-    const all = buildOpportunityDrawerEditorFieldPickerGroups();
+    const surfaceKey = input.surfaceKey ?? "opportunity_drawer";
+    const all = getDrawerLayoutEditorSurfaceConfig(surfaceKey).buildFieldPickerGroups();
     const entityOrder = CONTEXT_ENTITY_ORDER[input.dataContext ?? "lead"];
     let groups = reorderGroups(all, entityOrder);
 

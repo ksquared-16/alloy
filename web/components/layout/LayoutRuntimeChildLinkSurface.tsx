@@ -18,6 +18,7 @@ type Props = {
     secondary?: ReactNode;
     onAction?: LayoutRuntimeChildLinkHandler;
     className?: string;
+    suppressEntityIcon?: boolean;
 };
 
 export default function LayoutRuntimeChildLinkSurface(props: Props) {

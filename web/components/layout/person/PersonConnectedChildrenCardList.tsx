@@ -98,7 +98,8 @@ export default function PersonConnectedChildrenCardList({
                                                 item={nameSynthetic}
                                                 rowRecord={row}
                                                 anchorRecord={anchorRecord}
-                                                adornment={null}
+                                                adornment={nameCol.adornment ?? null}
+                                                suppressEntityIcon
                                                 display={childDisplayName}
                                                 onAction={onAdornmentAction}
                                                 className={`block truncate hover:text-alloy-juniper ${PRESENTATION_DATA_VALUE_COMPACT}`}

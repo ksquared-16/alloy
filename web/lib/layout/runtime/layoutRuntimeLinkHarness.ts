@@ -3,6 +3,10 @@
  */
 
 import type { LayoutCollectionColumn, LayoutFieldAdornment } from "@/lib/layout/layoutV2";
+import {
+    readLayoutEditorDisplayConfig,
+    resolveLayoutCollectionColumnShowIcon,
+} from "@/lib/layout/layoutEditorDisplayConfig";
 import { resolveLayoutRuntimeChildOpenTarget } from "@/lib/layout/runtime/resolveLayoutRuntimeChildOpenTarget";
 import type { ProofRuntimeRecord } from "@/lib/layout/runtime/proofRecordContext";
 
@@ -93,6 +97,22 @@ export function layoutRuntimePersonLinkDomDataset(
         "data-link-surface": surface === "drawer" ? "drawer" : "queue",
         "data-person-target-id": personId?.trim() ?? "",
     };
+}
+
+const REPEATER_ROW_ENTITY_ICONS = new Set(["child", "person"]);
+
+/** Show column icon in related-list rows — entity icons only once on the primary link column. */
+export function layoutRuntimeRepeaterColumnShowsEntityIcon(
+    col: Pick<LayoutCollectionColumn, "refKey" | "adornment" | "metadata">,
+    options?: { isRowPrimaryEntityLink?: boolean },
+): boolean {
+    if (!resolveLayoutCollectionColumnShowIcon(col)) return false;
+    const config = readLayoutEditorDisplayConfig(col);
+    const icon = config.icon ?? col.adornment?.icon;
+    if (icon && REPEATER_ROW_ENTITY_ICONS.has(icon)) {
+        return options?.isRowPrimaryEntityLink ?? isLayoutRuntimeChildNameRefKey(col.refKey);
+    }
+    return true;
 }
 
 /** Add child-link adornment to inferred repeater name columns. */

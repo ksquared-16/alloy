@@ -9,6 +9,7 @@ import { resolveHouseholdAddressFieldValues } from "./resolveHouseholdAddressFie
 import { resolvePersonAddressFieldValues } from "./resolvePersonAddressFieldValues";
 import { stampLayoutRuntimeActiveRecordContext } from "./layoutRuntimeRelatedListActiveRecord";
 import { enrichPersonDrawerSecondaryContactScalars } from "./enrichPersonDrawerSecondaryContactScalars";
+import { enrichPersonDrawerPrimaryContactFields } from "./enrichPersonDrawerPrimaryContactFields";
 
 function pickDisplay(...values: unknown[]): string | null {
     for (const value of values) {
@@ -249,7 +250,11 @@ export function buildPersonLayoutRuntimeRecordFromVm(input: {
     }
 
     return stampLayoutRuntimeActiveRecordContext(
-        enrichPersonDrawerSecondaryContactScalars(record),
+        enrichPersonDrawerPrimaryContactFields(
+            enrichPersonDrawerSecondaryContactScalars(record),
+            vmRecord,
+            personId,
+        ),
         {
             anchorEntity: "person",
             entityId: personId,

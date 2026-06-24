@@ -9,9 +9,9 @@ export const LAYOUT_RUNTIME_FIELD_SURFACE =
 /** Flat read-only field row for production drawer runtime (no input chrome). */
 export const LAYOUT_RUNTIME_FIELD_READ_SURFACE = "min-w-0 py-1";
 
-/** Subtle edit-mode affordance for inline-editable drawer fields. */
+/** Persistent edit-mode affordance for inline-editable drawer fields (visible without hover). */
 export const LAYOUT_RUNTIME_FIELD_EDITABLE_AFFORDANCE =
-    "min-w-0 rounded-md border border-dashed border-alloy-stone/28 bg-alloy-stone/[0.02] px-2 py-1 transition-[border-color,background-color,box-shadow] hover:border-alloy-juniper/35 hover:bg-white focus-within:border-alloy-juniper/40 focus-within:bg-white focus-within:shadow-[0_0_0_1px_rgba(0,162,131,0.08)]";
+    "min-w-0 rounded-md border border-alloy-juniper/30 bg-alloy-juniper/[0.05] px-2 py-1 shadow-[inset_0_0_0_1px_rgba(0,162,131,0.08)] transition-[border-color,background-color,box-shadow] hover:border-alloy-juniper/45 hover:bg-white focus-within:border-alloy-juniper/50 focus-within:bg-white focus-within:shadow-[0_0_0_1px_rgba(0,162,131,0.14)]";
 
 export const LAYOUT_RUNTIME_GROUP_SURFACE =
     "rounded-md border border-admin-border bg-white p-2.5";
